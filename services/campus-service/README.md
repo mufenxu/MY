@@ -15,7 +15,7 @@ npm start
 打开：
 
 ```text
-http://127.0.0.1:8780
+http://127.0.0.1:22101
 ```
 
 ## 项目结构
@@ -99,7 +99,7 @@ NRG_COOKIE_FILE=/run/secrets/hgu_nrg_cookie
    ```bash
    docker compose up -d
    ```
-4. 服务默认只监听宿主机 `127.0.0.1:8780`，请通过 HTTPS 反向代理访问。
+4. 服务默认只监听宿主机 `127.0.0.1:22101`，请通过 HTTPS 反向代理访问。
 
 详细的服务器部署步骤、反向代理配置以及备份说明，请参阅：[Docker Compose 部署指南](./DOCKER_DEPLOY.md)。
 
@@ -121,7 +121,7 @@ HGU_APP_COOKIE_SECURE=true
 
 ```bash
 HGU_HOST=127.0.0.1
-PORT=8780
+PORT=22101
 ```
 
 如果放在 Docker 容器内，容器内部继续使用 `HGU_HOST=0.0.0.0`，宿主机端口默认只绑定 `127.0.0.1`。只有在所有流量均经过可信反向代理时才设置 `HGU_TRUST_PROXY=true`；HTTPS 重定向也只会在该开关启用后信任代理传入的协议头。本地 HTTP 调试才可以临时设置 `HGU_APP_COOKIE_SECURE=false` 和 `HGU_ENABLE_HSTS=false`。

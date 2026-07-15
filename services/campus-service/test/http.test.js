@@ -33,7 +33,7 @@ test("JSON responses include hardened headers and request correlation", () => {
 });
 
 test("HTTPS redirects only trust proxy headers when explicitly enabled", () => {
-  const request = { headers: { host: "campus.example.edu:8780", "x-forwarded-proto": "http" } };
+  const request = { headers: { host: "campus.example.edu:22101", "x-forwarded-proto": "http" } };
   const url = new URL("http://localhost/path?value=1");
   const untrustedResponse = responseRecorder();
   const trustedResponse = responseRecorder();
@@ -49,12 +49,12 @@ test("HTTPS redirects only trust proxy headers when explicitly enabled", () => {
     url
   ), true);
   assert.equal(trustedResponse.status, 308);
-  assert.equal(trustedResponse.headers.location, "https://campus.example.edu:8780/path?value=1");
+  assert.equal(trustedResponse.headers.location, "https://campus.example.edu:22101/path?value=1");
 });
 
 test("host sanitization rejects redirect injection and invalid ports", () => {
   assert.equal(sanitizeHostHeader("example.edu"), "example.edu");
-  assert.equal(sanitizeHostHeader("[::1]:8780"), "[::1]:8780");
+  assert.equal(sanitizeHostHeader("[::1]:22101"), "[::1]:22101");
   assert.equal(sanitizeHostHeader("example.edu:99999"), "");
   assert.equal(sanitizeHostHeader("example.edu/path"), "");
   assert.equal(sanitizeHostHeader("example..edu"), "");

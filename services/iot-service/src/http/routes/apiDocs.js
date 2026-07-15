@@ -127,7 +127,7 @@ function registerApiDocsRoute(app) {
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
 
     const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const host = req.get('host') || 'localhost:4066';
+    const host = req.get('host') || 'localhost:22102';
     res.send(createApiDocsMarkdown(`${protocol}://${host}`));
   });
 }

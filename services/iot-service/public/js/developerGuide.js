@@ -9,7 +9,7 @@
       tabButtonSelector = '.doc-tab-btn',
       tabContentSelector = '.doc-tab-content',
       copyButtonSelector = '.copy-code-btn',
-      localhostOrigin = 'http://localhost:4066',
+      localhostOrigin = 'http://localhost:22102',
       showToast = noop
     } = options;
 

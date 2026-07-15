@@ -44,6 +44,15 @@ npm run check
 
 ## Containers
 
+生产端口按统一号段连续分配：
+
+| Service | Host port | Container port |
+| --- | ---: | ---: |
+| `platform-api` | `22100` | `22100` |
+| `campus-service` | `22101` | `22101` |
+| `iot-service` | `22102` | `22102` |
+| `mongodb` | Not published | `27017` |
+
 生产目标固定为四个容器：`platform-api`、`campus-service`、`iot-service`、`mongodb`。
 
 ```powershell

@@ -37,8 +37,8 @@ const router = createPlatformRouter({
   coreApp: coreWebApp,
   examApp: examRuntime.app,
   notifyApp,
-  campusTarget: process.env.CAMPUS_SERVICE_URL || 'http://campus-service:8780',
-  mqttTarget: process.env.MQTT_SERVICE_URL || 'http://mqtt-service:4066',
+  campusTarget: process.env.CAMPUS_SERVICE_URL || 'http://campus-service:22101',
+  mqttTarget: process.env.MQTT_SERVICE_URL || 'http://iot-service:22102',
   coreHosts: process.env.CORE_HOSTS || 'xcx.pxyb.cn',
   examHosts: process.env.EXAM_HOSTS || 'haxx.pxyb.cn',
   notifyHosts: process.env.NOTIFY_HOSTS || 'tongzhiapi.pxyb.cn',
@@ -47,7 +47,7 @@ const router = createPlatformRouter({
 });
 
 const host = process.env.PLATFORM_API_HOST || '0.0.0.0';
-const port = Number.parseInt(process.env.PLATFORM_API_PORT || '8080', 10);
+const port = Number.parseInt(process.env.PLATFORM_API_PORT || '22100', 10);
 let shuttingDown = false;
 
 await Promise.all([

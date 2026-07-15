@@ -7,7 +7,7 @@
 默认访问地址示例：
 
 ```text
-http://localhost:4066
+http://localhost:22102
 ```
 
 如果你部署在服务器上，请把 `localhost` 替换为服务器 IP 或域名。
@@ -291,7 +291,7 @@ http://localhost:4066
   "serviceName": "MQTT 监控面板",
   "configPath": "/app/data/config.json",
   "dataDirectory": "/app/data",
-  "apiPort": 4066,
+  "apiPort": 22102,
   "auth": {
     "enabled": true
   },

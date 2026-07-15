@@ -4,11 +4,11 @@ services:
     container_name: mqttapi
     restart: unless-stopped
     ports:
-      - "4066:4066"
+      - "22102:22102"
     environment:
       TZ: Asia/Shanghai
       DATA_DIR: /app/data
-      API_PORT: 4066
+      API_PORT: 22102
       LOG_HTTP_REQUESTS: ${LOG_HTTP_REQUESTS:-1}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}

@@ -48,7 +48,7 @@ const userContextStorage = new AsyncLocalStorage();
 
 loadDotEnv(join(__dirname, ".env"));
 
-const PORT = Number(process.env.PORT || 8780);
+const PORT = Number(process.env.PORT || 22101);
 const HOST = process.env.HGU_HOST || process.env.HOST || "127.0.0.1";
 const SCHOOL_ORIGIN = "https://nrg.hgu.edu.cn";
 const CAS_ORIGIN = "https://cas.hgu.edu.cn";

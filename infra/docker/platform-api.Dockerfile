@@ -46,7 +46,7 @@ RUN npm ci --omit=dev --no-audit --no-fund
 FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production \
     PLATFORM_API_HOST=0.0.0.0 \
-    PLATFORM_API_PORT=8080 \
+    PLATFORM_API_PORT=22100 \
     PLATFORM_CONFIG_PATH=/app/config/platform.services.docker.json
 
 WORKDIR /app
@@ -76,9 +76,9 @@ RUN mkdir -p /app/services/core-api/uploads /app/services/core-api/logs \
 
 USER node
 WORKDIR /app/services/platform-api
-EXPOSE 8080
+EXPOSE 22100
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:8080/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
+  CMD ["node", "-e", "fetch('http://127.0.0.1:22100/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
 
 CMD ["node", "src/server.mjs"]

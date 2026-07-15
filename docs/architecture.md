@@ -11,6 +11,17 @@
 
 两个微信小程序位于 `apps/`，通过微信开发者工具或 CI 发布，不进入 Docker 镜像。
 
+## Port allocation
+
+| Service | Host port | Container port | Exposure |
+| --- | ---: | ---: | --- |
+| `platform-api` | `22100` | `22100` | Loopback, behind the reverse proxy |
+| `campus-service` | `22101` | `22101` | Loopback and Docker network |
+| `iot-service` | `22102` | `22102` | Loopback and Docker network |
+| `mongodb` | Not published | `27017` | Docker internal network only |
+
+Development-only ports such as the Vite preview port are not part of the production allocation.
+
 ## Boundaries
 
 - `apps/`：用户直接使用的前端和微信小程序。

@@ -74,8 +74,8 @@ npm start
 
 启动后访问：
 
-- 管理页面：`http://localhost:4066`
-- 状态接口：`http://localhost:4066/api/status`
+- 管理页面：`http://localhost:22102`
+- 状态接口：`http://localhost:22102/api/status`
 
 ## Docker 部署
 
@@ -85,7 +85,7 @@ npm start
 docker build -t mqttapi .
 docker run -d \
   --name mqttapi \
-  -p 4066:4066 \
+  -p 22102:22102 \
   -v $(pwd)/data:/app/data \
   -e TZ=Asia/Shanghai \
   mqttapi
@@ -97,7 +97,7 @@ Windows PowerShell 可以使用：
 docker build -t mqttapi .
 docker run -d `
   --name mqttapi `
-  -p 4066:4066 `
+  -p 22102:22102 `
   -v ${PWD}/data:/app/data `
   -e TZ=Asia/Shanghai `
   mqttapi
@@ -157,7 +157,7 @@ data/config.json
     }
   },
   "api": {
-    "port": 4066,
+    "port": 22102,
     "deviceOnlineThreshold": 60000
   },
   "auth": {
@@ -221,7 +221,7 @@ Nginx 示例：
 
 ```nginx
 location / {
-  proxy_pass http://127.0.0.1:4066;
+  proxy_pass http://127.0.0.1:22102;
   proxy_http_version 1.1;
   proxy_set_header Host $host;
   proxy_set_header X-Forwarded-Host $host;
@@ -232,7 +232,7 @@ location / {
 }
 ```
 
-如果未设置这些反代头，浏览器从 `https://你的域名` 发起登录，但后端以为自己是 `http://内网地址:4066`，同源保护会把登录请求判定为跨站请求并返回 `403 FORBIDDEN`。设置 `PUBLIC_ORIGIN` 后，服务会优先按这个公网地址校验浏览器请求来源。
+如果未设置这些反代头，浏览器从 `https://你的域名` 发起登录，但后端以为自己是 `http://内网地址:22102`，同源保护会把登录请求判定为跨站请求并返回 `403 FORBIDDEN`。设置 `PUBLIC_ORIGIN` 后，服务会优先按这个公网地址校验浏览器请求来源。
 
 服务会为每个 HTTP 请求返回 `X-Request-Id`，错误响应也会包含 `requestId` 与稳定的 `code` 字段，便于排查问题。默认会输出 JSON 格式访问日志；如需关闭，可设置 `LOG_HTTP_REQUESTS=0`。
 
@@ -316,7 +316,7 @@ API Key 适合给小程序、大屏和后端服务使用，支持以下作用域
 
 ## 部署建议
 
-- 服务器开放 `4066` 端口，或通过 Nginx 反向代理到该服务
+- 服务器开放 `22102` 端口，或通过 Nginx 反向代理到该服务
 - 生产环境建议启用登录鉴权，并放在 HTTPS 或反向代理后面
 - `data/` 目录务必挂载卷，否则容器重建后配置会丢失
 - 如果 MQTT Broker 在公网，建议使用带认证或 TLS 的连接地址

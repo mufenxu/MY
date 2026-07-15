@@ -623,7 +623,7 @@
                   <span class="api-desc">获取所有物联网设备数据与传感器状态快照</span>
                 </div>
                 <div class="code-block-wrapper">
-                  <pre><code id="curl-code-1">curl -X GET "http://localhost:4066/api/devices" \
+                  <pre><code id="curl-code-1">curl -X GET "http://localhost:22102/api/devices" \
   -H "Authorization: Bearer <span class="doc-key-placeholder">sk_mqttapi_your_token</span>"</code></pre>
                   <button class="copy-code-btn" data-target="curl-code-1" type="button">复制</button>
                 </div>
@@ -636,7 +636,7 @@
                   <span class="api-desc">向指定物联网设备下发继电器开/关控制指令</span>
                 </div>
                 <div class="code-block-wrapper">
-                  <pre><code id="curl-code-2">curl -X POST "http://localhost:4066/api/devices/esp8266_living/relays/relay1/control" \
+                  <pre><code id="curl-code-2">curl -X POST "http://localhost:22102/api/devices/esp8266_living/relays/relay1/control" \
   -H "Authorization: Bearer <span class="doc-key-placeholder">sk_mqttapi_your_token</span>" \
   -H "Content-Type: application/json" \
   -d '{"status": "on"}'</code></pre>
@@ -657,11 +657,11 @@
                 </div>
                 <div class="code-block-wrapper">
                   <pre><code id="curl-code-3"># 示例 1: 获取最新 100 条历史数据
-curl -X GET "http://localhost:4066/api/devices/esp8266_living/history" \
+curl -X GET "http://localhost:22102/api/devices/esp8266_living/history" \
   -H "Authorization: Bearer <span class="doc-key-placeholder">sk_mqttapi_your_token</span>"
 
 # 示例 2: 查询最近 24 小时内的采样记录并返回
-curl -X GET "http://localhost:4066/api/devices/esp8266_living/history?range=24h" \
+curl -X GET "http://localhost:22102/api/devices/esp8266_living/history?range=24h" \
   -H "Authorization: Bearer <span class="doc-key-placeholder">sk_mqttapi_your_token</span>"</code></pre>
                   <button class="copy-code-btn" data-target="curl-code-3" type="button">复制</button>
                 </div>
@@ -677,7 +677,7 @@ curl -X GET "http://localhost:4066/api/devices/esp8266_living/history?range=24h"
                   <span class="api-desc">获取所有物联网设备数据与传感器状态快照</span>
                 </div>
                 <div class="code-block-wrapper">
-                  <pre><code id="js-code-1">fetch("http://localhost:4066/api/devices", {
+                  <pre><code id="js-code-1">fetch("http://localhost:22102/api/devices", {
   method: "GET",
   headers: {
     "Authorization": "Bearer <span class="doc-key-placeholder">sk_mqttapi_your_token</span>"
@@ -696,7 +696,7 @@ curl -X GET "http://localhost:4066/api/devices/esp8266_living/history?range=24h"
                   <span class="api-desc">向指定物联网设备下发继电器开/关控制指令</span>
                 </div>
                 <div class="code-block-wrapper">
-                  <pre><code id="js-code-2">fetch("http://localhost:4066/api/devices/esp8266_living/relays/relay1/control", {
+                  <pre><code id="js-code-2">fetch("http://localhost:22102/api/devices/esp8266_living/relays/relay1/control", {
   method: "POST",
   headers: {
     "Authorization": "Bearer <span class="doc-key-placeholder">sk_mqttapi_your_token</span>",
@@ -723,7 +723,7 @@ curl -X GET "http://localhost:4066/api/devices/esp8266_living/history?range=24h"
                 </div>
                 <div class="code-block-wrapper">
                   <pre><code id="js-code-3">// 示例: 使用 fetch 发送 GET 请求，拉取最近 24 小时采样温湿度数据
-fetch("http://localhost:4066/api/devices/esp8266_living/history?range=24h", {
+fetch("http://localhost:22102/api/devices/esp8266_living/history?range=24h", {
   method: "GET",
   headers: {
     "Authorization": "Bearer <span class="doc-key-placeholder">sk_mqttapi_your_token</span>"

@@ -64,7 +64,7 @@ const defaultConfig = {
     }
   ],
   api: {
-    port: intFromEnv('API_PORT', 4066),
+    port: intFromEnv('API_PORT', 22102),
     deviceOnlineThreshold: intFromEnv('DEVICE_ONLINE_THRESHOLD', 60000),
     webhookUrl: process.env.WEBHOOK_URL || '',
     webhookEnabled: boolFromEnv('WEBHOOK_ENABLED', false),

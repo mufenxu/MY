@@ -4,11 +4,11 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      - "${HGU_BIND_ADDRESS:-127.0.0.1}:${PORT:-8780}:8780"
+      - "${HGU_BIND_ADDRESS:-127.0.0.1}:${PORT:-22101}:22101"
     environment:
       - NODE_ENV=production
       - HGU_HOST=0.0.0.0
-      - PORT=8780
+      - PORT=22101
       - HGU_APP_AUTH_REQUIRED=${HGU_APP_AUTH_REQUIRED:-true}
       - HGU_ADMIN_USERNAME=${HGU_ADMIN_USERNAME:-admin}
       - HGU_ADMIN_PASSWORD=${HGU_ADMIN_PASSWORD}

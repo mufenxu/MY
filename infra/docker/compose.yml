@@ -36,12 +36,12 @@ services:
       iot-service:
         condition: service_started
     ports:
-      - "${PLATFORM_BIND_ADDRESS:-127.0.0.1}:${PLATFORM_API_PORT:-8080}:8080"
+      - "${PLATFORM_BIND_ADDRESS:-127.0.0.1}:${PLATFORM_API_PORT:-22100}:22100"
     environment:
       NODE_ENV: production
       TZ: ${TZ:-Asia/Shanghai}
       PLATFORM_API_HOST: 0.0.0.0
-      PLATFORM_API_PORT: 8080
+      PLATFORM_API_PORT: 22100
       PLATFORM_CONFIG_PATH: /app/config/platform.services.docker.json
       PLATFORM_TRUST_PROXY: "true"
       PLATFORM_PUBLIC_ORIGIN: ${PLATFORM_PUBLIC_ORIGIN:?Set PLATFORM_PUBLIC_ORIGIN}
@@ -52,8 +52,8 @@ services:
       CORE_HOSTS: ${CORE_HOSTS:-xcx.pxyb.cn}
       EXAM_HOSTS: ${EXAM_HOSTS:-haxx.pxyb.cn}
       NOTIFY_HOSTS: ${NOTIFY_HOSTS:-tongzhiapi.pxyb.cn}
-      CAMPUS_SERVICE_URL: http://campus-service:8780
-      MQTT_SERVICE_URL: http://iot-service:4066
+      CAMPUS_SERVICE_URL: http://campus-service:22101
+      MQTT_SERVICE_URL: http://iot-service:22102
       MONGO_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/core_app?authSource=admin
       MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/exam_app?authSource=admin
       CORE_JWT_SECRET: ${CORE_JWT_SECRET:?Set CORE_JWT_SECRET}
@@ -70,7 +70,7 @@ services:
       SEED_SAMPLE_DATA: ${EXAM_SEED_SAMPLE_DATA:-false}
       GH_WEBHOOK_SECRET: ${GH_WEBHOOK_SECRET:-}
       MQTT_API_KEY: ${MQTT_API_KEY:-}
-      MQTT_API_BASE_URL: http://iot-service:4066
+      MQTT_API_BASE_URL: http://iot-service:22102
       WECOM_CORP_ID: ${WECOM_CORP_ID:?Set WECOM_CORP_ID}
       WECOM_AGENT_ID: ${WECOM_AGENT_ID:?Set WECOM_AGENT_ID}
       WECOM_SECRET: ${WECOM_SECRET:?Set WECOM_SECRET}
@@ -100,12 +100,12 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      - "${CAMPUS_BIND_ADDRESS:-127.0.0.1}:${CAMPUS_PORT:-8780}:8780"
+      - "${CAMPUS_BIND_ADDRESS:-127.0.0.1}:${CAMPUS_PORT:-22101}:22101"
     environment:
       NODE_ENV: production
       TZ: ${TZ:-Asia/Shanghai}
       HGU_HOST: 0.0.0.0
-      PORT: 8780
+      PORT: 22101
       HGU_APP_AUTH_REQUIRED: "true"
       HGU_ADMIN_USERNAME: ${HGU_ADMIN_USERNAME:?Set HGU_ADMIN_USERNAME}
       HGU_ADMIN_PASSWORD: ${HGU_ADMIN_PASSWORD:?Set HGU_ADMIN_PASSWORD}
@@ -145,12 +145,12 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      - "${IOT_BIND_ADDRESS:-127.0.0.1}:${IOT_PORT:-4066}:4066"
+      - "${IOT_BIND_ADDRESS:-127.0.0.1}:${IOT_PORT:-22102}:22102"
     environment:
       NODE_ENV: production
       TZ: ${TZ:-Asia/Shanghai}
       DATA_DIR: /app/data
-      API_PORT: 4066
+      API_PORT: 22102
       TRUST_PROXY: "1"
       PUBLIC_ORIGIN: ${IOT_PUBLIC_ORIGIN:?Set IOT_PUBLIC_ORIGIN}
       LOG_HTTP_REQUESTS: ${IOT_LOG_HTTP_REQUESTS:-1}

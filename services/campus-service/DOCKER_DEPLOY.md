@@ -42,7 +42,7 @@ docker compose version
    * **`HGU_APP_COOKIE_SECURE`**:
      * 如果您使用 Nginx、Caddy 或 Traefik 等反向代理并启用了 **HTTPS**（强烈推荐），请保持为 `true`。
      * 如果仅在局域网内或通过纯 **HTTP** 访问调试，可以临时修改为 `false`，否则可能无法正常登录。
-   * **`PORT`**: 宿主机上映射的端口，默认为 `8780`。
+   * **`PORT`**: 宿主机上映射的端口，默认为 `22101`。
    * **`HGU_TRUST_PROXY`**：只有在服务仅能通过可信 Nginx/Caddy 访问时设为 `true`，否则保持 `false`。
 
    容器会先测试 `node` 用户能否写入；如果 NAS、NFS、CIFS 等存储禁止 `chown`，会自动读取现有 `app.db` 或 `data/` 目录的数字 UID/GID，并使用相同身份运行，不会因 `chown` 失败而重启。如果特殊存储仍无法自动识别，可在宿主机运行 `stat -c '%u:%g' ./data`，然后把结果分别写入 `.env` 的 `HGU_DATA_UID` 和 `HGU_DATA_GID`。
@@ -129,7 +129,7 @@ server {
     ssl_certificate_key /path/to/privkey.pem;
 
     location / {
-        proxy_pass http://127.0.0.1:8780;
+        proxy_pass http://127.0.0.1:22101;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -142,7 +142,7 @@ server {
     }
 }
 ```
-配置完成后，请确保宿主机上的防火墙不要直接对公网暴露 `8780` 端口，只允许反向代理本地转发即可。
+配置完成后，请确保宿主机上的防火墙不要直接对公网暴露 `22101` 端口，只允许反向代理本地转发即可。
 此时可以在 `.env` 中设置 `HGU_TRUST_PROXY=true`。Compose 默认将端口绑定到 `127.0.0.1`；如确需修改，可显式设置 `HGU_BIND_ADDRESS`，不建议设为公网地址。
 
 ### 微信客户端发布检查
