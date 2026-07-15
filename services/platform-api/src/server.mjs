@@ -1,25 +1,11 @@
 import http from 'node:http';
-import path from 'node:path';
 import { createRequire } from 'node:module';
-import { pathToFileURL, fileURLToPath } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { createCoreWebApp, createPlatformRouter } from './router.mjs';
+import { resolveRuntimePaths } from './runtime-paths.mjs';
 
 const require = createRequire(import.meta.url);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const workspaceRoot = path.resolve(__dirname, '..', '..');
-
-function resolveRuntimePath(envName, fallback) {
-  return path.resolve(process.env[envName] || path.join(workspaceRoot, fallback));
-}
-
-const paths = {
-  coreServer: resolveRuntimePath('CORE_SERVER_PATH', 'services/core-api/server.js'),
-  coreStatic: resolveRuntimePath('CORE_STATIC_PATH', 'apps/core-admin/dist'),
-  examServer: resolveRuntimePath('EXAM_SERVER_PATH', 'services/exam-api/src/server.js'),
-  notifyApp: resolveRuntimePath('NOTIFY_APP_PATH', 'services/notification-service/src/app.js'),
-  portalApp: resolveRuntimePath('PORTAL_APP_PATH', 'apps/admin-console/src/app.js'),
-  portalConfig: resolveRuntimePath('PORTAL_CONFIG_PATH', 'apps/admin-console/src/config.js'),
-};
+const { paths } = resolveRuntimePaths();
 
 const coreRuntime = require(paths.coreServer);
 const examRuntime = require(paths.examServer);
