@@ -1,0 +1,127 @@
+<view class="page-container">
+  <view class="custom-nav" style="padding-top: {{menuButtonTop}}px;">
+    <view class="nav-content" style="height: {{menuButtonHeight}}px;">
+      <view class="back-btn" bindtap="onBack"></view>
+      <text class="nav-title">学习报告</text>
+    </view>
+  </view>
+
+  <scroll-view class="content-scroll" scroll-y enhanced="{{true}}" bounces="{{true}}" show-scrollbar="{{false}}" style="padding-top: {{navBarHeight}}px;">
+    <view wx:if="{{loading}}" class="loading-state">
+      <skeleton type="card" rows="{{4}}"></skeleton>
+    </view>
+
+    <block wx:elif="{{report}}">
+      <view class="report-hero">
+        <view class="hero-copy">
+          <text class="hero-kicker">个人学习概览</text>
+          <text class="hero-title">{{report.summary.averageScore}} 分</text>
+          <text class="hero-desc">平均成绩 · 累计 {{report.summary.examCount}} 次练习</text>
+        </view>
+        <view class="hero-ring">
+          <text class="ring-value">{{report.summary.passRate}}%</text>
+          <text class="ring-label">通过率</text>
+        </view>
+      </view>
+
+      <view class="stat-grid">
+        <view class="stat-card">
+          <text class="stat-value">{{report.summary.bestScore}}</text>
+          <text class="stat-label">最高分</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-value">{{report.summary.accuracy}}%</text>
+          <text class="stat-label">总正确率</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-value">{{report.summary.totalCorrect}}</text>
+          <text class="stat-label">累计答对</text>
+        </view>
+      </view>
+
+      <view class="section-card trend-card">
+        <view class="section-head trend-head">
+          <view class="section-title-group">
+            <text class="section-title">近一周趋势</text>
+            <text class="section-subtitle">{{trendSummary}}</text>
+          </view>
+          <text class="section-tip">最近 7 天</text>
+        </view>
+
+        <view class="trend-legend">
+          <view class="legend-item">
+            <view class="legend-line"></view>
+            <text>平均分（0-100）</text>
+          </view>
+          <view class="legend-item">
+            <view class="legend-bar"></view>
+            <text>练习次数</text>
+          </view>
+          <view class="legend-item">
+            <view class="legend-dash"></view>
+            <text>7日均分参考线</text>
+          </view>
+        </view>
+
+        <view class="trend-metrics">
+          <view class="trend-metric" wx:for="{{trendMetrics}}" wx:key="label">
+            <text class="trend-metric-value">{{item.value}}</text>
+            <text class="trend-metric-label">{{item.label}}</text>
+          </view>
+        </view>
+
+        <view id="trendCanvasHost" class="trend-canvas-shell">
+          <canvas canvas-id="trendCanvas" class="trend-canvas"></canvas>
+        </view>
+
+        <text class="trend-note">柱形表示每日练习量，折线表示当日平均分；低于 60 分会落在及格线下方。</text>
+      </view>
+
+      <view class="section-card" wx:if="{{weakCategories.length > 0}}">
+        <view class="section-head">
+          <text class="section-title">薄弱题库</text>
+          <text class="section-tip">按错误率排序</text>
+        </view>
+        <view class="weak-list">
+          <view class="weak-item" wx:for="{{weakCategories}}" wx:key="categoryId">
+            <view class="weak-main">
+              <text class="weak-title">{{item.categoryName}}</text>
+              <text class="weak-meta">{{item.examCount}} 次练习 · 平均 {{item.averageScore}} 分</text>
+            </view>
+            <view class="weak-rate">
+              <text class="weak-rate-value">{{item.wrongRate}}%</text>
+              <text class="weak-rate-label">错误率</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="section-card">
+        <view class="section-head">
+          <text class="section-title">最近记录</text>
+          <text class="section-tip">最多显示 20 条</text>
+        </view>
+        <view class="history-list" wx:if="{{recentResults.length > 0}}">
+          <view class="history-item" wx:for="{{recentResults}}" wx:key="id">
+            <view class="history-score {{item.scoreClass}}">
+              <text>{{item.score}}</text>
+            </view>
+            <view class="history-main">
+              <text class="history-title">{{item.title}}</text>
+              <text class="history-meta">{{item.dateText}} · 正确率 {{item.accuracy}}%</text>
+            </view>
+            <text class="history-count">{{item.correctCount}}/{{item.totalCount}}</text>
+          </view>
+        </view>
+        <view class="empty-mini" wx:else>还没有练习记录</view>
+      </view>
+    </block>
+
+    <view class="empty-state" wx:else>
+      <text class="empty-title">报告暂时不可用</text>
+      <button class="retry-btn" bindtap="onRetry">重新加载</button>
+    </view>
+
+    <view class="footer-spacer"></view>
+  </scroll-view>
+</view>

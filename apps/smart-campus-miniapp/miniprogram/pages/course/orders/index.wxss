@@ -1,0 +1,501 @@
+/* ========================================
+   网课订单列表 - 3D拟态风格
+   ======================================== */
+page {
+  background-color: #f0f4f8;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  color: #1A1A1A;
+  --primary: #2563EB;
+  --primary-light: #EFF6FF;
+  --text-main: #1A1A1A;
+  --text-sub: #4B5563;
+  --text-muted: #9CA3AF;
+  --bg-input: rgba(240, 244, 248, 0.8);
+  --border-light: #EBEDF0;
+  --radius-card: 40rpx;
+  --radius-sm: 12rpx;
+
+  --status-pending-bg: #FFFBEB;
+  --status-pending-color: #D97706;
+  --status-processing-bg: #EFF6FF;
+  --status-processing-color: #2563EB;
+  --status-completed-bg: #ECFDF5;
+  --status-completed-color: #059669;
+  --status-failed-bg: #FEF2F2;
+  --status-failed-color: #DC2626;
+}
+
+.page {
+  padding: 24rpx 28rpx 60rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* ==================
+   搜索栏
+   ================== */
+.search-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 28rpx;
+}
+
+.search-input-wrap {
+  flex: 1;
+  height: 80rpx;
+  background: #f0f4f8;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  padding: 0 24rpx;
+  border: 4rpx solid rgba(255, 255, 255, 0.6);
+  box-shadow: 
+    inset 6rpx 6rpx 12rpx rgba(166, 180, 200, 0.4),
+    inset -6rpx -6rpx 12rpx rgba(255, 255, 255, 0.9);
+  transition: all 0.3s;
+  box-sizing: border-box;
+}
+
+.search-input-wrap:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4rpx rgba(37, 99, 235, 0.08);
+}
+
+.search-icon {
+  margin-right: 14rpx;
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  height: 100%;
+  font-size: 28rpx;
+  color: var(--text-main);
+}
+
+.search-ph {
+  color: var(--text-muted);
+}
+
+.clear-icon {
+  padding: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-btn {
+  margin-left: 20rpx;
+  font-size: 30rpx;
+  color: var(--primary);
+  font-weight: 500;
+  padding: 10rpx 4rpx;
+  flex-shrink: 0;
+}
+
+.search-btn:active {
+  opacity: 0.7;
+}
+
+/* ==================
+   订单列表
+   ================== */
+.order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+/* ==================
+   订单卡片
+   ================== */
+.order-card {
+  background: #f0f4f8;
+  border: 4rpx solid rgba(255, 255, 255, 0.8);
+  border-radius: var(--radius-card);
+  padding: 28rpx 28rpx 24rpx;
+  box-shadow: 
+    20rpx 20rpx 40rpx rgba(166, 180, 200, 0.5),
+    -20rpx -20rpx 40rpx rgba(255, 255, 255, 0.9),
+    inset 4rpx 4rpx 8rpx rgba(255, 255, 255, 0.8),
+    inset -4rpx -4rpx 8rpx rgba(166, 180, 200, 0.2);
+}
+
+/* ==================
+   卡片头部
+   ================== */
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+
+.status-badge {
+  font-size: 22rpx;
+  font-weight: 600;
+  padding: 6rpx 18rpx;
+  border-radius: 100rpx;
+  letter-spacing: 1rpx;
+}
+
+.status-badge.Pending {
+  color: var(--status-pending-color);
+  background: var(--status-pending-bg);
+}
+
+.status-badge.Processing,
+.status-badge.Refushing {
+  color: var(--status-processing-color);
+  background: var(--status-processing-bg);
+}
+
+.status-badge.Completed {
+  color: var(--status-completed-color);
+  background: var(--status-completed-bg);
+}
+
+.status-badge.Failed {
+  color: var(--status-failed-color);
+  background: var(--status-failed-bg);
+}
+
+.trade-no {
+  font-size: 22rpx;
+  color: var(--text-muted);
+  font-family: "SF Mono", Consolas, Monaco, "Courier New", monospace;
+  letter-spacing: 0.5rpx;
+}
+
+/* ==================
+   课程标题
+   ================== */
+.course-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.5;
+  margin-bottom: 24rpx;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==================
+   信息区域
+   ================== */
+.info-section {
+  margin-bottom: 20rpx;
+}
+
+.info-row {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.info-item {
+  flex: 1;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  padding: 16rpx 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.info-label {
+  font-size: 22rpx;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.info-val {
+  font-size: 26rpx;
+  color: var(--text-main);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==================
+   进度条区域
+   ================== */
+.progress-bar-area {
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  padding: 16rpx 20rpx;
+}
+
+.progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+
+.progress-value {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--status-completed-color);
+  font-family: "SF Pro Display", "Helvetica Neue", -apple-system, sans-serif;
+}
+
+.progress-track {
+  width: 100%;
+  height: 8rpx;
+  background: #E5E7EB;
+  border-radius: 4rpx;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #34D399, #059669);
+  border-radius: 4rpx;
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  min-width: 6rpx;
+}
+
+/* ==================
+   备注区域
+   ================== */
+.remarks-box {
+  background: var(--bg-input);
+  padding: 16rpx 20rpx;
+  border-radius: var(--radius-sm);
+  margin-bottom: 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.remarks-label {
+  font-size: 22rpx;
+  color: var(--text-muted);
+}
+
+.remarks-text {
+  font-size: 24rpx;
+  color: var(--text-sub);
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+/* ==================
+   卡片底部
+   ================== */
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 20rpx;
+  border-top: 2rpx solid var(--border-light);
+}
+
+.dateline {
+  font-size: 22rpx;
+  color: var(--text-muted);
+  font-family: "SF Mono", Consolas, Monaco, "Courier New", monospace;
+  flex-shrink: 0;
+}
+
+.btn-group {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+/* 补刷按钮 - 次要操作 */
+.btn-retry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  height: 56rpx;
+  padding: 0 20rpx;
+  font-size: 24rpx;
+  color: var(--text-sub);
+  background: transparent;
+  border: 2rpx solid var(--border-light);
+  border-radius: 28rpx;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.btn-retry-icon {
+  font-size: 26rpx;
+  margin-right: 2rpx;
+}
+
+.btn-retry:active {
+  background: var(--bg-input);
+  border-color: #D1D5DB;
+  transform: scale(0.95);
+}
+
+/* 刷新进度按钮 - 主要操作 */
+.btn-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 56rpx;
+  padding: 0 28rpx;
+  font-size: 24rpx;
+  font-weight: 500;
+  color: #FFFFFF;
+  background: var(--primary);
+  border-radius: 28rpx;
+  border: none;
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.2);
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.btn-refresh:active {
+  opacity: 0.85;
+  transform: scale(0.96);
+}
+
+.btn-refresh.is-loading {
+  background: #93C5FD;
+  box-shadow: none;
+}
+
+/* ==================
+   加载状态
+   ================== */
+.loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  color: var(--text-muted);
+  font-size: 24rpx;
+  padding: 32rpx 0;
+}
+
+.loading-dots {
+  display: flex;
+  gap: 8rpx;
+}
+
+.dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: dotPulse 1.4s ease-in-out infinite;
+}
+
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes dotPulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+.no-more {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 24rpx;
+  padding: 32rpx 0 16rpx;
+  letter-spacing: 2rpx;
+}
+
+/* ==================
+   空态
+   ================== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 22vh;
+}
+
+.empty-icon-wrap {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 50%;
+  background: #F3F4F6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 36rpx;
+}
+
+.empty-img {
+  position: relative;
+  width: 80rpx;
+  height: 80rpx;
+  box-sizing: border-box;
+  opacity: 0.75;
+}
+
+.empty-receipt {
+  border: 4rpx solid #d1d5db;
+  border-radius: 14rpx;
+  background: #ffffff;
+  padding: 18rpx 14rpx;
+}
+
+.empty-receipt::after {
+  content: "";
+  position: absolute;
+  left: 12rpx;
+  right: 12rpx;
+  bottom: -8rpx;
+  height: 14rpx;
+  background: repeating-linear-gradient(90deg, #d1d5db 0 10rpx, transparent 10rpx 20rpx);
+}
+
+.empty-receipt__line {
+  height: 4rpx;
+  border-radius: 999rpx;
+  background: #d1d5db;
+  margin-bottom: 10rpx;
+}
+
+.empty-receipt__line.short {
+  width: 70%;
+}
+
+.empty-text {
+  color: var(--text-main);
+  font-size: 30rpx;
+  font-weight: 500;
+  margin-bottom: 12rpx;
+}
+
+.empty-sub {
+  color: var(--text-muted);
+  font-size: 26rpx;
+  margin-bottom: 60rpx;
+}
+
+.btn-primary-go {
+  background: var(--primary);
+  color: #FFFFFF;
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 64rpx;
+  border-radius: 44rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.2);
+  border: none;
+  margin: 0;
+}
+
+.btn-primary-go:active {
+  opacity: 0.85;
+  transform: scale(0.97);
+}

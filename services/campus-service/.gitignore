@@ -1,0 +1,8 @@
+node_modules/
+.env
+data/
+.agents/
+.DS_Store
+npm-debug.log*
+server.out.log
+server.err.log

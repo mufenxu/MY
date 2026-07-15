@@ -1,0 +1,96 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/daily-news/index",
+    "pages/me/index",
+    "pages/auth/scan-confirm/scan-confirm",
+    "pages/scan/index"
+  ],
+  "tabBar": {
+    "custom": true,
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/me/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "subPackages": [
+    {
+      "root": "pages/ct8-management/",
+      "pages": [
+        "index",
+        "detail"
+      ]
+    },
+    {
+      "root": "pages/resources/",
+      "pages": [
+        "index"
+      ]
+    },
+    {
+      "root": "pages/login/",
+      "pages": [
+        "index"
+      ]
+    },
+    {
+      "root": "pages/bmi/",
+      "pages": [
+        "index"
+      ]
+    },
+    {
+      "root": "pages/todo/",
+      "pages": [
+        "index"
+      ]
+    },
+    {
+      "root": "pages/smart-control/",
+      "pages": [
+        "index",
+        "heat-pump/index",
+        "heat-pump/smart-settings/index"
+      ]
+    },
+    {
+      "root": "pages/course/",
+      "pages": [
+        "query/index",
+        "orders/index"
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/me/index": {
+      "network": "all",
+      "packages": [
+        "pages/login/"
+      ]
+    }
+  },
+  "window": {
+    "navigationBarTitleText": "首页",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#ffffff",
+    "enablePullDownRefresh": false,
+    "onReachBottomDistance": 50
+  },
+  "networkTimeout": {
+    "request": 10000,
+    "connectSocket": 10000,
+    "uploadFile": 20000,
+    "downloadFile": 20000
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents",
+  "debug": false
+}

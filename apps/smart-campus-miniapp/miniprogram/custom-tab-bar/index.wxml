@@ -1,0 +1,13 @@
+<view class="bottom-tab">
+  <view 
+    wx:for="{{list}}" 
+    wx:key="index" 
+    class="bottom-tab__item {{selected === index ? 'bottom-tab__item--active' : ''}}" 
+    data-path="{{item.pagePath}}" 
+    data-index="{{index}}" 
+    bindtap="switchTab"
+  >
+    <image class="tab-icon" mode="aspectFit" src="{{selected === index ? item.selectedIconPath : item.iconPath}}"></image>
+    <view class="bottom-tab__label">{{item.text}}</view>
+  </view>
+</view>

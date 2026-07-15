@@ -1,0 +1,301 @@
+/**app.wxss**/
+page {
+  /* 开启高级字体平滑渲染，文字呈现更高清、顺滑不毛糙 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* 彻底禁用原生的点击黑色半透明高亮，全盘使用自建的 3D 按压动画 */
+  -webkit-tap-highlight-color: transparent;
+  /* 启用 GPU 硬件加速整个页面层 */
+  transform: translateZ(0);
+}
+
+scroll-view {
+  /* 开启原生惯性回弹和丝滑滚动 */
+  -webkit-overflow-scrolling: touch;
+}
+
+image {
+  /* 防止长按拖拽带来的卡顿或意外误触，增加原生感 */
+  -webkit-user-drag: none;
+  content-visibility: auto;
+}
+
+/* 统一提速各类拟态按键和卡片的触发与回弹，通过触发 3D 加速极大提升点击手感 */
+.btn, .card, .todo-item, .news-item, .server-card, .auth-card, .mini-card, .profile-card {
+  transform: translateZ(0); 
+  will-change: transform, box-shadow;
+  /* 0.15s 是人眼感知按压反馈极佳区间，比 0.3s 更干脆 */
+  transition: all 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+}
+.container {
+  box-sizing: border-box;
+  display: -webkit-flex;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: space-between;
+  padding: 200rpx 0;
+}
+.btn,
+.container {
+  align-items: center;
+}
+.btn {
+  background: #f0f4f8;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 24rpx;
+  box-shadow: 
+    6px 6px 12px rgba(166, 180, 200, 0.5),
+    -6px -6px 12px rgba(255, 255, 255, 0.9),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.8),
+    inset -2px -2px 4px rgba(166, 180, 200, 0.2);
+  color: #111827;
+  display: -webkit-inline-flex;
+  display: inline-flex;
+  font-size: 28rpx;
+  font-weight: 600;
+  justify-content: center;
+  padding: 10rpx 28rpx;
+  transition:
+    opacity 0.1s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.1s cubic-bezier(0.4, 0, 0.2, 1),
+    -webkit-transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    transform 0.1s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.1s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    transform 0.1s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.1s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.1s cubic-bezier(0.4, 0, 0.2, 1),
+    -webkit-transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+.btn:active {
+  box-shadow: 
+    inset 4px 4px 8px rgba(166, 180, 200, 0.5),
+    inset -4px -4px 8px rgba(255, 255, 255, 0.9);
+  opacity: 0.96;
+  transform: translateY(2rpx) translateZ(0) scale(0.98);
+}
+.btn--primary {
+  background: linear-gradient(180deg, #7aa7ff, #4f83ff);
+  border-color: rgba(79, 131, 255, 0.5);
+  box-shadow:
+    6px 6px 12px rgba(79, 131, 255, 0.35),
+    -6px -6px 12px rgba(255, 255, 255, 0.9),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.5),
+    inset -2px -2px 4px rgba(0, 0, 0, 0.1);
+  color: #fff;
+}
+.btn--danger {
+  background: linear-gradient(180deg, #ff9a9e, #ff6a6a);
+  border-color: hsla(0, 100%, 71%, 0.5);
+  box-shadow:
+    6px 6px 12px hsla(0, 100%, 71%, 0.35),
+    -6px -6px 12px rgba(255, 255, 255, 0.9),
+    inset 2px 2px 4px hsla(0, 0%, 100%, 0.5),
+    inset -2px -2px 4px rgba(0, 0, 0, 0.1);
+  color: #fff;
+}
+.btn--ghost {
+  background: hsla(0, 0%, 100%, 0.85);
+  border-color: hsla(0, 0%, 100%, 0.95);
+  box-shadow:
+    0 8rpx 20rpx rgba(51, 132, 204, 0.22),
+    inset 0 1rpx 0 hsla(0, 0%, 100%, 0.85);
+  color: #1f3a8a;
+}
+.btn--icon {
+  border-radius: 34rpx;
+  height: 68rpx;
+  min-width: 68rpx;
+  padding: 0;
+  width: 68rpx;
+}
+.card {
+  background: #f0f4f8;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 32rpx;
+  box-shadow: 
+    10px 10px 20px rgba(166, 180, 200, 0.5),
+    -10px -10px 20px rgba(255, 255, 255, 0.9),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.8),
+    inset -2px -2px 4px rgba(166, 180, 200, 0.2);
+}
+.bottom-tab {
+  backdrop-filter: blur(24px);
+  background: rgba(240, 244, 248, 0.85); /* 适配整体拟态的主背景色 */
+  border-top: 2px solid rgba(255, 255, 255, 0.9);
+  border-top-left-radius: 32px;
+  border-top-right-radius: 32px;
+  bottom: 0;
+  box-shadow: 
+    0 -8px 24px rgba(166, 180, 200, 0.3),
+    inset 0 2px 6px rgba(255, 255, 255, 0.9);
+  height: 66px; /* 增加一点高度适配极圆角 */
+  left: 0;
+  overflow: hidden;
+  padding-bottom: constant(safe-area-inset-bottom);
+  position: fixed;
+  right: 0;
+  z-index: 120;
+}
+.bottom-tab,
+.bottom-tab__item {
+  display: -webkit-flex;
+  display: flex;
+}
+.bottom-tab__item {
+  align-items: center;
+  color: #6b7280;
+  flex: 1;
+  flex-direction: column;
+  font-size: 12px;
+  justify-content: center;
+  position: relative;
+  text-align: center;
+}
+.bottom-tab__item--active {
+  color: #111827;
+  font-weight: 800;
+}
+.tab-icon {
+  display: block;
+  height: 24px;
+  width: 24px;
+}
+.bottom-tab__label {
+  line-height: 1;
+  margin-top: 4px;
+  text-align: center;
+}
+
+/* --- 全局动态浮动微光背景（马卡龙柔和极光渐变，大半径高斯模糊，纯CSS硬件加速） --- */
+.bg-shape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90rpx); /* 大半径模糊，使色块变成极其柔和的背景极光 */
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55; /* 半透明，不干扰主体内容 */
+  will-change: transform; /* 开启硬件加速 */
+}
+
+.bg-shape-1 {
+  width: 480rpx;
+  height: 480rpx;
+  background: linear-gradient(135deg, #cbe3ff 0%, #e1d4ff 100%);
+  top: -100rpx;
+  left: -150rpx;
+  animation: float1 18s infinite alternate ease-in-out;
+}
+
+.bg-shape-2 {
+  width: 520rpx;
+  height: 520rpx;
+  background: linear-gradient(135deg, #fff3c4 0%, #ffdfdf 100%);
+  top: 42%;
+  right: -200rpx;
+  animation: float2 22s infinite alternate-reverse ease-in-out;
+}
+
+.bg-shape-3 {
+  width: 400rpx;
+  height: 400rpx;
+  background: linear-gradient(135deg, #d2f6ec 0%, #c4f3ff 100%);
+  bottom: -100rpx;
+  left: -120rpx;
+  animation: float3 20s infinite alternate ease-in-out;
+}
+
+@keyframes float1 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(100rpx, 150rpx, 0) scale(1.1); }
+}
+
+@keyframes float2 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(-120rpx, -80rpx, 0) scale(1.15); }
+}
+
+@keyframes float3 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(80rpx, -120rpx, 0) scale(1.08); }
+}
+
+/* --- 全局通用：顶级顺滑的弹性入场动画，用于解决启动突兀、跳动的问题 --- */
+@-webkit-keyframes slideUpFadeIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 60rpx, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes slideUpFadeIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 60rpx, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.startup-splash {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #f0f4f8; /* 采用不透明背景，以遮挡底层未加载完的一切 DOM 和背景 */
+}
+
+.splash-spinner {
+  width: 72rpx;
+  height: 72rpx;
+  border: 4rpx solid rgba(79, 131, 255, 0.15);
+  border-top-color: #4f83ff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(79, 131, 255, 0.1);
+}
+
+.splash-text {
+  font-size: 26rpx;
+  color: #64748b;
+  letter-spacing: 4rpx;
+  animation: pulseOpacity 1.5s infinite ease-in-out;
+  font-weight: 500;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulseOpacity {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* 全局大图背景统一样式 */
+.page-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}

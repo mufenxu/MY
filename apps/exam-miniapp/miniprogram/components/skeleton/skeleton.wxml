@@ -1,0 +1,36 @@
+<view class="skeleton-container {{type}}">
+  <block wx:if="{{type === 'list'}}">
+    <view class="skeleton-item" wx:for="{{rows}}" wx:key="index">
+      <view class="skeleton-avatar"></view>
+      <view class="skeleton-content">
+        <view class="skeleton-title"></view>
+        <view class="skeleton-row"></view>
+      </view>
+    </view>
+  </block>
+  
+  <block wx:if="{{type === 'exam'}}">
+    <view class="skeleton-header">
+      <view class="skeleton-index"></view>
+      <view class="skeleton-timer"></view>
+    </view>
+    <view class="skeleton-progress"></view>
+    <view class="skeleton-question-area">
+      <view class="skeleton-tag"></view>
+      <view class="skeleton-title skeleton-title-large"></view>
+      <view class="skeleton-title skeleton-title-medium"></view>
+      
+      <view class="skeleton-options">
+        <view class="skeleton-option" wx:for="{{4}}" wx:key="index"></view>
+      </view>
+    </view>
+  </block>
+
+  <block wx:if="{{type === 'card'}}">
+    <view class="skeleton-card" wx:for="{{rows}}" wx:key="index">
+      <view class="skeleton-title"></view>
+      <view class="skeleton-row"></view>
+      <view class="skeleton-row short"></view>
+    </view>
+  </block>
+</view>

@@ -1,0 +1,151 @@
+<view class="container exam-page">
+  <view class="custom-nav" style="padding-top: {{capsuleTop}}px;">
+    <view class="nav-title" style="height: {{capsuleHeight}}px; line-height: {{capsuleHeight}}px;">
+      {{title}}
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" style="margin-top: {{navBarHeight}}px; padding: 40rpx 0;">
+    <skeleton type="exam"></skeleton>
+  </view>
+
+  <view
+    class="main-content"
+    wx:if="{{!loading && totalCount > 0}}"
+    style="height: calc(100vh - {{navBarHeight}}px); margin-top: {{navBarHeight}}px; display: flex; flex-direction: column;"
+  >
+    <view class="header-bar">
+      <view class="progress-info">
+        <text class="current-index">{{currentIndex + 1}}</text>
+        <text class="total-count">/ {{totalCount}}</text>
+        <text class="timer" wx:if="{{timeLeft > 0}}">⏱ {{timerStr}}</text>
+      </view>
+
+      <view class="actions">
+        <view class="btn-sheet" bindtap="onToggleAnswerSheet">
+          <view class="sheet-icon">
+            <view class="rect"></view>
+            <view class="rect"></view>
+            <view class="rect"></view>
+            <view class="rect"></view>
+          </view>
+          <text>答题卡</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="recite-overview" wx:if="{{mode === 'recite'}}">
+      <text class="overview-item">已掌握 {{reciteKnownCount}}</text>
+      <text class="overview-item">待复习 {{recitePendingCount}}</text>
+      <text class="overview-item">今日复习 {{reciteReviewedCount}}</text>
+    </view>
+
+    <progress
+      percent="{{mode === 'recite' ? (reciteKnownCount / totalCount * 100) : ((currentIndex + 1) / totalCount * 100)}}"
+      stroke-width="3"
+      activeColor="#3B82F6"
+      backgroundColor="#E7ECF3"
+      class="progress-line"
+    />
+
+    <swiper
+      class="question-swiper"
+      current="{{currentIndex}}"
+      bindchange="onSwiperChange"
+      duration="300"
+      style="flex: 1; width: 100%;"
+    >
+      <swiper-item wx:for="{{questions}}" wx:key="_id">
+        <scroll-view scroll-y class="swiper-scroll-view" style="height: 100%;">
+          <view class="question-area" wx:if="{{index >= currentIndex - 1 && index <= currentIndex + 1}}">
+            <question-card
+              question="{{item}}"
+              showAnalysis="{{index === currentIndex ? isAnalysisVisible : false}}"
+              userAnswer="{{answers[item._id] || []}}"
+              canUseAiAnalysis="{{canUseAiAnalysis}}"
+              canGenerateAiAnalysis="{{canGenerateAiAnalysis}}"
+              aiAnalysis="{{aiAnalysisByQuestionId[item._id] || ''}}"
+              aiAnalysisLoading="{{aiAnalysisLoadingByQuestionId[item._id] || false}}"
+              bind:change="onAnswerChange"
+              bind:ai-analysis="onAiAnalysisRequest"
+            />
+          </view>
+          <view class="footer-spacer" style="height: {{footerSpacerHeight}}px;"></view>
+        </scroll-view>
+      </swiper-item>
+    </swiper>
+  </view>
+
+  <view class="footer-bar" wx:if="{{!loading}}" style="padding-bottom: {{footerBottomPadding}}px;">
+    <view class="btn-group recite-group" wx:if="{{mode === 'recite'}}">
+      <button class="btn-nav btn-reveal" bindtap="onToggleAnalysis">
+        {{isAnalysisVisible ? '隐藏答案' : '显示答案'}}
+      </button>
+      <button class="btn-confirm btn-known" bindtap="onReciteMark" data-level="known">会了</button>
+      <button class="btn-confirm btn-fuzzy" bindtap="onReciteMark" data-level="fuzzy">模糊</button>
+      <button class="btn-confirm btn-unknown" bindtap="onReciteMark" data-level="unknown">不会</button>
+    </view>
+
+    <view class="btn-group" wx:else>
+      <button class="btn-nav btn-prev {{currentIndex === 0 ? 'disabled' : ''}}" bindtap="onPrev" disabled="{{currentIndex === 0}}">上一题</button>
+
+      <button
+        class="btn-confirm"
+        wx:if="{{mode === 'practice' && questions[currentIndex].type === 'multiple' && !isAnalysisVisible}}"
+        bindtap="onConfirmAnswer"
+      >确认作答</button>
+
+      <button class="btn-submit" wx:elif="{{currentIndex === totalCount - 1}}" bindtap="onSubmit">提交试卷</button>
+      <button class="btn-nav btn-next" wx:else bindtap="onNext">下一题</button>
+    </view>
+  </view>
+
+  <view class="answer-sheet-mask {{showAnswerSheet ? 'visible' : ''}}" bindtap="onToggleAnswerSheet"></view>
+  <view class="answer-sheet {{showAnswerSheet ? 'visible' : ''}}">
+    <view class="sheet-header">
+      <view class="sheet-close-btn" bindtap="onToggleAnswerSheet">×</view>
+      <text class="sheet-title">答题卡</text>
+      <view class="sheet-legend" wx:if="{{mode !== 'recite'}}">
+        <view class="legend-item"><view class="legend-dot current"></view><text>当前</text></view>
+        <view class="legend-item"><view class="legend-dot answered"></view><text>已答</text></view>
+        <view class="legend-item"><view class="legend-dot pending"></view><text>未答</text></view>
+      </view>
+      <view class="recite-legend" wx:if="{{mode === 'recite'}}">
+        <text class="legend-item known">会了</text>
+        <text class="legend-item fuzzy">模糊</text>
+        <text class="legend-item unknown">不会</text>
+      </view>
+    </view>
+    <scroll-view scroll-y class="sheet-content">
+      <block wx:for="{{groupedQuestions}}" wx:key="type" wx:for-item="group">
+        <view class="type-section">
+          <view class="type-header">
+            <text class="type-name">{{group.typeName}}</text>
+            <text class="type-count">（{{group.items.length}}题）</text>
+          </view>
+          <view class="grid">
+            <view
+              class="grid-item {{item.originalIndex === currentIndex ? 'current' : ''}} {{mode === 'recite' ? (reciteMasteryClassMap[item.question._id] || '') : (answers[item.question._id] ? 'answered' : '')}}"
+              wx:for="{{group.items}}"
+              wx:key="originalIndex"
+              bindtap="onJumpToQuestion"
+              data-index="{{item.originalIndex}}"
+            >
+              {{item.originalIndex + 1}}
+            </view>
+          </view>
+        </view>
+      </block>
+    </scroll-view>
+  </view>
+
+  <custom-modal
+    show="{{mode !== 'recite' && showResumeModal}}"
+    title="提示"
+    content="检测到云端未完成的进度，是否继续？"
+    confirmText="继续"
+    cancelText="重新开始"
+    bind:confirm="onResumeConfirm"
+    bind:cancel="onResumeCancel"
+  />
+</view>

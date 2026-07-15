@@ -1,0 +1,215 @@
+page {
+  background-color: #f0f4f8;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 40rpx;
+}
+
+/* Background animated shapes */
+.bg-circle-1 {
+  position: absolute;
+  top: -10vh;
+  right: -10vw;
+  width: 60vw;
+  height: 60vw;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(34, 211, 238, 0.1));
+  filter: blur(40px);
+  z-index: 1;
+}
+
+.bg-circle-2 {
+  position: absolute;
+  bottom: 0vh;
+  left: -20vw;
+  width: 70vw;
+  height: 70vw;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.15), rgba(99, 102, 241, 0.1));
+  filter: blur(50px);
+  z-index: 1;
+}
+
+.bg-circle-3 {
+  position: absolute;
+  top: 40vh;
+  left: 60vw;
+  width: 40vw;
+  height: 40vw;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(236, 72, 153, 0.05));
+  filter: blur(40px);
+  z-index: 1;
+}
+
+/* Main Card */
+.auth-card {
+  width: 100%;
+  max-width: 600rpx;
+  background: rgba(240, 244, 248, 0.65);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: 60rpx;
+  padding: 80rpx 50rpx;
+  box-shadow: 
+    16rpx 16rpx 32rpx rgba(166, 180, 200, 0.4),
+    -16rpx -16rpx 32rpx rgba(255, 255, 255, 0.8),
+    inset 4rpx 4rpx 8rpx rgba(255, 255, 255, 0.9),
+    inset -4rpx -4rpx 8rpx rgba(166, 180, 200, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 10;
+  border: 4rpx solid rgba(255, 255, 255, 0.8);
+  box-sizing: border-box;
+}
+
+/* Icon with floating effect and pulse */
+.icon-wrapper {
+  width: 180rpx;
+  height: 180rpx;
+  background: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 16rpx 32rpx rgba(99, 102, 241, 0.15);
+  margin-bottom: 50rpx;
+  position: relative;
+  animation: float 6s ease-in-out infinite;
+  border: 4rpx solid rgba(255, 255, 255, 0.8);
+  z-index: 2;
+}
+
+.pulse-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #6366f1;
+  opacity: 0.15;
+  z-index: -1;
+  animation: pulse 2s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.3; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.pc-icon {
+  width: 90rpx;
+  height: 90rpx;
+  opacity: 0.9;
+}
+
+/* Typography */
+.title {
+  font-size: 48rpx;
+  font-weight: 800;
+  color: #1f2937;
+  margin-bottom: 24rpx;
+  letter-spacing: 2rpx;
+}
+
+.subtitle {
+  font-size: 30rpx;
+  color: #6b7280;
+  margin-bottom: 80rpx;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.app-name {
+  color: #4f46e5;
+  font-weight: 700;
+  margin-left: 12rpx;
+  background: rgba(79, 70, 229, 0.08);
+  padding: 8rpx 24rpx;
+  border-radius: 24rpx;
+}
+
+/* Buttons */
+.btn-group {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 32rpx;
+}
+
+.btn {
+  width: 100% !important;
+  height: 100rpx;
+  line-height: 100rpx;
+  border-radius: 50rpx;
+  font-size: 34rpx;
+  font-weight: 600;
+  padding: 0;
+  margin: 0;
+  border: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.btn-confirm {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #ffffff;
+  box-shadow: 0 12rpx 24rpx rgba(99, 102, 241, 0.25);
+}
+
+.btn-confirm:active {
+  transform: scale(0.97);
+  box-shadow: 0 6rpx 12rpx rgba(99, 102, 241, 0.15);
+}
+
+.btn-cancel {
+  background: rgba(243, 244, 246, 0.8);
+  color: #4b5563;
+}
+
+.btn-cancel:active {
+  background: rgba(229, 231, 235, 1);
+  transform: scale(0.97);
+}
+
+/* Security Tip */
+.security-tip {
+  margin-top: 60rpx;
+  display: flex;
+  align-items: center;
+  font-size: 24rpx;
+  color: #9ca3af;
+  z-index: 10;
+}
+
+.safe-icon {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 28rpx;
+  height: 28rpx;
+  background: #10b981;
+  color: white;
+  border-radius: 50%;
+  font-size: 20rpx;
+  margin-right: 12rpx;
+}

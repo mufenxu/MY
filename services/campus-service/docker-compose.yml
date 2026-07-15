@@ -1,0 +1,43 @@
+services:
+  hgu-campus-hub:
+    image: ${HGU_IMAGE:-mufenxu/hgu:latest}
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${HGU_BIND_ADDRESS:-127.0.0.1}:${PORT:-8780}:8780"
+    environment:
+      - NODE_ENV=production
+      - HGU_HOST=0.0.0.0
+      - PORT=8780
+      - HGU_APP_AUTH_REQUIRED=${HGU_APP_AUTH_REQUIRED:-true}
+      - HGU_ADMIN_USERNAME=${HGU_ADMIN_USERNAME:-admin}
+      - HGU_ADMIN_PASSWORD=${HGU_ADMIN_PASSWORD}
+      - HGU_APP_SESSION_SECRET=${HGU_APP_SESSION_SECRET}
+      - HGU_APP_SESSION_TTL_HOURS=${HGU_APP_SESSION_TTL_HOURS:-720}
+      - HGU_DATA_ENCRYPTION_KEY=${HGU_DATA_ENCRYPTION_KEY}
+      - HGU_APP_COOKIE_SECURE=${HGU_APP_COOKIE_SECURE:-true}
+      - HGU_TRUST_PROXY=${HGU_TRUST_PROXY:-false}
+      - HGU_ENABLE_HSTS=${HGU_ENABLE_HSTS:-true}
+      - HGU_ENABLE_HTTPS_REDIRECT=${HGU_ENABLE_HTTPS_REDIRECT:-true}
+      - HGU_EXTRA_ALLOWED_SCHOOL_HOSTS=${HGU_EXTRA_ALLOWED_SCHOOL_HOSTS:-}
+      # NAS/NFS/CIFS 挂载无法自动识别时，可在 .env 中填写宿主机 data 目录的数字 UID/GID
+      - HGU_DATA_UID=${HGU_DATA_UID:-}
+      - HGU_DATA_GID=${HGU_DATA_GID:-}
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    cap_add:
+      # 仅供入口脚本修复挂载目录权限并切换到 node 用户；Node 进程不会保留这些权限
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    stop_grace_period: 15s
+    volumes:
+      - ./data:/app/data

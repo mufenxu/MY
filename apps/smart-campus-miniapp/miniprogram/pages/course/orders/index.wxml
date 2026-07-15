@@ -1,0 +1,101 @@
+<!-- 现代风格 - 网课订单列表 -->
+<view class="page">
+  <!-- 顶部搜索栏 -->
+  <view class="search-bar">
+    <view class="search-input-wrap">
+      <icon type="search" size="14" color="#A3AED0" class="search-icon"></icon>
+      <input 
+        class="search-input" 
+        placeholder="搜索账号、平台或单号" 
+        placeholder-class="search-ph"
+        value="{{searchKeyword}}"
+        bindinput="onSearchInput"
+        bindconfirm="onSearch"
+        confirm-type="search"
+      />
+      <icon type="clear" size="18" color="#D1D5DB" class="clear-icon" wx:if="{{searchKeyword}}" bindtap="onClearSearch"></icon>
+    </view>
+    <view class="search-btn" bindtap="onSearch">搜索</view>
+  </view>
+
+  <!-- 订单卡片列表 -->
+  <view class="order-list" wx:if="{{orders.length > 0}}">
+    <view class="order-card card-{{item.status}}" wx:for="{{orders}}" wx:key="tradeNo">
+      <!-- 卡片头部：状态标签 + 单号 -->
+      <view class="card-header">
+        <view class="status-badge {{item.status}}">{{item.statusText}}</view>
+        <text class="trade-no">{{item.tradeNo}}</text>
+      </view>
+
+      <!-- 课程名称 -->
+      <view class="course-title">{{item.courseName || '未知课程'}}</view>
+
+      <!-- 信息区块 -->
+      <view class="info-section">
+        <view class="info-row">
+          <view class="info-item" bindtap="onQuickSearch" data-index="{{index}}" data-field="account">
+            <text class="info-label">授权账户</text>
+            <text class="info-val">{{item.account || '-'}}</text>
+          </view>
+          <view class="info-item" bindtap="onQuickSearch" data-keyword="{{item.platformName || item.platformCode}}" data-field="platformName">
+            <text class="info-label">接单平台</text>
+            <text class="info-val">{{item.platformName || item.platformCode}}</text>
+          </view>
+        </view>
+
+        <!-- 进度条区域 -->
+        <view class="progress-bar-area">
+          <view class="progress-meta">
+            <text class="info-label">当前进度</text>
+            <text class="progress-value">{{item.progress}}</text>
+          </view>
+          <view class="progress-track">
+            <view class="progress-fill" style="width: {{item.progressPercent || 0}}%"></view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 平台节点备注 -->
+      <view class="remarks-box" wx:if="{{item.remarks && item.status !== 'Pending'}}">
+        <text class="remarks-label">平台节点</text>
+        <text class="remarks-text">{{item.remarks}}</text>
+      </view>
+
+      <!-- 卡片底部：时间 + 操作按钮 -->
+      <view class="card-footer">
+        <text class="dateline">{{item.createdAt}}</text>
+        <view class="btn-group">
+          <view class="btn-retry" bindtap="onRetryOrder" data-id="{{item.tradeNo}}">
+            <text class="btn-retry-icon">↻</text>
+            <text>{{item.isRetrying ? '提交中' : '补刷'}}</text>
+          </view>
+          <view class="btn-refresh {{item.isRefreshing ? 'is-loading' : ''}}" bindtap="onRefreshProgress" data-id="{{item.tradeNo}}">
+            <text>{{item.isRefreshing ? '同步中..' : '刷新进度'}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+    
+    <view class="loading-more" wx:if="{{loadingMore}}">
+      <view class="loading-dots">
+        <view class="dot"></view><view class="dot"></view><view class="dot"></view>
+      </view>
+      <text>加载中</text>
+    </view>
+    <view class="no-more" wx:if="{{!hasMore && orders.length > 0}}">— 已显示全部订单 —</view>
+  </view>
+
+  <!-- 空态 -->
+  <view class="empty-state" wx:if="{{!loading && orders.length === 0}}">
+    <view class="empty-icon-wrap">
+      <view class="empty-img empty-receipt">
+        <view class="empty-receipt__line"></view>
+        <view class="empty-receipt__line short"></view>
+        <view class="empty-receipt__line"></view>
+      </view>
+    </view>
+    <view class="empty-text">暂无订单记录</view>
+    <view class="empty-sub">前往查课处理提交新订单</view>
+    <button class="btn-primary-go" bindtap="onGoToQuery">前往查课处理</button>
+  </view>
+</view>

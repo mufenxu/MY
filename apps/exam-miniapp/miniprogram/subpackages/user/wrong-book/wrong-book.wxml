@@ -1,0 +1,74 @@
+<view class="page-container">
+  <!-- 自定义导航栏 -->
+  <view class="custom-nav" style="padding-top: {{menuButtonTop}}px;">
+    <view class="nav-content" style="height: {{menuButtonHeight}}px;">
+      <text class="nav-title">错题本</text>
+    </view>
+  </view>
+
+  <scroll-view class="content-scroll" scroll-y enhanced="{{true}}" bounces="{{true}}" show-scrollbar="{{false}}" style="padding-top: {{navBarHeight}}px;">
+    <view class="wrong-overview fade-in-up" wx:if="{{!loading && wrongCategories.length > 0}}">
+      <view class="overview-copy">
+        <text class="overview-kicker">错题复盘</text>
+        <text class="overview-title">{{totalWrongCount}} 道待巩固</text>
+        <text class="overview-desc">按题库整理错题，优先回到薄弱章节练一遍。</text>
+      </view>
+      <view class="overview-side">
+        <text class="overview-number">{{wrongCategories.length}}</text>
+        <text class="overview-label">个题库</text>
+      </view>
+    </view>
+
+    <view class="section-header" wx:if="{{!loading && wrongCategories.length > 0}}">
+      <view class="section-copy">
+        <text class="section-title">错题题库</text>
+        <text class="section-subtitle">点击进入专项练习</text>
+      </view>
+      <view class="title-line"></view>
+    </view>
+
+    <view class="category-list fade-in-up" wx:if="{{!loading && wrongCategories.length > 0}}">
+      <view 
+        class="category-card" 
+        wx:for="{{wrongCategories}}" 
+        wx:key="categoryId"
+        bindtap="onCategoryTap"
+        data-category-id="{{item.categoryId}}"
+        data-category-name="{{item.categoryName}}"
+        data-count="{{item.questions.length}}"
+        hover-class="category-card-hover"
+      >
+        <view class="card-left">
+          <view class="card-icon" style="background: {{gradients[index % gradients.length]}}">
+            <text class="icon-text">{{index + 1}}</text>
+          </view>
+          <view class="card-info">
+            <text class="card-title">{{item.categoryName}}</text>
+            <view class="card-meta">
+              <view class="meta-dot"></view>
+              <text class="card-count">{{item.questions.length}} 道错题</text>
+            </view>
+          </view>
+        </view>
+        <view class="card-right">
+          <view class="practice-btn">开始</view>
+          <view class="arrow"></view>
+        </view>
+      </view>
+    </view>
+
+    <view class="empty-state" wx:if="{{!loading && wrongCategories.length === 0}}">
+      <view class="empty-visual">
+        <view class="empty-book"></view>
+      </view>
+      <text class="empty-title">暂时没有错题</text>
+      <text class="empty-desc">暂时没有错题，继续保持！</text>
+    </view>
+
+    <view class="loading-state" wx:if="{{loading}}">
+      <skeleton type="card" rows="{{3}}"></skeleton>
+    </view>
+
+    <view class="footer-spacer"></view>
+  </scroll-view>
+</view>

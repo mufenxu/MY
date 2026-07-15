@@ -1,0 +1,56 @@
+<view class="container {{isMaintenance ? 'is-playful' : ''}}">
+  <!-- 动态漂浮物，仅在搞怪模式显示 -->
+  <block wx:if="{{isMaintenance}}">
+    <view class="bg-bubble" style="top: 10%; left: 5%; animation-delay: 0s;"><text>👻</text></view>
+    <view class="bg-bubble" style="top: 30%; right: 10%; animation-delay: 2s;"><text>🎈</text></view>
+    <view class="bg-bubble" style="bottom: 20%; left: 15%; animation-delay: 4s;"><text>✨</text></view>
+    <view class="bg-bubble" style="bottom: 10%; right: 5%; animation-delay: 1s;"><text>🍀</text></view>
+    <view class="bg-bubble" style="top: 50%; left: 40%; animation-delay: 3s;"><text>🛸</text></view>
+  </block>
+
+  <view class="loading-container" wx:if="{{isLoading}}">
+    <view class="loading-spinner"></view>
+    <view class="loading-text">正在加载今日新闻...</view>
+  </view>
+
+  <view class="error-container" wx:elif="{{error}}">
+    <icon type="warn" size="64" color="#ef4444"></icon>
+    <view class="error-text">{{error}}</view>
+    <button class="retry-btn" bindtap="fetchNews">重试</button>
+  </view>
+
+  <view class="news-content" wx:else>
+    <view class="header-card">
+      <view class="header-left">
+        <text class="title">{{isMaintenance ? '精神状态观察记录' : '每天 60s 读懂世界'}}</text>
+        <text class="date">{{date}}</text>
+      </view>
+      <view class="header-right">
+        <view class="weather-icon {{isMaintenance ? 'spinning' : ''}}">
+          <text>{{isMaintenance ? '🤪' : '📰'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="news-list-container">
+      <view class="maintenance-tag" wx:if="{{isMaintenance}}">
+        <text>开发者的精神状态 / 碎碎念模式</text>
+      </view>
+      
+      <view class="news-item" wx:for="{{newsList}}" wx:key="index">
+        <view class="item-index">{{index + 1}}</view>
+        <view class="item-content">
+          <text class="item-text">{{item}}</text>
+        </view>
+      </view>
+
+      <view class="humor-tip" wx:if="{{isMaintenance}}">
+        <view class="tip-content">{{tip}}</view>
+      </view>
+    </view>
+      <view class="footer-info" wx:if="{{!isMaintenance}}">
+        <view class="footer-text">— 今天的资讯就到这里啦 —</view>
+      </view>
+
+  </view>
+</view>

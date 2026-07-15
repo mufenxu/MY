@@ -1,0 +1,81 @@
+<view class="bmi">
+    <view class="nav">
+        <view class="nav-left">
+            <view bindtap="onBack" class="nav-back"></view>
+        </view>
+        <view class="nav-center">
+            <text class="nav-title">BMI 计算器</text>
+        </view>
+        <view class="nav-right"></view>
+    </view>
+    <view class="content">
+        <view class="form">
+            <view class="field">
+                <text class="label">身高(cm)</text>
+                <input bindinput="onHeightInput" class="input" placeholder="例如 170" type="digit" value="{{height}}"></input>
+            </view>
+            <view class="field">
+                <text class="label">体重(kg)</text>
+                <input bindinput="onWeightInput" class="input" placeholder="例如 65" type="digit" value="{{weight}}"></input>
+            </view>
+            <button bindtap="onCalc" class="btn btn--primary" disabled="{{!canCalc}}">计算 BMI</button>
+        </view>
+        <view class="result {{resultClass}}" wx:if="{{hasResult}}">
+            <view class="bmi-value">BMI：{{bmi}}</view>
+            <view class="bmi-cat">{{category}}</view>
+            <view class="bmi-adv">{{advice}}</view>
+            <view class="bmi-tip">参考范围：18.5–23.9 为正常</view>
+        </view>
+        <view class="ref">
+            <view class="ref-title">
+                <text class="ref-icon">i</text>
+                <text>BMI参考标准</text>
+            </view>
+            <view class="ref-table">
+                <view class="ref-row ref-head">
+                    <text class="ref-th">BMI范围</text>
+                    <text class="ref-th">分类</text>
+                    <text class="ref-th">健康风险</text>
+                </view>
+                <view class="ref-row row-thin">
+                    <text class="ref-td">{{lt}}18.5</text>
+                    <text class="ref-td">偏瘦</text>
+                    <text class="ref-td">营养不良、骨质疏松风险</text>
+                </view>
+                <view class="ref-row row-normal">
+                    <text class="ref-td">18.5-23.9</text>
+                    <text class="ref-td">正常</text>
+                    <text class="ref-td">健康风险最低</text>
+                </view>
+                <view class="ref-row row-over">
+                    <text class="ref-td">24-27.9</text>
+                    <text class="ref-td">过重</text>
+                    <text class="ref-td">轻度增加健康风险</text>
+                </view>
+                <view class="ref-row row-obese1">
+                    <text class="ref-td">28-31.9</text>
+                    <text class="ref-td">肥胖(1级)</text>
+                    <text class="ref-td">中度增加健康风险</text>
+                </view>
+                <view class="ref-row row-obese2">
+                    <text class="ref-td">32-35.9</text>
+                    <text class="ref-td">肥胖(2级)</text>
+                    <text class="ref-td">严重增加健康风险</text>
+                </view>
+                <view class="ref-row row-obese3">
+                    <text class="ref-td">≥36</text>
+                    <text class="ref-td">肥胖(3级)</text>
+                    <text class="ref-td">极度增加健康风险</text>
+                </view>
+            </view>
+        </view>
+        <view class="ref-notice">
+            <text class="warn-icon">!</text>
+            <view class="ref-notice-body">
+                <view class="li">BMI不适用于运动员、孕妇、老人和儿童</view>
+                <view class="li">亚洲人群BMI标准可能比欧美标准更严格</view>
+                <view class="li">应结合腰围和体脂率综合评估</view>
+            </view>
+        </view>
+    </view>
+</view>

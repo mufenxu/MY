@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>地大智览 · 校园信息工作台</title>
+  <link rel="icon" type="image/png" href="./assets/hgu-emblem.png">
+  <link rel="apple-touch-icon" href="./assets/hgu-emblem.png">
+  <link rel="stylesheet" href="./styles.css?v=20260715-admin-workspace-v8">
+</head>
+<body data-app-locked="true">
+  <div class="nebula-glow purple"></div>
+  <div class="nebula-glow blue"></div>
+  <main class="shell">
+    <header class="topbar app-header">
+      <div class="brand">
+        <div class="brand-mark">
+          <img class="brand-logo" src="./assets/hgu-emblem.png" alt="河北地质大学校徽">
+        </div>
+        <div>
+          <p class="eyebrow">河北地质大学</p>
+          <h1>地大智览</h1>
+          <p class="header-subtitle">校园信息工作台</p>
+        </div>
+      </div>
+      <nav class="quick-nav" aria-label="主要板块">
+        <a href="#overview">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
+          <span>总览</span>
+        </a>
+        <a href="#study">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5zM20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z"/></svg>
+          <span>课表</span>
+        </a>
+        <a href="#rooms">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V5l7-2 7 2v16M9 8h1M14 8h1M9 12h1M14 12h1M9 16h1M14 16h1M3 21h18"/></svg>
+          <span>空教室</span>
+        </a>
+        <a href="#evaluation">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8M9 2h6v4H9zM6 4H5a2 2 0 0 0-2 2v14h18V6a2 2 0 0 0-2-2h-1M7.5 13l3 3 6-7"/></svg>
+          <span>评教</span>
+        </a>
+        <a href="#campus">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3zM3 10h18M7 15h4"/></svg>
+          <span>一卡通</span>
+        </a>
+        <a href="#energy">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-7 11h6l-1 9 7-12h-6z"/></svg>
+          <span>能耗</span>
+        </a>
+      </nav>
+      <div class="actions">
+        <button id="themeToggleButton" type="button" class="ghost">主题</button>
+        <a id="adminNavLink" class="admin-action ghost" href="#admin" title="用户管理" hidden>用户</a>
+        <button id="refreshButton" type="button">同步全部</button>
+        <button id="appLogoutButton" type="button" class="ghost">锁定</button>
+      </div>
+    </header>
+
+    <div class="main-content">
+      <section id="appGate" class="app-gate">
+      <img class="gate-logo" src="./assets/hgu-emblem.png" alt="河北地质大学校徽">
+      <div>
+        <p class="eyebrow">系统访问验证</p>
+        <h2>进入地大智览</h2>
+        <p id="appAuthStatusText">正在检查访问会话...</p>
+      </div>
+      <form id="appLoginForm" class="app-login-form" action="/app-auth/login" method="post" autocomplete="off">
+        <input id="appUsernameInput" name="username" type="text" placeholder="系统用户名" autocomplete="username">
+        <label class="password-field">
+          <input id="appPasswordInput" name="password" type="password" placeholder="系统密码" autocomplete="current-password">
+          <button type="button" class="password-toggle" data-password-toggle="appPasswordInput" aria-label="显示密码"></button>
+        </label>
+        <button id="appLoginButton" type="submit">解锁系统</button>
+      </form>
+      <div class="gate-register-toggle">
+        <span>还没有系统账号？</span>
+        <button id="inviteRegisterToggleButton" type="button" class="link-button">使用邀请码注册</button>
+      </div>
+      <form id="inviteRegisterForm" class="app-login-form invite-register-form" autocomplete="off" hidden>
+        <input id="inviteCodeInput" name="inviteCode" type="text" placeholder="邀请码" autocomplete="off">
+        <input id="inviteUsernameInput" name="inviteUsername" type="text" placeholder="新系统用户名" autocomplete="username">
+        <label class="password-field">
+          <input id="invitePasswordInput" name="invitePassword" type="password" placeholder="新系统密码（至少 12 位）" autocomplete="new-password">
+          <button type="button" class="password-toggle" data-password-toggle="invitePasswordInput" aria-label="显示密码"></button>
+        </label>
+        <button id="inviteRegisterButton" type="submit" class="ghost">注册并进入系统</button>
+      </form>
+      <p class="auth-note">这是你部署在公网后的第一道门，和学校统一身份认证密码不是同一个。</p>
+    </section>
+
+    <section id="status" class="status"></section>
+
+    <section id="overview" class="overview-grid" aria-label="系统总览">
+      <article class="overview-card tone-study overview-card-wide">
+        <div class="overview-card-main">
+          <span>学业状态</span>
+          <strong id="overviewStudyText">--</strong>
+          <small id="overviewStudyMeta">课表与空教室</small>
+        </div>
+        <dl class="overview-detail-grid">
+          <div>
+            <dt>课程安排</dt>
+            <dd id="overviewCourseDetail">--</dd>
+          </div>
+          <div>
+            <dt>空教室</dt>
+            <dd id="overviewRoomDetail">--</dd>
+          </div>
+          <div>
+            <dt>学期周次</dt>
+            <dd id="overviewTermDetail">--</dd>
+          </div>
+        </dl>
+      </article>
+      <article class="overview-card tone-gpa">
+        <div class="overview-card-main">
+          <span>GPA成绩</span>
+          <strong id="overviewGpaText">--</strong>
+          <small id="overviewGpaMeta">教务系统 GPA</small>
+        </div>
+        <dl class="overview-detail-list">
+          <div>
+            <dt>核心课</dt>
+            <dd id="overviewCoreGpaDetail">--</dd>
+          </div>
+          <div>
+            <dt>必修课</dt>
+            <dd id="overviewRequiredGpaDetail">--</dd>
+          </div>
+          <div>
+            <dt>学位课</dt>
+            <dd id="overviewDegreeGpaDetail">--</dd>
+          </div>
+        </dl>
+      </article>
+      <article class="overview-card tone-campus">
+        <div class="overview-card-main">
+          <span>校园账户</span>
+          <strong id="overviewCampusText">--</strong>
+          <small id="overviewCampusMeta">一卡通与生活用水</small>
+        </div>
+        <dl class="overview-detail-list">
+          <div>
+            <dt>住宿</dt>
+            <dd id="overviewDormDetail">--</dd>
+          </div>
+          <div>
+            <dt>用水码</dt>
+            <dd id="overviewWaterDetail">--</dd>
+          </div>
+          <div>
+            <dt>钱包</dt>
+            <dd id="overviewCardDetail">--</dd>
+          </div>
+        </dl>
+      </article>
+      <article class="overview-card tone-energy">
+        <div class="overview-card-main">
+          <span>宿舍能耗</span>
+          <strong id="overviewEnergyText">--</strong>
+          <small id="overviewEnergyMeta">电费与仪表</small>
+        </div>
+        <dl class="overview-detail-list">
+          <div>
+            <dt>房间</dt>
+            <dd id="overviewEnergyRoomDetail">--</dd>
+          </div>
+          <div>
+            <dt>仪表</dt>
+            <dd id="overviewMeterDetail">--</dd>
+          </div>
+          <div>
+            <dt>本月</dt>
+            <dd id="overviewMonthDetail">--</dd>
+          </div>
+        </dl>
+      </article>
+      <article class="overview-card tone-sync">
+        <div class="overview-card-main">
+          <span>同步状态</span>
+          <strong id="overviewSyncText">--</strong>
+          <small id="overviewSyncMeta">等待同步</small>
+        </div>
+        <dl class="overview-detail-list">
+          <div>
+            <dt>学校会话</dt>
+            <dd id="overviewAuthDetail">--</dd>
+          </div>
+          <div>
+            <dt>服务状态</dt>
+            <dd id="overviewServiceDetail">--</dd>
+          </div>
+          <div>
+            <dt>更新时间</dt>
+            <dd id="overviewSyncDetail">--</dd>
+          </div>
+        </dl>
+      </article>
+    </section>
+
+    <section id="authPanel" class="auth-panel">
+      <div>
+        <h2>连接学校账号</h2>
+        <p id="authStatusText">正在检查会话...</p>
+      </div>
+      <form id="loginForm" class="login-form" autocomplete="off">
+        <input id="usernameInput" name="username" type="text" inputmode="text" placeholder="学号/工号" autocomplete="username">
+        <label class="password-field">
+          <input id="passwordInput" name="password" type="password" placeholder="统一身份认证密码" autocomplete="current-password">
+          <button type="button" class="password-toggle" data-password-toggle="passwordInput" aria-label="显示密码"></button>
+        </label>
+        <label class="remember">
+          <input id="rememberInput" type="checkbox" checked>
+          <span>7天内自动登录</span>
+        </label>
+        <button id="loginButton" type="submit">登录并保存会话</button>
+      </form>
+      <div class="auth-actions">
+        <button id="logoutButton" type="button" class="ghost">退出学校会话</button>
+      </div>
+      <p class="auth-note">密码只用于本次 CAS 登录，不会写入磁盘。部署到公网时请务必使用 HTTPS。</p>
+    </section>
+
+    <section id="study" class="app-section academic-section">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">SMART SCHEDULE · 智能课程视图</p>
+          <h2>我的课程表</h2>
+          <p class="academic-headline-note">一眼掌握今天、下一节与整周安排</p>
+        </div>
+        <div class="section-tools academic-controls">
+          <button id="timetableRefreshButton" type="button" class="ghost">同步课表</button>
+          <span id="timetableSyncText">--</span>
+        </div>
+      </div>
+
+      <section class="metrics academic-metrics">
+        <article class="metric">
+          <span>课程门数</span>
+          <strong id="courseCountText">--</strong>
+          <small>门</small>
+        </article>
+        <article class="metric">
+          <span>上课安排</span>
+          <strong id="sessionCountText">--</strong>
+          <small>条</small>
+        </article>
+        <article class="metric">
+          <span>上课地点</span>
+          <strong id="locationCountText">--</strong>
+          <small>处</small>
+        </article>
+        <article class="metric">
+          <span>教务周历</span>
+          <strong id="academicCalendarText">--</strong>
+          <small>学校系统</small>
+        </article>
+      </section>
+
+      <section class="panel timetable-panel">
+        <div class="panel-head timetable-panel-head">
+          <div class="timetable-title">
+            <span class="timetable-title-kicker">WEEKLY OVERVIEW</span>
+            <h2 id="timetableHeadingText">本学期课表</h2>
+            <span id="timetableTermText">--</span>
+          </div>
+          <div class="timetable-toolbar">
+            <select id="timetableSourceSelect" aria-label="课表来源">
+              <option value="current">本学期课表</option>
+              <option value="selection">选课结果</option>
+            </select>
+            <select id="timetableWeekSelect" aria-label="课表周次">
+              <option value="all">全部学期</option>
+            </select>
+            <select id="timetableDaySelect" aria-label="课表星期">
+              <option value="all">全部星期</option>
+              <option value="1">周一</option>
+              <option value="2">周二</option>
+              <option value="3">周三</option>
+              <option value="4">周四</option>
+              <option value="5">周五</option>
+              <option value="6">周六</option>
+              <option value="7">周日</option>
+            </select>
+            <input id="courseSearchInput" type="search" placeholder="搜索课程、老师、教室" aria-label="搜索课程">
+          </div>
+        </div>
+        <div id="timetableSummary" class="timetable-summary"></div>
+        <div id="timetableGrid" class="timetable-grid-wrap"></div>
+      </section>
+
+      <section class="panel course-list-panel">
+        <div class="panel-head">
+          <h2>课程清单</h2>
+          <span id="courseListText">--</span>
+        </div>
+        <div id="courseList" class="course-list"></div>
+      </section>
+    </section>
+
+    <section id="rooms" class="app-section rooms-section">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">自习空间</p>
+          <h2>新校区空闲教室</h2>
+        </div>
+        <div class="section-tools free-room-page-actions">
+          <button id="freeRoomRefreshButton" type="button" class="ghost">查询空教室</button>
+          <span id="freeRoomSyncText">--</span>
+        </div>
+      </div>
+
+      <section class="panel free-room-panel">
+        <div class="panel-head free-room-head">
+          <div>
+            <h2>筛选条件</h2>
+            <span>按日期、楼宇和节次查询可用教室</span>
+          </div>
+          <div class="free-room-controls">
+            <select id="freeDaySelect" aria-label="空闲教室日期">
+              <option value="0">今天</option>
+              <option value="1">明天</option>
+              <option value="2">后天</option>
+            </select>
+            <select id="freeBuildingSelect" aria-label="新校区教学楼">
+              <option value="study">自习常用楼</option>
+              <option value="203">教一</option>
+              <option value="205">教二</option>
+              <option value="202">实验楼</option>
+              <option value="201">图书馆</option>
+              <option value="111">1号学院楼</option>
+              <option value="112">2号学院楼</option>
+              <option value="701">综合楼</option>
+              <option value="all">全部新校区</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="free-section-tools">
+          <div>
+            <span class="field-label">选择节次</span>
+            <div id="freeSectionPicker" class="free-section-picker"></div>
+          </div>
+          <div class="free-section-presets" aria-label="节次快捷选择">
+            <button type="button" class="ghost" data-free-preset="current">当前</button>
+            <button type="button" class="ghost" data-free-preset="morning">上午</button>
+            <button type="button" class="ghost" data-free-preset="afternoon">下午</button>
+            <button type="button" class="ghost" data-free-preset="evening">晚上</button>
+          </div>
+        </div>
+
+        <section class="metrics free-room-summary">
+          <article class="metric">
+            <span>开放楼宇</span>
+            <strong id="freeRoomBuildingCountText">--</strong>
+            <small>栋</small>
+          </article>
+          <article class="metric metric-balance">
+            <span>空闲教室</span>
+            <strong id="freeRoomCountText">--</strong>
+            <small>间</small>
+          </article>
+          <article class="metric">
+            <span>座位容量</span>
+            <strong id="freeSeatCountText">--</strong>
+            <small>座</small>
+          </article>
+          <article class="metric">
+            <span>查询节次</span>
+            <strong id="freeSectionText">--</strong>
+            <small>学校实时数据</small>
+          </article>
+        </section>
+
+        <div id="freeRoomList" class="free-room-list"></div>
+      </section>
+    </section>
+
+    <section id="evaluation" class="app-section evaluation-section">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">教学评估助手</p>
+          <h2>逐门检查，辅助填写</h2>
+          <p class="academic-headline-note">默认按每道分数题满分填写，提交前仍由你确认</p>
+        </div>
+        <div class="section-tools evaluation-page-actions">
+          <button id="evaluationRefreshButton" type="button" class="ghost">同步评估</button>
+          <button id="evaluationAutoButton" type="button">自动完成待评</button>
+          <span id="evaluationSyncText">--</span>
+        </div>
+      </div>
+
+      <div class="evaluation-safety-note">
+        <strong>两种模式</strong>
+        <span>手动模式会逐门确认；自动完成需要你启动时确认一次，随后在服务器后台按满分和默认评价依次处理待评课程，并保留教务系统的重复评估、开放时间和等待时间校验。</span>
+      </div>
+
+      <section id="evaluationAutoPanel" class="evaluation-auto-panel" hidden>
+        <div class="evaluation-auto-head">
+          <div>
+            <strong id="evaluationAutoTitle">自动完成待评</strong>
+            <span id="evaluationAutoText">等待启动</span>
+          </div>
+          <button id="evaluationAutoStopButton" type="button" class="ghost danger" hidden>停止</button>
+        </div>
+        <div class="evaluation-auto-progress">
+          <span id="evaluationAutoProgressBar"></span>
+        </div>
+        <div id="evaluationAutoProgressText" class="evaluation-auto-progress-text">--</div>
+        <div id="evaluationAutoList" class="evaluation-auto-list"></div>
+      </section>
+
+      <section class="metrics evaluation-metrics">
+        <article class="metric">
+          <span>全部课程</span>
+          <strong id="evaluationTotalText">--</strong>
+          <small>门</small>
+        </article>
+        <article class="metric metric-balance">
+          <span>待评课程</span>
+          <strong id="evaluationPendingText">--</strong>
+          <small>门</small>
+        </article>
+        <article class="metric">
+          <span>已完成</span>
+          <strong id="evaluationCompletedText">--</strong>
+          <small>门</small>
+        </article>
+        <article class="metric">
+          <span>默认分值</span>
+          <strong>10</strong>
+          <small>满分</small>
+        </article>
+      </section>
+
+      <section class="panel evaluation-list-panel">
+        <div class="panel-head">
+          <div>
+            <h2>课程评估清单</h2>
+            <span id="evaluationListMeta">等待同步</span>
+          </div>
+        </div>
+        <div id="evaluationList" class="evaluation-list"></div>
+      </section>
+
+      <section id="evaluationEditor" class="panel evaluation-editor" hidden>
+        <div class="panel-head evaluation-editor-head">
+          <div>
+            <span class="evaluation-editor-kicker">当前问卷</span>
+            <h2 id="evaluationEditorTitle">教学评估</h2>
+            <span id="evaluationEditorMeta">--</span>
+          </div>
+          <button id="evaluationCloseButton" type="button" class="ghost">关闭</button>
+        </div>
+        <div class="evaluation-fill-actions">
+          <button id="evaluationFillMaxButton" type="button" class="ghost">全部填满分</button>
+          <span>主观评价默认填“好”，可在提交前修改。</span>
+        </div>
+        <form id="evaluationForm" class="evaluation-form" autocomplete="off">
+          <div id="evaluationQuestions" class="evaluation-questions"></div>
+          <div class="evaluation-submit-bar">
+            <div>
+              <strong id="evaluationReadyTitle">正在准备提交</strong>
+              <span id="evaluationReadyText">教务系统要求打开问卷后等待一段时间</span>
+            </div>
+            <button id="evaluationSubmitButton" type="submit" disabled>确认并提交本门评估</button>
+          </div>
+        </form>
+      </section>
+    </section>
+
+    <section id="campus" class="app-section campus-section">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">校园一卡通</p>
+          <h2>余额、账单与生活用水</h2>
+        </div>
+        <div class="section-tools campus-controls">
+          <select id="campusModeSelect" aria-label="一卡通账单范围">
+            <option value="month">指定月份</option>
+            <option value="recent">最近记录</option>
+          </select>
+          <input id="campusMonthInput" type="month" aria-label="一卡通账单月份">
+          <button id="campusRefreshButton" type="button" class="ghost">查询</button>
+          <button id="campusRechargeButton" type="button">官方充值</button>
+          <span id="campusSyncText">--</span>
+        </div>
+      </div>
+
+      <section class="identity-card-panel" id="identityCardPanel">
+        <article class="campus-id-card">
+          <div class="campus-id-profile">
+          <div class="campus-id-card-top">
+            <div>
+              <span>校园身份卡</span>
+              <strong id="identityNameText">--</strong>
+              <em id="identityCodeText">等待同步</em>
+            </div>
+            <img id="identityAvatar" class="campus-id-avatar" alt="">
+          </div>
+          <div id="identityFacts" class="campus-id-facts"></div>
+          <div class="campus-id-footer">
+            <span id="identityStatusText">用户中心</span>
+            <button id="identityRefreshButton" type="button" class="ghost">同步身份</button>
+          </div>
+          </div>
+
+          <div class="campus-id-code-panel">
+          <div class="panel-head campus-id-code-head">
+            <div>
+              <p class="eyebrow">个人身份码</p>
+              <h2 id="identityCodeModeTitle">二维码</h2>
+            </div>
+            <div class="identity-code-actions">
+              <button id="identityQrButton" type="button" class="ghost active">二维码</button>
+              <button id="identityBarcodeButton" type="button" class="ghost">条形码</button>
+              <button id="identityCodeRefreshButton" type="button">刷新</button>
+            </div>
+          </div>
+          <div class="identity-code-stage">
+            <img id="identityCodeImage" alt="">
+            <div id="identityCodeEmpty" class="empty">等待同步个人身份码</div>
+          </div>
+          <p id="identityCodeMeta" class="identity-code-meta">动态码不会保存到磁盘</p>
+          </div>
+        </article>
+
+        <article class="panel identity-face-panel">
+          <div class="panel-head identity-face-head">
+            <div>
+              <p class="eyebrow">人脸信息</p>
+              <h2>采集状态与照片</h2>
+            </div>
+            <div class="identity-face-actions">
+              <button id="identityFaceRefreshButton" type="button" class="ghost">同步人脸</button>
+              <button id="identityFaceOfficialButton" type="button">官方采集页</button>
+            </div>
+          </div>
+          <div class="identity-face-layout">
+            <div class="identity-face-photo-frame">
+              <img id="identityFacePhoto" alt="人脸照片预览" hidden>
+              <div id="identityFaceEmpty" class="empty">点击同步人脸状态后显示</div>
+            </div>
+            <div class="identity-face-details">
+              <div>
+                <span>采集状态</span>
+                <strong id="identityFaceStatusText">--</strong>
+              </div>
+              <div>
+                <span>采集方式</span>
+                <strong id="identityFaceModeText">学校默认模式</strong>
+              </div>
+              <div>
+                <span>同步时间</span>
+                <strong id="identityFaceSyncText">--</strong>
+              </div>
+              <p id="identityFaceNotice" class="identity-face-notice">本系统只读取学校返回的状态和照片预览，不会保存人脸照片；采集、上传和协议确认请在学校官方页面完成。</p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="metrics campus-metrics">
+        <article class="metric metric-balance">
+          <span>一卡通余额</span>
+          <strong id="cardBalanceText">--</strong>
+          <small id="cardBalanceRemark">等待同步</small>
+        </article>
+        <article class="metric">
+          <span>绑定钱包</span>
+          <strong id="cardWalletCountText">--</strong>
+          <small>个</small>
+        </article>
+        <article class="metric metric-water-code">
+          <div class="metric-title-row">
+            <span>用水码</span>
+            <button id="waterCodeRefreshButton" type="button" class="metric-action">重新获取</button>
+          </div>
+          <strong id="waterCodeText">--</strong>
+          <small id="waterCodeRemark">只读查询</small>
+        </article>
+        <article class="metric">
+          <span>本月用水消费</span>
+          <strong id="waterAmountText">--</strong>
+          <small>元</small>
+        </article>
+      </section>
+
+      <section class="panel accommodation-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">公寓管理系统</p>
+            <h2>住宿信息</h2>
+          </div>
+          <span id="accommodationSyncText">--</span>
+        </div>
+        <div class="accommodation-layout">
+          <article class="accommodation-primary">
+            <span>住宿位置</span>
+            <strong id="accommodationPlaceText">--</strong>
+            <small id="accommodationClassText">等待同步</small>
+          </article>
+          <div class="accommodation-grid">
+            <div>
+              <span>学号</span>
+              <strong id="accommodationStudentText">--</strong>
+            </div>
+            <div>
+              <span>姓名</span>
+              <strong id="accommodationNameText">--</strong>
+            </div>
+            <div>
+              <span>入住状态</span>
+              <strong id="accommodationStatusText">--</strong>
+            </div>
+            <div>
+              <span>入住周期</span>
+              <strong id="accommodationDateText">--</strong>
+            </div>
+            <div>
+              <span>住宿费用</span>
+              <strong id="accommodationFeeText">--</strong>
+            </div>
+            <div>
+              <span>设备/Wi-Fi</span>
+              <strong id="accommodationDeviceText">--</strong>
+            </div>
+          </div>
+        </div>
+        <div class="roommate-block">
+          <div class="subsection-head">
+            <h3>宿友信息</h3>
+            <span id="roommateCountText">--</span>
+          </div>
+          <div id="roommateList" class="roommate-list"></div>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>一卡通账单</h2>
+            <span id="cardBillMonthText">--</span>
+          </div>
+          <div id="cardBillList" class="bill-list scroll-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>生活用水账单</h2>
+            <span id="waterBillMonthText">--</span>
+          </div>
+          <div id="waterBillList" class="bill-list scroll-list"></div>
+        </section>
+      </section>
+    </section>
+
+    <section id="energy" class="app-section energy-section">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">宿舍能耗</p>
+          <h2>电费、账单与仪表</h2>
+        </div>
+        <div class="section-tools energy-controls">
+          <input id="monthInput" type="month" aria-label="能耗账单月份">
+          <button id="energyRefreshButton" type="button" class="ghost">查询能耗</button>
+          <button id="energyRechargeButton" type="button">官方充值</button>
+        </div>
+      </div>
+
+      <section class="identity">
+        <div>
+          <span>账户</span>
+          <strong id="accountText">--</strong>
+        </div>
+        <div>
+          <span>房间</span>
+          <strong id="ownerText">--</strong>
+        </div>
+        <div>
+          <span>状态</span>
+          <strong id="stateText">只读查询</strong>
+        </div>
+      </section>
+
+      <section class="metrics">
+        <article class="metric metric-balance">
+          <span>账户余额</span>
+          <strong id="balanceText">--</strong>
+          <small id="balanceRemark">等待同步</small>
+        </article>
+        <article class="metric">
+          <span>本月用电量</span>
+          <strong id="monthKwhText">--</strong>
+          <small>千瓦时</small>
+        </article>
+        <article class="metric">
+          <span>超额电费</span>
+          <strong id="overFeeText">--</strong>
+          <small>元</small>
+        </article>
+        <article class="metric">
+          <span>在线仪表</span>
+          <strong id="meterOnlineText">--</strong>
+          <small id="meterTotalText">--</small>
+        </article>
+      </section>
+
+      <section class="workspace energy-workspace">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>月账单</h2>
+            <span id="billMonthText">--</span>
+          </div>
+          <div id="billList" class="bill-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>我的仪表</h2>
+            <span id="meterCategoryText">--</span>
+          </div>
+          <div id="meterList" class="meter-list"></div>
+        </section>
+      </section>
+
+      <section class="panel package-panel">
+        <div class="panel-head">
+          <h2>钱包备注</h2>
+          <span id="packageCountText">--</span>
+        </div>
+        <div id="packageList" class="package-list"></div>
+      </section>
+    </section>
+
+      <section id="admin" class="app-section admin-section">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">系统管理</p>
+            <h2>用户管理</h2>
+          </div>
+          <div class="section-tools">
+            <button id="adminRefreshButton" type="button" class="ghost">刷新用户</button>
+            <span id="adminSyncText">--</span>
+          </div>
+        </div>
+
+        <section class="admin-stats" aria-label="用户概览">
+          <div><strong id="adminTotalStat">--</strong><span>总账号</span></div>
+          <div><strong id="adminEnabledStat">--</strong><span>已启用</span></div>
+          <div><strong id="adminAdminStat">--</strong><span>管理员</span></div>
+          <div><strong id="adminUnboundStat">--</strong><span>未绑定学校账号</span></div>
+        </section>
+
+        <section class="workspace admin-workspace">
+          <section class="panel admin-create-panel">
+            <div class="panel-head">
+              <h2>新建系统账号</h2>
+              <span>管理员创建</span>
+            </div>
+            <form id="adminCreateUserForm" class="admin-form" autocomplete="off">
+              <input id="adminCreateUsernameInput" name="username" type="text" placeholder="系统用户名" autocomplete="off">
+              <label class="password-field">
+                <input id="adminCreatePasswordInput" name="password" type="password" placeholder="初始密码（至少 12 位）" autocomplete="new-password">
+                <button type="button" class="password-toggle" data-password-toggle="adminCreatePasswordInput" aria-label="显示密码"></button>
+              </label>
+              <select id="adminCreateRoleSelect" name="role" aria-label="账号角色">
+                <option value="user">普通用户</option>
+                <option value="admin">管理员</option>
+              </select>
+              <button id="adminCreateUserButton" type="submit">创建账号</button>
+            </form>
+          </section>
+
+          <section class="panel invite-create-panel">
+            <div class="panel-head">
+              <h2>生成邀请码</h2>
+              <span>自助注册</span>
+            </div>
+            <form id="inviteCreateForm" class="admin-form" autocomplete="off">
+              <input id="inviteNoteInput" name="note" type="text" placeholder="备注（可选）" autocomplete="off">
+              <div class="invite-select-row">
+                <select id="inviteRoleSelect" name="role" aria-label="邀请码角色">
+                  <option value="user">普通用户</option>
+                  <option value="admin">管理员</option>
+                </select>
+                <select id="inviteExpirySelect" name="expiresInDays" aria-label="有效期">
+                  <option value="7">7 天有效</option>
+                  <option value="1">1 天有效</option>
+                  <option value="30">30 天有效</option>
+                  <option value="0">永不过期</option>
+                </select>
+              </div>
+              <button id="inviteCreateButton" type="submit">生成邀请码</button>
+            </form>
+            <div id="inviteCreatedBox" class="invite-created-box" hidden></div>
+          </section>
+
+          <section class="panel admin-password-panel">
+            <div class="panel-head">
+              <h2>修改我的密码</h2>
+              <span id="adminCurrentUserText">--</span>
+            </div>
+            <form id="changePasswordForm" class="admin-form" autocomplete="off">
+              <label class="password-field">
+                <input id="currentPasswordInput" name="currentPassword" type="password" placeholder="当前系统密码" autocomplete="current-password">
+                <button type="button" class="password-toggle" data-password-toggle="currentPasswordInput" aria-label="显示密码"></button>
+              </label>
+              <label class="password-field">
+                <input id="newPasswordInput" name="newPassword" type="password" placeholder="新系统密码（至少 12 位）" autocomplete="new-password">
+                <button type="button" class="password-toggle" data-password-toggle="newPasswordInput" aria-label="显示密码"></button>
+              </label>
+              <button id="changePasswordButton" type="submit">更新密码</button>
+            </form>
+          </section>
+        </section>
+
+        <section class="panel admin-users-panel">
+          <div class="panel-head">
+            <h2>系统账号</h2>
+            <span id="adminUserCountText" aria-live="polite">--</span>
+          </div>
+          <div class="admin-user-toolbar" role="search">
+            <input id="adminUserSearchInput" type="search" placeholder="搜索用户名或学号/工号" aria-label="搜索系统账号">
+            <select id="adminUserRoleFilter" aria-label="按角色筛选">
+              <option value="all">全部角色</option>
+              <option value="admin">管理员</option>
+              <option value="user">普通用户</option>
+            </select>
+            <select id="adminUserStatusFilter" aria-label="按状态筛选">
+              <option value="all">全部状态</option>
+              <option value="enabled">已启用</option>
+              <option value="disabled">已停用</option>
+            </select>
+            <button id="adminUserFilterClear" class="ghost admin-filter-clear" type="button" title="清除筛选" aria-label="清除筛选" hidden>×</button>
+          </div>
+          <div id="adminUserList" class="admin-user-list"></div>
+          <div id="adminUserFilterEmpty" class="admin-filter-empty" hidden>没有符合当前条件的账号</div>
+        </section>
+
+        <section class="panel invite-list-panel">
+          <div class="panel-head">
+            <h2>邀请码</h2>
+            <span id="inviteCountText">--</span>
+          </div>
+          <div id="inviteList" class="invite-list"></div>
+        </section>
+      </section>
+    </div>
+  </main>
+
+  <div id="dialogBackdrop" class="app-dialog-backdrop" hidden>
+    <section id="dialogPanel" class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle" aria-describedby="dialogMessage">
+      <button id="dialogCloseButton" class="app-dialog-close" type="button" aria-label="关闭">×</button>
+      <div id="dialogToneIcon" class="app-dialog-icon" aria-hidden="true"></div>
+      <div class="app-dialog-copy">
+        <p id="dialogKicker" class="eyebrow">操作确认</p>
+        <h2 id="dialogTitle">确认操作</h2>
+        <p id="dialogMessage">请确认是否继续。</p>
+        <div id="dialogInputContainer" class="password-field" style="width: 100%;" hidden>
+          <input id="dialogInput" class="app-dialog-input" type="text" autocomplete="off" hidden>
+          <button id="dialogPasswordToggle" type="button" class="password-toggle" data-password-toggle="dialogInput" aria-label="显示密码" hidden></button>
+        </div>
+        <small id="dialogHint" class="app-dialog-hint" hidden></small>
+      </div>
+      <div class="app-dialog-actions">
+        <button id="dialogCancelButton" class="ghost" type="button">取消</button>
+        <button id="dialogConfirmButton" type="button">确认</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="./browser-check.js?v=20260714-wechat-v6" defer></script>
+  <script src="./app.js?v=20260715-notice-auto-clear" defer></script>
+  <script src="./admin.js?v=20260715-admin-workspace-v2" defer></script>
+</body>
+</html>

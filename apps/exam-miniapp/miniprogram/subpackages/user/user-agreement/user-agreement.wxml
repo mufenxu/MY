@@ -1,0 +1,23 @@
+<view class="page-container">
+  <view class="custom-nav" style="padding-top: {{menuButtonTop}}px;">
+    <view class="nav-content" style="height: {{menuButtonHeight}}px;">
+      <text class="nav-title">用户协议</text>
+    </view>
+  </view>
+
+  <scroll-view class="content-scroll" scroll-y style="padding-top: {{navBarHeight}}px;">
+    <view class="hero-card">
+      <text class="hero-title">{{appName}} 用户协议</text>
+      <text class="hero-meta">版本：{{version}}</text>
+      <text class="hero-meta">运营主体：{{companyName}}</text>
+      <text class="hero-meta">联系邮箱：{{supportEmail}}</text>
+    </view>
+
+    <view class="section-card" wx:for="{{sections}}" wx:key="title">
+      <text class="section-title">{{item.title}}</text>
+      <text class="section-copy" wx:for="{{item.paragraphs}}" wx:key="*this">{{item}}</text>
+    </view>
+
+    <view class="bottom-space"></view>
+  </scroll-view>
+</view>

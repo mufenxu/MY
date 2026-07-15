@@ -1,0 +1,82 @@
+<view class="result-page {{scoreLevel}}">
+  <view class="result-hero-bg"></view>
+
+  <view class="result-content" wx:if="{{result}}">
+    <view class="result-card">
+      <view class="result-card-header">
+        <view class="finish-icon">
+          <view class="check-line short"></view>
+          <view class="check-line long"></view>
+        </view>
+        <view class="header-copy">
+          <text class="result-kicker">交卷完成</text>
+          <text class="result-title">{{scoreTitle}}</text>
+        </view>
+        <text class="score-badge">{{scoreBadgeText}}</text>
+      </view>
+
+      <view class="score-panel">
+        <view class="score-copy">
+          <text class="score-label">最终得分</text>
+          <view class="score-row">
+            <text class="score-value">{{result.score}}</text>
+            <text class="score-unit">分</text>
+          </view>
+        </view>
+        <view class="accuracy-pill">
+          <text class="accuracy-value">{{accuracyPercent}}%</text>
+          <text class="accuracy-label">正确率</text>
+        </view>
+      </view>
+
+      <text class="result-summary">{{scoreSummary}}</text>
+
+      <view class="accuracy-track">
+        <view class="accuracy-fill" style="width: {{accuracyPercent}}%;"></view>
+      </view>
+      <view class="accuracy-meta">
+        <text>答对 {{result.correctCount}} 题</text>
+        <text>共 {{result.totalCount}} 题</text>
+      </view>
+    </view>
+
+    <view class="stats-grid">
+      <view class="stat-item correct">
+        <view class="stat-mark"></view>
+        <text class="stat-value">{{result.correctCount}}</text>
+        <text class="stat-label">答对</text>
+      </view>
+      <view class="stat-item total">
+        <view class="stat-mark"></view>
+        <text class="stat-value">{{result.totalCount}}</text>
+        <text class="stat-label">总题数</text>
+      </view>
+      <view class="stat-item wrong">
+        <view class="stat-mark"></view>
+        <text class="stat-value">{{wrongCount}}</text>
+        <text class="stat-label">答错</text>
+      </view>
+    </view>
+
+    <view class="review-card" bindtap="onViewDetail">
+      <view class="review-copy">
+        <text class="review-title">试卷复盘</text>
+        <text class="review-subtitle">查看每道题的答案与解析</text>
+      </view>
+      <view class="review-arrow"></view>
+    </view>
+
+    <view class="action-area">
+      <button class="btn-secondary" bindtap="onViewDetail">查看试卷详情</button>
+      <button class="btn-primary" bindtap="onBackHome">
+        <view class="home-icon"></view>
+        <text>返回首页</text>
+      </button>
+    </view>
+  </view>
+
+  <view class="empty-state" wx:else>
+    <text class="empty-title">成绩加载中</text>
+    <text class="empty-subtitle">请稍等片刻</text>
+  </view>
+</view>

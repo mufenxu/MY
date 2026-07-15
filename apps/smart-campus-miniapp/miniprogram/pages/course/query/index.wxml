@@ -1,0 +1,176 @@
+<!-- 现代风格重构 - 极简/高效 -->
+<view class="page">
+
+
+  <!-- 表单卡片 -->
+  <view class="card">
+    <view class="card-header">
+      <view class="card-title">基本信息</view>
+      <view class="card-action" bindtap="onGoToOrders">
+        <text>进度查询</text>
+        <text class="icon-arrow"></text>
+      </view>
+    </view>
+
+    <view class="form-group">
+      <view class="form-item">
+        <view class="form-label">网课平台类型</view>
+        <view class="picker-view {{platformIndex !== null ? 'has-val' : ''}}" bindtap="openPlatformPopup">
+          <text>{{platformIndex !== null ? platforms[platformIndex].name : '请选择平台'}}</text>
+          <view class="dropdown-icon"></view>
+        </view>
+      </view>
+
+      <view class="platform-notice" wx:if="{{platformIndex !== null && platforms[platformIndex].content}}">
+        <view class="notice-icon">i</view>
+        <text class="notice-text">{{platforms[platformIndex].content}}</text>
+      </view>
+
+      <view class="form-row">
+        <view class="form-item flex-1">
+          <view class="form-label">登录账号</view>
+          <input class="input" placeholder="账号或手机号" placeholder-class="ph-color" model:value="{{user}}" />
+        </view>
+        <view class="form-item flex-1">
+          <view class="form-label">登录密码</view>
+          <input class="input" password placeholder="平台密码" placeholder-class="ph-color" model:value="{{pass}}" />
+        </view>
+      </view>
+
+      <view class="form-item">
+        <view class="form-label">所在学校 <text class="optional">（部分平台必填）</text></view>
+        <input class="input" placeholder="请输入学校全称" placeholder-class="ph-color" model:value="{{school}}" />
+      </view>
+    </view>
+
+    <button class="btn-primary" bindtap="onQuery" disabled="{{querying}}">
+      <text wx:if="{{!querying}}">立即查询</text>
+      <text wx:else>查询中...</text>
+    </button>
+  </view>
+
+  <!-- 查询结果 -->
+  <view class="result-section {{queried ? 'show' : ''}}" wx:if="{{queried}}">
+    <view class="empty-state" wx:if="{{courseList.length === 0}}">
+      <view class="empty-img empty-folder">
+        <view class="empty-folder__tab"></view>
+        <view class="empty-folder__body"></view>
+      </view>
+      <text class="empty-text">该账号下暂未查询到可选课程</text>
+    </view>
+
+    <block wx:else>
+      <!-- 提交订单面板 (置于列表上方) -->
+      <view class="submit-panel">
+        <view class="submit-info">
+          <view class="submit-count">
+            已选 <text class="num">{{selectedIndices.length}}</text> 门
+          </view>
+          <view class="selected-names" wx:if="{{selectedIndices.length > 0}}">
+            <text class="selected-name-item" wx:for="{{courseList}}" wx:key="index" wx:if="{{item.checked}}">{{item.name || item.kcname || '未知课程'}}</text>
+          </view>
+          <view class="selected-names no-selection" wx:else>
+            <text>请在下方选择需要代刷的课程</text>
+          </view>
+        </view>
+        <button class="btn-submit" bindtap="onSubmitOrder" loading="{{submitting}}" disabled="{{submitting || selectedIndices.length === 0}}">
+          提交订单
+        </button>
+      </view>
+
+      <view class="result-toolbar">
+        <view class="result-title">
+          可选课程 <text class="highlight">{{courseList.length}}</text>
+        </view>
+        <view class="select-all-btn" bindtap="onSelectAll">
+          <text>{{selectedIndices.length === courseList.length ? '取消全选' : '全选'}}</text>
+        </view>
+      </view>
+
+      <checkbox-group bindchange="onCourseCheck" class="course-list">
+        <label class="course-item {{item.checked ? 'is-checked' : ''}}" wx:for="{{courseList}}" wx:key="index">
+          <checkbox class="hidden-checkbox" value="{{index}}" checked="{{item.checked}}" />
+          <view class="course-content">
+            <view class="course-name">{{item.name || item.kcname || '未知课程'}}</view>
+            <view class="course-meta">
+              <text class="course-id">ID: {{item.id || item.kcid}}</text>
+              <view class="course-status-list" wx:if="{{item.syjd || item.kszt}}">
+                <text class="status-tag" wx:if="{{item.syjd}}">{{item.syjd}}</text>
+                <text class="status-tag active" wx:if="{{item.kszt}}">{{item.kszt}}</text>
+              </view>
+            </view>
+          </view>
+          <view class="custom-checkbox {{item.checked ? 'checked' : ''}}"></view>
+        </label>
+      </checkbox-group>
+    </block>
+  </view>
+
+  <!-- 自定义平台选择弹窗 -->
+  <view class="custom-popup {{showPlatformPopup ? 'show' : ''}}">
+    <view class="popup-mask" bindtap="closePlatformPopup" catchtouchmove="preventTouchMove"></view>
+    <view class="popup-container {{showPlatformPopup ? 'slide-up' : ''}}">
+      <view class="popup-header">
+        <view class="popup-title">选择网课平台</view>
+        <view class="popup-close" bindtap="closePlatformPopup">
+          <view class="close-icon"></view>
+        </view>
+      </view>
+      <view class="popup-scroll">
+        <view class="platform-list">
+          <view class="platform-item {{platformIndex === index ? 'active' : ''}}" 
+                wx:for="{{platforms}}" 
+                wx:key="index" 
+                bindtap="onSelectPlatform" 
+                data-index="{{index}}">
+            <view class="platform-info">
+              <view class="platform-name">{{item.name}}</view>
+              <view class="platform-badges">
+                <text class="badge-price" wx:if="{{item.price}}">一口价 ¥{{item.price}}</text>
+                <text class="badge-price" wx:elif="{{item.suo && item.suo !== '0'}}">底价 ¥{{item.suo}}</text>
+                <text class="badge-tag" wx:if="{{item.nock === 1}}">免查课</text>
+              </view>
+            </view>
+            <view class="platform-radio">
+              <view class="radio-inner"></view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 自定义确认提交订单弹窗 -->
+  <view class="confirm-modal {{showConfirmPopup ? 'show' : ''}}" wx:if="{{showConfirmPopup}}" catchtouchmove="preventTouchMove">
+    <view class="modal-mask" bindtap="closeConfirmPopup"></view>
+    <view class="modal-container {{showConfirmPopup ? 'scale-up' : ''}}">
+      <view class="modal-header">
+        <view class="modal-title">确认提交订单</view>
+      </view>
+      <view class="modal-body">
+        <view class="info-row">
+          <view class="info-label">网课平台</view>
+          <view class="info-value">{{platformIndex !== null ? platforms[platformIndex].name : ''}}</view>
+        </view>
+        <view class="info-row align-start">
+          <view class="info-label">确认课程</view>
+          <view class="course-names-scroll">
+            <view class="modal-course-list">
+              <view class="modal-course-item" wx:for="{{courseList}}" wx:key="index" wx:if="{{item.checked}}">
+                <view class="modal-course-bullet"></view>
+                <view class="modal-course-name">{{item.name || item.kcname || '未知课程'}}</view>
+              </view>
+            </view>
+          </view>
+        </view>
+        <view class="submit-warning">
+          即将为您提交 {{selectedIndices.length}} 门课程的代刷请求，请核对无误后继续。
+        </view>
+      </view>
+      <view class="modal-footer">
+        <button class="btn-cancel" bindtap="closeConfirmPopup">取消</button>
+        <button class="btn-confirm-submit" bindtap="onConfirmSubmit" loading="{{submitting}}" disabled="{{submitting}}">确定</button>
+      </view>
+    </view>
+  </view>
+</view>

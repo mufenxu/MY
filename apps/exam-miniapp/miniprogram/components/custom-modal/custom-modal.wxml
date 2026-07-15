@@ -1,0 +1,12 @@
+<view class="modal-mask {{show ? 'show' : ''}}" catchtap="onCancel"></view>
+<view class="modal-container {{show ? 'show' : ''}}">
+  <view class="modal-header">
+    <text class="modal-icon">✅</text>
+    <view class="modal-title">{{title}}</view>
+  </view>
+  <view class="modal-content">{{content}}</view>
+  <view class="modal-footer">
+    <view class="btn cancel" bindtap="onCancel">{{cancelText}}</view>
+    <view class="btn confirm" bindtap="onConfirm">{{confirmText}}</view>
+  </view>
+</view>

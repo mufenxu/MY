@@ -1,0 +1,131 @@
+<view class="page-container">
+  <view class="ambient-scan">
+    <view class="scan-line scan-line-a"></view>
+    <view class="scan-line scan-line-b"></view>
+  </view>
+
+  <view class="custom-nav" style="height: {{navBarHeight}}px; padding-top: {{menuButtonTop}}px;">
+    <view class="nav-content" style="height: {{menuButtonHeight}}px;"></view>
+  </view>
+
+  <view class="page-shell">
+    <view class="hero">
+      <image class="hero-mark" src="/assets/admin-logo.png" mode="aspectFill"></image>
+      <text class="hero-eyebrow">好爱学习</text>
+      <text class="hero-title">扫码</text>
+      <text class="hero-sub">扫描电脑端登录二维码，或识别试卷分享码。</text>
+    </view>
+
+    <view class="content">
+      <view class="security-note" wx:if="{{isLogin}}">
+        <view class="security-dot"></view>
+        <text>请确认二维码来自你正在使用的电脑端后台或可信的试卷分享人。</text>
+      </view>
+
+      <view class="login-card guest-card" wx:if="{{!isLogin}}">
+        <view class="status-badge warning">需要登录</view>
+        <text class="card-title">请先登录小程序</text>
+        <text class="status">完成小程序登录后，才能确认电脑端登录请求。</text>
+        <button class="primary-btn" bindtap="onGoLogin">去登录</button>
+      </view>
+
+      <view class="login-card {{stateTone}}" wx:else>
+        <view class="card-scan-glow"></view>
+        <view class="card-head">
+          <view class="state-icon">
+            <view class="state-icon-inner"></view>
+          </view>
+          <view class="card-copy">
+            <view class="status-badge {{stateTone}}">{{stateLabel}}</view>
+            <text class="card-title">{{stateTitle}}</text>
+          </view>
+        </view>
+
+        <text class="status">{{statusText}}</text>
+
+        <view class="detail-list" wx:if="{{hasSession}}">
+          <view class="detail-row">
+            <text class="detail-label">操作内容</text>
+            <text class="detail-value">{{session.title}}</text>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">当前状态</text>
+            <text class="detail-value">{{confirmed ? '已确认' : '等待确认'}}</text>
+          </view>
+          <view class="detail-row" wx:if="{{sessionRequestTime}}">
+            <text class="detail-label">请求时间</text>
+            <text class="detail-value">{{sessionRequestTime}}</text>
+          </view>
+          <view class="detail-row" wx:if="{{sessionRequestIp}}">
+            <text class="detail-label">电脑端 IP</text>
+            <text class="detail-value">{{sessionRequestIp}}</text>
+          </view>
+        </view>
+
+        <view class="confirm-warning" wx:if="{{hasSession && !confirmed}}">
+          如果不是你正在登录电脑端后台，请不要确认。
+        </view>
+
+        <view class="detail-list" wx:if="{{sharePreview}}">
+          <view class="detail-row">
+            <text class="detail-label">分享码</text>
+            <text class="detail-value">{{sharePreview.share.shareCodeText || shareCode}}</text>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">试卷</text>
+            <text class="detail-value">{{sharePreview.sourceCategory ? sharePreview.sourceCategory.name : '未命名试卷'}}</text>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">题目数</text>
+            <text class="detail-value">{{sharePreview.sourceCategory ? sharePreview.sourceCategory.count : 0}} 道</text>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">权限</text>
+            <text class="detail-value">{{sharePreview.share.permissionLabel || '只读副本'}}</text>
+          </view>
+          <view class="detail-row">
+            <text class="detail-label">保存位置</text>
+            <text class="detail-value">{{shareSaveLocation}}</text>
+          </view>
+        </view>
+
+        <view class="action-area">
+          <block wx:if="{{sharePreview}}">
+            <view class="action-row">
+              <button class="primary-btn" loading="{{acceptingShare}}" disabled="{{acceptingShare}}" bindtap="onAcceptPaperShare">
+                {{sharePreview.alreadyAccepted ? '查看我的题库' : '接收试卷'}}
+              </button>
+              <button class="secondary-btn" loading="{{scanning}}" disabled="{{scanning || acceptingShare}}" bindtap="onStartScan">
+                重新扫码
+              </button>
+            </view>
+          </block>
+
+          <button wx:elif="{{confirmed}}" class="primary-btn" bindtap="onDone">完成</button>
+
+          <block wx:elif="{{hasSession}}">
+            <view class="action-row">
+              <button class="secondary-btn" loading="{{scanning}}" disabled="{{scanning || confirming}}" bindtap="onStartScan">
+                重新扫码
+              </button>
+              <button class="primary-btn" loading="{{confirming}}" disabled="{{confirming}}" bindtap="onConfirm">
+                {{session.confirmText || '确认'}}
+              </button>
+            </view>
+          </block>
+
+          <button wx:else class="primary-btn scan-primary-btn" disabled="{{scanning}}" bindtap="onStartScan">
+            <block wx:if="{{scanning}}">
+              <view class="scan-btn-spinner"></view>
+              <text>正在扫码</text>
+            </block>
+            <block wx:else>
+              <view class="scan-btn-icon"></view>
+              <text>扫描二维码</text>
+            </block>
+          </button>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

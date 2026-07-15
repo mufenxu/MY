@@ -1,0 +1,100 @@
+<view class="page">
+  <view class="card">
+    <view class="card-head">
+      <view>
+        <view class="card-title">继电器模块</view>
+        <view class="card-sub">{{ statusText }}</view>
+      </view>
+      <view class="custom-switch {{ relayOn ? 'active' : '' }} {{ switching ? 'loading' : '' }}" bindtap="onSwitchTap">
+        <view class="switch-track"></view>
+        <view class="switch-thumb">
+          <view class="loading-spinner" wx:if="{{switching}}"></view>
+        </view>
+      </view>
+    </view>
+    <view class="card-foot">
+      <view class="relay-status-row">
+        <text class="relay-status-label">当前状态：</text>
+        <text class="relay-status-value {{ relayOn ? 'on' : 'off' }}">{{ relayStatusDisplay }}</text>
+      </view>
+      <text class="relay-desc">通过 MQTT Smart Dashboard API 实时控制线路。</text>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-head">
+      <view>
+        <view class="card-title">ESP01S 继电器</view>
+        <view class="card-sub">{{ statusText2 }}</view>
+      </view>
+      <view class="custom-switch {{ relay2On ? 'active' : '' }} {{ switching2 ? 'loading' : '' }}" bindtap="onSwitchTap2">
+        <view class="switch-track"></view>
+        <view class="switch-thumb">
+          <view class="loading-spinner" wx:if="{{switching2}}"></view>
+        </view>
+      </view>
+    </view>
+    <view class="card-foot">
+      <view class="relay-status-row">
+        <text class="relay-status-label">当前状态：</text>
+        <text class="relay-status-value {{ relay2On ? 'on' : 'off' }}">{{ relayStatusDisplay2 }}</text>
+      </view>
+      <view class="relay-status-row esp-online-row">
+        <text class="relay-status-label">设备状态：</text>
+        <text class="status-value {{ esp01sOnline ? 'status-ok' : 'status-error' }}">{{ esp01sOnline ? '在线' : '离线' }}</text>
+      </view>
+      <text class="relay-desc">通过 MQTT Smart Dashboard API 控制 ESP01S 继电器模块。</text>
+    </view>
+  </view>
+
+  <view class="card sensor-card">
+    <view class="sensor-head">
+      <view>
+        <view class="card-title">环境监测</view>
+        <view class="sensor-status {{ sensorConnected ? 'online' : '' }}">{{ sensorStatus }}</view>
+      </view>
+      <view class="sensor-updated" wx:if="{{ lastUpdated }}">
+        最近同步 {{ lastUpdated }}
+      </view>
+    </view>
+    <view class="sensor-body">
+      <view class="sensor-item">
+        <view class="sensor-label">温度</view>
+        <view class="sensor-value">
+          {{ temperature }}
+          <text class="sensor-unit" wx:if="{{ sensorConnected && temperature !== '--' }}">℃</text>
+        </view>
+      </view>
+      <view class="sensor-divider"></view>
+      <view class="sensor-item">
+        <view class="sensor-label">湿度</view>
+        <view class="sensor-value">
+          {{ humidity }}
+          <text class="sensor-unit" wx:if="{{ sensorConnected && humidity !== '--' }}">%</text>
+        </view>
+      </view>
+    </view>
+    <view class="sensor-status-info">
+      <view class="status-item">
+        <view class="status-label">MQTT:</view>
+        <view class="status-value {{ mqttConnected ? 'status-ok' : 'status-error' }}">
+          {{ mqttConnected ? '已连接' : '未连接' }}
+        </view>
+      </view>
+      <view class="status-item">
+        <view class="status-label">订阅:</view>
+        <view class="status-value {{ subscribed ? 'status-ok' : 'status-error' }}">
+          {{ subscribed ? '已订阅' : '未订阅' }}
+        </view>
+      </view>
+      <view class="status-item">
+        <view class="status-label">设备:</view>
+        <view class="status-value {{ deviceOnline ? 'status-ok' : 'status-error' }}">
+          {{ deviceOnline ? '在线' : '离线' }}
+        </view>
+      </view>
+    </view>
+    <view class="sensor-error" wx:if="{{ sensorError }}">{{ sensorError }}</view>
+  </view>
+</view>
+

@@ -1,0 +1,42 @@
+<view class="container">
+  <view class="bg-circle-1"></view>
+  <view class="bg-circle-2"></view>
+  <view class="bg-circle-3"></view>
+
+  <!-- loading 状态：微信扫一扫进入时的处理中界面 -->
+  <view class="auth-card" wx:if="{{loading}}">
+    <view class="icon-wrapper">
+      <view class="pulse-ring"></view>
+      <image class="pc-icon" src="../../../assets/tab/computer.svg" mode="aspectFit"></image>
+    </view>
+    
+    <view class="title">处理中</view>
+    <view class="subtitle">
+      <text>{{loadingText}}</text>
+    </view>
+  </view>
+
+  <!-- 确认状态：显示登录确认界面 -->
+  <view class="auth-card" wx:else>
+    <view class="icon-wrapper">
+      <view class="pulse-ring"></view>
+      <image class="pc-icon" src="../../../assets/tab/computer.svg" mode="aspectFit"></image>
+    </view>
+    
+    <view class="title">登录确认</view>
+    <view class="subtitle">
+      <text>即将授权登录</text>
+      <text class="app-name">{{appName}}</text>
+    </view>
+
+    <view class="btn-group">
+      <button class="btn btn-confirm" bindtap="onConfirm">确认登录</button>
+      <button class="btn btn-cancel" bindtap="onCancel">取消</button>
+    </view>
+  </view>
+  
+  <view class="security-tip">
+    <text class="safe-icon">✓</text>
+    <text>安全认证环境保护中</text>
+  </view>
+</view>

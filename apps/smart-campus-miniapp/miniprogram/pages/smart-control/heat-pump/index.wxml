@@ -1,0 +1,298 @@
+<view class="container">
+  <!-- 顶部状态展示 -->
+  <view class="status-card {{powerOn ? 'on' : 'off'}}">
+    <!-- 除霜提醒图标 -->
+    <view wx:if="{{isDefrosting}}" class="defrost-badge">
+      <view class="defrost-icon"></view>
+      <text>正在除霜中...</text>
+    </view>
+
+    <view class="temp-display">
+      <view class="current-temp city-main">
+        <text class="temp-num">{{currentTemp || '--'}}</text>
+        <text class="temp-unit">℃</text>
+      </view>
+      <view class="temp-label">当前水温</view>
+    </view>
+    
+    <view class="device-info">
+      <view class="info-item">
+        <text class="label">工作模式</text>
+        <text class="value">{{modeLabel}}</text>
+      </view>
+      <view class="info-divider"></view>
+      <view class="info-item">
+        <text class="label">设定温度</text>
+        <text class="value">{{targetTemp}}℃</text>
+      </view>
+      <view class="info-divider"></view>
+      <view class="info-item">
+        <text class="label">室外温度</text>
+        <text class="value">{{outdoorTemp}}℃</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 控制操作区 -->
+  <view class="control-panel">
+    <!-- 电源控制 -->
+    <view class="control-group power-group">
+      <view class="group-header">
+        <text class="group-title">设备电源</text>
+        <view class="online-box">
+          <view class="dot {{online ? 'online' : 'offline'}}"></view>
+          <text class="group-status">{{online ? '在线' : '离线'}} · {{powerOn ? '运行中' : '已关机'}}</text>
+        </view>
+      </view>
+      <view class="power-btn {{powerOn ? 'active' : ''}}" bindtap="togglePower">
+        <view class="power-icon"></view>
+        <text>{{powerOn ? '点击关机' : '点击开机'}}</text>
+      </view>
+    </view>
+
+    <!-- 模式选择 -->
+    <view class="control-group mode-group">
+      <view class="group-header">
+        <text class="group-title">运行模式</text>
+      </view>
+      <view class="mode-grid">
+        <view wx:for="{{modes}}" wx:key="value" 
+              class="mode-item {{mode === item.value ? 'active' : ''}}" 
+              bindtap="setMode" data-mode="{{item.value}}">
+          <view class="mode-icon {{item.icon}}"></view>
+          <text>{{item.label}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 温度调节 -->
+    <view class="control-group temp-group">
+      <view class="group-header">
+        <text class="group-title">{{mode === 'heating' ? '制热目标设温' : (mode === 'cold' ? '制冷目标设温' : '水温调节')}}</text>
+      </view>
+      <view class="temp-slider-wrapper">
+        <button class="adjust-btn minus" bindtap="adjustTemp" data-delta="-1" disabled="{{!powerOn}}">-</button>
+        <view class="temp-val-wrapper">
+           <text class="temp-val">{{targetTemp}}</text>
+           <text class="unit">℃</text>
+        </view>
+        <button class="adjust-btn plus" bindtap="adjustTemp" data-delta="1" disabled="{{!powerOn}}">+</button>
+      </view>
+    </view>
+
+    <!-- 功能设置 (高级参数) -->
+    <view class="control-group function-group">
+      <view class="group-header">
+        <text class="group-title">功能设置</text>
+      </view>
+       <view class="function-item">
+          <view class="func-label">设定水箱温度</view>
+          <view class="func-control">
+             <button class="mini-btn" bindtap="adjustTankTemp" data-delta="-1" disabled="{{!powerOn}}">-</button>
+             <text class="func-val">{{targetTankTemp || '--'}}℃</text>
+             <button class="mini-btn" bindtap="adjustTankTemp" data-delta="1" disabled="{{!powerOn}}">+</button>
+          </view>
+       </view>
+
+       <view class="info-divider" style="height: 1px; width: 100%; background: #f1f5f9; margin: 10rpx 0;"></view>
+       
+       <!-- 3D 优化后的智能策略入口 -->
+       <view class="smart-entry-card" bindtap="goToSmartSettings" hover-class="card-hover">
+          <view class="smart-content">
+             <view class="smart-icon-box"></view>
+             <view class="smart-text-main">
+                <text class="smart-title">智能策略 (谷电/OTC)</text>
+                <text class="smart-desc">优化能效，更省电更智能</text>
+             </view>
+          </view>
+          <view class="smart-action">
+             <text>去配置</text>
+             <view class="arrow-right"></view>
+          </view>
+       </view>
+    </view>
+
+    <!-- 实时能效分析 (精致 3D 版) -->
+    <view class="control-group efficiency-card-premium" bindtap="goToEnergyReport" hover-class="card-hover">
+      <view class="eff-main-header">
+        <view class="eff-title-box">
+          <text class="eff-main-title">实时能效分析</text>
+          <text class="eff-main-subtitle">设备实时运行能效与成本监控</text>
+        </view>
+        <view class="cop-3d-badge">
+          <view class="cop-tag">实时能效</view>
+          <view class="cop-data">
+            <text class="cop-num">{{copScore}}</text>
+            <text class="cop-u">COP</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="eff-stats-grid">
+        <view class="eff-stat-box energy">
+          <view class="stat-icon-wrapper">
+            <view class="icon-lightning-mini"></view>
+          </view>
+          <view class="stat-info">
+            <text class="stat-label">今日累计用电</text>
+            <view class="stat-val-row">
+              <text class="stat-val">{{dailyEnergy || "0.00"}}</text>
+              <text class="stat-unit">kWh</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="eff-stat-box cost">
+          <view class="stat-icon-wrapper">
+            <view class="icon-money-mini"></view>
+          </view>
+          <view class="stat-info">
+            <text class="stat-label">今日预估电费</text>
+            <view class="stat-val-row">
+              <text class="stat-val">¥{{estimatedCost || "0.00"}}</text>
+              <view class="arrow-mini-gold-3d"></view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="eff-load-section-3d">
+        <view class="load-top-row">
+          <view class="load-title-group">
+            <view class="dot-indicator pulse"></view>
+            <text class="load-text">当前运行负荷</text>
+          </view>
+          <text class="load-percent-val">{{loadPercent}}%</text>
+        </view>
+        <view class="3d-depth-track">
+          <view class="shiny-progress-fill" style="width: {{loadPercent}}%"></view>
+        </view>
+      </view>
+      
+      <view class="freq-comparison-card">
+        <view class="freq-col">
+          <text class="freq-col-label">目标运行频率</text>
+          <text class="freq-col-val">{{targetFreq}}<text class="hz">Hz</text></text>
+        </view>
+        <view class="freq-v-divider"></view>
+        <view class="freq-col">
+          <text class="freq-col-label">当前实际频率</text>
+          <text class="freq-col-val active">{{runFreq}}<text class="hz">Hz</text></text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 进阶诊断看板 -->
+    <view class="control-group diagnosis-group">
+      <view class="group-header">
+        <text class="group-title">设备诊断看板</text>
+        <text class="fault-tip {{!online ? 'offline' : (faultCode > 0 ? 'error' : 'normal')}}">{{!online ? '设备离线' : (faultCode > 0 ? (faultText || '设备异常: ' + faultCode) : '运行正常')}}</text>
+      </view>
+      
+      <view class="diag-grid">
+        <view class="diag-item highlight">
+          <text class="diag-val">{{realtimePower}}</text>
+          <text class="diag-label">实时功率</text>
+        </view>
+        <view class="diag-item">
+          <text class="diag-val">{{runCurrent}}</text>
+          <text class="diag-unit">A</text>
+          <text class="diag-label">电流</text>
+        </view>
+        <view class="diag-item">
+          <text class="diag-val">{{acinVol}}</text>
+          <text class="diag-unit">V</text>
+          <text class="diag-label">电压</text>
+        </view>
+        <view class="diag-item">
+          <text class="diag-val">{{runFreq}}</text>
+          <text class="diag-unit">Hz</text>
+          <text class="diag-label">运行频率</text>
+        </view>
+        <view class="diag-item">
+          <text class="diag-val">{{waterOutTemp}}</text>
+          <text class="diag-unit">℃</text>
+          <text class="diag-label">出水水温</text>
+        </view>
+        <view class="diag-item">
+          <text class="diag-val">{{waterBackTemp}}</text>
+          <text class="diag-unit">℃</text>
+          <text class="diag-label">回水水温</text>
+        </view>
+        <view class="diag-item">
+          <text class="diag-val">{{ipmTemp}}</text>
+          <text class="diag-unit">℃</text>
+          <text class="diag-label">模块温度</text>
+        </view>
+        <view class="diag-item">
+          <text class="diag-val">{{exhaustTemp || '--'}}</text>
+          <text class="diag-unit">℃</text>
+          <text class="diag-label">排气温度</text>
+        </view>
+        <view class="diag-item">
+          <text class="diag-val">{{dcBusVol || '--'}}</text>
+          <text class="diag-unit">V</text>
+          <text class="diag-label">母线电压</text>
+        </view>
+        <view class="diag-item">
+          <text class="diag-val">{{coilTemp || '--'}}</text>
+          <text class="diag-unit">℃</text>
+          <text class="diag-label">盘管温度</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 24H 趋势图 (旗舰 3D 版) -->
+    <view class="control-group chart-group-premium">
+      <view class="chart-main-header">
+        <view class="chart-title-box">
+          <text class="group-title">24H 运行趋势</text>
+          <text class="group-subtitle">全天候温度与功率动态监控</text>
+        </view>
+        <view class="chart-legends-3d">
+           <view class="legend-badge temp">
+             <view class="l-dot"></view>
+             <text>水温</text>
+           </view>
+           <view class="legend-badge power">
+             <view class="l-dot"></view>
+             <text>功率</text>
+           </view>
+        </view>
+      </view>
+      <view class="chart-viewport-3d">
+        <canvas type="2d" id="trendChart" class="trend-chart-premium"></canvas>
+      </view>
+    </view>
+
+
+
+    <!-- 系统健康体检报告 -->
+    <view class="control-group health-group">
+      <view class="group-header">
+        <text class="group-title">系统健康体检报告</text>
+      </view>
+      <view class="health-content">
+        <view class="health-tags" wx:if="{{healthList.length > 0}}">
+          <view wx:for="{{healthList}}" wx:key="*this" class="health-tag warning">
+            <text class="tag-icon">!</text>
+            <text>{{item}}</text>
+          </view>
+        </view>
+        <view class="health-safe" wx:else>
+          <view class="safe-icon"></view>
+          <text>全系统扫描完成，所有关键组件运行良好</text>
+        </view>
+      </view>
+    </view>
+
+
+
+
+
+  </view>
+
+  <!-- 7日能耗弹窗 -->
+  <energy-popup show="{{showEnergyPopup}}" bind:close="closeEnergyPopup"></energy-popup>
+
+</view>

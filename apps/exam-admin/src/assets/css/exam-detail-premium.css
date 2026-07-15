@@ -1,0 +1,348 @@
+/*
+ * Premium question editor layer.
+ * Focus: quiet authoring workspace, clear hierarchy, and dense controls that
+ * still feel deliberate on desktop and mobile.
+ */
+
+body.exam-detail-active .exam-detail-page {
+    --paper-ink: #111f31;
+    --paper-ink-soft: #40516a;
+    --paper-muted: #718096;
+    --paper-line: rgba(198, 212, 228, 0.86);
+    --paper-line-strong: rgba(159, 178, 201, 0.88);
+    --paper-surface: rgba(255, 255, 255, 0.94);
+    --paper-surface-soft: rgba(248, 251, 254, 0.92);
+    --paper-blue: #2563eb;
+    --paper-blue-soft: #eaf2ff;
+    --paper-teal: #0f8f72;
+    --paper-teal-soft: #e7f8f2;
+    --paper-amber: #b86a13;
+    --paper-amber-soft: #fff4df;
+    --paper-red: #c2412d;
+    --paper-red-soft: #fff0ed;
+    --paper-radius: 10px;
+    --paper-shadow-xs: 0 1px 2px rgba(17, 31, 49, 0.06);
+    --paper-shadow-sm: 0 14px 32px rgba(17, 31, 49, 0.08);
+    --paper-shadow-md: 0 24px 58px rgba(17, 31, 49, 0.12);
+    color: var(--paper-ink);
+    background:
+        linear-gradient(rgba(37, 99, 235, 0.042) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 143, 114, 0.03) 1px, transparent 1px),
+        linear-gradient(135deg, #f9fbfe 0%, #eef4f8 48%, #f7fafc 100%) !important;
+    background-size: 32px 32px, 32px 32px, auto !important;
+    background-position: -1px -1px, -1px -1px, 0 0 !important;
+}
+
+body.exam-detail-active .exam-topbar {
+    border-bottom: 1px solid rgba(190, 204, 221, 0.7) !important;
+    background: rgba(255, 255, 255, 0.82) !important;
+    box-shadow: 0 14px 40px rgba(17, 31, 49, 0.07) !important;
+    backdrop-filter: blur(22px) saturate(1.16) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.16) !important;
+}
+
+body.exam-detail-active .paper-kicker,
+body.exam-detail-active .stage-eyebrow,
+body.exam-detail-active .prop-kicker {
+    color: var(--paper-blue) !important;
+    font-weight: 860 !important;
+    letter-spacing: 0 !important;
+}
+
+body.exam-detail-active .paper-title-block h1,
+body.exam-detail-active .stage-header h2,
+body.exam-detail-active .prop-title {
+    color: var(--paper-ink) !important;
+    font-weight: 920 !important;
+    letter-spacing: 0 !important;
+}
+
+body.exam-detail-active .topbar-back,
+body.exam-detail-active .desktop-toolbar,
+body.exam-detail-active .editor-status-strip,
+body.exam-detail-active .overview-card,
+body.exam-detail-active .stage-header,
+body.exam-detail-active .canvas-container,
+body.exam-detail-active .prop-aside > div,
+body.exam-detail-active .editor-question-card,
+body.exam-detail-active .prop-section,
+body.exam-detail-active .option-item,
+body.exam-detail-active .batch-import-workbench-dialog .batch-pane,
+body.exam-detail-active .batch-import-workbench-dialog .preview-item,
+body.exam-detail-active .ai-analysis-card {
+    border: 1px solid var(--paper-line) !important;
+    border-radius: var(--paper-radius) !important;
+    background: var(--paper-surface) !important;
+    box-shadow: var(--paper-shadow-xs) !important;
+    backdrop-filter: blur(10px) saturate(1.06);
+    -webkit-backdrop-filter: blur(10px) saturate(1.06);
+}
+
+body.exam-detail-active .desktop-toolbar {
+    background: rgba(255, 255, 255, 0.72) !important;
+}
+
+body.exam-detail-active .editor-status-strip .el-tag,
+body.exam-detail-active .editor-question-card .el-tag,
+body.exam-detail-active .batch-quality-tags .el-tag {
+    border-radius: 999px !important;
+    font-weight: 800 !important;
+}
+
+body.exam-detail-active .topbar-back,
+body.exam-detail-active .el-button {
+    border-radius: var(--paper-radius) !important;
+    font-weight: 800 !important;
+}
+
+body.exam-detail-active .save-exam-btn,
+body.exam-detail-active .el-button--primary {
+    border-color: var(--paper-blue) !important;
+    background: var(--paper-blue) !important;
+    color: #ffffff !important;
+    box-shadow: 0 12px 26px rgba(37, 99, 235, 0.18) !important;
+}
+
+body.exam-detail-active .import-question-btn,
+body.exam-detail-active .ai-batch-entry {
+    border-color: rgba(198, 212, 228, 0.92) !important;
+    background: rgba(255, 255, 255, 0.82) !important;
+}
+
+body.exam-detail-active .ai-batch-entry {
+    color: var(--paper-blue) !important;
+}
+
+body.exam-detail-active .import-question-btn {
+    color: var(--paper-teal) !important;
+}
+
+body.exam-detail-active .overview-card:hover,
+body.exam-detail-active .editor-question-card:hover,
+body.exam-detail-active .prop-section:hover,
+body.exam-detail-active .option-item:hover {
+    border-color: var(--paper-line-strong) !important;
+    box-shadow: var(--paper-shadow-sm) !important;
+}
+
+body.exam-detail-active .overview-card-head,
+body.exam-detail-active .prop-header,
+body.exam-detail-active .stage-header {
+    border-color: rgba(216, 227, 239, 0.78) !important;
+}
+
+body.exam-detail-active .overview-stats div,
+body.exam-detail-active .type-count-grid div,
+body.exam-detail-active .inspector-summary div,
+body.exam-detail-active .question-map-legend,
+body.exam-detail-active .exam-card-meta-grid div {
+    border: 1px solid rgba(210, 222, 235, 0.86) !important;
+    border-radius: var(--paper-radius) !important;
+    background: var(--paper-surface-soft) !important;
+}
+
+body.exam-detail-active .overview-stats strong,
+body.exam-detail-active .type-count-grid strong,
+body.exam-detail-active .inspector-summary strong,
+body.exam-detail-active .stage-completion strong {
+    color: var(--paper-ink) !important;
+    font-weight: 920 !important;
+    letter-spacing: 0 !important;
+}
+
+body.exam-detail-active .overview-card-head small,
+body.exam-detail-active .stage-header p,
+body.exam-detail-active .prop-subtitle,
+body.exam-detail-active .prop-section-tip,
+body.exam-detail-active .overview-stats span,
+body.exam-detail-active .type-count-grid span,
+body.exam-detail-active .inspector-summary span {
+    color: var(--paper-muted) !important;
+}
+
+body.exam-detail-active .question-map-item {
+    border: 1px solid rgba(210, 222, 235, 0.92) !important;
+    border-radius: var(--paper-radius) !important;
+    background: rgba(255, 255, 255, 0.88) !important;
+    color: var(--paper-ink-soft) !important;
+    font-weight: 860 !important;
+}
+
+body.exam-detail-active .question-map-item.active {
+    border-color: var(--paper-blue) !important;
+    background: var(--paper-blue) !important;
+    color: #ffffff !important;
+    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.2) !important;
+}
+
+body.exam-detail-active .question-map-item.done:not(.invalid):not(.active) {
+    border-color: rgba(15, 143, 114, 0.28) !important;
+    background: var(--paper-teal-soft) !important;
+    color: var(--paper-teal) !important;
+}
+
+body.exam-detail-active .question-map-item.invalid:not(.active) {
+    border-color: rgba(194, 65, 45, 0.28) !important;
+    background: var(--paper-red-soft) !important;
+    color: var(--paper-red) !important;
+}
+
+body.exam-detail-active .canvas-container {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 251, 254, 0.82)) !important;
+}
+
+body.exam-detail-active .editor-question-card {
+    position: relative;
+    overflow: hidden;
+}
+
+body.exam-detail-active .editor-question-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    border-radius: 999px;
+    background: rgba(159, 178, 201, 0.52);
+}
+
+body.exam-detail-active .editor-question-card.active {
+    border-color: rgba(37, 99, 235, 0.62) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.96)) !important;
+    box-shadow: 0 18px 42px rgba(37, 99, 235, 0.13) !important;
+}
+
+body.exam-detail-active .editor-question-card.active::before {
+    background: var(--paper-blue);
+}
+
+body.exam-detail-active .editor-question-card.invalid:not(.active)::before {
+    background: var(--paper-red);
+}
+
+body.exam-detail-active .q-index,
+body.exam-detail-active .prop-index-badge,
+body.exam-detail-active .option-letter,
+body.exam-detail-active .preview-index {
+    border-radius: var(--paper-radius) !important;
+    font-weight: 880 !important;
+}
+
+body.exam-detail-active .q-index,
+body.exam-detail-active .prop-index-badge {
+    background: var(--paper-blue-soft) !important;
+    color: var(--paper-blue) !important;
+}
+
+body.exam-detail-active .editor-question-card.active .q-index {
+    background: var(--paper-blue) !important;
+    color: #ffffff !important;
+}
+
+body.exam-detail-active .option-preview,
+body.exam-detail-active .fill-answer-preview,
+body.exam-detail-active .q-analysis-preview,
+body.exam-detail-active .prop-panel .el-input__wrapper,
+body.exam-detail-active .prop-panel .el-textarea__inner,
+body.exam-detail-active .el-dialog .el-input__wrapper,
+body.exam-detail-active .el-dialog .el-textarea__inner {
+    border: 1px solid rgba(210, 222, 235, 0.9) !important;
+    border-radius: var(--paper-radius) !important;
+    background: rgba(255, 255, 255, 0.9) !important;
+    box-shadow: none !important;
+}
+
+body.exam-detail-active .option-preview.answer,
+body.exam-detail-active .option-item.is-checked {
+    border-color: rgba(15, 143, 114, 0.28) !important;
+    background: var(--paper-teal-soft) !important;
+}
+
+body.exam-detail-active .prop-panel .el-input__wrapper.is-focus,
+body.exam-detail-active .prop-panel .el-textarea__inner:focus,
+body.exam-detail-active .el-dialog .el-input__wrapper.is-focus,
+body.exam-detail-active .el-dialog .el-textarea__inner:focus {
+    border-color: rgba(37, 99, 235, 0.58) !important;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.09) !important;
+}
+
+body.exam-detail-active .type-radio-group .el-radio-button__inner {
+    border-radius: var(--paper-radius) !important;
+    font-weight: 840 !important;
+}
+
+body.exam-detail-active .type-radio-group .el-radio-button.is-active .el-radio-button__inner {
+    border-color: var(--paper-blue) !important;
+    background: var(--paper-blue) !important;
+    color: #ffffff !important;
+}
+
+body.exam-detail-active .el-dialog,
+body.exam-detail-active .el-message-box,
+body.exam-detail-active .batch-import-workbench-dialog.el-dialog,
+body.exam-detail-active .batch-import-workbench-dialog .el-dialog {
+    border: 1px solid rgba(203, 217, 232, 0.92) !important;
+    border-radius: 12px !important;
+    background: rgba(255, 255, 255, 0.98) !important;
+    box-shadow: var(--paper-shadow-md) !important;
+}
+
+body.exam-detail-active .el-dialog__header,
+body.exam-detail-active .el-message-box__header,
+body.exam-detail-active .batch-import-workbench-dialog .el-dialog__header {
+    border-bottom: 1px solid rgba(218, 228, 239, 0.84) !important;
+    background: linear-gradient(180deg, #ffffff, #f8fbfe) !important;
+}
+
+body.exam-detail-active .el-dialog__footer,
+body.exam-detail-active .el-message-box__btns,
+body.exam-detail-active .batch-import-workbench-dialog .el-dialog__footer {
+    border-top: 1px solid rgba(218, 228, 239, 0.84) !important;
+    background: #fbfcfe !important;
+}
+
+body.exam-detail-active .mobile-fab {
+    box-shadow: 0 18px 34px rgba(37, 99, 235, 0.26) !important;
+}
+
+body.exam-detail-active .mobile-editor-sheet,
+body.exam-detail-active .mobile-drawer-content {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 254, 0.96)) !important;
+}
+
+@media (max-width: 1120px) {
+    body.exam-detail-active .exam-topbar {
+        border-radius: 0 0 14px 14px !important;
+    }
+
+    body.exam-detail-active .editor-workbench {
+        gap: 12px !important;
+    }
+}
+
+@media (max-width: 720px) {
+    body.exam-detail-active .topbar-actions,
+    body.exam-detail-active .desktop-toolbar {
+        gap: 7px !important;
+    }
+
+    body.exam-detail-active .editor-question-card,
+    body.exam-detail-active .overview-card,
+    body.exam-detail-active .stage-header,
+    body.exam-detail-active .canvas-container,
+    body.exam-detail-active .prop-section {
+        border-radius: 12px !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.exam-detail-active .overview-card,
+    body.exam-detail-active .editor-question-card,
+    body.exam-detail-active .prop-section,
+    body.exam-detail-active .option-item {
+        transition: none !important;
+        transform: none !important;
+    }
+}

@@ -1,0 +1,8 @@
+{
+    "usingComponents": {
+        "question-card": "../../components/question-card/question-card",
+        "custom-modal": "../../components/custom-modal/custom-modal"
+    },
+    "navigationStyle": "custom",
+    "disableScroll": true
+}

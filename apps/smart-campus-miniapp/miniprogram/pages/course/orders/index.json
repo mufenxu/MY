@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "我的网课订单",
+  "navigationBarBackgroundColor": "#f0f4f8",
+  "navigationBarTextStyle": "black",
+  "backgroundColor": "#f0f4f8",
+  "enablePullDownRefresh": true
+}

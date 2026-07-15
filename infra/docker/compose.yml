@@ -1,0 +1,188 @@
+name: my-platform
+
+services:
+  mongodb:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mongosh --quiet --host 127.0.0.1 --username "$$MONGO_INITDB_ROOT_USERNAME" --password "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "db.adminCommand('ping').ok" | grep 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - backend
+
+  platform-api:
+    image: ${PLATFORM_API_IMAGE:-my-platform/platform-api:local}
+    build:
+      context: ../..
+      dockerfile: infra/docker/platform-api.Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      campus-service:
+        condition: service_started
+      iot-service:
+        condition: service_started
+    ports:
+      - "${PLATFORM_BIND_ADDRESS:-127.0.0.1}:${PLATFORM_API_PORT:-8080}:8080"
+    environment:
+      NODE_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
+      PLATFORM_API_HOST: 0.0.0.0
+      PLATFORM_API_PORT: 8080
+      PLATFORM_CONFIG_PATH: /app/config/platform.services.docker.json
+      PLATFORM_TRUST_PROXY: "true"
+      PLATFORM_PUBLIC_ORIGIN: ${PLATFORM_PUBLIC_ORIGIN:?Set PLATFORM_PUBLIC_ORIGIN}
+      PLATFORM_ADMIN_USERNAME: ${PLATFORM_ADMIN_USERNAME:?Set PLATFORM_ADMIN_USERNAME}
+      PLATFORM_ADMIN_PASSWORD_HASH: ${PLATFORM_ADMIN_PASSWORD_HASH:?Set PLATFORM_ADMIN_PASSWORD_HASH}
+      PLATFORM_SESSION_SECRET: ${PLATFORM_SESSION_SECRET:?Set PLATFORM_SESSION_SECRET}
+      PLATFORM_SESSION_TTL_HOURS: ${PLATFORM_SESSION_TTL_HOURS:-12}
+      CORE_HOSTS: ${CORE_HOSTS:-xcx.pxyb.cn}
+      EXAM_HOSTS: ${EXAM_HOSTS:-haxx.pxyb.cn}
+      NOTIFY_HOSTS: ${NOTIFY_HOSTS:-tongzhiapi.pxyb.cn}
+      CAMPUS_SERVICE_URL: http://campus-service:8780
+      MQTT_SERVICE_URL: http://iot-service:4066
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/core_app?authSource=admin
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/exam_app?authSource=admin
+      CORE_JWT_SECRET: ${CORE_JWT_SECRET:?Set CORE_JWT_SECRET}
+      EXAM_JWT_SECRET: ${EXAM_JWT_SECRET:?Set EXAM_JWT_SECRET}
+      ENCRYPTION_KEY: ${CORE_ENCRYPTION_KEY:?Set CORE_ENCRYPTION_KEY}
+      WX_APP_ID: ${CORE_WECHAT_APP_ID:?Set CORE_WECHAT_APP_ID}
+      WX_APP_SECRET: ${CORE_WECHAT_APP_SECRET:?Set CORE_WECHAT_APP_SECRET}
+      WECHAT_APP_ID: ${EXAM_WECHAT_APP_ID:?Set EXAM_WECHAT_APP_ID}
+      WECHAT_APP_SECRET: ${EXAM_WECHAT_APP_SECRET:?Set EXAM_WECHAT_APP_SECRET}
+      CORS_ORIGINS: ${EXAM_CORS_ORIGINS:?Set EXAM_CORS_ORIGINS}
+      DEFAULT_ADMIN_USERNAME: ${EXAM_DEFAULT_ADMIN_USERNAME:-admin}
+      DEFAULT_ADMIN_DISPLAY_NAME: ${EXAM_DEFAULT_ADMIN_DISPLAY_NAME:-Super Admin}
+      DEFAULT_ADMIN_PASSWORD: ${EXAM_DEFAULT_ADMIN_PASSWORD:-}
+      SEED_SAMPLE_DATA: ${EXAM_SEED_SAMPLE_DATA:-false}
+      GH_WEBHOOK_SECRET: ${GH_WEBHOOK_SECRET:-}
+      MQTT_API_KEY: ${MQTT_API_KEY:-}
+      MQTT_API_BASE_URL: http://iot-service:4066
+      WECOM_CORP_ID: ${WECOM_CORP_ID:?Set WECOM_CORP_ID}
+      WECOM_AGENT_ID: ${WECOM_AGENT_ID:?Set WECOM_AGENT_ID}
+      WECOM_SECRET: ${WECOM_SECRET:?Set WECOM_SECRET}
+      NOTIFY_API_KEY: ${NOTIFY_API_KEY:?Set NOTIFY_API_KEY}
+      TOKEN_CACHE_MARGIN: ${TOKEN_CACHE_MARGIN:-120}
+      SUB2API_BASE_URL: ${SUB2API_BASE_URL:-}
+      SUB2API_API_KEY: ${SUB2API_API_KEY:-}
+      SUB2API_MODEL: ${SUB2API_MODEL:-gpt-4o-mini}
+    volumes:
+      - core_uploads:/app/services/core-api/uploads
+      - core_logs:/app/services/core-api/logs
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 512
+    networks:
+      - frontend
+      - backend
+
+  campus-service:
+    image: ${CAMPUS_SERVICE_IMAGE:-my-platform/campus-service:local}
+    build:
+      context: ../../services/campus-service
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${CAMPUS_BIND_ADDRESS:-127.0.0.1}:${CAMPUS_PORT:-8780}:8780"
+    environment:
+      NODE_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
+      HGU_HOST: 0.0.0.0
+      PORT: 8780
+      HGU_APP_AUTH_REQUIRED: "true"
+      HGU_ADMIN_USERNAME: ${HGU_ADMIN_USERNAME:?Set HGU_ADMIN_USERNAME}
+      HGU_ADMIN_PASSWORD: ${HGU_ADMIN_PASSWORD:?Set HGU_ADMIN_PASSWORD}
+      HGU_APP_SESSION_SECRET: ${HGU_APP_SESSION_SECRET:?Set HGU_APP_SESSION_SECRET}
+      HGU_DATA_ENCRYPTION_KEY: ${HGU_DATA_ENCRYPTION_KEY:?Set HGU_DATA_ENCRYPTION_KEY}
+      HGU_APP_COOKIE_SECURE: "true"
+      HGU_TRUST_PROXY: "true"
+      HGU_ENABLE_HSTS: "true"
+      HGU_ENABLE_HTTPS_REDIRECT: "true"
+      HGU_EXTRA_ALLOWED_SCHOOL_HOSTS: ${HGU_EXTRA_ALLOWED_SCHOOL_HOSTS:-}
+      HGU_DATA_UID: ${HGU_DATA_UID:-}
+      HGU_DATA_GID: ${HGU_DATA_GID:-}
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    volumes:
+      - campus_data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    pids_limit: 256
+    networks:
+      - frontend
+      - backend
+
+  iot-service:
+    image: ${IOT_SERVICE_IMAGE:-my-platform/iot-service:local}
+    build:
+      context: ../../services/iot-service
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${IOT_BIND_ADDRESS:-127.0.0.1}:${IOT_PORT:-4066}:4066"
+    environment:
+      NODE_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
+      DATA_DIR: /app/data
+      API_PORT: 4066
+      TRUST_PROXY: "1"
+      PUBLIC_ORIGIN: ${IOT_PUBLIC_ORIGIN:?Set IOT_PUBLIC_ORIGIN}
+      LOG_HTTP_REQUESTS: ${IOT_LOG_HTTP_REQUESTS:-1}
+      MQTT_URL: ${MQTT_URL:?Set MQTT_URL}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-my-platform-iot-service}
+      AUTH_ENABLED: "true"
+      AUTH_USERNAME: ${IOT_ADMIN_USERNAME:?Set IOT_ADMIN_USERNAME}
+      AUTH_PASSWORD: ${IOT_ADMIN_PASSWORD:?Set IOT_ADMIN_PASSWORD}
+      AUTH_SESSION_SECRET: ${IOT_SESSION_SECRET:?Set IOT_SESSION_SECRET}
+    volumes:
+      - iot_data:/app/data
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    networks:
+      - frontend
+      - backend
+
+networks:
+  frontend:
+  backend:
+    internal: true
+
+volumes:
+  mongodb_data:
+  core_uploads:
+  core_logs:
+  campus_data:
+  iot_data:

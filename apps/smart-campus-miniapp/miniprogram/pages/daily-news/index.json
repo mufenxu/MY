@@ -1,0 +1,7 @@
+{
+    "navigationBarTitleText": "近日趣事",
+    "navigationBarBackgroundColor": "#f0f4f8",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f0f4f8",
+    "enablePullDownRefresh": true
+}

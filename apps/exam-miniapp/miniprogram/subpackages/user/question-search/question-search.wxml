@@ -1,0 +1,101 @@
+<view class="page-container">
+  <view class="custom-nav" style="padding-top: {{menuButtonTop}}px;">
+    <view class="nav-content" style="height: {{menuButtonHeight}}px;">
+      <text class="nav-title">题目搜索</text>
+    </view>
+  </view>
+
+  <scroll-view class="content-scroll" scroll-y style="padding-top: {{navBarHeight}}px;">
+    <view class="filter-card">
+      <view class="filter-item">
+        <text class="label">关键词</text>
+        <input
+          class="keyword-input"
+          placeholder="请输入题干、选项、解析关键词或首拼"
+          value="{{keyword}}"
+          bindinput="onKeywordInput"
+          bindconfirm="onKeywordConfirm"
+          confirm-type="search"
+        />
+      </view>
+
+      <view class="filter-item">
+        <text class="label">搜索范围</text>
+        <view class="scope-tabs">
+          <view
+            class="scope-tab {{searchScope === item.value ? 'active' : ''}}"
+            wx:for="{{searchScopeOptions}}"
+            wx:key="value"
+            bindtap="onScopeTap"
+            data-value="{{item.value}}"
+          >
+            {{item.label}}
+          </view>
+        </view>
+      </view>
+
+      <view class="filter-grid">
+        <view class="filter-item compact">
+          <text class="label">科目</text>
+          <picker mode="selector" range="{{subjectOptions}}" range-key="label" value="{{selectedMajorIndex}}" bindchange="onSubjectChange">
+            <view class="picker-display">{{subjectOptions[selectedMajorIndex].label}}</view>
+          </picker>
+        </view>
+
+        <view class="filter-item compact">
+          <text class="label">试卷</text>
+          <picker mode="selector" range="{{paperOptions}}" range-key="label" value="{{selectedCategoryIndex}}" bindchange="onPaperChange">
+            <view class="picker-display">{{paperOptions[selectedCategoryIndex].label}}</view>
+          </picker>
+        </view>
+      </view>
+
+      <button class="search-btn" bindtap="onTapSearch" loading="{{searching}}" disabled="{{loadingOptions || searching}}">
+        <view class="search-icon"></view>
+        <text>开始搜索</text>
+      </button>
+    </view>
+
+    <view class="state-tip" wx:if="{{loadingOptions}}">筛选项加载中...</view>
+    <view class="state-tip" wx:if="{{!loadingOptions && !hasSearched}}">输入关键词或选择范围后点击搜索</view>
+
+    <view class="result-list" wx:if="{{hasSearched && list.length > 0}}">
+      <view class="question-card" wx:for="{{list}}" wx:key="_id">
+        <view class="card-head">
+          <text class="type-tag {{item.type}}">{{item.type === 'single' ? '单选' : (item.type === 'multiple' ? '多选' : (item.type === 'judge' ? '判断' : '填空'))}}</text>
+          <text class="scope">{{item.majorCategoryName || '未分组科目'}} / {{item.categoryName}}</text>
+        </view>
+
+        <rich-text class="question-content" nodes="{{item.highlightedContent}}"></rich-text>
+
+        <view class="option-list" wx:if="{{item.options && item.options.length > 0}}">
+          <view class="option-item" wx:for="{{item.highlightedOptions}}" wx:key="label">
+            <text class="option-label">{{item.label}}.</text>
+            <rich-text class="option-value" nodes="{{item.highlightedValue}}"></rich-text>
+          </view>
+        </view>
+
+        <view class="answer-row">
+          <text class="answer-label">答案</text>
+          <text class="answer-value">{{item.answer}}</text>
+        </view>
+
+        <view class="analysis-row" wx:if="{{item.analysis}}">
+          <text class="analysis-label">解析</text>
+          <rich-text class="analysis-value" nodes="{{item.highlightedAnalysis}}"></rich-text>
+        </view>
+      </view>
+    </view>
+
+    <view class="state-tip" wx:if="{{hasSearched && !searching && list.length === 0}}">没有找到匹配题目</view>
+
+    <view class="load-more-wrap" wx:if="{{hasSearched && list.length > 0}}">
+      <button class="load-more-btn" wx:if="{{hasMore}}" bindtap="onLoadMore" loading="{{searching}}" disabled="{{searching}}">
+        加载更多
+      </button>
+      <text class="no-more" wx:else>已经到底了</text>
+    </view>
+
+    <view style="height: 80rpx;"></view>
+  </scroll-view>
+</view>

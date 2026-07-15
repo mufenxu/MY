@@ -1,0 +1,46 @@
+<view class="scan-container">
+  <!-- 延迟唤起原生相机，解决进入页面的掉帧卡顿问题 -->
+  <view class="camera-placeholder"></view>
+  <camera wx:if="{{showCamera}}" class="scan-camera" mode="scanCode" flash="{{flashState}}" binderror="onCameraError" bindscancode="onScanCode"></camera>
+  
+  <view class="scan-overlay">
+    <!-- 优化性能：使用四个 mask view 替代大面积阴影，解决卡顿 -->
+    <view class="scan-mask-top"></view>
+    <view class="scan-layer-middle">
+      <view class="scan-mask-left"></view>
+      <view class="scan-frame">
+        <view class="corner top-left"></view>
+        <view class="corner top-right"></view>
+        <view class="corner bottom-left"></view>
+        <view class="corner bottom-right"></view>
+        <!-- 将动画绑定在相机初始化后才运行 -->
+        <view class="scan-line {{showCamera ? 'scan-anim' : ''}}"></view>
+      </view>
+      <view class="scan-mask-right"></view>
+    </view>
+    <view class="scan-mask-bottom">
+      <view class="scan-tip">将二维码放入框内，即可自动扫描</view>
+    </view>
+  </view>
+
+  <view class="scan-toolbar">
+    <view class="tool-item" bindtap="goBack">
+      <view class="tool-icon-wrap">
+         <view class="icon-img icon-back"></view>
+      </view>
+      <text class="tool-text">取消</text>
+    </view>
+    <view class="tool-item" bindtap="toggleFlash">
+      <view class="tool-icon-wrap {{flashState === 'on' ? 'active' : ''}}">
+         <view class="icon-img icon-flash"></view>
+      </view>
+      <text class="tool-text {{flashState === 'on' ? 'text-active' : ''}}">{{flashState === 'on' ? '关闭照明' : '打开照亮'}}</text>
+    </view>
+    <view class="tool-item" bindtap="openAlbum">
+      <view class="tool-icon-wrap">
+         <view class="icon-img icon-album"></view>
+      </view>
+      <text class="tool-text">从相册选择</text>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "platformName": "MY 管理中心",
+  "services": [
+    {
+      "id": "core",
+      "name": "综合小程序平台",
+      "shortName": "综合平台",
+      "category": "miniapp",
+      "description": "用户、订单、资源、IoT、CT8 与综合业务后台",
+      "baseUrl": "https://xcx.pxyb.cn",
+      "healthPath": "/health",
+      "adminUrl": "https://xcx.pxyb.cn",
+      "repositoryPath": "services/core-api",
+      "capabilities": ["小程序", "订单", "IoT", "CT8"]
+    },
+    {
+      "id": "exam",
+      "name": "考试学习平台",
+      "shortName": "考试平台",
+      "category": "miniapp",
+      "description": "题库、模拟考试、学习记录与题库管理",
+      "baseUrl": "https://haxx.pxyb.cn",
+      "healthPath": "/version",
+      "adminUrl": "https://haxx.pxyb.cn",
+      "repositoryPath": "services/exam-api",
+      "capabilities": ["小程序", "题库", "考试", "AI 解析"]
+    },
+    {
+      "id": "campus",
+      "name": "地大智览",
+      "shortName": "校园服务",
+      "category": "service",
+      "description": "校园能耗、一卡通、住宿与教务信息服务",
+      "baseUrl": "https://hgu.pxyb.cn",
+      "healthPath": "/api/health",
+      "adminUrl": "https://hgu.pxyb.cn",
+      "repositoryPath": "services/campus-service",
+      "capabilities": ["校园", "能耗", "教务"]
+    },
+    {
+      "id": "mqtt",
+      "name": "MQTT 设备平台",
+      "shortName": "MQTT",
+      "category": "service",
+      "description": "设备在线状态、遥测历史、继电器与实时消息",
+      "baseUrl": "https://mqttapi.pxyb.cn",
+      "healthPath": "/api/health",
+      "adminUrl": "https://mqttapi.pxyb.cn",
+      "repositoryPath": "services/iot-service",
+      "capabilities": ["MQTT", "设备", "WebSocket"]
+    },
+    {
+      "id": "notify",
+      "name": "企业微信通知",
+      "shortName": "通知服务",
+      "category": "service",
+      "description": "面向内部业务系统的企业微信消息网关",
+      "baseUrl": "https://tongzhiapi.pxyb.cn",
+      "healthPath": "/healthz",
+      "adminUrl": null,
+      "repositoryPath": "services/notification-service",
+      "capabilities": ["企业微信", "通知 API"]
+    },
+    {
+      "id": "ct8-automation",
+      "name": "CT8 GitHub 自动化",
+      "shortName": "CT8 自动化",
+      "category": "automation",
+      "description": "GitHub Actions 驱动的 SSH 调度与批量任务",
+      "baseUrl": null,
+      "healthPath": null,
+      "adminUrl": null,
+      "repositoryPath": "automation/ct8-automation",
+      "capabilities": ["GitHub Actions", "SSH"]
+    }
+  ]
+}

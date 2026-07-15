@@ -1,0 +1,83 @@
+{
+  "description": "项目配置文件",
+  "miniprogramRoot": "miniprogram/",
+  "compileType": "miniprogram",
+  "setting": {
+    "useCompilerPlugins": [
+      "typescript"
+    ],
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "coverView": false,
+    "postcss": false,
+    "minified": true,
+    "enhance": true,
+    "showShadowRootInWxmlPanel": false,
+    "packNpmRelationList": [],
+    "ignoreUploadUnusedFiles": true,
+    "compileHotReLoad": false,
+    "skylineRenderEnable": false,
+    "es6": true,
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": false,
+    "packNpmManually": false,
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "condition": true,
+    "swc": true,
+    "disableSWC": false,
+    "disableUseStrict": false
+  },
+  "simulatorType": "wechat",
+  "condition": {},
+  "srcMiniprogramRoot": "miniprogram/",
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  },
+  "libVersion": "3.10.3",
+  "packOptions": {
+    "ignore": [
+      {
+        "value": "**/node_modules/**",
+        "type": "glob"
+      },
+      {
+        "value": "**/esm/**",
+        "type": "glob"
+      },
+      {
+        "value": "**/*.d.ts",
+        "type": "glob"
+      },
+      {
+        "value": "miniprogram/package.json",
+        "type": "file"
+      },
+      {
+        "value": "miniprogram/package-lock.json",
+        "type": "file"
+      },
+      {
+        "value": "miniprogram/assets/home-bg.jpg",
+        "type": "file"
+      },
+      {
+        "value": "miniprogram/assets/order-course.png",
+        "type": "file"
+      },
+      {
+        "value": "miniprogram/assets/empty.png",
+        "type": "file"
+      }
+    ],
+    "include": []
+  },
+  "appid": "wx5f66da25b724ef76",
+  "simulatorPluginLibVersion": {}
+}

@@ -1,0 +1,80 @@
+<view class="page-container">
+    <view class="home {{enableInnerScroll ? 'is-scrollable' : 'is-static'}}">
+        <!-- 动态浮动背景 -->
+        <view class="bg-shape bg-shape-1"></view>
+        <view class="bg-shape bg-shape-2"></view>
+        <view class="bg-shape bg-shape-3"></view>
+        
+        <view class="content-wrapper">
+            <view bindtap="onGoMe" class="user-card">
+                <image class="uc-avatar" mode="aspectFill" src="{{avatarUrl}}" wx:if="{{avatarUrl}}"></image>
+                <view class="uc-avatar placeholder" wx:else></view>
+                <view class="uc-main">
+                    <view class="uc-name">{{loggedIn&&nickName?nickName:'访客用户'}}</view>
+                    <view class="uc-sub">{{loggedIn?'欢迎回来':'未登录，功能受限'}}</view>
+                </view>
+                <button catchtap="onGoLogin" class="btn btn--primary uc-logout" wx:if="{{!loggedIn}}">立即登录</button>
+                <view class="notification-btn" hoverClass="notification-btn--active" hoverStartTime="0" hoverStayTime="50" style="right: 50px;" catchtap="onScan" wx:if="{{loggedIn}}">
+                  <image class="notification-icon__img" lazy-load="true" mode="aspectFit" src="../../assets/tab/scan.svg"></image>
+                </view>
+                <view catchtap="onShowNotification" class="notification-btn" hoverClass="notification-btn--active" hoverStartTime="0" hoverStayTime="50">
+                    <image class="notification-icon__img" lazy-load="true" mode="aspectFit" src="../../assets/tab/notification-bell.svg"></image>
+                    <view class="notification-dot" wx:if="{{notificationBadge}}"></view>
+                </view>
+            </view>
+            <view class="tools-section">
+                <view class="section-title">常用工具</view>
+                <view class="card-grid">
+                    <view bindtap="onGoResources" class="mini-card" hoverClass="mini-card__active" hoverStartTime="0" hoverStayTime="50" wx:if="{{canViewResources}}">
+                        <view class="mini-card__icon icon-server"></view>
+                        <view class="mini-card__title">资源管理</view>
+                    </view>
+                    <view bindtap="onGoBMI" class="mini-card" hoverClass="mini-card__active" hoverStartTime="0" hoverStayTime="50" wx:if="{{canViewBMI}}">
+                        <view class="mini-card__icon icon-bmi"></view>
+                        <view class="mini-card__title">BMI计算器</view>
+                    </view>
+
+
+                    <view bindtap="onGoTodo" class="mini-card" hoverClass="mini-card__active" hoverStartTime="0" hoverStayTime="50" wx:if="{{canViewTodo}}">
+                    <view class="mini-card__icon icon-todo"></view>
+                    <view class="mini-card__title">待办清单</view>
+                </view>
+                    <view bindtap="onGoCT8Management" class="mini-card" hoverClass="mini-card__active" hoverStartTime="0" hoverStayTime="50" wx:if="{{canViewCT8}}">
+                        <view class="mini-card__icon icon-ct8-management"></view>
+                        <view class="mini-card__title">CT8管理</view>
+                    </view>
+
+                    <view bindtap="onGoSmartControl" class="mini-card" hoverClass="mini-card__active" hoverStartTime="0" hoverStayTime="50" wx:if="{{canViewSmartControl}}">
+                        <view class="mini-card__icon icon-smart-control"></view>
+                        <view class="mini-card__title">智能控制</view>
+                    </view>
+                    <view bindtap="onGoHeatPump" class="mini-card" hoverClass="mini-card__active" hoverStartTime="0" hoverStayTime="50" wx:if="{{canViewHeatPump}}">
+                        <view class="mini-card__icon icon-heat-pump"></view>
+                        <view class="mini-card__title">空气能</view>
+                    </view>
+                    <view bindtap="onGoDailyNews" class="mini-card" hoverClass="mini-card__active" hoverStartTime="0" hoverStayTime="50" wx:if="{{canViewDailyNews}}">
+                        <view class="mini-card__icon icon-daily-news"></view>
+                        <view class="mini-card__title">近日趣事</view>
+                    </view>
+                    <view bindtap="onGoCourseOrder" class="mini-card" hoverClass="mini-card__active" hoverStartTime="0" hoverStayTime="50" wx:if="{{canViewCourseOrder}}">
+                        <view class="mini-card__icon icon-course"></view>
+                        <view class="mini-card__title">订单处理</view>
+                    </view>
+                </view>
+            </view>
+        </view>
+    </view>
+</view>
+<view class="notice-mask" wx:if="{{showNoticeModal}}" bindtap="onCloseNoticeModal"></view>
+<view class="notice-modal" wx:if="{{showNoticeModal}}">
+  <view class="notice-header">
+    <view class="notice-title">{{noticeTitle}}</view>
+  </view>
+  <view class="notice-body">
+    <view class="notice-content">{{noticeContent}}</view>
+    <view class="notice-time" wx:if="{{noticeTime}}">发布时间：{{noticeTime}}</view>
+  </view>
+  <view class="notice-footer">
+    <button class="btn btn--primary" bindtap="onCloseNoticeModal">知道了</button>
+  </view>
+</view>

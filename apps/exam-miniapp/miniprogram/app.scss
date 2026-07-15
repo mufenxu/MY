@@ -1,0 +1,44 @@
+/*
+ * app.scss
+ *
+ * Keep phone layouts page-owned, but add a light tablet safety layer so
+ * 750rpx designs do not stretch across large screens.
+ */
+
+@media (min-width: 768px) {
+  .page-container .content-scroll,
+  .page-container .content-view,
+  .page-shell,
+  .content-wrapper,
+  .result-content,
+  .main-content {
+    width: calc(100% - 96rpx);
+    max-width: 960px;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+  }
+
+  .custom-nav .nav-content {
+    width: calc(100% - 96rpx);
+    max-width: 960px;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+  }
+
+  .custom-nav .nav-title,
+  .nav-title {
+    font-size: 18px !important;
+  }
+
+  .nav-title-main,
+  .nav-title-accent {
+    font-size: 21px !important;
+  }
+
+  .brand-subtitle {
+    font-size: 10px !important;
+    letter-spacing: 3px !important;
+  }
+}

@@ -1,0 +1,106 @@
+<view class="question-card" wx:if="{{question}}">
+  <view class="header">
+    <text class="type-tag">{{question.type === 'single' ? '单选' : (question.type === 'multiple' ? '多选' : (question.type === 'judge' ? '判断' : '填空'))}}</text>
+    <text class="content">{{question.content}}</text>
+  </view>
+
+  <view class="options" wx:if="{{question.type !== 'fill'}}">
+    <view
+      class="option-item {{utils.includes(selectedValues, item.label) ? 'selected' : ''}} {{showAnalysis && utils.includes(question.answer, item.label) ? 'correct' : ''}} {{showAnalysis && utils.isMissedMultiple(question, selectedValues, item.label) ? 'missed' : ''}} {{showAnalysis && utils.includes(selectedValues, item.label) && !utils.includes(question.answer, item.label) ? 'wrong' : ''}}"
+      wx:for="{{question.options}}"
+      wx:key="label"
+      bindtap="onOptionTap"
+      data-value="{{item.label}}"
+    >
+      <view class="option-label">{{item.label}}</view>
+      <view class="option-content">{{item.value}}</view>
+      <text class="option-hint missed-hint" wx:if="{{showAnalysis && utils.isMissedMultiple(question, selectedValues, item.label)}}">漏选</text>
+    </view>
+  </view>
+
+  <view class="answer-tip missed-tip" wx:if="{{showAnalysis && utils.hasMissedMultiple(question, selectedValues)}}">
+    <text class="tip-dot"></text>
+    <text>本题漏选了正确选项</text>
+  </view>
+
+  <view class="fill-input-area" wx:if="{{question.type === 'fill'}}">
+    <input
+      class="fill-input"
+      placeholder="请输入答案"
+      bindinput="onFillInput"
+      value="{{selectedValues[0] || ''}}"
+      disabled="{{showAnalysis}}"
+    />
+    <view class="correct-answer" wx:if="{{showAnalysis}}">
+      正确答案：{{question.answer[0]}}
+    </view>
+  </view>
+
+  <view class="analysis" wx:if="{{showAnalysis}}">
+    <view class="analysis-header">
+      <view class="analysis-title {{question.analysisSource === 'ai' ? 'ai-analysis-title' : ''}}">
+        {{question.analysisSource === 'ai' ? 'AI解析' : '解析'}}
+      </view>
+      <button
+        class="analysis-ai-action {{aiAnalysisLoading ? 'is-loading' : ''}} {{hasCurrentAiAnalysis && canGenerateAiAnalysis ? 'is-refresh' : ''}}"
+        wx:if="{{canUseAiAnalysis && canGenerateAiAnalysis}}"
+        size="mini"
+        disabled="{{aiAnalysisLoading}}"
+        hover-class="analysis-ai-action-hover"
+        bindtap="onAiAnalysisTap"
+      >
+        <view class="ai-action-sheen"></view>
+        <view class="ai-action-icon">
+          <view class="ai-chip">
+            <text>AI</text>
+          </view>
+        </view>
+        <text class="ai-action-text">{{aiAnalysisLoading ? '生成中' : (hasCurrentAiAnalysis ? '重新生成' : 'AI补充')}}</text>
+      </button>
+    </view>
+
+    <view class="analysis-block">
+      <view class="analysis-block-title" wx:if="{{question.analysisSource !== 'ai' && (aiAnalysis || question.aiAnalysis)}}">题库解析</view>
+      <view class="analysis-content">
+        <block wx:for="{{analysisSegments}}" wx:key="id">
+          <text class="{{item.bold ? 'analysis-strong' : ''}}">{{item.text}}</text>
+        </block>
+      </view>
+    </view>
+
+    <view class="analysis-block ai-block" wx:if="{{canUseAiAnalysis && question.analysisSource !== 'ai' && (aiAnalysis || question.aiAnalysis)}}">
+      <view class="analysis-block-title ai-title">AI补充解析</view>
+      <view class="analysis-content ai-content">
+        <block wx:for="{{aiAnalysisSegments}}" wx:key="id">
+          <text class="{{item.bold ? 'analysis-strong' : ''}}">{{item.text}}</text>
+        </block>
+      </view>
+    </view>
+
+    <view class="analysis-ai-empty" wx:if="{{canUseAiAnalysis && canGenerateAiAnalysis && question.analysisSource !== 'ai' && !(aiAnalysis || question.aiAnalysis) && !aiAnalysisLoading}}">
+      需要更细的讲解时，可以让 AI 补一版。
+    </view>
+  </view>
+</view>
+
+<wxs module="utils">
+var includes = function(arr, item) {
+  if (!arr || !arr.indexOf) return false;
+  return arr.indexOf(item) > -1;
+}
+
+module.exports.includes = includes;
+
+module.exports.isMissedMultiple = function(question, selectedValues, item) {
+  if (!question || question.type !== 'multiple') return false;
+  return includes(question.answer, item) && !includes(selectedValues, item);
+}
+
+module.exports.hasMissedMultiple = function(question, selectedValues) {
+  if (!question || question.type !== 'multiple' || !question.answer) return false;
+  for (var i = 0; i < question.answer.length; i++) {
+    if (!includes(selectedValues, question.answer[i])) return true;
+  }
+  return false;
+}
+</wxs>

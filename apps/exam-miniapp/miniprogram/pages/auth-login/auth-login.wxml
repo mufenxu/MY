@@ -1,0 +1,59 @@
+<view class="page-container">
+  <view class="custom-nav" style="height: {{navBarHeight}}px; padding-top: {{menuButtonTop}}px;">
+    <view class="nav-content" style="height: {{menuButtonHeight}}px; line-height: {{menuButtonHeight}}px;">
+      <view class="back-btn" bindtap="onBack">
+        <view class="back-arrow"></view>
+      </view>
+      <text class="nav-title">微信登录</text>
+    </view>
+  </view>
+
+  <scroll-view class="content-scroll" scroll-y style="padding-top: {{navBarHeight}}px;">
+    <view class="hero-card">
+      <view class="brand-title">
+        <text class="brand-main">好爱</text>
+        <text class="brand-accent">学习</text>
+      </view>
+      <text class="hero-subtitle">选择头像并填写昵称后确认登录，同步你的学习记录和错题本。</text>
+    </view>
+
+    <view class="panel-card">
+      <form class="login-form" bindsubmit="onConfirmLogin">
+        <button class="avatar-button" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+          <image class="avatar-image" src="{{avatarUrl || defaultAvatar}}" mode="aspectFill"></image>
+          <text class="avatar-tip">{{avatarUrl ? '重新选择头像' : '点击选择头像'}}</text>
+        </button>
+
+        <view class="field-block">
+          <text class="field-label">昵称</text>
+        <input
+          name="nickname"
+          type="nickname"
+          class="nickname-input"
+          placeholder="{{nickname || '请输入或选择昵称'}}"
+          bindinput="onNicknameInput"
+          bindblur="onNicknameBlur"
+        />
+        </view>
+
+        <button class="confirm-button" form-type="submit" loading="{{submitting}}" disabled="{{submitting}}">
+          确认登录
+        </button>
+
+        <view class="agreement-copy">
+          <checkbox-group class="agreement-check-group" bindchange="onAgreementChange">
+            <label class="agreement-check-label">
+              <checkbox class="agreement-checkbox" value="accepted" checked="{{agreementAccepted}}" color="#2563eb" />
+            </label>
+          </checkbox-group>
+          <view class="agreement-text">
+            <text>我已阅读并同意</text>
+            <text class="link" bindtap="goToUserAgreement">《用户协议》</text>
+            <text>和</text>
+            <text class="link" bindtap="goToPrivacyPolicy">《隐私政策》</text>
+          </view>
+        </view>
+      </form>
+    </view>
+  </scroll-view>
+</view>

@@ -1,0 +1,277 @@
+<page-meta page-style="{{showServerModal ? 'height: 100vh; overflow: hidden;' : ''}}"></page-meta>
+<view class="page-container">
+  <!-- 顶部 Tab 切换 -->
+  <view class="tabs-header">
+    <view class="tab-item {{activeTab === 'status' ? 'active' : ''}}" bindtap="switchTab" data-tab="status">
+      <text>运行状态</text>
+      <view class="tab-indicator" wx:if="{{activeTab === 'status'}}"></view>
+    </view>
+    <view class="tab-item {{activeTab === 'secrets' ? 'active' : ''}}" bindtap="switchTab" data-tab="secrets">
+      <text>Secrets 管理</text>
+      <view class="tab-indicator" wx:if="{{activeTab === 'secrets'}}"></view>
+    </view>
+  </view>
+
+  <!-- 内容区域 -->
+  <view class="content-area">
+    
+    <!-- 运行状态 Tab -->
+    <view class="tab-content" wx:if="{{activeTab === 'status'}}">
+
+      <!-- 任务执行中提示条 -->
+      <view class="running-banner" wx:if="{{taskRunning}}">
+        <view class="running-banner-inner">
+          <view class="running-mark">
+            <view class="running-mark-orbit"></view>
+            <view class="running-mark-core">GH</view>
+            <view class="running-mark-dot"></view>
+          </view>
+          <view class="running-info">
+            <view class="running-head">
+              <text class="running-kicker">CT8 · SSH Login</text>
+              <view class="running-chip">同步中</view>
+            </view>
+            <text class="running-title">节点续期任务执行中</text>
+            <view class="running-meta">
+              <text>已运行 {{runningElapsed}}</text>
+              <text>等待结果回传</text>
+            </view>
+            <view class="running-pipeline">
+              <view class="pipeline-node active"></view>
+              <view class="pipeline-line active"></view>
+              <view class="pipeline-node active"></view>
+              <view class="pipeline-line flow"></view>
+              <view class="pipeline-node"></view>
+            </view>
+          </view>
+          <view class="running-terminal">
+            <view class="terminal-line wide"></view>
+            <view class="terminal-line mid"></view>
+            <view class="terminal-line short"></view>
+            <view class="terminal-cursor"></view>
+          </view>
+        </view>
+      </view>
+      <view class="card status-card" wx:if="{{latestRun}}">
+        <view class="card-header">
+          <view class="card-title">最新运行状态</view>
+          <view class="status-badge status-{{latestRun.status}}">{{latestRun.status==='success'?'✓ 成功':latestRun.status==='failed'?'✗ 失败':latestRun.status==='partial'?'⚠ 部分成功':'⏳ 运行中'}}</view>
+        </view>
+        
+        <view class="status-grid">
+            <view class="grid-item">
+                <text class="label">运行ID</text>
+                <text class="value">{{latestRun.run_id}}</text>
+            </view>
+             <view class="grid-item">
+                <text class="label">总账号</text>
+                <text class="value">{{latestRun.total_accounts}}</text>
+            </view>
+            <view class="grid-item" bindtap="showFilteredServers" data-type="success" data-source="latest">
+                <text class="label">成功</text>
+                <text class="value success-text clickable">{{latestRun.success_count}}</text>
+                <text class="tap-hint" wx:if="{{latestRun.success_count > 0}}">点击查看 ›</text>
+            </view>
+            <view class="grid-item" bindtap="showFilteredServers" data-type="failed" data-source="latest">
+                <text class="label">失败</text>
+                <text class="value failed-text clickable">{{latestRun.failed_count}}</text>
+                <text class="tap-hint" wx:if="{{latestRun.failed_count > 0}}">点击查看 ›</text>
+            </view>
+        </view>
+
+        <view class="callback-alert" wx:if="{{latestRun.callback_missing}}">
+            <text>GitHub 已结束，但登录明细回调还未写入</text>
+        </view>
+
+        <view class="time-info">
+            <view class="time-row">
+                <text class="label">开始:</text>
+                <text class="value">{{latestRun.start_time}}</text>
+            </view>
+            <view class="time-row">
+                <text class="label">结束:</text>
+                <text class="value">{{latestRun.end_time||'进行中'}}</text>
+            </view>
+            <view class="time-row" wx:if="{{latestRun.duration}}">
+                <text class="label">时长:</text>
+                <text class="value duration-value">{{latestRun.duration}}</text>
+            </view>
+        </view>
+
+        <view class="action-buttons">
+            <button bindtap="onTriggerGH" class="btn primary-btn" disabled="{{triggering || taskRunning}}" loading="{{triggering}}">{{triggering?'触发中...':(taskRunning?'任务执行中...':'触发 GitHub 任务')}}</button>
+            <button bindtap="viewDetails" class="btn outline-btn" data-runid="{{latestRun.run_id}}">查看详情</button>
+        </view>
+      </view>
+
+      <view class="card history-card" wx:if="{{runHistory.length>0}}">
+        <view class="card-header">
+            <view class="card-title">历史记录</view>
+        </view>
+        <view class="history-list">
+            <view bindtap="viewDetails" class="history-item" data-runid="{{item.run_id}}" wx:for="{{runHistory}}" wx:key="run_id">
+                <view class="history-dot status-{{item.status}}"></view>
+                <view class="history-main">
+                    <view class="history-top-row">
+                        <view class="history-time">{{item.create_time}}</view>
+                        <view class="history-nums" wx:if="{{!item.callback_missing}}">
+                            <text class="num-success" catchtap="showFilteredServers" data-type="success" data-source="{{item.run_id}}">{{item.success_count}} 成功</text>
+                            <text class="num-sep">·</text>
+                            <text class="num-failed {{item.failed_count > 0 ? 'has-failed' : ''}}" catchtap="showFilteredServers" data-type="failed" data-source="{{item.run_id}}">{{item.failed_count}} 失败</text>
+                        </view>
+                        <view class="history-nums callback-pending" wx:else>回调未返回</view>
+                    </view>
+                    <view class="history-duration" wx:if="{{item.duration}}">
+                        <text class="duration-icon">⏱</text>
+                        <text class="duration-text">{{item.duration}}</text>
+                    </view>
+                </view>
+                <view class="history-arrow">›</view>
+            </view>
+        </view>
+      </view>
+
+      <!-- 列表底部：提示与常驻触发按钮 -->
+      <view class="list-footer {{!latestRun ? 'with-action' : 'hint-only'}}" wx:if="{{runHistory.length > 0}}">
+        <view class="list-bottom-hint">
+          <view class="line"></view>
+          <text class="hint-text">到底啦</text>
+          <view class="line"></view>
+        </view>
+        <!-- 当没有最新记录时，在底部提供触发按钮，以便用户操作 -->
+        <button wx:if="{{!latestRun}}" bindtap="onTriggerGH" class="btn primary-btn block-btn" disabled="{{triggering || taskRunning}}" loading="{{triggering}}">{{taskRunning?'任务执行中...':'🚀 立即触发新任务'}}</button>
+      </view>
+
+      <view class="empty-state" wx:if="{{!latestRun && runHistory.length === 0 && !loading}}">
+        <view class="empty-text">暂无数据哦，开启你的第一次运行吧</view>
+        <button bindtap="onTriggerGH" class="btn primary-btn small" disabled="{{triggering || taskRunning}}">{{taskRunning?'正在执行...':'立即触发'}}</button>
+      </view>
+    </view>
+
+    <!-- Secrets 管理 Tab -->
+    <view class="tab-content" wx:if="{{activeTab === 'secrets'}}">
+      
+      <!-- 深度重构：模式选择网格 -->
+      <view class="mode-selection-grid">
+        <view bindtap="onModeChange" class="mode-card {{mode==='replace'?'active':''}}" data-value="replace">
+          <view class="mode-card-icon">
+            <text>🔄</text>
+          </view>
+          <view class="mode-card-content">
+            <text class="mode-card-title">替换模式</text>
+            <text class="mode-card-desc">覆盖现有全部数据</text>
+          </view>
+          <view class="mode-card-dot" wx:if="{{mode==='replace'}}"></view>
+        </view>
+
+        <view bindtap="onModeChange" class="mode-card {{mode==='append'?'active':''}}" data-value="append">
+          <view class="mode-card-icon">
+            <text>➕</text>
+          </view>
+          <view class="mode-card-content">
+            <text class="mode-card-title">追加模式</text>
+            <text class="mode-card-desc">在末尾添加新内容</text>
+          </view>
+          <view class="mode-card-dot" wx:if="{{mode==='append'}}"></view>
+        </view>
+      </view>
+
+      <!-- 当前值标签展示 -->
+      <view class="card input-card" wx:if="{{currentValue}}">
+        <view class="card-header">
+            <view class="card-title">当前 Secret 值</view>
+            <view class="badge success">共 {{secretItems.length}} 项</view>
+        </view>
+        
+        <view class="secret-tags-container">
+            <view class="secret-tag" wx:for="{{secretItems}}" wx:key="index">
+                <text class="tag-text">{{item}}</text>
+                <view class="tag-delete" catchtap="onDeleteSecretItem" data-index="{{index}}">✕</view>
+            </view>
+        </view>
+        <view class="update-time" wx:if="{{lastUpdateTime}}">更新于 {{lastUpdateTime}}</view>
+      </view>
+
+      <!-- 追加模式无缓存时手动输入 -->
+      <view class="card input-card" wx:if="{{mode==='append' && !currentValue}}">
+        <view class="card-header">
+            <view class="card-title">当前 Secret 值</view>
+            <view class="badge warning">必填</view>
+        </view>
+        <view class="input-wrapper">
+            <textarea auto-height bindinput="onCurrentValueChange" class="textarea mono" maxlength="-1" placeholder="GitHub API 不返回 Secret，请手动输入当前完整值" value="{{currentValue}}"></textarea>
+        </view>
+      </view>
+
+      <!-- 输入区域 -->
+      <view class="card input-card">
+        <view class="card-header">
+            <view class="card-title">{{mode==='replace'?'新的完整值':'追加内容'}}</view>
+            <view class="char-count">{{inputValue.length}} 字符</view>
+        </view>
+        <view class="input-wrapper">
+            <textarea auto-height bindinput="onInputChange" class="textarea mono big" maxlength="-1" placeholder="{{mode==='replace'?'请输入完整的 Secret 值':'请输入要追加的内容 (将自动用逗号分隔)'}}" value="{{inputValue}}"></textarea>
+        </view>
+      </view>
+
+      <!-- 预览区域 -->
+      <view class="card preview-card" wx:if="{{mode==='append'&&currentValue&&inputValue}}">
+        <view class="card-header">
+            <view class="card-title">结果预览</view>
+        </view>
+        <view class="preview-box mono">
+            <text class="muted">{{currentValue}}</text>
+            <text class="highlight">,{{inputValue}}</text>
+        </view>
+      </view>
+
+      <!-- 底部按钮 -->
+      <view class="footer-actions">
+        <button bindtap="onSubmit" class="btn primary-btn block" disabled="{{!inputValue||(mode==='append'&&!currentValue)}}">{{mode==='replace'?'更新 Secret':'追加 Secret'}}</button>
+      </view>
+
+    </view>
+  </view>
+</view>
+
+<!-- 服务器详情弹窗 -->
+<root-portal wx:if="{{showServerModal}}">
+  <view class="modal-overlay show" bindtap="hideServerModal">
+    <view class="modal-sheet show" catchtap="">
+      <view class="modal-handle"></view>
+      <view class="modal-header">
+        <view class="modal-title">{{serverModalTitle}}</view>
+        <view class="modal-close" bindtap="hideServerModal">✕</view>
+      </view>
+      <view class="modal-body">
+        <view wx:if="{{filteredServers.length === 0}}" class="modal-empty">
+          <text>暂无数据</text>
+        </view>
+        <view class="server-item" wx:for="{{filteredServers}}" wx:key="index">
+          <view class="server-item-header">
+            <view class="server-name">{{item.user || item.host || '未知'}}</view>
+            <view class="server-status {{item.success ? 'status-ok' : 'status-err'}}">{{item.success ? '成功' : '失败'}}</view>
+          </view>
+          <view class="server-item-body">
+            <view class="server-detail-row" wx:if="{{item.host}}">
+              <text class="detail-label">🖥️ 主机</text>
+              <text class="detail-value">{{item.host}}{{item.port ? ':' + item.port : ''}}</text>
+            </view>
+            <view class="server-detail-row" wx:if="{{item.out_ip}}">
+              <text class="detail-label">🌐 IP</text>
+              <text class="detail-value">{{item.out_ip}}</text>
+            </view>
+            <view class="server-detail-row" wx:if="{{item.expiry_text}}">
+              <text class="detail-label">⏰ 过期</text>
+              <text class="detail-value">{{item.expiry_text}}</text>
+            </view>
+            <view class="server-detail-row" wx:if="{{item.proxy}}">
+              <text class="detail-label">🔗 代理</text>
+              <text class="detail-value">{{item.proxy}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</root-portal>

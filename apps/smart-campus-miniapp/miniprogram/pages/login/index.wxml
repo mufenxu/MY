@@ -1,0 +1,66 @@
+<view class="login-container">
+  <!-- Background Elements -->
+  <view class="bg-shape shape-1"></view>
+  <view class="bg-shape shape-2"></view>
+  
+  <view class="login-content">
+    <!-- Header Section -->
+    <view class="header fade-in-up">
+      <view class="logo-area">
+        <image class="logo-img" src="/pages/login/logo.png" mode="aspectFit"></image>
+      </view>
+      <view class="app-name">星轨轻具坊</view>
+      <view class="app-slogan">探索 · 创造 · 极致体验</view>
+    </view>
+
+    <!-- Login Card -->
+    <view class="login-card fade-in-up delay-1">
+      <view class="card-header">
+        <view class="card-title">欢迎回来</view>
+        <view class="card-subtitle">开启您的数字化极简生活</view>
+      </view>
+
+      <!-- Avatar Section -->
+      <view class="avatar-section">
+        <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+          <view class="avatar-inner">
+            <image class="avatar-img" src="{{avatarUrl}}" mode="aspectFill" wx:if="{{avatarUrl}}"></image>
+            <view class="avatar-placeholder" wx:else>
+              <text class="placeholder-icon">👤</text>
+            </view>
+          </view>
+        </button>
+        <view class="avatar-label">点击设置头像</view>
+      </view>
+
+      <!-- Input Section -->
+      <view class="form-section">
+        <view class="input-wrapper {{nickName ? 'has-value' : ''}}">
+          <input type="nickname" class="nickname-input" placeholder="请输入您的昵称" placeholder-class="input-placeholder" value="{{nickName}}" bindinput="onNickInput" bindblur="onNickBlur" maxlength="20"/>
+          <view class="input-line"></view>
+        </view>
+      </view>
+
+      <!-- Action Button -->
+      <view class="action-section">
+        <button class="submit-btn {{canLogin ? 'active' : ''}}" bindtap="onLogin" disabled="{{loggingIn}}" loading="{{loggingIn}}">
+          <text wx:if="{{!loggingIn}}">进入星轨</text>
+          <text wx:else>同步数据中...</text>
+        </button>
+      </view>
+
+      <!-- Privacy Link -->
+      <view class="privacy-container">
+        <checkbox-group bindchange="onAgreedChange">
+          <label class="privacy-label">
+            <checkbox class="privacy-checkbox" value="agreed" checked="{{isAgreed}}" color="#6366f1"/>
+            <view class="privacy-text-wrapper">
+              <text class="text-muted">我已阅读并同意</text>
+              <text class="text-link" catchtap="onOpenPrivacy">《用户隐私保护指引》</text>
+            </view>
+          </label>
+        </checkbox-group>
+      </view>
+    </view>
+  </view>
+</view>

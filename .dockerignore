@@ -1,0 +1,15 @@
+**/.git
+**/node_modules
+**/dist
+**/coverage
+**/data
+**/logs
+**/uploads
+**/.env
+**/env
+**/*.local
+**/*.log
+**/project.private.config.json
+archive
+docs
+legacy

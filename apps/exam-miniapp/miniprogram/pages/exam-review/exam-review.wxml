@@ -1,0 +1,122 @@
+<view class="container exam-page">
+  <!-- Minimalist Header -->
+  <!-- Custom Navigation Bar -->
+  <view class="custom-nav" style="padding-top: {{capsuleTop}}px;">
+    <view class="nav-title" style="height: {{capsuleHeight}}px; line-height: {{capsuleHeight}}px;">
+      {{title}}
+    </view>
+  </view>
+
+  <scroll-view 
+    class="main-content" 
+    wx:if="{{!loading && questions.length > 0}}"
+    scroll-y="{{true}}"
+    enhanced="{{true}}"
+    show-scrollbar="{{false}}"
+    style="height: calc(100vh - {{navBarHeight}}px); margin-top: {{navBarHeight}}px;"
+  >
+    <!-- Header Bar -->
+    <view class="header-bar">
+      <view class="progress-info">
+        <text class="current-index">{{currentIndex + 1}}</text>
+        <text class="total-count">/ {{questions.length}}</text>
+        <text class="timer" wx:if="{{timeLeft > 0}}">⏱ {{timerStr}}</text>
+      </view>
+      
+      <view class="actions">
+        <view class="btn-sheet" bindtap="onToggleAnswerSheet">
+          <view class="sheet-icon">
+            <view class="rect"></view>
+            <view class="rect"></view>
+            <view class="rect"></view>
+            <view class="rect"></view>
+          </view>
+          <text>答题卡</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- Progress Bar -->
+    <progress 
+      percent="{{(currentIndex + 1) / questions.length * 100}}" 
+      stroke-width="2" 
+      activeColor="#007AFF" 
+      backgroundColor="#F2F2F7" 
+      class="progress-line"
+    />
+
+    <!-- Question Area -->
+    <view class="question-area">
+      <question-card 
+        question="{{questions[currentIndex]}}" 
+        showAnalysis="{{isAnalysisVisible}}"
+        userAnswer="{{answers[questions[currentIndex]._id] || []}}"
+        canUseAiAnalysis="{{canUseAiAnalysis}}"
+        canGenerateAiAnalysis="{{canGenerateAiAnalysis}}"
+        aiAnalysis="{{aiAnalysisByQuestionId[questions[currentIndex]._id] || ''}}"
+        aiAnalysisLoading="{{aiAnalysisLoadingByQuestionId[questions[currentIndex]._id] || false}}"
+        bind:change="onAnswerChange"
+        bind:ai-analysis="onAiAnalysisRequest"
+      />
+    </view>
+    <!-- Buffer space for floating footer -->
+    <view class="footer-spacer"></view>
+  </scroll-view>
+
+  <!-- Minimalist Footer -->
+  <view class="footer-bar" wx:if="{{!loading}}">
+    <view class="btn-group">
+      <button class="btn-nav btn-prev {{currentIndex === 0 ? 'disabled' : ''}}" bindtap="onPrev" disabled="{{currentIndex === 0}}">上一题</button>
+      
+      <!-- Confirm Answer Button for Practice Mode Multiple Choice -->
+      <button 
+        class="btn-confirm" 
+        wx:if="{{mode === 'practice' && questions[currentIndex].type === 'multiple' && !isAnalysisVisible}}" 
+        bindtap="onConfirmAnswer"
+      >确认作答</button>
+
+      <button class="btn-submit" wx:elif="{{currentIndex === questions.length - 1}}" bindtap="onSubmit">返回结果</button>
+      <button class="btn-nav btn-next" wx:else bindtap="onNext">下一题</button>
+    </view>
+  </view>
+
+  <!-- Answer Sheet Modal (Drawer) -->
+  <view class="answer-sheet-mask {{showAnswerSheet ? 'visible' : ''}}" bindtap="onToggleAnswerSheet"></view>
+  <view class="answer-sheet {{showAnswerSheet ? 'visible' : ''}}">
+    <view class="sheet-header">
+      <text class="sheet-title">答题卡</text>
+    </view>
+    <scroll-view scroll-y class="sheet-content">
+      <block wx:for="{{groupedQuestions}}" wx:key="type" wx:for-item="group">
+        <view class="type-section">
+          <view class="type-header">
+            <text class="type-name">{{group.typeName}}</text>
+            <text class="type-count">（{{group.items.length}}题）</text>
+          </view>
+          <view class="grid">
+            <view 
+              class="grid-item {{item.originalIndex === currentIndex ? 'current' : ''}} {{results[item.question._id] ? 'correct' : 'wrong'}}" 
+              wx:for="{{group.items}}" 
+              wx:key="originalIndex"
+              bindtap="onJumpToQuestion"
+              data-index="{{item.originalIndex}}"
+            >
+              {{item.originalIndex + 1}}
+            </view>
+          </view>
+        </view>
+      </block>
+    </scroll-view>
+  </view>
+
+
+  <custom-modal
+    show="{{showResumeModal}}"
+    title="提示"
+    content="检测到云端未完成的进度，是否继续？"
+    confirmText="继续"
+    cancelText="重新开始"
+    bind:confirm="onResumeConfirm"
+    bind:cancel="onResumeCancel"
+  />
+</view>

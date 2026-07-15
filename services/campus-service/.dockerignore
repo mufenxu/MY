@@ -1,0 +1,16 @@
+.git
+.github
+.gitattributes
+.gitignore
+.agents
+.env*
+data
+node_modules
+coverage
+test
+npm-debug.log*
+server.*.log
+build-and-push.*
+docker-compose*.yml
+eslint.config.js
+*.md

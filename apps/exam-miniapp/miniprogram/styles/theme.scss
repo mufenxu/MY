@@ -1,0 +1,282 @@
+/* Soft 3D Theme - Minimalist Design System */
+
+// ------------------------------------------------------------------
+// Colors
+// ------------------------------------------------------------------
+$bg-color-page: #F5F6FA; // Soft Cool Grey
+$bg-color-card: #FFFFFF;
+$text-main: #2D3436; // Dark Grey
+$text-secondary: #636E72; // Medium Grey
+$text-light: #B2BEC3; // Light Grey
+
+$primary-color: #6C5CE7; // Purple-Blue
+$primary-gradient: linear-gradient(135deg, #6C5CE7, #a29bfe);
+
+$success-color: #00B894;
+$success-gradient: linear-gradient(135deg, #00b894, #55efc4);
+
+$danger-color: #FF7675;
+
+// Mirror the exam page styles
+$btn-bg-neutral: #E0E5EC;
+$btn-text-neutral: #636E72;
+$btn-shadow-neutral: #CBD0D8;
+
+// ------------------------------------------------------------------
+// Responsive layout
+// ------------------------------------------------------------------
+$tablet-breakpoint: 768px;
+$tablet-content-max-width: 960px;
+$tablet-reader-max-width: 720px;
+$tablet-question-max-width: 900px;
+$tablet-dialog-max-width: 680px;
+
+// ------------------------------------------------------------------
+// Mixins
+// ------------------------------------------------------------------
+
+// 1. Page Layout Base
+@mixin page-layout {
+    min-height: 100vh;
+    background-color: $bg-color-page;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, sans-serif;
+}
+
+// 1.1 Fixed Page Container (No root scroll)
+@mixin page-container-fixed {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: $bg-color-page;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+// 1.2 Scrollable Content Area (Inner scroll)
+@mixin scroll-content {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+    /* Removed fixed padding-bottom to prevent unnecessary scrolling */
+}
+
+@mixin tablet-up {
+    @media (min-width: #{$tablet-breakpoint}) {
+        @content;
+    }
+}
+
+@mixin tablet-centered-shell($max-width: $tablet-content-max-width) {
+    @include tablet-up {
+        width: calc(100% - 96rpx);
+        max-width: $max-width;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
+@mixin tablet-bottom-sheet($max-width: $tablet-reader-max-width) {
+    @include tablet-up {
+        left: 50%;
+        right: auto;
+        bottom: 32rpx;
+        width: calc(100% - 96rpx);
+        max-width: $max-width;
+        border-radius: 36rpx;
+        transform: translate(-50%, 100%);
+
+        &.visible,
+        &.sheet-active {
+            transform: translate(-50%, 0);
+        }
+    }
+}
+
+// 2. Floating Card (White "Island")
+@mixin floating-card {
+    background: $bg-color-card;
+    border-radius: 30rpx;
+    box-shadow:
+        0 10rpx 30rpx rgba(174, 174, 192, 0.15),
+        0 2rpx 6rpx rgba(174, 174, 192, 0.05);
+    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+// 3. 3D Pill Button (Standard Navigation)
+@mixin btn-3d-neutral {
+    background: $btn-bg-neutral;
+    color: $btn-text-neutral;
+    border: none;
+    border-radius: 28rpx;
+    font-size: 32rpx;
+    font-weight: 700;
+    padding: 24rpx 0;
+    line-height: 1.4;
+    position: relative;
+    transition: all 0.1s ease;
+
+    // The "Side" of the button
+    box-shadow:
+        0 8rpx 0 $btn-shadow-neutral,
+        0 15rpx 20rpx rgba(0, 0, 0, 0.1);
+    transform: translateY(0);
+
+    &:active {
+        box-shadow:
+            0 0rpx 0 $btn-shadow-neutral,
+            inset 0 4rpx 8rpx rgba(0, 0, 0, 0.1);
+        transform: translateY(8rpx);
+    }
+
+    &::after {
+        border: none;
+    }
+}
+
+// 4. 3D Pill Button (Primary Action)
+@mixin btn-3d-primary {
+    @include btn-3d-neutral;
+    background: $primary-gradient;
+    color: #fff;
+    box-shadow:
+        0 8rpx 0 darken($primary-color, 10%),
+        0 15rpx 20rpx rgba($primary-color, 0.3);
+
+    &:active {
+        box-shadow:
+            0 0rpx 0 darken($primary-color, 10%),
+            inset 0 4rpx 10rpx rgba(0, 0, 0, 0.2);
+        transform: translateY(8rpx);
+    }
+}
+
+// 5. Floating Footer Bar
+@mixin floating-footer {
+    position: fixed;
+    bottom: 50rpx;
+    left: 40rpx;
+    right: 40rpx;
+    background: rgba(255, 255, 255, 0.9);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    padding: 24rpx;
+    border-radius: 40rpx;
+    z-index: 100;
+
+    box-shadow:
+        0 20rpx 40rpx -10rpx rgba(0, 0, 0, 0.1),
+        0 0 0 1rpx rgba(255, 255, 255, 0.5);
+}
+
+@mixin question-footer-shell {
+    @include floating-footer;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 14rpx 56rpx 28rpx;
+    border-radius: 34rpx 34rpx 0 0;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow:
+        0 12rpx 28rpx -14rpx rgba(18, 24, 40, 0.28),
+        0 0 0 1rpx rgba(255, 255, 255, 0.8);
+
+    @include tablet-up {
+        left: 50%;
+        right: auto;
+        bottom: 28rpx;
+        width: calc(100% - 96rpx);
+        max-width: $tablet-question-max-width;
+        padding: 18rpx 28rpx 26rpx;
+        border-radius: 34rpx;
+        transform: translateX(-50%);
+    }
+}
+
+@mixin question-footer-button-base {
+    flex: 1;
+    height: 80rpx;
+    min-height: 80rpx;
+    margin: 0;
+    padding: 0 18rpx;
+    border-radius: 24rpx;
+    font-size: 28rpx;
+    line-height: 80rpx;
+    text-align: center;
+    letter-spacing: 0;
+    box-sizing: border-box;
+}
+
+@mixin question-footer-nav-button {
+    @include btn-3d-neutral;
+    @include question-footer-button-base;
+    box-shadow:
+        0 5rpx 0 #c8d0da,
+        0 10rpx 18rpx rgba(30, 41, 59, 0.08);
+
+    &:active {
+        box-shadow:
+            0 0rpx 0 #c8d0da,
+            inset 0 3rpx 8rpx rgba(30, 41, 59, 0.12);
+        transform: translateY(5rpx);
+    }
+
+    &.btn-prev {
+        flex: 0.92;
+        background: #f3f5f8;
+        color: #8a96a3;
+        box-shadow:
+            0 4rpx 0 #dce2e9,
+            0 8rpx 16rpx rgba(30, 41, 59, 0.05);
+    }
+
+    &.btn-next {
+        flex: 1.08;
+        background: linear-gradient(180deg, #EAF3FF 0%, #DCEBFF 100%);
+        color: #1D4ED8;
+        box-shadow:
+            0 6rpx 0 #B8D0F4,
+            0 12rpx 22rpx rgba(37, 99, 235, 0.16);
+    }
+
+    &.disabled {
+        opacity: 0.7;
+        box-shadow: none;
+        background: #edf0f4;
+        color: $text-light;
+        transform: none;
+    }
+}
+
+@mixin question-footer-submit-button {
+    @include btn-3d-primary;
+    @include question-footer-button-base;
+    box-shadow:
+        0 6rpx 0 darken($primary-color, 10%),
+        0 12rpx 20rpx rgba($primary-color, 0.24);
+
+    &:active {
+        box-shadow:
+            0 0rpx 0 darken($primary-color, 10%),
+            inset 0 3rpx 8rpx rgba(0, 0, 0, 0.18);
+        transform: translateY(6rpx);
+    }
+}
+
+@mixin question-footer-confirm-button {
+    @include btn-3d-neutral;
+    @include question-footer-button-base;
+    background: $success-gradient;
+    color: #fff;
+    box-shadow:
+        0 6rpx 0 darken($success-color, 10%),
+        0 12rpx 20rpx rgba($success-color, 0.24);
+
+    &:active {
+        box-shadow:
+            0 0rpx 0 darken($success-color, 10%),
+            inset 0 3rpx 8rpx rgba(0, 0, 0, 0.18);
+        transform: translateY(6rpx);
+    }
+}

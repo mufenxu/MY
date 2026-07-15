@@ -1,0 +1,60 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/auth-login/auth-login",
+    "pages/exam/exam",
+    "pages/result/result",
+    "pages/exam-review/exam-review",
+    "pages/profile/profile"
+  ],
+  "subpackages": [
+    {
+      "root": "subpackages/user",
+      "name": "user",
+      "pages": [
+        "study-report/study-report",
+        "scan-login/scan-login",
+        "account-manage/account-manage",
+        "privacy-policy/privacy-policy",
+        "user-agreement/user-agreement",
+        "question-search/question-search",
+        "wrong-book/wrong-book",
+        "wrong-practice/wrong-practice"
+      ]
+    }
+  ],
+  "window": {
+    "navigationBarTextStyle": "black",
+    "navigationStyle": "custom"
+  },
+  "style": "v2",
+  "rendererOptions": {
+    "skyline": {
+      "defaultDisplayBlock": true,
+      "defaultContentBox": true,
+      "disableABTest": true,
+      "sdkVersionBegin": "3.0.0",
+      "sdkVersionEnd": "15.255.255"
+    }
+  },
+  "componentFramework": "glass-easel",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents",
+  "tabBar": {
+    "custom": true,
+    "color": "#94a3b8",
+    "selectedColor": "#3b82f6",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的"
+      }
+    ]
+  }
+}

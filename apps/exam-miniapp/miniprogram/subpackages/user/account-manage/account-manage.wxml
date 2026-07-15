@@ -1,0 +1,45 @@
+<view class="page-container">
+  <view class="custom-nav" style="padding-top: {{menuButtonTop}}px;">
+    <view class="nav-content" style="height: {{menuButtonHeight}}px;">
+      <text class="nav-title">账号与数据</text>
+    </view>
+  </view>
+
+  <scroll-view class="content-scroll" scroll-y style="padding-top: {{navBarHeight}}px;">
+    <view class="hero-card">
+      <text class="hero-title">{{appName}}</text>
+      <text class="hero-sub">管理登录状态、导出路径与账号注销入口</text>
+      <text class="hero-id" wx:if="{{isLogin}}">学习 ID：{{uid}}</text>
+      <text class="hero-id" wx:else>当前未登录</text>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">数据说明</view>
+      <text class="section-copy">我们会在服务端保存你的 OpenID、昵称、考试结果、做题进度与错题记录，用于同步学习数据。</text>
+      <text class="section-copy">头像文件默认只保存在当前设备本地，不会主动上传到服务端。</text>
+      <text class="section-copy">如需申请进一步协助，可联系：{{supportEmail}}</text>
+    </view>
+
+    <view class="section-card">
+      <view class="section-title">本地操作</view>
+      <button class="action-btn secondary" bindtap="onLogout">退出当前登录</button>
+      <text class="action-tip">退出登录会清除当前设备缓存，下次进入需要重新登录。</text>
+    </view>
+
+    <view class="section-card danger-card">
+      <view class="section-title danger-title">危险操作</view>
+      <text class="section-copy">注销账号会删除你的账号、做题记录、考试成绩和做题进度，且无法恢复。</text>
+      <button class="action-btn danger" bindtap="onDeleteAccount" loading="{{submitting}}" disabled="{{submitting}}">
+        注销并删除全部数据
+      </button>
+    </view>
+
+    <view class="legal-links">
+      <text class="legal-link" bindtap="goToPrivacyPolicy">《隐私政策》</text>
+      <text class="legal-separator">和</text>
+      <text class="legal-link" bindtap="goToUserAgreement">《用户协议》</text>
+    </view>
+
+    <view class="bottom-space"></view>
+  </scroll-view>
+</view>

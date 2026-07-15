@@ -1,0 +1,32 @@
+<view class="page">
+  <view class="section" wx:if="{{runData}}">
+    <view class="server-list">
+      <view class="server-card" wx:for="{{details}}" wx:key="index">
+        <view class="card-header">
+          <view class="account-info">
+            <view class="account-name">{{item.displayAccount || '未知账号'}}</view>
+          </view>
+          <view class="status-badge {{item.displayStatus === '成功' ? 'status-success' : item.displayStatus === '失败' ? 'status-error' : 'status-default'}}" wx:if="{{item.displayStatus}}">
+            {{item.displayStatus}}
+          </view>
+        </view>
+        <view class="card-body">
+          <view class="info-row" wx:if="{{item.out_ip}}">
+            <view class="info-icon">🌐</view>
+            <view class="info-content">
+              <view class="info-label">登录IP</view>
+              <view class="info-value">{{item.out_ip}}</view>
+            </view>
+          </view>
+          <view class="info-row" wx:if="{{item.expiry_text}}">
+            <view class="info-icon">⏰</view>
+            <view class="info-content">
+              <view class="info-label">过期时间</view>
+              <view class="info-value">{{item.expiry_text}}</view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

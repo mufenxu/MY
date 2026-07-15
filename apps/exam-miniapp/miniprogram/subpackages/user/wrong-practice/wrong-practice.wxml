@@ -1,0 +1,171 @@
+<view class="container exam-page">
+  <!-- Custom Navigation Bar -->
+  <view class="custom-nav" style="padding-top: {{capsuleTop}}px;">
+    <view class="nav-title" style="height: {{capsuleHeight}}px; line-height: {{capsuleHeight}}px;">
+      {{title}}
+    </view>
+  </view>
+
+  <scroll-view 
+    class="main-content" 
+    wx:if="{{!loading && questions.length > 0}}"
+    scroll-y="{{true}}"
+    enhanced="{{true}}"
+    show-scrollbar="{{false}}"
+    style="height: calc(100vh - {{navBarHeight}}px); margin-top: {{navBarHeight}}px;"
+  >
+    <!-- Header Bar -->
+    <view class="header-bar">
+      <view class="progress-info">
+        <text class="current-index">{{currentIndex + 1}}</text>
+        <text class="total-count">/ {{questions.length}}</text>
+        <text class="wrong-tag">错题练习</text>
+      </view>
+      
+      <view class="actions">
+        <view class="btn-sheet" bindtap="onToggleAnswerSheet">
+          <view class="sheet-icon">
+            <view class="rect"></view>
+            <view class="rect"></view>
+            <view class="rect"></view>
+            <view class="rect"></view>
+          </view>
+          <text>答题卡</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- Progress Bar -->
+    <progress 
+      percent="{{(currentIndex + 1) / questions.length * 100}}" 
+      stroke-width="2" 
+      activeColor="#ff6b6b" 
+      backgroundColor="#F2F2F7" 
+      class="progress-line"
+    />
+
+    <!-- Question Area -->
+    <view class="question-area">
+      <question-card 
+        question="{{questions[currentIndex]}}" 
+        showAnalysis="{{isAnalysisVisible}}"
+        userAnswer="{{answers[questions[currentIndex]._id] || []}}"
+        canUseAiAnalysis="{{canUseAiAnalysis}}"
+        canGenerateAiAnalysis="{{canGenerateAiAnalysis}}"
+        aiAnalysis="{{aiAnalysisByQuestionId[questions[currentIndex]._id] || ''}}"
+        aiAnalysisLoading="{{aiAnalysisLoadingByQuestionId[questions[currentIndex]._id] || false}}"
+        bind:change="onAnswerChange"
+        bind:ai-analysis="onAiAnalysisRequest"
+      />
+      
+      <!-- 上次错误答案提示 -->
+      <view class="wrong-answer-hint" wx:if="{{questions[currentIndex].userAnswer && questions[currentIndex].userAnswer.length > 0}}">
+        <text class="hint-label">上次错误答案：</text>
+        <text class="hint-value">{{questions[currentIndex].userAnswer}}</text>
+      </view>
+
+      <view class="state-panel" wx:if="{{questions[currentIndex]}}">
+        <view class="state-summary">
+          <view class="state-pill {{questions[currentIndex].state.status === 'mastered' ? 'mastered' : ''}}">
+            {{questions[currentIndex].state.status === 'mastered' ? '已掌握' : '待复习'}}
+          </view>
+          <text class="state-meta">错 {{questions[currentIndex].state.wrongCount || 0}} 次 · 连续答对 {{questions[currentIndex].state.correctStreak || 0}} 次</text>
+        </view>
+        <view class="state-actions">
+          <button class="state-btn {{questions[currentIndex].state.favorite ? 'active' : ''}}" bindtap="onToggleFavorite" loading="{{syncingState}}">
+            {{questions[currentIndex].state.favorite ? '已收藏' : '收藏'}}
+          </button>
+          <button class="state-btn" wx:if="{{questions[currentIndex].state.status !== 'mastered'}}" bindtap="onMarkMastered" loading="{{syncingState}}">
+            标记掌握
+          </button>
+          <button class="state-btn" wx:else bindtap="onMarkNeedsReview" loading="{{syncingState}}">
+            继续复习
+          </button>
+          <button class="state-btn note" bindtap="onOpenNoteDialog">笔记</button>
+        </view>
+        <view class="note-preview" wx:if="{{questions[currentIndex].state.note}}">
+          {{questions[currentIndex].state.note}}
+        </view>
+      </view>
+    </view>
+    
+    <!-- Buffer space for floating footer -->
+    <view class="footer-spacer"></view>
+  </scroll-view>
+
+  <!-- Footer Bar -->
+  <view class="footer-bar" wx:if="{{!loading && questions.length > 0}}">
+    <view class="btn-group">
+      <button class="btn-nav btn-prev {{currentIndex === 0 ? 'disabled' : ''}}" bindtap="onPrev" disabled="{{currentIndex === 0}}">上一题</button>
+      
+      <!-- Confirm Button for Multiple Choice -->
+      <button 
+        class="btn-confirm" 
+        wx:if="{{questions[currentIndex].type === 'multiple' && !isAnalysisVisible && answers[questions[currentIndex]._id]}}" 
+        bindtap="onConfirmAnswer"
+      >确认作答</button>
+
+      <button class="btn-submit" wx:elif="{{currentIndex === questions.length - 1}}" bindtap="onFinish">完成练习</button>
+      <button class="btn-nav btn-next" wx:else bindtap="onNext">下一题</button>
+    </view>
+  </view>
+
+  <!-- Answer Sheet Modal -->
+  <view class="answer-sheet-mask {{showAnswerSheet ? 'visible' : ''}}" bindtap="onToggleAnswerSheet"></view>
+  <view class="answer-sheet {{showAnswerSheet ? 'visible' : ''}}">
+    <view class="sheet-header">
+      <text class="sheet-title">答题卡</text>
+    </view>
+    <scroll-view scroll-y class="sheet-content">
+      <block wx:for="{{groupedQuestions}}" wx:key="type" wx:for-item="group">
+        <view class="type-section">
+          <view class="type-header">
+            <text class="type-name">{{group.typeName}}</text>
+            <text class="type-count">（{{group.items.length}}题）</text>
+          </view>
+          <view class="grid">
+            <view 
+              class="grid-item {{item.originalIndex === currentIndex ? 'current' : ''}} {{answers[item.question._id] ? 'answered' : ''}}" 
+              wx:for="{{group.items}}" 
+              wx:key="originalIndex"
+              bindtap="onJumpToQuestion"
+              data-index="{{item.originalIndex}}"
+            >
+              {{item.originalIndex + 1}}
+            </view>
+          </view>
+        </view>
+      </block>
+    </scroll-view>
+  </view>
+
+  <!-- Loading State -->
+  <view class="loading-container" wx:if="{{loading}}" style="padding-top: {{navBarHeight}}px;">
+    <view class="spinner"></view>
+    <text>加载错题中...</text>
+  </view>
+
+  <!-- Empty State -->
+  <view class="empty-container" wx:if="{{!loading && questions.length === 0}}" style="padding-top: {{navBarHeight}}px;">
+    <text class="empty-title">太棒了！</text>
+    <text class="empty-desc">这份试卷的错题已全部掌握</text>
+    <button class="back-btn" bindtap="onBack">返回错题本</button>
+  </view>
+
+  <view class="note-mask" wx:if="{{noteDialogVisible}}" bindtap="onCloseNoteDialog">
+    <view class="note-dialog" catchtap="noop">
+      <text class="note-title">错题笔记</text>
+      <textarea
+        class="note-input"
+        maxlength="500"
+        value="{{noteDraft}}"
+        placeholder="记录这道题容易错在哪里"
+        bindinput="onNoteInput"
+      ></textarea>
+      <view class="note-actions">
+        <button class="note-cancel" bindtap="onCloseNoteDialog">取消</button>
+        <button class="note-save" bindtap="onSaveNote" loading="{{syncingState}}">保存</button>
+      </view>
+    </view>
+  </view>
+</view>

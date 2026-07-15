@@ -1,0 +1,30 @@
+{
+    "env": {
+        "node": true,
+        "es2022": true
+    },
+    "parserOptions": {
+        "ecmaVersion": 2022
+    },
+    "extends": ["eslint:recommended"],
+    "rules": {
+        "no-unused-vars": ["warn", { "argsIgnorePattern": "^(next|_)" }],
+        "no-console": "off",
+        "semi": ["error", "always"],
+        "quotes": ["error", "single", { "avoidEscape": true }],
+        "indent": ["error", 4, { "SwitchCase": 1 }],
+        "eqeqeq": ["error", "always"],
+        "no-var": "error",
+        "prefer-const": "warn",
+        "no-throw-literal": "error",
+        "no-return-await": "warn",
+        "no-multiple-empty-lines": ["warn", { "max": 2 }],
+        "comma-dangle": ["warn", "always-multiline"],
+        "eol-last": ["error", "always"],
+        "linebreak-style": ["error", "unix"]
+    },
+    "ignorePatterns": [
+        "node_modules/",
+        "public/vendor/"
+    ]
+}

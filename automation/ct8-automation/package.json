@@ -1,0 +1,11 @@
+{
+  "name": "@my-platform/ct8-automation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitHub Actions workflows to auto login via SSH",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {},
+  "dependencies": {}
+}
+

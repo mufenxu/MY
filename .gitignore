@@ -1,0 +1,29 @@
+# Dependencies and build output
+**/node_modules/
+**/dist/
+**/coverage/
+**/output/
+**/*.log
+
+# Runtime data
+**/data/
+**/uploads/
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+
+# Local migration archive (kept outside the maintained repository)
+/archive/
+
+# Secrets and local configuration
+.env
+**/.env
+**/env
+**/*.local
+**/project.private.config.json
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

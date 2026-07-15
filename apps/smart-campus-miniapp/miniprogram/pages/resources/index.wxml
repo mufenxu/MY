@@ -1,0 +1,262 @@
+<view class="res-container">
+    <view class="toolbar">
+        <view class="toolbar-inner">
+            <view class="tabs">
+                <view bindtap="onSwitchTab" class="tab {{activeTab==='servers'?'active':''}}" data-tab="servers">服务器信息</view>
+                <view bindtap="onSwitchTab" class="tab {{activeTab==='domains'?'active':''}}" data-tab="domains">域名信息</view>
+            </view>
+            <button bindtap="onOpenCreateMenu" class="pill-btn success">新增</button>
+        </view>
+    </view>
+    <view class="cache-preview-tip" wx:if="{{cachePreview}}">
+        当前为本地安全缓存预览，刷新成功后可编辑
+    </view>
+    <view class="section">
+        <block wx:if="{{activeTab==='servers'}}">
+            <block wx:for="{{serverGroups}}" wx:key="group">
+                <view bindtap="onToggleGroup" class="group-header {{item.collapsed ? 'collapsed' : ''}}" data-group="{{item.group}}" data-list="servers">
+                    <view class="group-accent"></view>
+                    <text class="group-name">{{item.group}}</text>
+                    <view class="group-arrow">›</view>
+                </view>
+                <block wx:if="{{!item.collapsed}}">
+                    <view class="card" wx:for="{{item.items}}" wx:for-item="sub" wx:key="index">
+                        <view class="card-header">
+                            <text class="card-title">{{sub.data.name||'未命名服务器'}}</text>
+                        </view>
+                        <view class="row">
+                            <text class="label">密码</text>
+                            <text class="value credential-value">{{sub.display.password||'-'}}</text>
+                        </view>
+                        <view class="row">
+                            <text class="label">邮箱</text>
+                            <text class="value credential-value">{{sub.display.email||sub.data.email||'-'}}</text>
+                        </view>
+                        <view class="row">
+                            <text class="label">到期</text>
+                            <text class="value">{{sub.data.expiresAt||'-'}} </text>
+                        </view>
+                        <view class="row" wx:if="{{sub.data.note}}">
+                            <text class="label">备注</text>
+                            <text class="value">{{sub.data.note}}</text>
+                        </view>
+                        <view class="card-actions bottom">
+                            <button bindtap="onEditServer" data-index="{{sub.index}}" size="mini">编辑</button>
+                            <button bindtap="onMarkRenewed" data-group="servers" data-index="{{sub.index}}" size="mini" type="primary">已续期</button>
+                            <button bindtap="onRemoveRow" data-group="servers" data-index="{{sub.index}}" size="mini" type="warn">删除</button>
+                        </view>
+                    </view>
+                </block>
+            </block>
+        </block>
+    </view>
+    <view class="section" style="margin-top:24px;">
+        <block wx:if="{{activeTab==='domains'}}">
+            <block wx:for="{{domainGroups}}" wx:key="group">
+                <view bindtap="onToggleGroup" class="group-header {{item.collapsed ? 'collapsed' : ''}}" data-group="{{item.group}}" data-list="domains">
+                    <view class="group-accent"></view>
+                    <text class="group-name">{{item.group}}</text>
+                    <view class="group-arrow">›</view>
+                </view>
+                <block wx:if="{{!item.collapsed}}">
+                    <view class="card" wx:for="{{item.items}}" wx:for-item="sub" wx:key="index">
+                        <view class="card-header">
+                            <text class="card-title">{{sub.data.host||'未命名域名'}}</text>
+                        </view>
+                        <view class="row">
+                            <text class="label">注册商</text>
+                            <text class="value">{{sub.data.registrar||'-'}} </text>
+                        </view>
+                        <view class="row" wx:if="{{sub.display.password||sub.data.password}}">
+                            <text class="label">密码</text>
+                            <text class="value credential-value">{{sub.display.password||sub.data.password}}</text>
+                        </view>
+                        <view class="row" wx:if="{{sub.display.email||sub.data.email}}">
+                            <text class="label">邮箱</text>
+                            <text class="value credential-value">{{sub.display.email||sub.data.email}}</text>
+                        </view>
+                        <view class="row">
+                            <text class="label">到期</text>
+                            <text class="value">{{sub.data.expiresAt||'-'}} </text>
+                        </view>
+                        <view class="row" wx:if="{{sub.data.note}}">
+                            <text class="label">备注</text>
+                            <text class="value">{{sub.data.note}}</text>
+                        </view>
+                        <view class="card-actions bottom">
+                            <button bindtap="onEditDomain" data-index="{{sub.index}}" size="mini">编辑</button>
+                            <button bindtap="onMarkRenewed" data-group="domains" data-index="{{sub.index}}" size="mini" type="primary">已续期</button>
+                            <button bindtap="onRemoveRow" data-group="domains" data-index="{{sub.index}}" size="mini" type="warn">删除</button>
+                        </view>
+                    </view>
+                </block>
+            </block>
+        </block>
+    </view>
+    <root-portal wx:if="{{showModal}}">
+        <view catchtouchmove="noop" class="modal-backdrop">
+            <view class="modal">
+                <view class="modal-title">{{modalTitle}}</view>
+                <scroll-view class="modal-body" scroll-y="true">
+                    <view class="modal-body-inner">
+                        <block wx:if="{{modalType==='server'}}">
+                            <view class="field">
+                                <view class="field-label">名称</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="name" placeholder="如：主服务器" value="{{modalData.name}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">IP</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="ip" placeholder="如：192.168.1.10" value="{{modalData.ip}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">配置</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="config" placeholder="如：4C8G 100G SSD" value="{{modalData.config}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">注册商</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="registrar" placeholder="如：阿里云" value="{{modalData.registrar}}"></input>
+                                </view>
+                                <picker bindchange="onPickRegistrarChange" mode="selector" range="{{registrarOptions}}" rangeKey="name">
+                                    <view class="field-box clickable" style="margin-top:6px;">从已有注册商选择</view>
+                                </picker>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">网址</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="siteUrl" placeholder="如：https://example.com" value="{{modalData.siteUrl}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">用户名</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="username" placeholder="用于登录的账户名" value="{{modalData.username}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">密码</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="password" placeholder="登录密码" value="{{modalData.password}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">邮箱</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="email" placeholder="联系邮箱" value="{{modalData.email}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">注册时间</view>
+                                <picker bindchange="onModalDateChange" data-field="registeredAt" mode="date" value="{{modalData.registeredAt}}">
+                                    <view class="field-box clickable">{{modalData.registeredAt||'选择日期'}}</view>
+                                </picker>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">到期时间</view>
+                                <picker bindchange="onModalDateChange" data-field="expiresAt" mode="date" value="{{modalData.expiresAt}}">
+                                    <view class="field-box clickable">{{modalData.expiresAt||'选择日期'}}</view>
+                                </picker>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">提前通知天数</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="advanceNoticeDays" placeholder="如：7（天）" value="{{modalData.advanceNoticeDays}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">续期周期</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="renewPeriod" placeholder="如：12个月" value="{{modalData.renewPeriod}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">备注</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="note" placeholder="可选" value="{{modalData.note}}"></input>
+                                </view>
+                            </view>
+                        </block>
+                        <block wx:elif="{{modalType==='domain'}}">
+                            <view class="field">
+                                <view class="field-label">域名</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="host" placeholder="如：example.com" value="{{modalData.host}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">注册商</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="registrar" placeholder="如：阿里云" value="{{modalData.registrar}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">网址</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="siteUrl" placeholder="如：https://example.com" value="{{modalData.siteUrl}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">用户名</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="username" placeholder="用于登录的账户名" value="{{modalData.username}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">密码</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="password" placeholder="登录密码" value="{{modalData.password}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">邮箱</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="email" placeholder="联系邮箱" value="{{modalData.email}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">注册时间</view>
+                                <picker bindchange="onModalDateChange" data-field="registeredAt" mode="date" value="{{modalData.registeredAt}}">
+                                    <view class="field-box clickable">{{modalData.registeredAt||'选择日期'}}</view>
+                                </picker>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">到期时间</view>
+                                <picker bindchange="onModalDateChange" data-field="expiresAt" mode="date" value="{{modalData.expiresAt}}">
+                                    <view class="field-box clickable">{{modalData.expiresAt||'选择日期'}}</view>
+                                </picker>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">提前通知天数</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="advanceNoticeDays" placeholder="如：7（天）" value="{{modalData.advanceNoticeDays}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">续期周期</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="renewPeriod" placeholder="如：12个月" value="{{modalData.renewPeriod}}"></input>
+                                </view>
+                            </view>
+                            <view class="field">
+                                <view class="field-label">备注</view>
+                                <view class="field-box">
+                                    <input bindinput="onModalInput" class="field-input" data-field="note" placeholder="可选" value="{{modalData.note}}"></input>
+                                </view>
+                            </view>
+                        </block>
+                    </view>
+                </scroll-view>
+                <view class="modal-footer">
+                    <button bindtap="onModalCancel">取消</button>
+                    <button bindtap="onModalSave" type="primary">保存</button>
+                </view>
+            </view>
+        </view>
+    </root-portal>
+</view>

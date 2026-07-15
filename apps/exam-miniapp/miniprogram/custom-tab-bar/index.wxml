@@ -1,0 +1,13 @@
+<view class="tab-bar-container">
+  <view class="tab-bar">
+    <!-- Active Background Blob for Smooth Transition -->
+    <view class="active-blob" style="transform: translateX({{selected * 100}}%)"></view>
+
+    <view wx:for="{{list}}" wx:key="index" class="tab-item {{selected === index ? 'active' : ''}}" data-path="{{item.pagePath}}" data-index="{{index}}" bindtap="switchTab">
+      <view class="icon-container">
+        <view class="icon icon-{{index === 0 ? 'home' : 'user'}}"></view>
+      </view>
+      <text class="tab-text">{{item.text}}</text>
+    </view>
+  </view>
+</view>

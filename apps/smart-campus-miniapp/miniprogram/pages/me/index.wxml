@@ -1,0 +1,53 @@
+<view class="me {{enableInnerScroll ? 'is-scrollable' : 'is-static'}}" style="padding-top:{{contentTop+8}}px;">
+    <!-- 动态浮动背景 -->
+    <view class="bg-shape bg-shape-1"></view>
+    <view class="bg-shape bg-shape-2"></view>
+    <view class="bg-shape bg-shape-3"></view>
+    
+    <view class="content-wrapper">
+        <view class="profile-card" wx:if="{{userProfile}}">
+        <view class="profile-main">
+            <image class="profile-avatar" lazy-load="true" mode="aspectFill" src="{{userProfile.avatarUrl}}" wx:if="{{userProfile && userProfile.avatarUrl}}"></image>
+            <view class="profile-avatar placeholder" wx:else></view>
+            <view class="profile-info">
+                <view class="profile-name">{{userProfile.nickName||'未设置昵称'}}</view>
+                <view class="profile-badges">
+                    <view class="badge role">{{userProfile.roleLabel}}</view>
+                    <view class="badge status">{{userProfile.statusLabel}}</view>
+                    <view class="profile-uid" bindtap="onCopyId" wx:if="{{userProfile.userId}}">
+                        <text class="uid-label">UID:</text>
+                        <text class="uid-value">{{userProfile.userId}}</text>
+                    </view>
+                </view>
+                <view class="profile-time" wx:if="{{userProfile.lastLoginAtText}}">最近登录：{{userProfile.lastLoginAtText}}</view>
+            </view>
+        </view>
+    </view>
+    <view class="section-title">设置</view>
+    <view class="menu-card">
+
+
+        <button class="menu-item btn-as-view" hoverClass="menu-item--active" hoverStartTime="0" hoverStayTime="50" openType="contact" sendMessagePath="/pages/index/index" sendMessageTitle="问题反馈" showMessageCard="true">
+            <view class="mi-left">
+                <image class="mi-icon" lazy-load="true" mode="aspectFit" src="../../assets/tab/customer-service.svg"></image>
+            </view>
+            <view class="mi-title">联系客服</view>
+            <view class="mi-arrow"></view>
+        </button>
+
+        <view bindtap="onOpenPrivacy" class="menu-item" hoverClass="menu-item--active" hoverStartTime="0" hoverStayTime="50">
+            <view class="mi-left">
+                <view class="icon-privacy"></view>
+            </view>
+            <view class="mi-title">隐私指引</view>
+            <view class="mi-arrow"></view>
+        </view>
+    </view>
+    <view class="logout-section" wx:if="{{showLogout}}">
+        <view bindtap="onLogout" class="logout-btn" hoverClass="logout-btn--active" hoverStartTime="0" hoverStayTime="50">
+            <view class="icon-logout-btn"></view>
+            <view class="logout-text">退出登录</view>
+        </view>
+    </view>
+    </view>
+</view>

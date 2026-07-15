@@ -1,0 +1,75 @@
+<page-container 
+  show="{{show}}" 
+  round 
+  position="bottom" 
+  bind:beforeleave="close"
+  custom-style="height: 85vh; background: #f8fafc; display: flex; flex-direction: column; border-radius: 48rpx 48rpx 0 0;"
+>
+    <!-- 头部区域: 精致化处理 -->
+    <view class="popup-header-premium">
+        <view class="header-content">
+          <text class="popup-title">能效分析月刊</text>
+          <text class="popup-subtitle">近 7 日用电成本与趋势监控</text>
+        </view>
+        <view class="close-btn-3d" bindtap="close">
+          <view class="icon-close-inner"></view>
+        </view>
+    </view>
+    
+    <view class="popup-scroll-area">
+      <!-- 汇总卡片流: 3D 浮级设计 -->
+      <view class="summary-cards-row">
+          <view class="summary-item-card total">
+              <view class="card-glass-glow"></view>
+              <text class="s-label">总费用支出</text>
+              <view class="s-val-group">
+                <text class="s-unit">¥</text>
+                <text class="s-val">{{totalCost}}</text>
+              </view>
+              <view class="card-icon-money"></view>
+          </view>
+          <view class="summary-item-card average">
+              <view class="card-glass-glow"></view>
+              <text class="s-label">日均估算</text>
+              <view class="s-val-group">
+                <text class="s-unit">¥</text>
+                <text class="s-val">{{avgCost}}</text>
+              </view>
+              <view class="card-icon-calendar"></view>
+          </view>
+      </view>
+
+      <!-- 图表容器: 深度内凹感 -->
+      <view class="chart-container-3d">
+          <view class="chart-header">
+            <view class="chart-tag">日电费分布 (元)</view>
+          </view>
+          <view class="chart-wrapper-inner">
+            <canvas type="2d" id="barChart" class="bar-chart-premium"></canvas>
+          </view>
+      </view>
+
+      <!-- 数据列表: 优雅清爽 -->
+      <view class="data-list-section">
+          <view class="list-title">能耗数据明细</view>
+          <view class="table-header">
+               <text class="col-date">日期</text>
+               <text class="col-energy">用电 (kWh)</text>
+               <text class="col-cost">电费支出</text>
+          </view>
+          <view class="table-body">
+              <view class="table-row {{item.isToday ? 'today' : ''}}" wx:for="{{weeklyData}}" wx:key="date">
+                  <view class="row-date-box">
+                    <text class="row-date">{{item.date}}</text>
+                    <text class="today-tag" wx:if="{{item.isToday}}">今日</text>
+                  </view>
+                  <text class="row-energy">{{item.energy}}</text>
+                  <view class="row-cost-box">
+                    <text class="currency">¥</text>
+                    <text class="amount">{{item.cost}}</text>
+                  </view>
+              </view>
+          </view>
+      </view>
+    </view>
+</page-container>

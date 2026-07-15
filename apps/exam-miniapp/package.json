@@ -1,0 +1,19 @@
+{
+  "name": "@my-platform/exam-miniapp",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "check:miniprogram": "node scripts/check-miniprogram-paths.js && node scripts/check-miniprogram-source.js",
+    "lint:backend": "npm --prefix ../../services/exam-api run lint",
+    "build:admin": "npm --prefix ../exam-admin run build",
+    "check": "npm run check:miniprogram && npm run lint:backend && npm run build:admin"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "",
+  "dependencies": {
+  },
+  "devDependencies": {
+    "miniprogram-api-typings": "^2.8.3-1"
+  }
+}

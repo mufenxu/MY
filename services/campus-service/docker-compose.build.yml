@@ -1,0 +1,6 @@
+services:
+  hgu-campus-hub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${HGU_IMAGE:-mufenxu/hgu:latest}

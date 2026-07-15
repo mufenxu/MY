@@ -1,0 +1,485 @@
+@import "../../../styles/theme.scss";
+@import "../../../styles/animations.scss";
+
+$page-bg: #f8fafc;
+$card-bg: #ffffff;
+$text-main-local: #1e293b;
+$text-sub: #64748b;
+$text-light-local: #94a3b8;
+$radius-lg: 28rpx;
+$radius-md: 18rpx;
+$shadow-soft: 0 12rpx 40rpx rgba(148, 163, 184, 0.12);
+
+.page-container {
+    min-height: 100vh;
+    background: $page-bg;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.custom-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: rgba(248, 250, 252, 0.95);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    box-sizing: border-box;
+}
+
+.nav-content {
+    height: 100%;
+    padding: 0 40rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.nav-title {
+    font-size: 34rpx;
+    font-weight: 800;
+    color: $text-main-local;
+    line-height: 1;
+}
+
+.content-scroll {
+    height: 100vh;
+    box-sizing: border-box;
+}
+
+.wrong-overview {
+    margin: 0 32rpx 24rpx;
+    padding: 30rpx 32rpx;
+    border-radius: $radius-lg;
+    background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%);
+    box-shadow: $shadow-soft;
+    border: 1px solid rgba(226, 232, 240, 0.72);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24rpx;
+}
+
+.overview-copy {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8rpx;
+}
+
+.overview-kicker {
+    font-size: 22rpx;
+    line-height: 1.2;
+    color: #ea580c;
+    font-weight: 800;
+}
+
+.overview-title {
+    font-size: 38rpx;
+    line-height: 1.25;
+    font-weight: 900;
+    color: $text-main-local;
+}
+
+.overview-desc {
+    font-size: 24rpx;
+    line-height: 1.55;
+    color: $text-sub;
+}
+
+.overview-side {
+    width: 120rpx;
+    height: 120rpx;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(254, 215, 170, 0.86);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.overview-number {
+    font-size: 40rpx;
+    line-height: 1;
+    font-weight: 900;
+    color: #f97316;
+}
+
+.overview-label {
+    margin-top: 8rpx;
+    font-size: 20rpx;
+    color: $text-sub;
+}
+
+.section-header {
+    padding: 4rpx 48rpx 18rpx;
+}
+
+.section-copy {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20rpx;
+}
+
+.section-title {
+    font-size: 34rpx;
+    font-weight: 800;
+    color: $text-main-local;
+    line-height: 1.3;
+    flex-shrink: 0;
+}
+
+.section-subtitle {
+    font-size: 22rpx;
+    color: $text-sub;
+    line-height: 1.5;
+    text-align: right;
+}
+
+.title-line {
+    width: 60rpx;
+    height: 8rpx;
+    border-radius: 999rpx;
+    background: #fed7aa;
+    margin-top: -8rpx;
+}
+
+.category-list {
+    padding: 0 32rpx 60rpx;
+}
+
+.category-card {
+    margin-bottom: 24rpx;
+    padding: 28rpx 28rpx 28rpx 30rpx;
+    min-height: 136rpx;
+    border-radius: $radius-lg;
+    background: $card-bg;
+    box-shadow: $shadow-soft;
+    border: 1px solid rgba(226, 232, 240, 0.72);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20rpx;
+    box-sizing: border-box;
+    transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.category-card-hover {
+    transform: scale(0.98);
+    background: #f8fafc;
+    box-shadow: 0 8rpx 24rpx rgba(148, 163, 184, 0.1);
+}
+
+.card-left {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+
+.card-icon {
+    width: 88rpx;
+    height: 88rpx;
+    border-radius: $radius-md;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 26rpx;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10rpx 22rpx rgba(15, 23, 42, 0.08);
+}
+
+.card-icon::after {
+    content: '';
+    position: absolute;
+    top: -18rpx;
+    right: -18rpx;
+    width: 56rpx;
+    height: 56rpx;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.24);
+}
+
+.icon-text {
+    position: relative;
+    z-index: 1;
+    font-size: 34rpx;
+    line-height: 1;
+    color: #ffffff;
+    font-weight: 900;
+}
+
+.card-info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10rpx;
+}
+
+.card-title {
+    display: block;
+    width: 100%;
+    font-size: 30rpx;
+    line-height: 1.35;
+    font-weight: 800;
+    color: $text-main-local;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-meta {
+    display: flex;
+    align-items: center;
+    gap: 10rpx;
+}
+
+.meta-dot {
+    width: 10rpx;
+    height: 10rpx;
+    border-radius: 50%;
+    background: #fb7185;
+    box-shadow: 0 0 0 6rpx rgba(251, 113, 133, 0.12);
+    flex-shrink: 0;
+}
+
+.card-count {
+    font-size: 24rpx;
+    line-height: 1.4;
+    color: $text-light-local;
+    font-weight: 600;
+}
+
+.card-right {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 14rpx;
+}
+
+.practice-btn {
+    height: 60rpx;
+    min-width: 96rpx;
+    padding: 0 24rpx;
+    border-radius: 999rpx;
+    background: #fff1f2;
+    color: #e11d48;
+    font-size: 24rpx;
+    font-weight: 800;
+    line-height: 60rpx;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.arrow {
+    width: 40rpx;
+    height: 40rpx;
+    border-radius: 999rpx;
+    background: #f1f5f9;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.arrow::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 12rpx;
+    height: 12rpx;
+    border-top: 4rpx solid #94a3b8;
+    border-right: 4rpx solid #94a3b8;
+    border-radius: 2rpx;
+    transform: translate(-62%, -50%) rotate(45deg);
+}
+
+.empty-state {
+    margin: 44rpx 32rpx 0;
+    padding: 72rpx 44rpx;
+    border-radius: $radius-lg;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    box-shadow: $shadow-soft;
+    border: 1px solid rgba(226, 232, 240, 0.72);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.empty-visual {
+    width: 150rpx;
+    height: 150rpx;
+    border-radius: 42rpx;
+    background: #eff6ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 30rpx;
+    box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.9);
+}
+
+.empty-book {
+    width: 70rpx;
+    height: 88rpx;
+    border-radius: 14rpx;
+    background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+    position: relative;
+    box-shadow: 10rpx 10rpx 20rpx rgba(37, 99, 235, 0.18);
+}
+
+.empty-book::before,
+.empty-book::after {
+    content: '';
+    position: absolute;
+    left: 18rpx;
+    right: 18rpx;
+    height: 5rpx;
+    border-radius: 999rpx;
+    background: rgba(255, 255, 255, 0.88);
+}
+
+.empty-book::before {
+    top: 30rpx;
+}
+
+.empty-book::after {
+    top: 48rpx;
+}
+
+.empty-title {
+    font-size: 34rpx;
+    line-height: 1.35;
+    font-weight: 800;
+    color: $text-main-local;
+    margin-bottom: 12rpx;
+}
+
+.empty-desc {
+    font-size: 25rpx;
+    line-height: 1.7;
+    color: $text-sub;
+}
+
+.loading-state {
+    padding: 20rpx 32rpx 80rpx;
+}
+
+.footer-spacer {
+    height: calc(80rpx + env(safe-area-inset-bottom));
+}
+
+@include tablet-up {
+    .content-scroll {
+        @include tablet-centered-shell(1040px);
+    }
+
+    .wrong-overview,
+    .empty-state {
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    .wrong-overview {
+        padding: 24px;
+        border-radius: 24px;
+    }
+
+    .overview-kicker,
+    .overview-desc,
+    .card-count,
+    .section-subtitle,
+    .empty-desc {
+        font-size: 13px;
+    }
+
+    .overview-title {
+        font-size: 24px;
+    }
+
+    .overview-side {
+        width: 78px;
+        height: 78px;
+    }
+
+    .overview-number {
+        font-size: 25px;
+    }
+
+    .overview-label {
+        font-size: 12px;
+    }
+
+    .section-header {
+        padding: 6px 8px 18px;
+    }
+
+    .section-title {
+        font-size: 22px;
+    }
+
+    .category-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+        padding: 0 0 96px;
+    }
+
+    .category-card {
+        min-height: 104px;
+        margin-bottom: 0;
+        padding: 20px;
+        border-radius: 22px;
+    }
+
+    .card-icon {
+        width: 54px;
+        height: 54px;
+        margin-right: 16px;
+        border-radius: 16px;
+    }
+
+    .icon-text {
+        font-size: 21px;
+    }
+
+    .card-title {
+        font-size: 17px;
+    }
+
+    .practice-btn {
+        height: 36px;
+        min-width: 66px;
+        padding: 0 14px;
+        font-size: 13px;
+        line-height: 36px;
+    }
+
+    .arrow {
+        width: 30px;
+        height: 30px;
+    }
+
+    .empty-state {
+        padding: 56px 40px;
+        border-radius: 24px;
+    }
+
+    .empty-visual {
+        width: 96px;
+        height: 96px;
+        border-radius: 28px;
+    }
+
+    .empty-title {
+        font-size: 22px;
+    }
+}

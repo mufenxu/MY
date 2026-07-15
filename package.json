@@ -1,0 +1,31 @@
+{
+  "name": "@my-platform/workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Unified management workspace for the MY applications and services.",
+  "scripts": {
+    "install:ci": "node scripts/install-workspace.mjs",
+    "install:console": "npm --prefix apps/admin-console install",
+    "dev:console": "npm --prefix apps/admin-console run dev",
+    "build:console": "npm --prefix apps/admin-console run build",
+    "test:console": "npm --prefix apps/admin-console test",
+    "check:console": "npm --prefix apps/admin-console run check",
+    "check:gateway": "npm --prefix services/platform-api run check",
+    "check:admins": "npm --prefix apps/core-admin run build && npm --prefix apps/exam-admin run build",
+    "check:core": "node --check services/core-api/server.js",
+    "check:exam": "npm --prefix services/exam-api run lint",
+    "check:campus": "npm --prefix services/campus-service run verify",
+    "check:iot": "npm --prefix services/iot-service run check && npm --prefix services/iot-service test",
+    "check:notification": "node --check services/notification-service/src/server.js && node --check services/notification-service/src/app.js",
+    "check:miniapps": "npm --prefix apps/exam-miniapp run check:miniprogram",
+    "check": "npm run check:console && npm run check:gateway && npm run check:admins && npm run check:core && npm run check:exam && npm run check:campus && npm run check:iot && npm run check:notification && npm run check:miniapps",
+    "password": "npm --prefix apps/admin-console run password --",
+    "compose:config": "docker compose --env-file .env -f infra/docker/compose.yml config",
+    "compose:up": "docker compose --env-file .env -f infra/docker/compose.yml up -d --build",
+    "compose:down": "docker compose --env-file .env -f infra/docker/compose.yml down",
+    "compose:logs": "docker compose --env-file .env -f infra/docker/compose.yml logs -f"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

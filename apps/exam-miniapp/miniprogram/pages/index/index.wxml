@@ -1,0 +1,188 @@
+<view class="page-container">
+  <view class="custom-nav" style="height: {{navBarHeight}}px; padding-top: {{menuButtonTop}}px;">
+    <view class="nav-content" style="height: {{menuButtonHeight}}px; line-height: {{menuButtonHeight}}px;">
+      <view class="nav-brand">
+        <view class="brand-group">
+          <view class="brand-text-wrap">
+            <text class="nav-title-main">好爱</text>
+            <text class="nav-title-accent">学习</text>
+          </view>
+          <text class="brand-subtitle">Love Learning</text>
+        </view>
+        <view class="brand-sparkle">+</view>
+      </view>
+    </view>
+  </view>
+
+  <scroll-view class="content-view" scroll-y enhanced="{{true}}" bounces="{{true}}" show-scrollbar="{{false}}" style="padding-top: {{navBarHeight}}px;">
+    <view class="user-header {{isLoggedIn ? 'signed-in' : 'guest'}} fade-in-up" bindtap="goToProfile">
+      <view class="user-info">
+        <text class="greeting">你好，{{nickname || '同学'}}</text>
+        <text class="sub-greeting">{{isLoggedIn ? '这里是你的专属题库，继续保持手感' : '登录后会切换到你的题库'}}</text>
+      </view>
+      <view class="header-right">
+        <view class="scan-btn" catchtap="goToScanLogin" hover-class="scan-btn-hover">
+          <view class="scan-icon"></view>
+        </view>
+        <image class="user-avatar" src="{{avatarUrl || defaultGuestAvatar}}" mode="aspectFill"></image>
+      </view>
+    </view>
+
+    <view class="library-overview {{isLoggedIn ? 'overview-my' : 'overview-demo'}} fade-in-up">
+      <view class="overview-copy">
+        <text class="overview-kicker">{{isLoggedIn ? '已登录' : '游客体验'}}</text>
+        <text class="overview-title">{{isLoggedIn ? '我的题库' : '示例题库'}}</text>
+        <text class="overview-desc">{{isLoggedIn ? '只展示你创建和管理员分配的内容。' : '不用登录也可以先体验练习、模拟和背题流程。'}}</text>
+      </view>
+      <view class="overview-side" wx:if="{{isLoggedIn}}">
+        <text class="overview-number">{{personalCategoryCount}}</text>
+        <text class="overview-label">个题库</text>
+      </view>
+      <view class="overview-action" wx:else catchtap="goToLogin">
+        <text>去登录</text>
+      </view>
+    </view>
+
+    <view class="section-header">
+      <view class="section-copy">
+        <text class="title">{{isLoggedIn ? '我的题库' : '示例题库'}}</text>
+        <text class="section-subtitle">{{isLoggedIn ? '只显示与你账号相关的题库' : '可直接体验完整刷题流程'}}</text>
+      </view>
+      <view class="title-line"></view>
+    </view>
+
+    <view class="library-empty fade-in-up" wx:if="{{!loading && !displayedGroups.length}}">
+      <text class="empty-title">{{isLoggedIn ? '你还没有可练习的题库' : '示例题库正在准备中'}}</text>
+      <text class="empty-desc">{{isLoggedIn ? '可以先在个人题库后台创建题库，或者等待管理员给你分配内容。' : '管理员题库不会自动作为示例题库展示，后续创建好示例题库后会在这里开放体验。'}}</text>
+      <button class="empty-btn" wx:if="{{isLoggedIn}}" bindtap="goToProfile">查看后台入口说明</button>
+      <button class="empty-btn empty-btn-secondary" wx:else bindtap="goToLogin">登录查看我的题库</button>
+    </view>
+
+    <view class="category-grid fade-in-up" wx:if="{{!loading && displayedGroups.length}}" style="animation-delay: 0.1s;">
+      <view
+        class="major-card {{group.expanded ? 'card-expanded' : ''}}"
+        wx:for="{{displayedGroups}}"
+        wx:key="_id"
+        wx:for-item="group"
+      >
+        <view class="card-hero" bindtap="onToggleGroup" data-index="{{index}}">
+          <view class="card-icon-box" style="--theme-color: {{group.gradient}}"></view>
+          <view class="card-main-info">
+            <text class="card-name">{{group.name}}</text>
+            <text class="card-desc" wx:if="{{isLoggedIn}}">{{group.children.length}} 个题库</text>
+            <text class="card-desc" wx:else>{{group.children.length}} 个精选章节</text>
+          </view>
+          <view class="card-arrow {{group.expanded ? 'arrow-up' : ''}}"></view>
+        </view>
+
+        <view class="card-content" wx:if="{{group.expanded}}">
+          <view
+            class="exam-row"
+            wx:for="{{group.children}}"
+            wx:key="_id"
+            bindtap="onCategoryTap"
+            data-id="{{item._id}}"
+            data-name="{{item.name}}"
+            data-duration="{{item.duration}}"
+            data-scope-type="{{activeLibraryTab}}"
+            data-library-source="{{item.librarySource || ''}}"
+          >
+            <view class="row-left">
+              <text class="row-title">{{item.name}}</text>
+              <view class="row-tags">
+                <text class="tag">{{item.count || 0}} 题</text>
+                <text class="tag" wx:if="{{item.duration}}">{{item.duration}}min</text>
+                <text class="tag tag-my" wx:if="{{isLoggedIn && item.librarySource === 'shared'}}">来自分享</text>
+                <text class="tag tag-my" wx:if="{{isLoggedIn && item.librarySource !== 'assigned' && item.librarySource !== 'shared'}}">我的题库</text>
+                <text class="tag tag-my" wx:if="{{isLoggedIn && item.librarySource === 'assigned'}}">管理员分配</text>
+                <text class="tag tag-demo" wx:if="{{!isLoggedIn}}">示例体验</text>
+              </view>
+            </view>
+            <view class="row-action">
+              <view class="go-btn" style="border-color: {{group.gradient}}">{{isLoggedIn ? '去练习' : '去体验'}}</view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="loading-box" wx:elif="{{loading}}">
+      <skeleton type="card" rows="{{3}}"></skeleton>
+    </view>
+
+    <view class="footer-spacer"></view>
+  </scroll-view>
+
+  <view class="sheet-mask {{showActionSheet ? 'mask-active' : ''}}" bindtap="onCloseActionSheet"></view>
+  <view class="bottom-sheet {{showActionSheet ? 'sheet-active' : ''}}">
+    <view class="sheet-handle"></view>
+    <view class="sheet-header">
+      <text class="title">{{currentCategory.name}}</text>
+      <text class="sheet-hint" wx:if="{{currentCategory.scopeType === 'demo'}}">登录后会同步提交记录，游客仅本地查看结果</text>
+      <text class="sheet-hint" wx:elif="{{currentCategory.scopeType === 'personal' && currentCategory.librarySource === 'assigned'}}">管理员分配给你的正式题库练习</text>
+      <text class="sheet-hint" wx:elif="{{currentCategory.scopeType === 'personal' && currentCategory.librarySource === 'shared'}}">通过分享接收的个人题库练习</text>
+      <text class="sheet-hint" wx:elif="{{currentCategory.scopeType === 'personal'}}">已发布后的小程序个人题库练习</text>
+    </view>
+
+    <view class="sheet-body">
+      <view class="progress-section" wx:if="{{progressEntries.length}}">
+        <view class="progress-section-head">
+          <text class="progress-title">未完成进度</text>
+          <view class="progress-head-actions">
+            <text class="progress-note">可接着上次做</text>
+            <text class="progress-clear-all" catchtap="onClearAllProgressTap">清除全部</text>
+          </view>
+        </view>
+        <view
+          class="menu-item progress-menu-item"
+          wx:for="{{progressEntries}}"
+          wx:key="mode"
+          wx:for-item="progress"
+          bindtap="onResumeProgressTap"
+          data-mode="{{progress.mode}}"
+        >
+          <view class="menu-icon progress-bg">续</view>
+          <view class="menu-text">
+            <text class="m-title">{{progress.title}}</text>
+            <text class="m-sub">{{progress.subtitle}}</text>
+          </view>
+          <view class="progress-clear-btn" catchtap="onClearProgressTap" data-mode="{{progress.mode}}">清除</view>
+        </view>
+      </view>
+
+      <view class="menu-item" wx:if="{{hasExamResult}}" bindtap="onActionTap" data-type="result">
+        <view class="menu-icon result-bg">答</view>
+        <view class="menu-text">
+          <text class="m-title">查看战绩</text>
+          <text class="m-sub">复盘错题，巩固知识点</text>
+        </view>
+      </view>
+
+      <view class="menu-item" bindtap="onActionTap" data-type="exam">
+        <view class="menu-icon exam-bg">测</view>
+        <view class="menu-text">
+          <text class="m-title">{{progressModeMap.exam ? '重新开始实战模拟' : '实战模拟'}}</text>
+          <text class="m-sub">{{currentCategory.scopeType === 'demo' ? '不登录也能完整体验交卷流程' : (currentCategory.librarySource === 'assigned' ? '按管理员分配的题库进行正式练习' : '按你自己的题库进行正式练习')}}</text>
+        </view>
+      </view>
+
+      <view class="menu-item" bindtap="onActionTap" data-type="practice">
+        <view class="menu-icon practice-bg">练</view>
+        <view class="menu-text">
+          <text class="m-title">{{progressModeMap.practice ? '重新开始自由练习' : '自由练习'}}</text>
+          <text class="m-sub">随心刷题，按题目解析逐步熟悉内容</text>
+        </view>
+      </view>
+
+      <view class="menu-item" bindtap="onActionTap" data-type="recite">
+        <view class="menu-icon recite-bg">背</view>
+        <view class="menu-text">
+          <text class="m-title">{{progressModeMap.recite ? '重新开始背题模式' : '背题模式'}}</text>
+          <text class="m-sub">按题过一遍，强化记忆与要点</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="sheet-close" bindtap="onCloseActionSheet">稍后再练</view>
+  </view>
+</view>

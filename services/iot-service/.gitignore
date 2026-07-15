@@ -1,0 +1,10 @@
+node_modules/
+.vscode/
+.agents/
+.DS_Store
+*.log
+.env
+coverage/
+data/*.json
+data/*.db
+data/*.db-*

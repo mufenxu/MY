@@ -1,0 +1,15 @@
+export const ROUTES = {
+    INDEX: '/pages/index/index',
+    AUTH_LOGIN: '/pages/auth-login/auth-login',
+    EXAM: '/pages/exam/exam',
+    EXAM_REVIEW: '/pages/exam-review/exam-review',
+    PROFILE: '/pages/profile/profile',
+    ACCOUNT_MANAGE: '/subpackages/user/account-manage/account-manage',
+    PRIVACY_POLICY: '/subpackages/user/privacy-policy/privacy-policy',
+    QUESTION_SEARCH: '/subpackages/user/question-search/question-search',
+    SCAN_LOGIN: '/subpackages/user/scan-login/scan-login',
+    STUDY_REPORT: '/subpackages/user/study-report/study-report',
+    USER_AGREEMENT: '/subpackages/user/user-agreement/user-agreement',
+    WRONG_BOOK: '/subpackages/user/wrong-book/wrong-book',
+    WRONG_PRACTICE: '/subpackages/user/wrong-practice/wrong-practice',
+} as const;

@@ -1,0 +1,2054 @@
+/* Exam editor redesign aligned with the NodeBits-style admin shell. */
+
+body.exam-detail-active {
+    --ed-bg: #fdfdfd;
+    --ed-fg: #1e2226;
+    --ed-muted: #6d7277;
+    --ed-card: #ffffff;
+    --ed-soft: #f3f5f8;
+    --ed-soft-2: #f8fafc;
+    --ed-border: #e9ebee;
+    --ed-border-strong: #dde2e8;
+    --ed-primary: #3275b4;
+    --ed-primary-soft: #e8f3ff;
+    --ed-green-soft: #def9f1;
+    --ed-green-text: #1d6c5b;
+    --ed-amber-soft: #fff3df;
+    --ed-amber-text: #876114;
+    --ed-red: #e40014;
+    --ed-shadow-sm: 0 1px 2px rgba(30, 34, 38, 0.04);
+    --ed-shadow-md: 0 12px 32px rgba(30, 34, 38, 0.08);
+    --admin-grid-line: rgba(50, 117, 180, 0.07);
+    --admin-grid-line-soft: rgba(52, 211, 153, 0.045);
+    --admin-grid-size: 32px;
+    --primary-color: var(--ed-primary);
+    --bg-color: var(--ed-bg);
+    --surface-color: var(--ed-card);
+    --text-primary: var(--ed-fg);
+    --text-secondary: var(--ed-muted);
+    --border-color: var(--ed-border);
+    --border-radius: 16px;
+}
+
+body.exam-detail-active * {
+    box-sizing: border-box;
+}
+
+body.exam-detail-active,
+body.exam-detail-active,
+body.exam-detail-active #app {
+    width: 100%;
+    height: 100%;
+    overflow: hidden !important;
+}
+
+body.exam-detail-active {
+    position: static !important;
+    margin: 0;
+    background:
+        linear-gradient(var(--admin-grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--admin-grid-line-soft) 1px, transparent 1px),
+        radial-gradient(circle at 18% 6%, rgba(14, 165, 233, 0.1), transparent 28%),
+        radial-gradient(circle at 86% 10%, rgba(245, 158, 11, 0.09), transparent 24%),
+        var(--ed-bg) !important;
+    background-size:
+        var(--admin-grid-size) var(--admin-grid-size),
+        var(--admin-grid-size) var(--admin-grid-size),
+        auto,
+        auto,
+        auto;
+    background-position:
+        -1px -1px,
+        -1px -1px,
+        0 0,
+        0 0,
+        0 0;
+    color: var(--ed-fg);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif !important;
+}
+
+body.exam-detail-active #app > .el-container {
+    height: 100% !important;
+    overflow: hidden !important;
+}
+
+body.exam-detail-active #app > .el-container > .el-container {
+    min-height: 0;
+    overflow: hidden !important;
+}
+
+body.exam-detail-active .el-header {
+    height: 72px !important;
+    padding: 0 clamp(18px, 2.4vw, 44px) !important;
+    border-bottom: 1px solid rgba(233, 235, 238, 0.9) !important;
+    background: rgba(253, 253, 253, 0.9) !important;
+    box-shadow: 0 1px 2px rgba(30, 34, 38, 0.03) !important;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    z-index: 40;
+}
+
+body.exam-detail-active .el-header .el-button.is-circle {
+    width: 38px !important;
+    height: 38px !important;
+    border-color: var(--ed-border) !important;
+    background: #fff !important;
+    color: var(--ed-fg) !important;
+    box-shadow: var(--ed-shadow-sm);
+}
+
+body.exam-detail-active .editor-status-strip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+body.exam-detail-active .el-tag {
+    border: 0 !important;
+    border-radius: 999px !important;
+    font-weight: 800 !important;
+}
+
+body.exam-detail-active .el-tag--info,
+body.exam-detail-active .el-tag--primary {
+    color: #39659b !important;
+    background: var(--ed-primary-soft) !important;
+}
+
+body.exam-detail-active .el-tag--success {
+    color: var(--ed-green-text) !important;
+    background: var(--ed-green-soft) !important;
+}
+
+body.exam-detail-active .el-tag--warning {
+    color: var(--ed-amber-text) !important;
+    background: var(--ed-amber-soft) !important;
+}
+
+body.exam-detail-active .desktop-toolbar {
+    min-width: 0;
+    padding: 5px;
+    border: 1px solid var(--ed-border);
+    border-radius: 999px !important;
+    background: var(--ed-soft);
+}
+
+body.exam-detail-active .desktop-toolbar-label,
+body.exam-detail-active .desktop-toolbar-divider {
+    display: none !important;
+}
+
+body.exam-detail-active .add-question-group {
+    display: inline-flex;
+    gap: 4px;
+    border: 0 !important;
+    background: transparent !important;
+}
+
+body.exam-detail-active .add-question-group .el-button,
+body.exam-detail-active .import-question-btn {
+    height: 34px !important;
+    padding: 0 12px !important;
+    border: 1px solid transparent !important;
+    border-radius: 999px !important;
+    background: transparent !important;
+    color: var(--ed-muted) !important;
+    font-weight: 850 !important;
+    box-shadow: none !important;
+}
+
+body.exam-detail-active .add-question-group .el-button:hover,
+body.exam-detail-active .add-question-group .el-button:focus,
+body.exam-detail-active .add-question-group .el-button:active {
+    border-color: rgba(50, 117, 180, 0.2) !important;
+    background: #fff !important;
+    color: var(--ed-primary) !important;
+}
+
+body.exam-detail-active .import-question-btn {
+    color: var(--ed-green-text) !important;
+}
+
+body.exam-detail-active .import-question-btn:hover,
+body.exam-detail-active .import-question-btn:focus,
+body.exam-detail-active .import-question-btn:active {
+    border-color: rgba(29, 108, 91, 0.18) !important;
+    background: #fff !important;
+    color: var(--ed-green-text) !important;
+}
+
+body.exam-detail-active .el-button {
+    border-radius: 999px !important;
+    font-weight: 850 !important;
+    box-shadow: none !important;
+}
+
+body.exam-detail-active .el-button--primary {
+    border-color: var(--ed-primary) !important;
+    background: var(--ed-primary) !important;
+    color: #fff !important;
+}
+
+body.exam-detail-active .el-button--primary:hover,
+body.exam-detail-active .el-button--primary:focus,
+body.exam-detail-active .el-button--primary:active {
+    border-color: #265f94 !important;
+    background: #265f94 !important;
+    color: #fff !important;
+}
+
+body.exam-detail-active .el-button--primary.is-link {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: var(--ed-primary) !important;
+}
+
+body.exam-detail-active .el-main {
+    min-width: 0;
+    margin: 0 !important;
+    padding: 18px 12px 18px clamp(18px, 2.4vw, 44px) !important;
+    background: transparent !important;
+    overflow: hidden !important;
+}
+
+body.exam-detail-active .canvas-container {
+    width: 100%;
+    height: 100%;
+    padding: 24px !important;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border: 1px solid rgba(233, 235, 238, 0.94) !important;
+    border-radius: 24px !important;
+    background: rgba(255, 255, 255, 0.92) !important;
+    box-shadow: var(--ed-shadow-sm) !important;
+}
+
+body.exam-detail-active .exam-title {
+    margin-bottom: 6px !important;
+    color: var(--ed-fg) !important;
+    font-size: 30px !important;
+    font-weight: 950 !important;
+    letter-spacing: 0 !important;
+}
+
+body.exam-detail-active .exam-desc {
+    margin-bottom: 18px !important;
+    color: var(--ed-muted) !important;
+    font-weight: 700;
+}
+
+body.exam-detail-active .completion-meter {
+    margin: 0 0 18px !important;
+    padding: 14px !important;
+    border: 1px solid var(--ed-border) !important;
+    border-radius: 18px !important;
+    background: #fbfcfd !important;
+}
+
+body.exam-detail-active .completion-meter-text {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    color: var(--ed-muted);
+    font-weight: 750;
+}
+
+body.exam-detail-active .completion-meter-text strong {
+    color: var(--ed-fg);
+}
+
+body.exam-detail-active .question-card {
+    margin-bottom: 14px !important;
+    padding: 18px !important;
+    border: 1px solid var(--ed-border) !important;
+    border-radius: 20px !important;
+    background: #fff !important;
+    box-shadow: var(--ed-shadow-sm) !important;
+}
+
+body.exam-detail-active .question-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(50, 117, 180, 0.25) !important;
+    background: #fff !important;
+    box-shadow: var(--ed-shadow-md) !important;
+}
+
+body.exam-detail-active .question-card.active {
+    border-color: rgba(50, 117, 180, 0.36) !important;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+    box-shadow: 0 0 0 4px rgba(50, 117, 180, 0.09) !important;
+}
+
+body.exam-detail-active .q-header {
+    gap: 10px !important;
+}
+
+body.exam-detail-active .q-index {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 10px !important;
+    background: var(--ed-primary-soft) !important;
+    color: var(--ed-primary) !important;
+    font-weight: 900 !important;
+}
+
+body.exam-detail-active .question-card.active .q-index {
+    background: var(--ed-primary) !important;
+    color: #fff !important;
+}
+
+body.exam-detail-active .q-content {
+    color: var(--ed-fg) !important;
+    font-size: 15px !important;
+    font-weight: 700;
+    line-height: 1.7 !important;
+}
+
+body.exam-detail-active .empty-tip,
+body.exam-detail-active .empty-prop {
+    border: 1px dashed var(--ed-border-strong) !important;
+    border-radius: 22px !important;
+    background: #fbfcfd !important;
+    color: var(--ed-muted) !important;
+}
+
+body.exam-detail-active .prop-aside {
+    width: clamp(430px, 32vw, 560px) !important;
+    height: auto !important;
+    margin: 18px clamp(18px, 2.4vw, 44px) 18px 0 !important;
+    padding: 14px !important;
+    border: 1px solid rgba(233, 235, 238, 0.94) !important;
+    border-radius: 24px !important;
+    background: rgba(255, 255, 255, 0.92) !important;
+    box-shadow: var(--ed-shadow-sm) !important;
+}
+
+body.exam-detail-active .prop-aside > div {
+    padding-right: 4px;
+}
+
+body.exam-detail-active .prop-panel {
+    gap: 12px !important;
+}
+
+body.exam-detail-active .prop-header {
+    padding: 0 0 12px !important;
+    border-bottom: 1px solid var(--ed-border) !important;
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+body.exam-detail-active .prop-title {
+    color: var(--ed-fg) !important;
+    font-size: 19px !important;
+    font-weight: 950 !important;
+}
+
+body.exam-detail-active .prop-subtitle,
+body.exam-detail-active .prop-section-tip {
+    color: var(--ed-muted) !important;
+    font-weight: 700;
+}
+
+body.exam-detail-active .prop-index-badge {
+    border: 0 !important;
+    background: var(--ed-primary-soft) !important;
+    color: var(--ed-primary) !important;
+    font-weight: 900 !important;
+}
+
+body.exam-detail-active .prop-metrics {
+    gap: 8px !important;
+}
+
+body.exam-detail-active .metric-card,
+body.exam-detail-active .prop-section,
+body.exam-detail-active .option-item {
+    border: 1px solid var(--ed-border) !important;
+    border-radius: 18px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+}
+
+body.exam-detail-active .metric-card {
+    padding: 10px !important;
+    background: #fbfcfd !important;
+}
+
+body.exam-detail-active .metric-label {
+    color: var(--ed-muted) !important;
+    font-weight: 750;
+}
+
+body.exam-detail-active .metric-value,
+body.exam-detail-active .prop-section-title {
+    color: var(--ed-fg) !important;
+    font-weight: 900 !important;
+}
+
+body.exam-detail-active .metric-value-answer,
+body.exam-detail-active .option-item.is-checked .option-label {
+    color: var(--ed-primary) !important;
+}
+
+body.exam-detail-active .prop-section {
+    padding: 13px !important;
+}
+
+body.exam-detail-active .type-radio-group {
+    padding: 5px !important;
+    border: 1px solid var(--ed-border) !important;
+    border-radius: 999px !important;
+    background: var(--ed-soft) !important;
+}
+
+body.exam-detail-active .type-radio-group .el-radio-button__inner {
+    height: 34px !important;
+    border-radius: 999px !important;
+    color: var(--ed-muted) !important;
+    font-weight: 850 !important;
+}
+
+body.exam-detail-active .type-radio-group .el-radio-button.is-active .el-radio-button__inner {
+    background: #fff !important;
+    color: var(--ed-primary) !important;
+    box-shadow: 0 8px 20px rgba(30, 34, 38, 0.08) !important;
+}
+
+body.exam-detail-active .prop-panel .el-input__wrapper,
+body.exam-detail-active .prop-panel .el-textarea__inner,
+body.exam-detail-active .el-dialog .el-input__wrapper,
+body.exam-detail-active .el-dialog .el-textarea__inner {
+    border: 1px solid var(--ed-border) !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+}
+
+body.exam-detail-active .prop-panel .el-input__wrapper.is-focus,
+body.exam-detail-active .prop-panel .el-textarea__inner:focus,
+body.exam-detail-active .el-dialog .el-input__wrapper.is-focus,
+body.exam-detail-active .el-dialog .el-textarea__inner:focus {
+    border-color: rgba(50, 117, 180, 0.62) !important;
+    box-shadow: 0 0 0 4px rgba(50, 117, 180, 0.1) !important;
+}
+
+body.exam-detail-active .option-item {
+    gap: 10px !important;
+}
+
+body.exam-detail-active .option-item:hover {
+    transform: none !important;
+    border-color: rgba(50, 117, 180, 0.26) !important;
+    box-shadow: var(--ed-shadow-sm) !important;
+}
+
+body.exam-detail-active .option-item.is-checked {
+    background: #f8fbff !important;
+}
+
+body.exam-detail-active .add-option-btn {
+    height: 40px !important;
+    border: 1px dashed var(--ed-border-strong) !important;
+    border-radius: 999px !important;
+    background: #fbfcfd !important;
+    color: var(--ed-primary) !important;
+}
+
+body.exam-detail-active .mobile-fab {
+    background: var(--ed-primary) !important;
+    box-shadow: 0 18px 34px rgba(50, 117, 180, 0.26) !important;
+}
+
+body.exam-detail-active .mobile-drawer-content {
+    background: #fff !important;
+}
+
+body.exam-detail-active .mobile-tool-item,
+body.exam-detail-active .mobile-tool-row {
+    border: 1px solid var(--ed-border) !important;
+    border-radius: 20px !important;
+    background: #fbfcfd !important;
+}
+
+body.exam-detail-active .tool-icon-wrapper {
+    border-radius: 16px !important;
+}
+
+body.exam-detail-active .batch-import-dialog,
+body.exam-detail-active .el-dialog {
+    border-radius: 24px !important;
+}
+
+body.exam-detail-active .el-overlay {
+    background: rgba(30, 34, 38, 0.42) !important;
+    backdrop-filter: none;
+}
+
+body.exam-detail-active .el-dialog,
+body.exam-detail-active .el-overlay .el-overlay-dialog .el-dialog {
+    border: 1px solid rgba(233, 235, 238, 0.94) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 24px 80px rgba(30, 34, 38, 0.18) !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__title {
+    color: var(--ed-fg) !important;
+    font-weight: 950 !important;
+}
+
+body.exam-detail-active .batch-format-tip,
+body.exam-detail-active .batch-preview-area,
+body.exam-detail-active .preview-list,
+body.exam-detail-active .preview-item {
+    border-color: var(--ed-border) !important;
+    border-radius: 18px !important;
+    background: #fbfcfd !important;
+}
+
+body.exam-detail-active .tip-title {
+    color: var(--ed-amber-text) !important;
+    font-weight: 900 !important;
+}
+
+body.exam-detail-active .tip-content code {
+    border-color: #f5dfbb !important;
+    border-radius: 999px !important;
+    background: #fff9ef !important;
+    color: var(--ed-amber-text) !important;
+}
+
+body.exam-detail-active .batch-dialog-footer {
+    gap: 10px !important;
+}
+
+@media (min-width: 769px) and (max-width: 1180px) {
+    body.exam-detail-active .el-header {
+        height: auto !important;
+        min-height: 72px;
+        padding: 10px 18px !important;
+    }
+
+    body.exam-detail-active .editor-status-strip {
+        order: 3;
+    }
+
+    body.exam-detail-active .desktop-toolbar {
+        order: 4;
+        max-width: 100%;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    body.exam-detail-active .desktop-toolbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    body.exam-detail-active .el-main {
+        padding: 14px 10px 14px 18px !important;
+    }
+
+    body.exam-detail-active .prop-aside {
+        width: clamp(360px, 42vw, 460px) !important;
+        min-width: 360px;
+        margin: 14px 18px 14px 0 !important;
+    }
+
+    body.exam-detail-active .prop-metrics {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 768px) {
+    body.exam-detail-active,
+    body.exam-detail-active,
+    body.exam-detail-active #app {
+        height: 100%;
+        overflow: hidden !important;
+    }
+
+    body.exam-detail-active .el-header {
+        height: auto !important;
+        min-height: 64px;
+        padding: 10px 14px !important;
+    }
+
+    body.exam-detail-active .editor-status-strip {
+        order: 10;
+        flex: 1 1 100%;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+    }
+
+    body.exam-detail-active .editor-status-strip::-webkit-scrollbar {
+        display: none;
+    }
+
+    body.exam-detail-active .el-header .el-button[type="primary"]:not(.is-link) {
+        height: 34px !important;
+        padding: 0 12px !important;
+    }
+
+    body.exam-detail-active .desktop-toolbar,
+    body.exam-detail-active .prop-aside {
+        display: none !important;
+    }
+
+    body.exam-detail-active .el-main {
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+    }
+
+    body.exam-detail-active .canvas-container {
+        height: 100% !important;
+        padding: 16px !important;
+        padding-bottom: calc(92px + var(--safe-area-inset-bottom)) !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+
+    body.exam-detail-active .exam-title {
+        font-size: 24px !important;
+    }
+
+    body.exam-detail-active .question-card {
+        border-radius: 18px !important;
+        padding: 16px !important;
+    }
+
+    body.exam-detail-active .q-content {
+        font-size: 14px !important;
+    }
+
+    body.exam-detail-active .mobile-fab {
+        display: inline-flex !important;
+        right: 18px !important;
+        bottom: calc(18px + var(--safe-area-inset-bottom)) !important;
+    }
+
+    body.exam-detail-active .custom-mobile-drawer .el-drawer {
+        border-radius: 24px 24px 0 0 !important;
+    }
+
+    body.exam-detail-active .mobile-drawer-content {
+        padding: 20px !important;
+        padding-bottom: calc(20px + var(--safe-area-inset-bottom)) !important;
+    }
+
+    body.exam-detail-active .mobile-tool-grid {
+        gap: 10px !important;
+    }
+
+    body.exam-detail-active .mobile-tool-item {
+        padding: 18px 12px !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl {
+        width: min(92vw, 520px) !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl .el-drawer__body {
+        padding: 0 !important;
+        overflow-y: auto;
+    }
+
+    body.exam-detail-active .prop-option-item {
+        align-items: stretch;
+        flex-direction: column;
+        border: 1px solid var(--ed-border) !important;
+        border-radius: 16px !important;
+        background: #fbfcfd !important;
+    }
+
+    body.exam-detail-active .batch-import-dialog,
+    body.exam-detail-active .el-dialog {
+        width: 94vw !important;
+        max-width: 94vw !important;
+        border-radius: 22px !important;
+    }
+
+    body.exam-detail-active .batch-import-dialog .el-dialog__body {
+        max-height: 66vh;
+        overflow-y: auto !important;
+    }
+}
+
+@media (max-width: 420px) {
+    body.exam-detail-active .el-header {
+        padding: 8px 10px !important;
+    }
+
+    body.exam-detail-active .el-header .el-button.is-circle {
+        width: 34px !important;
+        height: 34px !important;
+    }
+
+    body.exam-detail-active .editor-status-strip .el-tag {
+        font-size: 11px !important;
+    }
+
+    body.exam-detail-active .canvas-container {
+        padding: 12px !important;
+        padding-bottom: calc(88px + var(--safe-area-inset-bottom)) !important;
+    }
+
+    body.exam-detail-active .mobile-tool-grid {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    body.exam-detail-active .tool-icon-wrapper {
+        width: 48px !important;
+        height: 48px !important;
+    }
+}
+
+/* Unified editor dialogs */
+body.exam-detail-active .el-overlay {
+    background: rgba(30, 34, 38, 0.42) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+body.exam-detail-active .el-overlay-dialog {
+    padding: 24px !important;
+}
+
+body.exam-detail-active .el-dialog,
+body.exam-detail-active .el-message-box,
+body.exam-detail-active .el-overlay .el-overlay-dialog .el-dialog {
+    overflow: hidden !important;
+    border: 1px solid rgba(233, 235, 238, 0.96) !important;
+    border-radius: 26px !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(251, 252, 253, 0.98) 100%) !important;
+    box-shadow: 0 28px 90px rgba(30, 34, 38, 0.2) !important;
+}
+
+body.exam-detail-active .el-dialog::before,
+body.exam-detail-active .el-message-box::before {
+    content: "";
+    display: block;
+    height: 4px;
+    background: linear-gradient(to right, #0ea5e9, #f59e0b, #34d399, #fb7185);
+}
+
+body.exam-detail-active .el-dialog .el-dialog__header,
+body.exam-detail-active .el-message-box .el-message-box__header {
+    padding: 22px 26px 12px !important;
+    margin: 0 !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__title,
+body.exam-detail-active .el-message-box .el-message-box__title {
+    color: var(--ed-fg) !important;
+    font-size: 21px !important;
+    font-weight: 950 !important;
+    line-height: 1.25;
+    letter-spacing: 0 !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__headerbtn {
+    top: 18px !important;
+    right: 18px !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 999px !important;
+    background: var(--ed-soft) !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__headerbtn:hover {
+    background: var(--ed-primary-soft) !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__body,
+body.exam-detail-active .el-message-box .el-message-box__content {
+    padding: 16px 26px 22px !important;
+    color: var(--ed-muted) !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__footer,
+body.exam-detail-active .el-message-box .el-message-box__btns {
+    padding: 18px 26px 26px !important;
+    border-top: 1px solid var(--ed-border) !important;
+    background: rgba(248, 249, 251, 0.72) !important;
+}
+
+body.exam-detail-active .dialog-footer,
+body.exam-detail-active .el-dialog .el-dialog__footer span,
+body.exam-detail-active .el-message-box .el-message-box__btns,
+body.exam-detail-active .batch-dialog-footer {
+    display: flex !important;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px !important;
+    flex-wrap: wrap;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__footer .el-button,
+body.exam-detail-active .el-message-box .el-button,
+body.exam-detail-active .batch-dialog-footer .el-button {
+    min-width: 92px;
+    height: 38px !important;
+    margin: 0 !important;
+    border-radius: 999px !important;
+    font-weight: 900 !important;
+}
+
+body.exam-detail-active .el-dialog .el-form-item {
+    margin-bottom: 18px !important;
+}
+
+body.exam-detail-active .el-dialog .el-form-item__label {
+    color: var(--ed-muted) !important;
+    font-weight: 800 !important;
+}
+
+body.exam-detail-active .el-dialog .el-input .el-input__wrapper,
+body.exam-detail-active .el-dialog .el-select .el-input__wrapper,
+body.exam-detail-active .el-dialog .el-textarea .el-textarea__inner,
+body.exam-detail-active .el-dialog .el-input-number .el-input__wrapper {
+    border: 1px solid var(--ed-border) !important;
+    border-radius: 16px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+}
+
+body.exam-detail-active .el-dialog .el-input .el-input__wrapper.is-focus,
+body.exam-detail-active .el-dialog .el-select .el-input__wrapper.is-focus,
+body.exam-detail-active .el-dialog .el-textarea .el-textarea__inner:focus {
+    border-color: rgba(50, 117, 180, 0.62) !important;
+    box-shadow: 0 0 0 4px rgba(50, 117, 180, 0.1) !important;
+}
+
+body.exam-detail-active .batch-import-dialog {
+    width: min(860px, 92vw) !important;
+}
+
+body.exam-detail-active .batch-import-dialog .el-dialog__body {
+    max-height: 72vh;
+    overflow-y: auto;
+}
+
+body.exam-detail-active .batch-format-tip {
+    padding: 16px !important;
+    border: 1px solid #f5dfbb !important;
+    border-radius: 20px !important;
+    background: #fff9ef !important;
+}
+
+body.exam-detail-active .tip-title-row,
+body.exam-detail-active .tip-quick-row,
+body.exam-detail-active .tip-rule-row {
+    gap: 10px;
+}
+
+body.exam-detail-active .tip-content code {
+    display: inline-flex;
+    margin: 3px;
+    padding: 4px 9px !important;
+}
+
+body.exam-detail-active .batch-input .el-textarea__inner {
+    min-height: 220px !important;
+    font-family: Consolas, Monaco, monospace !important;
+}
+
+body.exam-detail-active .preview-list {
+    max-height: 260px !important;
+}
+
+@media (max-width: 768px) {
+    body.exam-detail-active .el-overlay-dialog {
+        padding: 12px !important;
+        align-items: flex-start !important;
+    }
+
+    body.exam-detail-active .el-dialog,
+    body.exam-detail-active .el-message-box {
+        width: min(94vw, 560px) !important;
+        max-width: 94vw !important;
+        margin-top: 5vh !important;
+        border-radius: 22px !important;
+    }
+
+    body.exam-detail-active .el-dialog .el-dialog__header,
+    body.exam-detail-active .el-message-box .el-message-box__header {
+        padding: 20px 20px 10px !important;
+    }
+
+    body.exam-detail-active .el-dialog .el-dialog__body,
+    body.exam-detail-active .el-message-box .el-message-box__content {
+        max-height: 66vh;
+        overflow-y: auto !important;
+        padding: 14px 20px 18px !important;
+    }
+
+    body.exam-detail-active .el-dialog .el-dialog__footer,
+    body.exam-detail-active .el-message-box .el-message-box__btns {
+        padding: 14px 20px 20px !important;
+    }
+
+    body.exam-detail-active .dialog-footer,
+    body.exam-detail-active .el-dialog .el-dialog__footer span,
+    body.exam-detail-active .el-message-box .el-message-box__btns,
+    body.exam-detail-active .batch-dialog-footer {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px !important;
+        width: 100%;
+    }
+
+    body.exam-detail-active .el-dialog .el-dialog__footer .el-button,
+    body.exam-detail-active .el-message-box .el-button,
+    body.exam-detail-active .batch-dialog-footer .el-button {
+        width: 100% !important;
+        min-width: 0;
+    }
+
+    body.exam-detail-active .batch-dialog-footer {
+        grid-template-areas:
+            "parse confirm"
+            "cancel cancel";
+    }
+
+    body.exam-detail-active .footer-btn-parse {
+        grid-area: parse;
+    }
+
+    body.exam-detail-active .footer-btn-confirm {
+        grid-area: confirm;
+    }
+
+    body.exam-detail-active .footer-btn-cancel {
+        grid-area: cancel;
+    }
+
+    body.exam-detail-active .batch-input .el-textarea__inner {
+        min-height: 180px !important;
+    }
+}
+
+/* NodeBits modal correction: calm, compact, form-first dialogs */
+body.exam-detail-active .el-overlay {
+    background: rgba(0, 0, 0, 0.48) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+body.exam-detail-active .el-overlay-dialog {
+    padding: 10px !important;
+}
+
+body.exam-detail-active .el-dialog,
+body.exam-detail-active .el-message-box,
+body.exam-detail-active .el-overlay .el-overlay-dialog .el-dialog {
+    overflow: hidden !important;
+    border: 1px solid rgba(0, 0, 0, 0.28) !important;
+    border-radius: 24px !important;
+    background: #ffffff !important;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22) !important;
+}
+
+body.exam-detail-active .el-dialog::before,
+body.exam-detail-active .el-message-box::before {
+    display: none !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__header,
+body.exam-detail-active .el-message-box .el-message-box__header {
+    padding: 30px 36px 8px !important;
+    margin: 0 !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__title,
+body.exam-detail-active .el-message-box .el-message-box__title {
+    color: #111827 !important;
+    font-size: 24px !important;
+    font-weight: 850 !important;
+    line-height: 1.25 !important;
+    letter-spacing: 0 !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__headerbtn {
+    top: 26px !important;
+    right: 26px !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 999px !important;
+    background: transparent !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__headerbtn:hover {
+    background: #f3f5f8 !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__headerbtn .el-dialog__close {
+    color: #1e2226 !important;
+    font-size: 20px !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__body,
+body.exam-detail-active .el-message-box .el-message-box__content {
+    padding: 12px 36px 22px !important;
+    color: #4b5563 !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__footer,
+body.exam-detail-active .el-message-box .el-message-box__btns {
+    padding: 0 36px 30px !important;
+    border-top: 0 !important;
+    background: transparent !important;
+}
+
+body.exam-detail-active .dialog-footer,
+body.exam-detail-active .el-dialog .el-dialog__footer span,
+body.exam-detail-active .el-message-box .el-message-box__btns,
+body.exam-detail-active .batch-dialog-footer {
+    display: flex !important;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px !important;
+    flex-wrap: nowrap;
+}
+
+body.exam-detail-active .el-dialog .el-form-item {
+    margin-bottom: 18px !important;
+}
+
+body.exam-detail-active .el-dialog .el-form-item__label {
+    padding-bottom: 7px !important;
+    color: #111827 !important;
+    font-size: 16px !important;
+    font-weight: 760 !important;
+    line-height: 1.25 !important;
+}
+
+body.exam-detail-active .el-dialog .el-input .el-input__wrapper,
+body.exam-detail-active .el-dialog .el-select .el-input__wrapper,
+body.exam-detail-active .el-dialog .el-input-number .el-input__wrapper {
+    min-height: 52px !important;
+    padding: 0 18px !important;
+    border: 1px solid #edf0f3 !important;
+    border-radius: 18px !important;
+    background: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+body.exam-detail-active .el-dialog .el-textarea .el-textarea__inner {
+    min-height: 112px !important;
+    padding: 16px 18px !important;
+    border: 1px solid #edf0f3 !important;
+    border-radius: 18px !important;
+    background: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+    line-height: 1.65;
+}
+
+body.exam-detail-active .el-dialog .el-input .el-input__wrapper:hover,
+body.exam-detail-active .el-dialog .el-select .el-input__wrapper:hover,
+body.exam-detail-active .el-dialog .el-input-number .el-input__wrapper:hover,
+body.exam-detail-active .el-dialog .el-textarea .el-textarea__inner:hover {
+    border-color: #dfe5ec !important;
+}
+
+body.exam-detail-active .el-dialog .el-input .el-input__wrapper.is-focus,
+body.exam-detail-active .el-dialog .el-select .el-input__wrapper.is-focus,
+body.exam-detail-active .el-dialog .el-textarea .el-textarea__inner:focus {
+    border-color: #6da9e7 !important;
+    box-shadow:
+        0 0 0 3px rgba(50, 117, 180, 0.28),
+        0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__footer .el-button,
+body.exam-detail-active .el-message-box .el-button,
+body.exam-detail-active .batch-dialog-footer .el-button {
+    min-width: 92px;
+    height: 52px !important;
+    padding: 0 24px !important;
+    margin: 0 !important;
+    border-radius: 18px !important;
+    font-size: 16px !important;
+    font-weight: 760 !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06) !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__footer .el-button--default,
+body.exam-detail-active .el-message-box .el-button--default,
+body.exam-detail-active .batch-dialog-footer .el-button--default {
+    border-color: #edf0f3 !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__footer .el-button--primary,
+body.exam-detail-active .el-message-box .el-button--primary,
+body.exam-detail-active .batch-dialog-footer .el-button--primary {
+    border-color: #9fc3e7 !important;
+    background: #9fc3e7 !important;
+    color: #ffffff !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__footer .el-button--primary:hover,
+body.exam-detail-active .el-message-box .el-button--primary:hover,
+body.exam-detail-active .batch-dialog-footer .el-button--primary:hover {
+    border-color: #82b0de !important;
+    background: #82b0de !important;
+}
+
+body.exam-detail-active .batch-import-dialog {
+    width: min(780px, 94vw) !important;
+}
+
+body.exam-detail-active .batch-import-dialog .el-dialog__body {
+    max-height: 70vh;
+    overflow-y: auto !important;
+}
+
+body.exam-detail-active .batch-format-tip {
+    padding: 14px !important;
+    border: 1px solid #f2e1be !important;
+    border-radius: 18px !important;
+    background: #fff9ef !important;
+}
+
+body.exam-detail-active .tip-content code {
+    border-radius: 999px !important;
+}
+
+@media (max-width: 768px) {
+    body.exam-detail-active .el-overlay-dialog {
+        padding: 8px !important;
+        align-items: center !important;
+    }
+
+    body.exam-detail-active .el-dialog,
+    body.exam-detail-active .el-message-box {
+        width: min(94vw, 640px) !important;
+        max-width: 94vw !important;
+        margin: 0 auto !important;
+        border-radius: 22px !important;
+    }
+
+    body.exam-detail-active .el-dialog .el-dialog__header,
+    body.exam-detail-active .el-message-box .el-message-box__header {
+        padding: 24px 22px 8px !important;
+    }
+
+    body.exam-detail-active .el-dialog .el-dialog__body,
+    body.exam-detail-active .el-message-box .el-message-box__content {
+        max-height: 68vh;
+        overflow-y: auto !important;
+        padding: 10px 22px 18px !important;
+    }
+
+    body.exam-detail-active .el-dialog .el-dialog__footer,
+    body.exam-detail-active .el-message-box .el-message-box__btns {
+        padding: 0 22px 24px !important;
+    }
+
+    body.exam-detail-active .dialog-footer,
+    body.exam-detail-active .el-dialog .el-dialog__footer span,
+    body.exam-detail-active .el-message-box .el-message-box__btns,
+    body.exam-detail-active .batch-dialog-footer {
+        display: flex !important;
+        justify-content: flex-end;
+        gap: 10px !important;
+    }
+
+    body.exam-detail-active .el-dialog .el-dialog__footer .el-button,
+    body.exam-detail-active .el-message-box .el-button,
+    body.exam-detail-active .batch-dialog-footer .el-button {
+        width: auto !important;
+        min-width: 86px;
+        height: 46px !important;
+        padding: 0 18px !important;
+        font-size: 15px !important;
+    }
+}
+
+/* Stable editor scroll chain: header stays visible, both editor panes scroll independently. */
+body.exam-detail-active {
+    height: 100dvh !important;
+    overflow: hidden !important;
+}
+
+body.exam-detail-active #app,
+body.exam-detail-active .exam-detail-page {
+    width: 100% !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+body.exam-detail-active .exam-detail-page {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+body.exam-detail-active .exam-detail-page > .el-container {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+body.exam-detail-active .exam-detail-page > .el-container > .el-header {
+    flex: 0 0 auto !important;
+}
+
+body.exam-detail-active .exam-detail-page > .el-container > .el-container {
+    width: 100% !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex: 1 1 auto !important;
+    overflow: hidden !important;
+}
+
+body.exam-detail-active .exam-detail-page .el-main {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    overflow: hidden !important;
+}
+
+body.exam-detail-active .exam-detail-page .canvas-container {
+    width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain !important;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+}
+
+body.exam-detail-active .exam-detail-page .prop-aside {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 0 0 clamp(430px, 32vw, 560px) !important;
+    overflow: hidden !important;
+}
+
+body.exam-detail-active .exam-detail-page .prop-aside > div {
+    min-height: 0 !important;
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 769px) and (max-width: 1180px) {
+    body.exam-detail-active .exam-detail-page .prop-aside {
+        flex-basis: clamp(360px, 42vw, 460px) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    body.exam-detail-active .exam-detail-page > .el-container > .el-container {
+        display: block !important;
+        overflow: hidden !important;
+    }
+
+    body.exam-detail-active .exam-detail-page .el-main {
+        width: 100% !important;
+        height: 100% !important;
+    }
+}
+
+/* ============================================================
+   Refined exam editor layer
+   Keeps the editor fluid while making dialogs and controls lighter.
+   ============================================================ */
+
+body.exam-detail-active {
+    --editor-bg: #f4f7fa;
+    --editor-surface: #ffffff;
+    --editor-surface-subtle: #fbfcfe;
+    --editor-line: #dde5ee;
+    --editor-line-strong: #c9d5e1;
+    --editor-text: #142033;
+    --editor-text-soft: #5c6b7c;
+    --editor-primary: #2468b2;
+    --editor-primary-hover: #1d5594;
+    --editor-primary-soft: #e8f2ff;
+    --editor-green: #12805c;
+    --editor-green-soft: #e8f8f1;
+    --editor-amber: #a76512;
+    --editor-amber-soft: #fff5e6;
+    --editor-red: #c73737;
+    --editor-red-soft: #fff0f0;
+    --editor-radius: 8px;
+    --editor-radius-lg: 12px;
+    --editor-shadow-xs: 0 1px 2px rgba(20, 32, 51, 0.04);
+    --editor-shadow-sm: 0 8px 22px rgba(20, 32, 51, 0.07);
+    --editor-shadow-lg: 0 18px 56px rgba(20, 32, 51, 0.16);
+    background:
+        linear-gradient(rgba(36, 104, 178, 0.042) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(18, 128, 92, 0.032) 1px, transparent 1px),
+        linear-gradient(180deg, #f7fafc 0%, #eef4f8 100%) !important;
+    background-size: 36px 36px, 36px 36px, auto !important;
+    background-position: -1px -1px, -1px -1px, 0 0 !important;
+    color: var(--editor-text) !important;
+    letter-spacing: 0 !important;
+}
+
+body.exam-detail-active .exam-detail-page {
+    background:
+        linear-gradient(rgba(36, 104, 178, 0.042) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(18, 128, 92, 0.032) 1px, transparent 1px),
+        linear-gradient(180deg, #f7fafc 0%, #eef4f8 100%) !important;
+    background-size: 36px 36px, 36px 36px, auto !important;
+}
+
+body.exam-detail-active .el-header {
+    height: 68px !important;
+    border-bottom-color: rgba(221, 229, 238, 0.9) !important;
+    background: rgba(255, 255, 255, 0.88) !important;
+    box-shadow: 0 1px 0 rgba(20, 32, 51, 0.04) !important;
+    backdrop-filter: blur(16px) saturate(1.15) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(1.15) !important;
+}
+
+body.exam-detail-active .el-button {
+    border-radius: var(--editor-radius) !important;
+    font-weight: 760 !important;
+    letter-spacing: 0 !important;
+    box-shadow: none !important;
+}
+
+body.exam-detail-active .el-button--primary {
+    border-color: var(--editor-primary) !important;
+    background: var(--editor-primary) !important;
+    color: #ffffff !important;
+}
+
+body.exam-detail-active .el-button--primary:hover,
+body.exam-detail-active .el-button--primary:focus,
+body.exam-detail-active .el-button--primary:active {
+    border-color: var(--editor-primary-hover) !important;
+    background: var(--editor-primary-hover) !important;
+}
+
+body.exam-detail-active .desktop-toolbar,
+body.exam-detail-active .canvas-container,
+body.exam-detail-active .prop-aside,
+body.exam-detail-active .question-card,
+body.exam-detail-active .completion-meter,
+body.exam-detail-active .metric-card,
+body.exam-detail-active .prop-section,
+body.exam-detail-active .option-item {
+    border-color: var(--editor-line) !important;
+    border-radius: var(--editor-radius) !important;
+    background: rgba(255, 255, 255, 0.94) !important;
+    box-shadow: var(--editor-shadow-xs) !important;
+}
+
+body.exam-detail-active .canvas-container,
+body.exam-detail-active .prop-aside {
+    border-radius: var(--editor-radius-lg) !important;
+}
+
+body.exam-detail-active .question-card:hover {
+    transform: translateY(-1px) !important;
+    border-color: var(--editor-line-strong) !important;
+    box-shadow: var(--editor-shadow-sm) !important;
+}
+
+body.exam-detail-active .question-card.active {
+    border-color: rgba(36, 104, 178, 0.42) !important;
+    box-shadow: 0 0 0 3px rgba(36, 104, 178, 0.1) !important;
+}
+
+body.exam-detail-active .q-index,
+body.exam-detail-active .prop-index-badge {
+    border-radius: var(--editor-radius) !important;
+    background: var(--editor-primary-soft) !important;
+    color: var(--editor-primary) !important;
+}
+
+body.exam-detail-active .prop-title,
+body.exam-detail-active .exam-title,
+body.exam-detail-active .q-content,
+body.exam-detail-active .metric-value,
+body.exam-detail-active .prop-section-title {
+    color: var(--editor-text) !important;
+}
+
+body.exam-detail-active .prop-subtitle,
+body.exam-detail-active .exam-desc,
+body.exam-detail-active .metric-label,
+body.exam-detail-active .prop-section-tip {
+    color: var(--editor-text-soft) !important;
+}
+
+body.exam-detail-active .type-radio-group {
+    border-radius: var(--editor-radius) !important;
+}
+
+body.exam-detail-active .type-radio-group .el-radio-button__inner {
+    height: 32px !important;
+    border-radius: 6px !important;
+}
+
+body.exam-detail-active .prop-panel .el-input__wrapper,
+body.exam-detail-active .prop-panel .el-textarea__inner {
+    border-color: var(--editor-line) !important;
+    border-radius: var(--editor-radius) !important;
+}
+
+body.exam-detail-active .prop-panel .el-input__wrapper.is-focus,
+body.exam-detail-active .prop-panel .el-textarea__inner:focus {
+    border-color: rgba(36, 104, 178, 0.58) !important;
+    box-shadow: 0 0 0 3px rgba(36, 104, 178, 0.12) !important;
+}
+
+/* Compact editor dialogs */
+body.exam-detail-active .el-overlay {
+    background: rgba(20, 32, 51, 0.38) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+body.exam-detail-active .el-overlay-dialog {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 18px !important;
+    overflow: auto !important;
+}
+
+body.exam-detail-active .el-dialog,
+body.exam-detail-active .el-message-box,
+body.exam-detail-active .el-overlay .el-overlay-dialog .el-dialog {
+    max-height: calc(100dvh - 36px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(221, 229, 238, 0.96) !important;
+    border-radius: var(--editor-radius-lg) !important;
+    background: rgba(255, 255, 255, 0.98) !important;
+    box-shadow: var(--editor-shadow-lg) !important;
+}
+
+body.exam-detail-active .el-dialog::before,
+body.exam-detail-active .el-message-box::before {
+    display: none !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__header,
+body.exam-detail-active .el-message-box .el-message-box__header {
+    flex: 0 0 auto !important;
+    padding: 18px 22px 8px !important;
+    margin: 0 !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__title,
+body.exam-detail-active .el-message-box .el-message-box__title {
+    color: var(--editor-text) !important;
+    font-size: 18px !important;
+    font-weight: 850 !important;
+    line-height: 1.3 !important;
+    letter-spacing: 0 !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__headerbtn {
+    top: 14px !important;
+    right: 14px !important;
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: var(--editor-radius) !important;
+    background: transparent !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__headerbtn:hover {
+    background: #eef3f8 !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__headerbtn .el-dialog__close {
+    color: var(--editor-text-soft) !important;
+    font-size: 17px !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__body,
+body.exam-detail-active .el-message-box .el-message-box__content {
+    min-height: 0 !important;
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    padding: 12px 22px 18px !important;
+    color: var(--editor-text-soft) !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__footer,
+body.exam-detail-active .el-message-box .el-message-box__btns {
+    flex: 0 0 auto !important;
+    padding: 14px 22px 18px !important;
+    border-top: 1px solid var(--editor-line) !important;
+    background: var(--editor-surface-subtle) !important;
+}
+
+body.exam-detail-active .dialog-footer,
+body.exam-detail-active .el-dialog .el-dialog__footer span,
+body.exam-detail-active .el-message-box .el-message-box__btns,
+body.exam-detail-active .batch-dialog-footer {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    flex-wrap: wrap !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__footer .el-button,
+body.exam-detail-active .el-message-box .el-button,
+body.exam-detail-active .batch-dialog-footer .el-button {
+    min-width: 82px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 16px !important;
+    margin: 0 !important;
+    border-radius: var(--editor-radius) !important;
+    font-size: 14px !important;
+    font-weight: 760 !important;
+    box-shadow: none !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__footer .el-button--default,
+body.exam-detail-active .el-message-box .el-button--default,
+body.exam-detail-active .batch-dialog-footer .el-button--default {
+    border-color: var(--editor-line) !important;
+    background: #ffffff !important;
+    color: var(--editor-text) !important;
+}
+
+body.exam-detail-active .el-dialog .el-dialog__footer .el-button--primary,
+body.exam-detail-active .el-message-box .el-button--primary,
+body.exam-detail-active .batch-dialog-footer .el-button--primary {
+    border-color: var(--editor-primary) !important;
+    background: var(--editor-primary) !important;
+    color: #ffffff !important;
+}
+
+body.exam-detail-active .el-dialog .el-form {
+    --el-component-size: 38px;
+}
+
+body.exam-detail-active .el-dialog .el-form-item {
+    margin-bottom: 14px !important;
+}
+
+body.exam-detail-active .el-dialog .el-form-item__label {
+    padding-bottom: 4px !important;
+    color: var(--editor-text-soft) !important;
+    font-size: 13px !important;
+    font-weight: 760 !important;
+    line-height: 1.35 !important;
+}
+
+body.exam-detail-active .el-dialog .el-input .el-input__wrapper,
+body.exam-detail-active .el-dialog .el-select .el-input__wrapper,
+body.exam-detail-active .el-dialog .el-input-number .el-input__wrapper {
+    min-height: 38px !important;
+    padding: 0 12px !important;
+    border: 1px solid var(--editor-line) !important;
+    border-radius: var(--editor-radius) !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+}
+
+body.exam-detail-active .el-dialog .el-textarea .el-textarea__inner {
+    min-height: 84px !important;
+    padding: 10px 12px !important;
+    border: 1px solid var(--editor-line) !important;
+    border-radius: var(--editor-radius) !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    line-height: 1.6 !important;
+}
+
+body.exam-detail-active .el-dialog .el-input .el-input__wrapper:hover,
+body.exam-detail-active .el-dialog .el-select .el-input__wrapper:hover,
+body.exam-detail-active .el-dialog .el-input-number .el-input__wrapper:hover,
+body.exam-detail-active .el-dialog .el-textarea .el-textarea__inner:hover {
+    border-color: var(--editor-line-strong) !important;
+}
+
+body.exam-detail-active .el-dialog .el-input .el-input__wrapper.is-focus,
+body.exam-detail-active .el-dialog .el-select .el-input__wrapper.is-focus,
+body.exam-detail-active .el-dialog .el-textarea .el-textarea__inner:focus {
+    border-color: rgba(36, 104, 178, 0.58) !important;
+    box-shadow: 0 0 0 3px rgba(36, 104, 178, 0.12) !important;
+}
+
+body.exam-detail-active .batch-import-dialog {
+    width: min(780px, calc(100vw - 36px)) !important;
+}
+
+body.exam-detail-active .batch-import-dialog .el-dialog__body {
+    max-height: none !important;
+}
+
+body.exam-detail-active .batch-format-tip,
+body.exam-detail-active .batch-preview-area,
+body.exam-detail-active .preview-list,
+body.exam-detail-active .preview-item {
+    border-color: var(--editor-line) !important;
+    border-radius: var(--editor-radius) !important;
+    background: var(--editor-surface-subtle) !important;
+}
+
+body.exam-detail-active .batch-format-tip {
+    border-color: #f1d8ad !important;
+    background: var(--editor-amber-soft) !important;
+}
+
+body.exam-detail-active .batch-input .el-textarea__inner {
+    min-height: 190px !important;
+}
+
+@media (max-width: 768px) {
+    body.exam-detail-active .el-header {
+        min-height: 60px !important;
+        padding: 8px 12px !important;
+    }
+
+    body.exam-detail-active .canvas-container {
+        padding: 14px !important;
+        padding-bottom: calc(88px + var(--safe-area-inset-bottom)) !important;
+    }
+
+    body.exam-detail-active .question-card {
+        border-radius: var(--editor-radius) !important;
+        padding: 14px !important;
+    }
+
+    body.exam-detail-active .el-overlay-dialog {
+        padding: 10px !important;
+        align-items: center !important;
+    }
+
+    body.exam-detail-active .el-dialog,
+    body.exam-detail-active .el-message-box {
+        width: min(94vw, 640px) !important;
+        max-width: 94vw !important;
+        max-height: calc(100dvh - 20px) !important;
+        margin: 0 auto !important;
+        border-radius: var(--editor-radius-lg) !important;
+    }
+
+    body.exam-detail-active .el-dialog .el-dialog__header,
+    body.exam-detail-active .el-message-box .el-message-box__header {
+        padding: 16px 18px 6px !important;
+    }
+
+    body.exam-detail-active .el-dialog .el-dialog__body,
+    body.exam-detail-active .el-message-box .el-message-box__content {
+        padding: 10px 18px 14px !important;
+    }
+
+    body.exam-detail-active .el-dialog .el-dialog__footer,
+    body.exam-detail-active .el-message-box .el-message-box__btns {
+        padding: 12px 18px 16px !important;
+    }
+
+    body.exam-detail-active .dialog-footer,
+    body.exam-detail-active .el-dialog .el-dialog__footer span,
+    body.exam-detail-active .el-message-box .el-message-box__btns,
+    body.exam-detail-active .batch-dialog-footer {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)) !important;
+        gap: 8px !important;
+    }
+
+    body.exam-detail-active .el-dialog .el-dialog__footer .el-button,
+    body.exam-detail-active .el-message-box .el-button,
+    body.exam-detail-active .batch-dialog-footer .el-button {
+        width: 100% !important;
+        min-width: 0 !important;
+        height: 38px !important;
+    }
+
+    body.exam-detail-active .batch-input .el-textarea__inner {
+        min-height: 160px !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.exam-detail-active .el-button,
+    body.exam-detail-active .question-card,
+    body.exam-detail-active .option-item {
+        transition: none !important;
+    }
+}
+
+/* ============================================================
+   Tablet and phone editor adaptation
+   1024px and below uses a roomy canvas plus a right-side detail drawer.
+   ============================================================ */
+
+@media (max-width: 1024px) {
+    body.exam-detail-active,
+    body.exam-detail-active #app,
+    body.exam-detail-active .exam-detail-page {
+        width: 100% !important;
+        height: 100dvh !important;
+        overflow: hidden !important;
+    }
+
+    body.exam-detail-active .el-header {
+        height: auto !important;
+        min-height: 64px !important;
+        padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px !important;
+    }
+
+    body.exam-detail-active .editor-status-strip {
+        order: 10 !important;
+        width: 100% !important;
+        padding-bottom: 2px !important;
+        overflow-x: auto !important;
+        scrollbar-width: none;
+    }
+
+    body.exam-detail-active .editor-status-strip::-webkit-scrollbar {
+        display: none;
+    }
+
+    body.exam-detail-active .desktop-toolbar,
+    body.exam-detail-active .prop-aside {
+        display: none !important;
+    }
+
+    body.exam-detail-active .exam-detail-page > .el-container > .el-container {
+        display: block !important;
+        overflow: hidden !important;
+    }
+
+    body.exam-detail-active .exam-detail-page .el-main {
+        width: 100% !important;
+        height: 100% !important;
+        padding: 14px !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+    }
+
+    body.exam-detail-active .exam-detail-page .canvas-container {
+        height: 100% !important;
+        padding: 18px !important;
+        padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important;
+        border-radius: var(--editor-radius-lg) !important;
+        overflow-y: auto !important;
+    }
+
+    body.exam-detail-active .exam-title {
+        font-size: clamp(22px, 4vw, 28px) !important;
+    }
+
+    body.exam-detail-active .question-card {
+        padding: 16px !important;
+    }
+
+    body.exam-detail-active .mobile-fab {
+        display: inline-flex !important;
+        right: 18px !important;
+        bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+        width: 52px !important;
+        height: 52px !important;
+        min-width: 52px !important;
+        border-radius: 16px !important;
+        box-shadow: 0 14px 30px rgba(36, 104, 178, 0.22) !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl {
+        width: min(88vw, 560px) !important;
+        max-width: calc(100vw - 18px) !important;
+        border-radius: var(--editor-radius-lg) 0 0 var(--editor-radius-lg) !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl .el-drawer__header {
+        margin-bottom: 0 !important;
+        padding: 16px 18px 10px !important;
+        border-bottom: 1px solid var(--editor-line) !important;
+        color: var(--editor-text) !important;
+        font-weight: 850 !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl .el-drawer__body {
+        padding: 0 !important;
+        overflow-y: auto !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl .el-drawer__body > div {
+        padding: 16px !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl .el-form-item {
+        margin-bottom: 14px !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl .el-form-item__label {
+        margin-bottom: 4px !important;
+        color: var(--editor-text-soft) !important;
+        font-size: 13px !important;
+        font-weight: 760 !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl .el-radio-group {
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        gap: 6px !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl .el-radio-button,
+    body.exam-detail-active .el-drawer.rtl .el-radio-button__inner {
+        width: 100% !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl .el-radio-button__inner {
+        height: 34px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border: 1px solid var(--editor-line) !important;
+        border-radius: var(--editor-radius) !important;
+        background: #ffffff !important;
+        color: var(--editor-text-soft) !important;
+        font-weight: 760 !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl .el-radio-button.is-active .el-radio-button__inner {
+        border-color: rgba(36, 104, 178, 0.42) !important;
+        background: var(--editor-primary-soft) !important;
+        color: var(--editor-primary) !important;
+        box-shadow: none !important;
+    }
+
+    body.exam-detail-active .prop-option-item {
+        align-items: stretch !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+        padding: 10px !important;
+        border: 1px solid var(--editor-line) !important;
+        border-radius: var(--editor-radius) !important;
+        background: var(--editor-surface-subtle) !important;
+    }
+
+    body.exam-detail-active .custom-mobile-drawer .el-drawer {
+        border-radius: 18px 18px 0 0 !important;
+    }
+
+    body.exam-detail-active .custom-mobile-drawer .el-drawer__body {
+        padding: 0 !important;
+    }
+
+    body.exam-detail-active .mobile-drawer-content {
+        padding: 18px !important;
+        padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    body.exam-detail-active .mobile-tool-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+    }
+
+    body.exam-detail-active .mobile-tool-item,
+    body.exam-detail-active .mobile-tool-row {
+        border-radius: var(--editor-radius) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    body.exam-detail-active .exam-detail-page .el-main {
+        padding: 0 !important;
+    }
+
+    body.exam-detail-active .exam-detail-page .canvas-container {
+        padding: 14px !important;
+        padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px)) !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+
+    body.exam-detail-active .mobile-tool-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl {
+        width: min(92vw, 520px) !important;
+    }
+
+    body.exam-detail-active .el-drawer.rtl .el-radio-group {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 480px) {
+    body.exam-detail-active .el-header {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
+
+    body.exam-detail-active .editor-status-strip .el-tag {
+        height: 22px !important;
+        padding: 0 8px !important;
+        font-size: 11px !important;
+    }
+
+    body.exam-detail-active .question-card {
+        padding: 13px !important;
+    }
+
+    body.exam-detail-active .q-header {
+        flex-wrap: wrap !important;
+    }
+
+    body.exam-detail-active .q-content {
+        font-size: 14px !important;
+        line-height: 1.62 !important;
+    }
+
+    body.exam-detail-active .mobile-fab {
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        right: 14px !important;
+        bottom: calc(14px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    body.exam-detail-active .mobile-tool-row {
+        align-items: center !important;
+        grid-template-columns: auto minmax(0, 1fr) auto !important;
+    }
+
+    body.exam-detail-active .mobile-drawer-content {
+        padding: 16px 14px !important;
+        padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+}
+
+/* Must stay last: keep editor dialogs and confirm boxes centered in every viewport. */
+body.exam-detail-active .el-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+}
+
+body.exam-detail-active .el-overlay-dialog,
+body.exam-detail-active .el-overlay.is-message-box .el-overlay-message-box {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    overflow: auto !important;
+    text-align: left !important;
+}
+
+body.exam-detail-active .el-overlay.is-message-box .el-overlay-message-box::after {
+    display: none !important;
+}
+
+body.exam-detail-active .el-overlay-dialog .el-dialog,
+body.exam-detail-active .el-overlay.is-message-box .el-message-box {
+    margin: 0 !important;
+}
+
+body.exam-detail-active .el-overlay.is-message-box .el-message-box {
+    width: min(460px, calc(100vw - 40px)) !important;
+    max-width: calc(100vw - 40px) !important;
+    min-height: 0 !important;
+}
+
+body.exam-detail-active .el-overlay.is-message-box .el-message-box__header {
+    position: relative !important;
+    padding-right: 48px !important;
+}
+
+body.exam-detail-active .el-overlay.is-message-box .el-message-box__headerbtn {
+    top: 12px !important;
+    right: 12px !important;
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: var(--editor-radius) !important;
+    background: transparent !important;
+}
+
+body.exam-detail-active .el-overlay.is-message-box .el-message-box__headerbtn:hover {
+    background: #eef3f8 !important;
+}
+
+body.exam-detail-active .el-overlay.is-message-box .el-message-box__container {
+    align-items: flex-start !important;
+    gap: 12px !important;
+}
+
+body.exam-detail-active .el-overlay.is-message-box .el-message-box__status {
+    flex: 0 0 auto !important;
+    margin-top: 1px !important;
+}
+
+body.exam-detail-active .el-overlay.is-message-box .el-message-box__message {
+    min-width: 0 !important;
+    color: var(--editor-text-soft) !important;
+    line-height: 1.65 !important;
+}
+
+body.exam-detail-active .el-overlay.is-message-box .el-message-box__btns {
+    min-height: 62px !important;
+}
+
+@media (max-width: 640px) {
+    body.exam-detail-active .el-overlay-dialog,
+    body.exam-detail-active .el-overlay.is-message-box .el-overlay-message-box {
+        padding: 12px !important;
+        align-items: center !important;
+    }
+
+    body.exam-detail-active .el-overlay.is-message-box .el-message-box {
+        width: calc(100vw - 24px) !important;
+        max-width: calc(100vw - 24px) !important;
+        border-radius: 14px !important;
+    }
+
+    body.exam-detail-active .el-overlay.is-message-box .el-message-box__header {
+        padding: 16px 50px 6px 16px !important;
+    }
+
+    body.exam-detail-active .el-overlay.is-message-box .el-message-box__content {
+        padding: 10px 16px 14px !important;
+    }
+
+    body.exam-detail-active .el-overlay.is-message-box .el-message-box__btns {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+        padding: 12px 16px 16px !important;
+    }
+
+    body.exam-detail-active .el-overlay.is-message-box .el-message-box__btns .el-button {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+}

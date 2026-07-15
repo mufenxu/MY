@@ -1,0 +1,78 @@
+.bottom-tab {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: auto; /* 自适应高度，避免死板留白 */
+  border-top-left-radius: 28px;
+  border-top-right-radius: 28px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  /* 效果图高保真底盘色：薄荷浅绿 */
+  background: #c2ebd0;
+  backdrop-filter: blur(20px);
+  /* 3D黏土外投影与边缘亮光 */
+  box-shadow: 
+    0 -5px 16px rgba(96, 115, 102, 0.15), 
+    inset 0 2px 4px rgba(255, 255, 255, 0.6);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.4);
+  display: flex;
+  align-items: center; /* 垂直居中，确保视觉高度对称 */
+  justify-content: space-around;
+  padding: 0 10px; /* 侧边边距 */
+  /* 普通屏幕机型基础边距，更加紧凑精致 */
+  padding-top: 10px;
+  padding-bottom: 10px;
+  z-index: 120;
+  box-sizing: border-box;
+}
+
+/* 针对全面屏安全区进行无损纯加法自适应覆盖，保证紧凑的高保真比例 */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .bottom-tab {
+    padding-top: 16px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    padding-bottom: calc(6px + constant(safe-area-inset-bottom));
+  }
+}
+.bottom-tab__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* 效果图未选中项颜色：深墨绿 */
+  color: #204a37;
+  font-size: 11px;
+  height: 44px;
+  width: 72px; /* 锁死宽度，避免范围过大，完美对齐效果图 */
+  flex: none; /* 取消等宽拉伸 */
+  border-radius: 14px;
+  box-sizing: border-box;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.bottom-tab__item--active {
+  /* 效果图选中项颜色：深茶色 */
+  color: #523f1a;
+  /* 效果图选中项背景：奶油淡黄 */
+  background: #fcedc5;
+  /* 3D黏土隆起浮雕按键投影 */
+  box-shadow: 
+    2px 4px 8px rgba(96, 115, 102, 0.22), 
+    inset 1.5px 1.5px 2px #ffffff,
+    inset -1.5px -1.5px 2px rgba(139, 134, 116, 0.08);
+  font-weight: 700;
+}
+.tab-icon {
+  display: block;
+  height: 22px;
+  width: 22px;
+  transition: transform 0.2s ease;
+}
+.bottom-tab__item--active .tab-icon {
+  transform: scale(1.05);
+}
+.bottom-tab__label {
+  line-height: 1;
+  margin-top: 3px;
+  text-align: center;
+}

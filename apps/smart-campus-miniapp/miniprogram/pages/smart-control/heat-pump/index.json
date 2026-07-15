@@ -1,0 +1,10 @@
+{
+    "navigationBarTitleText": "空气能热泵",
+    "navigationBarBackgroundColor": "#f0f4f8",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f0f4f8",
+    "enablePullDownRefresh": true,
+    "usingComponents": {
+        "energy-popup": "/components/energy-popup/index"
+    }
+}

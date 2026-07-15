@@ -1,0 +1,150 @@
+<view class="container">
+  <view class="header-tip">
+    <text>配置自动化策略，让设备运行更节能、更舒适。</text>
+  </view>
+
+  <!-- 1. 智能谷电定时 -->
+  <view class="card">
+    <view class="card-header">
+      <view class="title-section">
+        <view class="title-row">
+          <view class="icon schedule-icon"></view>
+          <text class="card-title">智能谷电定时</text>
+        </view>
+        <text class="card-subtitle" wx:if="{{!smartSchedule.enabled}}">谷电储热、峰电保温，智能省电</text>
+      </view>
+      <switch checked="{{smartSchedule.enabled}}" color="#10b981" bindchange="onScheduleToggle"/>
+    </view>
+    
+    <view class="card-content" wx:if="{{smartSchedule.enabled}}">
+      <view class="tip-box">
+        <text>谷电(20:00-08:00及13:00-17:00)储热，峰电(08:00-13:00及17:00-20:00)保温。</text>
+      </view>
+
+      <view class="input-group">
+        <view class="input-item">
+          <text class="label">谷电储能温度</text>
+          <input type="number" class="input" value="{{smartSchedule.valleyTemp}}" bindinput="onValleyInput" />
+        </view>
+        <view class="input-item">
+          <text class="label">峰电保温温度</text>
+          <input type="number" class="input" value="{{smartSchedule.peakTemp}}" bindinput="onPeakInput" />
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 2. 制热时段配置 -->
+  <view class="card">
+    <view class="card-header">
+      <view class="title-section">
+        <view class="title-row">
+          <view class="icon heat-icon"></view>
+          <text class="card-title">制热时段配置</text>
+        </view>
+        <text class="card-subtitle" wx:if="{{!heatSchedule.enabled}}">自定义时间段和温度，灵活控制</text>
+      </view>
+      <switch checked="{{heatSchedule.enabled}}" color="#f59e0b" bindchange="onHeatScheduleToggle"/>
+    </view>
+    
+    <view class="card-content" wx:if="{{heatSchedule.enabled}}">
+      <view class="tip-box warn">
+        <text>到达设定时间后，设备将自动切换至目标温度。其它时间将维持在默认温度。</text>
+      </view>
+
+      <!-- 默认维持温度设置 (升级为自定义滑块) -->
+      <view class="default-temp-section">
+        <view class="default-temp-header">
+          <text class="default-label">非时段默认温度</text>
+          <text class="default-value">{{heatSchedule.defaultTemp}}°C</text>
+        </view>
+        
+        <view class="custom-slider-container mini" id="defaultSliderContainer" 
+              catchtouchstart="onDefaultSliderTouch" 
+              catchtouchmove="onDefaultSliderTouch">
+          <view class="slider-track">
+            <view class="slider-fill" style="width: {{(heatSchedule.defaultTemp - 20) / (55 - 20) * 100}}%"></view>
+            <view class="slider-handle" style="left: {{(heatSchedule.defaultTemp - 20) / (55 - 20) * 100}}%"></view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 已配置的时段列表 -->
+      <view class="period-list">
+        <view class="period-item" wx:for="{{heatSchedule.periods}}" wx:key="id">
+          <view class="period-info">
+            <text class="period-time">{{item.startTime}} - {{item.endTime}}</text>
+            <text class="period-temp">{{item.targetTemp}}°C</text>
+          </view>
+          <view class="period-actions">
+            <view class="action-btn edit" hover-class="btn-hover" bindtap="onEditPeriod" data-idx="{{index}}">改</view>
+            <view class="action-btn delete" hover-class="btn-hover" bindtap="onDeletePeriod" data-idx="{{index}}">删</view>
+          </view>
+        </view>
+
+        <view class="empty-tip" wx:if="{{heatSchedule.periods.length === 0}}">
+          <text>暂无配置</text>
+        </view>
+      </view>
+
+      <view class="add-period-btn" hover-class="btn-hover" bindtap="onAddPeriod">
+        <text>+ 添加时段</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="footer-btn-area">
+    <button class="save-btn" hover-class="btn-hover" bindtap="saveConfig">保存配置</button>
+  </view>
+
+  <!-- 编辑弹窗 -->
+  <view class="modal-mask" wx:if="{{showEditModal}}" bindtap="onCloseModal"></view>
+  <view class="modal-container" wx:if="{{showEditModal}}">
+    <view class="modal-header">
+      <text>{{isNewPeriod ? '添加时段' : '编辑时段'}}</text>
+    </view>
+    <view class="modal-body">
+      <view class="modal-row">
+        <view class="modal-item">
+          <text class="modal-label">开始时间</text>
+          <picker mode="time" value="{{editingPeriod.startTime}}" bindchange="onStartTimeChange">
+            <view class="time-picker">{{editingPeriod.startTime}}</view>
+          </picker>
+        </view>
+        <view class="modal-arrow">至</view>
+        <view class="modal-item">
+          <text class="modal-label">结束时间</text>
+          <picker mode="time" value="{{editingPeriod.endTime}}" bindchange="onEndTimeChange">
+            <view class="time-picker">{{editingPeriod.endTime}}</view>
+          </picker>
+        </view>
+      </view>
+      
+      <view class="modal-item centered slider-item">
+        <view class="temp-header">
+           <text class="modal-label">目标温度</text>
+           <text class="temp-display-val">{{editingPeriod.targetTemp}}°C</text>
+        </view>
+        
+        <!-- 自定义柱体滑块 -->
+        <view class="custom-slider-container" id="sliderContainer" 
+              catchtouchstart="onSliderTouchStart" 
+              catchtouchmove="onSliderTouchMove">
+          <view class="slider-track">
+            <view class="slider-fill" style="width: {{(editingPeriod.targetTemp - 20) / (55 - 20) * 100}}%"></view>
+            <view class="slider-handle" style="left: {{(editingPeriod.targetTemp - 20) / (55 - 20) * 100}}%"></view>
+          </view>
+        </view>
+
+        <view class="slider-range">
+           <text>20°C</text>
+           <text>55°C</text>
+        </view>
+      </view>
+    </view>
+    <view class="modal-footer">
+      <button class="modal-btn cancel" hover-class="btn-hover" bindtap="onCloseModal">取消</button>
+      <button class="modal-btn confirm" hover-class="btn-hover" bindtap="onConfirmPeriod">确定</button>
+    </view>
+  </view>
+</view>

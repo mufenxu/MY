@@ -1,0 +1,16 @@
+<view class="skeleton" wx:if="{{loading}}">
+    <view class="skeleton-user-card">
+        <view class="skeleton-avatar"></view>
+        <view class="skeleton-user-info">
+            <view class="skeleton-line skeleton-line--title"></view>
+            <view class="skeleton-line skeleton-line--subtitle"></view>
+        </view>
+    </view>
+    <view class="skeleton-section">
+        <view class="skeleton-line skeleton-line--section-title"></view>
+        <view class="skeleton-cards">
+            <view class="skeleton-card" wx:for="{{4}}" wx:key="*this"></view>
+        </view>
+    </view>
+</view>
+
