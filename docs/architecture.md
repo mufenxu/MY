@@ -22,6 +22,10 @@
 
 Development-only ports such as the Vite preview port are not part of the production allocation.
 
+## Image distribution
+
+Alibaba Cloud Container Registry is the primary production image source. GitHub Container Registry remains a backup produced by CI. Production hosts pull all four images, including the MongoDB 7 mirror, from the Beijing ACR endpoint so deployment does not depend on Docker Hub or GHCR connectivity.
+
 ## Boundaries
 
 - `apps/`：用户直接使用的前端和微信小程序。

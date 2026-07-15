@@ -55,7 +55,7 @@ jobs:
         include:
           - image: platform-api
             context: .
-            file: infra/docker/platform-api.Dockerfile
+            file: Dockerfile
           - image: campus-service
             context: services/campus-service
             file: services/campus-service/Dockerfile

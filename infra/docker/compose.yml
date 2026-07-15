@@ -2,7 +2,7 @@ name: my-platform
 
 services:
   mongodb:
-    image: mongo:7.0
+    image: ${MONGODB_IMAGE:-mongo:7.0}
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}
@@ -25,7 +25,7 @@ services:
     image: ${PLATFORM_API_IMAGE:-my-platform/platform-api:local}
     build:
       context: ../..
-      dockerfile: infra/docker/platform-api.Dockerfile
+      dockerfile: Dockerfile
     restart: unless-stopped
     init: true
     depends_on:

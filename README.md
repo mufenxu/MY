@@ -56,15 +56,24 @@ npm run check
 生产目标固定为四个容器：`platform-api`、`campus-service`、`iot-service`、`mongodb`。
 
 ```powershell
-docker compose --env-file .env -f infra/docker/compose.yml up -d --build
+docker login --username=mufenx crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com
+npm run compose:pull
+npm run compose:up
 ```
 
-Every push to `main` runs the full workspace checks and publishes three application images to GitHub Container Registry:
+Alibaba Cloud Container Registry is the primary deployment registry:
+
+- `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:platform-api-latest`
+- `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:campus-service-latest`
+- `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:iot-service-latest`
+- `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:mongodb-7.0`
+
+Every push to `main` also runs the full workspace checks and publishes three backup application images to GitHub Container Registry:
 
 - `ghcr.io/mufenxu/my-platform-api:latest`
 - `ghcr.io/mufenxu/my-campus-service:latest`
 - `ghcr.io/mufenxu/my-iot-service:latest`
 
-MongoDB continues to use the official `mongo:7.0` image.
+ACR build rules and maintenance instructions are documented in [docs/aliyun-acr.md](./docs/aliyun-acr.md).
 
 详细边界见 [docs/architecture.md](./docs/architecture.md)。生产配置不得提交到 Git，所有密钥从根目录 `.env` 注入。

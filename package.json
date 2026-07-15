@@ -21,7 +21,9 @@
     "check": "npm run check:console && npm run check:gateway && npm run check:admins && npm run check:core && npm run check:exam && npm run check:campus && npm run check:iot && npm run check:notification && npm run check:miniapps",
     "password": "npm --prefix apps/admin-console run password --",
     "compose:config": "docker compose --env-file .env -f infra/docker/compose.yml config",
-    "compose:up": "docker compose --env-file .env -f infra/docker/compose.yml up -d --build",
+    "compose:pull": "docker compose --env-file .env -f infra/docker/compose.yml pull",
+    "compose:up": "docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build",
+    "compose:build": "docker compose --env-file .env -f infra/docker/compose.yml build",
     "compose:down": "docker compose --env-file .env -f infra/docker/compose.yml down",
     "compose:logs": "docker compose --env-file .env -f infra/docker/compose.yml logs -f"
   },
