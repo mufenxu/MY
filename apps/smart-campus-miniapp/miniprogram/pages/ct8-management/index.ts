@@ -70,6 +70,7 @@ Page({
     currentValue: '',
     lastUpdateTime: '',
     secretItems: [] as string[],
+    secretCacheStatus: 'loading',
     deletingItem: false,
   },
 
@@ -462,22 +463,24 @@ Page({
   async loadCachedValue() {
     const secret = this.data.secretName
     // 不显示 loading，避免切换 tab 时闪烁
+    this.setData({ secretCacheStatus: 'loading' })
     try {
       const body: any = await request(CT8_ENDPOINTS.secretCache, 'POST', { action: 'get', secret_name: secret }, false, { timeout: 15000 })
       if (body && body.ok && body.data) {
         const ts = body.data.updated_at
           ? pageHelper.formatTimestamp(body.data.updated_at)
           : ''
-        this.setData({ currentValue: body.data.value, lastUpdateTime: ts })
+        this.setData({ currentValue: body.data.value, lastUpdateTime: ts, secretCacheStatus: 'ready' })
         this._parseSecretItems()
       } else if (body && body.ok && body.found === false) {
-        this.setData({ currentValue: '', lastUpdateTime: '', secretItems: [] })
+        this.setData({ currentValue: '', lastUpdateTime: '', secretItems: [], secretCacheStatus: 'missing' })
       }
     } catch (err: any) {
       if (err?.statusCode === 404 || err?.error === 'Not found' || /cache not found|未找到缓存/i.test(String(err?.message || ''))) {
-        this.setData({ currentValue: '', lastUpdateTime: '', secretItems: [] })
+        this.setData({ currentValue: '', lastUpdateTime: '', secretItems: [], secretCacheStatus: 'missing' })
         return
       }
+      this.setData({ secretCacheStatus: 'error' })
       logger.error('从服务器加载失败', err, 'CT8Management')
     }
   },

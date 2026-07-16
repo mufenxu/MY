@@ -196,7 +196,15 @@
       <view class="card input-card" wx:if="{{mode==='append' && !currentValue}}">
         <view class="card-header">
             <view class="card-title">当前 Secret 值</view>
-            <view class="badge warning">必填</view>
+            <view class="badge {{secretCacheStatus==='missing'?'neutral':'warning'}}">{{secretCacheStatus==='missing'?'未缓存':'必填'}}</view>
+        </view>
+        <view class="cache-missing-note" wx:if="{{secretCacheStatus==='missing'}}">
+            <view class="cache-missing-title">服务器暂未缓存当前值</view>
+            <view class="cache-missing-desc">GitHub 不会返回已保存的 Secret 明文。粘贴一次当前完整值后，后续更新会自动缓存。</view>
+        </view>
+        <view class="cache-missing-note error" wx:elif="{{secretCacheStatus==='error'}}">
+            <view class="cache-missing-title">缓存加载失败</view>
+            <view class="cache-missing-desc">可以先手动粘贴当前完整值，保存成功后会重新同步缓存。</view>
         </view>
         <view class="input-wrapper">
             <textarea auto-height bindinput="onCurrentValueChange" class="textarea mono" maxlength="-1" placeholder="GitHub API 不返回 Secret，请手动输入当前完整值" value="{{currentValue}}"></textarea>
