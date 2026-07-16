@@ -9,7 +9,7 @@ const SecretCacheSchema = new mongoose.Schema({
     },
     secret_value: {
         type: String,
-        required: true
+        default: ''
     },
     updated_by: {
         type: String,

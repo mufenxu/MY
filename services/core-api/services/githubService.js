@@ -826,21 +826,30 @@ exports.manageSecretCache = async (action, secret_name, secret_value, updated_by
                     updated_by: cache.updated_by
                 }
             };
-        } else {
-            throw new AppError('Cache not found', 404);
         }
-    } else if (action === 'set') {
-        if (!secret_value) throw new AppError('secret_value is required', 400);
-
-        const result = await SecretCache.findOneAndUpdate(
-            { secret_name },
-            { secret_value, updated_by: updated_by || 'unknown' },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
 
         return {
             ok: true,
-            action: result.create_time === result.updated_at ? 'created' : 'updated',
+            found: false,
+            data: null,
+            message: 'Cache not found'
+        };
+    } else if (action === 'set') {
+        if (secret_value === undefined || secret_value === null) {
+            throw new AppError('secret_value is required', 400);
+        }
+
+        const result = await SecretCache.findOneAndUpdate(
+            { secret_name },
+            { secret_value: String(secret_value), updated_by: updated_by || 'unknown' },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        const createdAt = result.create_time instanceof Date ? result.create_time.getTime() : 0;
+        const updatedAt = result.updated_at instanceof Date ? result.updated_at.getTime() : 0;
+
+        return {
+            ok: true,
+            action: createdAt && updatedAt && createdAt === updatedAt ? 'created' : 'updated',
         };
 
     } else if (action === 'delete') {

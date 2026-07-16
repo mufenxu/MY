@@ -470,8 +470,14 @@ Page({
           : ''
         this.setData({ currentValue: body.data.value, lastUpdateTime: ts })
         this._parseSecretItems()
+      } else if (body && body.ok && body.found === false) {
+        this.setData({ currentValue: '', lastUpdateTime: '', secretItems: [] })
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.statusCode === 404 || err?.error === 'Not found' || /cache not found|未找到缓存/i.test(String(err?.message || ''))) {
+        this.setData({ currentValue: '', lastUpdateTime: '', secretItems: [] })
+        return
+      }
       logger.error('从服务器加载失败', err, 'CT8Management')
     }
   },
@@ -594,7 +600,7 @@ Page({
     try {
       const body: any = await request(CT8_ENDPOINTS.updateSecret, 'POST', { action: 'update', secret_name: secret, value }, false, { timeout: 30000 })
       if (body && body.ok) {
-        this.saveCachedValue(value)
+        await this.saveCachedValue(value)
         wx.showToast({ icon: 'success', title: '更新成功', duration: 2000 })
         this.setData({ inputValue: '', currentValue: value })
         this.loadCachedValue() // 立即重新加载以获取最新更新时间
