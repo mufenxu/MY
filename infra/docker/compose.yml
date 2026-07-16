@@ -1,23 +1,68 @@
 name: my-platform
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   mongodb:
-    image: ${MONGODB_IMAGE:-mongo:7.0}
+    image: ${MONGODB_IMAGE:-my-platform/mongodb:local}
+    build:
+      context: .
+      dockerfile: mongodb.Dockerfile
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
+      MONGO_REPLICA_SET_KEY: ${MONGO_REPLICA_SET_KEY:?Set MONGO_REPLICA_SET_KEY}
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
       - mongodb_data:/data/db
+    ports:
+      - "${MONGODB_BIND_ADDRESS:-127.0.0.1}:${MONGODB_PORT:-27017}:27017"
     healthcheck:
       test:
         - CMD-SHELL
         - mongosh --quiet --host 127.0.0.1 --username "$$MONGO_INITDB_ROOT_USERNAME" --password "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "db.adminCommand('ping').ok" | grep 1
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 20s
+      retries: 20
+      start_period: 30s
+    pids_limit: ${MONGODB_PIDS_LIMIT:-512}
+    mem_limit: ${MONGODB_MEMORY_LIMIT:-1g}
+    cpus: ${MONGODB_CPU_LIMIT:-2}
+    stop_grace_period: 60s
+    logging: *default-logging
+    networks:
+      - backend
+
+  mongodb-init:
+    image: ${MONGODB_IMAGE:-my-platform/mongodb:local}
+    build:
+      context: .
+      dockerfile: mongodb.Dockerfile
+    restart: "no"
+    entrypoint: ["/usr/local/bin/my-mongo-init"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      MONGO_HOST: mongodb
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
+      MONGO_PLATFORM_USERNAME: ${MONGO_PLATFORM_USERNAME:-platform_app}
+      MONGO_PLATFORM_PASSWORD: ${MONGO_PLATFORM_PASSWORD:?Set MONGO_PLATFORM_PASSWORD}
+      MONGO_CORE_USERNAME: ${MONGO_CORE_USERNAME:-core_app}
+      MONGO_CORE_PASSWORD: ${MONGO_CORE_PASSWORD:?Set MONGO_CORE_PASSWORD}
+      MONGO_EXAM_USERNAME: ${MONGO_EXAM_USERNAME:-exam_app}
+      MONGO_EXAM_PASSWORD: ${MONGO_EXAM_PASSWORD:?Set MONGO_EXAM_PASSWORD}
+      MONGO_CAMPUS_USERNAME: ${MONGO_CAMPUS_USERNAME:-campus_app}
+      MONGO_CAMPUS_PASSWORD: ${MONGO_CAMPUS_PASSWORD:?Set MONGO_CAMPUS_PASSWORD}
+      MONGO_IOT_USERNAME: ${MONGO_IOT_USERNAME:-iot_app}
+      MONGO_IOT_PASSWORD: ${MONGO_IOT_PASSWORD:?Set MONGO_IOT_PASSWORD}
+    logging: *default-logging
     networks:
       - backend
 
@@ -29,8 +74,8 @@ services:
     restart: unless-stopped
     init: true
     depends_on:
-      mongodb:
-        condition: service_healthy
+      mongodb-init:
+        condition: service_completed_successfully
       campus-service:
         condition: service_started
       iot-service:
@@ -51,6 +96,7 @@ services:
       PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: ${PLATFORM_INTERNAL_AUTH_PRIVATE_KEY:?Set PLATFORM_INTERNAL_AUTH_PRIVATE_KEY}
       PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: ${PLATFORM_INTERNAL_AUTH_PUBLIC_KEY:?Set PLATFORM_INTERNAL_AUTH_PUBLIC_KEY}
       PLATFORM_SESSION_TTL_HOURS: ${PLATFORM_SESSION_TTL_HOURS:-12}
+      PLATFORM_METRICS_TOKEN: ${PLATFORM_METRICS_TOKEN:?Set PLATFORM_METRICS_TOKEN}
       PLATFORM_SSO_CORE_USERNAME: ${PLATFORM_SSO_CORE_USERNAME:-admin}
       PLATFORM_SSO_EXAM_USERNAME: ${PLATFORM_SSO_EXAM_USERNAME:-admin}
       CORE_HOSTS: ${CORE_HOSTS:-xcx.pxyb.cn}
@@ -58,8 +104,9 @@ services:
       NOTIFY_HOSTS: ${NOTIFY_HOSTS:-tongzhiapi.pxyb.cn}
       CAMPUS_SERVICE_URL: http://campus-service:22101
       MQTT_SERVICE_URL: http://iot-service:22102
-      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/core_app?authSource=admin
-      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/exam_app?authSource=admin
+      PLATFORM_MONGODB_URI: mongodb://${MONGO_PLATFORM_USERNAME:-platform_app}:${MONGO_PLATFORM_PASSWORD}@mongodb:27017/platform_app?authSource=platform_app&replicaSet=rs0
+      MONGO_URI: mongodb://${MONGO_CORE_USERNAME:-core_app}:${MONGO_CORE_PASSWORD}@mongodb:27017/core_app?authSource=core_app&replicaSet=rs0
+      MONGODB_URI: mongodb://${MONGO_EXAM_USERNAME:-exam_app}:${MONGO_EXAM_PASSWORD}@mongodb:27017/exam_app?authSource=exam_app&replicaSet=rs0
       CORE_JWT_SECRET: ${CORE_JWT_SECRET:?Set CORE_JWT_SECRET}
       EXAM_JWT_SECRET: ${EXAM_JWT_SECRET:?Set EXAM_JWT_SECRET}
       ENCRYPTION_KEY: ${CORE_ENCRYPTION_KEY:?Set CORE_ENCRYPTION_KEY}
@@ -83,6 +130,7 @@ services:
       SUB2API_BASE_URL: ${SUB2API_BASE_URL:-}
       SUB2API_API_KEY: ${SUB2API_API_KEY:-}
       SUB2API_MODEL: ${SUB2API_MODEL:-gpt-4o-mini}
+    read_only: true
     volumes:
       - core_uploads:/app/services/core-api/uploads
       - core_logs:/app/services/core-api/logs
@@ -92,7 +140,11 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    pids_limit: 512
+    pids_limit: ${PLATFORM_PIDS_LIMIT:-512}
+    mem_limit: ${PLATFORM_MEMORY_LIMIT:-1g}
+    cpus: ${PLATFORM_CPU_LIMIT:-2}
+    stop_grace_period: 30s
+    logging: *default-logging
     networks:
       - frontend
       - backend
@@ -103,6 +155,9 @@ services:
       context: ../../services/campus-service
     restart: unless-stopped
     init: true
+    depends_on:
+      mongodb-init:
+        condition: service_completed_successfully
     ports:
       - "${CAMPUS_BIND_ADDRESS:-127.0.0.1}:${CAMPUS_PORT:-22101}:22101"
     environment:
@@ -111,6 +166,7 @@ services:
       HGU_HOST: 0.0.0.0
       PORT: 22101
       HGU_APP_AUTH_REQUIRED: "true"
+      CAMPUS_MONGODB_URI: mongodb://${MONGO_CAMPUS_USERNAME:-campus_app}:${MONGO_CAMPUS_PASSWORD}@mongodb:27017/campus_app?authSource=campus_app&replicaSet=rs0
       HGU_ADMIN_USERNAME: ${HGU_ADMIN_USERNAME:?Set HGU_ADMIN_USERNAME}
       HGU_ADMIN_PASSWORD: ${HGU_ADMIN_PASSWORD:?Set HGU_ADMIN_PASSWORD}
       HGU_APP_SESSION_SECRET: ${HGU_APP_SESSION_SECRET:?Set HGU_APP_SESSION_SECRET}
@@ -122,24 +178,18 @@ services:
       HGU_ENABLE_HSTS: "true"
       HGU_ENABLE_HTTPS_REDIRECT: "true"
       HGU_EXTRA_ALLOWED_SCHOOL_HOSTS: ${HGU_EXTRA_ALLOWED_SCHOOL_HOSTS:-}
-      HGU_DATA_UID: ${HGU_DATA_UID:-}
-      HGU_DATA_GID: ${HGU_DATA_GID:-}
     read_only: true
     tmpfs:
       - /tmp:size=64m,noexec,nosuid,nodev
-    volumes:
-      - campus_data:/app/data
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETGID
-      - SETUID
-    pids_limit: 256
+    pids_limit: ${CAMPUS_PIDS_LIMIT:-256}
+    mem_limit: ${CAMPUS_MEMORY_LIMIT:-512m}
+    cpus: ${CAMPUS_CPU_LIMIT:-1}
+    stop_grace_period: 30s
+    logging: *default-logging
     networks:
       - frontend
       - backend
@@ -150,14 +200,17 @@ services:
       context: ../../services/iot-service
     restart: unless-stopped
     init: true
+    depends_on:
+      mongodb-init:
+        condition: service_completed_successfully
     ports:
       - "${IOT_BIND_ADDRESS:-127.0.0.1}:${IOT_PORT:-22102}:22102"
     environment:
       NODE_ENV: production
       TZ: ${TZ:-Asia/Shanghai}
-      DATA_DIR: /app/data
       API_PORT: 22102
       TRUST_PROXY: "1"
+      IOT_MONGODB_URI: mongodb://${MONGO_IOT_USERNAME:-iot_app}:${MONGO_IOT_PASSWORD}@mongodb:27017/iot_app?authSource=iot_app&replicaSet=rs0
       PUBLIC_ORIGIN: ${IOT_PUBLIC_ORIGIN:?Set IOT_PUBLIC_ORIGIN}
       PUBLIC_API_BASE_URL: ${PLATFORM_PUBLIC_ORIGIN:?Set PLATFORM_PUBLIC_ORIGIN}/api/iot
       LOG_HTTP_REQUESTS: ${IOT_LOG_HTTP_REQUESTS:-1}
@@ -170,15 +223,18 @@ services:
       AUTH_PASSWORD: ${IOT_ADMIN_PASSWORD:?Set IOT_ADMIN_PASSWORD}
       AUTH_SESSION_SECRET: ${IOT_SESSION_SECRET:?Set IOT_SESSION_SECRET}
       PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: ${PLATFORM_INTERNAL_AUTH_PUBLIC_KEY:?Set PLATFORM_INTERNAL_AUTH_PUBLIC_KEY}
-    volumes:
-      - iot_data:/app/data
+    read_only: true
     tmpfs:
       - /tmp:size=64m,noexec,nosuid,nodev
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    pids_limit: 256
+    pids_limit: ${IOT_PIDS_LIMIT:-256}
+    mem_limit: ${IOT_MEMORY_LIMIT:-512m}
+    cpus: ${IOT_CPU_LIMIT:-1}
+    stop_grace_period: 30s
+    logging: *default-logging
     networks:
       - frontend
       - backend
@@ -192,5 +248,3 @@ volumes:
   mongodb_data:
   core_uploads:
   core_logs:
-  campus_data:
-  iot_data:

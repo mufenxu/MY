@@ -7,8 +7,7 @@ const logger = require('../utils/logger');
  * - 结构化错误响应
  */
 const errorHandler = (err, req, res, next) => {
-    // 生成请求 ID（如果没有的话）
-    const requestId = req.headers['x-request-id'] || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const requestId = req.id || `req-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
     // 确定状态码
     const statusCode = err.statusCode || err.status || 500;

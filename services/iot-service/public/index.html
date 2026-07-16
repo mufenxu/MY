@@ -389,7 +389,7 @@
             <div class="panel-head history-toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; width: 100%;">
               <div>
                 <h2 id="history-section-title">趋势与导出中心</h2>
-                <p class="muted" style="margin: 0;">筛选并分析 SQLite 数据库中已同步的所有历史采样数据。</p>
+                <p class="muted" style="margin: 0;">筛选并分析 MongoDB 中已同步的所有历史采样数据。</p>
               </div>
               <div class="history-toolbar-controls" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                 <select id="history-device-selector" class="toolbar-select" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-card); border-radius: 8px; padding: 8px 16px; color: var(--text-main); font-family: inherit; font-size: 0.88rem; outline:none; cursor:pointer;">
@@ -539,7 +539,7 @@
                       <span class="scope-info-hint">?</span>
                     </label>
 
-                    <label class="scope-pill-label" data-tooltip="允许拉取存放在 SQLite 数据库中长期采样的传感器历史时序记录">
+                    <label class="scope-pill-label" data-tooltip="允许拉取存放在 MongoDB 中长期采样的传感器历史时序记录">
                       <input id="api-scope-history-read" data-api-scope="history:read" type="checkbox" checked />
                       <span class="scope-pill-dot"></span>
                       <span>读取历史数据</span>
@@ -965,7 +965,7 @@ fetch("http://localhost:22102/api/devices/esp8266_living/history?range=24h", {
                         <h2>部署与配置信息</h2>
                         <p>容器内路径和系统参数。</p>
                       </div>
-                      <span class="badge badge-muted">SQLite + Docker</span>
+                      <span class="badge badge-muted">MongoDB + Docker</span>
                     </div>
                     <dl class="detail-list">
                       <div>
@@ -1036,7 +1036,7 @@ fetch("http://localhost:22102/api/devices/esp8266_living/history?range=24h", {
               <div id="system-subtab-maintenance" class="subtab-content hidden" style="width: 100%;">
                 <div class="subtab-header" style="margin-bottom: 20px;">
                   <h3 style="margin: 0 0 6px 0; font-size: 1.15rem; color: var(--text-main);">系统运行与数据维护</h3>
-                  <p class="muted" style="margin: 0; font-size: 0.82rem;">配置物联网网关在线判定门限、数据刷新频率及 SQLite 数据库定时碎片整理与清理策略。</p>
+                  <p class="muted" style="margin: 0; font-size: 0.82rem;">配置物联网网关在线判定门限、数据刷新频率及 MongoDB 历史数据清理策略。</p>
                 </div>
 
                 <div class="config-card-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; width: 100%;">

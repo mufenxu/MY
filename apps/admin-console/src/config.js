@@ -69,6 +69,10 @@ function matchingEd25519KeyPair(privateValue, publicValue) {
   }
 }
 
+function isTemplatePlaceholder(value) {
+  return /^(?:replace|change)_with_/i.test(String(value || '').trim());
+}
+
 export function loadConfig(env = process.env) {
   const nodeEnv = env.NODE_ENV || 'development';
   const isProduction = nodeEnv === 'production';
@@ -92,6 +96,8 @@ export function loadConfig(env = process.env) {
     sessionSecret: env.PLATFORM_SESSION_SECRET || '',
     internalAuthPrivateKey: env.PLATFORM_INTERNAL_AUTH_PRIVATE_KEY || (isProduction ? '' : localInternalPrivateKey),
     internalAuthPublicKey: env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY || (isProduction ? '' : localInternalPublicKey),
+    mongoUri: env.PLATFORM_MONGODB_URI || '',
+    metricsToken: env.PLATFORM_METRICS_TOKEN || '',
     sessionTtlHours: parseInteger(env.PLATFORM_SESSION_TTL_HOURS, 12, { min: 1, max: 168 }),
     serviceTimeoutMs: parseInteger(env.PLATFORM_SERVICE_TIMEOUT_MS, 8000, { min: 1000, max: 30000 }),
   };
@@ -99,8 +105,10 @@ export function loadConfig(env = process.env) {
   if (!config.authDisabled) {
     const missing = [];
     if (!config.adminUsername) missing.push('PLATFORM_ADMIN_USERNAME');
-    if (!config.adminPasswordHash.startsWith('scrypt$')) missing.push('PLATFORM_ADMIN_PASSWORD_HASH');
-    if (config.sessionSecret.length < 32) missing.push('PLATFORM_SESSION_SECRET');
+    if (!config.adminPasswordHash.startsWith('scrypt$') || isTemplatePlaceholder(config.adminPasswordHash.split('$')[1])) {
+      missing.push('PLATFORM_ADMIN_PASSWORD_HASH');
+    }
+    if (config.sessionSecret.length < 32 || isTemplatePlaceholder(config.sessionSecret)) missing.push('PLATFORM_SESSION_SECRET');
     if (!validEd25519Key(config.internalAuthPrivateKey, 'private')) missing.push('PLATFORM_INTERNAL_AUTH_PRIVATE_KEY');
     if (!validEd25519Key(config.internalAuthPublicKey, 'public')) missing.push('PLATFORM_INTERNAL_AUTH_PUBLIC_KEY');
     if (
@@ -109,6 +117,8 @@ export function loadConfig(env = process.env) {
       && !matchingEd25519KeyPair(config.internalAuthPrivateKey, config.internalAuthPublicKey)
     ) missing.push('PLATFORM_INTERNAL_AUTH_KEY_PAIR_MISMATCH');
     if (!config.publicOrigin) missing.push('PLATFORM_PUBLIC_ORIGIN');
+    if (!config.mongoUri) missing.push('PLATFORM_MONGODB_URI');
+    if (config.metricsToken.length < 32 || isTemplatePlaceholder(config.metricsToken)) missing.push('PLATFORM_METRICS_TOKEN');
     if (config.isProduction && !config.publicOrigin.startsWith('https://')) missing.push('PLATFORM_PUBLIC_ORIGIN_HTTPS');
 
     if (missing.length > 0) {
@@ -119,4 +129,4 @@ export function loadConfig(env = process.env) {
   return config;
 }
 
-export { parseBoolean, parseInteger, parseOrigin, parseTrustProxy };
+export { isTemplatePlaceholder, parseBoolean, parseInteger, parseOrigin, parseTrustProxy };

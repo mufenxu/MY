@@ -15,10 +15,24 @@ const [{ createApp: createPortalApp }, { loadConfig: loadPortalConfig }] = await
   import(pathToFileURL(paths.portalApp).href),
   import(pathToFileURL(paths.portalConfig).href),
 ]);
+const { createMongoSessionRegistry } = await import(
+  pathToFileURL(paths.portalMongoSessionRegistry).href
+);
 
 const portalConfig = loadPortalConfig();
-const portalApp = createPortalApp({ config: portalConfig });
-const getPlatformSession = (req) => {
+const sessionRegistry = portalConfig.mongoUri
+  ? await createMongoSessionRegistry({ uri: portalConfig.mongoUri, secret: portalConfig.sessionSecret })
+  : null;
+const portalApp = createPortalApp({
+  config: portalConfig,
+  sessionRegistry,
+  readinessCheck: async () => Boolean(
+    coreRuntime.isCoreRuntimeReady()
+    && examRuntime.isExamRuntimeReady()
+    && (!sessionRegistry || await sessionRegistry.ping())
+  ),
+});
+const getPlatformSession = async (req) => {
   if (portalConfig.authDisabled) {
     return { sub: 'local-admin', nonce: 'local-development-session' };
   }
@@ -52,8 +66,23 @@ await Promise.all([
   examRuntime.initializeExamRuntime(),
 ]);
 
-const server = http.createServer(router.handler);
-server.on('upgrade', router.handleUpgrade);
+const server = http.createServer((req, res) => {
+  router.handler(req, res).catch((error) => {
+    console.error('Unhandled platform request:', error);
+    if (!res.headersSent) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: '平台内部错误。', code: 'PLATFORM_INTERNAL_ERROR' }));
+    } else {
+      res.destroy(error);
+    }
+  });
+});
+server.on('upgrade', (req, socket, head) => {
+  router.handleUpgrade(req, socket, head).catch((error) => {
+    console.error('Unhandled platform upgrade:', error);
+    socket.destroy();
+  });
+});
 server.listen(port, host, () => {
   console.log(`MY Platform API listening on http://${host}:${port}`);
 });
@@ -62,11 +91,15 @@ async function shutdown(signal, exitCode = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`Received ${signal}, shutting down MY Platform API.`);
-  await new Promise((resolve) => server.close(resolve));
   router.close();
+  const forceTimer = setTimeout(() => server.closeAllConnections?.(), 10_000);
+  forceTimer.unref();
+  await new Promise((resolve) => server.close(resolve));
+  clearTimeout(forceTimer);
   const results = await Promise.allSettled([
     coreRuntime.closeCoreRuntime(),
     examRuntime.closeExamRuntime(),
+    sessionRegistry?.close(),
   ]);
   for (const result of results) {
     if (result.status === 'rejected') console.error(result.reason);

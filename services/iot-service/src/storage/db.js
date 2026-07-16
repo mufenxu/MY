@@ -1,7 +1,5 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
+const { MongoClient } = require('mongodb');
 
 const DEFAULT_API_KEY_SCOPES = Object.freeze([
   'devices:read',
@@ -22,29 +20,13 @@ function normalizeApiKeyScopes(input) {
     : Array.from(DEFAULT_API_KEY_SCOPES);
 }
 
-function parseStoredScopes(value) {
-  if (!value) {
-    return Array.from(DEFAULT_API_KEY_SCOPES);
-  }
-
-  try {
-    return normalizeApiKeyScopes(JSON.parse(value));
-  } catch (error) {
-    return Array.from(DEFAULT_API_KEY_SCOPES);
-  }
-}
-
 function hashApiKey(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex');
 }
 
 function createApiKeyPreview(token) {
   const value = String(token);
-  if (value.length <= 16) {
-    return value;
-  }
-
-  return `${value.slice(0, 14)}...${value.slice(-6)}`;
+  return value.length <= 16 ? value : `${value.slice(0, 14)}...${value.slice(-6)}`;
 }
 
 function createApiKeyId(seed = '') {
@@ -52,422 +34,395 @@ function createApiKeyId(seed = '') {
   return `key_${source.slice(0, 24)}`;
 }
 
+function normalizeLegacyApiKeyRow(input) {
+  const row = { ...input };
+  const previousId = String(row.id || '');
+  if (!previousId) throw new Error('Legacy API key row is missing id.');
+
+  let storedScopes = row.scopes;
+  if (typeof storedScopes === 'string') {
+    try { storedScopes = JSON.parse(storedScopes); } catch { storedScopes = []; }
+  }
+  const tokenHash = row.token_hash || hashApiKey(previousId);
+  const keyId = row.key_id || (previousId.startsWith('key_') ? previousId : createApiKeyId(tokenHash));
+  return {
+    ...row,
+    id: keyId,
+    key_id: keyId,
+    token_hash: tokenHash,
+    token_preview: row.token_preview || createApiKeyPreview(previousId),
+    scopes: normalizeApiKeyScopes(storedScopes)
+  };
+}
+
+function clone(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
 class Database {
-  constructor(dbPath) {
-    this.dbPath = dbPath;
-    this.db = null;
+  constructor(uri = process.env.IOT_MONGODB_URI || process.env.MONGODB_URI, options = {}) {
+    this.uri = uri;
+    this.dbName = options.dbName || process.env.IOT_MONGODB_DATABASE || 'iot_app';
+    this.client = options.client || null;
+    this.ownsClient = !options.client;
+    this.db = options.db || null;
     this.apiKeyCache = new Map();
   }
 
-  open() {
-    return new Promise((resolve, reject) => {
-      const dir = path.dirname(this.dbPath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-
-      this.db = new sqlite3.Database(this.dbPath, (err) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve();
+  async open() {
+    if (this.db) return;
+    if (!this.uri) throw new Error('IOT_MONGODB_URI is required.');
+    if (!this.client) {
+      this.client = new MongoClient(this.uri, {
+        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 5000
       });
-    });
-  }
-
-  run(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function (err) {
-        if (err) {
-          return reject(err);
-        }
-        resolve({ lastID: this.lastID, changes: this.changes });
-      });
-    });
-  }
-
-  all(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.all(sql, params, (err, rows) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(rows);
-      });
-    });
-  }
-
-  get(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.get(sql, params, (err, row) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(row);
-      });
-    });
-  }
-
-  close() {
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        resolve();
-        return;
-      }
-
-      this.db.close((err) => {
-        if (err) {
-          return reject(err);
-        }
-
-        this.db = null;
-        resolve();
-      });
-    });
+      await this.client.connect();
+    }
+    this.db = this.client.db(this.dbName);
   }
 
   async initialize() {
     await this.open();
-
-    // 启用 WAL (Write-Ahead Logging) 模式以支持并发读写，防止高频传感器写入导致表锁冲突
-    try {
-      await this.run('PRAGMA journal_mode=WAL');
-    } catch (e) {
-      console.error('Failed to set journal_mode to WAL:', e.message);
-    }
-
-    // 1. 创建 devices 表
-    await this.run(`
-      CREATE TABLE IF NOT EXISTS devices (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        type TEXT NOT NULL,
-        online_status TEXT DEFAULT 'offline',
-        last_active INTEGER,
-        created_at INTEGER
-      )
-    `);
-
-    // 2. 创建 sensor_data 表
-    await this.run(`
-      CREATE TABLE IF NOT EXISTS sensor_data (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        device_id TEXT NOT NULL,
-        temp REAL,
-        hum REAL,
-        created_at INTEGER,
-        FOREIGN KEY(device_id) REFERENCES devices(id)
-      )
-    `);
-    
-    await this.run(`
-      CREATE INDEX IF NOT EXISTS idx_sensor_data_device_time 
-      ON sensor_data(device_id, created_at)
-    `);
-
-    // 3. 创建 relay_logs 表
-    await this.run(`
-      CREATE TABLE IF NOT EXISTS relay_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        device_id TEXT NOT NULL,
-        relay_id TEXT NOT NULL,
-        status TEXT NOT NULL,
-        triggered_by TEXT,
-        created_at INTEGER,
-        FOREIGN KEY(device_id) REFERENCES devices(id)
-      )
-    `);
-
-    // 4. 创建 api_keys 授权密钥表
-    await this.run(`
-      CREATE TABLE IF NOT EXISTS api_keys (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        request_count INTEGER DEFAULT 0,
-        last_used_at INTEGER,
-        created_at INTEGER
-      )
-    `);
-
-    // 针对旧表的平滑兼容升级
-    try {
-      await this.run(`ALTER TABLE api_keys ADD COLUMN request_count INTEGER DEFAULT 0`);
-    } catch (e) {
-      // 字段已存在则会抛错，此处安全忽略
-    }
-    try {
-      await this.run(`ALTER TABLE api_keys ADD COLUMN last_used_at INTEGER`);
-    } catch (e) {
-      // 安全忽略
-    }
-    try {
-      await this.run(`ALTER TABLE api_keys ADD COLUMN key_id TEXT`);
-    } catch (e) {
-      // 安全忽略
-    }
-    try {
-      await this.run(`ALTER TABLE api_keys ADD COLUMN token_hash TEXT`);
-    } catch (e) {
-      // 安全忽略
-    }
-    try {
-      await this.run(`ALTER TABLE api_keys ADD COLUMN token_preview TEXT`);
-    } catch (e) {
-      // 安全忽略
-    }
-    try {
-      await this.run(`ALTER TABLE api_keys ADD COLUMN scopes TEXT`);
-    } catch (e) {
-      // 安全忽略
-    }
-
-    await this.run(`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_key_id
-      ON api_keys(key_id)
-    `);
-
-    await this.run(`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_token_hash
-      ON api_keys(token_hash)
-    `);
-
-    await this.migrateApiKeys();
+    await Promise.all([
+      this.db.collection('devices').createIndex({ id: 1 }, { unique: true }),
+      this.db.collection('sensor_data').createIndex({ device_id: 1, created_at: -1 }),
+      this.db.collection('relay_logs').createIndex({ device_id: 1, created_at: -1 }),
+      this.db.collection('api_keys').createIndex({ key_id: 1 }, { unique: true }),
+      this.db.collection('api_keys').createIndex({ token_hash: 1 }, { unique: true, sparse: true }),
+      this.db.collection('settings').createIndex({ key: 1 }, { unique: true })
+    ]);
   }
 
-  async migrateApiKeys() {
-    const rows = await this.all(`
-      SELECT id, key_id, token_hash, token_preview, scopes
-      FROM api_keys
-    `);
-
-    for (const row of rows) {
-      const previousId = row.id;
-      const tokenHash = row.token_hash || hashApiKey(previousId);
-      const keyId = row.key_id || (previousId.startsWith('key_') ? previousId : createApiKeyId(tokenHash));
-      const tokenPreview = row.token_preview || createApiKeyPreview(previousId);
-      const scopes = JSON.stringify(parseStoredScopes(row.scopes));
-
-      const nextId = previousId.startsWith('key_') ? previousId : keyId;
-
-      await this.run(`
-        UPDATE api_keys
-        SET id = ?, key_id = ?, token_hash = ?, token_preview = ?, scopes = ?
-        WHERE id = ?
-      `, [nextId, keyId, tokenHash, tokenPreview, scopes, previousId]);
-    }
+  async ping() {
+    if (!this.db) return false;
+    const result = await this.db.command({ ping: 1 });
+    return result.ok === 1;
   }
 
-  // 记录 API Key 审计与活跃状态
+  async close() {
+    if (this.client && this.ownsClient) await this.client.close();
+    this.client = null;
+    this.db = null;
+    this.apiKeyCache.clear();
+  }
+
   async recordApiKeyUsage(keyId) {
     const now = Date.now();
-    return this.run(`
-      UPDATE api_keys 
-      SET request_count = COALESCE(request_count, 0) + 1, last_used_at = ? 
-      WHERE key_id = ? OR id = ?
-    `, [now, keyId, keyId]);
+    return this.db.collection('api_keys').updateOne(
+      { $or: [{ key_id: keyId }, { id: keyId }] },
+      [{
+        $set: {
+          request_count: { $add: [{ $ifNull: ['$request_count', 0] }, 1] },
+          last_used_at: now
+        }
+      }]
+    );
   }
 
-  // 同步配置里的设备信息到数据库中
   async syncDevices(configDevices) {
     const now = Date.now();
-    for (const device of configDevices) {
-      // 确定设备类型
+    if (!Array.isArray(configDevices) || configDevices.length === 0) return;
+    await this.db.collection('devices').bulkWrite(configDevices.map((device) => {
       let type = 'combo';
-      if (device.topics.temp && !device.relays) type = 'sensor';
-      if (!device.topics.temp && device.relays) type = 'relay';
-
-      await this.run(`
-        INSERT INTO devices (id, name, type, online_status, last_active, created_at)
-        VALUES (?, ?, ?, 'offline', NULL, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          name = excluded.name,
-          type = excluded.type
-      `, [device.id, device.name, type, now]);
-    }
+      if (device.topics?.temp && !device.relays) type = 'sensor';
+      if (!device.topics?.temp && device.relays) type = 'relay';
+      return {
+        updateOne: {
+          filter: { id: device.id },
+          update: {
+            $set: { name: device.name, type },
+            $setOnInsert: {
+              id: device.id,
+              online_status: 'offline',
+              last_active: null,
+              created_at: now
+            }
+          },
+          upsert: true
+        }
+      };
+    }));
   }
 
-  // 记录传感器温湿度
   async saveSensorData(deviceId, temp, hum) {
     const now = Date.now();
-    await this.run(`
-      INSERT INTO sensor_data (device_id, temp, hum, created_at)
-      VALUES (?, ?, ?, ?)
-    `, [deviceId, temp, hum, now]);
-
-    await this.run(`
-      UPDATE devices 
-      SET online_status = 'online', last_active = ?
-      WHERE id = ?
-    `, [now, deviceId]);
+    await Promise.all([
+      this.db.collection('sensor_data').insertOne({ device_id: deviceId, temp, hum, created_at: now }),
+      this.db.collection('devices').updateOne(
+        { id: deviceId },
+        { $set: { online_status: 'online', last_active: now } }
+      )
+    ]);
   }
 
-  // 获取传感器温湿度历史数据 (支持可选的 range 时间区间过滤)
   async getSensorHistory(deviceId, limit = 100, range = null) {
-    let query = `SELECT temp, hum, created_at FROM sensor_data WHERE device_id = ?`;
-    const params = [deviceId];
-
-    if (range) {
-      const now = Date.now();
-      let duration = 0;
-      if (range === '1h') duration = 60 * 60 * 1000;
-      else if (range === '24h') duration = 24 * 60 * 60 * 1000;
-      else if (range === '7d') duration = 7 * 24 * 60 * 60 * 1000;
-
-      if (duration > 0) {
-        query += ` AND created_at >= ?`;
-        params.push(now - duration);
-      }
-      query += ` ORDER BY created_at DESC LIMIT 500`; // 限制最大 500 条防性能雪崩
-    } else {
-      query += ` ORDER BY created_at DESC LIMIT ?`;
-      params.push(limit);
-    }
-
-    const rows = await this.all(query, params);
+    const query = { device_id: deviceId };
+    const durations = {
+      '1h': 60 * 60 * 1000,
+      '24h': 24 * 60 * 60 * 1000,
+      '7d': 7 * 24 * 60 * 60 * 1000
+    };
+    if (durations[range]) query.created_at = { $gte: Date.now() - durations[range] };
+    const max = durations[range]
+      ? 500
+      : Math.min(500, Math.max(1, Number.parseInt(limit, 10) || 100));
+    const rows = await this.db.collection('sensor_data')
+      .find(query, { projection: { _id: 0, temp: 1, hum: 1, created_at: 1 } })
+      .sort({ created_at: -1 })
+      .limit(max)
+      .toArray();
     return rows.reverse();
   }
 
-  // 手动/定时清理历史过期数据并释放整理磁盘文件 (Vacuum)
   async cleanOldData(retentionDays) {
     if (!retentionDays || retentionDays <= 0) return 0;
     const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
-    
-    const res1 = await this.run(`DELETE FROM sensor_data WHERE created_at < ?`, [cutoff]);
-    const res2 = await this.run(`DELETE FROM relay_logs WHERE created_at < ?`, [cutoff]);
-    
-    // 执行物理体积压缩收缩
-    try {
-      await this.run(`VACUUM`);
-    } catch (e) {
-      console.error('SQLite VACUUM failed:', e.message);
-    }
-
-    return (res1.changes || 0) + (res2.changes || 0);
+    const [sensor, relays] = await Promise.all([
+      this.db.collection('sensor_data').deleteMany({ created_at: { $lt: cutoff } }),
+      this.db.collection('relay_logs').deleteMany({ created_at: { $lt: cutoff } })
+    ]);
+    return sensor.deletedCount + relays.deletedCount;
   }
 
-  // 记录继电器变动
   async saveRelayLog(deviceId, relayId, status, triggeredBy = 'system') {
     const now = Date.now();
-    await this.run(`
-      INSERT INTO relay_logs (device_id, relay_id, status, triggered_by, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `, [deviceId, relayId, status, triggeredBy, now]);
-
-    await this.run(`
-      UPDATE devices 
-      SET online_status = 'online', last_active = ?
-      WHERE id = ?
-    `, [now, deviceId]);
+    await Promise.all([
+      this.db.collection('relay_logs').insertOne({
+        device_id: deviceId,
+        relay_id: relayId,
+        status,
+        triggered_by: triggeredBy,
+        created_at: now
+      }),
+      this.db.collection('devices').updateOne(
+        { id: deviceId },
+        { $set: { online_status: 'online', last_active: now } }
+      )
+    ]);
   }
 
-  // 更新设备在线状态
   async updateDeviceStatus(deviceId, status) {
-    const now = Date.now();
-    await this.run(`
-      UPDATE devices 
-      SET online_status = ?, last_active = ?
-      WHERE id = ?
-    `, [status, now, deviceId]);
+    return this.db.collection('devices').updateOne(
+      { id: deviceId },
+      { $set: { online_status: status, last_active: Date.now() } }
+    );
   }
 
-  // 获取所有设备数据
   async getDevices() {
-    return this.all(`SELECT * FROM devices`);
+    return this.db.collection('devices').find({}, { projection: { _id: 0 } }).toArray();
   }
 
-  // 增加 API Key
   async addApiKey(name, scopes = DEFAULT_API_KEY_SCOPES) {
     const normalizedScopes = normalizeApiKeyScopes(scopes);
-    const token = 'sk_mqttapi_' + crypto.randomBytes(24).toString('hex');
+    const token = `sk_mqttapi_${crypto.randomBytes(24).toString('hex')}`;
     const tokenHash = hashApiKey(token);
     const keyId = createApiKeyId(tokenHash);
     const tokenPreview = createApiKeyPreview(token);
     const now = Date.now();
-    await this.run(`
-      INSERT INTO api_keys (id, key_id, name, token_hash, token_preview, scopes, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [keyId, keyId, name, tokenHash, tokenPreview, JSON.stringify(normalizedScopes), now]);
-    return {
-      keyId,
-      token,
-      tokenPreview,
+    await this.db.collection('api_keys').insertOne({
+      id: keyId,
+      key_id: keyId,
       name,
+      token_hash: tokenHash,
+      token_preview: tokenPreview,
       scopes: normalizedScopes,
+      request_count: 0,
+      last_used_at: null,
       created_at: now
-    };
+    });
+    return { keyId, token, tokenPreview, name, scopes: normalizedScopes, created_at: now };
   }
 
-  // 删除 API Key
   async deleteApiKey(keyId) {
-    await this.run(`DELETE FROM api_keys WHERE key_id = ? OR id = ?`, [keyId, keyId]);
-    // 吊销或删除密钥后，清空内存鉴权缓存以确保安全性与数据实时一致性
+    await this.db.collection('api_keys').deleteOne({ $or: [{ key_id: keyId }, { id: keyId }] });
     this.apiKeyCache.clear();
   }
 
-  // 验证 API Key 是否合法
   async verifyApiKey(token) {
     const tokenHash = hashApiKey(token);
     const now = Date.now();
-
-    // 优先读取内存中的有效验证缓存 (60秒过期，大幅降低高频并发下的磁盘数据库I/O)
     const cached = this.apiKeyCache.get(tokenHash);
-    if (cached && now - cached.timestamp < 60000) {
-      return cached.data;
-    }
+    if (cached && now - cached.timestamp < 60_000) return clone(cached.data);
 
-    const row = await this.get(`
-      SELECT key_id, name, scopes
-      FROM api_keys
-      WHERE token_hash = ?
-    `, [tokenHash]);
-
-    const data = row ? {
-      keyId: row.key_id || null,
-      name: row.name,
-      scopes: parseStoredScopes(row.scopes)
-    } : null;
-
-    // 将验证结果（无论合法还是不合法）写入内存缓存，防止暴力撞库等对数据库进行压力攻击
-    this.apiKeyCache.set(tokenHash, {
-      data,
-      timestamp: now
-    });
-
-    return data;
+    const row = await this.db.collection('api_keys').findOne(
+      { token_hash: tokenHash },
+      { projection: { _id: 0, key_id: 1, name: 1, scopes: 1 } }
+    );
+    const data = row
+      ? { keyId: row.key_id || null, name: row.name, scopes: normalizeApiKeyScopes(row.scopes) }
+      : null;
+    this.apiKeyCache.set(tokenHash, { data, timestamp: now });
+    return clone(data);
   }
 
-  // 获取所有 API Key 列表
   async getApiKeys() {
-    const rows = await this.all(`
-      SELECT key_id, name, token_preview, scopes, request_count, last_used_at, created_at
-      FROM api_keys
-      ORDER BY created_at DESC
-    `);
-
+    const rows = await this.db.collection('api_keys')
+      .find({}, { projection: { _id: 0, token_hash: 0 } })
+      .sort({ created_at: -1 })
+      .toArray();
     return rows.map((row) => ({
       keyId: row.key_id,
       name: row.name,
       tokenPreview: row.token_preview,
-      scopes: parseStoredScopes(row.scopes),
-      request_count: row.request_count,
-      last_used_at: row.last_used_at,
+      scopes: normalizeApiKeyScopes(row.scopes),
+      request_count: row.request_count || 0,
+      last_used_at: row.last_used_at || null,
       created_at: row.created_at
     }));
   }
+
+  async loadSettings() {
+    const row = await this.db.collection('settings').findOne({ key: 'runtime' });
+    return row?.value ? clone(row.value) : null;
+  }
+
+  async saveSettings(value) {
+    await this.db.collection('settings').updateOne(
+      { key: 'runtime' },
+      { $set: { key: 'runtime', value: clone(value), updated_at: Date.now() } },
+      { upsert: true }
+    );
+  }
+}
+
+class MemoryDatabase {
+  constructor() {
+    this.devices = new Map();
+    this.sensorData = [];
+    this.relayLogs = [];
+    this.apiKeys = new Map();
+    this.settings = null;
+    this.apiKeyCache = new Map();
+    this.db = { collection: () => null };
+  }
+
+  async open() {}
+  async initialize() {}
+  async ping() { return true; }
+  async close() { this.apiKeyCache.clear(); }
+
+  async syncDevices(configDevices) {
+    for (const device of configDevices || []) {
+      const existing = this.devices.get(device.id) || {
+        id: device.id,
+        online_status: 'offline',
+        last_active: null,
+        created_at: Date.now()
+      };
+      let type = 'combo';
+      if (device.topics?.temp && !device.relays) type = 'sensor';
+      if (!device.topics?.temp && device.relays) type = 'relay';
+      this.devices.set(device.id, { ...existing, name: device.name, type });
+    }
+  }
+
+  async saveSensorData(deviceId, temp, hum) {
+    const now = Date.now();
+    this.sensorData.push({ device_id: deviceId, temp, hum, created_at: now });
+    const device = this.devices.get(deviceId);
+    if (device) this.devices.set(deviceId, { ...device, online_status: 'online', last_active: now });
+  }
+
+  async getSensorHistory(deviceId, limit = 100, range = null) {
+    const duration = { '1h': 3600000, '24h': 86400000, '7d': 604800000 }[range];
+    const cutoff = duration ? Date.now() - duration : 0;
+    const max = duration ? 500 : Math.min(500, Math.max(1, Number(limit) || 100));
+    return this.sensorData.filter((row) => row.device_id === deviceId && row.created_at >= cutoff).slice(-max).map(clone);
+  }
+
+  async cleanOldData(retentionDays) {
+    if (!retentionDays || retentionDays <= 0) return 0;
+    const cutoff = Date.now() - retentionDays * 86400000;
+    const before = this.sensorData.length + this.relayLogs.length;
+    this.sensorData = this.sensorData.filter((row) => row.created_at >= cutoff);
+    this.relayLogs = this.relayLogs.filter((row) => row.created_at >= cutoff);
+    return before - this.sensorData.length - this.relayLogs.length;
+  }
+
+  async saveRelayLog(deviceId, relayId, status, triggeredBy = 'system') {
+    const now = Date.now();
+    this.relayLogs.push({ device_id: deviceId, relay_id: relayId, status, triggered_by: triggeredBy, created_at: now });
+    const device = this.devices.get(deviceId);
+    if (device) this.devices.set(deviceId, { ...device, online_status: 'online', last_active: now });
+  }
+
+  async updateDeviceStatus(deviceId, status) {
+    const device = this.devices.get(deviceId);
+    if (device) this.devices.set(deviceId, { ...device, online_status: status, last_active: Date.now() });
+  }
+
+  async getDevices() { return Array.from(this.devices.values(), clone); }
+
+  async addApiKey(name, scopes = DEFAULT_API_KEY_SCOPES) {
+    const token = `sk_mqttapi_${crypto.randomBytes(24).toString('hex')}`;
+    const tokenHash = hashApiKey(token);
+    const keyId = createApiKeyId(tokenHash);
+    const row = {
+      id: keyId,
+      key_id: keyId,
+      name,
+      token_hash: tokenHash,
+      token_preview: createApiKeyPreview(token),
+      scopes: normalizeApiKeyScopes(scopes),
+      request_count: 0,
+      last_used_at: null,
+      created_at: Date.now()
+    };
+    this.apiKeys.set(keyId, row);
+    return { keyId, token, tokenPreview: row.token_preview, name, scopes: row.scopes, created_at: row.created_at };
+  }
+
+  async deleteApiKey(keyId) { this.apiKeys.delete(keyId); this.apiKeyCache.clear(); }
+
+  async verifyApiKey(token) {
+    const tokenHash = hashApiKey(token);
+    const row = Array.from(this.apiKeys.values()).find((item) => item.token_hash === tokenHash);
+    return row ? { keyId: row.key_id, name: row.name, scopes: clone(row.scopes) } : null;
+  }
+
+  async recordApiKeyUsage(keyId) {
+    const row = this.apiKeys.get(keyId);
+    if (row) {
+      row.request_count = (row.request_count || 0) + 1;
+      row.last_used_at = Date.now();
+    }
+  }
+
+  async getApiKeys() {
+    return Array.from(this.apiKeys.values())
+      .sort((a, b) => b.created_at - a.created_at)
+      .map((row) => ({
+        keyId: row.key_id,
+        name: row.name,
+        tokenPreview: row.token_preview,
+        scopes: clone(row.scopes),
+        request_count: row.request_count || 0,
+        last_used_at: row.last_used_at || null,
+        created_at: row.created_at
+      }));
+  }
+
+  async loadSettings() { return clone(this.settings); }
+  async saveSettings(value) { this.settings = clone(value); }
 }
 
 let dbInstance = null;
 
-function getDatabase(dbPath) {
+function getDatabase(uri = process.env.IOT_MONGODB_URI || process.env.MONGODB_URI) {
   if (!dbInstance) {
-    dbInstance = new Database(dbPath);
+    dbInstance = process.env.IOT_STORAGE_DRIVER === 'memory'
+      ? new MemoryDatabase()
+      : new Database(uri);
   }
   return dbInstance;
 }
 
 module.exports = {
   Database,
+  MemoryDatabase,
   DEFAULT_API_KEY_SCOPES,
   getDatabase,
+  normalizeLegacyApiKeyRow,
   normalizeApiKeyScopes
 };

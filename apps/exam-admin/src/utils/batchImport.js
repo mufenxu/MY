@@ -6,6 +6,11 @@
 
 const SPREADSHEET_OPTION_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 let spreadsheetParserPromise = null;
+const MAX_SPREADSHEET_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_SPREADSHEET_ROWS = 10000;
+const MAX_SPREADSHEET_COLUMNS = 100;
+const MAX_XLSX_ENTRIES = 2000;
+const MAX_XLSX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024;
 const truthySet = new Set(['正确', '对', 'true', 'yes', 'y', 't', '√', '是']);
 const falsySet = new Set(['错误', '错', 'false', 'no', 'n', 'f', '×', '否']);
 const judgeKeywordSet = new Set([...truthySet, ...falsySet]);
@@ -373,32 +378,119 @@ const decodeSpreadsheetCsv = (arrayBuffer) => {
 
 const getSpreadsheetParser = () => {
     if (!spreadsheetParserPromise) {
-        spreadsheetParserPromise = import('xlsx');
+        spreadsheetParserPromise = Promise.all([
+            import('exceljs'),
+            import('papaparse'),
+        ]).then(([excelModule, csvModule]) => ({
+            ExcelJS: excelModule.default || excelModule,
+            Papa: csvModule.default || csvModule,
+        }));
     }
     return spreadsheetParserPromise;
 };
 
+function inspectXlsxArchive(arrayBuffer) {
+    const bytes = new Uint8Array(arrayBuffer);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const minimumEocdSize = 22;
+    const firstCandidate = Math.max(0, bytes.byteLength - 65557);
+    let eocdOffset = -1;
+    for (let offset = bytes.byteLength - minimumEocdSize; offset >= firstCandidate; offset -= 1) {
+        if (view.getUint32(offset, true) === 0x06054b50) {
+            eocdOffset = offset;
+            break;
+        }
+    }
+    if (eocdOffset < 0) throw new Error('XLSX 文件不是有效的 ZIP 文档');
+
+    const entryCount = view.getUint16(eocdOffset + 10, true);
+    const centralDirectorySize = view.getUint32(eocdOffset + 12, true);
+    const centralDirectoryOffset = view.getUint32(eocdOffset + 16, true);
+    if (entryCount === 0xffff || centralDirectorySize === 0xffffffff || centralDirectoryOffset === 0xffffffff) {
+        throw new Error('不支持 ZIP64 格式的 XLSX 文件');
+    }
+    if (entryCount > MAX_XLSX_ENTRIES || centralDirectoryOffset + centralDirectorySize > bytes.byteLength) {
+        throw new Error('XLSX 压缩包结构或条目数量超出限制');
+    }
+
+    let cursor = centralDirectoryOffset;
+    let uncompressedBytes = 0;
+    for (let index = 0; index < entryCount; index += 1) {
+        if (cursor + 46 > bytes.byteLength || view.getUint32(cursor, true) !== 0x02014b50) {
+            throw new Error('XLSX 压缩包目录损坏');
+        }
+        const uncompressedSize = view.getUint32(cursor + 24, true);
+        const fileNameLength = view.getUint16(cursor + 28, true);
+        const extraLength = view.getUint16(cursor + 30, true);
+        const commentLength = view.getUint16(cursor + 32, true);
+        if (uncompressedSize === 0xffffffff) throw new Error('不支持 ZIP64 格式的 XLSX 文件');
+        uncompressedBytes += uncompressedSize;
+        if (uncompressedBytes > MAX_XLSX_UNCOMPRESSED_BYTES) {
+            throw new Error('XLSX 解压后内容不能超过 50 MiB');
+        }
+        cursor += 46 + fileNameLength + extraLength + commentLength;
+    }
+}
+
+function parseCsvRows(Papa, source) {
+    const rows = [];
+    const errors = [];
+    let dimensionError = null;
+    Papa.parse(source, {
+        skipEmptyLines: true,
+        dynamicTyping: false,
+        step(result, parser) {
+            if (result.errors?.length) errors.push(...result.errors);
+            const row = Array.isArray(result.data) ? result.data : [];
+            if (rows.length >= MAX_SPREADSHEET_ROWS || row.length > MAX_SPREADSHEET_COLUMNS) {
+                dimensionError = new Error('表格最多允许 10000 行、100 列');
+                parser.abort();
+                return;
+            }
+            rows.push(row);
+        },
+    });
+    if (dimensionError) throw dimensionError;
+    if (errors.length) throw new Error(`CSV 解析失败：${errors[0].message}`);
+    return rows;
+}
+
 export async function readQuestionsFromSpreadsheetFile(file) {
     if (!file) return '';
 
-    const XLSX = await getSpreadsheetParser();
+    if (file.size > MAX_SPREADSHEET_FILE_BYTES) throw new Error('表格文件不能超过 10 MiB');
+    const { ExcelJS, Papa } = await getSpreadsheetParser();
     const fileName = file.name || '';
     const extension = fileName.split('.').pop()?.toLowerCase() || '';
-    const isCsv = extension === 'csv' || file.type === 'text/csv';
+    if (!['csv', 'xlsx'].includes(extension)) throw new Error('只支持 .xlsx 或 .csv 文件');
+    const isCsv = extension === 'csv';
     const arrayBuffer = await file.arrayBuffer();
-    const workbook = isCsv
-        ? XLSX.read(decodeSpreadsheetCsv(arrayBuffer), { type: 'string', raw: false })
-        : XLSX.read(arrayBuffer, { type: 'array', raw: false });
-    const sheetName = workbook.SheetNames?.[0];
-    if (!sheetName) return '';
-
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet, {
-        header: 1,
-        defval: '',
-        raw: false,
-        blankrows: false,
-    });
+    let rows;
+    if (isCsv) {
+        rows = parseCsvRows(Papa, decodeSpreadsheetCsv(arrayBuffer));
+    } else {
+        inspectXlsxArchive(arrayBuffer);
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(arrayBuffer);
+        const sheet = workbook.worksheets[0];
+        if (!sheet) return '';
+        if (sheet.rowCount > MAX_SPREADSHEET_ROWS || sheet.columnCount > MAX_SPREADSHEET_COLUMNS) {
+            throw new Error('表格最多允许 10000 行、100 列');
+        }
+        rows = [];
+        sheet.eachRow({ includeEmpty: false }, (row) => {
+            rows.push(Array.from({ length: sheet.columnCount }, (_, index) => {
+                const cell = row.getCell(index + 1);
+                if (cell.value == null) return '';
+                if (cell.value instanceof Date) return cell.value.toISOString();
+                if (typeof cell.value === 'object' && 'result' in cell.value) return String(cell.value.result ?? '');
+                if (typeof cell.value === 'object' && Array.isArray(cell.value.richText)) {
+                    return cell.value.richText.map((part) => part.text || '').join('');
+                }
+                return cell.text || String(cell.value);
+            }));
+        });
+    }
     return createQuestionTextFromSpreadsheetRows(rows, fileName);
 }
 

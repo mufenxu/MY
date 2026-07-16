@@ -184,7 +184,7 @@
       }
 
       const range = rangeSelector ? rangeSelector.value : '';
-      mainChartBox.innerHTML = '<p class="muted" style="text-align:center; padding-top: 140px;">正在提取 SQLite 历史传感器采样...</p>';
+      mainChartBox.innerHTML = '<p class="muted" style="text-align:center; padding-top: 140px;">正在提取 MongoDB 历史传感器采样...</p>';
 
       try {
         const url = `/api/devices/${deviceId}/history${range ? `?range=${range}` : ''}`;
@@ -193,7 +193,7 @@
         });
 
         if (!data || data.length < 2) {
-          mainChartBox.innerHTML = '<p class="muted" style="text-align:center; padding-top: 140px;">当前时间区间内在 SQLite 中暂无充足的传感器采样记录。</p>';
+          mainChartBox.innerHTML = '<p class="muted" style="text-align:center; padding-top: 140px;">当前时间区间内在 MongoDB 中暂无充足的传感器采样记录。</p>';
           return;
         }
 

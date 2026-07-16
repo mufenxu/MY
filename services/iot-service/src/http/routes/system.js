@@ -1,4 +1,3 @@
-const path = require('path');
 const { MqttService } = require('../../services/mqttClient');
 
 function registerSystemRoutes(app, { settingsStore, mqttService, requireSession }) {
@@ -10,10 +9,10 @@ function registerSystemRoutes(app, { settingsStore, mqttService, requireSession 
     res.json(settingsStore.getPublicDefaults());
   });
 
-  app.put('/api/config', requireSession, (req, res, next) => {
+  app.put('/api/config', requireSession, async (req, res, next) => {
     try {
       const previous = settingsStore.getConfig();
-      const result = settingsStore.saveConfig(req.body || {});
+      const result = await settingsStore.saveConfig(req.body || {});
       const restartRequired = previous.api.port !== result.config.api.port;
       const publicConfig = settingsStore.getPublicConfig();
 
@@ -27,9 +26,9 @@ function registerSystemRoutes(app, { settingsStore, mqttService, requireSession 
     }
   });
 
-  app.post('/api/config/reset', requireSession, (req, res, next) => {
+  app.post('/api/config/reset', requireSession, async (req, res, next) => {
     try {
-      const result = settingsStore.resetConfig();
+      const result = await settingsStore.resetConfig();
       mqttService.restart('config-reset');
       const publicConfig = settingsStore.getPublicConfig();
 
@@ -89,8 +88,7 @@ function registerSystemRoutes(app, { settingsStore, mqttService, requireSession 
 
     res.json({
       serviceName: 'MQTT 监控面板',
-      configPath: settingsStore.getConfigPath(),
-      dataDirectory: path.dirname(settingsStore.getConfigPath()),
+      storage: 'mongodb',
       apiPort: config.api.port,
       auth: {
         enabled: Boolean(config.auth.enabled && config.auth.password)
@@ -105,6 +103,15 @@ function registerSystemRoutes(app, { settingsStore, mqttService, requireSession 
       uptime: process.uptime(),
       timestamp: Date.now()
     });
+  });
+
+  app.get('/api/ready', async (req, res) => {
+    try {
+      const ready = await mqttService.db.ping();
+      res.status(ready ? 200 : 503).json({ ok: ready, storage: 'mongodb' });
+    } catch {
+      res.status(503).json({ ok: false, storage: 'mongodb' });
+    }
   });
 }
 

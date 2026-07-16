@@ -22,7 +22,7 @@ unified-platform/
 ├─ automation/ct8-automation/
 ├─ packages/                  # 稳定的跨模块共享包
 ├─ config/                    # 无密钥服务注册表
-├─ infra/docker/              # 四容器构建与编排
+├─ infra/docker/              # 四个常驻容器与 MongoDB 初始化任务
 ├─ scripts/                   # 工作区命令
 ├─ docs/                      # 架构与运维文档
 ```
@@ -51,9 +51,9 @@ npm run check
 | `platform-api` | `22100` | `22100` |
 | `campus-service` | `22101` | `22101` |
 | `iot-service` | `22102` | `22102` |
-| `mongodb` | Not published | `27017` |
+| `mongodb` | `127.0.0.1:27017` | `27017` |
 
-生产目标固定为四个容器：`platform-api`、`campus-service`、`iot-service`、`mongodb`。
+生产目标为四个常驻容器：`platform-api`、`campus-service`、`iot-service`、`mongodb`，另有一次性 `mongodb-init` 初始化任务。
 
 网页管理面使用一个主域名和一次登录：`/apps/core/`、`/apps/exam/`、`/apps/campus/`、`/apps/iot/` 均由 `platform-api` 统一认证和转发。原业务域名与小程序 API 保持兼容。
 

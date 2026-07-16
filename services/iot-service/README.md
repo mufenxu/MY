@@ -15,7 +15,7 @@
 - 提供 `/api/latest`、`/api/status`、`/api/info` 等接口
 - 提供浏览器管理页面，可直接查看状态和修改配置
 - MQTT 配置修改后自动重连
-- 配置保存到 `data/config.json`，容器重启后仍然保留
+- 配置、设备、历史与 API Key 统一保存到独立的 `iot_app` MongoDB 数据库
 - 支持轻量登录会话，适合公网部署前做基础保护
 - 提供 `/ws` 实时通道，页面收到 MQTT 消息后可立即更新
 - API Key 仅在创建时展示一次，数据库内仅保存哈希值
@@ -35,14 +35,12 @@ mqttapi/
 │  ├─ services/           # MQTT 连接、消息解析与业务状态
 │  │  └─ mqtt/            # 消息处理、控制发布、在线扫描、保留策略、试连与 Webhook
 │  ├─ settings/           # 配置读写、校验与脱敏
-│  └─ storage/            # SQLite 数据访问层
+│  └─ storage/            # MongoDB 数据访问层
 ├─ public/                # 可视化管理页面
 │  └─ js/                 # 前端 API 客户端、反馈交互、布局控制、表单增强、安全准入、系统运维、开发者指南、设备/历史视图与配置向导
-├─ scripts/               # 本地质量检查脚本
+├─ scripts/               # 本地质量检查与 SQLite 迁移脚本
 ├─ test/                  # Node.js 内置测试套件
-├─ data/                  # 本地持久化配置与数据库，仅保留 .gitkeep
-├─ Dockerfile
-└─ docker-compose.yml
+└─ Dockerfile
 ```
 
 ## 本地运行
@@ -69,6 +67,7 @@ npm run audit:prod
 ### 启动服务
 
 ```bash
+IOT_MONGODB_URI=mongodb://iot_app:password@127.0.0.1:27017/iot_app?authSource=iot_app
 npm start
 ```
 
@@ -79,55 +78,22 @@ npm start
 
 ## Docker 部署
 
-### 方式一：直接构建并运行
-
-```bash
-docker build -t mqttapi .
-docker run -d \
-  --name mqttapi \
-  -p 22102:22102 \
-  -v $(pwd)/data:/app/data \
-  -e TZ=Asia/Shanghai \
-  mqttapi
-```
-
-Windows PowerShell 可以使用：
-
-```powershell
-docker build -t mqttapi .
-docker run -d `
-  --name mqttapi `
-  -p 22102:22102 `
-  -v ${PWD}/data:/app/data `
-  -e TZ=Asia/Shanghai `
-  mqttapi
-```
-
-### 方式二：使用 Docker Compose
+IoT 服务依赖 MongoDB 副本集和独立账号，不再提供容易遗漏数据库参数的单容器部署入口。请在仓库根目录使用统一 Compose：
 
 ```bash
 cp .env.example .env
-docker compose up -d --build
+docker compose --env-file .env -f infra/docker/compose.yml up -d --build iot-service
 ```
 
 停止服务：
 
 ```bash
-docker compose down
+docker compose --env-file .env -f infra/docker/compose.yml stop iot-service
 ```
 
 ## 配置说明
 
-服务启动后会自动生成配置文件：
-
-```text
-data/config.json
-```
-
-你可以通过两种方式配置服务：
-
-1. 直接在浏览器管理页面修改并保存
-2. 手动编辑 `data/config.json` 后重启服务
+运行配置保存在 `iot_app.settings` 集合。通过浏览器管理页面修改后会立即写入 MongoDB；不要绕过服务直接编辑集合中的敏感字段。
 
 控制台中所有敏感字段都会脱敏显示：
 
@@ -207,7 +173,7 @@ AUTH_SESSION_SECRET=
 - `WebSocket /ws` 也会校验登录会话，未登录时不会再返回实时快照
 - `/api/config`、`/api/keys`、`/api/reconnect`、`/api/meta` 仅允许控制台会话访问
 
-注意：`AUTH_*` 环境变量主要用于首次生成 `data/config.json`。如果配置文件已经存在，请在管理页面里修改，或直接编辑 `data/config.json` 后重启容器。
+`AUTH_*` 和 `MQTT_*` 环境变量用于首次生成 MongoDB 中的运行配置。已有配置请通过管理页面修改。
 
 如果服务部署在 Nginx、Cloudflare、Traefik、宝塔、1Panel 等反向代理后面，请设置 `TRUST_PROXY=1`，并确保代理传递真实的域名与协议。直连公网时保持默认 `TRUST_PROXY=0`。
 
@@ -318,7 +284,7 @@ API Key 适合给小程序、大屏和后端服务使用，支持以下作用域
 
 - 服务器开放 `22102` 端口，或通过 Nginx 反向代理到该服务
 - 生产环境建议启用登录鉴权，并放在 HTTPS 或反向代理后面
-- `data/` 目录务必挂载卷，否则容器重建后配置会丢失
+- 必须使用独立的 `iot_app` MongoDB 账号，并将 MongoDB 数据卷纳入统一备份
 - 如果 MQTT Broker 在公网，建议使用带认证或 TLS 的连接地址
 
 ## 说明

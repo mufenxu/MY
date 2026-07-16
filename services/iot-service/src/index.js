@@ -1,6 +1,7 @@
 const { createApiServer } = require('./http/apiServer');
 const { MqttService } = require('./services/mqttClient');
 const { SettingsStore } = require('./settings/settingsStore');
+const { getDatabase } = require('./storage/db');
 
 function registerShutdown(server, mqttService) {
   let shuttingDown = false;
@@ -54,12 +55,14 @@ function listen(server, port) {
 async function main() {
   console.log('Starting MQTT dashboard service...');
 
-  const settingsStore = new SettingsStore();
-  const initialConfig = settingsStore.initialize();
-  const mqttService = new MqttService(settingsStore);
+  const database = getDatabase();
+  await database.initialize();
+  const settingsStore = new SettingsStore({ storage: database });
+  const initialConfig = await settingsStore.initialize();
+  const mqttService = new MqttService(settingsStore, database);
   const { server } = createApiServer({ settingsStore, mqttService });
 
-  await mqttService.start();
+  await mqttService.start({ databaseInitialized: true });
   await listen(server, initialConfig.api.port);
 
   console.log(`API server listening on port ${initialConfig.api.port}`);

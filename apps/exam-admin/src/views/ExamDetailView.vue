@@ -655,7 +655,7 @@
                                 ref="batchFileInputRef"
                                 class="batch-file-input"
                                 type="file"
-                                accept=".xlsx,.xls,.csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                 @change="handleBatchFileChange">
                         </div>
                     </div>
@@ -1486,8 +1486,7 @@ const triggerBatchFileImport = () => {
 };
 
 const isSupportedBatchSpreadsheetFile = (file) => (
-    /\.(xlsx|xls|csv)$/i.test(file?.name || '')
-    || ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(file?.type)
+    /\.(xlsx|csv)$/i.test(file?.name || '')
 );
 
 const handleBatchFileChange = async (event) => {
@@ -1497,7 +1496,7 @@ const handleBatchFileChange = async (event) => {
     if (!file) return;
 
     if (!isSupportedBatchSpreadsheetFile(file)) {
-        ElMessage.warning('请选择 .xlsx、.xls 或 .csv 文件');
+        ElMessage.warning('请选择 .xlsx 或 .csv 文件');
         return;
     }
 

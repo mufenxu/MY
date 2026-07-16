@@ -1,14 +1,8 @@
-const fs = require('fs');
-const path = require('path');
 const { EventEmitter } = require('events');
-const { configFile, defaultConfig } = require('../config');
+const { defaultConfig } = require('../config');
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
-}
-
-function stripUtf8Bom(value) {
-  return typeof value === 'string' ? value.replace(/^\uFEFF/, '') : value;
 }
 
 const SECRET_DIRECTIVE_VALUES = new Set(['preserve', 'replace', 'clear']);
@@ -291,28 +285,18 @@ function validateConfig(config) {
 }
 
 class SettingsStore extends EventEmitter {
-  constructor() {
+  constructor({ storage } = {}) {
     super();
-    this.filePath = configFile;
+    if (!storage) throw new Error('SettingsStore requires a MongoDB storage adapter.');
+    this.storage = storage;
     this.defaults = normalizeConfig(defaultConfig, defaultConfig);
     this.config = deepClone(this.defaults);
   }
 
-  initialize() {
-    fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
-
-    let loaded = {};
+  async initialize() {
+    let loaded = await this.storage.loadSettings() || {};
     let shouldPersist = false;
-
-    if (fs.existsSync(this.filePath)) {
-      try {
-        loaded = JSON.parse(stripUtf8Bom(fs.readFileSync(this.filePath, 'utf8')));
-      } catch (error) {
-        throw new Error(`配置文件读取失败: ${error.message}`);
-      }
-    } else {
-      shouldPersist = true;
-    }
+    if (Object.keys(loaded).length === 0) shouldPersist = true;
 
     const normalized = normalizeConfig(loaded, this.defaults);
 
@@ -331,19 +315,19 @@ class SettingsStore extends EventEmitter {
 
     this.config = normalized;
 
-    if (!fs.existsSync(this.filePath) || JSON.stringify(loaded) !== JSON.stringify(normalized)) {
+    if (JSON.stringify(loaded) !== JSON.stringify(normalized)) {
       shouldPersist = true;
     }
 
     if (shouldPersist) {
-      this.persist(normalized);
+      await this.persist(normalized);
     }
 
     return this.getConfig();
   }
 
-  persist(config) {
-    fs.writeFileSync(this.filePath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  async persist(config) {
+    await this.storage.saveSettings(config);
   }
 
   getConfig() {
@@ -362,11 +346,7 @@ class SettingsStore extends EventEmitter {
     return buildPublicConfigPayload(this.defaults);
   }
 
-  getConfigPath() {
-    return this.filePath;
-  }
-
-  saveConfig(partialConfig) {
+  async saveConfig(partialConfig) {
     const previous = this.getConfig();
     const input = applySecretDirectives(this.config, partialConfig);
     const merged = mergeObjects(this.config, input);
@@ -379,7 +359,7 @@ class SettingsStore extends EventEmitter {
       throw error;
     }
 
-    this.persist(next);
+    await this.persist(next);
     this.config = next;
     this.emit('updated', { previous, current: this.getConfig() });
 
@@ -389,11 +369,11 @@ class SettingsStore extends EventEmitter {
     };
   }
 
-  resetConfig() {
+  async resetConfig() {
     const previous = this.getConfig();
     const next = this.getDefaults();
 
-    this.persist(next);
+    await this.persist(next);
     this.config = next;
     this.emit('updated', { previous, current: this.getConfig() });
 

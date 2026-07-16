@@ -328,7 +328,7 @@
         modalDeviceName.textContent = `${deviceName} - 历史趋势`;
       }
       if (historyChartBox) {
-        historyChartBox.innerHTML = '<p class="muted" style="text-align:center; padding-top:100px;">正在提取 SQLite 传感器采样...</p>';
+        historyChartBox.innerHTML = '<p class="muted" style="text-align:center; padding-top:100px;">正在提取 MongoDB 传感器采样...</p>';
       }
       if (historyModal) {
         historyModal.classList.remove('hidden');

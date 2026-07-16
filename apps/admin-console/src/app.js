@@ -14,6 +14,7 @@ import {
 } from './auth.js';
 import { loadConfig } from './config.js';
 import { createStatusMonitor, loadServiceRegistry } from './service-registry.js';
+import { createMetrics } from './metrics.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.resolve(__dirname, '..', 'dist');
@@ -35,32 +36,47 @@ function requireConsoleRequest(req, res, next) {
   return next();
 }
 
-export function createApp({ config = loadConfig(), fetchImpl = fetch } = {}) {
+function secureTokenEqual(actual, expected) {
+  const left = Buffer.from(String(actual || ''));
+  const right = Buffer.from(String(expected || ''));
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+export function createApp({
+  config = loadConfig(),
+  fetchImpl = fetch,
+  sessionRegistry = null,
+  readinessCheck = async () => true,
+} = {}) {
   const registry = loadServiceRegistry(config.registryPath);
   const monitor = createStatusMonitor(registry.services, {
     timeoutMs: config.serviceTimeoutMs,
     fetchImpl,
   });
   const app = express();
-  const sessions = createSessionRegistry({ secret: config.sessionSecret });
+  const sessions = sessionRegistry || createSessionRegistry({ secret: config.sessionSecret });
+  const metrics = createMetrics();
 
   function readSessionToken(req) {
     return parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME];
   }
 
-  function readSession(req) {
+  async function readSession(req) {
     return sessions.verify(readSessionToken(req));
   }
 
-  app.locals.verifyConsoleSession = (token, now) => sessions.verify(token, now);
+  app.locals.verifyConsoleSession = async (token, now) => sessions.verify(token, now);
+  app.locals.sessionRegistry = sessions;
 
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
   app.use((req, res, next) => {
-    req.requestId = crypto.randomUUID();
+    const incoming = String(req.get('x-request-id') || '');
+    req.requestId = /^[A-Za-z0-9._:-]{1,128}$/.test(incoming) ? incoming : crypto.randomUUID();
     res.setHeader('X-Request-Id', req.requestId);
     next();
   });
+  app.use(metrics.middleware);
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
@@ -83,11 +99,33 @@ export function createApp({ config = loadConfig(), fetchImpl = fetch } = {}) {
     res.json({ status: 'ok', service: 'admin-console' });
   });
 
-  app.get('/api/auth/status', (req, res) => {
+  app.get('/api/livez', (req, res) => {
+    res.json({ status: 'ok', service: 'admin-console' });
+  });
+
+  app.get('/api/readyz', async (req, res) => {
+    try {
+      const ready = Boolean(await readinessCheck());
+      res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not-ready', service: 'admin-console' });
+    } catch {
+      res.status(503).json({ status: 'not-ready', service: 'admin-console' });
+    }
+  });
+
+  app.get('/api/metrics', async (req, res) => {
+    const authorization = String(req.get('authorization') || '');
+    if (!config.metricsToken || !secureTokenEqual(authorization, `Bearer ${config.metricsToken}`)) {
+      return res.status(401).json({ error: '指标访问凭据无效。', code: 'METRICS_UNAUTHORIZED' });
+    }
+    res.type(metrics.contentType);
+    return res.send(await metrics.render());
+  });
+
+  app.get('/api/auth/status', async (req, res) => {
     if (config.authDisabled) {
       return res.json({ authenticated: true, authDisabled: true, user: { username: 'local-admin' } });
     }
-    const session = readSession(req);
+    const session = await readSession(req);
     return res.json({
       authenticated: Boolean(session),
       authDisabled: false,
@@ -115,7 +153,7 @@ export function createApp({ config = loadConfig(), fetchImpl = fetch } = {}) {
       return res.status(401).json({ error: '账号或密码错误。', code: 'INVALID_CREDENTIALS' });
     }
 
-    const token = sessions.issue({
+    const token = await sessions.issue({
       username: config.adminUsername,
       ttlHours: config.sessionTtlHours,
     });
@@ -123,19 +161,19 @@ export function createApp({ config = loadConfig(), fetchImpl = fetch } = {}) {
     return res.json({ authenticated: true, authDisabled: false, user: { username: config.adminUsername } });
   });
 
-  app.post('/api/auth/logout', requireConsoleRequest, (req, res) => {
-    sessions.revoke(readSessionToken(req));
+  app.post('/api/auth/logout', requireConsoleRequest, async (req, res) => {
+    await sessions.revoke(readSessionToken(req));
     res.clearCookie(SESSION_COOKIE_NAME, { ...sessionCookieOptions(config), maxAge: 0 });
     res.json({ authenticated: false });
   });
 
-  app.use('/api', (req, res, next) => {
+  app.use('/api', async (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     if (config.authDisabled) {
       req.consoleUser = { username: 'local-admin' };
       return next();
     }
-    const session = readSession(req);
+    const session = await readSession(req);
     if (!session) return res.status(401).json({ error: '请先登录。', code: 'UNAUTHORIZED' });
     req.consoleUser = { username: session.sub };
     return next();

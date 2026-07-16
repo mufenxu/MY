@@ -48,7 +48,7 @@
 | `platform-api` | `22100` | `22100` | Loopback, behind the reverse proxy |
 | `campus-service` | `22101` | `22101` | Loopback and Docker network |
 | `iot-service` | `22102` | `22102` | Loopback and Docker network |
-| `mongodb` | Not published | `27017` | Docker internal network only |
+| `mongodb` | `27017` | `27017` | Loopback and Docker internal network |
 
 Development-only ports such as the Vite preview port are not part of the production allocation.
 
@@ -67,7 +67,10 @@ Alibaba Cloud Container Registry is the primary production image source. GitHub 
 
 ## Data ownership
 
+- 管理门户使用 MongoDB 数据库 `platform_app` 保存可撤销会话。
 - `core-api` 使用 MongoDB 数据库 `core_app`。
 - `exam-api` 使用 MongoDB 数据库 `exam_app`。
-- `campus-service` 与 `iot-service` 各自拥有独立 SQLite 数据卷。
+- `campus-service` 使用 MongoDB 数据库 `campus_app`。
+- `iot-service` 使用 MongoDB 数据库 `iot_app`。
+- 五个数据库分别使用独立的最小权限账号；只有初始化与备份任务使用 root 账号。
 - 服务之间通过 HTTP API 交互，不跨边界直接读取对方数据库。

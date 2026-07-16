@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check public/app.js && node --check public/admin.js && node --check public/platform-runtime.js && node --check scripts/users.mjs && node --check scripts/backup.mjs && node --check scripts/generate-secrets.mjs && node --check scripts/setup-env.mjs && node --check src/lib/env.js && node --check src/lib/http.js && node --check src/lib/password.js && node --check src/lib/platform-sso.js && node --check src/lib/static-assets.js",
+    "check": "node --check server.js && node --check public/app.js && node --check public/admin.js && node --check public/platform-runtime.js && node --check scripts/users.mjs && node --check scripts/backup.mjs && node --check scripts/migrate-sqlite-to-mongodb.mjs && node --check scripts/generate-secrets.mjs && node --check scripts/setup-env.mjs && node --check src/lib/env.js && node --check src/lib/http.js && node --check src/lib/password.js && node --check src/lib/platform-sso.js && node --check src/lib/static-assets.js && node --check src/storage/campus-repository.js",
     "lint": "eslint server.js public/app.js public/admin.js scripts src test",
     "test": "node --test",
     "verify": "npm run check && npm run lint && npm test",
@@ -15,21 +15,23 @@
     "backup": "node scripts/backup.mjs",
     "user:list": "node scripts/users.mjs list",
     "user:add": "node scripts/users.mjs add",
-    "user:password": "node scripts/users.mjs password"
+    "user:password": "node scripts/users.mjs password",
+    "migrate:sqlite": "node scripts/migrate-sqlite-to-mongodb.mjs"
   },
   "engines": {
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "better-sqlite3": "^12.11.1",
     "bwip-js": "^4.11.2",
     "cheerio": "^1.2.0",
     "crypto-js": "^4.2.0",
+    "mongodb": "^7.5.0",
     "qrcode": "^1.5.4",
     "sm-crypto": "^0.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "better-sqlite3": "^12.11.1",
     "eslint": "^9.39.5",
     "globals": "^16.5.0"
   }

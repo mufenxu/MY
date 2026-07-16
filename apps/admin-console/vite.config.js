@@ -9,6 +9,6 @@ export default defineConfig({
     },
   },
   build: {
-    sourcemap: true,
+    sourcemap: process.env.SOURCE_MAPS === 'hidden' ? 'hidden' : false,
   },
 });

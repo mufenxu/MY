@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import express from 'express';
 import httpProxy from 'http-proxy';
 import { PLATFORM_SSO_HEADER, issueInternalIdentity } from './internal-auth.mjs';
@@ -161,8 +162,8 @@ export function createPlatformRouter({
     proxy.web(req, res, { target });
   }
 
-  function authorizeManagedApp(req, res, service, prefix) {
-    const session = getPlatformSession(req);
+  async function authorizeManagedApp(req, res, service, prefix) {
+    const session = await getPlatformSession(req);
     if (!session) {
       rejectUnauthenticated(req, res, new URL(req.url || '/', 'http://platform.internal').pathname);
       return false;
@@ -183,9 +184,12 @@ export function createPlatformRouter({
     return true;
   }
 
-  function handler(req, res) {
+  async function handler(req, res) {
     // 外部请求永远不能自行传入内部身份票据。
     delete req.headers[PLATFORM_SSO_HEADER];
+    const requestId = crypto.randomUUID();
+    req.headers['x-request-id'] = requestId;
+    res.setHeader('X-Request-Id', requestId);
     const host = normalizeHost(req.headers.host);
     const requestUrl = new URL(req.url || '/', 'http://platform.internal');
 
@@ -205,19 +209,19 @@ export function createPlatformRouter({
     }
 
     if (requestUrl.pathname.startsWith('/apps/core/')) {
-      if (!authorizeManagedApp(req, res, 'core', '/apps/core')) return;
+      if (!await authorizeManagedApp(req, res, 'core', '/apps/core')) return;
       return coreApp(req, res);
     }
     if (requestUrl.pathname.startsWith('/apps/exam/')) {
-      if (!authorizeManagedApp(req, res, 'exam', '/apps/exam')) return;
+      if (!await authorizeManagedApp(req, res, 'exam', '/apps/exam')) return;
       return examApp(req, res);
     }
     if (requestUrl.pathname.startsWith('/apps/campus/')) {
-      if (!authorizeManagedApp(req, res, 'campus', '/apps/campus')) return;
+      if (!await authorizeManagedApp(req, res, 'campus', '/apps/campus')) return;
       return proxyRequest(req, res, campusTarget);
     }
     if (requestUrl.pathname.startsWith('/apps/iot/')) {
-      if (!authorizeManagedApp(req, res, 'iot', '/apps/iot')) return;
+      if (!await authorizeManagedApp(req, res, 'iot', '/apps/iot')) return;
       return proxyRequest(req, res, mqttTarget);
     }
 
@@ -266,8 +270,9 @@ export function createPlatformRouter({
     return portalApp(req, res);
   }
 
-  function handleUpgrade(req, socket, head) {
+  async function handleUpgrade(req, socket, head) {
     delete req.headers[PLATFORM_SSO_HEADER];
+    req.headers['x-request-id'] = crypto.randomUUID();
     const host = normalizeHost(req.headers.host);
     const requestUrl = new URL(req.url || '/', 'http://platform.internal');
     if (hostSets.mqtt.has(host)) {
@@ -275,7 +280,7 @@ export function createPlatformRouter({
       return proxy.ws(req, socket, head, { target: mqttTarget });
     }
     if (requestUrl.pathname === '/apps/iot/ws' || requestUrl.pathname.startsWith('/apps/iot/ws/')) {
-      const session = getPlatformSession(req);
+      const session = await getPlatformSession(req);
       if (
         !session
         || !mqttTarget

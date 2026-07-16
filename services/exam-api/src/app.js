@@ -7,6 +7,7 @@ const compression = require('compression');
 const helmet = require('helmet');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const config = require('./config');
 const errorHandler = require('./middleware/errorHandler');
 const requestLogger = require('./middleware/requestLogger');
@@ -15,6 +16,12 @@ const { NotFoundError } = require('./utils/errors');
 const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
+app.use((req, res, next) => {
+    const incoming = String(req.get('x-request-id') || '');
+    req.id = /^[A-Za-z0-9._:-]{1,128}$/.test(incoming) ? incoming : crypto.randomUUID();
+    res.setHeader('X-Request-Id', req.id);
+    next();
+});
 
 const captchaResourceSources = [
     'https://o.alicdn.com',

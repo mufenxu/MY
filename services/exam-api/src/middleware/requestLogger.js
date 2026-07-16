@@ -46,6 +46,7 @@ function requestLogger(req, res, next) {
             status: res.statusCode,
             duration: `${duration}ms`,
             ip: req.ip,
+            requestId: req.id,
         }, '%s %s %d %dms', req.method, url, res.statusCode, duration);
     });
 

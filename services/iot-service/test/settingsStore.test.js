@@ -1,8 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
+const { MemoryDatabase } = require('../src/storage/db');
 
 const { defaultConfig } = require('../src/config');
 const {
@@ -89,35 +87,15 @@ test('applySecretDirectives clears and replaces secrets explicitly', () => {
   assert.equal(nextInput.auth.sessionSecret, 'next-session-secret');
 });
 
-test('SettingsStore can read a UTF-8 BOM config file', () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mqttapi-config-'));
-  const configPath = path.join(tempDir, 'config.json');
-  const originalConfigFile = process.env.CONFIG_FILE;
+test('SettingsStore persists normalized configuration in MongoDB storage', async () => {
+  const storage = new MemoryDatabase();
+  const { SettingsStore } = require('../src/settings/settingsStore');
+  const store = new SettingsStore({ storage });
+  const loaded = await store.initialize();
+  assert.equal(loaded.mqtt.url, defaultConfig.mqtt.url);
 
-  try {
-    const config = normalizeConfig(defaultConfig, defaultConfig);
-    const content = `\uFEFF${JSON.stringify(config, null, 2)}\n`;
-    fs.writeFileSync(configPath, content, 'utf8');
-
-    process.env.CONFIG_FILE = configPath;
-    delete require.cache[require.resolve('../src/config')];
-    delete require.cache[require.resolve('../src/settings/settingsStore')];
-
-    const { SettingsStore } = require('../src/settings/settingsStore');
-    const store = new SettingsStore();
-    const loaded = store.initialize();
-
-    assert.equal(loaded.mqtt.url, config.mqtt.url);
-    assert.equal(loaded.api.port, config.api.port);
-  } finally {
-    if (originalConfigFile == null) {
-      delete process.env.CONFIG_FILE;
-    } else {
-      process.env.CONFIG_FILE = originalConfigFile;
-    }
-
-    delete require.cache[require.resolve('../src/config')];
-    delete require.cache[require.resolve('../src/settings/settingsStore')];
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  }
+  await store.saveConfig({ dashboard: { refreshInterval: 9000 } });
+  const nextStore = new SettingsStore({ storage });
+  const restored = await nextStore.initialize();
+  assert.equal(restored.dashboard.refreshInterval, 9000);
 });

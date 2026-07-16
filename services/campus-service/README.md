@@ -55,13 +55,7 @@ server.js    学校系统连接器、业务编排和 API 路由
 
 一卡通生活用水平台在同一账号换取新 token 时会立即废弃旧 token，并返回“账号在其他地方登录”。校园余额、用水和住宿连接器共用同一份 UIAS/CAS 会话，`getCampusSummary` 必须保持串行调用，不能改回 `Promise.all` 并发；UWC 请求还会进行有上限的自动会话恢复，前端在最终认证错误时会自动补查一次用水数据。调整校园接口编排后必须运行 `test/auth-recovery.test.js`，并验证首次打开页面无需手动点“查询”即可显示用水码。
 
-保存位置：
-
-```text
-data/app.db
-```
-
-SQLite 数据库会按系统账号隔离保存学校会话、一卡通临时 Token 或个人课表缓存。学校 Cookie/Token 会使用 AES-256-GCM 加密后落盘；建议生产环境配置独立的 `HGU_DATA_ENCRYPTION_KEY`。升级旧部署时如果暂未配置，程序会从 `HGU_APP_SESSION_SECRET` 派生隔离密钥，避免容器启动失败。请勿提交或公开分享数据库和密钥。
+`campus_app` MongoDB 数据库会按系统账号隔离保存学校会话、一卡通临时 Token 或个人课表缓存。学校 Cookie/Token 会使用 AES-256-GCM 加密后入库；生产环境必须配置并长期备份独立的 `HGU_DATA_ENCRYPTION_KEY`。请勿提交或公开分享数据库和密钥。
 
 默认会在首次启动时创建管理员账号。开发环境默认账号为 `admin`，密码为 `admin12345678`；公网部署请务必通过 `.env` 设置 `HGU_ADMIN_USERNAME` 和 `HGU_ADMIN_PASSWORD`。创建更多系统账号：
 
@@ -93,11 +87,11 @@ NRG_COOKIE_FILE=/run/secrets/hgu_nrg_cookie
 
 ### 快速启动
 
-1. 复制 `.env.example` 为 `.env`，然后运行 `npm run env:setup` 自动填充缺失的随机密码、会话签名密钥和数据加密密钥。已有配置不会被覆盖。
-2. 检查 `.env` 中的部署参数；也可以用 `npm run secrets:generate` 只打印一组新凭据后手动配置。
-3. 在项目根目录下执行以下命令：
+1. 在统一平台仓库根目录复制 `.env.example` 为 `.env`，生成并填写所有随机密码、会话签名密钥和数据加密密钥。
+2. 检查根目录 `.env` 中的 MongoDB 与校园服务参数。
+3. 在统一平台仓库根目录执行：
    ```bash
-   docker compose up -d
+   docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build campus-service
    ```
 4. 服务默认只监听宿主机 `127.0.0.1:22101`，请通过 HTTPS 反向代理访问。
 
@@ -126,9 +120,9 @@ PORT=22101
 
 如果放在 Docker 容器内，容器内部继续使用 `HGU_HOST=0.0.0.0`，宿主机端口默认只绑定 `127.0.0.1`。只有在所有流量均经过可信反向代理时才设置 `HGU_TRUST_PROXY=true`；HTTPS 重定向也只会在该开关启用后信任代理传入的协议头。本地 HTTP 调试才可以临时设置 `HGU_APP_COOKIE_SECURE=false` 和 `HGU_ENABLE_HSTS=false`。
 
-不要公开或提交 `data/` 目录；其中包含系统账号和个人缓存。备份数据库时必须同时安全备份 `HGU_DATA_ENCRYPTION_KEY`，但两者应分开保存。`/api/health` 是存活检查，`/api/ready` 会验证数据库可用性。
+备份 `campus_app` 时必须同时安全备份 `HGU_DATA_ENCRYPTION_KEY`，但两者应分开保存。`/api/health` 是存活检查，`/api/ready` 会验证 MongoDB 可用性。
 
-运行 `npm run backup` 可以使用 SQLite 在线备份 API 在 `data/backups/` 生成一致性备份；不要在服务运行时直接复制 WAL 数据库的单个 `app.db` 文件。
+统一备份、恢复和旧 SQLite 迁移步骤见根目录 `docs/operations.md`。
 
 ## 当前功能
 

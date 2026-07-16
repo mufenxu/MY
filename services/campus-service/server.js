@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { isIP } from "node:net";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
@@ -10,7 +10,6 @@ import CryptoJS from "crypto-js";
 import * as cheerio from "cheerio";
 import QRCode from "qrcode";
 import bwipjs from "bwip-js";
-import Database from "better-sqlite3";
 import { runWithAuthRecovery } from "./src/lib/auth-recovery.js";
 import { createLogger } from "./src/lib/logger.js";
 import { KeyedSerialQueue } from "./src/lib/keyed-serial-queue.js";
@@ -23,6 +22,7 @@ import { createSensitiveJsonCodec, deriveDataEncryptionKey } from "./src/lib/sen
 import { normalizeAllowedSchoolUrl } from "./src/lib/school-url.js";
 import { verifyPlatformSso } from "./src/lib/platform-sso.js";
 import { createStaticAssetHandler } from "./src/lib/static-assets.js";
+import { createCampusRepository } from "./src/storage/campus-repository.js";
 import {
   UIAS_ENDPOINTS,
   casServiceFromTicketRedirect,
@@ -41,7 +41,6 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 process.umask(0o077);
 const publicDir = join(__dirname, "public");
 const dataDir = resolve(process.env.HGU_DATA_DIR || join(__dirname, "data"));
-const databasePath = join(dataDir, "app.db");
 const legacySessionPath = join(dataDir, "school-session.json");
 const legacyAcademicCachePath = join(dataDir, "academic-timetable-cache.json");
 const legacyAcademicCurrentCachePath = join(dataDir, "academic-timetable-current-cache.json");
@@ -260,9 +259,6 @@ async function withCampusSessionLock(task) {
 if (APP_AUTH_REQUIRED && !APP_SESSION_SECRET) {
   throw new Error("公网部署必须设置 HGU_APP_SESSION_SECRET。");
 }
-if (APP_AUTH_REQUIRED && !DEFAULT_ADMIN_PASSWORD && !existsSync(databasePath)) {
-  throw new Error("首次启动必须设置 HGU_ADMIN_PASSWORD。");
-}
 if (APP_AUTH_REQUIRED && DEFAULT_ADMIN_PASSWORD && DEFAULT_ADMIN_PASSWORD.length < APP_PASSWORD_MIN_LENGTH) {
   throw new Error(`HGU_ADMIN_PASSWORD must be at least ${APP_PASSWORD_MIN_LENGTH} characters.`);
 }
@@ -358,101 +354,28 @@ function safeEqualString(a, b) {
   return timingSafeEqual(left, right);
 }
 
-mkdirSync(dataDir, { recursive: true });
-const db = new Database(databasePath);
-db.exec(`
-  PRAGMA journal_mode = WAL;
-  PRAGMA foreign_keys = ON;
-  PRAGMA busy_timeout = 5000;
-  PRAGMA synchronous = NORMAL;
+const repository = createCampusRepository();
+await repository.initialize();
 
-  CREATE TABLE IF NOT EXISTS schema_migrations (
-    version INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    applied_at TEXT NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    username TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'user',
-    disabled INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    last_login_at TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS school_sessions (
-    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    jar_json TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS academic_caches (
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    source_key TEXT NOT NULL,
-    cache_json TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    PRIMARY KEY (user_id, source_key)
-  );
-
-  CREATE TABLE IF NOT EXISTS invites (
-    id TEXT PRIMARY KEY,
-    code_hash TEXT NOT NULL UNIQUE,
-    code_preview TEXT NOT NULL,
-    code_text TEXT,
-    role TEXT NOT NULL DEFAULT 'user',
-    note TEXT,
-    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-    used_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-    created_at TEXT NOT NULL,
-    expires_at TEXT,
-    used_at TEXT,
-    revoked_at TEXT
-  );
-`);
-
-function ensureColumn(tableName, columnName, definition) {
-  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
-  if (!columns.some((column) => column.name === columnName)) {
-    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+async function migrateSensitiveDataRows() {
+  if (!sensitiveJson.encrypted) return;
+  const [sessionRows, cacheRows] = await Promise.all([
+    repository.listSchoolSessions(),
+    repository.listAcademicCaches()
+  ]);
+  for (const row of sessionRows) {
+    const decoded = sensitiveJson.decodeWithMetadata(row.jar_json);
+    if (String(row.jar_json || "").startsWith("enc:v1:") && decoded.keyIndex === 0) continue;
+    await repository.upsertSchoolSession(row.user_id, sensitiveJson.encode(decoded.value), nowIso());
+  }
+  for (const row of cacheRows) {
+    const decoded = sensitiveJson.decodeWithMetadata(row.cache_json);
+    if (String(row.cache_json || "").startsWith("enc:v1:") && decoded.keyIndex === 0) continue;
+    await repository.upsertAcademicCache(row.user_id, row.source_key, sensitiveJson.encode(decoded.value), nowIso());
   }
 }
 
-ensureColumn("invites", "code_text", "TEXT");
-ensureColumn("users", "session_version", "INTEGER NOT NULL DEFAULT 1");
-
-function recordSchemaMigration(version, name) {
-  db.prepare("INSERT OR IGNORE INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)")
-    .run(version, name, nowIso());
-}
-
-recordSchemaMigration(1, "baseline_schema");
-recordSchemaMigration(2, "session_security_and_encrypted_sensitive_data");
-
-function migrateSensitiveDataRows() {
-  if (!sensitiveJson.encrypted) return;
-  const sessionRows = db.prepare("SELECT user_id, jar_json FROM school_sessions").all();
-  const cacheRows = db.prepare("SELECT user_id, source_key, cache_json FROM academic_caches").all();
-  const updateSession = db.prepare("UPDATE school_sessions SET jar_json = ?, updated_at = ? WHERE user_id = ?");
-  const updateCache = db.prepare("UPDATE academic_caches SET cache_json = ?, updated_at = ? WHERE user_id = ? AND source_key = ?");
-  const migrate = db.transaction(() => {
-    for (const row of sessionRows) {
-      const decoded = sensitiveJson.decodeWithMetadata(row.jar_json);
-      if (String(row.jar_json || "").startsWith("enc:v1:") && decoded.keyIndex === 0) continue;
-      updateSession.run(sensitiveJson.encode(decoded.value), nowIso(), row.user_id);
-    }
-    for (const row of cacheRows) {
-      const decoded = sensitiveJson.decodeWithMetadata(row.cache_json);
-      if (String(row.cache_json || "").startsWith("enc:v1:") && decoded.keyIndex === 0) continue;
-      updateCache.run(sensitiveJson.encode(decoded.value), nowIso(), row.user_id, row.source_key);
-    }
-  });
-  migrate();
-}
-
-migrateSensitiveDataRows();
+await migrateSensitiveDataRows();
 
 function nowIso() {
   return new Date().toISOString();
@@ -538,21 +461,28 @@ async function verifyUserPassword(password, passwordHash) {
   return verifyPassword(password, passwordHash, { maxLength: APP_PASSWORD_MAX_LENGTH });
 }
 
-function insertSystemUser({ normalized, passwordHash, role = "user" }) {
+async function insertSystemUser({ normalized, passwordHash, role = "user" }) {
   const id = randomUUID();
   const timestamp = nowIso();
   try {
-    db.prepare(`
-      INSERT INTO users (id, username, password_hash, role, disabled, created_at, updated_at)
-      VALUES (?, ?, ?, ?, 0, ?, ?)
-    `).run(id, normalized, passwordHash, role, timestamp, timestamp);
+    await repository.insertUser({
+      id,
+      username: normalized,
+      password_hash: passwordHash,
+      role,
+      disabled: 0,
+      session_version: 1,
+      created_at: timestamp,
+      updated_at: timestamp,
+      last_login_at: null
+    });
   } catch (error) {
-    if (String(error?.code || "").includes("CONSTRAINT")) {
+    if (error?.code === 11000) {
       throw new HttpError(409, "系统用户名已存在。");
     }
     throw error;
   }
-  return publicUser(findUserById(id));
+  return publicUser(await findUserById(id));
 }
 
 async function createSystemUser({ username, password, role = "user" }) {
@@ -563,63 +493,51 @@ async function createSystemUser({ username, password, role = "user" }) {
 
 const DUMMY_PASSWORD_HASH = await hashUserPassword(randomBytes(24).toString("base64url"));
 
-function findUserById(id) {
+async function findUserById(id) {
   if (!id) return null;
-  return db.prepare("SELECT * FROM users WHERE id = ?").get(String(id)) || null;
+  return repository.findUserById(String(id));
 }
 
-function findUserByUsername(username) {
+async function findUserByUsername(username) {
   const normalized = normalizeUsername(username);
   if (!normalized) return null;
-  return db.prepare("SELECT * FROM users WHERE username = ?").get(normalized) || null;
+  return repository.findUserByUsername(normalized);
 }
 
-function listSystemUsers() {
-  return db.prepare(`
-    SELECT
-      users.*,
-      school_sessions.updated_at AS school_session_updated_at,
-      school_sessions.jar_json AS school_session_jar_json,
-      CASE WHEN school_sessions.user_id IS NULL THEN 0 ELSE 1 END AS has_school_session
-    FROM users
-    LEFT JOIN school_sessions ON school_sessions.user_id = users.id
-    ORDER BY users.created_at ASC
-  `).all().map(publicUserWithStatus);
+async function listSystemUsers() {
+  return (await repository.listUsersWithSessions()).map(publicUserWithStatus);
 }
 
 async function authenticateSystemUser(username, password) {
-  const user = findUserByUsername(username);
+  const user = await findUserByUsername(username);
   const passwordValid = await verifyUserPassword(password, user?.password_hash || DUMMY_PASSWORD_HASH);
   if (!user || user.disabled || !passwordValid) return null;
-  db.prepare("UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?").run(nowIso(), nowIso(), user.id);
+  await repository.updateUserLogin(user.id, nowIso());
   return findUserById(user.id);
 }
 
-function setSystemUserDisabled({ id, disabled, actorId }) {
-  const user = findUserById(id);
+async function setSystemUserDisabled({ id, disabled, actorId }) {
+  const user = await findUserById(id);
   if (!user) throw new HttpError(404, "系统用户不存在。");
   if (user.id === actorId && disabled) throw new HttpError(400, "不能停用当前登录的管理员账号。");
-  db.prepare("UPDATE users SET disabled = ?, session_version = session_version + 1, updated_at = ? WHERE id = ?")
-    .run(disabled ? 1 : 0, nowIso(), user.id);
-  return publicUser(findUserById(user.id));
+  await repository.setUserDisabled(user.id, disabled, nowIso());
+  return publicUser(await findUserById(user.id));
 }
 
-function revokeSystemUserSessions(id) {
-  db.prepare("UPDATE users SET session_version = session_version + 1, updated_at = ? WHERE id = ?")
-    .run(nowIso(), id);
+async function revokeSystemUserSessions(id) {
+  await repository.bumpSessionVersion(id, nowIso());
 }
 
 async function resetSystemUserPassword({ id, password }) {
-  const user = findUserById(id);
+  const user = await findUserById(id);
   if (!user) throw new HttpError(404, "系统用户不存在。");
   const passwordHash = await hashUserPassword(password);
-  db.prepare("UPDATE users SET password_hash = ?, session_version = session_version + 1, updated_at = ? WHERE id = ?")
-    .run(passwordHash, nowIso(), user.id);
-  return publicUser(findUserById(user.id));
+  await repository.setUserPassword(user.id, passwordHash, nowIso());
+  return publicUser(await findUserById(user.id));
 }
 
 async function changeOwnPassword({ userId, currentPassword, newPassword }) {
-  const user = findUserById(userId);
+  const user = await findUserById(userId);
   if (!user) throw new HttpError(404, "系统用户不存在。");
   if (!(await verifyUserPassword(currentPassword || "", user.password_hash))) {
     throw new HttpError(401, "当前系统密码不正确。");
@@ -627,11 +545,11 @@ async function changeOwnPassword({ userId, currentPassword, newPassword }) {
   return resetSystemUserPassword({ id: user.id, password: newPassword });
 }
 
-function deleteSystemUser({ id, actorId }) {
-  const user = findUserById(id);
+async function deleteSystemUser({ id, actorId }) {
+  const user = await findUserById(id);
   if (!user) throw new HttpError(404, "系统用户不存在。");
   if (user.id === actorId) throw new HttpError(400, "不能删除当前登录的管理员账号。");
-  db.prepare("DELETE FROM users WHERE id = ?").run(user.id);
+  await repository.deleteUser(user.id);
   return publicUser(user);
 }
 
@@ -687,21 +605,11 @@ function publicInvite(row, { code = null } = {}) {
   };
 }
 
-function listInvites() {
-  return db.prepare(`
-    SELECT
-      invites.*,
-      creator.username AS created_by_username,
-      used_user.username AS used_by_username
-    FROM invites
-    LEFT JOIN users creator ON creator.id = invites.created_by
-    LEFT JOIN users used_user ON used_user.id = invites.used_by
-    ORDER BY invites.created_at DESC
-    LIMIT 100
-  `).all().map(publicInvite);
+async function listInvites() {
+  return (await repository.listInvites()).map(publicInvite);
 }
 
-function createInvite({ role = "user", note = "", expiresInDays = 7, actorId }) {
+async function createInvite({ role = "user", note = "", expiresInDays = 7, actorId }) {
   const id = randomUUID();
   const code = generateInviteCode();
   const normalized = normalizeInviteCode(code);
@@ -712,58 +620,66 @@ function createInvite({ role = "user", note = "", expiresInDays = 7, actorId }) 
   const expiresAt = Number.isFinite(days) && days > 0
     ? new Date(Date.now() + Math.min(days, 365) * 24 * 60 * 60 * 1000).toISOString()
     : null;
-  db.prepare(`
-    INSERT INTO invites (id, code_hash, code_preview, code_text, role, note, created_by, created_at, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  const row = await repository.insertInvite({
     id,
-    inviteCodeHash(normalized),
-    inviteCodePreview(code),
-    code,
-    role === "admin" ? "admin" : "user",
-    normalizedNote || null,
-    actorId,
-    timestamp,
-    expiresAt
-  );
-  const row = db.prepare("SELECT * FROM invites WHERE id = ?").get(id);
+    code_hash: inviteCodeHash(normalized),
+    code_preview: inviteCodePreview(code),
+    code_text: code,
+    role: role === "admin" ? "admin" : "user",
+    note: normalizedNote || null,
+    created_by: actorId,
+    used_by: null,
+    created_at: timestamp,
+    expires_at: expiresAt,
+    used_at: null,
+    revoked_at: null
+  });
   return publicInvite(row, { code });
 }
 
-function revokeInvite({ id }) {
-  const invite = db.prepare("SELECT * FROM invites WHERE id = ?").get(id);
+async function revokeInvite({ id }) {
+  const invite = await repository.findInviteById(id);
   if (!invite) throw new HttpError(404, "邀请码不存在。");
   if (invite.used_at) throw new HttpError(400, "已使用的邀请码不能撤销。");
-  db.prepare("UPDATE invites SET revoked_at = ? WHERE id = ?").run(nowIso(), id);
-  return publicInvite(db.prepare("SELECT * FROM invites WHERE id = ?").get(id));
+  return publicInvite(await repository.revokeInvite(id, nowIso()));
 }
 
-function deleteInvite({ id }) {
-  const invite = db.prepare("SELECT * FROM invites WHERE id = ?").get(id);
+async function deleteInvite({ id }) {
+  const invite = await repository.findInviteById(id);
   if (!invite) throw new HttpError(404, "邀请码不存在。");
-  db.prepare("DELETE FROM invites WHERE id = ?").run(id);
+  await repository.deleteInvite(id);
   return publicInvite(invite);
 }
 
-const registerWithInviteTx = db.transaction(({ inviteCode, normalized, passwordHash }) => {
-  const invite = db.prepare("SELECT * FROM invites WHERE code_hash = ?").get(inviteCodeHash(inviteCode));
-  if (!invite) throw new HttpError(400, "邀请码无效。");
-  if (inviteStatus(invite) !== "active") throw new HttpError(400, "邀请码已失效。");
-  const user = insertSystemUser({ normalized, passwordHash, role: invite.role });
-  db.prepare("UPDATE invites SET used_by = ?, used_at = ? WHERE id = ?").run(user.id, nowIso(), invite.id);
-  return findUserById(user.id);
-});
-
 async function registerWithInvite({ inviteCode, username, password }) {
-  const existingInvite = db.prepare("SELECT * FROM invites WHERE code_hash = ?").get(inviteCodeHash(inviteCode));
+  const codeHash = inviteCodeHash(inviteCode);
+  const existingInvite = await repository.findInviteByHash(codeHash);
   if (!existingInvite || inviteStatus(existingInvite) !== "active") throw new HttpError(400, "邀请码无效或已失效。");
   const normalized = validateNewUsername(username);
   const passwordHash = await hashUserPassword(password);
-  return registerWithInviteTx({ inviteCode, normalized, passwordHash });
+  const timestamp = nowIso();
+  const user = await repository.registerWithInvite({
+    codeHash,
+    timestamp,
+    inviteIsActive: (invite) => inviteStatus(invite) === "active",
+    user: {
+      id: randomUUID(),
+      username: normalized,
+      password_hash: passwordHash,
+      role: "user",
+      disabled: 0,
+      session_version: 1,
+      created_at: timestamp,
+      updated_at: timestamp,
+      last_login_at: null
+    }
+  });
+  if (!user) throw new HttpError(400, "邀请码无效或已失效。");
+  return user;
 }
 
-function getDefaultUser() {
-  return db.prepare("SELECT * FROM users ORDER BY created_at ASC LIMIT 1").get() || null;
+async function getDefaultUser() {
+  return repository.findFirstUser();
 }
 
 function readLegacyJson(filePath) {
@@ -775,44 +691,40 @@ function readLegacyJson(filePath) {
   }
 }
 
-function migrateLegacyJsonData(userId) {
+async function migrateLegacyJsonData(userId) {
   if (!userId) return;
-  const hasSession = db.prepare("SELECT 1 FROM school_sessions WHERE user_id = ?").get(userId);
+  const hasSession = await repository.getSchoolSession(userId);
   const legacySession = readLegacyJson(legacySessionPath);
   if (!hasSession && legacySession) {
-    db.prepare(`
-      INSERT INTO school_sessions (user_id, jar_json, updated_at)
-      VALUES (?, ?, ?)
-    `).run(userId, sensitiveJson.encode(legacySession), nowIso());
+    await repository.upsertSchoolSession(userId, sensitiveJson.encode(legacySession), nowIso());
   }
 
   for (const [sourceKey, filePath] of [
     ["current", legacyAcademicCurrentCachePath],
     ["selection", legacyAcademicCachePath]
   ]) {
-    const hasCache = db.prepare("SELECT 1 FROM academic_caches WHERE user_id = ? AND source_key = ?").get(userId, sourceKey);
+    const hasCache = await repository.getAcademicCache(userId, sourceKey);
     const legacyCache = readLegacyJson(filePath);
     if (!hasCache && legacyCache) {
-      db.prepare(`
-        INSERT INTO academic_caches (user_id, source_key, cache_json, updated_at)
-        VALUES (?, ?, ?, ?)
-      `).run(userId, sourceKey, sensitiveJson.encode(legacyCache), nowIso());
+      await repository.upsertAcademicCache(userId, sourceKey, sensitiveJson.encode(legacyCache), nowIso());
     }
   }
 }
 
 async function ensureDefaultAdminUser() {
-  const count = db.prepare("SELECT COUNT(*) AS count FROM users").get().count;
+  const count = await repository.countUsers();
   if (count > 0) return;
+  if (!DEFAULT_ADMIN_PASSWORD) throw new Error("首次启动必须设置 HGU_ADMIN_PASSWORD。");
   const admin = await createSystemUser({
     username: DEFAULT_ADMIN_USERNAME,
     password: DEFAULT_ADMIN_PASSWORD,
     role: "admin"
   });
-  migrateLegacyJsonData(admin.id);
+  await migrateLegacyJsonData(admin.id);
 }
 
 await ensureDefaultAdminUser();
+const defaultSystemUser = await getDefaultUser();
 
 function parseCookieHeader(headerValue = "") {
   const cookies = {};
@@ -855,8 +767,8 @@ function appSessionData(user, { csrfToken = null, expiresAt = null } = {}) {
   };
 }
 
-function verifyAppSession(token) {
-  if (!APP_AUTH_REQUIRED) return appSessionData(getDefaultUser(), { csrfToken: null, expiresAt: null });
+async function verifyAppSession(token) {
+  if (!APP_AUTH_REQUIRED) return appSessionData(defaultSystemUser, { csrfToken: null, expiresAt: null });
   const [body, signature] = String(token || "").split(".");
   if (!body || !signature || !safeEqualString(signature, hmacBase64Url(body))) {
     throw new HttpError(401, "系统访问会话无效，请重新输入访问密码。");
@@ -870,7 +782,7 @@ function verifyAppSession(token) {
   if (!payload.exp || Number(payload.exp) <= Date.now()) {
     throw new HttpError(401, "系统访问会话已过期，请重新输入访问密码。");
   }
-  const user = findUserById(payload.uid);
+  const user = await findUserById(payload.uid);
   if (!user || user.disabled || Number(payload.sv) !== Number(user.session_version || 1)) {
     throw new HttpError(401, "系统账号不存在或已停用，请重新登录。");
   }
@@ -891,12 +803,12 @@ function appSessionTokenFromHeader(req) {
   return token.length <= 4_096 ? token : "";
 }
 
-function getAppSession(req) {
-  if (!APP_AUTH_REQUIRED) return appSessionData(getDefaultUser(), { csrfToken: null, expiresAt: null });
+async function getAppSession(req) {
+  if (!APP_AUTH_REQUIRED) return appSessionData(defaultSystemUser, { csrfToken: null, expiresAt: null });
   const platformIdentity = verifyPlatformSso(req);
   if (platformIdentity) {
     const mappedUsername = process.env.PLATFORM_SSO_CAMPUS_USERNAME || platformIdentity.sub;
-    const user = findUserByUsername(mappedUsername);
+    const user = await findUserByUsername(mappedUsername);
     if (!user || user.disabled || user.role !== "admin") {
       throw new HttpError(403, "统一管理员未映射到校园服务管理员账号。", null, "PLATFORM_SSO_ACCOUNT_NOT_MAPPED");
     }
@@ -920,12 +832,12 @@ function getAppSession(req) {
   return verifyAppSession(cookieToken);
 }
 
-function appAuthStatus(req) {
+async function appAuthStatus(req) {
   if (!APP_AUTH_REQUIRED) {
-    return { required: false, ...appSessionData(getDefaultUser(), { csrfToken: null, expiresAt: null }) };
+    return { required: false, ...appSessionData(defaultSystemUser, { csrfToken: null, expiresAt: null }) };
   }
   try {
-    return { required: true, ...getAppSession(req) };
+    return { required: true, ...await getAppSession(req) };
   } catch {
     return { required: true, authenticated: false, csrfToken: null, expiresAt: null };
   }
@@ -1008,8 +920,8 @@ function methodNeedsCsrf(method) {
   return !["GET", "HEAD", "OPTIONS"].includes(String(method || "GET").toUpperCase());
 }
 
-function requireAppAccess(req) {
-  const session = getAppSession(req);
+async function requireAppAccess(req) {
+  const session = await getAppSession(req);
   if (methodNeedsCsrf(req.method)) {
     const supplied = req.headers["x-csrf-token"];
     if (!session.csrfToken || !supplied || !safeEqualString(String(supplied), session.csrfToken)) {
@@ -1022,7 +934,7 @@ function requireAppAccess(req) {
 function currentUser() {
   const user = userContextStorage.getStore()?.user;
   if (user) return user;
-  const fallback = getDefaultUser();
+  const fallback = defaultSystemUser;
   if (!fallback) throw new HttpError(401, "请先登录系统账号。");
   return fallback;
 }
@@ -1245,24 +1157,27 @@ function readEnvCookie() {
   return "";
 }
 
-const saveSessionJarTx = db.transaction((userId, incoming) => {
-  const row = db.prepare("SELECT jar_json FROM school_sessions WHERE user_id = ?").get(userId);
-  let stored = emptyJar();
-  if (row?.jar_json) stored = sensitiveJson.decode(row.jar_json);
-  const merged = mergeSessionJars(stored, incoming);
-  db.prepare(`
-    INSERT INTO school_sessions (user_id, jar_json, updated_at)
-    VALUES (?, ?, ?)
-    ON CONFLICT(user_id) DO UPDATE SET
-      jar_json = excluded.jar_json,
-      updated_at = excluded.updated_at
-  `).run(userId, sensitiveJson.encode(merged), merged.updatedAt);
-  return merged;
-});
+async function saveSessionJarForUser(userId, incoming) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const row = await repository.getSchoolSession(userId);
+    let stored = emptyJar();
+    if (row?.jar_json) stored = sensitiveJson.decode(row.jar_json);
+    const merged = mergeSessionJars(stored, incoming);
+    const expectedVersion = row ? Number(row.version || 0) : null;
+    const saved = await repository.replaceSchoolSessionIfVersion(
+      userId,
+      expectedVersion,
+      sensitiveJson.encode(merged),
+      merged.updatedAt
+    );
+    if (saved) return merged;
+  }
+  throw new HttpError(409, "校园会话正在被其他请求更新，请重试。", null, "SESSION_WRITE_CONFLICT");
+}
 
 async function readSessionJar() {
   const userId = currentUserId();
-  const row = db.prepare("SELECT jar_json FROM school_sessions WHERE user_id = ?").get(userId);
+  const row = await repository.getSchoolSession(userId);
   if (!row) return emptyJar();
   try {
     const parsed = sensitiveJson.decode(row.jar_json);
@@ -1280,12 +1195,12 @@ async function readSessionJar() {
 }
 
 async function saveSessionJar(jar) {
-  const merged = saveSessionJarTx(currentUserId(), jar);
+  const merged = await saveSessionJarForUser(currentUserId(), jar);
   Object.assign(jar, merged);
 }
 
 async function clearSessionJar() {
-  db.prepare("DELETE FROM school_sessions WHERE user_id = ?").run(currentUserId());
+  await repository.deleteSchoolSession(currentUserId());
 }
 
 function academicSessionSummary(jar) {
@@ -4921,10 +4836,7 @@ async function getFreeClassrooms(query) {
 }
 
 async function readAcademicTimetableCache(source = ACADEMIC_TIMETABLE_SOURCES.current) {
-  const row = db.prepare(`
-    SELECT cache_json FROM academic_caches
-    WHERE user_id = ? AND source_key = ?
-  `).get(currentUserId(), source.key);
+  const row = await repository.getAcademicCache(currentUserId(), source.key);
   if (!row) return null;
   try {
     const cached = sensitiveJson.decode(row.cache_json);
@@ -4940,13 +4852,12 @@ async function readAcademicTimetableCache(source = ACADEMIC_TIMETABLE_SOURCES.cu
 }
 
 async function saveAcademicTimetableCache(data, source = ACADEMIC_TIMETABLE_SOURCES.current) {
-  db.prepare(`
-    INSERT INTO academic_caches (user_id, source_key, cache_json, updated_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(user_id, source_key) DO UPDATE SET
-      cache_json = excluded.cache_json,
-      updated_at = excluded.updated_at
-  `).run(currentUserId(), source.key, sensitiveJson.encode(data), nowIso());
+  await repository.upsertAcademicCache(
+    currentUserId(),
+    source.key,
+    sensitiveJson.encode(data),
+    nowIso()
+  );
 }
 
 async function getAcademicTimetable(source = ACADEMIC_TIMETABLE_SOURCES.current) {
@@ -5844,12 +5755,12 @@ async function handleAppLoginForm(req, res) {
 async function handleApi(req, res, url) {
   try {
     if (url.pathname === "/api/app-auth/status") {
-      json(res, 200, { ok: true, data: appAuthStatus(req) });
+      json(res, 200, { ok: true, data: await appAuthStatus(req) });
       return;
     }
     if (url.pathname === "/api/app-auth/login" && req.method === "POST") {
       if (!APP_AUTH_REQUIRED) {
-        json(res, 200, { ok: true, data: appAuthStatus(req) });
+        json(res, 200, { ok: true, data: await appAuthStatus(req) });
         return;
       }
       const body = await readBodyJson(req);
@@ -5878,7 +5789,7 @@ async function handleApi(req, res, url) {
     }
 
     if (url.pathname === "/api/health") {
-      const { csrfToken: _csrfToken, ...healthAuth } = appAuthStatus(req);
+      const { csrfToken: _csrfToken, ...healthAuth } = await appAuthStatus(req);
       json(res, 200, {
         ok: true,
         service: "hgu-campus-hub",
@@ -5887,13 +5798,13 @@ async function handleApi(req, res, url) {
       return;
     }
     if (url.pathname === "/api/ready") {
-      db.prepare("SELECT 1 AS ready").get();
-      json(res, 200, { ok: true, service: "hgu-campus-hub", ready: true });
+      const ready = await repository.ping();
+      json(res, ready ? 200 : 503, { ok: ready, service: "hgu-campus-hub", ready });
       return;
     }
 
-    const appSession = APP_AUTH_REQUIRED ? requireAppAccess(req) : getAppSession(req);
-    const contextUser = findUserById(appSession.user?.id);
+    const appSession = APP_AUTH_REQUIRED ? await requireAppAccess(req) : await getAppSession(req);
+    const contextUser = await findUserById(appSession.user?.id);
     if (!contextUser) throw new HttpError(401, "请先登录系统账号。");
     const requestContext = userContextStorage.getStore();
     if (requestContext) requestContext.user = contextUser;
@@ -5909,7 +5820,7 @@ async function handleApi(req, res, url) {
         json(res, 200, { ok: true, data: appSession });
         return;
       }
-      revokeSystemUserSessions(currentUserId());
+      await revokeSystemUserSessions(currentUserId());
       logger.info("audit_app_logout", { actorUserId: currentUserId() });
       json(res, 200, {
         ok: true,
@@ -5924,7 +5835,7 @@ async function handleApi(req, res, url) {
         currentPassword: body.currentPassword,
         newPassword: body.newPassword
       });
-      const refreshedUser = findUserById(currentUserId());
+      const refreshedUser = await findUserById(currentUserId());
       const issued = issueAppSessionHeaders(refreshedUser, req);
       logger.info("audit_password_changed", { actorUserId: currentUserId() });
       json(res, 200, { ok: true, data: issued.session }, issued.headers);
@@ -5933,7 +5844,7 @@ async function handleApi(req, res, url) {
 
     if (url.pathname === "/api/users" && req.method === "GET") {
       requireAdminUser();
-      json(res, 200, { ok: true, data: listSystemUsers() });
+      json(res, 200, { ok: true, data: await listSystemUsers() });
       return;
     }
     if (url.pathname === "/api/users" && req.method === "POST") {
@@ -5950,13 +5861,13 @@ async function handleApi(req, res, url) {
     }
     if (url.pathname === "/api/invites" && req.method === "GET") {
       requireAdminUser();
-      json(res, 200, { ok: true, data: listInvites() });
+      json(res, 200, { ok: true, data: await listInvites() });
       return;
     }
     if (url.pathname === "/api/invites" && req.method === "POST") {
       requireAdminUser();
       const body = await readBodyJson(req);
-      const invite = createInvite({
+      const invite = await createInvite({
         role: body.role,
         note: body.note,
         expiresInDays: body.expiresInDays,
@@ -5971,14 +5882,14 @@ async function handleApi(req, res, url) {
       requireAdminUser();
       const body = await readBodyJson(req);
       if (body.revoked !== true) throw new HttpError(400, "无效的邀请码操作。");
-      const invite = revokeInvite({ id: decodeURIComponent(inviteActionMatch[1]) });
+      const invite = await revokeInvite({ id: decodeURIComponent(inviteActionMatch[1]) });
       logger.info("audit_invite_revoked", { actorUserId: currentUserId(), inviteId: invite.id });
       json(res, 200, { ok: true, data: invite });
       return;
     }
     if (inviteActionMatch && req.method === "DELETE") {
       requireAdminUser();
-      const invite = deleteInvite({ id: decodeURIComponent(inviteActionMatch[1]) });
+      const invite = await deleteInvite({ id: decodeURIComponent(inviteActionMatch[1]) });
       logger.info("audit_invite_deleted", { actorUserId: currentUserId(), inviteId: invite.id });
       json(res, 200, { ok: true, data: invite });
       return;
@@ -5997,7 +5908,7 @@ async function handleApi(req, res, url) {
       }
       if (!subAction && req.method === "PATCH") {
         const body = await readBodyJson(req);
-        const user = setSystemUserDisabled({
+        const user = await setSystemUserDisabled({
           id: targetUserId,
           disabled: Boolean(body.disabled),
           actorId: currentUserId()
@@ -6011,7 +5922,7 @@ async function handleApi(req, res, url) {
         return;
       }
       if (!subAction && req.method === "DELETE") {
-        const user = deleteSystemUser({ id: targetUserId, actorId: currentUserId() });
+        const user = await deleteSystemUser({ id: targetUserId, actorId: currentUserId() });
         logger.info("audit_user_deleted", { actorUserId: currentUserId(), targetUserId: user.id });
         json(res, 200, { ok: true, data: user });
         return;
@@ -6239,7 +6150,7 @@ async function refreshAcademicTimetableInBackground(reason) {
   if (academicAutoRefreshRunning) return;
   academicAutoRefreshRunning = true;
   try {
-    const users = db.prepare("SELECT * FROM users WHERE disabled = 0 ORDER BY created_at ASC").all();
+    const users = await repository.listActiveUsers();
     for (const user of users) {
       await userContextStorage.run({ requestId: `job-${randomUUID()}`, user }, async () => {
         if (!(await hasAcademicRefreshSession())) return;
@@ -6277,7 +6188,8 @@ function startAcademicAutoRefresh() {
 }
 
 const server = createServer((req, res) => {
-  const requestId = randomUUID();
+  const incomingRequestId = String(req.headers["x-request-id"] || "");
+  const requestId = /^[A-Za-z0-9._:-]{1,128}$/.test(incomingRequestId) ? incomingRequestId : randomUUID();
   const startedAt = performance.now();
   res.once("finish", () => {
     const path = String(req.url || "").split("?", 1)[0];
@@ -6348,9 +6260,9 @@ function shutdown(signal) {
     server.closeAllConnections?.();
   }, 10_000);
   forceTimer.unref();
-  server.close(() => {
+  server.close(async () => {
     clearTimeout(forceTimer);
-    db.close();
+    await repository.close();
     logger.info("service_stopped", { signal });
   });
 }

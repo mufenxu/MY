@@ -6,7 +6,9 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "test": "node --test",
+    "check": "node --check src/server.js && node --check src/app.js && npm test"
   },
   "keywords": [
     "wecom",
@@ -20,6 +22,8 @@
     "axios": "^1.7.2",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.3.0",
     "morgan": "^1.10.0",
     "zod": "^3.23.8"
   },
@@ -27,4 +31,3 @@
     "nodemon": "^3.1.0"
   }
 }
-

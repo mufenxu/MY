@@ -8,6 +8,7 @@ const runtimeFiles = {
   notifyApp: ['NOTIFY_APP_PATH', 'services/notification-service/src/app.js'],
   portalApp: ['PORTAL_APP_PATH', 'apps/admin-console/src/app.js'],
   portalConfig: ['PORTAL_CONFIG_PATH', 'apps/admin-console/src/config.js'],
+  portalMongoSessionRegistry: ['PORTAL_MONGO_SESSION_REGISTRY_PATH', 'apps/admin-console/src/mongo-session-registry.js'],
 };
 
 export function resolveWorkspaceRoot(moduleUrl = import.meta.url) {

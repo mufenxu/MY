@@ -3,6 +3,7 @@
  */
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const app = require('./app');
 const config = require('./config');
 const logger = require('./config/logger');
@@ -156,6 +157,10 @@ async function closeExamRuntime() {
     }
 }
 
+function isExamRuntimeReady() {
+    return initialized && mongoose.connection.readyState === 1;
+}
+
 async function startStandalone() {
     try {
         await initializeExamRuntime();
@@ -189,5 +194,6 @@ module.exports = {
     app,
     initializeExamRuntime,
     closeExamRuntime,
+    isExamRuntimeReady,
     startStandalone,
 };

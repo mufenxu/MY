@@ -7,15 +7,19 @@
     "check": "node scripts/check-js.js",
     "audit:prod": "npm audit --omit=dev",
     "start": "node src/index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "migrate:sqlite": "node scripts/migrate-sqlite-to-mongodb.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "express": "^5.1.0",
+    "mongodb": "^7.5.0",
     "mqtt": "^5.14.1",
-    "sqlite3": "^6.0.1",
     "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "sqlite3": "^6.0.1"
   }
 }

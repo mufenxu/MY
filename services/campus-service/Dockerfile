@@ -1,25 +1,22 @@
-FROM node:22-alpine AS runtime
+FROM node:24-bookworm-slim
+
+ENV NODE_ENV=production \
+    PORT=22101 \
+    HGU_HOST=0.0.0.0
 
 WORKDIR /app
 COPY package*.json ./
-RUN apk add --no-cache su-exec \
-  && npm ci --omit=dev \
+RUN npm ci --omit=dev --no-audit --no-fund \
   && npm cache clean --force
 
 COPY --chown=node:node server.js ./
 COPY --chown=node:node src ./src
 COPY --chown=node:node scripts ./scripts
 COPY --chown=node:node public ./public
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN mkdir -p /app/data && chown node:node /app/data
-RUN chmod 755 /usr/local/bin/docker-entrypoint.sh
 
-ENV NODE_ENV=production
-ENV PORT=22101
-ENV HGU_HOST=0.0.0.0
-
+USER node
 EXPOSE 22101
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD su-exec node wget -q -O - http://127.0.0.1:22101/api/ready >/dev/null || exit 1
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+  CMD ["node", "-e", "fetch('http://127.0.0.1:22101/api/ready').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
+
 CMD ["node", "server.js"]

@@ -20,13 +20,7 @@
 - `ACCOUNTS_JSON`：可选，多账号 JSON（见下）
 - `USERS_LIST`：可选，仅用户名列表（见下），其余 `SSH_HOST/SSH_PASSWORD/SSH_PORT` 复用
 
-> 私钥示例（请完整粘贴，包括 BEGIN/END 行）：
->
-> ```
-> -----BEGIN OPENSSH PRIVATE KEY-----
-> ...
-> -----END OPENSSH PRIVATE KEY-----
-> ```
+> `SSH_PRIVATE_KEY` 需要粘贴完整的 OpenSSH 私钥内容，包括标准的起始行和结束行；不要把真实私钥写入仓库文件。
 
 ### 2. 网页面板所需 Secrets / Variables
 

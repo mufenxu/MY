@@ -37,6 +37,25 @@ test('production accepts a password hash and strong session secret', () => {
     PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: internalPrivateKey,
     PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: internalPublicKey,
     PLATFORM_PUBLIC_ORIGIN: 'https://admin.example.com',
+    PLATFORM_MONGODB_URI: 'mongodb://platform.example/platform_app',
+    PLATFORM_METRICS_TOKEN: 'm'.repeat(32),
   });
   assert.equal(config.authDisabled, false);
+});
+
+test('production rejects public template secrets', () => {
+  assert.throws(
+    () => loadConfig({
+      NODE_ENV: 'production',
+      PLATFORM_ADMIN_USERNAME: 'admin',
+      PLATFORM_ADMIN_PASSWORD_HASH: 'scrypt$salt$hash',
+      PLATFORM_SESSION_SECRET: 'x'.repeat(32),
+      PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: internalPrivateKey,
+      PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: internalPublicKey,
+      PLATFORM_PUBLIC_ORIGIN: 'https://admin.example.com',
+      PLATFORM_MONGODB_URI: 'mongodb://platform.example/platform_app',
+      PLATFORM_METRICS_TOKEN: 'replace_with_at_least_32_random_characters',
+    }),
+    /PLATFORM_METRICS_TOKEN/,
+  );
 });

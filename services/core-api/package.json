@@ -12,7 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "@alicloud/mpserverless-node-sdk": "^1.2.5",
-    "axios": "^1.13.2",
+    "axios": "^1.18.1",
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
@@ -20,18 +20,18 @@
     "dayjs": "^1.11.19",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "express-rate-limit": "^8.2.1",
+    "express-rate-limit": "^8.5.2",
     "helmet": "^8.1.0",
-    "joi": "^18.0.2",
+    "joi": "^18.2.3",
     "jsonwebtoken": "^9.0.2",
     "libsodium-wrappers": "^0.7.15",
-    "mongoose": "^9.0.0",
-    "morgan": "^1.10.1",
-    "multer": "^2.0.2",
+    "mongoose": "^9.7.4",
+    "morgan": "^1.11.0",
+    "multer": "^2.2.0",
     "node-cron": "^4.2.1",
     "node-schedule": "^2.1.1",
-    "nodemailer": "^7.0.10",
+    "nodemailer": "^9.0.3",
     "winston": "^3.19.0",
-    "ws": "^8.18.3"
+    "ws": "^8.21.1"
   }
 }

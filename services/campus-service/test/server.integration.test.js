@@ -62,6 +62,7 @@ test("server authentication, revocation, validation and static caching work toge
       PORT: String(port),
       HGU_HOST: "127.0.0.1",
       HGU_DATA_DIR: dataDir,
+      HGU_STORAGE_DRIVER: "memory",
       HGU_ADMIN_USERNAME: "admin",
       HGU_ADMIN_PASSWORD: initialPassword,
       HGU_APP_SESSION_SECRET: randomBytes(32).toString("base64url"),

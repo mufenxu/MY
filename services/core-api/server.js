@@ -47,7 +47,8 @@ app.use(helmet({
     hsts: { maxAge: 31536000, includeSubDomains: false },
 }));
 // HTTP 请求日志 - 精简格式，跳过高频无意义请求
-app.use(morgan(':method :url :status :response-time[0]ms :res[content-length]', {
+morgan.token('request-id', (req) => req.id || '-');
+app.use(morgan(':request-id :method :url :status :response-time[0]ms :res[content-length]', {
     stream: logger.stream,
     skip: (req, _res) => {
         // 跳过健康检查和根路径等高频请求
@@ -76,7 +77,7 @@ app.use(cors({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'X-App-Id']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'X-App-Id', 'X-Request-Id']
 }));
 app.use(express.json({
     limit: '1mb',
@@ -170,6 +171,10 @@ async function closeCoreRuntime() {
     initialized = false;
 }
 
+function isCoreRuntimeReady() {
+    return initialized && mongoose.connection.readyState === 1;
+}
+
 async function gracefulShutdown(signal) {
     logger.info(`Received ${signal}. Starting graceful shutdown...`);
     if (server) {
@@ -226,5 +231,6 @@ module.exports = {
     app,
     initializeCoreRuntime,
     closeCoreRuntime,
+    isCoreRuntimeReady,
     startStandalone,
 };

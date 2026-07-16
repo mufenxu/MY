@@ -328,7 +328,7 @@ const deviceConfigView = window.MqttApiDeviceConfig.createDeviceConfigView({
 // 细分页面头部文案元数据
 const paneMeta = {
   devices: { eyebrow: 'Device Center', title: '设备中心', desc: '实时监控传感器快照与继电器，并在此统一进行多设备映射配置和活跃主题嗅探自动注册。' },
-  history: { eyebrow: 'Data & Analysis', title: '数据分析', desc: '调取并过滤 SQLite 数据库中长期存储的传感器采样时序数据，支持多端对比折线图及 CSV 数据导出。' },
+  history: { eyebrow: 'Data & Analysis', title: '数据分析', desc: '调取并过滤 MongoDB 中长期存储的传感器采样时序数据，支持多端对比折线图及 CSV 数据导出。' },
   keys: { eyebrow: 'Security Center', title: '安全准入', desc: '统一保护系统安全边界。支持在此管理外部应用 API Token 授权密钥，并管理后台管理员登录凭证。' },
   events: { eyebrow: 'Audit Logs', title: '日志审计', desc: '捕获并监视实时业务操作流、系统连接日志和网络底层命令收发轨迹。' },
   config: { eyebrow: 'System Maintenance', title: '系统运维', desc: '就地测试与管理 MQTT Broker / Webhook 通信，查看硬件系统诊断，并管理底层垃圾清理维护。' }

@@ -17,19 +17,15 @@ docker compose version
 ## 2. 准备配置文件
 
 1. 将项目代码克隆或上传到您的远程服务器。
-2. 进入项目根目录：
+2. 进入统一平台仓库根目录：
    ```bash
-   cd HGU
+   cd unified-platform
    ```
 3. 从模板复制并创建您的配置文件 `.env`：
    ```bash
    cp .env.example .env
    ```
-4. 自动补齐缺失的生产环境随机凭据（不会覆盖已有值）：
-   ```bash
-   npm run env:setup
-   ```
-5. 编辑并检查 `.env` 文件：
+4. 编辑并检查 `.env` 文件：
    ```bash
    nano .env
    ```
@@ -45,68 +41,58 @@ docker compose version
    * **`PORT`**: 宿主机上映射的端口，默认为 `22101`。
    * **`HGU_TRUST_PROXY`**：只有在服务仅能通过可信 Nginx/Caddy 访问时设为 `true`，否则保持 `false`。
 
-   容器会先测试 `node` 用户能否写入；如果 NAS、NFS、CIFS 等存储禁止 `chown`，会自动读取现有 `app.db` 或 `data/` 目录的数字 UID/GID，并使用相同身份运行，不会因 `chown` 失败而重启。如果特殊存储仍无法自动识别，可在宿主机运行 `stat -c '%u:%g' ./data`，然后把结果分别写入 `.env` 的 `HGU_DATA_UID` 和 `HGU_DATA_GID`。
+   校园服务不再挂载本地写入目录；请在根目录 `.env` 配置独立的 `MONGO_CAMPUS_USERNAME` 和 `MONGO_CAMPUS_PASSWORD`。
 
 ## 3. 一键部署与管理
 
 ### 启动服务
 
-在服务器部署目录下执行以下命令，Docker Compose 将拉取已发布镜像并于后台运行：
+在统一平台仓库根目录执行以下命令，Docker Compose 将初始化 MongoDB 并启动校园服务：
 ```bash
-docker compose up -d
+docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build campus-service
 ```
 
 ### 查看运行状态
 
 检查容器是否正在运行：
 ```bash
-docker compose ps
+docker compose --env-file .env -f infra/docker/compose.yml ps
 ```
 
 ### 查看实时日志
 
 查看服务输出的控制台日志以确认有无异常：
 ```bash
-docker compose logs -f
+docker compose --env-file .env -f infra/docker/compose.yml logs -f campus-service
 ```
 
 ### 停止服务
 
 若需要暂停服务，可以使用以下命令：
 ```bash
-docker compose down
+docker compose --env-file .env -f infra/docker/compose.yml stop campus-service
 ```
 
 ### 更新服务器镜像
 
-服务器上如果只保留 `docker-compose.yml` 和 `.env`，不保存源码，请先在本地或 GitHub Actions 构建并推送新镜像，然后在服务器执行：
+更新已发布镜像：
 ```bash
-docker compose pull
-docker compose up -d --force-recreate
+docker compose --env-file .env -f infra/docker/compose.yml pull campus-service
+docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build --force-recreate campus-service
 ```
 
 ### 源码机器重新构建
 
-如果服务器或本机保留完整源码，并希望直接从源码构建镜像，请使用构建覆盖文件：
+如果服务器或本机保留完整源码，可以使用统一 Compose 直接构建：
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build --force-recreate
+docker compose --env-file .env -f infra/docker/compose.yml up -d --build --force-recreate campus-service
 ```
 
 ## 4. 数据持久化与备份
 
-项目中的学校登录态和教务课表缓存均存储于 `data/` 目录中。
+系统账号、学校登录态和教务课表缓存统一存储于 `campus_app` MongoDB 数据库，校园容器不再挂载本地数据目录。数据库使用独立的 `campus_app` 账号，不能访问其他业务数据库。
 
-在 `docker-compose.yml` 中，我们已经将容器内的 `/app/data` 映射到了宿主机项目根目录下的 `./data` 文件夹。
-* **安全性**：请勿将宿主机的 `./data` 目录公开分享或提交至 Git 仓库。
-* **数据备份**：备份 `./data` 的同时，要在独立的安全位置备份 `HGU_DATA_ENCRYPTION_KEY`。缺少原密钥将无法恢复已加密的学校会话。建议定期执行恢复演练，而不只是确认备份文件存在。
-
-宿主机源码部署可以运行 `npm run backup` 创建 SQLite 一致性在线备份。容器部署可执行：
-
-```bash
-docker compose exec hgu-campus-hub npm run backup
-```
-
-不要在服务运行期间只复制 `app.db` 而忽略 `-wal` 文件。
+统一备份会包含 `campus_app`；同时还必须在独立的安全位置备份 `HGU_DATA_ENCRYPTION_KEY`。缺少原密钥将无法恢复已加密的学校会话。完整的备份、恢复和旧 SQLite 数据迁移步骤见根目录 `docs/operations.md`。
 
 ## 5. 安全性与反向代理（推荐）
 

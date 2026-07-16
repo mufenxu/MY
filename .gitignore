@@ -14,9 +14,11 @@
 
 # Local migration archive (kept outside the maintained repository)
 /archive/
+/backups/
 
 # Secrets and local configuration
 .env
+/.env.ci
 **/.env
 **/env
 **/*.local

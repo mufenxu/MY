@@ -1,5 +1,4 @@
 const mqtt = require('mqtt');
-const path = require('path');
 const { EventEmitter } = require('events');
 const { getDatabase } = require('../storage/db');
 const { testMqttConnection } = require('./mqtt/connectionTest');
@@ -14,7 +13,7 @@ const { sendDevicePresenceWebhook } = require('./mqtt/webhookNotifier');
 const DATA_RETENTION_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 class MqttService extends EventEmitter {
-  constructor(settingsStore) {
+  constructor(settingsStore, database = getDatabase()) {
     super();
     this.settingsStore = settingsStore;
     this.client = null;
@@ -27,9 +26,7 @@ class MqttService extends EventEmitter {
     this.retentionCleanupTimer = null;
     this.retentionCleanupInFlight = false;
     
-    // 初始化数据库实例
-    const dbPath = path.join(path.dirname(this.settingsStore.getConfigPath()), 'mqttapi.db');
-    this.db = getDatabase(dbPath);
+    this.db = database;
 
     this.latest = {
       devices: {}
@@ -105,9 +102,9 @@ class MqttService extends EventEmitter {
     this.latest.devices = currentLatestDevices;
   }
 
-  async start() {
-    // 1. 初始化 SQLite 数据库
-    await this.db.initialize();
+  async start({ databaseInitialized = false } = {}) {
+    // 1. 初始化 MongoDB 数据库
+    if (!databaseInitialized) await this.db.initialize();
     
     // 2. 同步当前配置文件中的设备到数据库
     const devices = this.settingsStore.getConfig().devices || [];
