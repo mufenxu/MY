@@ -273,6 +273,20 @@ function Dashboard({ session, onLogout }) {
     loadServices();
   }, [loadServices]);
 
+  useEffect(() => {
+    function clearLaunchState() {
+      setLaunchingService(null);
+    }
+
+    window.addEventListener('pageshow', clearLaunchState);
+    window.addEventListener('focus', clearLaunchState);
+
+    return () => {
+      window.removeEventListener('pageshow', clearLaunchState);
+      window.removeEventListener('focus', clearLaunchState);
+    };
+  }, []);
+
   const filteredServices = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return (data?.services || []).filter((service) => {
