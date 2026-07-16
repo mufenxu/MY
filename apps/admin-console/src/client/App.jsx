@@ -320,6 +320,9 @@ function Dashboard({ session, onLogout }) {
 
   const counts = data?.counts || {};
   const total = data?.services?.length || 0;
+  const activeFilterMeta = FILTERS.find((item) => item.id === activeFilter) || FILTERS[0];
+  const previewServices = (data?.services || []).slice(0, 3);
+  const attentionCount = (counts.degraded || 0) + (counts.offline || 0);
 
   return (
     <div className="app-shell">
@@ -331,7 +334,10 @@ function Dashboard({ session, onLogout }) {
       )}
       <aside className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
         <div className="brand-lockup sidebar-brand">
-          <span className="brand-mark" aria-hidden="true">MY</span>
+          <span className="brand-mark" aria-hidden="true">
+            <span>MY</span>
+            <small>IO</small>
+          </span>
           <span>
             <strong>管理中心</strong>
             <small>Platform Console</small>
@@ -355,6 +361,22 @@ function Dashboard({ session, onLogout }) {
             </button>
           ))}
         </nav>
+        <div className="nav-actions" aria-label="服务工具">
+          <label className="search-box nav-search">
+            <Search size={17} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索服务" />
+          </label>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => loadServices(true)}
+            disabled={refreshing}
+            title="刷新服务状态"
+            aria-label="刷新服务状态"
+          >
+            <RefreshCw className={refreshing ? 'spin' : ''} size={18} />
+          </button>
+        </div>
         <div className="sidebar-footer">
           <div className="admin-identity">
             <span className="admin-avatar">管</span>
@@ -383,7 +405,7 @@ function Dashboard({ session, onLogout }) {
           </button>
           <div className="page-title">
             <span>统一管理</span>
-            <h1>{FILTERS.find((item) => item.id === activeFilter)?.label || '总览'}</h1>
+            <h1>{activeFilterMeta.label}</h1>
           </div>
           <div className="topbar-actions">
             <label className="search-box">
@@ -405,18 +427,82 @@ function Dashboard({ session, onLogout }) {
 
         <div className="workspace-content">
           <section className="overview-heading">
-            <div>
-              <p className="eyebrow">SYSTEM OVERVIEW</p>
-              <h2>服务运行概况</h2>
-              <p>最后刷新：{formatCheckedAt(data?.refreshedAt)}</p>
+            <div className="hero-copy">
+              <p className="eyebrow">MY PLATFORM</p>
+              <h2>Easy Operations.<br />Powerful Control.</h2>
+              <p>统一查看小程序、考试平台、校园服务、IoT 与自动化任务，把分散系统收进一个清爽的控制台。</p>
+              <div className="hero-actions">
+                <button
+                  className="hero-primary"
+                  type="button"
+                  onClick={() => loadServices(true)}
+                  disabled={refreshing}
+                >
+                  {refreshing ? <LoaderCircle className="spin" size={18} /> : <RefreshCw size={18} />}
+                  刷新状态
+                  <ChevronRight size={17} />
+                </button>
+                <span className="hero-secondary">
+                  最后刷新：{formatCheckedAt(data?.refreshedAt)}
+                </span>
+              </div>
+              <div className="hero-trust-row" aria-label="控制台状态">
+                <span><CheckCircle2 size={17} /> {counts.healthy || 0} 项正常</span>
+                <span><CircleAlert size={17} /> {attentionCount} 项关注</span>
+                <span><Clock3 size={17} /> {counts.unmonitored || 0} 项未监测</span>
+              </div>
             </div>
-            <div className="environment-pill"><Activity size={15} /> Production</div>
+            <div className="console-preview" aria-label="平台预览">
+              <div className="preview-window">
+                <div className="preview-rail">
+                  <span className="preview-logo">MY</span>
+                  <span />
+                  <span />
+                  <span />
+                </div>
+                <div className="preview-main">
+                  <div className="preview-header">
+                    <div>
+                      <strong>Devices</strong>
+                      <small>Services and telemetry</small>
+                    </div>
+                    <div className="environment-pill"><Activity size={15} /> Production</div>
+                  </div>
+                  <div className="preview-list">
+                    {previewServices.length > 0 ? previewServices.map((service) => {
+                      const Icon = SERVICE_ICONS[service.id] || Server;
+                      return (
+                        <div className="preview-service" key={service.id}>
+                          <span className={`preview-service-icon service-${service.category}`}><Icon size={18} /></span>
+                          <span>
+                            <strong>{service.shortName || service.name}</strong>
+                            <small>{service.repositoryPath}</small>
+                          </span>
+                          <StatusBadge state={service.state} />
+                        </div>
+                      );
+                    }) : (
+                      <>
+                        <div className="preview-service preview-skeleton" />
+                        <div className="preview-service preview-skeleton" />
+                        <div className="preview-service preview-skeleton" />
+                      </>
+                    )}
+                  </div>
+                  <div className="preview-footer">
+                    <span>{total} Projects</span>
+                    <span>{counts.healthy || 0} Online</span>
+                    <span>{attentionCount} Alerts</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </section>
 
           <section className="summary-band" aria-label="状态摘要">
             <SummaryMetric label="全部项目" value={total} tone="neutral" icon={Gauge} />
             <SummaryMetric label="运行正常" value={counts.healthy || 0} tone="positive" icon={CheckCircle2} />
-            <SummaryMetric label="需要关注" value={(counts.degraded || 0) + (counts.offline || 0)} tone="warning" icon={CircleAlert} />
+            <SummaryMetric label="需要关注" value={attentionCount} tone="warning" icon={CircleAlert} />
             <SummaryMetric label="未接监测" value={counts.unmonitored || 0} tone="muted" icon={Clock3} />
           </section>
 
