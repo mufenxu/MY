@@ -2,6 +2,7 @@ type EnvVersion = 'develop' | 'trial' | 'release';
 
 type RuntimeProfile = {
     baseUrl: string;
+    consoleBaseUrl: string;
     appName: string;
     companyName: string;
     supportEmail: string;
@@ -23,7 +24,8 @@ function getEnvVersion(): EnvVersion {
 }
 
 const sharedProfile: RuntimeProfile = {
-    baseUrl: 'https://haxx.pxyb.cn',
+    baseUrl: 'https://pxyb.cn/api/exam/client',
+    consoleBaseUrl: 'https://pxyb.cn/apps/exam',
     appName: '好爱学习',
     companyName: '请在发布前补充运营主体名称',
     supportEmail: 'support@example.com',

@@ -131,6 +131,14 @@ test('canonical single-domain API paths preserve existing service authentication
       name: 'exam',
       url: '/api/public/runtime-config',
     });
+    assert.deepEqual((await request(port, '/api/exam/client/major-categories')).body, {
+      name: 'exam',
+      url: '/major-categories',
+    });
+    assert.deepEqual((await request(port, '/api/exam/client/api/user/login')).body, {
+      name: 'exam',
+      url: '/api/user/login',
+    });
     assert.deepEqual((await request(port, '/api/notify/healthz')).body, { name: 'notify', url: '/healthz' });
   });
 });

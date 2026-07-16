@@ -11,23 +11,29 @@
 
 ## 路由
 
-原域名可继续反向代理到同一个 `22100` 端口，平台按 `Host` 分发：
+原域名在迁移期可继续反向代理到同一个 `22100` 端口，平台按 `Host` 分发：
 
 | Host | 模块 |
 | --- | --- |
-| `admin.pxyb.cn` 或其他默认 Host | 统一管理门户 |
+| `pxyb.cn` 或其他默认 Host | 统一管理门户 |
 | `xcx.pxyb.cn` | 综合小程序 API 与原管理后台 |
 | `haxx.pxyb.cn` | 考试 API 与原管理后台 |
 | `tongzhiapi.pxyb.cn` | 企业微信通知 API |
 
-统一 API 路径同时可用：
+统一域名路径：
 
-- `/core/*` -> 综合小程序 `/api/*`
-- `/exam/*` -> 考试小程序 `/api/*`
-- `/campus/*` -> HGU `/api/*`
-- `/iot/*` -> MQTT `/api/*`
-- `/iot/ws` -> MQTT WebSocket `/ws`
-- `/notify-service/*` -> 企业微信通知原路径
+- `/` -> 统一管理门户
+- `/apps/core/` -> 综合后台
+- `/apps/exam/` -> 考试后台
+- `/apps/campus/` -> HGU 后台
+- `/apps/iot/` -> MQTT 后台
+- `/api/core/*` -> 综合小程序 `/api/*`
+- `/api/exam/*` -> 考试后端 `/api/*`
+- `/api/exam/client/*` -> 考试小程序原客户端路径
+- `/api/campus/*` -> HGU `/api/*`
+- `/api/iot/*` -> MQTT `/api/*`
+- `/api/iot/ws` -> MQTT WebSocket `/ws`
+- `/api/notify/*` -> 企业微信通知原路径
 
 ## 设计约束
 

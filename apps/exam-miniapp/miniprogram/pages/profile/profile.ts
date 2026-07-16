@@ -232,7 +232,7 @@ Page({
 
         const rawConsolePath = this.data.consoleProfile.consolePath || '';
         const consolePath = rawConsolePath === '/' || rawConsolePath === '/login.html' ? '' : rawConsolePath;
-        const consoleUrl = `${runtimeConfig.baseUrl.replace(/\/$/, '')}${consolePath}`;
+        const consoleUrl = `${runtimeConfig.consoleBaseUrl.replace(/\/$/, '')}${consolePath}`;
 
         this.setData({
             consoleUrl,

@@ -13,7 +13,7 @@
 
 ## Single-domain management plane
 
-生产管理入口只需要一个域名，例如 `https://admin.example.com`。Nginx 只把该域名转发到 `platform-api:22100`，平台网关再按路径分发：
+生产管理入口只需要一个域名，例如当前的 `https://pxyb.cn`。Nginx 只把该域名转发到 `platform-api:22100`，平台网关再按路径分发：
 
 | Public path | Purpose | Internal target |
 | --- | --- | --- |

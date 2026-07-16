@@ -229,6 +229,10 @@ export function createPlatformRouter({
       rewriteServicePrefix(req, '/api/core', { apiByDefault: true, preserve: ['/uploads', '/public'] });
       return coreApp(req, res);
     }
+    if (requestUrl.pathname === '/api/exam/client' || requestUrl.pathname.startsWith('/api/exam/client/')) {
+      rewriteServicePrefix(req, '/api/exam/client');
+      return examApp(req, res);
+    }
     if (requestUrl.pathname === '/api/exam' || requestUrl.pathname.startsWith('/api/exam/')) {
       rewriteServicePrefix(req, '/api/exam', { apiByDefault: true });
       return examApp(req, res);

@@ -7,9 +7,9 @@ interface RuntimeConfig {
   tempHumidityBaseUrl: string
 }
 
-const DEFAULT_API_BASE_URL = 'https://xcx.pxyb.cn'
-const DEFAULT_LIBROOM_BASE_URL = 'https://hgu.pxyb.cn'
-const DEFAULT_TEMP_HUMIDITY_BASE_URL = 'https://mqttapi.pxyb.cn'
+const DEFAULT_API_BASE_URL = 'https://pxyb.cn/api/core'
+const DEFAULT_LIBROOM_BASE_URL = 'https://pxyb.cn/api/campus'
+const DEFAULT_TEMP_HUMIDITY_BASE_URL = 'https://pxyb.cn/api/iot'
 
 const DEV_API_OVERRIDE_KEY = 'dev_api_base_url'
 
