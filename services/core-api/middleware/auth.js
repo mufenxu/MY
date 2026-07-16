@@ -1,16 +1,12 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 const { verifyPlatformSso } = require('./platformSso');
+const { resolvePlatformSsoUser } = require('../services/platformSsoAccountService');
 
 exports.verifyToken = (req, res, next) => {
     const platformIdentity = verifyPlatformSso(req);
     if (platformIdentity) {
         const mappedUsername = process.env.PLATFORM_SSO_CORE_USERNAME || platformIdentity.sub;
-        return User.findOne({
-            userId: mappedUsername,
-            role: { $in: ['admin', 'super_admin'] },
-            status: 'active'
-        }).lean().then((user) => {
+        return resolvePlatformSsoUser({ mappedUserId: mappedUsername }).then((user) => {
             if (!user) {
                 return res.status(403).json({
                     success: false,
