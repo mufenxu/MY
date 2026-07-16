@@ -1,9 +1,11 @@
+import { resolveAppUrl } from './runtime';
+
 const CURRENT_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
 const RELOAD_MARKER_KEY = 'admin-web-reloaded-version';
 const VERSION_FILE = '/version.json';
 
 const getVersionUrl = () => {
-    const url = new URL(VERSION_FILE, window.location.origin);
+    const url = new URL(resolveAppUrl(VERSION_FILE), window.location.origin);
     url.searchParams.set('t', Date.now().toString());
     return url.toString();
 };

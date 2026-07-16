@@ -7,6 +7,7 @@ import { session } from '@/utils/session';
 import { ElMessage } from 'element-plus';
 import router from '@/router';
 import { notifyAuthExpiredOnce, resetAuthExpiredNotice } from '@/utils/authFailure';
+import { IS_PLATFORM_SSO, redirectToPlatformLogin, stripAppBase } from '@/utils/runtime';
 
 let initialized = false;
 let authRedirecting = false;
@@ -28,7 +29,7 @@ function readCookie(name) {
 
 function getRequestPath(config = {}) {
     try {
-        return new URL(config.url || '', window.location.origin).pathname;
+        return stripAppBase(new URL(config.url || '', window.location.origin).pathname);
     } catch {
         return String(config.url || '').split('?')[0];
     }
@@ -92,6 +93,10 @@ export function setupHttpInterceptors() {
                 const requestConfig = error.config || error.response.config || {};
 
                 if (shouldHandleAsAuthFailure(status, message, requestConfig)) {
+                    if (IS_PLATFORM_SSO) {
+                        redirectToPlatformLogin();
+                        return Promise.reject(error);
+                    }
                     notifyAuthExpiredOnce();
                     session.clear();
                     redirectToLogin();

@@ -6,6 +6,7 @@ import Components from 'unplugin-vue-components/vite';
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers';
 
 export default defineConfig({
+    base: './',
     // Frontend assets are owned by this app and copied into the API image at build time.
     publicDir: path.resolve(__dirname, 'public'),
     plugins: [

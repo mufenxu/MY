@@ -1,6 +1,37 @@
 const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const { verifyPlatformSso } = require('./platformSso');
 
 exports.verifyToken = (req, res, next) => {
+    const platformIdentity = verifyPlatformSso(req);
+    if (platformIdentity) {
+        const mappedUsername = process.env.PLATFORM_SSO_CORE_USERNAME || platformIdentity.sub;
+        return User.findOne({
+            userId: mappedUsername,
+            role: { $in: ['admin', 'super_admin'] },
+            status: 'active'
+        }).lean().then((user) => {
+            if (!user) {
+                return res.status(403).json({
+                    success: false,
+                    error: '统一管理员未映射到综合平台管理员账号。',
+                    code: 'PLATFORM_SSO_ACCOUNT_NOT_MAPPED'
+                });
+            }
+            req.platformSso = platformIdentity;
+            req.user = {
+                id: user._id,
+                _id: user._id,
+                userId: user.userId,
+                nickName: user.nickName,
+                avatarUrl: user.avatarUrl,
+                role: user.role,
+                permissions: user.permissions || []
+            };
+            return next();
+        }).catch(next);
+    }
+
     const token = req.header('Authorization')?.replace('Bearer ', '');
 
     if (!token) {

@@ -215,7 +215,12 @@ function ServiceCard({ service }) {
       <footer className="service-card-footer">
         <span className="repository-path" title={service.repositoryPath}>{service.repositoryPath}</span>
         {service.adminUrl ? (
-          <a className="open-link" href={service.adminUrl} target="_blank" rel="noreferrer">
+          <a
+            className="open-link"
+            href={service.adminUrl}
+            target={service.adminUrl.startsWith('/') ? undefined : '_blank'}
+            rel={service.adminUrl.startsWith('/') ? undefined : 'noreferrer'}
+          >
             进入后台
             <ExternalLink size={15} />
           </a>
@@ -418,14 +423,22 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
 
-  useEffect(() => {
-    requestJson('/api/auth/status')
-      .then(setSession)
-      .catch(() => setSession({ authenticated: false, authDisabled: false, user: null }))
-      .finally(() => setCheckingSession(false));
+  const finishAuthentication = useCallback((nextSession) => {
+    setSession(nextSession);
+    const returnTo = new URLSearchParams(window.location.search).get('returnTo') || '';
+    if (nextSession?.authenticated && /^\/apps\/(core|exam|campus|iot)(?:\/|$)/.test(returnTo)) {
+      window.location.replace(returnTo);
+    }
   }, []);
 
+  useEffect(() => {
+    requestJson('/api/auth/status')
+      .then(finishAuthentication)
+      .catch(() => setSession({ authenticated: false, authDisabled: false, user: null }))
+      .finally(() => setCheckingSession(false));
+  }, [finishAuthentication]);
+
   if (checkingSession) return <LoadingScreen />;
-  if (!session?.authenticated) return <LoginScreen onAuthenticated={setSession} />;
+  if (!session?.authenticated) return <LoginScreen onAuthenticated={finishAuthentication} />;
   return <Dashboard session={session} onLogout={() => setSession({ authenticated: false, authDisabled: false, user: null })} />;
 }

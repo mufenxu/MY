@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { session } from '@/utils/session';
 import { notifyAuthExpiredOnce } from '@/utils/authFailure';
 import { applyUiPreviewQuery, ensureUiPreviewSession } from '@/utils/uiPreview';
+import { APP_BASE_PATH } from '@/utils/runtime';
 
 const routes = [
     {
@@ -29,7 +30,7 @@ const routes = [
 ];
 
 const router = createRouter({
-    history: createWebHistory(),
+    history: createWebHistory(APP_BASE_PATH || '/'),
     routes,
     scrollBehavior(to, from, savedPosition) {
         if (to.name === 'Dashboard' && from.name === 'ExamDetail') {

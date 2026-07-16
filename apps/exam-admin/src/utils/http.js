@@ -3,6 +3,7 @@
  * 从 http-client.js IIFE 迁移为 ES Module。
  * 保留自写 fetch 封装，兼容拦截器模式。
  */
+import { resolveAppUrl } from '@/utils/runtime';
 
 function createInterceptorManager() {
     const handlers = [];
@@ -100,6 +101,7 @@ http.request = async function request(rawConfig) {
         method: 'get',
         headers: {},
         ...rawConfig,
+        url: resolveAppUrl(rawConfig.url || ''),
     });
 
     const method = String(config.method || 'get').toUpperCase();

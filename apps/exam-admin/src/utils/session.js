@@ -3,6 +3,7 @@
  * 管理 token、用户信息、认证类型的存储与读取。
  * 从 shared.js IIFE 迁移为 ES Module。
  */
+import { IS_PLATFORM_SSO, resolveAppUrl } from '@/utils/runtime';
 
 const TOKEN_KEY = 'manageToken';
 const USER_KEY = 'manageUser';
@@ -15,6 +16,7 @@ const STORAGE_TEST_KEY = '__manage_session_test__';
 const EXPIRY_GRACE_MS = 30 * 1000;
 const memoryStore = {};
 let runtimeConfigPromise = null;
+let platformSsoActive = false;
 
 function getAvailableStorage(name) {
     try {
@@ -188,6 +190,9 @@ function isExpiredAt(expiresAt) {
 }
 
 function getSessionStatus() {
+    if (IS_PLATFORM_SSO && platformSsoActive) {
+        return { active: true, expired: false };
+    }
     const token = getStoredValue(TOKEN_KEY);
     if (token) {
         const expiresAt = getTokenExpiresAt(token);
@@ -274,21 +279,33 @@ export const session = {
         clearLegacyKeys();
     },
     clear() {
+        platformSsoActive = false;
         clearSessionValues();
+    },
+    enablePlatformSso(user) {
+        platformSsoActive = true;
+        setStoredValue(USER_KEY, JSON.stringify(user || {}));
+        setStoredValue(AUTH_TYPE_KEY, 'admin');
     },
 };
 
 export async function loadRuntimeConfig() {
     if (!runtimeConfigPromise) {
-        runtimeConfigPromise = fetch('/api/public/runtime-config', {
+        runtimeConfigPromise = fetch(resolveAppUrl('/api/public/runtime-config'), {
             cache: 'no-store',
             credentials: 'same-origin',
         })
             .then((r) => r.json())
-            .then((payload) => payload.data || {
-                scanLogin: { enabled: false, apiBase: '' },
-                aiCaptcha: { enabled: false, region: 'cn', prefix: '', sceneId: '' },
-                console: { loginPath: '/login' },
+            .then((payload) => {
+                const runtime = payload.data || {
+                    scanLogin: { enabled: false, apiBase: '' },
+                    aiCaptcha: { enabled: false, region: 'cn', prefix: '', sceneId: '' },
+                    console: { loginPath: '/login' },
+                };
+                if (runtime.scanLogin?.apiBase) {
+                    runtime.scanLogin.apiBase = resolveAppUrl(runtime.scanLogin.apiBase);
+                }
+                return runtime;
             })
             .catch(() => ({
                 scanLogin: { enabled: false, apiBase: '' },

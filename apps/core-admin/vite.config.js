@@ -18,6 +18,7 @@ const buildVersionPlugin = () => ({
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './',
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(buildVersion)
   },

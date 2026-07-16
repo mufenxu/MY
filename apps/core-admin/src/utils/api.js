@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { API_BASE_PATH, IS_PLATFORM_SSO, redirectToPlatformLogin } from './runtime';
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || '/api',
+    baseURL: import.meta.env.VITE_API_URL || API_BASE_PATH,
 });
 
 // 标记是否正在刷新 token，防止多个请求同时触发刷新
@@ -21,6 +22,7 @@ const processQueue = (error, token = null) => {
 };
 
 api.interceptors.request.use((config) => {
+    if (IS_PLATFORM_SSO) return config;
     const token = localStorage.getItem('token');
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
@@ -32,6 +34,11 @@ api.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
+
+        if (IS_PLATFORM_SSO && error.response?.status === 401) {
+            redirectToPlatformLogin();
+            return Promise.reject(error);
+        }
 
         // 如果是 401 且标记为 token 过期，且不是刷新请求本身，尝试自动刷新
         if (
@@ -69,7 +76,7 @@ api.interceptors.response.use(
 
             try {
                 const res = await axios.post(
-                    (import.meta.env.VITE_API_URL || '/api') + '/auth/refresh',
+                    (import.meta.env.VITE_API_URL || API_BASE_PATH) + '/auth/refresh',
                     { refreshToken }
                 );
 

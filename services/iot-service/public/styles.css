@@ -5225,3 +5225,21 @@ body.unauthenticated #history-modal {
     padding: 12px 14px !important;
   }
 }
+.api-docs-link {
+  align-items: center;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 6px;
+  color: var(--primary-color);
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 500;
+  gap: 5px;
+  padding: 3px 10px;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.api-docs-link:hover {
+  background: rgba(99, 102, 241, 0.15);
+}

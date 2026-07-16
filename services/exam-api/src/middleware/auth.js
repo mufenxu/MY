@@ -7,8 +7,26 @@ const config = require('../config');
 const Admin = require('../models/Admin');
 const { AuthError, ForbiddenError } = require('../utils/errors');
 const { ADMIN_AUTH_COOKIE, getAuthToken } = require('../utils/authCookies');
+const { verifyPlatformSso } = require('./platformSso');
 
 async function authenticateAdmin(req, res, next) {
+    const platformIdentity = verifyPlatformSso(req);
+    if (platformIdentity) {
+        const mappedUsername = process.env.PLATFORM_SSO_EXAM_USERNAME || platformIdentity.sub;
+        const admin = await Admin.findOne({ username: mappedUsername }).lean();
+        if (!admin) {
+            throw new ForbiddenError('统一管理员未映射到考试平台管理员账号');
+        }
+        req.platformSso = platformIdentity;
+        req.user = {
+            id: admin._id.toString(),
+            username: admin.username,
+            role: 'admin',
+            tokenVersion: admin.tokenVersion || 0,
+        };
+        return next();
+    }
+
     const token = getAuthToken(req, ADMIN_AUTH_COOKIE);
 
     if (!token) {

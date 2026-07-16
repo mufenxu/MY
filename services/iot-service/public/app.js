@@ -12,6 +12,7 @@ const state = {
   events: [],
   authEnabled: false,
   authenticated: false,
+  platformSso: false,
   autoRefresh: true,
   refreshInterval: 5000,
   pendingControls: {}, // 记录处于控制加载状态的继电器： 'deviceId:relayId' -> timestamp
@@ -26,7 +27,14 @@ const state = {
 
 const AUX_REFRESH_MIN_INTERVAL = 30000;
 const apiClient = window.MqttApiClient.createApiClient({
-  onUnauthorized: () => {
+  onUnauthorized: (error) => {
+    if (
+      window.MqttApiClient.APP_BASE_PATH
+      && error?.code === 'PLATFORM_SESSION_REQUIRED'
+    ) {
+      window.MqttApiClient.redirectToPlatformLogin();
+      return;
+    }
     state.authenticated = false;
     updateAuthUi();
   }
@@ -951,7 +959,7 @@ function connectRealtime() {
   clearTimeout(state.socketRetryTimer);
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+  const socket = new WebSocket(`${protocol}//${window.location.host}${window.MqttApiClient.APP_BASE_PATH}/ws`);
   state.socket = socket;
   setBadge(elements.wsBadge, '连接实时通道', 'badge badge-warning');
 
@@ -1006,6 +1014,7 @@ async function loadAuthStatus() {
   const auth = await requestJson('/api/auth/status');
   state.authEnabled = auth.enabled;
   state.authenticated = auth.authenticated;
+  state.platformSso = Boolean(auth.platformSso);
 
   if (state.authEnabled) {
     elements.loginUsername.value = auth.username || 'admin';
@@ -1141,10 +1150,20 @@ async function handleLogout() {
   }
 
   try {
+    if (state.platformSso) {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-Platform-Request': 'console' }
+      }).catch(() => {});
+      window.location.replace('/');
+      return;
+    }
     await requestJson('/api/auth/logout', { method: 'POST' });
     showToast('会话已清除', '已安全登出控制后台。', 'info');
   } finally {
     state.authenticated = false;
+    state.platformSso = false;
     updateAuthUi();
     renderCreatedApiKey(null);
     renderLockedMeta();

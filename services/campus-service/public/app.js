@@ -1,5 +1,5 @@
 "use strict";
-
+const p=window.HguPlatformRuntime;
 const state = {
   loading: false,
   month: currentMonth(),
@@ -585,15 +585,10 @@ function rememberAppAuthSession(session) {
   return remembered;
 }
 
-function isAppAccessError(error) {
-  return error?.status === 401
-    && /系统访问会话|请先登录系统账号|系统账号不存在或已停用/.test(error.message || "");
-}
-
 function shouldHandleAppAccessError(path, options, error) {
   return !options.skipAppAuthHandling
     && !String(path || "").startsWith("/api/app-auth/")
-    && isAppAccessError(error);
+    && p.isAppAccessError(error);
 }
 
 function handleAppAccessExpired(error) {
@@ -626,7 +621,7 @@ function renderAppGate(error) {
     return;
   }
   if (error) {
-    const message = isAppAccessError(error)
+    const message = p.isAppAccessError(error)
       ? `${error.message || "系统访问会话已失效。"} 请先解锁系统账号；这里还没有校验学校账号密码。`
       : (error.message || "访问验证失败，请稍后重试。");
     nodes.appAuthStatusText.textContent = message;
@@ -739,6 +734,10 @@ async function registerWithInvite() {
 }
 
 async function logoutApp() {
+  if (state.appAuth?.platformSso) {
+    await p.logout();
+    return;
+  }
   nodes.appLogoutButton.disabled = true;
   try {
     state.appAuth = await api("/api/app-auth/logout", { method: "POST" });
@@ -2348,7 +2347,7 @@ async function api(path, options = {}) {
   }
   let response;
   try {
-    response = await fetch(path, init);
+    response = await fetch(p.appUrl(path), init);
   } catch (error) {
     if (error?.name === "AbortError") {
       const timeoutError = new Error("请求等待时间过长，请稍后重试。");
@@ -2364,6 +2363,7 @@ async function api(path, options = {}) {
     const error = new Error(payload.error || `HTTP ${response.status}`);
     error.details = payload.details;
     error.status = response.status;
+    if (p.handleSessionError(response.status, payload.code)) throw error;
     if (shouldHandleAppAccessError(path, options, error)) {
       handleAppAccessExpired(error);
     }

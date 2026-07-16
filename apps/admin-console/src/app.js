@@ -8,10 +8,9 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import {
   SESSION_COOKIE_NAME,
-  issueSession,
+  createSessionRegistry,
   parseCookies,
   verifyPassword,
-  verifySession,
 } from './auth.js';
 import { loadConfig } from './config.js';
 import { createStatusMonitor, loadServiceRegistry } from './service-registry.js';
@@ -43,6 +42,17 @@ export function createApp({ config = loadConfig(), fetchImpl = fetch } = {}) {
     fetchImpl,
   });
   const app = express();
+  const sessions = createSessionRegistry({ secret: config.sessionSecret });
+
+  function readSessionToken(req) {
+    return parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME];
+  }
+
+  function readSession(req) {
+    return sessions.verify(readSessionToken(req));
+  }
+
+  app.locals.verifyConsoleSession = (token, now) => sessions.verify(token, now);
 
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -77,8 +87,7 @@ export function createApp({ config = loadConfig(), fetchImpl = fetch } = {}) {
     if (config.authDisabled) {
       return res.json({ authenticated: true, authDisabled: true, user: { username: 'local-admin' } });
     }
-    const token = parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME];
-    const session = verifySession(token, config.sessionSecret);
+    const session = readSession(req);
     return res.json({
       authenticated: Boolean(session),
       authDisabled: false,
@@ -106,9 +115,8 @@ export function createApp({ config = loadConfig(), fetchImpl = fetch } = {}) {
       return res.status(401).json({ error: '账号或密码错误。', code: 'INVALID_CREDENTIALS' });
     }
 
-    const token = issueSession({
+    const token = sessions.issue({
       username: config.adminUsername,
-      secret: config.sessionSecret,
       ttlHours: config.sessionTtlHours,
     });
     res.cookie(SESSION_COOKIE_NAME, token, sessionCookieOptions(config));
@@ -116,6 +124,7 @@ export function createApp({ config = loadConfig(), fetchImpl = fetch } = {}) {
   });
 
   app.post('/api/auth/logout', requireConsoleRequest, (req, res) => {
+    sessions.revoke(readSessionToken(req));
     res.clearCookie(SESSION_COOKIE_NAME, { ...sessionCookieOptions(config), maxAge: 0 });
     res.json({ authenticated: false });
   });
@@ -126,8 +135,7 @@ export function createApp({ config = loadConfig(), fetchImpl = fetch } = {}) {
       req.consoleUser = { username: 'local-admin' };
       return next();
     }
-    const token = parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME];
-    const session = verifySession(token, config.sessionSecret);
+    const session = readSession(req);
     if (!session) return res.status(401).json({ error: '请先登录。', code: 'UNAUTHORIZED' });
     req.consoleUser = { username: session.sub };
     return next();

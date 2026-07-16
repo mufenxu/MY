@@ -20,11 +20,26 @@
       if (!guidePanel) return;
 
       const origin = window.location.origin;
+      const managedPath = Boolean(window.MqttApiClient?.APP_BASE_PATH);
+      const localApiBase = `${localhostOrigin}/api`;
+      const publicApiBase = managedPath ? `${origin}/api/iot` : `${origin}/api`;
       guidePanel.querySelectorAll('pre code').forEach((codeElement) => {
-        if (codeElement.innerHTML.includes(localhostOrigin)) {
-          codeElement.innerHTML = codeElement.innerHTML.replace(new RegExp(localhostOrigin.replace(/\./g, '\\.'), 'g'), origin);
+        if (codeElement.innerHTML.includes(localApiBase)) {
+          codeElement.innerHTML = codeElement.innerHTML.replace(
+            new RegExp(localApiBase.replace(/\./g, '\\.'), 'g'),
+            publicApiBase
+          );
         }
       });
+
+      if (managedPath) {
+        guidePanel.querySelectorAll('.api-path').forEach((pathElement) => {
+          pathElement.textContent = pathElement.textContent.replace(/^\/api/, '/api/iot');
+        });
+      }
+
+      const docsLink = guidePanel.querySelector('[data-api-docs-link]');
+      if (docsLink) docsLink.href = managedPath ? '/api/iot/api-docs' : '/api-docs';
     }
 
     function bindTabs() {

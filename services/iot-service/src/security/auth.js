@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { verifyPlatformSso } = require('./platformSso');
 
 const COOKIE_NAME = 'mqttapi_session';
 
@@ -148,6 +149,19 @@ class AuthManager {
   }
 
   getRequestAuth(req) {
+    const platformIdentity = verifyPlatformSso(req);
+    if (platformIdentity) {
+      return {
+        enabled: true,
+        authenticated: true,
+        username: platformIdentity.sub,
+        isApiKey: false,
+        platformSso: true,
+        csrfToken: platformIdentity.csrf,
+        scopes: ['*']
+      };
+    }
+
     if (!this.isEnabled()) {
       return {
         enabled: false,

@@ -1,4 +1,7 @@
-function createApiDocsMarkdown(baseUrl) {
+function createApiDocsMarkdown(apiBaseUrl) {
+  const apiPath = (() => {
+    try { return new URL(apiBaseUrl).pathname.replace(/\/$/, '') || '/api'; } catch { return '/api'; }
+  })();
   return `# MQTT Smart Dashboard API Developer Documentation (LLM & AI Friendly)
 
 This documentation provides the official API endpoints of the MQTT Smart Dashboard. It is designed to be easily read and parsed by AI assistants (like Gemini, ChatGPT, Claude) to help write code integrations for WeChat mini-programs, dashboard displays, or other third-party services.
@@ -23,19 +26,19 @@ Authorization: Bearer sk_mqttapi_your_token_here
 Retrieve real-time snapshots of all registered IoT devices, including sensor metrics (temperature, humidity), relay statuses, and online state.
 
 - **Method**: \`GET\`
-- **Path**: \`/api/devices\`
+- **Path**: \`${apiPath}/devices\`
 - **Authentication**: Required (Bearer Token)
 - **Response Format**: JSON (Array of Devices)
 
 #### cURL Example:
 \`\`\`bash
-curl -X GET "${baseUrl}/api/devices" \\
+curl -X GET "${apiBaseUrl}/devices" \\
   -H "Authorization: Bearer sk_mqttapi_your_token_here"
 \`\`\`
 
 #### JavaScript (Fetch) Example:
 \`\`\`javascript
-fetch("${baseUrl}/api/devices", {
+fetch("${apiBaseUrl}/devices", {
   method: "GET",
   headers: {
     "Authorization": "Bearer sk_mqttapi_your_token_here"
@@ -51,7 +54,7 @@ fetch("${baseUrl}/api/devices", {
 Publish control directives to open or close a specific relay switch on a device.
 
 - **Method**: \`POST\`
-- **Path**: \`/api/devices/:deviceId/relays/:relayId/control\`
+- **Path**: \`${apiPath}/devices/:deviceId/relays/:relayId/control\`
 - **Authentication**: Required (Bearer Token)
 - **Request Body (JSON)**:
   - \`status\`: \`"on"\` (close/enable) or \`"off"\` (open/disable).
@@ -59,7 +62,7 @@ Publish control directives to open or close a specific relay switch on a device.
 
 #### cURL Example:
 \`\`\`bash
-curl -X POST "${baseUrl}/api/devices/esp8266_living/relays/relay1/control" \\
+curl -X POST "${apiBaseUrl}/devices/esp8266_living/relays/relay1/control" \\
   -H "Authorization: Bearer sk_mqttapi_your_token_here" \\
   -H "Content-Type: application/json" \\
   -d '{"status": "on"}'
@@ -67,7 +70,7 @@ curl -X POST "${baseUrl}/api/devices/esp8266_living/relays/relay1/control" \\
 
 #### JavaScript (Fetch) Example:
 \`\`\`javascript
-fetch("${baseUrl}/api/devices/esp8266_living/relays/relay1/control", {
+fetch("${apiBaseUrl}/devices/esp8266_living/relays/relay1/control", {
   method: "POST",
   headers: {
     "Authorization": "Bearer sk_mqttapi_your_token_here",
@@ -85,7 +88,7 @@ fetch("${baseUrl}/api/devices/esp8266_living/relays/relay1/control", {
 Query history log of temperature and humidity readings for a specific device, supporting query limits and time-span ranges.
 
 - **Method**: \`GET\`
-- **Path**: \`/api/devices/:deviceId/history\`
+- **Path**: \`${apiPath}/devices/:deviceId/history\`
 - **Authentication**: Required (Bearer Token)
 - **Query Parameters**:
   - \`limit\` (Optional): Maximum number of log records to fetch. Default is \`100\`. Value must be between \`1\` and \`500\`.
@@ -98,17 +101,17 @@ Query history log of temperature and humidity readings for a specific device, su
 #### cURL Examples:
 \`\`\`bash
 # Example 1: Fetch default 100 latest samples
-curl -X GET "${baseUrl}/api/devices/esp8266_living/history" \\
+curl -X GET "${apiBaseUrl}/devices/esp8266_living/history" \\
   -H "Authorization: Bearer sk_mqttapi_your_token_here"
 
 # Example 2: Query last 24 hours of data
-curl -X GET "${baseUrl}/api/devices/esp8266_living/history?range=24h" \\
+curl -X GET "${apiBaseUrl}/devices/esp8266_living/history?range=24h" \\
   -H "Authorization: Bearer sk_mqttapi_your_token_here"
 \`\`\`
 
 #### JavaScript (Fetch) Example:
 \`\`\`javascript
-fetch("${baseUrl}/api/devices/esp8266_living/history?range=24h", {
+fetch("${apiBaseUrl}/devices/esp8266_living/history?range=24h", {
   method: "GET",
   headers: {
     "Authorization": "Bearer sk_mqttapi_your_token_here"
@@ -128,7 +131,8 @@ function registerApiDocsRoute(app) {
 
     const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
     const host = req.get('host') || 'localhost:22102';
-    res.send(createApiDocsMarkdown(`${protocol}://${host}`));
+    const configuredApiBase = String(process.env.PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
+    res.send(createApiDocsMarkdown(configuredApiBase || `${protocol}://${host}/api`));
   });
 }
 

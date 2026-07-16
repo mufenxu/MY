@@ -5,7 +5,8 @@ function registerAuthRoutes(app, { authManager, loginLimiter }) {
     res.json({
       enabled: authState.enabled,
       authenticated: authState.authenticated,
-      username: authState.username
+      username: authState.username,
+      platformSso: Boolean(authState.platformSso)
     });
   });
 

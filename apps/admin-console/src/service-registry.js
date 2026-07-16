@@ -11,6 +11,15 @@ function validateHttpUrl(value, field, serviceId) {
   return url.toString().replace(/\/$/, '');
 }
 
+function validateAdminUrl(value, serviceId) {
+  if (value === null) return null;
+  const normalized = String(value || '').trim();
+  if (normalized.startsWith('/') && !normalized.startsWith('//')) {
+    return normalized.endsWith('/') ? normalized : `${normalized}/`;
+  }
+  return validateHttpUrl(normalized, 'adminUrl', serviceId);
+}
+
 function normalizeService(input) {
   if (!input || typeof input !== 'object' || !input.id || !input.name) {
     throw new Error('服务清单中存在缺少 id 或 name 的项目。');
@@ -20,7 +29,7 @@ function normalizeService(input) {
   }
 
   const baseUrl = validateHttpUrl(input.baseUrl, 'baseUrl', input.id);
-  const adminUrl = validateHttpUrl(input.adminUrl, 'adminUrl', input.id);
+  const adminUrl = validateAdminUrl(input.adminUrl, input.id);
   const healthPath = input.healthPath ? String(input.healthPath) : null;
   if (healthPath && (!healthPath.startsWith('/') || !baseUrl)) {
     throw new Error(`${input.id}.healthPath 必须以 / 开头且需要 baseUrl。`);

@@ -66,6 +66,48 @@ export function verifySession(token, secret, now = Date.now()) {
   }
 }
 
+export function createSessionRegistry({ secret, maxSessions = 1024 } = {}) {
+  const activeSessions = new Map();
+
+  function prune(now = Date.now()) {
+    const nowSeconds = Math.floor(now / 1000);
+    for (const [nonce, expiresAt] of activeSessions) {
+      if (expiresAt <= nowSeconds) activeSessions.delete(nonce);
+    }
+  }
+
+  function issue({ username, ttlHours, now = Date.now() }) {
+    prune(now);
+    while (activeSessions.size >= maxSessions) {
+      activeSessions.delete(activeSessions.keys().next().value);
+    }
+    const token = issueSession({ username, secret, ttlHours, now });
+    const session = verifySession(token, secret, now);
+    activeSessions.set(session.nonce, session.exp);
+    return token;
+  }
+
+  function verify(token, now = Date.now()) {
+    prune(now);
+    const session = verifySession(token, secret, now);
+    if (!session || activeSessions.get(session.nonce) !== session.exp) return null;
+    return session;
+  }
+
+  function revoke(token, now = Date.now()) {
+    const session = verifySession(token, secret, now);
+    if (!session) return false;
+    return activeSessions.delete(session.nonce);
+  }
+
+  return {
+    issue,
+    verify,
+    revoke,
+    size: () => activeSessions.size,
+  };
+}
+
 export async function createPasswordHash(password, salt = crypto.randomBytes(16)) {
   if (typeof password !== 'string' || password.length < 10) {
     throw new Error('管理员密码至少需要 10 个字符。');

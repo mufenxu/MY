@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
 import httpProxy from 'http-proxy';
+import { PLATFORM_SSO_HEADER, issueInternalIdentity } from './internal-auth.mjs';
 
 function normalizeHost(value) {
   return String(value || '').trim().toLowerCase().replace(/:\d+$/, '');
@@ -37,9 +38,60 @@ function writeProxyError(res, error) {
   console.error('Platform proxy error:', error.message);
 }
 
+function isDocumentRequest(req, pathname) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+  if (pathname.includes('.')) return false;
+  return String(req.headers.accept || '').includes('text/html')
+    || req.headers['sec-fetch-dest'] === 'document';
+}
+
+function rejectUnauthenticated(req, res, pathname) {
+  if (isDocumentRequest(req, pathname)) {
+    const returnTo = encodeURIComponent(pathWithQuery(pathname, new URL(req.url || '/', 'http://platform.internal').search));
+    res.writeHead(302, { Location: `/?returnTo=${returnTo}`, 'Cache-Control': 'no-store' });
+    res.end();
+    return;
+  }
+  res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify({ error: '统一登录会话已失效，请重新登录。', code: 'PLATFORM_SESSION_REQUIRED' }));
+}
+
+function requestOrigin(req) {
+  const value = req.headers.origin || req.headers.referer || '';
+  if (!value) return '';
+  try { return new URL(String(value)).origin; } catch { return 'invalid'; }
+}
+
+function managedWriteAllowed(req, platformPublicOrigin) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(String(req.method || 'GET').toUpperCase())) return true;
+  const fetchSite = String(req.headers['sec-fetch-site'] || '').toLowerCase();
+  if (fetchSite && fetchSite !== 'same-origin') return false;
+  return Boolean(platformPublicOrigin) && requestOrigin(req) === platformPublicOrigin;
+}
+
+function managedSocketAllowed(req, platformPublicOrigin) {
+  const fetchSite = String(req.headers['sec-fetch-site'] || '').toLowerCase();
+  if (fetchSite && fetchSite !== 'same-origin') return false;
+  return Boolean(platformPublicOrigin) && requestOrigin(req) === platformPublicOrigin;
+}
+
+function rejectCrossSiteWrite(res) {
+  res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify({ error: '跨站管理请求已被拒绝。', code: 'PLATFORM_CSRF_REJECTED' }));
+}
+
 export function createCoreWebApp({ coreApp, staticPath }) {
   const app = express();
   app.disable('x-powered-by');
+  app.use((req, res, next) => {
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+      + "font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; "
+      + "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+    );
+    next();
+  });
   app.use((req, res, next) => {
     if (/^\/(api(?:\/|$)|uploads(?:\/|$)|public(?:\/|$)|health$)/.test(req.path)) {
       return coreApp(req, res);
@@ -86,6 +138,9 @@ export function createPlatformRouter({
   notifyHosts = '',
   campusHosts = '',
   mqttHosts = '',
+  getPlatformSession = () => null,
+  internalAuthPrivateKey = '',
+  platformPublicOrigin = '',
 }) {
   const hostSets = {
     core: parseHosts(coreHosts),
@@ -106,7 +161,31 @@ export function createPlatformRouter({
     proxy.web(req, res, { target });
   }
 
+  function authorizeManagedApp(req, res, service, prefix) {
+    const session = getPlatformSession(req);
+    if (!session) {
+      rejectUnauthenticated(req, res, new URL(req.url || '/', 'http://platform.internal').pathname);
+      return false;
+    }
+    if (!managedWriteAllowed(req, platformPublicOrigin)) {
+      rejectCrossSiteWrite(res);
+      return false;
+    }
+    rewriteServicePrefix(req, prefix);
+    const rewrittenUrl = new URL(req.url || '/', 'http://platform.internal');
+    req.headers[PLATFORM_SSO_HEADER] = issueInternalIdentity({
+      audience: service,
+      session,
+      privateKey: internalAuthPrivateKey,
+      method: req.method,
+      pathname: pathWithQuery(rewrittenUrl.pathname, rewrittenUrl.search),
+    });
+    return true;
+  }
+
   function handler(req, res) {
+    // 外部请求永远不能自行传入内部身份票据。
+    delete req.headers[PLATFORM_SSO_HEADER];
     const host = normalizeHost(req.headers.host);
     const requestUrl = new URL(req.url || '/', 'http://platform.internal');
 
@@ -115,6 +194,53 @@ export function createPlatformRouter({
     if (hostSets.notify.has(host)) return notifyApp(req, res);
     if (hostSets.campus.has(host)) return proxyRequest(req, res, campusTarget);
     if (hostSets.mqtt.has(host)) return proxyRequest(req, res, mqttTarget);
+
+    if (['/apps/core', '/apps/exam', '/apps/campus', '/apps/iot'].includes(requestUrl.pathname)) {
+      res.writeHead(308, {
+        Location: `${requestUrl.pathname}/${requestUrl.search}`,
+        'Cache-Control': 'no-store',
+      });
+      res.end();
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/apps/core/')) {
+      if (!authorizeManagedApp(req, res, 'core', '/apps/core')) return;
+      return coreApp(req, res);
+    }
+    if (requestUrl.pathname.startsWith('/apps/exam/')) {
+      if (!authorizeManagedApp(req, res, 'exam', '/apps/exam')) return;
+      return examApp(req, res);
+    }
+    if (requestUrl.pathname.startsWith('/apps/campus/')) {
+      if (!authorizeManagedApp(req, res, 'campus', '/apps/campus')) return;
+      return proxyRequest(req, res, campusTarget);
+    }
+    if (requestUrl.pathname.startsWith('/apps/iot/')) {
+      if (!authorizeManagedApp(req, res, 'iot', '/apps/iot')) return;
+      return proxyRequest(req, res, mqttTarget);
+    }
+
+    if (requestUrl.pathname === '/api/core' || requestUrl.pathname.startsWith('/api/core/')) {
+      rewriteServicePrefix(req, '/api/core', { apiByDefault: true, preserve: ['/uploads', '/public'] });
+      return coreApp(req, res);
+    }
+    if (requestUrl.pathname === '/api/exam' || requestUrl.pathname.startsWith('/api/exam/')) {
+      rewriteServicePrefix(req, '/api/exam', { apiByDefault: true });
+      return examApp(req, res);
+    }
+    if (requestUrl.pathname === '/api/notify' || requestUrl.pathname.startsWith('/api/notify/')) {
+      rewriteServicePrefix(req, '/api/notify');
+      return notifyApp(req, res);
+    }
+    if (requestUrl.pathname === '/api/campus' || requestUrl.pathname.startsWith('/api/campus/')) {
+      rewriteServicePrefix(req, '/api/campus', { apiByDefault: true });
+      return proxyRequest(req, res, campusTarget);
+    }
+    if (requestUrl.pathname === '/api/iot' || requestUrl.pathname.startsWith('/api/iot/')) {
+      rewriteServicePrefix(req, '/api/iot', { apiByDefault: true, preserve: ['/api-docs'] });
+      return proxyRequest(req, res, mqttTarget);
+    }
 
     if (requestUrl.pathname === '/core' || requestUrl.pathname.startsWith('/core/')) {
       rewriteServicePrefix(req, '/core', { apiByDefault: true, preserve: ['/uploads', '/public'] });
@@ -141,10 +267,32 @@ export function createPlatformRouter({
   }
 
   function handleUpgrade(req, socket, head) {
+    delete req.headers[PLATFORM_SSO_HEADER];
     const host = normalizeHost(req.headers.host);
     const requestUrl = new URL(req.url || '/', 'http://platform.internal');
     if (hostSets.mqtt.has(host)) {
       if (!mqttTarget) return socket.destroy();
+      return proxy.ws(req, socket, head, { target: mqttTarget });
+    }
+    if (requestUrl.pathname === '/apps/iot/ws' || requestUrl.pathname.startsWith('/apps/iot/ws/')) {
+      const session = getPlatformSession(req);
+      if (
+        !session
+        || !mqttTarget
+        || !internalAuthPrivateKey
+        || !managedSocketAllowed(req, platformPublicOrigin)
+      ) return socket.destroy();
+      rewriteServicePrefix(req, '/apps/iot');
+      req.headers[PLATFORM_SSO_HEADER] = issueInternalIdentity({
+        audience: 'iot',
+        session,
+        privateKey: internalAuthPrivateKey,
+        method: req.method,
+        pathname: pathWithQuery(
+          new URL(req.url || '/', 'http://platform.internal').pathname,
+          new URL(req.url || '/', 'http://platform.internal').search,
+        ),
+      });
       return proxy.ws(req, socket, head, { target: mqttTarget });
     }
     if (requestUrl.pathname === '/iot/ws' || requestUrl.pathname.startsWith('/iot/ws/')) {
@@ -158,4 +306,4 @@ export function createPlatformRouter({
   return { handler, handleUpgrade, close: () => proxy.close() };
 }
 
-export { normalizeHost, parseHosts, rewriteServicePrefix };
+export { managedSocketAllowed, managedWriteAllowed, normalizeHost, parseHosts, rewriteServicePrefix };

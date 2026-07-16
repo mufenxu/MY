@@ -1,8 +1,10 @@
 import React, { Suspense, lazy, memo, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider, Spin, theme, message } from 'antd';
+import { Button, ConfigProvider, Result, Spin, theme, message } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import ErrorBoundary from './components/ErrorBoundary';
+import api from './utils/api';
+import { APP_BASE_PATH, IS_PLATFORM_SSO } from './utils/runtime';
 
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -65,7 +67,8 @@ const isAdminRoleToken = (token) => {
   }
 };
 
-const PrivateRoute = ({ children }) => {
+const PrivateRoute = ({ children, platformSsoReady }) => {
+  if (IS_PLATFORM_SSO) return platformSsoReady ? children : <RouteFallback />;
   const token = localStorage.getItem('token');
   if (!token) return <Navigate to="/login" />;
 
@@ -78,6 +81,10 @@ const PrivateRoute = ({ children }) => {
 };
 
 function App() {
+  const [platformSso, setPlatformSso] = useState(() => ({
+    ready: !IS_PLATFORM_SSO,
+    error: null,
+  }));
   const [isDarkMode, setIsDarkMode] = useState(
     localStorage.getItem('theme') === 'dark' || document.documentElement.classList.contains('dark')
   );
@@ -102,8 +109,25 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!IS_PLATFORM_SSO) return undefined;
+    let cancelled = false;
+    api.get('/users/me')
+      .then((response) => {
+        if (cancelled) return;
+        localStorage.setItem('user', JSON.stringify(response.data.user || {}));
+        setPlatformSso({ ready: true, error: null });
+      })
+      .catch((error) => {
+        if (!cancelled && error.response?.status !== 401) {
+          setPlatformSso({ ready: false, error });
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!token) return undefined;
+    if (!token && !IS_PLATFORM_SSO) return undefined;
 
     let cancelled = false;
     const runPreloadQueue = (index = 0) => {
@@ -133,6 +157,17 @@ function App() {
     };
   }, []);
 
+  if (platformSso.error) {
+    return (
+      <Result
+        status="403"
+        title="统一账号尚未完成映射"
+        subTitle={platformSso.error.response?.data?.error || '请检查综合平台的统一登录账号映射配置。'}
+        extra={<Button type="primary" onClick={() => { window.location.href = '/'; }}>返回管理中心</Button>}
+      />
+    );
+  }
+
   return (
     <ConfigProvider
       locale={zhCN}
@@ -160,11 +195,11 @@ function App() {
     >
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
-          <Router>
+          <Router basename={APP_BASE_PATH || undefined}>
             <Routes>
-              <Route path="/login" element={<Login />} />
+              <Route path="/login" element={IS_PLATFORM_SSO ? <Navigate to="/dashboard" replace /> : <Login />} />
               <Route path="/query" element={<PublicQuery />} />
-              <Route path="/" element={<PrivateRoute><MainLayout /></PrivateRoute>}>
+              <Route path="/" element={<PrivateRoute platformSsoReady={platformSso.ready}><MainLayout /></PrivateRoute>}>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="iot-monitor" element={<IotMonitor />} />

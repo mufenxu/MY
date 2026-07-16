@@ -7,9 +7,9 @@
 ```text
 unified-platform/
 ├─ apps/
-│  ├─ admin-console/          # 唯一统一管理门户
-│  ├─ core-admin/             # 综合业务旧后台，迁移期间兼容
-│  ├─ exam-admin/             # 考试业务旧后台，迁移期间兼容
+│  ├─ admin-console/          # 统一登录与服务总览
+│  ├─ core-admin/             # 综合业务后台（统一路径 + 旧域名兼容）
+│  ├─ exam-admin/             # 考试业务后台（统一路径 + 旧域名兼容）
 │  ├─ smart-campus-miniapp/   # 综合微信小程序
 │  └─ exam-miniapp/           # 考试学习微信小程序
 ├─ services/
@@ -55,11 +55,14 @@ npm run check
 
 生产目标固定为四个容器：`platform-api`、`campus-service`、`iot-service`、`mongodb`。
 
+网页管理面使用一个主域名和一次登录：`/apps/core/`、`/apps/exam/`、`/apps/campus/`、`/apps/iot/` 均由 `platform-api` 统一认证和转发。原业务域名与小程序 API 保持兼容。
+
 ```powershell
-docker login --username=mufenx crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com
 npm run compose:pull
 npm run compose:up
 ```
+
+当前阿里云 ACR 仓库为公开仓库，服务器拉取镜像不需要登录；以后切回私有仓库时再执行 `docker login`。
 
 Alibaba Cloud Container Registry is the primary deployment registry:
 
@@ -77,3 +80,5 @@ Every push to `main` also runs the full workspace checks and publishes three bac
 ACR build rules and maintenance instructions are documented in [docs/aliyun-acr.md](./docs/aliyun-acr.md).
 
 详细边界见 [docs/architecture.md](./docs/architecture.md)。生产配置不得提交到 Git，所有密钥从根目录 `.env` 注入。
+
+单域名部署步骤见 [docs/single-domain-deployment.md](./docs/single-domain-deployment.md)。

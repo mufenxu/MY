@@ -4,18 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MQTT 智能后台管理系统</title>
-    <link rel="stylesheet" href="/styles.css?v=14" />
+    <link rel="stylesheet" href="./styles.css?v=14" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3' fill='%236366f1' stroke='none'%3E%3C/circle%3E%3Cline x1='12' y1='9' x2='12' y2='4'%3E%3C/line%3E%3Ccircle cx='12' cy='3' r='1.5' fill='none' stroke='%236366f1' stroke-width='1.5'%3E%3C/circle%3E%3Cline x1='9.5' y1='13.5' x2='5' y2='16'%3E%3C/line%3E%3Ccircle cx='4' cy='16.5' r='1.5' fill='none' stroke='%236366f1' stroke-width='1.5'%3E%3C/circle%3E%3Cline x1='14.5' y1='13.5' x2='19' y2='16'%3E%3C/line%3E%3Ccircle cx='20' cy='16.5' r='1.5' fill='none' stroke='%236366f1' stroke-width='1.5'%3E%3C/circle%3E%3Cpath d='M5 8a9 9 0 0 1 14 0' stroke-dasharray='2,2'%3E%3C/path%3E%3Cpath d='M19 16a9 9 0 0 1-7 4' stroke-dasharray='2,2'%3E%3C/path%3E%3Cpath d='M5 16a9 9 0 0 1-1-6' stroke-dasharray='2,2'%3E%3C/path%3E%3C/svg%3E" />
-    <script>
-      (function() {
-        const savedTheme = localStorage.getItem('mqttapi_theme') || 'light';
-        if (savedTheme === 'light') {
-          document.documentElement.setAttribute('data-theme', 'light');
-        } else {
-          document.documentElement.removeAttribute('data-theme');
-        }
-      })();
-    </script>
+    <script src="./js/themeBootstrap.js?v=1"></script>
   </head>
   <body>
     <!-- 动态消息 Toast 提示容器 -->
@@ -592,7 +583,7 @@
               <h2 style="font-weight: 700; color: var(--text-main);">开发者 API 调用说明</h2>
               <p style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <span>供微信小程序、大屏或其它第三方系统快速对接物联网 API 的文档与代码模板。</span>
-                <a href="/api-docs" target="_blank" style="text-decoration: none; font-size: 0.75rem; color: var(--primary-color); background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.15); padding: 3px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; font-weight: 500; transition: all 0.2s;" onmouseenter="this.style.background='rgba(99,102,241,0.15)'" onmouseleave="this.style.background='rgba(99,102,241,0.08)'">
+                <a href="./api-docs" data-api-docs-link target="_blank" class="api-docs-link">
                   <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                   <span>AI 友好型 Markdown 链接 (公开免签)</span>
                 </a>
@@ -1159,16 +1150,16 @@ fetch("http://localhost:22102/api/devices/esp8266_living/history?range=24h", {
       </section>
     </div>
 
-    <script src="/js/apiClient.js?v=1"></script>
-    <script src="/js/uiFeedback.js?v=1"></script>
-    <script src="/js/apiKeysView.js?v=1"></script>
-    <script src="/js/systemActions.js?v=1"></script>
-    <script src="/js/developerGuide.js?v=1"></script>
-    <script src="/js/layoutController.js?v=1"></script>
-    <script src="/js/formEnhancements.js?v=1"></script>
-    <script src="/js/historyView.js?v=1"></script>
-    <script src="/js/deviceGridView.js?v=1"></script>
-    <script src="/js/deviceConfigView.js?v=1"></script>
-    <script src="/app.js?v=23"></script>
+    <script src="./js/apiClient.js?v=1"></script>
+    <script src="./js/uiFeedback.js?v=1"></script>
+    <script src="./js/apiKeysView.js?v=1"></script>
+    <script src="./js/systemActions.js?v=1"></script>
+    <script src="./js/developerGuide.js?v=1"></script>
+    <script src="./js/layoutController.js?v=1"></script>
+    <script src="./js/formEnhancements.js?v=1"></script>
+    <script src="./js/historyView.js?v=1"></script>
+    <script src="./js/deviceGridView.js?v=1"></script>
+    <script src="./js/deviceConfigView.js?v=1"></script>
+    <script src="./app.js?v=23"></script>
   </body>
 </html>

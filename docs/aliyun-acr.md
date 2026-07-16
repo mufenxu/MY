@@ -21,12 +21,13 @@ The ACR console uses the Dockerfile directory as the build context. The platform
 
 ## Deployment
 
-Log in with the ACR registry password configured in Alibaba Cloud. Do not store it in the repository.
+The current ACR repository is public, so production servers can pull without logging in. Keep the optional login command only for future private-repository use, and never store its password in Git.
 
 ```bash
-docker login --username=mufenx crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com
+# Optional: required only after changing the repository back to private.
+# docker login --username=mufenx crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com
 docker compose --env-file .env -f infra/docker/compose.yml pull
 docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build
 ```
 
-For an ECS instance in the same Beijing VPC, the VPC registry endpoint may be used instead of the public endpoint. Keep the repository private because the application images contain server-side source code.
+For an ECS instance in the same Beijing VPC, the VPC registry endpoint may be used instead of the public endpoint. The repository is intentionally public for the current deployment workflow; do not bake `.env`, credentials, private keys, or runtime data into any image.

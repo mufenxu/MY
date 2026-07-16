@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createPasswordHash,
+  createSessionRegistry,
   issueSession,
   parseCookies,
   verifyPassword,
@@ -23,6 +24,20 @@ test('signed sessions expire and reject tampering', () => {
   assert.equal(verifySession(token, secret, now + 1000).sub, 'admin');
   assert.equal(verifySession(`${token}x`, secret, now + 1000), null);
   assert.equal(verifySession(token, secret, now + 60 * 60 * 1000), null);
+});
+
+test('registered sessions can be revoked server-side', () => {
+  const secret = 'b'.repeat(32);
+  const now = Date.UTC(2026, 6, 15, 12, 0, 0);
+  const sessions = createSessionRegistry({ secret });
+  const token = sessions.issue({ username: 'admin', ttlHours: 1, now });
+
+  assert.equal(sessions.verify(token, now + 1000).sub, 'admin');
+  assert.equal(sessions.revoke(token, now + 1000), true);
+  assert.equal(sessions.verify(token, now + 2000), null);
+
+  const unregistered = issueSession({ username: 'admin', secret, ttlHours: 1, now });
+  assert.equal(sessions.verify(unregistered, now + 1000), null);
 });
 
 test('cookie parser handles encoded values and malformed input', () => {

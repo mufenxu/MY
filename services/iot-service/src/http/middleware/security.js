@@ -16,25 +16,18 @@ function parseTrustProxy(value) {
   return Number.isFinite(parsed) ? parsed : String(value).trim();
 }
 
-function getConfiguredPublicOrigin() {
-  const value = process.env.PUBLIC_ORIGIN;
-  if (value == null || String(value).trim() === '') {
-    return '';
-  }
-
-  try {
-    return new URL(String(value).trim()).origin;
-  } catch (error) {
-    return '';
-  }
+function getConfiguredPublicOrigins() {
+  return String(process.env.PUBLIC_ORIGIN || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => {
+      try { return new URL(value).origin; } catch { return ''; }
+    })
+    .filter(Boolean);
 }
 
-function getExpectedOrigin(req) {
-  const configuredOrigin = getConfiguredPublicOrigin();
-  if (configuredOrigin) {
-    return configuredOrigin;
-  }
-
+function getRequestHostOrigin(req) {
   const trustProxy = Boolean(req.app && req.app.get('trust proxy'));
   const forwardedProtocol = trustProxy ? getFirstHeader(req.headers['x-forwarded-proto']) : '';
   const forwardedHost = trustProxy ? getFirstHeader(req.headers['x-forwarded-host']) : '';
@@ -90,14 +83,27 @@ function requireSameOriginSessionWrite(req, res, next) {
     return next();
   }
 
-  const expectedOrigin = getExpectedOrigin(req);
-  if (origin === expectedOrigin) {
+  const expectedOrigins = new Set([
+    ...getConfiguredPublicOrigins(),
+    getRequestHostOrigin(req)
+  ].filter(Boolean));
+  if (expectedOrigins.has(origin)) {
     return next();
   }
 
   return res.status(403).json({
     error: '跨站请求已被拒绝。'
   });
+}
+
+function isAllowedRealtimeOrigin(req) {
+  const origin = getRequestOrigin(req);
+  if (!origin) return false;
+  const expectedOrigins = new Set([
+    ...getConfiguredPublicOrigins(),
+    getRequestHostOrigin(req)
+  ].filter(Boolean));
+  return expectedOrigins.has(origin);
 }
 
 function setSecurityHeaders(req, res, next) {
@@ -108,13 +114,14 @@ function setSecurityHeaders(req, res, next) {
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:; " +
-    "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; " +
+    "style-src 'self' 'unsafe-inline'; script-src 'self'; " +
     "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
   );
   next();
 }
 
 module.exports = {
+  isAllowedRealtimeOrigin,
   parseTrustProxy,
   requireSameOriginSessionWrite,
   setSecurityHeaders

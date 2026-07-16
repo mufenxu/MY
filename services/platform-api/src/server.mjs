@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { createCoreWebApp, createPlatformRouter } from './router.mjs';
 import { resolveRuntimePaths } from './runtime-paths.mjs';
+import { SESSION_COOKIE_NAME, parseCookies } from '../../../apps/admin-console/src/auth.js';
 
 const require = createRequire(import.meta.url);
 const { paths } = resolveRuntimePaths();
@@ -17,6 +18,13 @@ const [{ createApp: createPortalApp }, { loadConfig: loadPortalConfig }] = await
 
 const portalConfig = loadPortalConfig();
 const portalApp = createPortalApp({ config: portalConfig });
+const getPlatformSession = (req) => {
+  if (portalConfig.authDisabled) {
+    return { sub: 'local-admin', nonce: 'local-development-session' };
+  }
+  const token = parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME];
+  return portalApp.locals.verifyConsoleSession(token);
+};
 const coreWebApp = createCoreWebApp({ coreApp: coreRuntime.app, staticPath: paths.coreStatic });
 const router = createPlatformRouter({
   portalApp,
@@ -30,6 +38,9 @@ const router = createPlatformRouter({
   notifyHosts: process.env.NOTIFY_HOSTS || 'tongzhiapi.pxyb.cn',
   campusHosts: process.env.CAMPUS_HOSTS || '',
   mqttHosts: process.env.MQTT_HOSTS || '',
+  getPlatformSession,
+  internalAuthPrivateKey: portalConfig.internalAuthPrivateKey,
+  platformPublicOrigin: portalConfig.publicOrigin,
 });
 
 const host = process.env.PLATFORM_API_HOST || '0.0.0.0';

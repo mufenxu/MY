@@ -4,7 +4,7 @@
         <!-- Mobile Header -->
         <div class="mobile-header">
             <div class="logo mobile-header-logo">
-                <span class="logo-mark"><img src="/favicon.png" alt="好爱学习"></span>
+                <span class="logo-mark"><img :src="faviconUrl" alt="好爱学习"></span>
                 <span>好爱学习</span>
             </div>
             <button type="button" class="mobile-menu-trigger" aria-label="打开导航菜单" @click="mobileMenuVisible = true">
@@ -20,7 +20,7 @@
             aria-label="导航菜单" class="mobile-menu-drawer">
             <el-aside width="100%" class="mobile-drawer-aside">
                 <div class="logo">
-                    <span class="logo-mark"><img src="/favicon.png" alt="好爱学习"></span>
+                    <span class="logo-mark"><img :src="faviconUrl" alt="好爱学习"></span>
                     <span>好爱学习</span>
                 </div>
                 <el-menu :default-active="activeMenu" @select="handleMenuSelect">
@@ -86,7 +86,7 @@
             <!-- Desktop Aside -->
             <el-aside width="260px" class="desktop-aside">
                 <div class="logo">
-                    <span class="logo-mark"><img src="/favicon.png" alt="好爱学习"></span>
+                    <span class="logo-mark"><img :src="faviconUrl" alt="好爱学习"></span>
                     <span>好爱学习</span>
                 </div>
                 <el-menu :default-active="activeMenu" @select="handleMenuSelect">
@@ -1758,9 +1758,11 @@ import { createMockAdminApi } from '@/api/adminMock';
 import { createCartoonAvatar } from '@/utils/cartoonAvatar';
 import { isUiPreviewMode } from '@/utils/uiPreview';
 import MiniLineChart from '@/components/MiniLineChart.vue';
+import { IS_PLATFORM_SSO, logoutPlatformSession, resolveAppUrl } from '@/utils/runtime';
 
 const route = useRoute();
 const router = useRouter();
+const faviconUrl = resolveAppUrl('/favicon.png');
 const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
 
 // Interceptors are configured globally in main.js via setupHttp
@@ -1884,6 +1886,11 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             const message = isConsoleMode.value ? '确定退出个人题库后台吗？' : '确定退出登录吗？';
             ElMessageBox.confirm(message, '提示', { type: 'warning' })
                 .then(async () => {
+                    if (IS_PLATFORM_SSO) {
+                        session.clear();
+                        await logoutPlatformSession();
+                        return;
+                    }
                     await adminApi.logout().catch(() => {});
                     session.clear();
                     router.push('/login');
@@ -4213,8 +4220,9 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                     newPassword: passwordForm.newPassword
                 });
                 if (res.data.code === 0) {
-                    ElMessage.success('密码修改成功，请重新登录');
+                    ElMessage.success(IS_PLATFORM_SSO ? '考试后台独立密码已修改' : '密码修改成功，请重新登录');
                     passwordDialog.visible = false;
+                    if (IS_PLATFORM_SSO) return;
                     setTimeout(() => {
                         session.clear();
                         router.push('/login');

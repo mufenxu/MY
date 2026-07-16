@@ -10,7 +10,7 @@
       "description": "用户、订单、资源、IoT、CT8 与综合业务后台",
       "baseUrl": "http://127.0.0.1:22100/core",
       "healthPath": "/health",
-      "adminUrl": "https://xcx.pxyb.cn",
+      "adminUrl": "/apps/core/",
       "repositoryPath": "services/core-api",
       "capabilities": ["小程序", "订单", "IoT", "CT8"]
     },
@@ -22,7 +22,7 @@
       "description": "题库、模拟考试、学习记录与题库管理",
       "baseUrl": "http://127.0.0.1:22100/exam",
       "healthPath": "/version",
-      "adminUrl": "https://haxx.pxyb.cn",
+      "adminUrl": "/apps/exam/",
       "repositoryPath": "services/exam-api",
       "capabilities": ["小程序", "题库", "考试", "AI 解析"]
     },
@@ -34,7 +34,7 @@
       "description": "校园能耗、一卡通、住宿与教务信息服务",
       "baseUrl": "http://campus-service:22101",
       "healthPath": "/api/health",
-      "adminUrl": "https://hgu.pxyb.cn",
+      "adminUrl": "/apps/campus/",
       "repositoryPath": "services/campus-service",
       "capabilities": ["校园", "能耗", "教务"]
     },
@@ -46,7 +46,7 @@
       "description": "设备在线状态、遥测历史、继电器与实时消息",
       "baseUrl": "http://iot-service:22102",
       "healthPath": "/api/health",
-      "adminUrl": "https://mqttapi.pxyb.cn",
+      "adminUrl": "/apps/iot/",
       "repositoryPath": "services/iot-service",
       "capabilities": ["MQTT", "设备", "WebSocket"]
     },

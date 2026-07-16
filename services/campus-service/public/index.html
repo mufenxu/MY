@@ -65,7 +65,7 @@
         <h2>进入地大智览</h2>
         <p id="appAuthStatusText">正在检查访问会话...</p>
       </div>
-      <form id="appLoginForm" class="app-login-form" action="/app-auth/login" method="post" autocomplete="off">
+      <form id="appLoginForm" class="app-login-form" action="./app-auth/login" method="post" autocomplete="off">
         <input id="appUsernameInput" name="username" type="text" placeholder="系统用户名" autocomplete="username">
         <label class="password-field">
           <input id="appPasswordInput" name="password" type="password" placeholder="系统密码" autocomplete="current-password">
@@ -872,6 +872,7 @@
   </div>
 
   <script src="./browser-check.js?v=20260714-wechat-v6" defer></script>
+  <script src="./platform-runtime.js?v=20260715-sso-v1" defer></script>
   <script src="./app.js?v=20260715-notice-auto-clear" defer></script>
   <script src="./admin.js?v=20260715-admin-workspace-v2" defer></script>
 </body>

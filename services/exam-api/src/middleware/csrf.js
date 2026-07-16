@@ -20,6 +20,11 @@ function requireCsrfToken(req, res, next) {
         return next();
     }
 
+    // 统一网关会用 SameSite=Strict 的中央会话和短时签名票据完成 CSRF 防护。
+    if (req.platformSso) {
+        return next();
+    }
+
     if (!hasAuthCookie(req)) {
         return next();
     }

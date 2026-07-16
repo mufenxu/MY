@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkService, createStatusMonitor } from '../src/service-registry.js';
+import { checkService, createStatusMonitor, loadServiceRegistry } from '../src/service-registry.js';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const service = {
   id: 'example',
@@ -41,4 +44,23 @@ test('status monitor coalesces concurrent refreshes', async () => {
   const [left, right] = await Promise.all([monitor.refresh(), monitor.refresh()]);
   assert.deepEqual(left, right);
   assert.equal(calls, 1);
+});
+
+test('service registry accepts same-origin managed application paths', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'my-platform-registry-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const registryPath = join(directory, 'services.json');
+  await writeFile(registryPath, JSON.stringify({
+    schemaVersion: 1,
+    services: [{
+      id: 'core',
+      name: 'Core',
+      category: 'miniapp',
+      baseUrl: 'http://127.0.0.1:22100',
+      healthPath: '/health',
+      adminUrl: '/apps/core',
+    }],
+  }));
+
+  assert.equal(loadServiceRegistry(registryPath).services[0].adminUrl, '/apps/core/');
 });

@@ -11,6 +11,36 @@
 
 两个微信小程序位于 `apps/`，通过微信开发者工具或 CI 发布，不进入 Docker 镜像。
 
+## Single-domain management plane
+
+生产管理入口只需要一个域名，例如 `https://admin.example.com`。Nginx 只把该域名转发到 `platform-api:22100`，平台网关再按路径分发：
+
+| Public path | Purpose | Internal target |
+| --- | --- | --- |
+| `/` | 统一登录与服务总览 | 管理门户 |
+| `/apps/core/` | 综合业务管理后台 | `core-api` + `core-admin` |
+| `/apps/exam/` | 考试学习管理后台 | `exam-api` + `exam-admin` |
+| `/apps/campus/` | 校园服务工作台 | `campus-service:22101` |
+| `/apps/iot/` | IoT / MQTT 管理后台 | `iot-service:22102` |
+| `/api/core/` | 综合业务规范化 API 入口 | `core-api` |
+| `/api/exam/` | 考试业务规范化 API 入口 | `exam-api` |
+| `/api/campus/` | 校园服务规范化 API 入口 | `campus-service:22101` |
+| `/api/iot/` | IoT 规范化 API 入口 | `iot-service:22102` |
+| `/api/notify/` | 通知服务规范化 API 入口 | `notification-service` |
+
+旧业务域名和原 API 路径继续兼容，便于小程序平滑迁移和快速回滚。某个项目需要独立域名时，可在 Nginx 增加别名入口，不影响统一管理入口。
+
+## Authentication model
+
+- 浏览器只保存 `my_platform_session` 中央会话，Cookie 为 `HttpOnly`、`Secure`、`SameSite=Strict`。
+- 中央会话除签名校验外还必须存在于服务端会话表；主动退出会立即撤销当前会话，容器重启后需要重新登录。
+- `/apps/*` 由平台网关统一校验；未登录请求无法到达业务服务。
+- 网关使用 Ed25519 私钥为每个内部请求签发 15 秒有效、绑定目标服务、HTTP 方法、路径和查询参数的身份票据。
+- 下游容器只持有 Ed25519 公钥；单个业务容器失陷时无法伪造新的统一管理员票据。
+- 网关会删除所有外部传入的内部身份请求头，业务容器再独立验签，防止伪造或跨服务重放。
+- 综合、考试和校园后台会将统一账号映射到各自已有管理员，原权限、数据归属和审计记录保持不变。
+- 原业务登录、JWT、API Key 和小程序用户认证继续保留，仅统一网页管理面的登录。
+
 ## Port allocation
 
 | Service | Host port | Container port | Exposure |

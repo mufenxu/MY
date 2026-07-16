@@ -12,6 +12,7 @@ const {
   normalizeStatusCode
 } = require('./middleware/requestContext');
 const {
+  isAllowedRealtimeOrigin,
   parseTrustProxy,
   requireSameOriginSessionWrite,
   setSecurityHeaders
@@ -85,6 +86,11 @@ function createApiServer({ settingsStore, mqttService }) {
 
     if (!authManager.canAccessRealtime(req)) {
       rejectUpgrade(socket, 401, 'Unauthorized');
+      return;
+    }
+
+    if (!isAllowedRealtimeOrigin(req)) {
+      rejectUpgrade(socket, 403, 'Forbidden');
       return;
     }
 

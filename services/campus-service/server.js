@@ -21,6 +21,7 @@ import { createHttpToolkit, HttpError } from "./src/lib/http.js";
 import { hashPassword, isValidUsername, normalizeUsername, verifyPassword } from "./src/lib/password.js";
 import { createSensitiveJsonCodec, deriveDataEncryptionKey } from "./src/lib/sensitive-json.js";
 import { normalizeAllowedSchoolUrl } from "./src/lib/school-url.js";
+import { verifyPlatformSso } from "./src/lib/platform-sso.js";
 import { createStaticAssetHandler } from "./src/lib/static-assets.js";
 import {
   UIAS_ENDPOINTS,
@@ -892,6 +893,22 @@ function appSessionTokenFromHeader(req) {
 
 function getAppSession(req) {
   if (!APP_AUTH_REQUIRED) return appSessionData(getDefaultUser(), { csrfToken: null, expiresAt: null });
+  const platformIdentity = verifyPlatformSso(req);
+  if (platformIdentity) {
+    const mappedUsername = process.env.PLATFORM_SSO_CAMPUS_USERNAME || platformIdentity.sub;
+    const user = findUserByUsername(mappedUsername);
+    if (!user || user.disabled || user.role !== "admin") {
+      throw new HttpError(403, "统一管理员未映射到校园服务管理员账号。", null, "PLATFORM_SSO_ACCOUNT_NOT_MAPPED");
+    }
+    return {
+      required: true,
+      platformSso: true,
+      ...appSessionData(user, {
+        csrfToken: platformIdentity.csrf,
+        expiresAt: new Date((platformIdentity.session_exp || platformIdentity.exp) * 1000).toISOString()
+      })
+    };
+  }
   const headerToken = appSessionTokenFromHeader(req);
   if (headerToken) return verifyAppSession(headerToken);
   const cookies = parseCookieHeader(req.headers.cookie);
@@ -5888,6 +5905,10 @@ async function handleApi(req, res, url) {
     apiUserLimiter.recordFailure(contextUser.id);
 
     if (url.pathname === "/api/app-auth/logout" && req.method === "POST") {
+      if (appSession.platformSso) {
+        json(res, 200, { ok: true, data: appSession });
+        return;
+      }
       revokeSystemUserSessions(currentUserId());
       logger.info("audit_app_logout", { actorUserId: currentUserId() });
       json(res, 200, {

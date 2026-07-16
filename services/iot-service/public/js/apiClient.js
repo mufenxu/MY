@@ -2,6 +2,21 @@
   const REQUEST_TIMEOUT_MS = 15000;
   const HISTORY_REQUEST_TIMEOUT_MS = 30000;
   const MAINTENANCE_REQUEST_TIMEOUT_MS = 60000;
+  const APP_BASE_PATH = /^\/apps\/iot(?:\/|$)/.test(global.location.pathname)
+    ? '/apps/iot'
+    : '';
+
+  function resolveAppUrl(url) {
+    const normalized = String(url || '/');
+    if (!APP_BASE_PATH || !normalized.startsWith('/')) return normalized;
+    if (normalized === APP_BASE_PATH || normalized.startsWith(`${APP_BASE_PATH}/`)) return normalized;
+    return `${APP_BASE_PATH}${normalized}`;
+  }
+
+  function redirectToPlatformLogin() {
+    const returnTo = `${global.location.pathname}${global.location.search}${global.location.hash}`;
+    global.location.replace(`/?returnTo=${encodeURIComponent(returnTo)}`);
+  }
 
   function createClientRequestId() {
     if (global.crypto && typeof global.crypto.randomUUID === 'function') {
@@ -83,7 +98,7 @@
       }
 
       try {
-        const response = await fetch(url, {
+        const response = await fetch(resolveAppUrl(url), {
           ...fetchOptions,
           signal: controller ? controller.signal : signal,
           headers: createRequestHeaders(headers, requestId)
@@ -92,14 +107,13 @@
         const responseRequestId = response.headers.get('x-request-id') || data.requestId || requestId;
 
         if (!response.ok) {
-          if (response.status === 401) {
-            onUnauthorized();
-          }
-
           const error = new Error(formatRequestError(data, response.status, responseRequestId));
           error.status = response.status;
           error.code = data.code;
           error.requestId = responseRequestId;
+          if (response.status === 401) {
+            onUnauthorized(error);
+          }
           throw error;
         }
 
@@ -145,9 +159,12 @@
   }
 
   global.MqttApiClient = {
+    APP_BASE_PATH,
     HISTORY_REQUEST_TIMEOUT_MS,
     MAINTENANCE_REQUEST_TIMEOUT_MS,
     REQUEST_TIMEOUT_MS,
-    createApiClient
+    createApiClient,
+    redirectToPlatformLogin,
+    resolveAppUrl
   };
 })(window);

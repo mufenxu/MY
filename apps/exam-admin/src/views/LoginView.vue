@@ -3,7 +3,7 @@
         <div class="shell">
             <section class="hero">
                 <div class="brand-mark">
-                    <img src="/favicon.png" alt="好爱学习">
+                    <img :src="faviconUrl" alt="好爱学习">
                 </div>
                 <div class="hero-badge">{{ loginCopy.heroBadge }}</div>
                 <h1>{{ loginCopy.heroTitle }}</h1>
@@ -17,7 +17,7 @@
 
                 <div class="mini-program-card">
                     <div class="mini-program-code">
-                        <img src="/assets/haoai-miniprogram-code.jpg" alt="好爱学习小程序码">
+                        <img :src="miniProgramCodeUrl" alt="好爱学习小程序码">
                     </div>
                     <div class="mini-program-copy">
                         <strong>好爱学习小程序</strong>
@@ -138,9 +138,12 @@ import {
     getCaptchaVerifyCode,
 } from '@/utils/aliyunAiCaptcha';
 import http from '@/utils/http';
+import { resolveAppUrl } from '@/utils/runtime';
 
 const router = useRouter();
 const route = useRoute();
+const faviconUrl = resolveAppUrl('/favicon.png');
+const miniProgramCodeUrl = resolveAppUrl('/assets/haoai-miniprogram-code.jpg');
 
 const QR_TOKEN_KEY = 'manage_qr_token';
 const QR_POLL_TOKEN_KEY = 'manage_qr_poll_token';

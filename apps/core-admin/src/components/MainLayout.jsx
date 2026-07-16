@@ -25,6 +25,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { getDiceBearAvatar } from '../utils/avatar';
+import { IS_PLATFORM_SSO, logoutPlatformSession } from '../utils/runtime';
 
 const { Sider, Content } = Layout;
 
@@ -359,6 +360,11 @@ const MainLayout = () => {
     }, []);
 
     const handleLogout = useCallback(async () => {
+        if (IS_PLATFORM_SSO) {
+            localStorage.removeItem('user');
+            await logoutPlatformSession();
+            return;
+        }
         try {
             const refreshToken = localStorage.getItem('refreshToken');
             await api.post('/auth/logout', { refreshToken });
