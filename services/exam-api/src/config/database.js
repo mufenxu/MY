@@ -8,7 +8,7 @@ const logger = require('./logger');
 
 async function connectDatabase() {
     try {
-        await mongoose.connect(config.mongodbUri);
+        await mongoose.connect(config.mongodbUri, config.mongodbOptions);
         logger.info('MongoDB 连接成功');
     } catch (err) {
         logger.fatal({ err }, 'MongoDB 连接失败');

@@ -14,7 +14,7 @@ const requestLogger = require('./middleware/requestLogger');
 const { NotFoundError } = require('./utils/errors');
 
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', config.trustProxy);
 app.disable('x-powered-by');
 app.use((req, res, next) => {
     const incoming = String(req.get('x-request-id') || '');

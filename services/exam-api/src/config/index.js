@@ -55,6 +55,15 @@ function parsePositiveInt(value, fallback) {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseTrustProxy(value, fallback = 1) {
+    if (value === undefined || value === null || value === '') return fallback;
+    const normalized = String(value).trim().toLowerCase();
+    if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) return 1;
+    const hops = Number.parseInt(normalized, 10);
+    return Number.isFinite(hops) && hops >= 0 ? hops : String(value).trim();
+}
+
 function parseOptionalHttpUrl(value, name) {
     const trimmed = String(value || '').trim();
     if (!trimmed) {
@@ -107,8 +116,17 @@ const aiApiKey = process.env.SUB2API_API_KEY || process.env.AI_API_KEY || '';
 const config = {
     isProduction,
     port: parseInt(process.env.PORT, 10) || DEFAULT_PORT,
+    trustProxy: parseTrustProxy(
+        process.env.EXAM_TRUST_PROXY || process.env.TRUST_PROXY || process.env.PLATFORM_TRUST_PROXY,
+        1,
+    ),
 
     mongodbUri: process.env.MONGODB_URI,
+    mongodbOptions: {
+        serverSelectionTimeoutMS: parsePositiveInt(process.env.EXAM_MONGODB_SERVER_SELECTION_TIMEOUT_MS, 5000),
+        socketTimeoutMS: parsePositiveInt(process.env.EXAM_MONGODB_SOCKET_TIMEOUT_MS, 45000),
+        maxPoolSize: parsePositiveInt(process.env.EXAM_MONGODB_MAX_POOL_SIZE, 10),
+    },
 
     jwtSecret: examJwtSecret,
     jwtExpiresIn: process.env.ADMIN_JWT_EXPIRES_IN || '12h',

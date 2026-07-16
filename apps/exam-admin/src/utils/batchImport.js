@@ -5,7 +5,8 @@
  */
 
 const SPREADSHEET_OPTION_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-let spreadsheetParserPromise = null;
+let excelParserPromise = null;
+let csvParserPromise = null;
 const MAX_SPREADSHEET_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_SPREADSHEET_ROWS = 10000;
 const MAX_SPREADSHEET_COLUMNS = 100;
@@ -376,17 +377,18 @@ const decodeSpreadsheetCsv = (arrayBuffer) => {
     }
 };
 
-const getSpreadsheetParser = () => {
-    if (!spreadsheetParserPromise) {
-        spreadsheetParserPromise = Promise.all([
-            import('exceljs'),
-            import('papaparse'),
-        ]).then(([excelModule, csvModule]) => ({
-            ExcelJS: excelModule.default || excelModule,
-            Papa: csvModule.default || csvModule,
-        }));
+const getExcelParser = () => {
+    if (!excelParserPromise) {
+        excelParserPromise = import('exceljs').then((module) => module.default || module);
     }
-    return spreadsheetParserPromise;
+    return excelParserPromise;
+};
+
+const getCsvParser = () => {
+    if (!csvParserPromise) {
+        csvParserPromise = import('papaparse').then((module) => module.default || module);
+    }
+    return csvParserPromise;
 };
 
 function inspectXlsxArchive(arrayBuffer) {
@@ -459,7 +461,6 @@ export async function readQuestionsFromSpreadsheetFile(file) {
     if (!file) return '';
 
     if (file.size > MAX_SPREADSHEET_FILE_BYTES) throw new Error('表格文件不能超过 10 MiB');
-    const { ExcelJS, Papa } = await getSpreadsheetParser();
     const fileName = file.name || '';
     const extension = fileName.split('.').pop()?.toLowerCase() || '';
     if (!['csv', 'xlsx'].includes(extension)) throw new Error('只支持 .xlsx 或 .csv 文件');
@@ -467,9 +468,11 @@ export async function readQuestionsFromSpreadsheetFile(file) {
     const arrayBuffer = await file.arrayBuffer();
     let rows;
     if (isCsv) {
+        const Papa = await getCsvParser();
         rows = parseCsvRows(Papa, decodeSpreadsheetCsv(arrayBuffer));
     } else {
         inspectXlsxArchive(arrayBuffer);
+        const ExcelJS = await getExcelParser();
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(arrayBuffer);
         const sheet = workbook.worksheets[0];

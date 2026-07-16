@@ -20,8 +20,20 @@ let server = null;
 let initializationPromise = null;
 let initialized = false;
 
-// Trust remote proxy (e.g., Nginx, Cloudflare) for correct IP rate limiting
-app.set('trust proxy', 1);
+function parseTrustProxy(value, fallback = 1) {
+    if (value === undefined || value === null || value === '') return fallback;
+    const normalized = String(value).trim().toLowerCase();
+    if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) return 1;
+    const hops = Number.parseInt(normalized, 10);
+    return Number.isFinite(hops) && hops >= 0 ? hops : String(value).trim();
+}
+
+// Keep the current one-hop proxy default, but allow direct deployments to opt out.
+app.set('trust proxy', parseTrustProxy(
+    process.env.CORE_TRUST_PROXY ?? process.env.TRUST_PROXY ?? process.env.PLATFORM_TRUST_PROXY,
+    1,
+));
 
 // Middleware
 app.use(requestId); // 全局请求 ID（必须最先注册）

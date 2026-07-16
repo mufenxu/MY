@@ -43,7 +43,8 @@ export default defineConfig({
                 manualChunks(id) {
                     const normalizedId = id.replace(/\\/g, '/');
                     if (normalizedId.includes('node_modules/@vue') || normalizedId.includes('node_modules/vue-router')) return 'vue-vendor';
-                    if (normalizedId.includes('node_modules/xlsx')) return 'xlsx';
+                    if (normalizedId.includes('node_modules/exceljs')) return 'exceljs';
+                    if (normalizedId.includes('node_modules/papaparse')) return 'papaparse';
                     if (normalizedId.includes('node_modules/qrcode')) return 'qrcode';
                 },
             },
