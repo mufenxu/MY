@@ -34,6 +34,7 @@ jobs:
             apps/core-admin/package-lock.json
             apps/exam-admin/package-lock.json
             services/platform-api/package-lock.json
+            services/core-api/package-lock.json
             services/exam-api/package-lock.json
             services/campus-service/package-lock.json
             services/iot-service/package-lock.json

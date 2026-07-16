@@ -5,6 +5,7 @@ const projects = [
   'apps/core-admin',
   'apps/exam-admin',
   'services/platform-api',
+  'services/core-api',
   'services/exam-api',
   'services/campus-service',
   'services/iot-service',
