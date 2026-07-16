@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Space, Card, Tag, Avatar, Typography, Tooltip, Tabs } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, message, Space, Card, Tag, Typography, Tooltip, Tabs } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, TeamOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { useUsers } from '../hooks/useUsers';
 import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
 import FeatureVisibilityConfig from '../components/FeatureVisibilityConfig';
-import { getDiceBearAvatar } from '../utils/avatar';
+import UserAvatar from '../components/UserAvatar';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -74,13 +74,12 @@ const Users = () => {
             key: 'nickName',
             render: (text, record) => (
                 <Space>
-                    <Avatar
-                        src={getDiceBearAvatar(record.userId || record._id || record.nickName)}
-                        style={{ backgroundColor: 'var(--bg-color)', verticalAlign: 'middle', border: '1px solid var(--border-color)' }}
+                    <UserAvatar
+                        seed={record.userId || record._id}
+                        label={text || record.userId}
+                        style={{ verticalAlign: 'middle', border: '1px solid var(--border-color)' }}
                         size="large"
-                    >
-                        {text?.[0]?.toUpperCase()}
-                    </Avatar>
+                    />
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <Text strong style={{ fontSize: 16, color: 'var(--text-primary)' }}>{text}</Text>
                         <Text type="secondary" style={{ fontSize: 12 }}>UID: {record.userId || record._id}</Text>
@@ -169,13 +168,12 @@ const Users = () => {
         >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                 <Space>
-                    <Avatar
-                        src={getDiceBearAvatar(user.userId || user._id || user.nickName)}
+                    <UserAvatar
+                        seed={user.userId || user._id}
+                        label={user.nickName || user.userId}
                         size={48}
-                        style={{ backgroundColor: 'var(--bg-color)', border: '1px solid var(--border-color)' }}
-                    >
-                        {user.nickName?.[0]?.toUpperCase()}
-                    </Avatar>
+                        style={{ border: '1px solid var(--border-color)' }}
+                    />
                     <div>
                         <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{user.nickName}</div>
                         <div style={{ fontSize: 12, color: '#A3AED0' }}>UID: {user.userId || user._id}</div>

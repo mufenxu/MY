@@ -2547,7 +2547,7 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                 await loadFeedbackSummary();
             }
             // Fetch user info to update bind status
-            if (hasSession) {
+            if (hasSession && !IS_PLATFORM_SSO) {
                 refreshUserInfo();
             }
             resetDashboardViewport();

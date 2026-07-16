@@ -25,18 +25,7 @@ export default defineConfig({
   plugins: [react(), buildVersionPlugin()],
   build: {
     cssCodeSplit: true,
-    chunkSizeWarningLimit: 1200,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-antd': ['antd'],
-          'vendor-icons': ['@ant-design/icons'],
-          'vendor-charts': ['recharts'],
-          'vendor-utils': ['axios', 'swr']
-        }
-      }
-    }
+    chunkSizeWarningLimit: 1200
   },
   server: {
     proxy: {

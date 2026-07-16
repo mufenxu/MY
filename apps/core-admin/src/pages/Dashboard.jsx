@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, List, Avatar, Tag, Space, Spin, Typography, Button, Badge } from 'antd';
+import { Card, Row, Col, Statistic, List, Tag, Space, Spin, Typography, Button, Badge } from 'antd';
 import {
     UserOutlined,
     TeamOutlined,
@@ -30,7 +30,7 @@ import {
     Legend
 } from 'recharts';
 import api from '../utils/api';
-import { getDiceBearAvatar } from '../utils/avatar';
+import UserAvatar from '../components/UserAvatar';
 import { useResponsive } from '../hooks/useIsMobile';
 
 const { Title, Text } = Typography;
@@ -467,13 +467,12 @@ const Dashboard = () => {
                                 <List.Item style={{ borderBottom: '1px solid #F5F7FB', padding: '10px 0' }}>
                                     <List.Item.Meta
                                         avatar={
-                                            <Avatar
-                                                src={getDiceBearAvatar(user.nickName || user._id || user.deviceId)}
-                                                style={{ backgroundColor: 'var(--bg-color)', border: '1px solid var(--border-color)' }}
+                                            <UserAvatar
+                                                seed={user.userId || user._id || user.deviceId}
+                                                label={user.nickName || user.userId}
+                                                style={{ border: '1px solid var(--border-color)' }}
                                                 size={36}
-                                            >
-                                                {user.nickName?.[0]?.toUpperCase() || <UserOutlined />}
-                                            </Avatar>
+                                            />
                                         }
                                         title={
                                             <Space>

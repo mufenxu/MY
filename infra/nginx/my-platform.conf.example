@@ -1,6 +1,6 @@
 map $http_upgrade $connection_upgrade {
     default upgrade;
-    '' close;
+    '' '';
 }
 
 upstream my_platform_gateway {

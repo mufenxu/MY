@@ -11,7 +11,7 @@
     "test:console": "npm --prefix apps/admin-console test",
     "check:console": "npm --prefix apps/admin-console run check",
     "check:gateway": "npm --prefix services/platform-api run check",
-    "check:admins": "npm --prefix apps/core-admin run build && npm --prefix apps/exam-admin run build",
+    "check:admins": "npm --prefix apps/core-admin run check && npm --prefix apps/exam-admin run build && node scripts/check-admin-performance.mjs",
     "check:core": "node --check services/core-api/server.js && node --test services/core-api/test/*.test.js",
     "check:exam": "npm --prefix services/exam-api run lint && node --test services/exam-api/test/*.test.js",
     "check:campus": "npm --prefix services/campus-service run verify",

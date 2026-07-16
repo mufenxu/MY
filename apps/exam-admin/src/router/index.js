@@ -4,6 +4,12 @@ import { notifyAuthExpiredOnce } from '@/utils/authFailure';
 import { applyUiPreviewQuery, ensureUiPreviewSession } from '@/utils/uiPreview';
 import { APP_BASE_PATH } from '@/utils/runtime';
 
+const loadDashboardView = () => import('@/views/DashboardView.vue');
+
+export function preloadDashboardView() {
+    return loadDashboardView();
+}
+
 const routes = [
     {
         path: '/login',
@@ -14,7 +20,7 @@ const routes = [
     {
         path: '/',
         name: 'Dashboard',
-        component: () => import('@/views/DashboardView.vue'),
+        component: loadDashboardView,
         meta: { requiresAuth: true },
     },
     {

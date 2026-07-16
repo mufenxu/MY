@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Card, Button, message, Modal, Form, Input, Switch, Tag, Space, Popconfirm, List, Drawer, Avatar } from 'antd';
-import { getDiceBearAvatar } from '../utils/avatar';
-import { PlusOutlined, DeleteOutlined, EditOutlined, GlobalOutlined, KeyOutlined, CodeOutlined, CopyOutlined, ReloadOutlined, HistoryOutlined, UserOutlined } from '@ant-design/icons';
+import { Table, Card, Button, message, Modal, Form, Input, Switch, Tag, Space, Popconfirm, List, Drawer } from 'antd';
+import UserAvatar from '../components/UserAvatar';
+import { PlusOutlined, DeleteOutlined, EditOutlined, GlobalOutlined, KeyOutlined, CodeOutlined, CopyOutlined, ReloadOutlined, HistoryOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import dayjs from 'dayjs';
 import useIsMobile from '../hooks/useIsMobile';
@@ -495,9 +495,12 @@ const response = await axios.post('https://xcx.pxyb.cn/api/auth/token/exchange',
                                     </Tag>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, fontSize: 13, color: 'var(--text-primary)' }}>
-                                    <Avatar src={getDiceBearAvatar(item.userId?.nickName || item.userId?._id)} style={{ marginRight: 8, border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-color)' }} size="small">
-                                        {item.userId?.nickName?.[0]?.toUpperCase() || <UserOutlined />}
-                                    </Avatar>
+                                    <UserAvatar
+                                        seed={item.userId?._id || item.userId?.userId}
+                                        label={item.userId?.nickName || item.userId?.username}
+                                        style={{ marginRight: 8, border: '1px solid var(--border-color)' }}
+                                        size="small"
+                                    />
                                     {item.userId?.nickname || item.userId?.username || '未知用户'}
                                 </div>
                                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
@@ -539,9 +542,12 @@ const response = await axios.post('https://xcx.pxyb.cn/api/auth/token/exchange',
                                 width: 120,
                                 render: (user) => (
                                     <Space>
-                                        <Avatar src={getDiceBearAvatar(user?.nickName || user?._id || user?.userId)} style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-color)' }} size="small">
-                                            {user?.nickName?.[0]?.toUpperCase() || <UserOutlined />}
-                                        </Avatar>
+                                        <UserAvatar
+                                            seed={user?._id || user?.userId}
+                                            label={user?.nickName || user?.username}
+                                            style={{ border: '1px solid var(--border-color)' }}
+                                            size="small"
+                                        />
                                         <span style={{ maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {user?.nickname || user?.username || '未知'}
                                         </span>

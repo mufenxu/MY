@@ -58,6 +58,15 @@ docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build --fo
 docker compose --env-file .env -f infra/docker/compose.yml ps
 ```
 
+如果同步修改了 Nginx 配置，必须先检查配置，再平滑重载：
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+只有 `nginx -t` 成功后才能执行重载。普通 HTTP 请求应复用上游连接，WebSocket 请求仍通过 `Connection: upgrade` 升级。
+
 ## 验收顺序
 
 1. 打开主域名，确认只出现一次统一登录。

@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
+import { isPlainInternalNavigation } from './navigation.js';
 
 const FILTERS = [
   { id: 'all', label: '总览', icon: LayoutDashboard },
@@ -183,8 +184,16 @@ function SummaryMetric({ label, value, tone, icon: Icon }) {
   );
 }
 
-function ServiceCard({ service }) {
+function ServiceCard({ service, onLaunch }) {
   const Icon = SERVICE_ICONS[service.id] || Server;
+
+  function handleOpen(event) {
+    if (!isPlainInternalNavigation(event, service.adminUrl)) return;
+
+    event.preventDefault();
+    onLaunch(service);
+  }
+
   return (
     <article className="service-card">
       <div className="service-card-top">
@@ -220,6 +229,7 @@ function ServiceCard({ service }) {
             href={service.adminUrl}
             target={service.adminUrl.startsWith('/') ? undefined : '_blank'}
             rel={service.adminUrl.startsWith('/') ? undefined : 'noreferrer'}
+            onClick={handleOpen}
           >
             进入后台
             <ExternalLink size={15} />
@@ -240,6 +250,7 @@ function Dashboard({ session, onLogout }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [launchingService, setLaunchingService] = useState(null);
 
   const loadServices = useCallback(async (force = false) => {
     force ? setRefreshing(true) : setLoading(true);
@@ -285,11 +296,25 @@ function Dashboard({ session, onLogout }) {
     }
   }
 
+  const launchService = useCallback((service) => {
+    if (!service?.adminUrl || launchingService) return;
+    setLaunchingService(service);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => window.location.assign(service.adminUrl));
+    });
+  }, [launchingService]);
+
   const counts = data?.counts || {};
   const total = data?.services?.length || 0;
 
   return (
     <div className="app-shell">
+      {launchingService && (
+        <div className="navigation-transition" role="status" aria-live="polite">
+          <LoaderCircle className="spin" size={26} />
+          <strong>正在进入{launchingService.shortName || launchingService.name}</strong>
+        </div>
+      )}
       <aside className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
         <div className="brand-lockup sidebar-brand">
           <span className="brand-mark" aria-hidden="true">MY</span>
@@ -404,7 +429,9 @@ function Dashboard({ session, onLogout }) {
               </div>
             ) : filteredServices.length > 0 ? (
               <div className="service-grid">
-                {filteredServices.map((service) => <ServiceCard key={service.id} service={service} />)}
+                {filteredServices.map((service) => (
+                  <ServiceCard key={service.id} service={service} onLaunch={launchService} />
+                ))}
               </div>
             ) : (
               <div className="empty-state">

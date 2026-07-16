@@ -1,6 +1,6 @@
 import React, { Suspense, useState, useEffect, useCallback, useMemo, useTransition } from 'react';
 import api from '../utils/api';
-import { Layout, Menu, Button, Drawer, Avatar, Dropdown, Breadcrumb, Tooltip, Spin } from 'antd';
+import { Layout, Menu, Button, Drawer, Dropdown, Breadcrumb, Tooltip, Spin } from 'antd';
 import {
     UserOutlined,
     SettingOutlined,
@@ -24,7 +24,7 @@ import {
     MoonOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
-import { getDiceBearAvatar } from '../utils/avatar';
+import UserAvatar from './UserAvatar';
 import { IS_PLATFORM_SSO, logoutPlatformSession } from '../utils/runtime';
 
 const { Sider, Content } = Layout;
@@ -129,17 +129,15 @@ const SidebarContent = ({
                 <div className="main-sidebar-mobile-top">
                     <div className="main-sidebar-user main-sidebar-user-mobile-card">
                         <div className="main-sidebar-user-main">
-                            <img
-                                src={getDiceBearAvatar(avatarSeed)}
-                                alt="logo"
+                            <UserAvatar
+                                seed={avatarSeed}
+                                label={displayName}
+                                shape="square"
+                                size={42}
                                 style={{
-                                    width: 42,
-                                    height: 42,
                                     borderRadius: 14,
-                                    objectFit: 'cover',
                                     boxShadow: '0 10px 20px rgba(67, 24, 255, 0.14)',
                                     border: '1px solid var(--border-color)',
-                                    background: 'var(--bg-color)'
                                 }}
                             />
                             <div className="main-sidebar-user-copy">
@@ -209,17 +207,15 @@ const SidebarContent = ({
                 justifyContent: collapsed ? 'center' : 'flex-start',
                 gap: 12
             }}>
-                <img
-                    src={getDiceBearAvatar(avatarSeed)}
-                    alt="logo"
+                <UserAvatar
+                    seed={avatarSeed}
+                    label={displayName}
+                    shape="square"
+                    size={40}
                     style={{
-                        width: 40,
-                        height: 40,
                         borderRadius: 12,
-                        objectFit: 'cover',
                         boxShadow: '0 10px 20px rgba(67, 24, 255, 0.15)',
                         border: '1px solid var(--border-color)',
-                        background: 'var(--bg-color)'
                     }}
                 />
                 {!collapsed && (
@@ -227,7 +223,7 @@ const SidebarContent = ({
                         color: 'var(--text-primary)',
                         fontSize: 22,
                         fontWeight: 700,
-                        fontFamily: "'Plus Jakarta Sans', sans-serif",
+                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif",
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -602,19 +598,17 @@ const MainLayout = () => {
                                 </Tooltip>
                             )}
                             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-                                <Avatar
-                                    src={getDiceBearAvatar(currentUser.userId || currentUser._id || currentUser.nickName || 'admin')}
+                                <UserAvatar
+                                    seed={currentUser.userId || currentUser._id || currentUser.nickName || 'admin'}
+                                    label={currentUser.nickName || currentUser.userId || 'admin'}
                                     className="soybean-header-avatar"
                                     style={{
                                         cursor: 'pointer',
                                         marginLeft: 8,
                                         border: '1px solid var(--border-color)',
-                                        backgroundColor: 'var(--bg-color)'
                                     }}
                                     size={isMobile ? 30 : 34}
-                                >
-                                    {currentUser.nickName?.[0]?.toUpperCase() || 'M'}
-                                </Avatar>
+                                />
                             </Dropdown>
                         </div>
                     </div>

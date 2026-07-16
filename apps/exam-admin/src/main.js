@@ -4,7 +4,7 @@ import 'element-plus/es/components/message-box/style/css';
 import 'element-plus/es/components/loading/style/css';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import App from './App.vue';
-import router from './router';
+import router, { preloadDashboardView } from './router';
 import { setupHttpInterceptors } from './utils/setupHttp';
 import './assets/css/interaction-polish.css';
 import { IS_PLATFORM_SSO, redirectToPlatformLogin, resolveAppUrl } from './utils/runtime';
@@ -28,7 +28,12 @@ async function bootstrapPlatformSession() {
 }
 
 async function startApplication() {
-    await bootstrapPlatformSession();
+    if (IS_PLATFORM_SSO) {
+        await Promise.all([
+            bootstrapPlatformSession(),
+            preloadDashboardView(),
+        ]);
+    }
     setupHttpInterceptors();
 
     const app = createApp(App);

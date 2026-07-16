@@ -22,21 +22,6 @@ const PublicQuery = lazy(() => import('./pages/PublicQuery'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const MainLayout = lazy(() => import('./components/MainLayout'));
 
-const ADMIN_ROUTE_PRELOADERS = [
-  () => import('./components/MainLayout'),
-  () => import('./pages/Dashboard'),
-  () => import('./pages/Users'),
-  () => import('./pages/Notifications'),
-  () => import('./pages/CourseOrders'),
-  () => import('./pages/AuditLogs'),
-  () => import('./pages/Resources'),
-  () => import('./pages/ScanManagement'),
-  () => import('./pages/IotMonitor'),
-  () => import('./pages/AirEnergyMonitor'),
-  () => import('./pages/ct8/Ct8Dashboard'),
-  () => import('./pages/Settings'),
-];
-
 const RouteFallback = memo(() => (
   <div
     style={{
@@ -125,38 +110,6 @@ function App() {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token && !IS_PLATFORM_SSO) return undefined;
-
-    let cancelled = false;
-    const runPreloadQueue = (index = 0) => {
-      if (cancelled || index >= ADMIN_ROUTE_PRELOADERS.length) return;
-      ADMIN_ROUTE_PRELOADERS[index]().catch(() => {});
-
-      const scheduleNext = () => runPreloadQueue(index + 1);
-      if ('requestIdleCallback' in window) {
-        window.requestIdleCallback(scheduleNext, { timeout: 2500 });
-      } else {
-        window.setTimeout(scheduleNext, 350);
-      }
-    };
-
-    if ('requestIdleCallback' in window) {
-      const idleId = window.requestIdleCallback(() => runPreloadQueue(), { timeout: 1500 });
-      return () => {
-        cancelled = true;
-        window.cancelIdleCallback(idleId);
-      };
-    }
-
-    const fallbackTimer = window.setTimeout(() => runPreloadQueue(), 500);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(fallbackTimer);
-    };
-  }, []);
-
   if (platformSso.error) {
     return (
       <Result
@@ -180,7 +133,7 @@ function App() {
           colorError: '#F56565',
           colorInfo: '#4A7CF7',
           borderRadius: 12,
-          fontFamily: "'Plus Jakarta Sans', sans-serif"
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif"
         },
         components: {
           Button: {
