@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Activity,
   AppWindow,
@@ -869,13 +869,6 @@ function Dashboard({ session, onLogout }) {
   const username = session.user?.username || 'admin';
   const greeting = getGreeting();
 
-  const categoryCounts = useMemo(() => ({
-    all: services.length,
-    miniapp: services.filter((service) => service.category === 'miniapp').length,
-    service: services.filter((service) => service.category === 'service').length,
-    automation: services.filter((service) => service.category === 'automation').length,
-  }), [services]);
-
   async function handleLogout() {
     try {
       await requestJson('/api/auth/logout', { method: 'POST' });
@@ -920,13 +913,12 @@ function Dashboard({ session, onLogout }) {
                 closeMobileNav();
               }}
               title={label}
-              aria-label={`${label}，${categoryCounts[id] || 0} 项`}
+              aria-label={label}
               aria-pressed={activeFilter === id}
               type="button"
             >
               <Icon size={19} />
               <span>{label}</span>
-              <small>{categoryCounts[id] || 0}</small>
             </button>
           ))}
           <button type="button" onClick={() => loadServices(true)} disabled={refreshing} title="刷新服务状态">
