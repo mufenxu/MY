@@ -9,13 +9,43 @@ const AppError = require('../utils/AppError');
 const secretService = require('./secretService');
 
 // Use getters to fetch the latest values dynamically
-const getGhOptions = () => ({
-    GH_TOKEN: secretService.getSecretSync('GH_TOKEN'),
-    GH_OWNER: secretService.getSecretSync('GH_OWNER') || 'Mufenxu',
-    GH_REPO: secretService.getSecretSync('GH_REPO') || 'ct8-login',
-    GH_WORKFLOW: secretService.getSecretSync('GH_WORKFLOW') || 'ssh-login.yml',
-    GH_REF: secretService.getSecretSync('GH_REF') || 'main'
-});
+const getSecretValue = (...names) => {
+    for (const name of names) {
+        const value = secretService.getSecretSync(name);
+        if (value !== undefined && value !== null && String(value).trim() !== '') {
+            return String(value).trim();
+        }
+    }
+    return '';
+};
+
+const normalizeGitRef = (value) => String(value || '')
+    .replace(/^refs\/heads\//, '')
+    .replace(/^refs\/tags\//, '');
+
+const getGhOptions = () => {
+    const repository = getSecretValue('GH_REPOSITORY', 'GITHUB_REPOSITORY');
+    const [repoOwner, repoName] = repository.includes('/') ? repository.split('/', 2) : ['', ''];
+
+    return {
+        GH_TOKEN: getSecretValue('GH_TOKEN', 'GITHUB_TOKEN'),
+        GH_OWNER: getSecretValue('GH_OWNER', 'GITHUB_OWNER') || repoOwner || 'Mufenxu',
+        GH_REPO: getSecretValue('GH_REPO', 'GITHUB_REPO') || repoName || 'ct8-login',
+        GH_WORKFLOW: getSecretValue('GH_WORKFLOW', 'GITHUB_WORKFLOW') || 'ssh-login.yml',
+        GH_REF: normalizeGitRef(getSecretValue('GH_REF', 'GITHUB_REF_NAME', 'GITHUB_REF') || 'main')
+    };
+};
+
+function createGithubConfigurationError(operation) {
+    const error = new AppError('GitHub 凭据未配置：请在服务端配置 GH_TOKEN（或 GITHUB_TOKEN）后重试。', 503);
+    error.code = 'GITHUB_NOT_CONFIGURED';
+    error.details = {
+        operation,
+        required: ['GH_TOKEN'],
+        acceptedAliases: ['GITHUB_TOKEN']
+    };
+    return error;
+}
 
 function createGithubUpstreamError(error, operation) {
     const upstreamStatus = Number(error?.response?.status) || null;
@@ -411,7 +441,7 @@ exports.triggerAction = async (ip, inputs = {}) => {
     const { GH_TOKEN, GH_OWNER, GH_REPO, GH_WORKFLOW, GH_REF } = getGhOptions();
 
     if (!GH_TOKEN) {
-        throw new AppError('Server not configured: GH_TOKEN missing', 500);
+        throw createGithubConfigurationError('触发 GitHub Actions Workflow');
     }
 
     const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${GH_WORKFLOW}/dispatches`;
@@ -773,9 +803,7 @@ exports.updateSecret = async (action, secret_name, value) => {
     const { GH_TOKEN, GH_OWNER, GH_REPO } = getGhOptions();
 
     if (!GH_TOKEN) {
-        const error = new AppError('服务器未配置 GH_TOKEN', 500);
-        error.code = 'GITHUB_NOT_CONFIGURED';
-        throw error;
+        throw createGithubConfigurationError('更新 Actions Secret');
     }
 
     // Get Secret Check
