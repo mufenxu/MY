@@ -38,3 +38,32 @@ test('metrics require the configured bearer token', async () => {
     assert.match(await response.text(), /my_platform_http_requests_total/);
   });
 });
+
+test('backup mutations require the console request header', async () => {
+  const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
+  let backupStarted = false;
+  const app = createApp({
+    config,
+    backupManager: {
+      getStatus: async () => ({ capabilities: { canBackup: true, canRestore: true }, backups: [], jobs: [] }),
+      startBackup: async () => {
+        backupStarted = true;
+        return { id: 'job-1', type: 'backup', status: 'running' };
+      },
+      getJob: () => ({ id: 'job-1', type: 'backup', status: 'running' }),
+      startRestore: async () => ({ id: 'job-2', type: 'restore', status: 'running' }),
+    },
+  });
+
+  await withServer(app, async (origin) => {
+    assert.equal((await fetch(`${origin}/api/backups/status`)).status, 200);
+    assert.equal((await fetch(`${origin}/api/backups/run`, { method: 'POST' })).status, 403);
+
+    const response = await fetch(`${origin}/api/backups/run`, {
+      method: 'POST',
+      headers: { 'X-Platform-Request': 'console' },
+    });
+    assert.equal(response.status, 202);
+    assert.equal(backupStarted, true);
+  });
+});

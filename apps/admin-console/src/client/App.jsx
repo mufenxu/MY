@@ -42,6 +42,7 @@ const FILTERS = [
   { id: 'miniapp', label: '应用中心', icon: AppWindow },
   { id: 'service', label: '服务运维', icon: Server },
   { id: 'automation', label: '自动化中心', icon: Bot },
+  { id: 'backup', label: '数据灾备', icon: Database },
 ];
 
 const CATEGORY_LABELS = {
@@ -101,6 +102,25 @@ function formatCheckedAt(value) {
     second: '2-digit',
     hour12: false,
   }).format(new Date(value));
+}
+
+function formatDateTime(value) {
+  if (!value) return '暂无';
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(value));
+}
+
+function formatBytes(value) {
+  const size = Number(value || 0);
+  if (size >= 1024 * 1024 * 1024) return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+  if (size >= 1024) return `${Math.round(size / 1024)} KB`;
+  return `${size} B`;
 }
 
 function getGreeting() {
@@ -756,6 +776,276 @@ function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) 
   );
 }
 
+function BackupRecoveryView({ session }) {
+  const [statusData, setStatusData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedBackup, setSelectedBackup] = useState(null);
+  const [activeJob, setActiveJob] = useState(null);
+  const [restorePassword, setRestorePassword] = useState('');
+  const [confirmText, setConfirmText] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
+
+  const loadBackupStatus = useCallback(async (force = false) => {
+    force ? setRefreshing(true) : setLoading(true);
+    setActionError('');
+    try {
+      const nextStatus = await requestJson('/api/backups/status');
+      setStatusData(nextStatus);
+      const running = nextStatus.jobs?.find((job) => job.status === 'running') || null;
+      setActiveJob((current) => {
+        if (running) return running;
+        if (current?.status === 'running') {
+          return nextStatus.jobs?.find((job) => job.id === current.id) || current;
+        }
+        return current;
+      });
+    } catch (error) {
+      setActionError(error.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBackupStatus();
+  }, [loadBackupStatus]);
+
+  const backups = statusData?.backups || [];
+  const capabilities = statusData?.capabilities || {};
+  const jobs = statusData?.jobs || [];
+  const runningJob = activeJob?.status === 'running'
+    ? activeJob
+    : jobs.find((job) => job.status === 'running') || null;
+  const latestJob = activeJob || jobs[0] || null;
+  const latestBackup = backups.find((backup) => backup.restorable) || backups[0] || null;
+  const restoreConfirmText = capabilities.restoreConfirmText || 'RESTORE ALL DATA';
+
+  useEffect(() => {
+    if (backups.length === 0) {
+      setSelectedBackup(null);
+      return;
+    }
+    setSelectedBackup((current) => {
+      if (current && backups.some((backup) => backup.name === current.name)) return current;
+      return backups.find((backup) => backup.restorable) || backups[0];
+    });
+  }, [backups]);
+
+  useEffect(() => {
+    if (!activeJob || activeJob.status !== 'running') return undefined;
+    const timer = window.setInterval(async () => {
+      try {
+        const result = await requestJson(`/api/backups/jobs/${encodeURIComponent(activeJob.id)}`);
+        setActiveJob(result.job);
+        if (result.job.status !== 'running') {
+          setActionMessage(result.job.status === 'succeeded' ? '任务已完成' : result.job.error || '任务执行失败');
+          loadBackupStatus(true);
+        }
+      } catch (error) {
+        setActionError(error.message);
+      }
+    }, 2200);
+    return () => window.clearInterval(timer);
+  }, [activeJob, loadBackupStatus]);
+
+  async function handleStartBackup() {
+    setActionError('');
+    setActionMessage('');
+    try {
+      const result = await requestJson('/api/backups/run', { method: 'POST' });
+      setActiveJob(result.job);
+      setActionMessage('备份任务已提交');
+      await loadBackupStatus(true);
+    } catch (error) {
+      setActionError(error.message);
+    }
+  }
+
+  async function handleStartRestore() {
+    setActionError('');
+    setActionMessage('');
+    if (!selectedBackup?.name) {
+      setActionError('请选择要恢复的备份');
+      return;
+    }
+    if (!session.authDisabled && !restorePassword) {
+      setActionError('请输入管理员密码');
+      return;
+    }
+    if (confirmText !== restoreConfirmText) {
+      setActionError('确认短语不正确');
+      return;
+    }
+    const accepted = window.confirm(`即将使用备份 ${selectedBackup.name} 覆写当前数据库。是否继续？`);
+    if (!accepted) return;
+
+    try {
+      const result = await requestJson('/api/backups/restore', {
+        method: 'POST',
+        body: JSON.stringify({
+          backupName: selectedBackup.name,
+          password: restorePassword,
+          confirmText,
+        }),
+      });
+      setActiveJob(result.job);
+      setRestorePassword('');
+      setConfirmText('');
+      setActionMessage('恢复任务已提交');
+      await loadBackupStatus(true);
+    } catch (error) {
+      setActionError(error.message);
+    }
+  }
+
+  const canUseRestore = Boolean(capabilities.canRestore && selectedBackup?.restorable && !runningJob);
+  const executorHealthy = capabilities.canBackup && capabilities.canRestore;
+
+  return (
+    <section className="page-view backup-view" aria-labelledby="backup-view-title">
+      <ViewHeading
+        eyebrow="灾备"
+        title="数据灾备"
+        description="管理 MongoDB 全库归档、核心上传文件备份和高危恢复任务。"
+      >
+        <button className="secondary-action" type="button" onClick={() => loadBackupStatus(true)} disabled={refreshing}>
+          {refreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
+          {refreshing ? '正在刷新' : '刷新清单'}
+        </button>
+      </ViewHeading>
+
+      <div className="backup-kpis">
+        <article><span className="kpi-icon blue"><Database size={20} /></span><div><span>可用备份</span><strong>{backups.filter((backup) => backup.restorable).length}</strong><small>服务器备份目录</small></div></article>
+        <article><span className="kpi-icon green"><CheckCircle2 size={20} /></span><div><span>执行器</span><strong>{executorHealthy ? '就绪' : '受限'}</strong><small>{capabilities.issues?.join('，') || '可执行备份与恢复'}</small></div></article>
+        <article><span className="kpi-icon orange"><Clock3 size={20} /></span><div><span>最近备份</span><strong>{formatDateTime(latestBackup?.createdAt)}</strong><small>{latestBackup?.name || '暂无归档'}</small></div></article>
+        <article><span className="kpi-icon purple"><ShieldCheck size={20} /></span><div><span>恢复保护</span><strong>{session.authDisabled ? '确认短语' : '密码验证'}</strong><small>恢复前校验归档哈希</small></div></article>
+      </div>
+
+      {(actionError || actionMessage) && (
+        <div className={`backup-feedback ${actionError ? 'error' : 'success'}`} role="status">
+          {actionError ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}
+          <span>{actionError || actionMessage}</span>
+        </div>
+      )}
+
+      <div className="backup-layout">
+        <section className="view-card backup-action-card">
+          <header className="section-bar">
+            <div><h3>创建备份</h3><span>{capabilities.backupRoot || '备份目录未配置'}</span></div>
+            <Database size={21} />
+          </header>
+          <div className="backup-action-copy">
+            <strong>{capabilities.canBackup ? '全量备份已接入' : '备份执行器不可用'}</strong>
+            <span>备份会短暂停止业务容器，生成包含五个 MongoDB 数据库和核心上传文件的归档。</span>
+          </div>
+          <button
+            className="primary-button backup-primary-action"
+            type="button"
+            onClick={handleStartBackup}
+            disabled={!capabilities.canBackup || Boolean(runningJob)}
+          >
+            {runningJob?.type === 'backup' ? <LoaderCircle className="spin" size={18} /> : <Play size={18} />}
+            {runningJob?.type === 'backup' ? '正在备份' : '立即备份'}
+          </button>
+        </section>
+
+        <section className="view-card backup-list-card">
+          <header className="section-bar">
+            <div><h3>备份清单</h3><span>{loading ? '正在读取' : `${backups.length} 个归档`}</span></div>
+            <span className="section-count">{backups.filter((backup) => backup.restorable).length}</span>
+          </header>
+          <div className="backup-table-head">
+            <span>备份</span><span>时间</span><span>大小</span><span>状态</span>
+          </div>
+          <div className="backup-table-body">
+            {loading ? (
+              <div className="view-loading"><LoaderCircle className="spin" size={20} /> 正在加载备份清单</div>
+            ) : backups.length > 0 ? backups.map((backup) => (
+              <button
+                key={backup.name}
+                className={`backup-row ${selectedBackup?.name === backup.name ? 'selected' : ''} ${backup.restorable ? '' : 'invalid'}`}
+                type="button"
+                onClick={() => setSelectedBackup(backup)}
+              >
+                <span><strong>{backup.name}</strong><small>{backup.includes?.join(' / ') || '清单不可读'}</small></span>
+                <span>{formatDateTime(backup.createdAt)}</span>
+                <span>{formatBytes(backup.sizeBytes)}</span>
+                <span className={backup.restorable ? 'healthy' : 'degraded'}>{backup.restorable ? '可恢复' : '不可用'}</span>
+              </button>
+            )) : (
+              <div className="view-empty">暂无备份归档</div>
+            )}
+          </div>
+        </section>
+
+        <aside className="view-card restore-card">
+          <header>
+            <div><span className="view-eyebrow">恢复</span><h3>高危恢复</h3></div>
+            <CircleAlert size={21} />
+          </header>
+          <div className="restore-target">
+            <span>目标备份</span>
+            <strong>{selectedBackup?.name || '未选择'}</strong>
+            <small>{selectedBackup ? formatDateTime(selectedBackup.createdAt) : '请从备份清单选择'}</small>
+          </div>
+          <p className="restore-warning">恢复提交后会先创建当前状态备份，再执行覆写。</p>
+          {!session.authDisabled && (
+            <label className="restore-field">
+              <span>管理员密码</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={restorePassword}
+                onChange={(event) => setRestorePassword(event.target.value)}
+                placeholder="当前平台登录密码"
+              />
+            </label>
+          )}
+          <label className="restore-field">
+            <span>确认短语</span>
+            <input
+              value={confirmText}
+              onChange={(event) => setConfirmText(event.target.value)}
+              placeholder={restoreConfirmText}
+            />
+          </label>
+          <div className="restore-confirm-text">{restoreConfirmText}</div>
+          <button
+            className="danger-button"
+            type="button"
+            disabled={!canUseRestore || confirmText !== restoreConfirmText || (!session.authDisabled && !restorePassword)}
+            onClick={handleStartRestore}
+          >
+            {runningJob?.type === 'restore' ? <LoaderCircle className="spin" size={18} /> : <ShieldCheck size={18} />}
+            {runningJob?.type === 'restore' ? '正在恢复' : '执行恢复'}
+          </button>
+        </aside>
+      </div>
+
+      {latestJob && (
+        <section className={`view-card backup-job-card job-${latestJob.status}`}>
+          <header className="section-bar">
+            <div><h3>最近任务</h3><span>{latestJob.type === 'backup' ? '备份任务' : '恢复任务'} · {latestJob.status}</span></div>
+            {latestJob.status === 'running' ? <LoaderCircle className="spin" size={21} /> : <CheckCircle2 size={21} />}
+          </header>
+          <div className="backup-job-grid">
+            <div><span>发起人</span><strong>{latestJob.requestedBy || 'admin'}</strong></div>
+            <div><span>开始时间</span><strong>{formatDateTime(latestJob.startedAt)}</strong></div>
+            <div><span>结束时间</span><strong>{formatDateTime(latestJob.finishedAt)}</strong></div>
+            <div><span>退出码</span><strong>{latestJob.exitCode ?? '--'}</strong></div>
+          </div>
+          {(latestJob.error || latestJob.stdout || latestJob.stderr) && (
+            <pre className="backup-job-log">{latestJob.error || latestJob.stderr || latestJob.stdout}</pre>
+          )}
+        </section>
+      )}
+    </section>
+  );
+}
+
 function Dashboard({ session, onLogout }) {
   const [activeFilter, setActiveFilter] = useState('all');
   const [data, setData] = useState(null);
@@ -891,6 +1181,7 @@ function Dashboard({ session, onLogout }) {
     miniapp: { title: '应用中心', subtitle: '应用入口与运行状态' },
     service: { title: '服务运维', subtitle: '基础服务健康监测' },
     automation: { title: '自动化中心', subtitle: '任务能力与观测链路' },
+    backup: { title: '数据灾备', subtitle: '备份恢复与灾难演练' },
   }[activeFilter];
 
   return (
@@ -1030,6 +1321,7 @@ function Dashboard({ session, onLogout }) {
               onLaunch={launchService}
             />
           )}
+          {activeFilter === 'backup' && <BackupRecoveryView session={session} />}
         </div>
       </main>
     </div>

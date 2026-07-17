@@ -12,6 +12,7 @@ import {
   parseCookies,
   verifyPassword,
 } from './auth.js';
+import { BackupOperationError, createBackupManager } from './backups.js';
 import { loadConfig } from './config.js';
 import { createStatusMonitor, loadServiceRegistry } from './service-registry.js';
 import { createMetrics } from './metrics.js';
@@ -47,6 +48,7 @@ export function createApp({
   fetchImpl = fetch,
   sessionRegistry = null,
   readinessCheck = async () => true,
+  backupManager = null,
 } = {}) {
   const registry = loadServiceRegistry(config.registryPath);
   const monitor = createStatusMonitor(registry.services, {
@@ -56,6 +58,7 @@ export function createApp({
   const app = express();
   const sessions = sessionRegistry || createSessionRegistry({ secret: config.sessionSecret });
   const metrics = createMetrics();
+  const backups = backupManager || createBackupManager({ config });
 
   function readSessionToken(req) {
     return parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME];
@@ -63,6 +66,13 @@ export function createApp({
 
   async function readSession(req) {
     return sessions.verify(readSessionToken(req));
+  }
+
+  function sendBackupError(res, error) {
+    if (error instanceof BackupOperationError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    throw error;
   }
 
   app.locals.verifyConsoleSession = async (token, now) => sessions.verify(token, now);
@@ -194,6 +204,73 @@ export function createApp({
       res.json({ platformName: registry.platformName, services, counts, refreshedAt: new Date().toISOString() });
     } catch (error) {
       next(error);
+    }
+  });
+
+  app.get('/api/backups/status', async (req, res, next) => {
+    try {
+      res.json(await backups.getStatus());
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/backups/run', requireConsoleRequest, async (req, res, next) => {
+    try {
+      const job = await backups.startBackup({ requestedBy: req.consoleUser?.username || 'admin' });
+      res.status(202).json({ job });
+    } catch (error) {
+      try {
+        sendBackupError(res, error);
+      } catch (unexpectedError) {
+        next(unexpectedError);
+      }
+    }
+  });
+
+  app.get('/api/backups/jobs/:id', async (req, res, next) => {
+    try {
+      res.json({ job: backups.getJob(req.params.id) });
+    } catch (error) {
+      try {
+        sendBackupError(res, error);
+      } catch (unexpectedError) {
+        next(unexpectedError);
+      }
+    }
+  });
+
+  app.post('/api/backups/restore', requireConsoleRequest, async (req, res, next) => {
+    try {
+      const backupName = String(req.body?.backupName || '');
+      const confirmText = String(req.body?.confirmText || '');
+      const password = String(req.body?.password || '');
+
+      if (!backupName) {
+        return res.status(400).json({ error: '请选择要恢复的备份。', code: 'BACKUP_REQUIRED' });
+      }
+      if (confirmText !== config.restoreConfirmText) {
+        return res.status(400).json({ error: '确认短语不正确。', code: 'RESTORE_CONFIRMATION_REQUIRED' });
+      }
+      if (!config.authDisabled) {
+        const passwordValid = await verifyPassword(password, config.adminPasswordHash);
+        if (!passwordValid) {
+          return res.status(403).json({ error: '管理员密码错误，恢复已拒绝。', code: 'RESTORE_PASSWORD_INVALID' });
+        }
+      }
+
+      const job = await backups.startRestore({
+        backupName,
+        requestedBy: req.consoleUser?.username || 'admin',
+      });
+      return res.status(202).json({ job });
+    } catch (error) {
+      try {
+        sendBackupError(res, error);
+      } catch (unexpectedError) {
+        next(unexpectedError);
+      }
+      return undefined;
     }
   });
 

@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 dotenv.config({ quiet: true });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(__dirname, '..', '..', '..');
 const defaultRegistryPath = path.resolve(__dirname, '..', '..', '..', 'config', 'platform.services.local.json');
 const localInternalKeyPair = crypto.generateKeyPairSync('ed25519');
 const localInternalPrivateKey = localInternalKeyPair.privateKey
@@ -90,6 +91,7 @@ export function loadConfig(env = process.env) {
     publicOrigin: parseOrigin(env.PLATFORM_PUBLIC_ORIGIN)
       || (isProduction ? '' : `http://127.0.0.1:${platformApiPort}`),
     registryPath: path.resolve(env.PLATFORM_CONFIG_PATH || defaultRegistryPath),
+    workspaceRoot,
     authDisabled,
     adminUsername: env.PLATFORM_ADMIN_USERNAME || '',
     adminPasswordHash: env.PLATFORM_ADMIN_PASSWORD_HASH || '',
@@ -100,6 +102,13 @@ export function loadConfig(env = process.env) {
     metricsToken: env.PLATFORM_METRICS_TOKEN || '',
     sessionTtlHours: parseInteger(env.PLATFORM_SESSION_TTL_HOURS, 12, { min: 1, max: 168 }),
     serviceTimeoutMs: parseInteger(env.PLATFORM_SERVICE_TIMEOUT_MS, 8000, { min: 1000, max: 30000 }),
+    backupRoot: path.resolve(env.PLATFORM_BACKUP_DIR || path.join(workspaceRoot, 'backups')),
+    backupOperationsEnabled: parseBoolean(env.PLATFORM_BACKUP_ENABLED, true),
+    restoreOperationsEnabled: parseBoolean(env.PLATFORM_RESTORE_ENABLED, true),
+    preRestoreBackupEnabled: parseBoolean(env.PLATFORM_RESTORE_PRE_BACKUP, true),
+    backupCommand: env.PLATFORM_BACKUP_COMMAND || '',
+    restoreCommand: env.PLATFORM_RESTORE_COMMAND || '',
+    restoreConfirmText: env.PLATFORM_RESTORE_CONFIRM_TEXT || 'RESTORE ALL DATA',
   };
 
   if (!config.authDisabled) {
