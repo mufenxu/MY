@@ -13,11 +13,11 @@ Enable automatic builds for source changes and keep overseas builders enabled. C
 | Image | Build context directory | Dockerfile filename | Image tag |
 | --- | --- | --- | --- |
 | Unified platform API | `/` | `Dockerfile` | `platform-api-latest` |
-| Campus service | `/` | `services/campus-service/Dockerfile` | `campus-service-latest` |
-| IoT service | `/` | `services/iot-service/Dockerfile` | `iot-service-latest` |
+| Campus service | `/services/campus-service/` | `Dockerfile` | `campus-service-latest` |
+| IoT service | `/services/iot-service/` | `Dockerfile` | `iot-service-latest` |
 | MongoDB 7 mirror | `/infra/docker/` | `mongodb.Dockerfile` | `mongodb-7.0` |
 
-The ACR console uses the configured Dockerfile directory as the build context. The platform, campus, and IoT images now use the repository root as build context so they can copy shared code from `packages/` as well as service files from `services/`.
+The platform API image uses the repository root because it builds the single-domain gateway and the admin assets. The campus and IoT service images intentionally use their service directories as build context so ACR can build them with the default `Dockerfile` setting. Each service carries a Docker-build vendor copy of `packages/platform-auth`; `npm run check:packages` verifies those copies stay byte-for-byte aligned with the shared package.
 
 ## Deployment
 
