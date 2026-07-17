@@ -3,6 +3,7 @@ import {
   Activity,
   AppWindow,
   ArrowRight,
+  ArrowUpRight,
   Bell,
   Bot,
   Boxes,
@@ -12,6 +13,7 @@ import {
   CircleOff,
   Clock3,
   CloudCog,
+  Database,
   GraduationCap,
   LayoutDashboard,
   Layers3,
@@ -20,21 +22,26 @@ import {
   LogOut,
   Menu,
   Moon,
+  Network,
+  Play,
   Radio,
   RefreshCw,
   Server,
   ShieldCheck,
   Sun,
+  Timer,
+  Workflow,
+  Wrench,
   X,
   Zap,
 } from 'lucide-react';
 import { isPlainInternalNavigation } from './navigation.js';
 
 const FILTERS = [
-  { id: 'all', label: '全部服务', icon: LayoutDashboard },
-  { id: 'miniapp', label: '应用', icon: AppWindow },
-  { id: 'service', label: '基础服务', icon: Server },
-  { id: 'automation', label: '自动化', icon: Bot },
+  { id: 'all', label: '运行总览', icon: LayoutDashboard },
+  { id: 'miniapp', label: '应用中心', icon: AppWindow },
+  { id: 'service', label: '服务运维', icon: Server },
+  { id: 'automation', label: '自动化中心', icon: Bot },
 ];
 
 const CATEGORY_LABELS = {
@@ -197,8 +204,11 @@ function OperationsChart({ services }) {
   const items = chartServices.length > 0 ? chartServices : services.slice(0, 6);
   const values = items.map((service) => service.latencyMs || 0);
   const fastest = values.length > 0 ? Math.min(...values) : null;
-  const average = values.length > 0
-    ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+  const onlineValues = items
+    .filter((service) => !['offline', 'unmonitored'].includes(service.state) && Number.isFinite(service.latencyMs))
+    .map((service) => service.latencyMs);
+  const average = onlineValues.length > 0
+    ? Math.round(onlineValues.reduce((sum, value) => sum + value, 0) / onlineValues.length)
     : null;
   const peak = values.length > 0 ? Math.max(...values) : null;
   const maximum = Math.max(...values, 1);
@@ -231,7 +241,7 @@ function OperationsChart({ services }) {
     <div className="operations-chart">
       <div className="chart-summary" aria-label="响应时间摘要">
         <span className="fast"><i /> 最快 {fastest === null ? '--' : `${fastest} ms`}</span>
-        <span className="average"><i /> 平均 {average === null ? '--' : `${average} ms`}</span>
+        <span className="average"><i /> 在线平均 {average === null ? '--' : `${average} ms`}</span>
         <span className="peak"><i /> 峰值 {peak === null ? '--' : `${peak} ms`}</span>
       </div>
       {items.length > 0 ? (
@@ -327,6 +337,423 @@ function ServicePortfolioRow({ service, index, onLaunch }) {
       {content}
     </a>
   ) : <div className="portfolio-row disabled">{content}</div>;
+}
+
+function ServiceStatus({ state }) {
+  const meta = STATE_META[state] || STATE_META.unmonitored;
+  const Icon = meta.icon;
+  return (
+    <span className={`service-status ${meta.className}`}>
+      <Icon size={14} />
+      {meta.label}
+    </span>
+  );
+}
+
+function ApplicationTile({ service, onLaunch }) {
+  const Icon = SERVICE_ICONS[service.id] || AppWindow;
+
+  function handleOpen(event) {
+    if (!service.adminUrl || !isPlainInternalNavigation(event, service.adminUrl)) return;
+    event.preventDefault();
+    onLaunch(service);
+  }
+
+  return (
+    <article className="application-tile">
+      <header>
+        <span className="application-tile-icon"><Icon size={23} /></span>
+        <div>
+          <span>{CATEGORY_LABELS[service.category]}</span>
+          <h3>{service.name}</h3>
+        </div>
+        <ServiceStatus state={service.state} />
+      </header>
+      <p>{service.description}</p>
+      <div className="application-capabilities">
+        {service.capabilities.slice(0, 4).map((capability) => <span key={capability}>{capability}</span>)}
+      </div>
+      <footer>
+        <dl>
+          <div><dt>响应时间</dt><dd>{service.latencyMs === null ? '--' : `${service.latencyMs} ms`}</dd></div>
+          <div><dt>检查时间</dt><dd>{formatCheckedAt(service.checkedAt)}</dd></div>
+        </dl>
+        {service.adminUrl ? (
+          <a
+            href={service.adminUrl}
+            target={service.adminUrl.startsWith('/') ? undefined : '_blank'}
+            rel={service.adminUrl.startsWith('/') ? undefined : 'noreferrer'}
+            onClick={handleOpen}
+          >
+            打开应用 <ArrowUpRight size={16} />
+          </a>
+        ) : <span className="entry-unavailable">未配置入口</span>}
+      </footer>
+    </article>
+  );
+}
+
+function ViewHeading({ eyebrow, title, description, children }) {
+  return (
+    <header className="view-heading">
+      <div>
+        <span className="view-eyebrow">{eyebrow}</span>
+        <h2>{title}</h2>
+        <p>{description}</p>
+      </div>
+      {children}
+    </header>
+  );
+}
+
+function OverviewView({
+  services,
+  counts,
+  total,
+  healthyRate,
+  attentionCount,
+  loading,
+  environmentLabel,
+  monitoringEnabled,
+  setMonitoringEnabled,
+  primaryService,
+  launchService,
+  refreshedAt,
+}) {
+  const sortedServices = [...services].sort((left, right) => (
+    (STATE_PRIORITY[left.state] ?? 4) - (STATE_PRIORITY[right.state] ?? 4)
+    || left.name.localeCompare(right.name, 'zh-CN')
+  ));
+
+  return (
+    <section className="dashboard-grid" aria-label="系统运行总览">
+      <article className="dashboard-card performance-card">
+        <div className="platform-pass">
+          <div className="pass-topline">
+            <span>MY SERVICE CLOUD</span>
+            <span className="pass-layer"><Layers3 size={17} /></span>
+          </div>
+          <span className="pass-count">{counts.healthy || 0} / {total || '--'}</span>
+          <div className="pass-bottomline">
+            <Activity size={25} />
+            <strong>{environmentLabel === '生产环境' ? 'ONLINE' : 'DEV'}</strong>
+          </div>
+          <svg className="pass-wave" viewBox="0 0 640 120" aria-hidden="true">
+            <path d="M0 95 C105 38 205 45 306 91 S522 115 640 38" />
+            <path d="M0 116 C136 65 236 76 352 111 S550 123 640 80" />
+          </svg>
+        </div>
+
+        <div className="performance-heading">
+          <div>
+            <span>服务可用率</span>
+            <strong>{loading ? '--' : `${healthyRate.toFixed(1)}%`}</strong>
+          </div>
+          <span className="performance-state">
+            <i /> {attentionCount > 0 ? `${attentionCount} 项待处理` : '运行平稳'}
+          </span>
+        </div>
+        <OperationsChart services={services} />
+      </article>
+
+      <article className="dashboard-card monitoring-card">
+        <div>
+          <span className="card-eyebrow">实时监测</span>
+          <h2>{monitoringEnabled ? '自动监测已开启' : '自动监测已暂停'}</h2>
+          <p>{monitoringEnabled ? '每 30 秒自动同步服务状态' : '可随时重新开启状态同步'}</p>
+        </div>
+        <span className="monitoring-icon"><CloudCog size={24} /></span>
+        <button
+          className={`toggle-switch ${monitoringEnabled ? 'active' : ''}`}
+          type="button"
+          role="switch"
+          aria-checked={monitoringEnabled}
+          aria-label="自动监测"
+          onClick={() => setMonitoringEnabled((enabled) => !enabled)}
+        >
+          <span />
+        </button>
+      </article>
+
+      <article className="dashboard-card service-entry-card">
+        <div className="service-entry-copy">
+          <span className="entry-icon"><CloudCog size={19} /></span>
+          <div>
+            <h2>统一服务中心</h2>
+            <p>统一访问核心平台、考试、校园与消息服务</p>
+          </div>
+          <button
+            className="entry-action"
+            type="button"
+            disabled={!primaryService}
+            onClick={() => launchService(primaryService)}
+            aria-label="进入统一服务中心"
+            title="进入统一服务中心"
+          >
+            <ArrowRight size={21} />
+          </button>
+        </div>
+        <div className="service-visual" aria-hidden="true">
+          <span className="visual-card visual-card-one"><Server size={25} /></span>
+          <span className="visual-card visual-card-two"><Boxes size={27} /></span>
+          <span className="visual-card visual-card-three"><Zap size={24} /></span>
+          <i className="visual-link link-one" />
+          <i className="visual-link link-two" />
+        </div>
+      </article>
+
+      <article className="dashboard-card portfolio-card">
+        <header>
+          <div>
+            <span className="card-eyebrow">SERVICES</span>
+            <h2>服务组合</h2>
+          </div>
+          <span className="portfolio-count">{sortedServices.length}</span>
+        </header>
+        <div className="portfolio-list">
+          {sortedServices.length > 0 ? sortedServices.map((service, index) => (
+            <ServicePortfolioRow key={service.id} service={service} index={index} onLaunch={launchService} />
+          )) : (
+            <div className="portfolio-empty">暂无服务数据</div>
+          )}
+        </div>
+        <footer>
+          <span><i /> {total} 项服务已接入</span>
+          <span>更新于 {formatCheckedAt(refreshedAt)}</span>
+        </footer>
+      </article>
+    </section>
+  );
+}
+
+function ApplicationsView({ services, loading, onLaunch }) {
+  const applications = services.filter((service) => service.category === 'miniapp');
+  const healthyApplications = applications.filter((service) => service.state === 'healthy').length;
+  const availability = applications.length > 0 ? Math.round((healthyApplications / applications.length) * 100) : 0;
+
+  return (
+    <section className="page-view applications-view" aria-labelledby="applications-title">
+      <ViewHeading
+        eyebrow="APPLICATIONS"
+        title="应用中心"
+        description="统一管理面向用户的应用入口、运行状态与服务能力。"
+      >
+        <div className="view-heading-stats">
+          <span><strong>{applications.length}</strong> 个应用</span>
+          <span><strong>{availability}%</strong> 可用率</span>
+        </div>
+      </ViewHeading>
+
+      <div className="applications-layout">
+        <div className="application-catalog">
+          <div className="section-bar">
+            <div><h3>应用目录</h3><span>可直接进入已配置的管理端</span></div>
+            <span className="section-count">{applications.length}</span>
+          </div>
+          {loading ? (
+            <div className="view-loading"><LoaderCircle className="spin" size={20} /> 正在加载应用</div>
+          ) : applications.length > 0 ? applications.map((service) => (
+            <ApplicationTile key={service.id} service={service} onLaunch={onLaunch} />
+          )) : <div className="view-empty">暂无已接入应用</div>}
+        </div>
+
+        <aside className="application-insights">
+          <section className="view-card availability-panel">
+            <span className="view-card-icon"><AppWindow size={21} /></span>
+            <span>应用可用率</span>
+            <strong>{availability}%</strong>
+            <div className="availability-bar"><i style={{ width: `${availability}%` }} /></div>
+            <p>{healthyApplications} 个应用运行正常，共接入 {applications.length} 个应用。</p>
+          </section>
+          <section className="view-card check-panel">
+            <header><h3>最近检查</h3><Timer size={18} /></header>
+            {applications.map((service) => (
+              <div className="check-row" key={service.id}>
+                <span><i className={STATE_META[service.state]?.className} />{service.shortName || service.name}</span>
+                <strong>{formatCheckedAt(service.checkedAt)}</strong>
+              </div>
+            ))}
+          </section>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function ServiceTableRow({ service, onLaunch }) {
+  const Icon = SERVICE_ICONS[service.id] || Server;
+
+  function handleOpen(event) {
+    if (!service.adminUrl || !isPlainInternalNavigation(event, service.adminUrl)) return;
+    event.preventDefault();
+    onLaunch(service);
+  }
+
+  return (
+    <div className="service-table-row">
+      <div className="service-table-name">
+        <span><Icon size={19} /></span>
+        <div><strong>{service.shortName || service.name}</strong><small>{service.repositoryPath}</small></div>
+      </div>
+      <ServiceStatus state={service.state} />
+      <span className="table-value">{service.latencyMs === null ? '--' : `${service.latencyMs} ms`}</span>
+      <span className="table-value">{service.httpStatus ?? '--'}</span>
+      <span className="table-value">{formatCheckedAt(service.checkedAt)}</span>
+      {service.adminUrl ? (
+        <a
+          className="table-entry"
+          href={service.adminUrl}
+          target={service.adminUrl.startsWith('/') ? undefined : '_blank'}
+          rel={service.adminUrl.startsWith('/') ? undefined : 'noreferrer'}
+          onClick={handleOpen}
+          aria-label={`进入${service.name}`}
+        ><ArrowUpRight size={17} /></a>
+      ) : <span className="table-entry disabled">--</span>}
+    </div>
+  );
+}
+
+function ServicesView({ services, loading, onLaunch }) {
+  const infrastructure = services.filter((service) => service.category === 'service');
+  const healthy = infrastructure.filter((service) => service.state === 'healthy').length;
+  const attention = infrastructure.filter((service) => ['offline', 'degraded'].includes(service.state)).length;
+  const unmonitored = infrastructure.filter((service) => service.state === 'unmonitored').length;
+  const latencies = infrastructure
+    .filter((service) => !['offline', 'unmonitored'].includes(service.state))
+    .map((service) => service.latencyMs)
+    .filter(Number.isFinite);
+  const averageLatency = latencies.length > 0
+    ? Math.round(latencies.reduce((sum, value) => sum + value, 0) / latencies.length)
+    : null;
+
+  return (
+    <section className="page-view services-view" aria-labelledby="services-view-title">
+      <ViewHeading
+        eyebrow="OPERATIONS"
+        title="服务运维"
+        description="集中查看基础服务健康度、响应时间和检查结果。"
+      />
+
+      <div className="operations-kpis">
+        <article><span className="kpi-icon blue"><Server size={20} /></span><div><span>基础服务</span><strong>{infrastructure.length}</strong><small>已接入运维</small></div></article>
+        <article><span className="kpi-icon green"><CheckCircle2 size={20} /></span><div><span>运行正常</span><strong>{healthy}</strong><small>当前在线</small></div></article>
+        <article><span className="kpi-icon orange"><CircleAlert size={20} /></span><div><span>需要处理</span><strong>{attention}</strong><small>异常或离线</small></div></article>
+        <article><span className="kpi-icon purple"><Activity size={20} /></span><div><span>在线平均</span><strong>{averageLatency === null ? '--' : averageLatency}</strong><small>{averageLatency === null ? '暂无数据' : '响应毫秒'}</small></div></article>
+      </div>
+
+      <div className="services-layout">
+        <section className="view-card service-table-card">
+          <header className="section-bar">
+            <div><h3>基础服务清单</h3><span>状态数据来自实时健康检查</span></div>
+            <span className="section-count">{infrastructure.length}</span>
+          </header>
+          <div className="service-table-head">
+            <span>服务</span><span>状态</span><span>响应</span><span>HTTP</span><span>检查时间</span><span />
+          </div>
+          <div className="service-table-body">
+            {loading ? (
+              <div className="view-loading"><LoaderCircle className="spin" size={20} /> 正在加载服务</div>
+            ) : infrastructure.map((service) => (
+              <ServiceTableRow key={service.id} service={service} onLaunch={onLaunch} />
+            ))}
+          </div>
+        </section>
+
+        <aside className="view-card distribution-panel">
+          <header><div><span className="view-eyebrow">HEALTH</span><h3>状态分布</h3></div><Network size={21} /></header>
+          <div className="distribution-score">
+            <strong>{infrastructure.length > 0 ? Math.round((healthy / infrastructure.length) * 100) : 0}%</strong>
+            <span>基础服务可用率</span>
+          </div>
+          <div className="distribution-list">
+            <div><span><i className="healthy" />运行正常</span><strong>{healthy}</strong></div>
+            <div><span><i className="degraded" />需要处理</span><strong>{attention}</strong></div>
+            <div><span><i className="unmonitored" />未接监测</span><strong>{unmonitored}</strong></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) {
+  const automations = services.filter((service) => service.category === 'automation');
+  const automation = automations[0];
+  const meta = STATE_META[automation?.state] || STATE_META.unmonitored;
+
+  function handleOpen(event) {
+    if (!automation?.adminUrl || !isPlainInternalNavigation(event, automation.adminUrl)) return;
+    event.preventDefault();
+    onLaunch(automation);
+  }
+
+  return (
+    <section className="page-view automation-view" aria-labelledby="automation-title">
+      <ViewHeading
+        eyebrow="AUTOMATION"
+        title="自动化中心"
+        description="查看自动化任务接入状态、执行能力与监测链路。"
+      >
+        <button className="secondary-action" type="button" onClick={onRefresh} disabled={refreshing}>
+          {refreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
+          {refreshing ? '正在同步' : '刷新状态'}
+        </button>
+      </ViewHeading>
+
+      {loading ? (
+        <div className="view-loading large"><LoaderCircle className="spin" size={22} /> 正在加载自动化服务</div>
+      ) : automation ? (
+        <>
+          <article className={`automation-hero state-${meta.className}`}>
+            <div className="automation-hero-icon"><Workflow size={29} /></div>
+            <div className="automation-hero-copy">
+              <span>自动化服务</span>
+              <h3>{automation.name}</h3>
+              <p>{automation.description}</p>
+            </div>
+            <ServiceStatus state={automation.state} />
+            <div className="automation-hero-metrics">
+              <div><span>响应时间</span><strong>{automation.latencyMs === null ? '--' : `${automation.latencyMs} ms`}</strong></div>
+              <div><span>HTTP 状态</span><strong>{automation.httpStatus ?? '--'}</strong></div>
+              <div><span>最近检查</span><strong>{formatCheckedAt(automation.checkedAt)}</strong></div>
+            </div>
+            {automation.adminUrl && (
+              <a
+                href={automation.adminUrl}
+                target={automation.adminUrl.startsWith('/') ? undefined : '_blank'}
+                rel={automation.adminUrl.startsWith('/') ? undefined : 'noreferrer'}
+                onClick={handleOpen}
+              >进入后台 <ArrowUpRight size={16} /></a>
+            )}
+          </article>
+
+          <div className="automation-layout">
+            <section className="view-card capability-panel">
+              <header><div><span className="view-eyebrow">CAPABILITIES</span><h3>能力范围</h3></div><Wrench size={21} /></header>
+              <div className="capability-grid">
+                {automation.capabilities.map((capability, index) => (
+                  <div key={capability}>
+                    <span>{String(index + 1).padStart(2, '0')}</span>
+                    <strong>{capability}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="view-card observability-panel">
+              <header><div><span className="view-eyebrow">OBSERVABILITY</span><h3>接入链路</h3></div><Database size={21} /></header>
+              <ol>
+                <li className="done"><span><CheckCircle2 size={17} /></span><div><strong>服务注册</strong><small>已接入统一管理中心</small></div></li>
+                <li className={automation.adminUrl ? 'done' : 'pending'}><span>{automation.adminUrl ? <CheckCircle2 size={17} /> : <Clock3 size={17} />}</span><div><strong>管理入口</strong><small>{automation.adminUrl ? '后台入口已配置' : '暂无网页管理入口'}</small></div></li>
+                <li className={automation.state === 'unmonitored' ? 'pending' : 'done'}><span>{automation.state === 'unmonitored' ? <Clock3 size={17} /> : <CheckCircle2 size={17} />}</span><div><strong>健康监测</strong><small>{automation.state === 'unmonitored' ? '等待配置健康检查' : '健康检查已接入'}</small></div></li>
+                <li className="current"><span><Play size={17} /></span><div><strong>运行观测</strong><small>{meta.label}</small></div></li>
+              </ol>
+            </section>
+          </div>
+        </>
+      ) : <div className="view-empty">暂无自动化服务</div>}
+    </section>
+  );
 }
 
 function Dashboard({ session, onLogout }) {
@@ -449,13 +876,6 @@ function Dashboard({ session, onLogout }) {
     automation: services.filter((service) => service.category === 'automation').length,
   }), [services]);
 
-  const visibleServices = useMemo(() => services
-    .filter((service) => activeFilter === 'all' || service.category === activeFilter)
-    .sort((left, right) => (
-      (STATE_PRIORITY[left.state] ?? 4) - (STATE_PRIORITY[right.state] ?? 4)
-      || left.name.localeCompare(right.name, 'zh-CN')
-    )), [activeFilter, services]);
-
   async function handleLogout() {
     try {
       await requestJson('/api/auth/logout', { method: 'POST' });
@@ -474,6 +894,11 @@ function Dashboard({ session, onLogout }) {
 
   const primaryService = services.find((service) => service.id === 'core' && service.adminUrl)
     || services.find((service) => service.adminUrl);
+  const viewMeta = {
+    miniapp: { title: '应用中心', subtitle: '应用入口与运行状态' },
+    service: { title: '服务运维', subtitle: '基础服务健康监测' },
+    automation: { title: '自动化中心', subtitle: '任务能力与观测链路' },
+  }[activeFilter];
 
   return (
     <div className="app-shell">
@@ -537,8 +962,10 @@ function Dashboard({ session, onLogout }) {
             </button>
             <img className="welcome-avatar" src="/assets/console-avatar.jpg" alt="管理员头像" />
             <div className="welcome-copy">
-              <h1>{greeting}，<strong>{username}</strong></h1>
-              <span>MY 统一服务控制台</span>
+              {activeFilter === 'all' ? (
+                <h1>{greeting}，<strong>{username}</strong></h1>
+              ) : <h1><strong>{viewMeta.title}</strong></h1>}
+              <span>{activeFilter === 'all' ? 'MY 统一服务控制台' : viewMeta.subtitle}</span>
             </div>
           </div>
 
@@ -584,103 +1011,33 @@ function Dashboard({ session, onLogout }) {
             </div>
           )}
 
-          <section className="dashboard-grid" aria-label="系统运行总览">
-            <article className="dashboard-card performance-card">
-              <div className="platform-pass">
-                <div className="pass-topline">
-                  <span>MY SERVICE CLOUD</span>
-                  <span className="pass-layer"><Layers3 size={17} /></span>
-                </div>
-                <span className="pass-count">{counts.healthy || 0} / {total || '--'}</span>
-                <div className="pass-bottomline">
-                  <Activity size={25} />
-                  <strong>{environmentLabel === '生产环境' ? 'ONLINE' : 'DEV'}</strong>
-                </div>
-                <svg className="pass-wave" viewBox="0 0 640 120" aria-hidden="true">
-                  <path d="M0 95 C105 38 205 45 306 91 S522 115 640 38" />
-                  <path d="M0 116 C136 65 236 76 352 111 S550 123 640 80" />
-                </svg>
-              </div>
-
-              <div className="performance-heading">
-                <div>
-                  <span>服务可用率</span>
-                  <strong>{loading ? '--' : `${healthyRate.toFixed(1)}%`}</strong>
-                </div>
-                <span className="performance-state">
-                  <i /> {attentionCount > 0 ? `${attentionCount} 项待处理` : '运行平稳'}
-                </span>
-              </div>
-              <OperationsChart services={services} />
-            </article>
-
-            <article className="dashboard-card monitoring-card">
-              <div>
-                <span className="card-eyebrow">实时监测</span>
-                <h2>{monitoringEnabled ? '自动监测已开启' : '自动监测已暂停'}</h2>
-                <p>{monitoringEnabled ? '每 30 秒自动同步服务状态' : '可随时重新开启状态同步'}</p>
-              </div>
-              <span className="monitoring-icon"><CloudCog size={24} /></span>
-              <button
-                className={`toggle-switch ${monitoringEnabled ? 'active' : ''}`}
-                type="button"
-                role="switch"
-                aria-checked={monitoringEnabled}
-                aria-label="自动监测"
-                onClick={() => setMonitoringEnabled((enabled) => !enabled)}
-              >
-                <span />
-              </button>
-            </article>
-
-            <article className="dashboard-card service-entry-card">
-              <div className="service-entry-copy">
-                <span className="entry-icon"><CloudCog size={19} /></span>
-                <div>
-                  <h2>统一服务中心</h2>
-                  <p>统一访问核心平台、考试、校园与消息服务</p>
-                </div>
-                <button
-                  className="entry-action"
-                  type="button"
-                  disabled={!primaryService}
-                  onClick={() => launchService(primaryService)}
-                  aria-label="进入统一服务中心"
-                  title="进入统一服务中心"
-                >
-                  <ArrowRight size={21} />
-                </button>
-              </div>
-              <div className="service-visual" aria-hidden="true">
-                <span className="visual-card visual-card-one"><Server size={25} /></span>
-                <span className="visual-card visual-card-two"><Boxes size={27} /></span>
-                <span className="visual-card visual-card-three"><Zap size={24} /></span>
-                <i className="visual-link link-one" />
-                <i className="visual-link link-two" />
-              </div>
-            </article>
-
-            <article className="dashboard-card portfolio-card">
-              <header>
-                <div>
-                  <span className="card-eyebrow">SERVICES</span>
-                  <h2>{activeFilter === 'all' ? '服务组合' : CATEGORY_LABELS[activeFilter]}</h2>
-                </div>
-                <span className="portfolio-count">{visibleServices.length}</span>
-              </header>
-              <div className="portfolio-list">
-                {visibleServices.length > 0 ? visibleServices.map((service, index) => (
-                  <ServicePortfolioRow key={service.id} service={service} index={index} onLaunch={launchService} />
-                )) : (
-                  <div className="portfolio-empty">此分类暂无服务</div>
-                )}
-              </div>
-              <footer>
-                <span><i /> {total} 项服务已接入</span>
-                <span>更新于 {formatCheckedAt(data?.refreshedAt)}</span>
-              </footer>
-            </article>
-          </section>
+          {activeFilter === 'all' && (
+            <OverviewView
+              services={services}
+              counts={counts}
+              total={total}
+              healthyRate={healthyRate}
+              attentionCount={attentionCount}
+              loading={loading}
+              environmentLabel={environmentLabel}
+              monitoringEnabled={monitoringEnabled}
+              setMonitoringEnabled={setMonitoringEnabled}
+              primaryService={primaryService}
+              launchService={launchService}
+              refreshedAt={data?.refreshedAt}
+            />
+          )}
+          {activeFilter === 'miniapp' && <ApplicationsView services={services} loading={loading} onLaunch={launchService} />}
+          {activeFilter === 'service' && <ServicesView services={services} loading={loading} onLaunch={launchService} />}
+          {activeFilter === 'automation' && (
+            <AutomationView
+              services={services}
+              loading={loading}
+              refreshing={refreshing}
+              onRefresh={() => loadServices(true)}
+              onLaunch={launchService}
+            />
+          )}
         </div>
       </main>
     </div>
