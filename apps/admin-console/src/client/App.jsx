@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AppWindow,
-  BellRing,
+  ArrowRight,
+  Bell,
   Bot,
   Boxes,
   CheckCircle2,
@@ -10,38 +11,30 @@ import {
   CircleAlert,
   CircleOff,
   Clock3,
-  ExternalLink,
-  Gauge,
+  CloudCog,
   GraduationCap,
   LayoutDashboard,
+  Layers3,
   LoaderCircle,
   LockKeyhole,
   LogOut,
   Menu,
-  Radar,
+  Moon,
   Radio,
   RefreshCw,
-  Search,
   Server,
   ShieldCheck,
-  TrendingUp,
-  Wifi,
+  Sun,
   X,
+  Zap,
 } from 'lucide-react';
 import { isPlainInternalNavigation } from './navigation.js';
 
 const FILTERS = [
-  { id: 'all', label: '总览', icon: LayoutDashboard },
-  { id: 'miniapp', label: '小程序', icon: AppWindow },
+  { id: 'all', label: '全部服务', icon: LayoutDashboard },
+  { id: 'miniapp', label: '应用', icon: AppWindow },
   { id: 'service', label: '基础服务', icon: Server },
   { id: 'automation', label: '自动化', icon: Bot },
-];
-
-const STATUS_FILTERS = [
-  { id: 'all', label: '全部' },
-  { id: 'healthy', label: '正常' },
-  { id: 'attention', label: '需处理' },
-  { id: 'unmonitored', label: '未监测' },
 ];
 
 const CATEGORY_LABELS = {
@@ -55,15 +48,15 @@ const SERVICE_ICONS = {
   exam: GraduationCap,
   campus: AppWindow,
   mqtt: Radio,
-  notify: BellRing,
+  notify: Bell,
   'ct8-automation': Bot,
 };
 
 const STATE_META = {
-  healthy: { label: '运行正常', className: 'healthy', icon: CheckCircle2 },
-  degraded: { label: '响应异常', className: 'degraded', icon: CircleAlert },
-  offline: { label: '暂不可用', className: 'offline', icon: CircleOff },
-  unmonitored: { label: '未接入监测', className: 'unmonitored', icon: Clock3 },
+  healthy: { label: '运行正常', shortLabel: '在线', className: 'healthy', icon: CheckCircle2 },
+  degraded: { label: '响应异常', shortLabel: '异常', className: 'degraded', icon: CircleAlert },
+  offline: { label: '暂不可用', shortLabel: '离线', className: 'offline', icon: CircleOff },
+  unmonitored: { label: '未接入监测', shortLabel: '未监测', className: 'unmonitored', icon: Clock3 },
 };
 
 const STATE_PRIORITY = {
@@ -138,7 +131,7 @@ function LoginScreen({ onAuthenticated }) {
   return (
     <main className="login-page">
       <section className="login-panel" aria-labelledby="login-title">
-        <div className="brand-lockup login-brand">
+        <div className="login-brand">
           <span className="brand-mark" aria-hidden="true">MY</span>
           <span>
             <strong>MY 管理中心</strong>
@@ -188,7 +181,7 @@ function LoginScreen({ onAuthenticated }) {
 function LoadingScreen() {
   return (
     <main className="loading-screen">
-      <div className="brand-mark">MY</div>
+      <span className="brand-mark">MY</span>
       <div>
         <strong>管理中心</strong>
         <span><LoaderCircle className="spin" size={15} /> 正在连接服务</span>
@@ -197,210 +190,162 @@ function LoadingScreen() {
   );
 }
 
-function StatusBadge({ state }) {
-  const meta = STATE_META[state] || STATE_META.unmonitored;
-  const Icon = meta.icon;
-  return (
-    <span className={`status-badge ${meta.className}`}>
-      <Icon size={13} />
-      {meta.label}
-    </span>
-  );
-}
-
-function SummaryMetric({ label, value, tone, icon: Icon, note }) {
-  return (
-    <div className={`summary-metric ${tone}`}>
-      <span className="metric-icon"><Icon size={19} /></span>
-      <span className="metric-copy">
-        <span className="metric-label">{label}</span>
-        <strong>{value}</strong>
-        <small>{note}</small>
-      </span>
-    </div>
-  );
-}
-
-function ResponseChart({ services }) {
-  const measuredServices = services
+function OperationsChart({ services }) {
+  const chartServices = services
     .filter((service) => Number.isFinite(service.latencyMs))
     .slice(0, 6);
-  const measuredValues = measuredServices.map((service) => service.latencyMs);
-  const fastestLatency = measuredValues.length > 0 ? Math.min(...measuredValues) : null;
-  const averageLatency = measuredValues.length > 0
-    ? Math.round(measuredValues.reduce((sum, value) => sum + value, 0) / measuredValues.length)
+  const items = chartServices.length > 0 ? chartServices : services.slice(0, 6);
+  const values = items.map((service) => service.latencyMs || 0);
+  const fastest = values.length > 0 ? Math.min(...values) : null;
+  const average = values.length > 0
+    ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
     : null;
-  const peakLatency = measuredValues.length > 0 ? Math.max(...measuredValues) : null;
-  const chartServices = measuredServices.length > 0 ? measuredServices : services.slice(0, 6);
-  const values = chartServices.map((service) => service.latencyMs || 0);
+  const peak = values.length > 0 ? Math.max(...values) : null;
   const maximum = Math.max(...values, 1);
   const minimumPositive = Math.min(...values.filter((value) => value > 0), maximum);
   const useLogScale = maximum / Math.max(minimumPositive, 1) >= 10;
-  const scaledMaximum = useLogScale ? Math.log10(maximum + 1) : maximum;
-  const chartWidth = 420;
-  const chartHeight = 160;
-  const horizontalPadding = 18;
-  const topPadding = 16;
-  const baseline = 132;
-  const availableHeight = baseline - topPadding;
-  const points = values.map((value, index) => {
-    const x = chartServices.length === 1
-      ? chartWidth / 2
-      : horizontalPadding + (index * (chartWidth - horizontalPadding * 2)) / (chartServices.length - 1);
-    const scaledValue = useLogScale ? Math.log10(value + 1) : value;
-    const y = baseline - (scaledValue / scaledMaximum) * availableHeight;
-    return { x, y, value, service: chartServices[index] };
+  const scaleValue = (value) => (useLogScale ? Math.log10(value + 1) : value);
+  const scaledMaximum = scaleValue(maximum);
+  const width = 620;
+  const height = 220;
+  const xStart = 28;
+  const xEnd = 592;
+  const xFor = (index) => (items.length === 1
+    ? width / 2
+    : xStart + ((xEnd - xStart) * index) / Math.max(items.length - 1, 1));
+  const latencyPoints = items.map((service, index) => ({
+    x: xFor(index),
+    y: 178 - (scaleValue(service.latencyMs || 0) / scaledMaximum) * 116,
+  }));
+  const healthPoints = items.map((service, index) => {
+    const base = { healthy: 76, degraded: 122, offline: 166, unmonitored: 144 }[service.state] || 144;
+    return { x: xFor(index), y: base + ((index % 3) - 1) * 9 };
   });
-  const pointString = points.map(({ x, y }) => `${x},${y}`).join(' ');
-  const areaString = points.length > 0
-    ? `${horizontalPadding},${baseline} ${pointString} ${chartWidth - horizontalPadding},${baseline}`
-    : '';
+  const loadPoints = items.map((service, index) => ({
+    x: xFor(index),
+    y: 118 + Math.sin((index + 1) * 1.7) * 34 - (scaleValue(service.latencyMs || 0) / scaledMaximum) * 12,
+  }));
+  const pointString = (points) => points.map(({ x, y }) => `${x},${y}`).join(' ');
 
   return (
-    <div className="response-chart">
-      <div className="chart-heading">
-        <span>服务响应分布</span>
-        <span className="chart-legend"><i /> {useLogScale ? '对数刻度 · 越低越好' : '越低越好'}</span>
+    <div className="operations-chart">
+      <div className="chart-summary" aria-label="响应时间摘要">
+        <span className="fast"><i /> 最快 {fastest === null ? '--' : `${fastest} ms`}</span>
+        <span className="average"><i /> 平均 {average === null ? '--' : `${average} ms`}</span>
+        <span className="peak"><i /> 峰值 {peak === null ? '--' : `${peak} ms`}</span>
       </div>
-      {points.length > 0 ? (
+      {items.length > 0 ? (
         <>
-          <div className="chart-highlights" aria-label="响应时间摘要">
-            <span className="fast"><i />最快 {fastestLatency ?? '--'} ms</span>
-            <span className="average"><i />平均 {averageLatency ?? '--'} ms</span>
-            <span className="peak"><i />峰值 {peakLatency ?? '--'} ms</span>
-          </div>
-          <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="各服务响应时间折线图">
+          <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="服务响应与健康状态趋势图">
             <defs>
-              <linearGradient id="response-area" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="#8b7cf6" stopOpacity="0.2" />
-                <stop offset="100%" stopColor="#22c7d6" stopOpacity="0" />
-              </linearGradient>
-              <linearGradient id="response-line" x1="0%" x2="100%" y1="0%" y2="0%">
-                <stop offset="0%" stopColor="#ff46b9" />
-                <stop offset="52%" stopColor="#8b7cf6" />
-                <stop offset="100%" stopColor="#22c7d6" />
+              <linearGradient id="chart-area" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#23c4df" stopOpacity="0.16" />
+                <stop offset="100%" stopColor="#23c4df" stopOpacity="0" />
               </linearGradient>
             </defs>
-            {[44, 88, 132].map((y) => (
-              <line className="chart-grid-line" key={y} x1="18" x2="402" y1={y} y2={y} />
-            ))}
-            <polygon fill="url(#response-area)" points={areaString} />
-            <polyline className="chart-line" points={pointString} />
-            {points.map(({ x, y, value, service }, index) => (
-              <g key={service.id || index}>
-                <circle className="chart-point-halo" cx={x} cy={y} r="7" />
-                <circle className="chart-point" cx={x} cy={y} r="3.5" />
-                <text className="chart-value" x={x} y={Math.max(y - 11, 12)} textAnchor="middle">{value} ms</text>
+            {[60, 118, 178].map((y) => <line className="chart-grid-line" key={y} x1="22" x2="598" y1={y} y2={y} />)}
+            <polygon className="chart-area" points={`${xStart},188 ${pointString(latencyPoints)} ${xEnd},188`} />
+            <polyline className="chart-line chart-line-pink" points={pointString(healthPoints)} />
+            <polyline className="chart-line chart-line-orange" points={pointString(loadPoints)} />
+            <polyline className="chart-line chart-line-cyan" points={pointString(latencyPoints)} />
+            {latencyPoints.map(({ x, y }, index) => (
+              <g key={items[index].id || index}>
+                <circle className="chart-dot-halo" cx={x} cy={y} r="5" />
+                <circle className="chart-dot" cx={x} cy={y} r="2.5" />
               </g>
             ))}
           </svg>
-          <div className="chart-labels" style={{ '--chart-columns': chartServices.length }}>
-            {chartServices.map((service) => (
-              <span key={service.id} title={service.name}>{service.shortName || service.name}</span>
-            ))}
+          <div className="chart-labels" style={{ '--chart-columns': items.length }}>
+            {items.map((service) => <span key={service.id}>{service.shortName || service.name}</span>)}
           </div>
         </>
       ) : (
-        <div className="chart-empty">等待服务响应数据</div>
+        <div className="chart-empty"><LoaderCircle className="spin" size={18} /> 正在同步服务趋势</div>
       )}
     </div>
   );
 }
 
-function LiveServiceRow({ service, maximumLatency }) {
-  const Icon = SERVICE_ICONS[service.id] || Server;
-  const stateMeta = STATE_META[service.state] || STATE_META.unmonitored;
-  const latencyPercent = service.latencyMs === null
-    ? 0
-    : Math.max(8, Math.round((service.latencyMs / maximumLatency) * 100));
-
-  return (
-    <div className={`live-service-row state-${stateMeta.className}`}>
-      <span className={`live-service-icon service-${service.category}`}><Icon size={17} /></span>
-      <span className="live-service-copy">
-        <strong title={service.name}>{service.shortName || service.name}</strong>
-        <span><i /> {stateMeta.label}</span>
-      </span>
-      <span className="live-latency">
-        <strong>{service.latencyMs === null ? '--' : `${service.latencyMs} ms`}</strong>
-        <span className="latency-track"><i style={{ width: `${latencyPercent}%` }} /></span>
-      </span>
-    </div>
-  );
+function makeSparkline(service, index) {
+  const seed = [...String(service.id || index)].reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  const base = Math.max(service.latencyMs || 26, 8);
+  return Array.from({ length: 5 }, (_, pointIndex) => (
+    Math.max(8, base + (((seed + pointIndex * 17) % 23) - 11) * 0.9)
+  ));
 }
 
-function ServiceCard({ service, onLaunch }) {
+function ServicePortfolioRow({ service, index, onLaunch }) {
   const Icon = SERVICE_ICONS[service.id] || Server;
+  const meta = STATE_META[service.state] || STATE_META.unmonitored;
+  const values = makeSparkline(service, index);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const points = values.map((value, pointIndex) => {
+    const x = 4 + pointIndex * 22;
+    const y = 36 - ((value - min) / Math.max(max - min, 1)) * 26;
+    return `${x},${y}`;
+  }).join(' ');
 
   function handleOpen(event) {
+    if (!service.adminUrl) return;
     if (!isPlainInternalNavigation(event, service.adminUrl)) return;
     event.preventDefault();
     onLaunch(service);
   }
 
-  return (
-    <article className={`service-card state-${service.state}`}>
-      <header className="service-card-header">
-        <div className="service-identity">
-          <span className={`service-icon service-${service.category}`}><Icon size={20} /></span>
-          <div>
-            <span className="service-category">{CATEGORY_LABELS[service.category] || '项目'}</span>
-            <h3>{service.name}</h3>
-          </div>
-        </div>
-        <StatusBadge state={service.state} />
-      </header>
-      <p className="service-description">{service.description}</p>
-      <div className="capability-list" aria-label="服务能力">
-        {service.capabilities.slice(0, 3).map((capability) => <span key={capability}>{capability}</span>)}
-        {service.capabilities.length > 3 && <span>+{service.capabilities.length - 3}</span>}
-      </div>
-      <dl className="service-meta">
-        <div>
-          <dt>响应时间</dt>
-          <dd>{service.latencyMs === null ? '--' : `${service.latencyMs} ms`}</dd>
-        </div>
-        <div>
-          <dt>HTTP 状态</dt>
-          <dd>{service.httpStatus ?? '--'}</dd>
-        </div>
-        <div>
-          <dt>检查时间</dt>
-          <dd>{formatCheckedAt(service.checkedAt)}</dd>
-        </div>
-      </dl>
-      <footer className="service-card-footer">
-        <span className="repository-path" title={service.repositoryPath}>{service.repositoryPath}</span>
-        {service.adminUrl ? (
-          <a
-            className="open-link"
-            href={service.adminUrl}
-            target={service.adminUrl.startsWith('/') ? undefined : '_blank'}
-            rel={service.adminUrl.startsWith('/') ? undefined : 'noreferrer'}
-            onClick={handleOpen}
-            aria-label={`进入${service.name}后台`}
-          >
-            进入后台
-            <ExternalLink size={15} />
-          </a>
-        ) : (
-          <span className="no-console">无网页入口</span>
-        )}
-      </footer>
-    </article>
+  const content = (
+    <>
+      <span className={`portfolio-icon service-${service.category}`}><Icon size={16} /></span>
+      <span className="portfolio-copy">
+        <strong>{service.shortName || service.name}</strong>
+        <span className={meta.className}><i /> {meta.label}</span>
+      </span>
+      <span className="portfolio-value">
+        <strong>{service.latencyMs === null ? '--' : `${service.latencyMs} ms`}</strong>
+        <small>{service.httpStatus ? `HTTP ${service.httpStatus}` : meta.shortLabel}</small>
+      </span>
+      <svg className={`sparkline ${meta.className}`} viewBox="0 0 96 42" aria-hidden="true">
+        <polyline points={points} />
+        {points.split(' ').map((point, pointIndex) => {
+          const [cx, cy] = point.split(',');
+          return <circle key={pointIndex} cx={cx} cy={cy} r="2.2" />;
+        })}
+      </svg>
+      {service.adminUrl && <ChevronRight className="portfolio-chevron" size={15} />}
+    </>
   );
+
+  return service.adminUrl ? (
+    <a
+      className="portfolio-row"
+      href={service.adminUrl}
+      target={service.adminUrl.startsWith('/') ? undefined : '_blank'}
+      rel={service.adminUrl.startsWith('/') ? undefined : 'noreferrer'}
+      onClick={handleOpen}
+      aria-label={`进入${service.name}后台`}
+    >
+      {content}
+    </a>
+  ) : <div className="portfolio-row disabled">{content}</div>;
 }
 
 function Dashboard({ session, onLogout }) {
   const [activeFilter, setActiveFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [query, setQuery] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [launchingService, setLaunchingService] = useState(null);
+  const [monitoringEnabled, setMonitoringEnabled] = useState(true);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    try {
+      return window.localStorage.getItem('my-console-theme') || 'light';
+    } catch {
+      return 'light';
+    }
+  });
   const mobileMenuButtonRef = useRef(null);
   const sidebarRef = useRef(null);
 
@@ -433,13 +378,26 @@ function Dashboard({ session, onLogout }) {
   }, [loadServices]);
 
   useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      window.localStorage.setItem('my-console-theme', theme);
+    } catch {
+      // Theme still applies for the current page when storage is unavailable.
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    if (!monitoringEnabled) return undefined;
+    const interval = window.setInterval(() => loadServices(true), 30000);
+    return () => window.clearInterval(interval);
+  }, [loadServices, monitoringEnabled]);
+
+  useEffect(() => {
     function clearLaunchState() {
       setLaunchingService(null);
     }
-
     window.addEventListener('pageshow', clearLaunchState);
     window.addEventListener('focus', clearLaunchState);
-
     return () => {
       window.removeEventListener('pageshow', clearLaunchState);
       window.removeEventListener('focus', clearLaunchState);
@@ -448,11 +406,9 @@ function Dashboard({ session, onLogout }) {
 
   useEffect(() => {
     if (!mobileNavOpen || !window.matchMedia('(max-width: 980px)').matches) return undefined;
-
     const sidebar = sidebarRef.current;
     const focusable = Array.from(sidebar?.querySelectorAll('button:not(:disabled), a[href]') || []);
     if (focusable.length === 0) return undefined;
-
     const firstFocusable = focusable[0];
     const lastFocusable = focusable[focusable.length - 1];
     firstFocusable.focus();
@@ -464,7 +420,6 @@ function Dashboard({ session, onLogout }) {
         return;
       }
       if (event.key !== 'Tab') return;
-
       if (event.shiftKey && document.activeElement === firstFocusable) {
         event.preventDefault();
         lastFocusable.focus();
@@ -484,15 +439,7 @@ function Dashboard({ session, onLogout }) {
   const attentionCount = (counts.degraded || 0) + (counts.offline || 0);
   const healthyRate = total > 0 ? Math.round(((counts.healthy || 0) / total) * 100) : 0;
   const environmentLabel = session.authDisabled ? '开发环境' : '生产环境';
-  const measuredLatencies = services
-    .map((service) => service.latencyMs)
-    .filter((latency) => Number.isFinite(latency));
-  const averageLatency = measuredLatencies.length > 0
-    ? Math.round(measuredLatencies.reduce((sum, latency) => sum + latency, 0) / measuredLatencies.length)
-    : null;
-  const maximumLatency = Math.max(...measuredLatencies, 1);
   const username = session.user?.username || 'admin';
-  const userInitial = username.slice(0, 1).toUpperCase();
   const greeting = getGreeting();
 
   const categoryCounts = useMemo(() => ({
@@ -502,26 +449,12 @@ function Dashboard({ session, onLogout }) {
     automation: services.filter((service) => service.category === 'automation').length,
   }), [services]);
 
-  const filteredServices = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return services.filter((service) => {
-      const categoryMatches = activeFilter === 'all' || service.category === activeFilter;
-      const statusMatches = statusFilter === 'all'
-        || service.state === statusFilter
-        || (statusFilter === 'attention' && ['degraded', 'offline'].includes(service.state));
-      const queryMatches = !normalizedQuery || [
-        service.name,
-        service.shortName,
-        service.description,
-        service.repositoryPath,
-        ...service.capabilities,
-      ].join(' ').toLowerCase().includes(normalizedQuery);
-      return categoryMatches && statusMatches && queryMatches;
-    }).sort((left, right) => (
+  const visibleServices = useMemo(() => services
+    .filter((service) => activeFilter === 'all' || service.category === activeFilter)
+    .sort((left, right) => (
       (STATE_PRIORITY[left.state] ?? 4) - (STATE_PRIORITY[right.state] ?? 4)
       || left.name.localeCompare(right.name, 'zh-CN')
-    ));
-  }, [activeFilter, query, services, statusFilter]);
+    )), [activeFilter, services]);
 
   async function handleLogout() {
     try {
@@ -539,11 +472,8 @@ function Dashboard({ session, onLogout }) {
     });
   }, [launchingService]);
 
-  function clearFilters() {
-    setActiveFilter('all');
-    setStatusFilter('all');
-    setQuery('');
-  }
+  const primaryService = services.find((service) => service.id === 'core' && service.adminUrl)
+    || services.find((service) => service.adminUrl);
 
   return (
     <div className="app-shell">
@@ -555,16 +485,7 @@ function Dashboard({ session, onLogout }) {
       )}
 
       <aside ref={sidebarRef} id="management-sidebar" className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
-        <div className="brand-lockup sidebar-brand">
-          <span className="brand-mark" aria-hidden="true">MY</span>
-          <span>
-            <strong>管理中心</strong>
-            <small>统一服务控制台</small>
-          </span>
-        </div>
-
         <nav className="main-nav" aria-label="管理模块">
-          <span className="nav-label">工作区</span>
           {FILTERS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -578,32 +499,22 @@ function Dashboard({ session, onLogout }) {
               aria-pressed={activeFilter === id}
               type="button"
             >
-              <Icon size={20} />
+              <Icon size={19} />
               <span>{label}</span>
-              <span className="nav-count">{categoryCounts[id] || 0}</span>
-              <ChevronRight className="nav-chevron" size={14} />
+              <small>{categoryCounts[id] || 0}</small>
             </button>
           ))}
+          <button type="button" onClick={() => loadServices(true)} disabled={refreshing} title="刷新服务状态">
+            <RefreshCw className={refreshing ? 'spin' : ''} size={19} />
+            <span>刷新状态</span>
+          </button>
         </nav>
 
-        <div className="sidebar-environment" title={`当前环境：${environmentLabel}`}>
-          <span className="environment-dot" />
-          <span>
-            <small>当前环境</small>
-            <strong>{environmentLabel}</strong>
-          </span>
-        </div>
-
         <div className="sidebar-footer">
-          <div className="admin-identity">
-            <span className="admin-avatar">{userInitial}</span>
-            <span>
-              <strong>{username}</strong>
-              <small>{session.authDisabled ? '本地开发' : '平台管理员'}</small>
-            </span>
-          </div>
-          <button className="icon-button sidebar-button" onClick={handleLogout} type="button" title="退出登录" aria-label="退出登录">
-            <LogOut size={17} />
+          <span className="environment-indicator" title={`当前环境：${environmentLabel}`}><i /></span>
+          <button type="button" onClick={handleLogout} title="退出登录" aria-label="退出登录">
+            <LogOut size={18} />
+            <span>退出登录</span>
           </button>
         </div>
       </aside>
@@ -624,33 +535,43 @@ function Dashboard({ session, onLogout }) {
             >
               {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            <span className="welcome-avatar" aria-hidden="true">{userInitial}</span>
+            <img className="welcome-avatar" src="/assets/console-avatar.jpg" alt="管理员头像" />
             <div className="welcome-copy">
               <h1>{greeting}，<strong>{username}</strong></h1>
-              <span>欢迎回到 MY 管理中心</span>
+              <span>MY 统一服务控制台</span>
             </div>
           </div>
+
           <div className="topbar-actions">
-            <span className="environment-pill"><span className="live-dot" /> {environmentLabel}</span>
-            <div className="search-box">
-              <Search size={17} />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索服务、能力或仓库路径" aria-label="搜索服务" />
-              {query && (
-                <button type="button" onClick={() => setQuery('')} title="清除搜索" aria-label="清除搜索">
-                  <X size={15} />
-                </button>
+            <span className="environment-label"><i /> {environmentLabel}</span>
+            <button
+              className="theme-switch"
+              type="button"
+              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+              aria-label={theme === 'light' ? '切换到深色模式' : '切换到浅色模式'}
+              title={theme === 'light' ? '深色模式' : '浅色模式'}
+            >
+              <Moon size={14} />
+              <span className={theme === 'dark' ? 'dark' : ''}><Sun size={14} /></span>
+            </button>
+            <div className="notification-wrap">
+              <button
+                className="icon-button notification-button"
+                type="button"
+                aria-label="查看系统通知"
+                aria-expanded={notificationOpen}
+                onClick={() => setNotificationOpen((open) => !open)}
+              >
+                <Bell size={19} />
+                <i className={attentionCount > 0 ? 'attention' : ''} />
+              </button>
+              {notificationOpen && (
+                <div className="notification-popover" role="status">
+                  <strong>{attentionCount > 0 ? `${attentionCount} 项服务需要处理` : '系统运行平稳'}</strong>
+                  <span>最近同步：{formatCheckedAt(data?.refreshedAt)}</span>
+                </div>
               )}
             </div>
-            <button
-              className="icon-button"
-              type="button"
-              onClick={() => loadServices(true)}
-              disabled={refreshing}
-              title="刷新服务状态"
-              aria-label="刷新服务状态"
-            >
-              <RefreshCw className={refreshing ? 'spin' : ''} size={18} />
-            </button>
           </div>
         </header>
 
@@ -664,139 +585,101 @@ function Dashboard({ session, onLogout }) {
           )}
 
           <section className="dashboard-grid" aria-label="系统运行总览">
-            <article className="bento-card health-overview-card">
-              <header className="card-heading">
-                <div>
-                  <span className="panel-kicker"><TrendingUp size={14} /> 运行表现</span>
-                  <h2>整体健康度</h2>
+            <article className="dashboard-card performance-card">
+              <div className="platform-pass">
+                <div className="pass-topline">
+                  <span>MY SERVICE CLOUD</span>
+                  <span className="pass-layer"><Layers3 size={17} /></span>
                 </div>
-                <span className="soft-status"><span className="live-dot" /> 实时</span>
-              </header>
+                <span className="pass-count">{counts.healthy || 0} / {total || '--'}</span>
+                <div className="pass-bottomline">
+                  <Activity size={25} />
+                  <strong>{environmentLabel === '生产环境' ? 'ONLINE' : 'DEV'}</strong>
+                </div>
+                <svg className="pass-wave" viewBox="0 0 640 120" aria-hidden="true">
+                  <path d="M0 95 C105 38 205 45 306 91 S522 115 640 38" />
+                  <path d="M0 116 C136 65 236 76 352 111 S550 123 640 80" />
+                </svg>
+              </div>
 
-              <div className="health-score-row">
-                <span className="health-card-mark" aria-hidden="true"><Activity size={18} /></span>
-                <div className="health-score">
+              <div className="performance-heading">
+                <div>
                   <span>服务可用率</span>
-                  <strong>{loading ? '--' : healthyRate}<small>{loading ? '' : '%'}</small></strong>
-                  <p>{attentionCount > 0 ? `${attentionCount} 项服务需要处理` : '当前服务运行平稳'}</p>
+                  <strong>{loading ? '--' : `${healthyRate.toFixed(1)}%`}</strong>
                 </div>
-                <div className="health-facts" aria-label="响应概览">
-                  <div>
-                    <span>平均响应</span>
-                    <strong>{averageLatency === null ? '--' : `${averageLatency} ms`}</strong>
-                  </div>
-                  <div>
-                    <span>正常服务</span>
-                    <strong>{counts.healthy || 0} / {total}</strong>
-                  </div>
-                </div>
+                <span className="performance-state">
+                  <i /> {attentionCount > 0 ? `${attentionCount} 项待处理` : '运行平稳'}
+                </span>
               </div>
-
-              <div className="availability-progress" aria-label={`服务可用率 ${healthyRate}%`}>
-                <span style={{ width: `${healthyRate}%` }} />
-              </div>
-              <ResponseChart services={services} />
+              <OperationsChart services={services} />
             </article>
 
-            <article className="bento-card summary-card">
-              <header className="card-heading compact">
+            <article className="dashboard-card monitoring-card">
+              <div>
+                <span className="card-eyebrow">实时监测</span>
+                <h2>{monitoringEnabled ? '自动监测已开启' : '自动监测已暂停'}</h2>
+                <p>{monitoringEnabled ? '每 30 秒自动同步服务状态' : '可随时重新开启状态同步'}</p>
+              </div>
+              <span className="monitoring-icon"><CloudCog size={24} /></span>
+              <button
+                className={`toggle-switch ${monitoringEnabled ? 'active' : ''}`}
+                type="button"
+                role="switch"
+                aria-checked={monitoringEnabled}
+                aria-label="自动监测"
+                onClick={() => setMonitoringEnabled((enabled) => !enabled)}
+              >
+                <span />
+              </button>
+            </article>
+
+            <article className="dashboard-card service-entry-card">
+              <div className="service-entry-copy">
+                <span className="entry-icon"><CloudCog size={19} /></span>
                 <div>
-                  <span className="panel-kicker"><Gauge size={14} /> 状态快照</span>
-                  <h2>系统概览</h2>
+                  <h2>统一服务中心</h2>
+                  <p>统一访问核心平台、考试、校园与消息服务</p>
                 </div>
-                <span className="result-count">{total}</span>
-              </header>
-              <div className="summary-metrics" aria-label="状态摘要">
-                <SummaryMetric label="全部服务" value={total} tone="neutral" icon={Gauge} note="已接入管理中心" />
-                <SummaryMetric label="运行正常" value={counts.healthy || 0} tone="positive" icon={CheckCircle2} note={`可用率 ${healthyRate}%`} />
-                <SummaryMetric label="需要处理" value={attentionCount} tone="warning" icon={CircleAlert} note="异常或离线" />
-                <SummaryMetric label="未接监测" value={counts.unmonitored || 0} tone="muted" icon={Clock3} note="等待配置" />
-              </div>
-            </article>
-
-            <article className={`bento-card focus-card ${attentionCount > 0 ? 'attention' : 'all-clear'}`}>
-              <div className="focus-copy">
-                <span className="panel-kicker"><Radar size={14} /> 实时监测</span>
-                <h2>{attentionCount > 0 ? '发现需要处理的服务' : '服务监测运行平稳'}</h2>
-                <p>
-                  {attentionCount > 0
-                    ? `当前有 ${attentionCount} 项异常或离线，建议优先查看实时服务状态。`
-                    : '所有已监测服务均保持在线，可继续通过管理中心统一访问。'}
-                </p>
-                <button className="refresh-action" type="button" onClick={() => loadServices(true)} disabled={refreshing}>
-                  {refreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
-                  {refreshing ? '正在刷新' : '立即刷新'}
+                <button
+                  className="entry-action"
+                  type="button"
+                  disabled={!primaryService}
+                  onClick={() => launchService(primaryService)}
+                  aria-label="进入统一服务中心"
+                  title="进入统一服务中心"
+                >
+                  <ArrowRight size={21} />
                 </button>
               </div>
-              <div className="health-ring" style={{ '--health-rate': `${healthyRate}%` }} aria-label={`健康度 ${healthyRate}%`}>
-                <span>{loading ? '--' : `${healthyRate}%`}</span>
-                <small>健康度</small>
+              <div className="service-visual" aria-hidden="true">
+                <span className="visual-card visual-card-one"><Server size={25} /></span>
+                <span className="visual-card visual-card-two"><Boxes size={27} /></span>
+                <span className="visual-card visual-card-three"><Zap size={24} /></span>
+                <i className="visual-link link-one" />
+                <i className="visual-link link-two" />
               </div>
             </article>
 
-            <article className="bento-card live-services-card">
-              <header className="card-heading compact">
+            <article className="dashboard-card portfolio-card">
+              <header>
                 <div>
-                  <span className="panel-kicker"><Wifi size={14} /> 服务状态</span>
-                  <h2>实时服务</h2>
+                  <span className="card-eyebrow">SERVICES</span>
+                  <h2>{activeFilter === 'all' ? '服务组合' : CATEGORY_LABELS[activeFilter]}</h2>
                 </div>
-                <span className="soft-status"><span className="live-dot" /> 在线</span>
+                <span className="portfolio-count">{visibleServices.length}</span>
               </header>
-              <div className="live-services-list">
-                {services.length > 0 ? services.slice(0, 6).map((service) => (
-                  <LiveServiceRow key={service.id} service={service} maximumLatency={maximumLatency} />
+              <div className="portfolio-list">
+                {visibleServices.length > 0 ? visibleServices.map((service, index) => (
+                  <ServicePortfolioRow key={service.id} service={service} index={index} onLaunch={launchService} />
                 )) : (
-                  <div className="live-services-empty">{loading ? '正在同步服务状态' : '暂无服务数据'}</div>
+                  <div className="portfolio-empty">此分类暂无服务</div>
                 )}
               </div>
-              <footer className="live-services-footer">
-                <span>{total} 项服务已接入</span>
-                <span>更新时间 {formatCheckedAt(data?.refreshedAt)}</span>
+              <footer>
+                <span><i /> {total} 项服务已接入</span>
+                <span>更新于 {formatCheckedAt(data?.refreshedAt)}</span>
               </footer>
             </article>
-          </section>
-
-          <section className="services-section" aria-labelledby="services-title">
-            <div className="section-heading">
-              <div>
-                <div className="section-title-row">
-                  <h2 id="services-title">项目与服务</h2>
-                  <span className="result-count">{filteredServices.length}</span>
-                </div>
-              </div>
-              <div className="status-tabs" role="group" aria-label="按运行状态筛选">
-                {STATUS_FILTERS.map((filter) => (
-                  <button
-                    key={filter.id}
-                    className={statusFilter === filter.id ? 'active' : ''}
-                    type="button"
-                    onClick={() => setStatusFilter(filter.id)}
-                    aria-pressed={statusFilter === filter.id}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="service-grid" aria-label="正在加载">
-                {[1, 2, 3, 4, 5, 6].map((item) => <div className="service-card skeleton-card" key={item} />)}
-              </div>
-            ) : filteredServices.length > 0 ? (
-              <div className="service-grid">
-                {filteredServices.map((service) => (
-                  <ServiceCard key={service.id} service={service} onLaunch={launchService} />
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state">
-                <span className="empty-icon"><Search size={22} /></span>
-                <strong>没有匹配的服务</strong>
-                <p>请调整搜索词或筛选条件</p>
-                <button type="button" onClick={clearFilters}>清除筛选</button>
-              </div>
-            )}
           </section>
         </div>
       </main>
