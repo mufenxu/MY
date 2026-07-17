@@ -535,7 +535,7 @@ Page({
       content: `确定要删除「${item}」吗？\n\n删除后将自动同步到 GitHub Secret`,
       confirmColor: '#ff3b30',
       confirmText: '删除',
-      success: (m) => {
+      success: async (m) => {
         if (m.confirm) {
           const newItems = [...this.data.secretItems]
           newItems.splice(index, 1)
@@ -545,23 +545,25 @@ Page({
           // 先更新 GitHub Secret
           const secret = this.data.secretName
           wx.showLoading({ title: '删除中...', mask: true })
-          request(CT8_ENDPOINTS.updateSecret, 'POST', { action: 'update', secret_name: secret, value: newValue }, false, { timeout: 30000 })
-            .then((body: any) => {
-              if (body && body.ok) {
-                this.saveCachedValue(newValue)
-                this.setData({ currentValue: newValue, secretItems: newItems })
-                wx.showToast({ icon: 'success', title: `已删除 ${item}` })
-              } else {
-                wx.showToast({ icon: 'error', title: body?.message || '删除失败' })
-              }
-            })
-            .catch((err: any) => {
-              wx.showToast({ icon: 'error', title: err?.message || err?.error || '网络错误' })
-            })
-            .finally(() => {
-              wx.hideLoading()
-              this.setData({ deletingItem: false })
-            })
+          let succeeded = false
+          let message = '删除失败'
+          try {
+            const body: any = await request(CT8_ENDPOINTS.updateSecret, 'POST', { action: 'update', secret_name: secret, value: newValue }, false, { timeout: 30000 })
+            if (body && body.ok) {
+              await this.saveCachedValue(newValue)
+              this.setData({ currentValue: newValue, secretItems: newItems })
+              succeeded = true
+              message = `已删除 ${item}`
+            } else {
+              message = body?.message || body?.error || '删除失败'
+            }
+          } catch (err: any) {
+            message = err?.message || err?.error || '网络错误'
+          } finally {
+            wx.hideLoading()
+            this.setData({ deletingItem: false })
+          }
+          wx.showToast({ icon: succeeded ? 'success' : 'error', title: message })
         }
       },
     })
@@ -600,22 +602,30 @@ Page({
   async updateSecret(value: string) {
     const secret = this.data.secretName
     wx.showLoading({ title: '更新中...' })
+    let succeeded = false
+    let message = '更新失败'
     try {
       const body: any = await request(CT8_ENDPOINTS.updateSecret, 'POST', { action: 'update', secret_name: secret, value }, false, { timeout: 30000 })
       if (body && body.ok) {
         await this.saveCachedValue(value)
-        wx.showToast({ icon: 'success', title: '更新成功', duration: 2000 })
         this.setData({ inputValue: '', currentValue: value })
         this.loadCachedValue() // 立即重新加载以获取最新更新时间
         this._parseSecretItems()
+        succeeded = true
+        message = '更新成功'
       } else {
-        wx.showToast({ icon: 'error', title: body?.message || '更新失败', duration: 3000 })
+        message = body?.message || body?.error || '更新失败'
       }
     } catch (err: any) {
       logger.error('更新失败', err, 'CT8Management')
-      wx.showToast({ icon: 'error', title: err?.message || err?.error || '网络错误', duration: 3000 })
+      message = err?.message || err?.error || '网络错误'
     } finally {
       wx.hideLoading()
     }
+    wx.showToast({
+      icon: succeeded ? 'success' : 'error',
+      title: message,
+      duration: succeeded ? 2000 : 3000,
+    })
   },
 })

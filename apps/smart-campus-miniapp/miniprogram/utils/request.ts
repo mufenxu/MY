@@ -56,6 +56,23 @@ function getResponseMessage(data: any, fallback: string): string {
     return data.message || data.error || fallback
 }
 
+const PLATFORM_AUTH_ERROR_CODES = new Set([
+    'AUTH_TOKEN_MISSING',
+    'AUTH_TOKEN_EXPIRED',
+    'AUTH_TOKEN_INVALID',
+])
+
+function isPlatformAuthenticationFailure(data: any): boolean {
+    if (!data || typeof data !== 'object') return false
+    if (data.tokenExpired === true || PLATFORM_AUTH_ERROR_CODES.has(data.code)) return true
+
+    // 兼容尚未返回结构化错误码的旧版服务端。
+    const message = getResponseMessage(data, '')
+    return message === 'Token expired.'
+        || message === 'Invalid token.'
+        || message === 'Access denied. No token provided.'
+}
+
 function logIfSlow(url: string, method: string, startedAt: number, requestId: string, threshold: number): void {
     const elapsed = Date.now() - startedAt
     if (elapsed < threshold) return
@@ -105,7 +122,10 @@ const request = <T = any>(url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE'
                 logIfSlow(url, method, startedAt, requestId, slowThreshold)
 
                 // 拦截 401 Token 过期
-                if (res.statusCode === 401 && !isRetry && !url.includes('/auth/wechat-login')) {
+                if (res.statusCode === 401
+                    && isPlatformAuthenticationFailure(res.data)
+                    && !isRetry
+                    && !url.includes('/auth/wechat-login')) {
                     try {
                         // 清除失效的旧 Token，确保调用登录重新获取
                         clearToken();
@@ -122,7 +142,7 @@ const request = <T = any>(url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE'
                             url,
                             statusCode: res.statusCode,
                         }, 'Request')
-                        reject(res.data || res)
+                        reject(err)
                     }
                     return
                 }

@@ -17,6 +17,29 @@ const getGhOptions = () => ({
     GH_REF: secretService.getSecretSync('GH_REF') || 'main'
 });
 
+function createGithubUpstreamError(error, operation) {
+    const upstreamStatus = Number(error?.response?.status) || null;
+    const upstreamMessage = error?.response?.data?.message || error?.message || 'Unknown GitHub API error';
+    let message = `GitHub API 请求失败（${operation}）`;
+    let code = 'GITHUB_UPSTREAM_ERROR';
+
+    if (upstreamStatus === 401) {
+        message = 'GitHub 凭据无效，请更新 GH_TOKEN 后重试';
+        code = 'GITHUB_AUTH_FAILED';
+    } else if (upstreamStatus === 403) {
+        message = 'GitHub 拒绝了请求，请检查 GH_TOKEN 的 Actions Secrets 权限或 API 限额';
+        code = 'GITHUB_PERMISSION_DENIED';
+    } else if (upstreamStatus === 404) {
+        message = 'GitHub 仓库不存在，或当前 GH_TOKEN 无权访问该仓库';
+        code = 'GITHUB_REPOSITORY_UNAVAILABLE';
+    }
+
+    const appError = new AppError(message, 502);
+    appError.code = code;
+    appError.details = { operation, upstreamStatus, upstreamMessage };
+    return appError;
+}
+
 // Helper: Encrypt secret using libsodium
 async function encryptSecret(key, value) {
     await sodium.ready;
@@ -749,6 +772,12 @@ exports.updateSecret = async (action, secret_name, value) => {
     const targetSecretName = secret_name || 'USERS_LIST';
     const { GH_TOKEN, GH_OWNER, GH_REPO } = getGhOptions();
 
+    if (!GH_TOKEN) {
+        const error = new AppError('服务器未配置 GH_TOKEN', 500);
+        error.code = 'GITHUB_NOT_CONFIGURED';
+        throw error;
+    }
+
     // Get Secret Check
     if (action === 'get') {
         const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/secrets/${targetSecretName}`;
@@ -765,7 +794,7 @@ exports.updateSecret = async (action, secret_name, value) => {
             if (err.response && err.response.status === 404) {
                 return { ok: false, message: `Secret '${targetSecretName}' not found`, notFound: true };
             }
-            throw err;
+            throw createGithubUpstreamError(err, '读取 Actions Secret');
         }
     }
 
@@ -778,37 +807,41 @@ exports.updateSecret = async (action, secret_name, value) => {
     }
 
     // Update Secret Logic
-    const keyUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/secrets/public-key`;
-    const keyResp = await axios.get(keyUrl, {
-        headers: {
-            'Accept': 'application/vnd.github+json',
-            'Authorization': `Bearer ${GH_TOKEN}`,
-            'X-GitHub-Api-Version': '2022-11-28'
-        }
-    });
+    try {
+        const keyUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/secrets/public-key`;
+        const keyResp = await axios.get(keyUrl, {
+            headers: {
+                'Accept': 'application/vnd.github+json',
+                'Authorization': `Bearer ${GH_TOKEN}`,
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
+        });
 
-    const publicKey = keyResp.data.key;
-    const keyId = keyResp.data.key_id;
-    const encryptedValue = await encryptSecret(publicKey, value);
+        const publicKey = keyResp.data.key;
+        const keyId = keyResp.data.key_id;
+        const encryptedValue = await encryptSecret(publicKey, value);
 
-    const updateUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/secrets/${targetSecretName}`;
-    const updateResp = await axios.put(updateUrl, {
-        encrypted_value: encryptedValue,
-        key_id: keyId
-    }, {
-        headers: {
-            'Accept': 'application/vnd.github+json',
-            'Authorization': `Bearer ${GH_TOKEN}`,
-            'X-GitHub-Api-Version': '2022-11-28'
-        }
-    });
+        const updateUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/secrets/${targetSecretName}`;
+        const updateResp = await axios.put(updateUrl, {
+            encrypted_value: encryptedValue,
+            key_id: keyId
+        }, {
+            headers: {
+                'Accept': 'application/vnd.github+json',
+                'Authorization': `Bearer ${GH_TOKEN}`,
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
+        });
 
-    return {
-        ok: true,
-        status: updateResp.status,
-        message: updateResp.status === 201 ? 'Secret created' : 'Secret updated',
-        secret_name: targetSecretName
-    };
+        return {
+            ok: true,
+            status: updateResp.status,
+            message: updateResp.status === 201 ? 'Secret created' : 'Secret updated',
+            secret_name: targetSecretName
+        };
+    } catch (err) {
+        throw createGithubUpstreamError(err, '更新 Actions Secret');
+    }
 };
 
 exports.manageSecretCache = async (action, secret_name, secret_value, updated_by) => {

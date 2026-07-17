@@ -31,7 +31,11 @@ exports.verifyToken = (req, res, next) => {
     const token = req.header('Authorization')?.replace('Bearer ', '');
 
     if (!token) {
-        return res.status(401).json({ success: false, error: 'Access denied. No token provided.' });
+        return res.status(401).json({
+            success: false,
+            error: 'Access denied. No token provided.',
+            code: 'AUTH_TOKEN_MISSING'
+        });
     }
 
     try {
@@ -44,9 +48,18 @@ exports.verifyToken = (req, res, next) => {
     } catch (ex) {
         // 区分 token 过期和 token 无效，便于前端自动刷新
         if (ex.name === 'TokenExpiredError') {
-            return res.status(401).json({ success: false, error: 'Token expired.', tokenExpired: true });
+            return res.status(401).json({
+                success: false,
+                error: 'Token expired.',
+                code: 'AUTH_TOKEN_EXPIRED',
+                tokenExpired: true
+            });
         }
-        res.status(401).json({ success: false, error: 'Invalid token.' });
+        res.status(401).json({
+            success: false,
+            error: 'Invalid token.',
+            code: 'AUTH_TOKEN_INVALID'
+        });
     }
 };
 

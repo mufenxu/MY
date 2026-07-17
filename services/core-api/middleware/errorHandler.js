@@ -31,6 +31,10 @@ const errorHandler = (err, req, res, next) => {
         requestId
     };
 
+    if (err.code) {
+        response.code = err.code;
+    }
+
     // 开发环境返回更多调试信息
     if (!isProduction) {
         response.stack = err.stack;
