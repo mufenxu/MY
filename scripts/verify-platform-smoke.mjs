@@ -3,6 +3,11 @@ const publicOrigin = process.env.PLATFORM_PUBLIC_ORIGIN;
 const username = process.env.PLATFORM_ADMIN_USERNAME;
 const password = process.env.CI_PLATFORM_ADMIN_PASSWORD;
 const metricsToken = process.env.PLATFORM_METRICS_TOKEN;
+const consoleWriteHeaders = {
+  'Content-Type': 'application/json',
+  'X-Platform-Request': 'console',
+  Origin: publicOrigin,
+};
 
 for (const [name, value] of Object.entries({ publicOrigin, username, password, metricsToken })) {
   if (!value) throw new Error(`${name} is required.`);
@@ -18,7 +23,7 @@ async function expectStatus(response, expected, label) {
 await expectStatus(await fetch(`${origin}/api/readyz`), 200, 'readiness');
 const login = await expectStatus(await fetch(`${origin}/api/auth/login`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json', Origin: publicOrigin },
+  headers: consoleWriteHeaders,
   body: JSON.stringify({ username, password }),
 }), 200, 'login');
 const cookie = login.headers.get('set-cookie')?.split(';', 1)[0];
@@ -38,7 +43,7 @@ if (!(await metrics.text()).includes('my_platform_http_requests_total')) {
 
 await expectStatus(await fetch(`${origin}/api/auth/logout`, {
   method: 'POST',
-  headers: { Cookie: cookie, Origin: publicOrigin },
+  headers: { ...consoleWriteHeaders, Cookie: cookie },
 }), 200, 'logout');
 const revoked = await expectStatus(await fetch(`${origin}/api/auth/status`, {
   headers: { Cookie: cookie },
