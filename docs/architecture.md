@@ -61,7 +61,6 @@ Alibaba Cloud Container Registry is the primary production image source. GitHub 
 - `apps/`：用户直接使用的前端和微信小程序。
 - `services/`：可独立测试的后端模块和容器入口。
 - `automation/`：不常驻服务器的 GitHub Actions 与运维任务。
-- `packages/`：经过验证的跨模块共享代码，不存放业务杂项。
 - `infra/`：Docker、反向代理和部署配置。
 - `config/`：不含密钥的服务注册表。
 
