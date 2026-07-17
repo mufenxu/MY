@@ -82,7 +82,9 @@ COPY --from=admin-console-build --chown=node:node /build/admin-console/node_modu
 COPY --from=admin-console-build --chown=node:node /build/admin-console/dist ./apps/admin-console/dist
 COPY --chown=node:node config/platform.services.docker.json ./config/platform.services.docker.json
 
-RUN mkdir -p /app/services/core-api/uploads /app/services/core-api/logs /app/backups \
+RUN mongodump --version >/dev/null \
+    && mongorestore --version >/dev/null \
+    && mkdir -p /app/services/core-api/uploads /app/services/core-api/logs /app/backups \
     && chown -R node:node /app
 
 USER node

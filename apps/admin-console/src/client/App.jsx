@@ -31,7 +31,6 @@ import {
   Sun,
   Timer,
   Workflow,
-  Wrench,
   X,
   Zap,
 } from 'lucide-react';
@@ -74,6 +73,8 @@ const STATE_PRIORITY = {
   healthy: 3,
 };
 
+const CT8_API_BASE = '/apps/core/api';
+
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {
     credentials: 'same-origin',
@@ -87,7 +88,7 @@ async function requestJson(url, options = {}) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(data.error || `请求失败（HTTP ${response.status}）`);
+    const error = new Error(data.message || data.error || `请求失败（HTTP ${response.status}）`);
     error.status = response.status;
     throw error;
   }
@@ -113,6 +114,73 @@ function formatDateTime(value) {
     minute: '2-digit',
     hour12: false,
   }).format(new Date(value));
+}
+
+function formatCount(value) {
+  return Number.isFinite(Number(value)) ? String(Number(value)) : '--';
+}
+
+function getCt8RunTime(run) {
+  return run?.start_time || run?.started_at || run?.create_time || run?.createdAt || null;
+}
+
+function formatCt8RunId(value) {
+  if (!value) return '--';
+  const text = String(value);
+  return text.length > 10 ? `#${text.slice(-10)}` : `#${text}`;
+}
+
+function getCt8StatusMeta(status, conclusion) {
+  const normalized = String(status || conclusion || 'unknown').toLowerCase();
+  if (normalized === 'running' || normalized === 'queued' || normalized === 'in_progress') {
+    return { label: '运行中', className: 'running' };
+  }
+  if (normalized === 'success' || normalized === 'completed') {
+    return { label: '成功', className: 'success' };
+  }
+  if (normalized === 'partial') {
+    return { label: '部分成功', className: 'partial' };
+  }
+  if (normalized === 'failed' || normalized === 'failure' || normalized === 'cancelled' || normalized === 'timed_out') {
+    return { label: '失败', className: 'failed' };
+  }
+  if (normalized === 'idle') {
+    return { label: '空闲', className: 'idle' };
+  }
+  return { label: '暂无', className: 'unknown' };
+}
+
+function collectCt8Runs(...sources) {
+  const byKey = new Map();
+  for (const source of sources) {
+    if (!Array.isArray(source)) continue;
+    for (const run of source) {
+      if (!run || typeof run !== 'object') continue;
+      const key = String(run.run_id || run.id || `${getCt8RunTime(run) || ''}-${byKey.size}`);
+      if (!byKey.has(key)) byKey.set(key, run);
+    }
+  }
+  return [...byKey.values()].slice(0, 6);
+}
+
+function requestFailure(result, label) {
+  if (result.status === 'rejected') {
+    return `${label}：${result.reason?.message || '请求失败'}`;
+  }
+  const value = result.value || {};
+  if (value.success === false || value.ok === false) {
+    return `${label}：${value.message || value.error || '返回异常'}`;
+  }
+  return '';
+}
+
+function hasCt8Payload(value, type) {
+  if (!value || typeof value !== 'object') return false;
+  if (value.success === false || value.ok === false) return true;
+  if (type === 'stats') return Boolean(value.stats || value.data?.stats);
+  if (type === 'status') return Boolean(value.data?.activeTask || value.data?.latest || Array.isArray(value.data?.runs));
+  if (type === 'runs') return Array.isArray(value.runs) || Array.isArray(value.data?.runs);
+  return false;
 }
 
 function formatBytes(value) {
@@ -700,12 +768,120 @@ function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) 
   const automations = services.filter((service) => service.category === 'automation');
   const automation = automations[0];
   const meta = STATE_META[automation?.state] || STATE_META.unmonitored;
+  const [ct8Data, setCt8Data] = useState({ stats: null, status: null, runs: [] });
+  const [ct8Loading, setCt8Loading] = useState(true);
+  const [ct8Refreshing, setCt8Refreshing] = useState(false);
+  const [ct8Error, setCt8Error] = useState('');
+  const [ct8Message, setCt8Message] = useState('');
+  const [triggering, setTriggering] = useState(false);
+
+  const loadCt8 = useCallback(async ({ quiet = false } = {}) => {
+    quiet ? setCt8Refreshing(true) : setCt8Loading(true);
+    setCt8Error('');
+
+    try {
+      const [statsResult, statusResult, runsResult] = await Promise.allSettled([
+        requestJson(`${CT8_API_BASE}/ct8/stats`),
+        requestJson(`${CT8_API_BASE}/github/status?limit=6`),
+        requestJson(`${CT8_API_BASE}/ct8/runs?pageSize=6`),
+      ]);
+
+      const failures = [
+        requestFailure(statsResult, '统计'),
+        requestFailure(statusResult, '当前状态'),
+        requestFailure(runsResult, '运行历史'),
+      ].filter(Boolean);
+
+      if (statsResult.status === 'fulfilled' && !hasCt8Payload(statsResult.value, 'stats')) failures.push('统计：未收到 CT8 数据');
+      if (statusResult.status === 'fulfilled' && !hasCt8Payload(statusResult.value, 'status')) failures.push('当前状态：未收到 CT8 数据');
+      if (runsResult.status === 'fulfilled' && !hasCt8Payload(runsResult.value, 'runs')) failures.push('运行历史：未收到 CT8 数据');
+
+      const statsPayload = statsResult.status === 'fulfilled'
+        ? (statsResult.value?.stats || statsResult.value?.data?.stats || null)
+        : null;
+      const statusPayload = statusResult.status === 'fulfilled'
+        ? (statusResult.value?.data || null)
+        : null;
+      const historyRuns = runsResult.status === 'fulfilled'
+        ? (runsResult.value?.runs || runsResult.value?.data?.runs || [])
+        : [];
+      const statusRuns = statusPayload?.runs || [];
+
+      setCt8Data({
+        stats: statsPayload,
+        status: statusPayload,
+        runs: collectCt8Runs(historyRuns, statusRuns),
+      });
+
+      if (failures.length > 0) {
+        setCt8Error(`部分 CT8 数据未能加载：${failures.join('；')}`);
+      }
+    } catch (error) {
+      setCt8Error(error.message || 'CT8 数据加载失败');
+    } finally {
+      setCt8Loading(false);
+      setCt8Refreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!loading && automation) loadCt8();
+  }, [automation, loadCt8, loading]);
+
+  const activeTask = ct8Data.status?.activeTask || null;
+  const latestRun = ct8Data.status?.latest || ct8Data.runs[0] || null;
+  const latestStatus = getCt8StatusMeta(latestRun?.status, latestRun?.workflow_conclusion);
+  const activeStatus = getCt8StatusMeta(activeTask?.status || 'idle', activeTask?.workflow_conclusion);
+  const taskRunning = activeStatus.className === 'running' || latestStatus.className === 'running';
+  const ct8Ready = Boolean(ct8Data.stats || ct8Data.status || ct8Data.runs.length);
+  const serviceState = ct8Ready ? 'healthy' : automation?.state;
+
+  useEffect(() => {
+    if (!taskRunning) return undefined;
+    const interval = window.setInterval(() => loadCt8({ quiet: true }), 15000);
+    return () => window.clearInterval(interval);
+  }, [loadCt8, taskRunning]);
 
   function handleOpen(event) {
     if (!automation?.adminUrl || !isPlainInternalNavigation(event, automation.adminUrl)) return;
     event.preventDefault();
     onLaunch(automation);
   }
+
+  async function handleRefresh() {
+    setCt8Message('');
+    await Promise.all([
+      onRefresh?.(),
+      loadCt8({ quiet: true }),
+    ]);
+  }
+
+  async function handleTrigger() {
+    setTriggering(true);
+    setCt8Message('');
+    setCt8Error('');
+    try {
+      await requestJson(`${CT8_API_BASE}/github/trigger`, {
+        method: 'POST',
+        body: JSON.stringify({ inputs: {} }),
+      });
+      setCt8Message('任务已提交到 GitHub Actions，正在等待运行结果回调。');
+      await loadCt8({ quiet: true });
+    } catch (error) {
+      setCt8Error(error.message || '触发 CT8 任务失败');
+    } finally {
+      setTriggering(false);
+    }
+  }
+
+  const stats = ct8Data.stats || {};
+  const totalHosts = stats.totalHosts ?? latestRun?.total_accounts ?? latestRun?.stats?.total;
+  const successHosts = stats.successHosts ?? latestRun?.success_count ?? latestRun?.stats?.success;
+  const failedHosts = stats.failedHosts ?? latestRun?.failed_count ?? latestRun?.stats?.failed;
+  const todayRuns = stats.todayRuns;
+  const latestRunTime = stats.lastRunTime || getCt8RunTime(latestRun);
+  const latestWorkflow = latestRun?.workflow || activeTask?.workflow || 'ssh-login.yml';
+  const triggerDisabled = triggering || taskRunning || ct8Loading;
 
   return (
     <section className="page-view automation-view" aria-labelledby="automation-title">
@@ -714,10 +890,16 @@ function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) 
         title="自动化中心"
         description="查看自动化任务接入状态、执行能力与监测链路。"
       >
-        <button className="secondary-action" type="button" onClick={onRefresh} disabled={refreshing}>
-          {refreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
-          {refreshing ? '正在同步' : '刷新状态'}
-        </button>
+        <div className="automation-actions">
+          <button className="secondary-action" type="button" onClick={handleRefresh} disabled={refreshing || ct8Refreshing}>
+            {refreshing || ct8Refreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
+            {refreshing || ct8Refreshing ? '正在同步' : '刷新状态'}
+          </button>
+          <button className="primary-button" type="button" onClick={handleTrigger} disabled={triggerDisabled}>
+            {triggering || taskRunning ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}
+            {taskRunning ? '任务运行中' : '触发任务'}
+          </button>
+        </div>
       </ViewHeading>
 
       {loading ? (
@@ -731,11 +913,11 @@ function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) 
               <h3>{automation.name}</h3>
               <p>{automation.description}</p>
             </div>
-            <ServiceStatus state={automation.state} />
+            <ServiceStatus state={serviceState} />
             <div className="automation-hero-metrics">
-              <div><span>响应时间</span><strong>{automation.latencyMs === null ? '--' : `${automation.latencyMs} ms`}</strong></div>
-              <div><span>状态码</span><strong>{automation.httpStatus ?? '--'}</strong></div>
-              <div><span>最近检查</span><strong>{formatCheckedAt(automation.checkedAt)}</strong></div>
+              <div><span>今日运行</span><strong>{formatCount(todayRuns)}</strong></div>
+              <div><span>最近结果</span><strong>{latestStatus.label}</strong></div>
+              <div><span>最近运行</span><strong>{formatDateTime(latestRunTime)}</strong></div>
             </div>
             {automation.adminUrl && (
               <a
@@ -747,28 +929,73 @@ function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) 
             )}
           </article>
 
+          {(ct8Error || ct8Message) && (
+            <div className={`automation-feedback ${ct8Error ? 'error' : 'success'}`} role={ct8Error ? 'alert' : 'status'}>
+              {ct8Error ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}
+              <span>{ct8Error || ct8Message}</span>
+            </div>
+          )}
+
+          <div className="automation-kpis">
+            <article><span className="kpi-icon blue"><Timer size={20} /></span><div><span>今日运行</span><strong>{formatCount(todayRuns)}</strong><small>GitHub Actions 调度</small></div></article>
+            <article><span className="kpi-icon green"><CheckCircle2 size={20} /></span><div><span>成功节点</span><strong>{formatCount(successHosts)}</strong><small>最近一次结果</small></div></article>
+            <article><span className="kpi-icon orange"><CircleAlert size={20} /></span><div><span>失败节点</span><strong>{formatCount(failedHosts)}</strong><small>最近一次结果</small></div></article>
+            <article><span className="kpi-icon purple"><Activity size={20} /></span><div><span>总节点</span><strong>{formatCount(totalHosts)}</strong><small>最近一次覆盖</small></div></article>
+          </div>
+
           <div className="automation-layout">
-            <section className="view-card capability-panel">
-              <header><div><span className="view-eyebrow">能力</span><h3>能力范围</h3></div><Wrench size={21} /></header>
-              <div className="capability-grid">
-                {automation.capabilities.map((capability, index) => (
-                  <div key={capability}>
-                    <span>{String(index + 1).padStart(2, '0')}</span>
-                    <strong>{capability}</strong>
-                  </div>
-                ))}
-              </div>
+            <section className="view-card ct8-runs-panel">
+              <header><div><span className="view-eyebrow">历史</span><h3>运行历史</h3></div><Timer size={21} /></header>
+              {ct8Loading ? (
+                <div className="ct8-inline-loading"><LoaderCircle className="spin" size={18} /> 正在加载运行记录</div>
+              ) : ct8Data.runs.length > 0 ? (
+                <div className="ct8-runs-list">
+                  {ct8Data.runs.map((run) => {
+                    const runStatus = getCt8StatusMeta(run.status, run.workflow_conclusion);
+                    return (
+                      <div className="ct8-run-row" key={run.run_id || run.id || getCt8RunTime(run)}>
+                        <div>
+                          <strong>{run.workflow || 'ssh-login.yml'}</strong>
+                          <span>{formatCt8RunId(run.run_id || run.id)} · {formatDateTime(getCt8RunTime(run))}</span>
+                        </div>
+                        <span className={`ct8-run-status ${runStatus.className}`}>{runStatus.label}</span>
+                        <span>{formatCount(run.success_count ?? run.stats?.success)}</span>
+                        <span>{formatCount(run.failed_count ?? run.stats?.failed)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="ct8-inline-empty">暂无运行记录</div>
+              )}
             </section>
 
-            <section className="view-card observability-panel">
-              <header><div><span className="view-eyebrow">观测</span><h3>接入链路</h3></div><Database size={21} /></header>
-              <ol>
-                <li className="done"><span><CheckCircle2 size={17} /></span><div><strong>服务注册</strong><small>已接入统一服务控制台</small></div></li>
-                <li className={automation.adminUrl ? 'done' : 'pending'}><span>{automation.adminUrl ? <CheckCircle2 size={17} /> : <Clock3 size={17} />}</span><div><strong>管理入口</strong><small>{automation.adminUrl ? '后台入口已配置' : '暂无网页管理入口'}</small></div></li>
-                <li className={automation.state === 'unmonitored' ? 'pending' : 'done'}><span>{automation.state === 'unmonitored' ? <Clock3 size={17} /> : <CheckCircle2 size={17} />}</span><div><strong>健康监测</strong><small>{automation.state === 'unmonitored' ? '等待配置健康检查' : '健康检查已接入'}</small></div></li>
-                <li className="current"><span><Play size={17} /></span><div><strong>运行观测</strong><small>{meta.label}</small></div></li>
-              </ol>
-            </section>
+            <div className="automation-side-stack">
+              <section className="view-card ct8-status-panel">
+                <header><div><span className="view-eyebrow">任务</span><h3>当前任务</h3></div>{taskRunning ? <LoaderCircle className="spin" size={21} /> : <Play size={21} />}</header>
+                <div className="ct8-status-grid">
+                  <div><span>任务状态</span><strong className={`ct8-run-status ${activeStatus.className}`}>{activeStatus.label}</strong></div>
+                  <div><span>Workflow</span><strong>{latestWorkflow}</strong></div>
+                  <div><span>最近 Run ID</span><strong>{formatCt8RunId(latestRun?.run_id || activeTask?.run_id)}</strong></div>
+                  <div><span>检查时间</span><strong>{formatCheckedAt(automation.checkedAt)}</strong></div>
+                </div>
+                {activeTask?.html_url && (
+                  <a className="ct8-external-link" href={activeTask.html_url} target="_blank" rel="noreferrer">
+                    打开 GitHub 运行记录 <ArrowUpRight size={15} />
+                  </a>
+                )}
+              </section>
+
+              <section className="view-card observability-panel">
+                <header><div><span className="view-eyebrow">观测</span><h3>接入链路</h3></div><Database size={21} /></header>
+                <ol>
+                  <li className="done"><span><CheckCircle2 size={17} /></span><div><strong>服务注册</strong><small>已接入统一服务控制台</small></div></li>
+                  <li className="done"><span><CheckCircle2 size={17} /></span><div><strong>Core API</strong><small>通过平台内部身份访问 CT8 接口</small></div></li>
+                  <li className={ct8Ready ? 'done' : 'pending'}><span>{ct8Ready ? <CheckCircle2 size={17} /> : <Clock3 size={17} />}</span><div><strong>运行观测</strong><small>{ct8Ready ? '统计与历史已接入' : '等待读取运行数据'}</small></div></li>
+                  <li className={automation.state === 'unmonitored' ? 'pending' : 'done'}><span>{automation.state === 'unmonitored' ? <Clock3 size={17} /> : <CheckCircle2 size={17} />}</span><div><strong>健康探针</strong><small>{automation.state === 'unmonitored' ? 'GitHub Actions 无独立健康端点' : meta.label}</small></div></li>
+                </ol>
+              </section>
+            </div>
           </div>
         </>
       ) : <div className="view-empty">暂无自动化服务</div>}
@@ -1038,7 +1265,11 @@ function BackupRecoveryView({ session }) {
             <div><span>退出码</span><strong>{latestJob.exitCode ?? '--'}</strong></div>
           </div>
           {(latestJob.error || latestJob.stdout || latestJob.stderr) && (
-            <pre className="backup-job-log">{latestJob.error || latestJob.stderr || latestJob.stdout}</pre>
+            <pre className="backup-job-log">{[
+              latestJob.error,
+              !latestJob.error && latestJob.stderr && `stderr:\n${latestJob.stderr}`,
+              !latestJob.error && latestJob.stdout && `stdout:\n${latestJob.stdout}`,
+            ].filter(Boolean).join('\n\n')}</pre>
           )}
         </section>
       )}

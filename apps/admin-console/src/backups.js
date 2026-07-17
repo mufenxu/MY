@@ -160,6 +160,14 @@ function commandWithVariables(spec, variables, { appendRestoreArgs = false } = {
   return { command, args };
 }
 
+function commandScriptTarget(spec) {
+  if (!spec) return '';
+  const commandName = path.basename(String(spec.command || '')).toLowerCase();
+  const runsNode = ['node', 'node.exe'].includes(commandName) || path.resolve(spec.command) === process.execPath;
+  if (!runsNode) return '';
+  return spec.args.find((arg) => !String(arg).startsWith('-')) || '';
+}
+
 async function exists(filePath) {
   try {
     await access(filePath);
@@ -167,6 +175,12 @@ async function exists(filePath) {
   } catch {
     return false;
   }
+}
+
+async function commandScriptAvailable(spec, workspaceRoot) {
+  const target = commandScriptTarget(spec);
+  if (!target) return true;
+  return exists(path.isAbsolute(target) ? target : path.resolve(workspaceRoot, target));
 }
 
 async function sha256(filePath) {
@@ -294,19 +308,27 @@ export function createBackupManager({
     const restoreScriptAvailable = await exists(restoreScript);
     let backupCommandValid = true;
     let restoreCommandValid = true;
+    let backupSpec = null;
+    let restoreSpec = null;
 
     try {
-      parseCommandSpec(config.backupCommand, backupScriptAvailable
+      backupSpec = parseCommandSpec(config.backupCommand, backupScriptAvailable
         ? { command: process.execPath, args: [backupScript] }
         : null);
     } catch {
       backupCommandValid = false;
     }
     try {
-      parseCommandSpec(config.restoreCommand, restoreScriptAvailable
+      restoreSpec = parseCommandSpec(config.restoreCommand, restoreScriptAvailable
         ? { command: process.execPath, args: [restoreScript] }
         : null);
     } catch {
+      restoreCommandValid = false;
+    }
+    if (backupCommandValid && !await commandScriptAvailable(backupSpec, config.workspaceRoot)) {
+      backupCommandValid = false;
+    }
+    if (restoreCommandValid && !await commandScriptAvailable(restoreSpec, config.workspaceRoot)) {
       restoreCommandValid = false;
     }
 
@@ -365,13 +387,18 @@ export function createBackupManager({
   function runCommand(job, spec, variables, options = {}) {
     const commandSpec = commandWithVariables(spec, variables, options);
     const stdoutStart = job.stdout.length;
+    const stderrStart = job.stderr.length;
     return new Promise((resolve) => {
       let child;
       let settled = false;
       const settle = (result) => {
         if (settled) return;
         settled = true;
-        resolve({ ...result, stdout: job.stdout.slice(stdoutStart) });
+        resolve({
+          ...result,
+          stdout: job.stdout.slice(stdoutStart),
+          stderr: job.stderr.slice(stderrStart),
+        });
       };
 
       try {
@@ -393,6 +420,16 @@ export function createBackupManager({
     });
   }
 
+  function failureMessage(step, result) {
+    const details = [
+      result.stderr?.trim() ? `stderr:\n${result.stderr.trim()}` : '',
+      result.stdout?.trim() ? `stdout:\n${result.stdout.trim()}` : '',
+    ].filter(Boolean).join('\n\n');
+    return details
+      ? `${step.label}命令退出码 ${result.code}\n\n${details}`
+      : `${step.label}命令退出码 ${result.code}`;
+  }
+
   async function runJobSteps(job, steps) {
     for (const step of steps) {
       const result = await runCommand(job, step.spec, step.variables, step.options);
@@ -406,7 +443,7 @@ export function createBackupManager({
       if (result.code !== 0) {
         job.status = 'failed';
         job.finishedAt = now().toISOString();
-        job.error = `${step.label}命令退出码 ${result.code}`;
+        job.error = failureMessage(step, result);
         return;
       }
       if (step.captureBackupResult) {

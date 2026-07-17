@@ -48,6 +48,8 @@ docker compose --env-file .env -f infra/docker/compose.yml build platform-api
 docker compose --env-file .env -f infra/docker/compose.yml up -d --force-recreate platform-api
 ```
 
+如果控制中心显示“备份命令退出码 1”，先确认已经执行过上面的 `build platform-api`。旧镜像没有容器内备份脚本和 MongoDB 工具，只重启容器不会把这些文件放进去。
+
 网页点击“立即备份”后，`platform-api` 会在容器内直接执行 `mongodump --oplog`，创建 MongoDB 副本集归档，覆盖平台使用的五个数据库，并复制核心上传文件。备份清单、校验和与恢复任务都保存在 `platform_backups` 卷中。恢复会先自动创建一份当前状态备份，再校验所选归档的 SHA-256，要求平台管理员密码和确认短语，然后执行 `mongorestore --drop --oplogReplay` 并恢复上传文件。
 
 恢复会覆盖现有数据，只在维护窗口执行。恢复过程中不要让用户继续上传文件或提交业务数据；恢复完成后建议重启业务容器，清掉进程内缓存和长连接状态：

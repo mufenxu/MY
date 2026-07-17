@@ -60,6 +60,7 @@ async function copyDirectoryContents(source, target) {
   return true;
 }
 
+async function main() {
 const manifest = JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8'));
 const archiveName = manifest.mongoArchive || 'mongodb.archive.gz';
 if (path.basename(archiveName) !== archiveName) {
@@ -101,3 +102,9 @@ await Promise.all([
 const uploadsRestored = await copyDirectoryContents(path.join(directory, 'uploads'), uploadsRoot);
 console.log(`MongoDB restored from ${directory}.`);
 console.log(uploadsRestored ? `Uploads restored to ${uploadsRoot}.` : 'Backup did not include uploads.');
+}
+
+main().catch((error) => {
+  console.error(`容器内恢复失败：${error.message}`);
+  process.exitCode = 1;
+});

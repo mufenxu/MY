@@ -114,6 +114,34 @@ test('backup command starts a tracked job', async (t) => {
   assert.equal(fake.calls[0].options.env.BACKUP_DIR, backupRoot);
 });
 
+test('failed backup jobs include stderr details', async (t) => {
+  const backupRoot = await mkdtemp(join(tmpdir(), 'my-platform-backups-'));
+  const workspaceRoot = await mkdtemp(join(tmpdir(), 'my-platform-workspace-'));
+  t.after(() => rm(backupRoot, { recursive: true, force: true }));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  const fake = fakeSpawnFactory({ stderr: 'mongodump failed loudly\n', exitCode: 1 });
+
+  const manager = createBackupManager({
+    spawnImpl: fake.spawnImpl,
+    config: {
+      backupRoot,
+      workspaceRoot,
+      backupOperationsEnabled: true,
+      restoreOperationsEnabled: true,
+      backupCommand: 'node backup.js',
+      restoreCommand: 'node restore.js',
+      restoreConfirmText: 'RESTORE ALL DATA',
+    },
+  });
+
+  const job = await manager.startBackup({ requestedBy: 'admin' });
+  await new Promise((resolve) => setImmediate(resolve));
+  const finished = manager.getJob(job.id);
+  assert.equal(finished.status, 'failed');
+  assert.match(finished.error, /备份命令退出码 1/);
+  assert.match(finished.error, /mongodump failed loudly/);
+});
+
 test('restore verifies checksum and appends destructive restore arguments', async (t) => {
   const backupRoot = await mkdtemp(join(tmpdir(), 'my-platform-backups-'));
   const workspaceRoot = await mkdtemp(join(tmpdir(), 'my-platform-workspace-'));

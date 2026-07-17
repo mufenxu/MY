@@ -46,6 +46,7 @@ async function copyUploads() {
   return true;
 }
 
+async function main() {
 const mongoHost = process.env.PLATFORM_BACKUP_MONGO_HOST || process.env.MONGO_HOST || 'mongodb';
 const mongoPort = process.env.PLATFORM_BACKUP_MONGO_PORT || process.env.MONGO_PORT || '27017';
 const mongoUsername = process.env.PLATFORM_BACKUP_MONGO_USERNAME || process.env.MONGO_ROOT_USERNAME || '';
@@ -100,3 +101,9 @@ for (const entry of await readdir(backupRoot, { withFileTypes: true })) {
 }
 
 console.log(destination);
+}
+
+main().catch((error) => {
+  console.error(`容器内备份失败：${error.message}`);
+  process.exitCode = 1;
+});
