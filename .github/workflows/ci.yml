@@ -100,10 +100,10 @@ jobs:
             file: Dockerfile
           - image: campus-service
             context: .
-            file: services/campus-service/Dockerfile
+            file: campus-service.Dockerfile
           - image: iot-service
             context: .
-            file: services/iot-service/Dockerfile
+            file: iot-service.Dockerfile
 
     steps:
       - name: Checkout
