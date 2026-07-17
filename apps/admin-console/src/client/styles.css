@@ -1997,21 +1997,8 @@ input:focus-visible {
   color: var(--text);
   background: var(--panel-solid);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--purple);
   border-radius: 16px;
   box-shadow: var(--shadow-soft);
-}
-
-.automation-hero.state-healthy {
-  border-left-color: var(--green);
-}
-
-.automation-hero.state-degraded {
-  border-left-color: var(--orange);
-}
-
-.automation-hero.state-offline {
-  border-left-color: var(--red);
 }
 
 .automation-hero-icon {
