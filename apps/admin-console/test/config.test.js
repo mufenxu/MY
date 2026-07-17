@@ -59,3 +59,22 @@ test('production rejects public template secrets', () => {
     /PLATFORM_METRICS_TOKEN/,
   );
 });
+
+test('production backup runner requires a strong shared token when enabled', () => {
+  assert.throws(
+    () => loadConfig({
+      NODE_ENV: 'production',
+      PLATFORM_ADMIN_USERNAME: 'admin',
+      PLATFORM_ADMIN_PASSWORD_HASH: 'scrypt$salt$hash',
+      PLATFORM_SESSION_SECRET: 'x'.repeat(32),
+      PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: internalPrivateKey,
+      PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: internalPublicKey,
+      PLATFORM_PUBLIC_ORIGIN: 'https://admin.example.com',
+      PLATFORM_MONGODB_URI: 'mongodb://platform.example/platform_app',
+      PLATFORM_METRICS_TOKEN: 'm'.repeat(32),
+      PLATFORM_BACKUP_RUNNER_URL: 'http://host.docker.internal:22103',
+      PLATFORM_BACKUP_RUNNER_TOKEN: 'replace_with_at_least_32_random_characters',
+    }),
+    /PLATFORM_BACKUP_RUNNER_TOKEN/,
+  );
+});

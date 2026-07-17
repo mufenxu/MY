@@ -42,15 +42,26 @@ npm run backup
 
 The command briefly stops the three application containers, creates a replica-set point-in-time archive, copies core uploads, waits for the archive stream to finish, and then restarts only the services that were running. It writes a checksum-protected backup under `backups/` and removes local backups older than `BACKUP_RETENTION_DAYS` (default 30). Copy the resulting directory to encrypted off-host storage. A local backup on the same server is not disaster recovery.
 
-The unified control center exposes the same operational flow under **数据灾备**. By default it looks for `scripts/backup-mongodb.mjs` and `scripts/restore-mongodb.mjs` in the deployed workspace and stores archives in `PLATFORM_BACKUP_DIR` (default `backups/`). If the production runtime is an immutable Docker image without host Docker access, the page will show the executor as unavailable; keep using the CLI workflow above or provide explicit executor commands:
+The unified control center exposes the same operational flow under **数据灾备**. In production, run the backup executor on the host and let the platform container call it through `host.docker.internal`. Generate a shared token and add it to `.env`. The runner binds to `0.0.0.0` so Docker containers can reach it, but it rejects public remote addresses and still requires the token:
 
 ```bash
-PLATFORM_BACKUP_COMMAND='["node","scripts/backup-mongodb.mjs"]'
-PLATFORM_RESTORE_COMMAND='["node","scripts/restore-mongodb.mjs"]'
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
+BACKUP_RUNNER_HOST=0.0.0.0
+BACKUP_RUNNER_PORT=22103
+PLATFORM_BACKUP_RUNNER_URL=http://host.docker.internal:22103
+PLATFORM_BACKUP_RUNNER_TOKEN=<the-generated-token>
+PLATFORM_BACKUP_DIR=backups
 PLATFORM_RESTORE_CONFIRM_TEXT='RESTORE ALL DATA'
 ```
 
-Restore from the control center first starts a fresh backup of the current state, then verifies the selected manifest SHA-256 checksum, requires the platform administrator password when authentication is enabled, and requires the configured confirmation phrase.
+Start the host-side runner from the workspace root, then recreate or restart `platform-api` so it receives the new environment:
+
+```bash
+npm run backup:runner
+docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build --force-recreate platform-api
+```
+
+For a permanent production setup, run `npm run backup:runner` under systemd or another host process supervisor. Restore from the control center first starts a fresh backup of the current state, then verifies the selected manifest SHA-256 checksum, requires the platform administrator password when authentication is enabled, and requires the configured confirmation phrase.
 
 Restore only during a maintenance window, after taking a fresh backup:
 

@@ -35,6 +35,18 @@ function parseOrigin(value) {
   }
 }
 
+function parseHttpUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    if (!['http:', 'https:'].includes(url.protocol)) return '';
+    url.hash = '';
+    url.search = '';
+    return url.href.endsWith('/') ? url.href : `${url.href}/`;
+  } catch {
+    return '';
+  }
+}
+
 function parseTrustProxy(value, fallback = false) {
   if (value === undefined || value === null || value === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
@@ -109,6 +121,9 @@ export function loadConfig(env = process.env) {
     backupCommand: env.PLATFORM_BACKUP_COMMAND || '',
     restoreCommand: env.PLATFORM_RESTORE_COMMAND || '',
     restoreConfirmText: env.PLATFORM_RESTORE_CONFIRM_TEXT || 'RESTORE ALL DATA',
+    backupRunnerUrl: parseHttpUrl(env.PLATFORM_BACKUP_RUNNER_URL),
+    backupRunnerToken: env.PLATFORM_BACKUP_RUNNER_TOKEN || '',
+    backupRunnerTimeoutMs: parseInteger(env.PLATFORM_BACKUP_RUNNER_TIMEOUT_MS, 8000, { min: 1000, max: 60000 }),
   };
 
   if (!config.authDisabled) {
@@ -128,6 +143,9 @@ export function loadConfig(env = process.env) {
     if (!config.publicOrigin) missing.push('PLATFORM_PUBLIC_ORIGIN');
     if (!config.mongoUri) missing.push('PLATFORM_MONGODB_URI');
     if (config.metricsToken.length < 32 || isTemplatePlaceholder(config.metricsToken)) missing.push('PLATFORM_METRICS_TOKEN');
+    if (config.backupRunnerUrl && (config.backupRunnerToken.length < 32 || isTemplatePlaceholder(config.backupRunnerToken))) {
+      missing.push('PLATFORM_BACKUP_RUNNER_TOKEN');
+    }
     if (config.isProduction && !config.publicOrigin.startsWith('https://')) missing.push('PLATFORM_PUBLIC_ORIGIN_HTTPS');
 
     if (missing.length > 0) {
@@ -138,4 +156,4 @@ export function loadConfig(env = process.env) {
   return config;
 }
 
-export { isTemplatePlaceholder, parseBoolean, parseInteger, parseOrigin, parseTrustProxy };
+export { isTemplatePlaceholder, parseBoolean, parseHttpUrl, parseInteger, parseOrigin, parseTrustProxy };

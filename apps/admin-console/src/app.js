@@ -12,7 +12,7 @@ import {
   parseCookies,
   verifyPassword,
 } from './auth.js';
-import { BackupOperationError, createBackupManager } from './backups.js';
+import { BackupOperationError, createBackupManager, createBackupRunnerClient } from './backups.js';
 import { loadConfig } from './config.js';
 import { createStatusMonitor, loadServiceRegistry } from './service-registry.js';
 import { createMetrics } from './metrics.js';
@@ -58,7 +58,9 @@ export function createApp({
   const app = express();
   const sessions = sessionRegistry || createSessionRegistry({ secret: config.sessionSecret });
   const metrics = createMetrics();
-  const backups = backupManager || createBackupManager({ config });
+  const backups = backupManager || (config.backupRunnerUrl
+    ? createBackupRunnerClient({ config })
+    : createBackupManager({ config }));
 
   function readSessionToken(req) {
     return parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME];

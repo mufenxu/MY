@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { once } from 'node:events';
+import http from 'node:http';
 import { PassThrough } from 'node:stream';
 import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createBackupManager } from '../src/backups.js';
+import { createBackupManager, createBackupRunnerClient } from '../src/backups.js';
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -45,6 +47,18 @@ function fakeSpawnFactory({ stdout = '', stderr = '', exitCode = 0 } = {}) {
     return child;
   };
   return { calls, spawnImpl };
+}
+
+async function withHttpServer(handler, callback) {
+  const server = http.createServer(handler);
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address();
+  try {
+    await callback(`http://127.0.0.1:${address.port}/`);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
 }
 
 test('backup status lists restorable manifest directories', async (t) => {
@@ -152,4 +166,46 @@ test('restore rejects unsafe backup names before spawning a command', async (t) 
     /备份名称无效/,
   );
   assert.equal(fake.calls.length, 0);
+});
+
+test('runner client sends bearer token and proxies backup jobs', async () => {
+  const token = 't'.repeat(32);
+  const seen = [];
+
+  await withHttpServer(async (req, res) => {
+    seen.push({ method: req.method, url: req.url, authorization: req.headers.authorization });
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    if (req.headers.authorization !== `Bearer ${token}`) {
+      res.writeHead(401);
+      res.end(JSON.stringify({ error: 'unauthorized', code: 'NOPE' }));
+      return;
+    }
+    if (req.method === 'GET' && req.url === '/status') {
+      res.end(JSON.stringify({ capabilities: { canBackup: true, canRestore: true }, backups: [], jobs: [] }));
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/backups/run') {
+      res.writeHead(202);
+      res.end(JSON.stringify({ job: { id: 'remote-1', status: 'running', type: 'backup' } }));
+      return;
+    }
+    res.writeHead(404);
+    res.end(JSON.stringify({ error: 'not found' }));
+  }, async (origin) => {
+    const client = createBackupRunnerClient({
+      config: {
+        backupRunnerUrl: origin,
+        backupRunnerToken: token,
+        backupRunnerTimeoutMs: 1000,
+        restoreConfirmText: 'RESTORE ALL DATA',
+      },
+    });
+
+    const status = await client.getStatus();
+    assert.equal(status.capabilities.canBackup, true);
+    const job = await client.startBackup({ requestedBy: 'admin' });
+    assert.equal(job.id, 'remote-1');
+  });
+
+  assert.deepEqual(seen.map((request) => request.authorization), [`Bearer ${token}`, `Bearer ${token}`]);
 });

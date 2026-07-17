@@ -23,6 +23,93 @@ export class BackupOperationError extends Error {
   }
 }
 
+function fallbackRemoteStatus(config, issue) {
+  return {
+    capabilities: {
+      canBackup: false,
+      canRestore: false,
+      backupRoot: 'remote-runner',
+      restoreConfirmText: config.restoreConfirmText || 'RESTORE ALL DATA',
+      issues: [issue],
+    },
+    backups: [],
+    jobs: [],
+  };
+}
+
+async function requestRunner(config, resource, { method = 'GET', body } = {}) {
+  if (!config.backupRunnerToken) {
+    throw new BackupOperationError(503, 'BACKUP_RUNNER_TOKEN_MISSING', '备份执行器令牌未配置。');
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.backupRunnerTimeoutMs || 8000);
+  try {
+    const response = await fetch(new URL(resource, config.backupRunnerUrl), {
+      method,
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${config.backupRunnerToken}`,
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new BackupOperationError(
+        response.status,
+        data.code || 'BACKUP_RUNNER_ERROR',
+        data.error || `备份执行器请求失败（HTTP ${response.status}）。`,
+      );
+    }
+    return data;
+  } catch (error) {
+    if (error instanceof BackupOperationError) throw error;
+    const isAbort = error.name === 'AbortError';
+    throw new BackupOperationError(
+      isAbort ? 504 : 502,
+      isAbort ? 'BACKUP_RUNNER_TIMEOUT' : 'BACKUP_RUNNER_UNAVAILABLE',
+      isAbort ? '备份执行器请求超时。' : `备份执行器不可用：${error.message}`,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function createBackupRunnerClient({ config } = {}) {
+  return {
+    async getStatus() {
+      try {
+        return await requestRunner(config, '/status');
+      } catch (error) {
+        if (error instanceof BackupOperationError) {
+          return fallbackRemoteStatus(config, error.message);
+        }
+        throw error;
+      }
+    },
+    async startBackup({ requestedBy } = {}) {
+      const data = await requestRunner(config, '/backups/run', {
+        method: 'POST',
+        body: { requestedBy },
+      });
+      return data.job;
+    },
+    async startRestore({ backupName, requestedBy } = {}) {
+      const data = await requestRunner(config, '/backups/restore', {
+        method: 'POST',
+        body: { backupName, requestedBy },
+      });
+      return data.job;
+    },
+    async getJob(id) {
+      const data = await requestRunner(config, `/backups/jobs/${encodeURIComponent(id)}`);
+      return data.job;
+    },
+  };
+}
+
 function appendLog(job, streamName, chunk) {
   const text = chunk.toString('utf8');
   const key = streamName === 'stderr' ? 'stderr' : 'stdout';
