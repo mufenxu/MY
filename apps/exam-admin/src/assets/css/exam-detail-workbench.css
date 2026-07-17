@@ -8,12 +8,6 @@
     background-position: -1px -1px, -1px -1px, 0 0;
 }
 
-body.exam-detail-active .question-card {
-    content-visibility: auto;
-    contain-intrinsic-size: 180px;
-    contain: layout paint style;
-}
-
 body.exam-detail-active .question-list-more {
     display: flex;
     justify-content: center;

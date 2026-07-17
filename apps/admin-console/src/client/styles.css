@@ -1071,8 +1071,12 @@ input:focus-visible {
   flex: 1;
   overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-color: rgba(80, 110, 160, 0.22) transparent;
-  scrollbar-width: thin;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.portfolio-list::-webkit-scrollbar {
+  display: none;
 }
 
 .portfolio-row {

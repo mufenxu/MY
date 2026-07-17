@@ -1,4 +1,4 @@
-import { unref } from 'vue';
+import { isRef, unref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
     addQuestionOption,
@@ -14,7 +14,7 @@ function readQuestionList(questions) {
 }
 
 function writeRef(target, value) {
-    if (target && typeof target === 'object' && Object.prototype.hasOwnProperty.call(target, 'value')) {
+    if (isRef(target) || (target && typeof target === 'object' && 'value' in target)) {
         target.value = value;
     }
 }
@@ -74,8 +74,15 @@ export function useQuestionEditor({
     };
 
     const selectQuestion = (index) => {
-        writeRef(selectedIndex, index);
-        ensureQuestionRendered?.(index);
+        const questionIndex = Number(index);
+        const questionList = readQuestionList(questions);
+
+        if (!Number.isInteger(questionIndex) || questionIndex < 0 || questionIndex >= questionList.length) {
+            return;
+        }
+
+        ensureQuestionRendered?.(questionIndex);
+        writeRef(selectedIndex, questionIndex);
         showMobileProperties();
     };
 

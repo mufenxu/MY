@@ -185,14 +185,20 @@
 
                         <div
                             v-for="item in renderedQuestionItems"
-                            :key="item.question._id"
+                            :key="item.question._id || `question-${item.index}`"
                             class="question-card editor-question-card"
                             :data-question-index="item.index"
+                            role="button"
+                            tabindex="0"
+                            :aria-current="selectedIndex === item.index ? 'true' : undefined"
+                            :aria-label="`选择第 ${item.index + 1} 题`"
                             :class="{
                                 active: selectedIndex === item.index,
                                 invalid: canEdit && !validateQuestion(item.question),
                             }"
                             @click="selectQuestion(item.index)"
+                            @keydown.enter.self.prevent="selectQuestion(item.index)"
+                            @keydown.space.self.prevent="selectQuestion(item.index)"
                         >
                             <div class="q-header">
                                 <div class="q-titleline">
