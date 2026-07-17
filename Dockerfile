@@ -50,6 +50,10 @@ COPY services/notification-service/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
 FROM ${NODE_IMAGE} AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV NODE_ENV=production \
     PLATFORM_API_HOST=0.0.0.0 \
     PLATFORM_API_PORT=22100 \
