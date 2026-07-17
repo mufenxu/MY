@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AppWindow,
@@ -142,7 +142,7 @@ function LoginScreen({ onAuthenticated }) {
           <span className="brand-mark" aria-hidden="true">MY</span>
           <span>
             <strong>MY 管理中心</strong>
-            <small>Platform Console</small>
+            <small>统一服务控制台</small>
           </span>
         </div>
         <div className="login-heading">
@@ -225,9 +225,18 @@ function ResponseChart({ services }) {
   const measuredServices = services
     .filter((service) => Number.isFinite(service.latencyMs))
     .slice(0, 6);
+  const measuredValues = measuredServices.map((service) => service.latencyMs);
+  const fastestLatency = measuredValues.length > 0 ? Math.min(...measuredValues) : null;
+  const averageLatency = measuredValues.length > 0
+    ? Math.round(measuredValues.reduce((sum, value) => sum + value, 0) / measuredValues.length)
+    : null;
+  const peakLatency = measuredValues.length > 0 ? Math.max(...measuredValues) : null;
   const chartServices = measuredServices.length > 0 ? measuredServices : services.slice(0, 6);
   const values = chartServices.map((service) => service.latencyMs || 0);
   const maximum = Math.max(...values, 1);
+  const minimumPositive = Math.min(...values.filter((value) => value > 0), maximum);
+  const useLogScale = maximum / Math.max(minimumPositive, 1) >= 10;
+  const scaledMaximum = useLogScale ? Math.log10(maximum + 1) : maximum;
   const chartWidth = 420;
   const chartHeight = 160;
   const horizontalPadding = 18;
@@ -238,7 +247,8 @@ function ResponseChart({ services }) {
     const x = chartServices.length === 1
       ? chartWidth / 2
       : horizontalPadding + (index * (chartWidth - horizontalPadding * 2)) / (chartServices.length - 1);
-    const y = baseline - (value / maximum) * availableHeight;
+    const scaledValue = useLogScale ? Math.log10(value + 1) : value;
+    const y = baseline - (scaledValue / scaledMaximum) * availableHeight;
     return { x, y, value, service: chartServices[index] };
   });
   const pointString = points.map(({ x, y }) => `${x},${y}`).join(' ');
@@ -250,15 +260,25 @@ function ResponseChart({ services }) {
     <div className="response-chart">
       <div className="chart-heading">
         <span>服务响应分布</span>
-        <span className="chart-legend"><i /> 越低越好</span>
+        <span className="chart-legend"><i /> {useLogScale ? '对数刻度 · 越低越好' : '越低越好'}</span>
       </div>
       {points.length > 0 ? (
         <>
+          <div className="chart-highlights" aria-label="响应时间摘要">
+            <span className="fast"><i />最快 {fastestLatency ?? '--'} ms</span>
+            <span className="average"><i />平均 {averageLatency ?? '--'} ms</span>
+            <span className="peak"><i />峰值 {peakLatency ?? '--'} ms</span>
+          </div>
           <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="各服务响应时间折线图">
             <defs>
               <linearGradient id="response-area" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="#35c8c4" stopOpacity="0.28" />
-                <stop offset="100%" stopColor="#35c8c4" stopOpacity="0" />
+                <stop offset="0%" stopColor="#8b7cf6" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="#22c7d6" stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id="response-line" x1="0%" x2="100%" y1="0%" y2="0%">
+                <stop offset="0%" stopColor="#ff46b9" />
+                <stop offset="52%" stopColor="#8b7cf6" />
+                <stop offset="100%" stopColor="#22c7d6" />
               </linearGradient>
             </defs>
             {[44, 88, 132].map((y) => (
@@ -381,6 +401,15 @@ function Dashboard({ session, onLogout }) {
   const [error, setError] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [launchingService, setLaunchingService] = useState(null);
+  const mobileMenuButtonRef = useRef(null);
+  const sidebarRef = useRef(null);
+
+  const closeMobileNav = useCallback(() => {
+    setMobileNavOpen(false);
+    if (window.matchMedia('(max-width: 980px)').matches) {
+      window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
+    }
+  }, []);
 
   const loadServices = useCallback(async (force = false) => {
     force ? setRefreshing(true) : setLoading(true);
@@ -417,12 +446,43 @@ function Dashboard({ session, onLogout }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!mobileNavOpen || !window.matchMedia('(max-width: 980px)').matches) return undefined;
+
+    const sidebar = sidebarRef.current;
+    const focusable = Array.from(sidebar?.querySelectorAll('button:not(:disabled), a[href]') || []);
+    if (focusable.length === 0) return undefined;
+
+    const firstFocusable = focusable[0];
+    const lastFocusable = focusable[focusable.length - 1];
+    firstFocusable.focus();
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMobileNav();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      if (event.shiftKey && document.activeElement === firstFocusable) {
+        event.preventDefault();
+        lastFocusable.focus();
+      } else if (!event.shiftKey && document.activeElement === lastFocusable) {
+        event.preventDefault();
+        firstFocusable.focus();
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [closeMobileNav, mobileNavOpen]);
+
   const services = data?.services || [];
   const counts = data?.counts || {};
   const total = services.length;
   const attentionCount = (counts.degraded || 0) + (counts.offline || 0);
   const healthyRate = total > 0 ? Math.round(((counts.healthy || 0) / total) * 100) : 0;
-  const activeFilterMeta = FILTERS.find((item) => item.id === activeFilter) || FILTERS[0];
   const environmentLabel = session.authDisabled ? '开发环境' : '生产环境';
   const measuredLatencies = services
     .map((service) => service.latencyMs)
@@ -494,12 +554,12 @@ function Dashboard({ session, onLogout }) {
         </div>
       )}
 
-      <aside className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
+      <aside ref={sidebarRef} id="management-sidebar" className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
         <div className="brand-lockup sidebar-brand">
           <span className="brand-mark" aria-hidden="true">MY</span>
           <span>
             <strong>管理中心</strong>
-            <small>MY Console</small>
+            <small>统一服务控制台</small>
           </span>
         </div>
 
@@ -511,10 +571,11 @@ function Dashboard({ session, onLogout }) {
               className={activeFilter === id ? 'active' : ''}
               onClick={() => {
                 setActiveFilter(id);
-                setMobileNavOpen(false);
+                closeMobileNav();
               }}
               title={label}
               aria-label={`${label}，${categoryCounts[id] || 0} 项`}
+              aria-pressed={activeFilter === id}
               type="button"
             >
               <Icon size={20} />
@@ -547,22 +608,25 @@ function Dashboard({ session, onLogout }) {
         </div>
       </aside>
 
-      {mobileNavOpen && <button className="nav-backdrop" type="button" aria-label="关闭导航" onClick={() => setMobileNavOpen(false)} />}
+      {mobileNavOpen && <button className="nav-backdrop" type="button" aria-label="关闭导航" onClick={closeMobileNav} />}
 
-      <main className="workspace">
+      <main className="workspace" aria-hidden={mobileNavOpen || undefined} inert={mobileNavOpen || undefined}>
         <header className="topbar">
           <div className="topbar-leading">
             <button
+              ref={mobileMenuButtonRef}
               className="icon-button mobile-menu-button"
               type="button"
-              onClick={() => setMobileNavOpen((value) => !value)}
+              onClick={() => (mobileNavOpen ? closeMobileNav() : setMobileNavOpen(true))}
               aria-label={mobileNavOpen ? '关闭导航' : '打开导航'}
+              aria-expanded={mobileNavOpen}
+              aria-controls="management-sidebar"
             >
               {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
             <span className="welcome-avatar" aria-hidden="true">{userInitial}</span>
             <div className="welcome-copy">
-              <p>{greeting}，<strong>{username}</strong></p>
+              <h1>{greeting}，<strong>{username}</strong></h1>
               <span>欢迎回到 MY 管理中心</span>
             </div>
           </div>
@@ -591,18 +655,6 @@ function Dashboard({ session, onLogout }) {
         </header>
 
         <div className="workspace-content">
-          <section className="overview-heading">
-            <div>
-              <span className="eyebrow"><Activity size={14} /> UNIFIED OPERATIONS</span>
-              <h1>{activeFilter === 'all' ? '服务运行概况' : `${activeFilterMeta.label}运行概况`}</h1>
-              <p>集中查看服务健康度、响应表现与管理入口</p>
-            </div>
-            <div className="overview-meta">
-              <span className="monitoring-state"><span className="live-dot" /> {loading ? '正在获取状态' : '状态已同步'}</span>
-              <span className="last-refresh"><Clock3 size={15} /> 更新于 {formatCheckedAt(data?.refreshedAt)}</span>
-            </div>
-          </section>
-
           {error && (
             <div className="error-banner" role="alert">
               <CircleAlert size={18} />
@@ -615,13 +667,14 @@ function Dashboard({ session, onLogout }) {
             <article className="bento-card health-overview-card">
               <header className="card-heading">
                 <div>
-                  <span className="panel-kicker"><TrendingUp size={14} /> PERFORMANCE</span>
+                  <span className="panel-kicker"><TrendingUp size={14} /> 运行表现</span>
                   <h2>整体健康度</h2>
                 </div>
                 <span className="soft-status"><span className="live-dot" /> 实时</span>
               </header>
 
               <div className="health-score-row">
+                <span className="health-card-mark" aria-hidden="true"><Activity size={18} /></span>
                 <div className="health-score">
                   <span>服务可用率</span>
                   <strong>{loading ? '--' : healthyRate}<small>{loading ? '' : '%'}</small></strong>
@@ -648,7 +701,7 @@ function Dashboard({ session, onLogout }) {
             <article className="bento-card summary-card">
               <header className="card-heading compact">
                 <div>
-                  <span className="panel-kicker"><Gauge size={14} /> SNAPSHOT</span>
+                  <span className="panel-kicker"><Gauge size={14} /> 状态快照</span>
                   <h2>系统概览</h2>
                 </div>
                 <span className="result-count">{total}</span>
@@ -663,7 +716,7 @@ function Dashboard({ session, onLogout }) {
 
             <article className={`bento-card focus-card ${attentionCount > 0 ? 'attention' : 'all-clear'}`}>
               <div className="focus-copy">
-                <span className="panel-kicker"><Radar size={14} /> ACTIVE MONITORING</span>
+                <span className="panel-kicker"><Radar size={14} /> 实时监测</span>
                 <h2>{attentionCount > 0 ? '发现需要处理的服务' : '服务监测运行平稳'}</h2>
                 <p>
                   {attentionCount > 0
@@ -684,7 +737,7 @@ function Dashboard({ session, onLogout }) {
             <article className="bento-card live-services-card">
               <header className="card-heading compact">
                 <div>
-                  <span className="panel-kicker"><Wifi size={14} /> LIVE SERVICES</span>
+                  <span className="panel-kicker"><Wifi size={14} /> 服务状态</span>
                   <h2>实时服务</h2>
                 </div>
                 <span className="soft-status"><span className="live-dot" /> 在线</span>
@@ -710,7 +763,6 @@ function Dashboard({ session, onLogout }) {
                   <h2 id="services-title">项目与服务</h2>
                   <span className="result-count">{filteredServices.length}</span>
                 </div>
-                <p>查看各项目的实时运行状态和响应数据</p>
               </div>
               <div className="status-tabs" role="group" aria-label="按运行状态筛选">
                 {STATUS_FILTERS.map((filter) => (
@@ -719,6 +771,7 @@ function Dashboard({ session, onLogout }) {
                     className={statusFilter === filter.id ? 'active' : ''}
                     type="button"
                     onClick={() => setStatusFilter(filter.id)}
+                    aria-pressed={statusFilter === filter.id}
                   >
                     {filter.label}
                   </button>
