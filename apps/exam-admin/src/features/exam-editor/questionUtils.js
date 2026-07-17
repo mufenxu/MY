@@ -289,6 +289,120 @@ export const createEmptyQuestion = (type) => ({
     fillAnswer: '',
 });
 
+export const applyAnswerSelectionChange = (question, changedOption) => {
+    if (!question || !changedOption) {
+        return;
+    }
+
+    if ((question.type === 'single' || question.type === 'judge') && changedOption.isAnswer) {
+        (question.options || []).forEach((opt) => {
+            if (opt !== changedOption) {
+                opt.isAnswer = false;
+            }
+        });
+    }
+};
+
+export const applyQuestionTypeChange = (question, newType) => {
+    if (!question) {
+        return;
+    }
+
+    if (newType === 'judge') {
+        question.options = createDefaultOptions('judge');
+        question.fillAnswer = '';
+    } else if (newType === 'fill') {
+        question.options = [];
+        question.fillAnswer = question.fillAnswer || '';
+    } else {
+        const shouldResetOptions = (
+            !Array.isArray(question.options)
+            || question.options.length === 0
+            || question.type === 'judge'
+            || question.type === 'fill'
+        );
+
+        if (shouldResetOptions) {
+            question.options = createDefaultOptions(newType);
+        }
+
+        if (newType === 'single') {
+            let found = false;
+            (question.options || []).forEach((opt) => {
+                if (opt.isAnswer) {
+                    if (found) {
+                        opt.isAnswer = false;
+                    }
+                    found = true;
+                }
+            });
+        }
+    }
+
+    question.type = newType;
+};
+
+export const addQuestionOption = (question) => {
+    if (!question || question.type === 'judge' || question.type === 'fill') {
+        return false;
+    }
+
+    if (!Array.isArray(question.options)) {
+        question.options = [];
+    }
+
+    if (question.options.length >= QUESTION_OPTION_LABELS.length) {
+        return false;
+    }
+
+    question.options.push({
+        label: QUESTION_OPTION_LABELS[question.options.length],
+        value: '',
+        isAnswer: false,
+    });
+    return true;
+};
+
+export const removeQuestionOption = (question, optionIndex) => {
+    if (!question || !Array.isArray(question.options)) {
+        return false;
+    }
+
+    question.options.splice(optionIndex, 1);
+    normalizePreviewOptionLabels(question);
+    return true;
+};
+
+export const createQuestionSavePayload = (question) => ({
+    ...(isPersistedQuestion(question) ? { _id: question._id } : {}),
+    type: question.type,
+    content: String(question.content || '').trim(),
+    options: question.type === 'fill'
+        ? []
+        : (question.options || []).map((opt) => ({
+            label: opt.label,
+            value: String(opt.value || '').trim(),
+        })),
+    answer: question.type === 'fill'
+        ? [String(question.fillAnswer || '').trim()]
+        : (question.options || []).filter((opt) => opt.isAnswer).map((opt) => opt.label),
+    analysis: String(question.analysis || '').trim(),
+});
+
+export const createEditableQuestionFromApi = (question = {}) => ({
+    _id: question._id,
+    type: question.type,
+    content: question.content,
+    options: (question.options || []).map((opt) => ({
+        label: opt.label,
+        value: opt.value,
+        isAnswer: (question.answer || []).includes(opt.label),
+    })),
+    analysis: question.analysis || '',
+    analysisSource: question.analysisSource || 'manual',
+    fillAnswer: question.type === 'fill' ? (question.answer?.[0] || '') : '',
+});
+
 export const validateQuestion = (question) => {
     if (!String(question.content || '').trim()) {
         return false;
@@ -305,6 +419,50 @@ export const validateQuestion = (question) => {
     }
 
     return options.some((opt) => opt.isAnswer);
+};
+
+export const createQuestionTypeCounts = () => ({
+    single: 0,
+    multiple: 0,
+    judge: 0,
+    fill: 0,
+});
+
+export const countQuestionTypes = (questions = []) => questions.reduce((counts, question) => {
+    const type = question?.type || 'single';
+    if (Object.prototype.hasOwnProperty.call(counts, type)) {
+        counts[type] += 1;
+    }
+    return counts;
+}, createQuestionTypeCounts());
+
+export const getInvalidQuestionIndexes = (questions = []) => questions
+    .map((question, index) => (validateQuestion(question) ? -1 : index))
+    .filter((index) => index >= 0);
+
+export const countInvalidQuestions = (questions = []) => getInvalidQuestionIndexes(questions).length;
+
+export const getCompletedQuestionCount = (questions = [], invalidQuestionCount = countInvalidQuestions(questions)) => (
+    Math.max(questions.length - invalidQuestionCount, 0)
+);
+
+export const getCompletionPercent = (questions = [], completedQuestionCount = getCompletedQuestionCount(questions)) => (
+    questions.length ? Math.round((completedQuestionCount / questions.length) * 100) : 0
+);
+
+export const summarizeSelectedAnswer = (question) => {
+    if (!question) {
+        return '未选择';
+    }
+
+    if (question.type === 'fill') {
+        return String(question.fillAnswer || '').trim() || '未设置';
+    }
+
+    return (question.options || [])
+        .filter((opt) => opt.isAnswer)
+        .map((opt) => opt.label)
+        .join('、') || '未设置';
 };
 
 export const cloneBatchQuestionForImport = (question) => ({

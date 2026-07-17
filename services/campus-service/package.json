@@ -22,6 +22,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@my-platform/platform-auth": "file:../../packages/platform-auth",
     "bwip-js": "^4.11.2",
     "cheerio": "^1.2.0",
     "crypto-js": "^4.2.0",

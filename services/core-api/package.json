@@ -11,6 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@my-platform/platform-auth": "file:../../packages/platform-auth",
     "@alicloud/mpserverless-node-sdk": "^1.2.5",
     "axios": "^1.18.1",
     "bcryptjs": "^3.0.3",

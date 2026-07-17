@@ -99,10 +99,10 @@ jobs:
             context: .
             file: Dockerfile
           - image: campus-service
-            context: services/campus-service
+            context: .
             file: services/campus-service/Dockerfile
           - image: iot-service
-            context: services/iot-service
+            context: .
             file: services/iot-service/Dockerfile
 
     steps:

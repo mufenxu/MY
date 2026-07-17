@@ -165,7 +165,8 @@ services:
   campus-service:
     image: ${CAMPUS_SERVICE_IMAGE:-my-platform/campus-service:local}
     build:
-      context: ../../services/campus-service
+      context: ../..
+      dockerfile: services/campus-service/Dockerfile
     restart: unless-stopped
     init: true
     depends_on:
@@ -210,7 +211,8 @@ services:
   iot-service:
     image: ${IOT_SERVICE_IMAGE:-my-platform/iot-service:local}
     build:
-      context: ../../services/iot-service
+      context: ../..
+      dockerfile: services/iot-service/Dockerfile
     restart: unless-stopped
     init: true
     depends_on:

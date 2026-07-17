@@ -24,17 +24,20 @@ COPY apps/exam-admin/ ./
 RUN npm run build
 
 FROM ${NODE_IMAGE} AS platform-api-deps
-WORKDIR /build/platform-api
+WORKDIR /build/services/platform-api
+COPY packages/platform-auth/ /build/packages/platform-auth/
 COPY services/platform-api/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
 FROM ${NODE_IMAGE} AS core-api-deps
-WORKDIR /build/core-api
+WORKDIR /build/services/core-api
+COPY packages/platform-auth/ /build/packages/platform-auth/
 COPY services/core-api/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
 FROM ${NODE_IMAGE} AS exam-api-deps
-WORKDIR /build/exam-api
+WORKDIR /build/services/exam-api
+COPY packages/platform-auth/ /build/packages/platform-auth/
 COPY services/exam-api/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
@@ -51,15 +54,18 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
+COPY --chown=node:node packages/platform-auth/ ./packages/platform-auth/
+COPY --chown=node:node packages/platform-auth/ /build/packages/platform-auth/
+
 COPY --chown=node:node services/platform-api/ ./services/platform-api/
-COPY --from=platform-api-deps --chown=node:node /build/platform-api/node_modules ./services/platform-api/node_modules
+COPY --from=platform-api-deps --chown=node:node /build/services/platform-api/node_modules ./services/platform-api/node_modules
 
 COPY --chown=node:node services/core-api/ ./services/core-api/
-COPY --from=core-api-deps --chown=node:node /build/core-api/node_modules ./services/core-api/node_modules
+COPY --from=core-api-deps --chown=node:node /build/services/core-api/node_modules ./services/core-api/node_modules
 COPY --from=core-admin-build --chown=node:node /build/core-admin/dist ./apps/core-admin/dist
 
 COPY --chown=node:node services/exam-api/ ./services/exam-api/
-COPY --from=exam-api-deps --chown=node:node /build/exam-api/node_modules ./services/exam-api/node_modules
+COPY --from=exam-api-deps --chown=node:node /build/services/exam-api/node_modules ./services/exam-api/node_modules
 COPY --from=exam-admin-build --chown=node:node /build/exam-admin/dist ./services/exam-api/frontend/dist
 
 COPY --chown=node:node services/notification-service/ ./services/notification-service/

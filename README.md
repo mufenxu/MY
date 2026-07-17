@@ -19,6 +19,8 @@ MY/
 |   |-- notification-service/   # WeCom notification module
 |   |-- campus-service/         # campus connector service
 |   `-- iot-service/            # MQTT and device service
+|-- packages/
+|   `-- platform-auth/          # shared platform SSO and internal identity helpers
 |-- automation/ct8-automation/  # non-resident automation tasks
 |-- config/                     # service registry without secrets
 |-- docs/                       # architecture and operations docs

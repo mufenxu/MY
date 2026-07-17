@@ -1,7 +1,9 @@
 FROM node:24-bookworm-slim AS deps
 
 WORKDIR /app
-COPY package*.json ./
+COPY packages/platform-auth/ ./packages/platform-auth/
+WORKDIR /app/services/iot-service
+COPY services/iot-service/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund \
   && npm cache clean --force
 
@@ -11,10 +13,12 @@ ENV NODE_ENV=production \
     API_PORT=22102
 
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY --chown=node:node src ./src
-COPY --chown=node:node public ./public
-COPY --chown=node:node package.json ./package.json
+COPY --chown=node:node packages/platform-auth/ ./packages/platform-auth/
+WORKDIR /app/services/iot-service
+COPY --from=deps /app/services/iot-service/node_modules ./node_modules
+COPY --chown=node:node services/iot-service/src ./src
+COPY --chown=node:node services/iot-service/public ./public
+COPY --chown=node:node services/iot-service/package.json ./package.json
 
 USER node
 EXPOSE 22102

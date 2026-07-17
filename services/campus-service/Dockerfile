@@ -5,14 +5,16 @@ ENV NODE_ENV=production \
     HGU_HOST=0.0.0.0
 
 WORKDIR /app
-COPY package*.json ./
+COPY packages/platform-auth/ ./packages/platform-auth/
+WORKDIR /app/services/campus-service
+COPY services/campus-service/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund \
   && npm cache clean --force
 
-COPY --chown=node:node server.js ./
-COPY --chown=node:node src ./src
-COPY --chown=node:node scripts ./scripts
-COPY --chown=node:node public ./public
+COPY --chown=node:node services/campus-service/server.js ./
+COPY --chown=node:node services/campus-service/src ./src
+COPY --chown=node:node services/campus-service/scripts ./scripts
+COPY --chown=node:node services/campus-service/public ./public
 
 USER node
 EXPOSE 22101

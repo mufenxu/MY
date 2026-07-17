@@ -12,6 +12,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@my-platform/platform-auth": "file:../../packages/platform-auth",
     "express": "^5.1.0",
     "http-proxy": "^1.18.1"
   }
