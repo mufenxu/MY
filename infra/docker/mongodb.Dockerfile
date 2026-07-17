@@ -8,5 +8,7 @@ COPY mongo-init.sh /usr/local/bin/my-mongo-init
 COPY ensure-users.js /opt/my-platform/ensure-users.js
 RUN chmod 755 /usr/local/bin/my-mongodb-entrypoint /usr/local/bin/my-mongo-init
 
+USER mongodb
+
 ENTRYPOINT ["/usr/local/bin/my-mongodb-entrypoint"]
 CMD ["mongod", "--bind_ip_all", "--replSet", "rs0"]

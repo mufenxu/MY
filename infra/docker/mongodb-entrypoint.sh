@@ -9,7 +9,9 @@ fi
 key_file=/tmp/my-platform-mongodb-keyfile
 umask 077
 printf '%s' "$MONGO_REPLICA_SET_KEY" > "$key_file"
-chown mongodb:mongodb "$key_file"
+if [ "$(id -u)" = "0" ]; then
+  chown mongodb:mongodb "$key_file"
+fi
 chmod 400 "$key_file"
 
 exec /usr/local/bin/docker-entrypoint.sh "$@" --keyFile "$key_file"
