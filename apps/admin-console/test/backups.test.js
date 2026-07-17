@@ -92,6 +92,8 @@ test('backup command starts a tracked job', async (t) => {
   t.after(() => rm(backupRoot, { recursive: true, force: true }));
   t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
   const fake = fakeSpawnFactory({ stdout: `${join(backupRoot, 'done')}\n` });
+  await writeFile(join(workspaceRoot, 'backup.js'), '');
+  await writeFile(join(workspaceRoot, 'restore.js'), '');
 
   const manager = createBackupManager({
     spawnImpl: fake.spawnImpl,
@@ -120,6 +122,8 @@ test('failed backup jobs include stderr details', async (t) => {
   t.after(() => rm(backupRoot, { recursive: true, force: true }));
   t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
   const fake = fakeSpawnFactory({ stderr: 'mongodump failed loudly\n', exitCode: 1 });
+  await writeFile(join(workspaceRoot, 'backup.js'), '');
+  await writeFile(join(workspaceRoot, 'restore.js'), '');
 
   const manager = createBackupManager({
     spawnImpl: fake.spawnImpl,
@@ -149,6 +153,8 @@ test('restore verifies checksum and appends destructive restore arguments', asyn
   t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
   const directory = await createBackupFixture(backupRoot);
   const fake = fakeSpawnFactory();
+  await writeFile(join(workspaceRoot, 'backup.js'), '');
+  await writeFile(join(workspaceRoot, 'restore.js'), '');
 
   const manager = createBackupManager({
     spawnImpl: fake.spawnImpl,
@@ -175,6 +181,8 @@ test('restore rejects unsafe backup names before spawning a command', async (t) 
   t.after(() => rm(backupRoot, { recursive: true, force: true }));
   t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
   const fake = fakeSpawnFactory();
+  await writeFile(join(workspaceRoot, 'backup.js'), '');
+  await writeFile(join(workspaceRoot, 'restore.js'), '');
 
   const manager = createBackupManager({
     spawnImpl: fake.spawnImpl,
