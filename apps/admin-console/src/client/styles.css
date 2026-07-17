@@ -1320,38 +1320,10 @@ input:focus-visible {
   transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
-.service-card::before {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 3px;
-  background: var(--purple);
-  content: "";
-  opacity: 0.4;
-  transition: opacity 150ms ease;
-}
-
-.service-card.state-healthy::before {
-  background: linear-gradient(90deg, var(--cyan), var(--green));
-}
-
-.service-card.state-degraded::before {
-  background: var(--amber);
-}
-
-.service-card.state-offline::before {
-  background: var(--red);
-}
-
 .service-card:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-md);
   transform: translateY(-2px);
-}
-
-.service-card:hover::before {
-  opacity: 1;
 }
 
 .service-card-header {
