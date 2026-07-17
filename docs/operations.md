@@ -34,54 +34,43 @@ Do not delete the SQLite files until the migrated user counts, settings, devices
 
 ## Backup and restore
 
-Create a local backup containing all five MongoDB databases and core uploads:
+统一控制中心的 **数据灾备** 页面已经内置到 `platform-api` 容器，不需要额外启动备份 runner，也不需要新增容器。生产部署时，Compose 会把 Docker 命名卷 `my-platform_platform_backups` 挂载到容器内的 `/app/backups`：
+
+```env
+PLATFORM_RESTORE_CONFIRM_TEXT=RESTORE ALL DATA
+PLATFORM_RESTORE_PRE_BACKUP=true
+```
+
+更新镜像后重建并重启 `platform-api`：
+
+```bash
+docker compose --env-file .env -f infra/docker/compose.yml build platform-api
+docker compose --env-file .env -f infra/docker/compose.yml up -d --force-recreate platform-api
+```
+
+网页点击“立即备份”后，`platform-api` 会在容器内直接执行 `mongodump --oplog`，创建 MongoDB 副本集归档，覆盖平台使用的五个数据库，并复制核心上传文件。备份清单、校验和与恢复任务都保存在 `platform_backups` 卷中。恢复会先自动创建一份当前状态备份，再校验所选归档的 SHA-256，要求平台管理员密码和确认短语，然后执行 `mongorestore --drop --oplogReplay` 并恢复上传文件。
+
+恢复会覆盖现有数据，只在维护窗口执行。恢复过程中不要让用户继续上传文件或提交业务数据；恢复完成后建议重启业务容器，清掉进程内缓存和长连接状态：
+
+```bash
+docker compose --env-file .env -f infra/docker/compose.yml restart platform-api campus-service iot-service
+```
+
+命令行仍保留宿主机备份入口，可在服务器项目根目录创建一份本地备份：
 
 ```bash
 npm run backup
 ```
 
-The command briefly stops the three application containers, creates a replica-set point-in-time archive, copies core uploads, waits for the archive stream to finish, and then restarts only the services that were running. It writes a checksum-protected backup under `backups/` and removes local backups older than `BACKUP_RETENTION_DAYS` (default 30). Copy the resulting directory to encrypted off-host storage. A local backup on the same server is not disaster recovery.
+这个命令会短暂停止业务容器，创建 MongoDB 副本集时间点归档，复制核心上传文件，然后只重启原本正在运行的服务。它会写入带校验和的备份目录，并删除超过 `BACKUP_RETENTION_DAYS`（默认 30 天）的本地备份。请把备份目录同步到加密的异地存储；同一台服务器上的本地备份不等于灾备。
 
-The unified control center exposes the same operational flow under **数据灾备**. In production, run the backup executor on the host and let the platform container call it through `host.docker.internal`. Generate a shared token and add it to `.env`. The runner binds to `0.0.0.0` so Docker containers can reach it, but it rejects public remote addresses and still requires the token:
-
-```bash
-node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
-BACKUP_RUNNER_HOST=0.0.0.0
-BACKUP_RUNNER_PORT=22103
-PLATFORM_BACKUP_RUNNER_URL=http://host.docker.internal:22103
-PLATFORM_BACKUP_RUNNER_TOKEN=<the-generated-token>
-PLATFORM_BACKUP_DIR=backups
-PLATFORM_RESTORE_CONFIRM_TEXT='RESTORE ALL DATA'
-```
-
-Start the host-side runner from the workspace root, then recreate or restart `platform-api` so it receives the new environment:
-
-```bash
-npm run backup:runner
-docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build --force-recreate platform-api
-```
-
-For a permanent production setup, run `npm run backup:runner` under systemd or another host process supervisor. Restore from the control center first starts a fresh backup of the current state, then verifies the selected manifest SHA-256 checksum, requires the platform administrator password when authentication is enabled, and requires the configured confirmation phrase.
-
-Restore only during a maintenance window, after taking a fresh backup:
+命令行恢复入口仍可用于服务器维护场景：
 
 ```bash
 npm run restore -- /path/to/backup-directory --confirm-drop
 ```
 
-The restore command verifies the SHA-256 checksum, stops all running application containers, and uses `mongorestore --drop --oplogReplay`. It intentionally leaves application containers stopped so uploads can be restored before any new writes occur:
-
-```bash
-docker compose --env-file .env -f infra/docker/compose.yml run --rm --no-deps \
-  --user root --cap-add DAC_OVERRIDE --cap-add FOWNER --entrypoint sh platform-api \
-  -c 'find /app/services/core-api/uploads -mindepth 1 -delete'
-docker compose --env-file .env -f infra/docker/compose.yml cp \
-  /path/to/backup-directory/uploads/. platform-api:/app/services/core-api/uploads/
-docker compose --env-file .env -f infra/docker/compose.yml run --rm --no-deps \
-  --user root --cap-add CHOWN --entrypoint chown platform-api \
-  -R node:node /app/services/core-api/uploads
-docker compose --env-file .env -f infra/docker/compose.yml start campus-service iot-service platform-api
-```
+该命令会校验 SHA-256，停止正在运行的业务容器，并使用 `mongorestore --drop --oplogReplay` 恢复数据库。它保留给低频、人工维护使用；日常优先使用控制中心。
 
 Recommended policy:
 

@@ -99,10 +99,17 @@ services:
       PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: ${PLATFORM_INTERNAL_AUTH_PUBLIC_KEY:?Set PLATFORM_INTERNAL_AUTH_PUBLIC_KEY}
       PLATFORM_SESSION_TTL_HOURS: ${PLATFORM_SESSION_TTL_HOURS:-12}
       PLATFORM_METRICS_TOKEN: ${PLATFORM_METRICS_TOKEN:?Set PLATFORM_METRICS_TOKEN}
-      PLATFORM_BACKUP_RUNNER_URL: ${PLATFORM_BACKUP_RUNNER_URL:-}
-      PLATFORM_BACKUP_RUNNER_TOKEN: ${PLATFORM_BACKUP_RUNNER_TOKEN:-}
-      PLATFORM_BACKUP_RUNNER_TIMEOUT_MS: ${PLATFORM_BACKUP_RUNNER_TIMEOUT_MS:-8000}
+      PLATFORM_BACKUP_DIR: /app/backups
+      PLATFORM_BACKUP_COMMAND: node /app/scripts/backup-mongodb-container.mjs
+      PLATFORM_RESTORE_COMMAND: node /app/scripts/restore-mongodb-container.mjs
       PLATFORM_RESTORE_CONFIRM_TEXT: ${PLATFORM_RESTORE_CONFIRM_TEXT:-RESTORE ALL DATA}
+      PLATFORM_RESTORE_PRE_BACKUP: ${PLATFORM_RESTORE_PRE_BACKUP:-true}
+      PLATFORM_CORE_UPLOADS_DIR: /app/services/core-api/uploads
+      PLATFORM_BACKUP_MONGO_HOST: mongodb
+      PLATFORM_BACKUP_MONGO_PORT: 27017
+      PLATFORM_BACKUP_MONGO_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}
+      PLATFORM_BACKUP_MONGO_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
+      PLATFORM_BACKUP_MONGO_AUTH_DB: admin
       PLATFORM_SSO_CORE_USERNAME: ${PLATFORM_SSO_CORE_USERNAME:-admin}
       PLATFORM_SSO_EXAM_USERNAME: ${PLATFORM_SSO_EXAM_USERNAME:-admin}
       CORE_HOSTS: ${CORE_HOSTS:-xcx.pxyb.cn}
@@ -151,6 +158,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
+      - platform_backups:/app/backups
       - core_uploads:/app/services/core-api/uploads
       - core_logs:/app/services/core-api/logs
     tmpfs:
@@ -267,5 +275,6 @@ networks:
 
 volumes:
   mongodb_data:
+  platform_backups:
   core_uploads:
   core_logs:

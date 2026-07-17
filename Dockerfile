@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.7
 
 ARG NODE_IMAGE=node:24-bookworm-slim
+ARG MONGODB_TOOLS_IMAGE=mongo:7.0
+
+FROM ${MONGODB_TOOLS_IMAGE} AS mongo-tools
 
 FROM ${NODE_IMAGE} AS admin-console-build
 WORKDIR /build/admin-console
@@ -71,13 +74,15 @@ COPY --from=exam-admin-build --chown=node:node /build/exam-admin/dist ./services
 COPY --chown=node:node services/notification-service/ ./services/notification-service/
 COPY --from=notification-deps --chown=node:node /build/notification-service/node_modules ./services/notification-service/node_modules
 
+COPY --from=mongo-tools /usr/bin/mongodump /usr/bin/mongorestore /usr/local/bin/
+COPY --chown=node:node scripts/backup-mongodb.mjs scripts/restore-mongodb.mjs scripts/backup-mongodb-container.mjs scripts/restore-mongodb-container.mjs ./scripts/
 COPY --chown=node:node apps/admin-console/src ./apps/admin-console/src
 COPY --chown=node:node apps/admin-console/package.json ./apps/admin-console/package.json
 COPY --from=admin-console-build --chown=node:node /build/admin-console/node_modules ./apps/admin-console/node_modules
 COPY --from=admin-console-build --chown=node:node /build/admin-console/dist ./apps/admin-console/dist
 COPY --chown=node:node config/platform.services.docker.json ./config/platform.services.docker.json
 
-RUN mkdir -p /app/services/core-api/uploads /app/services/core-api/logs \
+RUN mkdir -p /app/services/core-api/uploads /app/services/core-api/logs /app/backups \
     && chown -R node:node /app
 
 USER node
