@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "platformName": "MY 管理中心",
+  "platformName": "统一服务控制台",
   "services": [
     {
       "id": "core",

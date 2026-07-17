@@ -139,9 +139,9 @@ function LoginScreen({ onAuthenticated }) {
     <main className="login-page">
       <section className="login-panel" aria-labelledby="login-title">
         <div className="login-brand">
-          <span className="brand-mark" aria-hidden="true">MY</span>
+          <span className="brand-mark" aria-hidden="true">统</span>
           <span>
-            <strong>MY 管理中心</strong>
+            <strong>统一服务控制台</strong>
             <small>统一服务控制台</small>
           </span>
         </div>
@@ -188,9 +188,9 @@ function LoginScreen({ onAuthenticated }) {
 function LoadingScreen() {
   return (
     <main className="loading-screen">
-      <span className="brand-mark">MY</span>
+      <span className="brand-mark">统</span>
       <div>
-        <strong>管理中心</strong>
+        <strong>统一服务控制台</strong>
         <span><LoaderCircle className="spin" size={15} /> 正在连接服务</span>
       </div>
     </main>
@@ -312,7 +312,7 @@ function ServicePortfolioRow({ service, index, onLaunch }) {
       </span>
       <span className="portfolio-value">
         <strong>{service.latencyMs === null ? '--' : `${service.latencyMs} ms`}</strong>
-        <small>{service.httpStatus ? `HTTP ${service.httpStatus}` : meta.shortLabel}</small>
+        <small>{service.httpStatus ? `状态码 ${service.httpStatus}` : meta.shortLabel}</small>
       </span>
       <svg className={`sparkline ${meta.className}`} viewBox="0 0 96 42" aria-hidden="true">
         <polyline points={points} />
@@ -430,13 +430,13 @@ function OverviewView({
       <article className="dashboard-card performance-card">
         <div className="platform-pass">
           <div className="pass-topline">
-            <span>MY SERVICE CLOUD</span>
+            <span>统一服务云</span>
             <span className="pass-layer"><Layers3 size={17} /></span>
           </div>
           <span className="pass-count">{counts.healthy || 0} / {total || '--'}</span>
           <div className="pass-bottomline">
             <Activity size={25} />
-            <strong>{environmentLabel === '生产环境' ? 'ONLINE' : 'DEV'}</strong>
+            <strong>{environmentLabel === '生产环境' ? '在线' : '开发'}</strong>
           </div>
           <svg className="pass-wave" viewBox="0 0 640 120" aria-hidden="true">
             <path d="M0 95 C105 38 205 45 306 91 S522 115 640 38" />
@@ -505,7 +505,7 @@ function OverviewView({
       <article className="dashboard-card portfolio-card">
         <header>
           <div>
-            <span className="card-eyebrow">SERVICES</span>
+            <span className="card-eyebrow">服务</span>
             <h2>服务组合</h2>
           </div>
           <span className="portfolio-count">{sortedServices.length}</span>
@@ -534,7 +534,7 @@ function ApplicationsView({ services, loading, onLaunch }) {
   return (
     <section className="page-view applications-view" aria-labelledby="applications-title">
       <ViewHeading
-        eyebrow="APPLICATIONS"
+        eyebrow="应用"
         title="应用中心"
         description="统一管理面向用户的应用入口、运行状态与服务能力。"
       >
@@ -629,7 +629,7 @@ function ServicesView({ services, loading, onLaunch }) {
   return (
     <section className="page-view services-view" aria-labelledby="services-view-title">
       <ViewHeading
-        eyebrow="OPERATIONS"
+        eyebrow="运维"
         title="服务运维"
         description="集中查看基础服务健康度、响应时间和检查结果。"
       />
@@ -648,7 +648,7 @@ function ServicesView({ services, loading, onLaunch }) {
             <span className="section-count">{infrastructure.length}</span>
           </header>
           <div className="service-table-head">
-            <span>服务</span><span>状态</span><span>响应</span><span>HTTP</span><span>检查时间</span><span />
+            <span>服务</span><span>状态</span><span>响应</span><span>状态码</span><span>检查时间</span><span />
           </div>
           <div className="service-table-body">
             {loading ? (
@@ -660,7 +660,7 @@ function ServicesView({ services, loading, onLaunch }) {
         </section>
 
         <aside className="view-card distribution-panel">
-          <header><div><span className="view-eyebrow">HEALTH</span><h3>状态分布</h3></div><Network size={21} /></header>
+          <header><div><span className="view-eyebrow">健康</span><h3>状态分布</h3></div><Network size={21} /></header>
           <div className="distribution-score">
             <strong>{infrastructure.length > 0 ? Math.round((healthy / infrastructure.length) * 100) : 0}%</strong>
             <span>基础服务可用率</span>
@@ -690,7 +690,7 @@ function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) 
   return (
     <section className="page-view automation-view" aria-labelledby="automation-title">
       <ViewHeading
-        eyebrow="AUTOMATION"
+        eyebrow="自动化"
         title="自动化中心"
         description="查看自动化任务接入状态、执行能力与监测链路。"
       >
@@ -714,7 +714,7 @@ function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) 
             <ServiceStatus state={automation.state} />
             <div className="automation-hero-metrics">
               <div><span>响应时间</span><strong>{automation.latencyMs === null ? '--' : `${automation.latencyMs} ms`}</strong></div>
-              <div><span>HTTP 状态</span><strong>{automation.httpStatus ?? '--'}</strong></div>
+              <div><span>状态码</span><strong>{automation.httpStatus ?? '--'}</strong></div>
               <div><span>最近检查</span><strong>{formatCheckedAt(automation.checkedAt)}</strong></div>
             </div>
             {automation.adminUrl && (
@@ -729,7 +729,7 @@ function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) 
 
           <div className="automation-layout">
             <section className="view-card capability-panel">
-              <header><div><span className="view-eyebrow">CAPABILITIES</span><h3>能力范围</h3></div><Wrench size={21} /></header>
+              <header><div><span className="view-eyebrow">能力</span><h3>能力范围</h3></div><Wrench size={21} /></header>
               <div className="capability-grid">
                 {automation.capabilities.map((capability, index) => (
                   <div key={capability}>
@@ -741,9 +741,9 @@ function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) 
             </section>
 
             <section className="view-card observability-panel">
-              <header><div><span className="view-eyebrow">OBSERVABILITY</span><h3>接入链路</h3></div><Database size={21} /></header>
+              <header><div><span className="view-eyebrow">观测</span><h3>接入链路</h3></div><Database size={21} /></header>
               <ol>
-                <li className="done"><span><CheckCircle2 size={17} /></span><div><strong>服务注册</strong><small>已接入统一管理中心</small></div></li>
+                <li className="done"><span><CheckCircle2 size={17} /></span><div><strong>服务注册</strong><small>已接入统一服务控制台</small></div></li>
                 <li className={automation.adminUrl ? 'done' : 'pending'}><span>{automation.adminUrl ? <CheckCircle2 size={17} /> : <Clock3 size={17} />}</span><div><strong>管理入口</strong><small>{automation.adminUrl ? '后台入口已配置' : '暂无网页管理入口'}</small></div></li>
                 <li className={automation.state === 'unmonitored' ? 'pending' : 'done'}><span>{automation.state === 'unmonitored' ? <Clock3 size={17} /> : <CheckCircle2 size={17} />}</span><div><strong>健康监测</strong><small>{automation.state === 'unmonitored' ? '等待配置健康检查' : '健康检查已接入'}</small></div></li>
                 <li className="current"><span><Play size={17} /></span><div><strong>运行观测</strong><small>{meta.label}</small></div></li>
@@ -965,7 +965,7 @@ function Dashboard({ session, onLogout }) {
               {activeFilter === 'all' ? (
                 <h1>{greeting}，<strong>{username}</strong></h1>
               ) : <h1><strong>{viewMeta.title}</strong></h1>}
-              <span>{activeFilter === 'all' ? 'MY 统一服务控制台' : viewMeta.subtitle}</span>
+              <span>{activeFilter === 'all' ? '统一服务控制台' : viewMeta.subtitle}</span>
             </div>
           </div>
 

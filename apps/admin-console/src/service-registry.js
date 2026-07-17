@@ -65,7 +65,7 @@ export function loadServiceRegistry(registryPath) {
 
   return Object.freeze({
     schemaVersion: registry.schemaVersion,
-    platformName: String(registry.platformName || 'MY 管理中心'),
+    platformName: String(registry.platformName || '统一服务控制台'),
     services,
   });
 }

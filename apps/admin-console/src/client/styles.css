@@ -2558,7 +2558,7 @@ input:focus-visible {
     padding-bottom: 20px;
     color: var(--ink);
     border-bottom: 1px solid var(--line);
-    content: "MY 管理中心";
+    content: "统一服务控制台";
     font-size: 17px;
     font-weight: 800;
   }

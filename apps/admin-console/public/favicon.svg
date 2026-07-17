@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="统一服务控制台">
+  <defs>
+    <linearGradient id="bg" x1="8" x2="56" y1="6" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1F6FEB"/>
+      <stop offset="0.52" stop-color="#19B7D8"/>
+      <stop offset="1" stop-color="#16A36D"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="20" x2="45" y1="16" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DFF7FF"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#081A33"/>
+  <path d="M32 7 53 17v15c0 13.2-8.5 21.7-21 25-12.5-3.3-21-11.8-21-25V17L32 7Z" fill="url(#bg)"/>
+  <path d="M32 12.5 48 20v11.7c0 9.8-6.1 16.4-16 19.4-9.9-3-16-9.6-16-19.4V20l16-7.5Z" fill="rgba(255,255,255,0.12)"/>
+  <rect x="21" y="19" width="22" height="22" rx="6" fill="url(#panel)"/>
+  <path d="M26 27h12M26 33h12" stroke="#0F4AB8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M32 41v6M20 47h24M20 47v-6M44 47v-6" stroke="#BFF7F0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="20" cy="47" r="3.5" fill="#FFFFFF"/>
+  <circle cx="32" cy="47" r="3.5" fill="#FFFFFF"/>
+  <circle cx="44" cy="47" r="3.5" fill="#FFFFFF"/>
+</svg>

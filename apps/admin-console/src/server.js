@@ -12,7 +12,7 @@ const app = createApp({
   readinessCheck: async () => !sessionRegistry || sessionRegistry.ping(),
 });
 const server = app.listen(config.port, config.host, () => {
-  console.log(`MY 管理中心 API 已启动：http://${config.host}:${config.port}`);
+  console.log(`统一服务控制台 API 已启动：http://${config.host}:${config.port}`);
   if (config.authDisabled) console.warn('当前为本地开发免登录模式。');
 });
 
