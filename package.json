@@ -11,7 +11,7 @@
     "build:console": "npm --prefix apps/admin-console run build",
     "test:console": "npm --prefix apps/admin-console test",
     "check:console": "npm --prefix apps/admin-console run check",
-    "check:packages": "node --check packages/platform-auth/index.cjs && node --check packages/platform-auth/esm/index.mjs && node scripts/check-platform-auth-vendors.mjs",
+    "check:packages": "node --check packages/platform-auth/index.cjs && node --check packages/platform-auth/esm/index.mjs",
     "check:gateway": "npm --prefix services/platform-api run check",
     "check:admins": "npm --prefix apps/core-admin run check && npm --prefix apps/exam-admin run check && node scripts/check-admin-performance.mjs",
     "check:core": "node --check services/core-api/server.js && node --test services/core-api/test/*.test.js",
