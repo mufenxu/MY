@@ -503,7 +503,13 @@ input:focus-visible {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  -ms-overflow-style: none;
+  scrollbar-gutter: auto;
+  scrollbar-width: none;
+}
+
+.workspace-content::-webkit-scrollbar {
+  display: none;
 }
 
 .error-banner {
