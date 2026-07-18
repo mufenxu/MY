@@ -1,0 +1,164 @@
+name: Build and push Aliyun ACR images
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: "Images to build: platform,backup,core,exam,notification,campus,iot,mongodb,all"
+        required: true
+        default: "platform,backup"
+      push_sha_tags:
+        description: "Also push immutable tags suffixed with the short commit SHA"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aliyun-acr-${{ github.ref }}-${{ github.event.inputs.targets }}
+  cancel-in-progress: false
+
+env:
+  ACR_REGISTRY: crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com
+  ACR_IMAGE: crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my
+
+jobs:
+  build-and-push:
+    name: Build selected ACR images
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Check ACR secrets
+        env:
+          ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ACR_USERNAME}" ] || [ -z "${ACR_PASSWORD}" ]; then
+            echo "ALIYUN_ACR_USERNAME and ALIYUN_ACR_PASSWORD repository secrets are required." >&2
+            exit 1
+          fi
+
+      - name: Sign in to Aliyun Container Registry
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ${{ env.ACR_REGISTRY }}
+          username: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          password: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+
+      - name: Build and push selected images
+        env:
+          RAW_TARGETS: ${{ github.event.inputs.targets }}
+          PUSH_SHA_TAGS: ${{ github.event.inputs.push_sha_tags }}
+        run: |
+          set -euo pipefail
+
+          declare -A dockerfiles=(
+            [platform]="Dockerfile"
+            [core]="core-api.Dockerfile"
+            [exam]="exam-api.Dockerfile"
+            [notification]="notification-service.Dockerfile"
+            [backup]="backup-runner.Dockerfile"
+            [campus]="campus-service.Dockerfile"
+            [iot]="iot-service.Dockerfile"
+            [mongodb]="infra/docker/mongodb.Dockerfile"
+          )
+          declare -A contexts=(
+            [platform]="."
+            [core]="."
+            [exam]="."
+            [notification]="."
+            [backup]="."
+            [campus]="."
+            [iot]="."
+            [mongodb]="infra/docker"
+          )
+          declare -A tags=(
+            [platform]="platform-api-latest"
+            [core]="core-api-latest"
+            [exam]="exam-api-latest"
+            [notification]="notification-service-latest"
+            [backup]="backup-runner-latest"
+            [campus]="campus-service-latest"
+            [iot]="iot-service-latest"
+            [mongodb]="mongodb-7.0"
+          )
+
+          normalize_target() {
+            printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | xargs
+          }
+
+          targets=()
+          IFS=',' read -ra requested <<< "${RAW_TARGETS}"
+          for item in "${requested[@]}"; do
+            target="$(normalize_target "${item}")"
+            [ -z "${target}" ] && continue
+            if [ "${target}" = "all" ]; then
+              targets=(platform core exam notification backup campus iot mongodb)
+              break
+            fi
+            case "${target}" in
+              platform-api) target="platform" ;;
+              core-api) target="core" ;;
+              exam-api) target="exam" ;;
+              notification-service) target="notification" ;;
+              backup-runner) target="backup" ;;
+              campus-service) target="campus" ;;
+              iot-service) target="iot" ;;
+              mongo) target="mongodb" ;;
+            esac
+            if [ -z "${dockerfiles[$target]+x}" ]; then
+              echo "Unknown target: ${target}" >&2
+              exit 1
+            fi
+            targets+=("${target}")
+          done
+
+          if [ "${#targets[@]}" -eq 0 ]; then
+            echo "No valid targets selected." >&2
+            exit 1
+          fi
+
+          unique_targets=()
+          for target in "${targets[@]}"; do
+            duplicate=false
+            for selected in "${unique_targets[@]}"; do
+              if [ "${selected}" = "${target}" ]; then
+                duplicate=true
+                break
+              fi
+            done
+            if [ "${duplicate}" = false ]; then
+              unique_targets+=("${target}")
+            fi
+          done
+
+          short_sha="${GITHUB_SHA::12}"
+          for target in "${unique_targets[@]}"; do
+            image_tag="${tags[$target]}"
+            image="${ACR_IMAGE}:${image_tag}"
+            extra_tags=()
+            if [ "${PUSH_SHA_TAGS}" = "true" ]; then
+              extra_tags+=(--tag "${ACR_IMAGE}:${image_tag}-${short_sha}")
+            fi
+
+            echo "::group::Build ${target} -> ${image}"
+            docker buildx build \
+              --platform linux/amd64 \
+              --file "${dockerfiles[$target]}" \
+              --tag "${image}" \
+              "${extra_tags[@]}" \
+              --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+              --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+              --push \
+              "${contexts[$target]}"
+            echo "::endgroup::"
+          done

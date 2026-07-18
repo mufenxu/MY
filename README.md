@@ -74,6 +74,6 @@ Alibaba Cloud Container Registry is the primary deployment registry:
 - `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:iot-service-latest`
 - `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:mongodb-7.0`
 
-ACR build rules and maintenance instructions are documented in [docs/aliyun-acr.md](./docs/aliyun-acr.md). Architecture boundaries are in [docs/architecture.md](./docs/architecture.md), and single-domain deployment steps are in [docs/single-domain-deployment.md](./docs/single-domain-deployment.md).
+ACR registry and image release instructions are documented in [docs/aliyun-acr.md](./docs/aliyun-acr.md). Architecture boundaries are in [docs/architecture.md](./docs/architecture.md), and single-domain deployment steps are in [docs/single-domain-deployment.md](./docs/single-domain-deployment.md).
 
-To trigger a single ACR image rebuild after the ACR rules have been switched to tag matching, run `npm run acr:build -- <target>`; for example, `npm run acr:build -- iot`.
+To rebuild ACR images, run the GitHub Actions workflow named `Build and push Aliyun ACR images`; for example, set `targets` to `platform,backup` for the unified console and backup runner.
