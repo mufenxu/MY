@@ -319,6 +319,38 @@ function validateProductionSecrets(auth, nodeEnv = process.env.NODE_ENV) {
   return errors;
 }
 
+function hasInvalidProductionPassword(password) {
+  const value = String(password || '');
+  if (isPasswordHash(value)) return false;
+  return value.length < 16 || TEMPLATE_PASSWORDS.has(value.trim().toLowerCase());
+}
+
+function hasInvalidProductionSessionSecret(sessionSecret) {
+  const value = String(sessionSecret || '').trim();
+  return value.length < 32 || TEMPLATE_SESSION_SECRETS.has(value.toLowerCase());
+}
+
+function refreshInvalidProductionAuthSecrets(config, defaults, nodeEnv = process.env.NODE_ENV) {
+  if (nodeEnv !== 'production' || !config.auth.enabled) {
+    return { config, refreshed: false };
+  }
+
+  const next = deepClone(config);
+  let refreshed = false;
+
+  if (hasInvalidProductionPassword(next.auth.password)) {
+    next.auth.password = defaults.auth.password;
+    refreshed = true;
+  }
+
+  if (hasInvalidProductionSessionSecret(next.auth.sessionSecret)) {
+    next.auth.sessionSecret = defaults.auth.sessionSecret;
+    refreshed = true;
+  }
+
+  return { config: next, refreshed };
+}
+
 function protectAuthPassword(config) {
   const protectedConfig = deepClone(config);
   protectedConfig.auth.password = hashPassword(protectedConfig.auth.password);
@@ -343,6 +375,12 @@ class SettingsStore extends EventEmitter {
     if (Object.keys(loaded).length === 0) shouldPersist = true;
 
     let normalized = normalizeConfig(loaded, this.defaults);
+    const refreshedAuth = refreshInvalidProductionAuthSecrets(normalized, this.defaults);
+    if (refreshedAuth.refreshed) {
+      normalized = refreshedAuth.config;
+      shouldPersist = true;
+      console.warn('[security] Replaced invalid persisted IoT auth secrets with current environment defaults.');
+    }
 
     // 自动用随机密钥替换不安全的默认 Session Secret，防止签名被伪造漏洞
     if (normalized.auth.sessionSecret === 'change-me-in-production') {
@@ -442,5 +480,6 @@ module.exports = {
   buildPublicConfigPayload,
   normalizeConfig,
   sanitizeConfigForPublic,
+  refreshInvalidProductionAuthSecrets,
   validateProductionSecrets
 };

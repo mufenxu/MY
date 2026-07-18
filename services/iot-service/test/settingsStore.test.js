@@ -10,7 +10,7 @@ const {
   validateProductionSecrets
 } = require('../src/settings/settingsStore');
 const { AuthManager } = require('../src/security/auth');
-const { isPasswordHash, verifyPassword } = require('../src/security/password');
+const { hashPassword, isPasswordHash, verifyPassword } = require('../src/security/password');
 
 test('buildPublicConfigPayload redacts secret values but reports presence', () => {
   const config = normalizeConfig(defaultConfig, defaultConfig);
@@ -122,6 +122,50 @@ test('SettingsStore persists administrator passwords only as scrypt hashes', asy
   const authManager = new AuthManager(store, storage);
   assert.equal(authManager.authenticate('admin', password).ok, true);
   assert.equal(authManager.authenticate('admin', 'wrong-password').ok, false);
+});
+
+test('SettingsStore recovers invalid persisted production auth from environment defaults', async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+
+  try {
+    const storage = new MemoryDatabase();
+    const { SettingsStore } = require('../src/settings/settingsStore');
+    const store = new SettingsStore({ storage });
+    const envPassword = 'correct horse battery staple';
+    const envSessionSecret = '0123456789abcdef0123456789abcdef0123456789abcdef';
+
+    store.defaults = normalizeConfig({
+      ...defaultConfig,
+      auth: {
+        ...defaultConfig.auth,
+        enabled: true,
+        username: 'admin',
+        password: hashPassword(envPassword),
+        sessionSecret: envSessionSecret
+      }
+    }, defaultConfig);
+    storage.settings = {
+      auth: {
+        enabled: true,
+        username: 'admin',
+        password: 'short',
+        sessionSecret: 'tiny'
+      }
+    };
+
+    await store.initialize();
+
+    assert.equal(isPasswordHash(storage.settings.auth.password), true);
+    assert.equal(verifyPassword(envPassword, storage.settings.auth.password), true);
+    assert.equal(storage.settings.auth.sessionSecret, envSessionSecret);
+  } finally {
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+  }
 });
 
 test('production auth rejects weak and template credentials', () => {
