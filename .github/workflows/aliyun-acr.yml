@@ -1,6 +1,34 @@
 name: Build and push Aliyun ACR images
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - backup-runner.Dockerfile
+      - core-api.Dockerfile
+      - exam-api.Dockerfile
+      - notification-service.Dockerfile
+      - campus-service.Dockerfile
+      - iot-service.Dockerfile
+      - apps/admin-console/**
+      - apps/core-admin/**
+      - apps/exam-admin/**
+      - config/platform.services.docker.json
+      - packages/platform-auth/**
+      - services/platform-api/**
+      - services/core-api/**
+      - services/exam-api/**
+      - services/notification-service/**
+      - services/campus-service/**
+      - services/iot-service/**
+      - scripts/backup-runner.mjs
+      - scripts/backup-mongodb-container.mjs
+      - scripts/restore-mongodb-container.mjs
+      - infra/docker/mongodb.Dockerfile
+      - infra/docker/mongodb-entrypoint.sh
+      - infra/docker/mongo-init.sh
+      - infra/docker/ensure-users.js
   workflow_dispatch:
     inputs:
       targets:
@@ -17,7 +45,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: aliyun-acr-${{ github.ref }}-${{ github.event.inputs.targets }}
+  group: aliyun-acr-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.targets || 'auto' }}
   cancel-in-progress: false
 
 env:
@@ -32,11 +60,143 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
+      - name: Resolve image targets
+        id: resolve
+        env:
+          RAW_TARGETS_INPUT: ${{ github.event.inputs.targets }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          add_target() {
+            local candidate="$1"
+            for selected in "${targets[@]:-}"; do
+              if [ "${selected}" = "${candidate}" ]; then
+                return
+              fi
+            done
+            targets+=("${candidate}")
+          }
+
+          targets=()
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            raw_targets="${RAW_TARGETS_INPUT:-platform,backup}"
+            IFS=',' read -ra requested <<< "${raw_targets}"
+            for item in "${requested[@]}"; do
+              target="$(printf '%s' "${item}" | tr '[:upper:]' '[:lower:]' | xargs)"
+              [ -z "${target}" ] && continue
+              if [ "${target}" = "all" ]; then
+                targets=(platform core exam notification backup campus iot mongodb)
+                break
+              fi
+              case "${target}" in
+                platform-api) target="platform" ;;
+                core-api) target="core" ;;
+                exam-api) target="exam" ;;
+                notification-service) target="notification" ;;
+                backup-runner) target="backup" ;;
+                campus-service) target="campus" ;;
+                iot-service) target="iot" ;;
+                mongo) target="mongodb" ;;
+              esac
+              add_target "${target}"
+            done
+          else
+            if [ -n "${PUSH_BEFORE}" ] && [ "${PUSH_BEFORE}" != "0000000000000000000000000000000000000000" ]; then
+              git diff --name-only "${PUSH_BEFORE}" "${GITHUB_SHA}" > changed-files.txt
+            else
+              git show --name-only --format= "${GITHUB_SHA}" > changed-files.txt
+            fi
+
+            while IFS= read -r file; do
+              case "${file}" in
+                Dockerfile|apps/admin-console/*|config/platform.services.docker.json|services/platform-api/*)
+                  add_target platform
+                  ;;
+              esac
+              case "${file}" in
+                backup-runner.Dockerfile|scripts/backup-runner.mjs|scripts/backup-mongodb-container.mjs|scripts/restore-mongodb-container.mjs)
+                  add_target backup
+                  ;;
+                apps/admin-console/package.json|apps/admin-console/src/backups.js)
+                  add_target backup
+                  ;;
+              esac
+              case "${file}" in
+                core-api.Dockerfile|apps/core-admin/*|services/core-api/*)
+                  add_target core
+                  ;;
+              esac
+              case "${file}" in
+                exam-api.Dockerfile|apps/exam-admin/*|services/exam-api/*)
+                  add_target exam
+                  ;;
+              esac
+              case "${file}" in
+                notification-service.Dockerfile|services/notification-service/*)
+                  add_target notification
+                  ;;
+              esac
+              case "${file}" in
+                campus-service.Dockerfile|services/campus-service/*)
+                  add_target campus
+                  ;;
+              esac
+              case "${file}" in
+                iot-service.Dockerfile|services/iot-service/*)
+                  add_target iot
+                  ;;
+              esac
+              case "${file}" in
+                infra/docker/mongodb.Dockerfile|infra/docker/mongodb-entrypoint.sh|infra/docker/mongo-init.sh|infra/docker/ensure-users.js)
+                  add_target mongodb
+                  ;;
+              esac
+              case "${file}" in
+                packages/platform-auth/*)
+                  add_target platform
+                  add_target core
+                  add_target exam
+                  add_target campus
+                  add_target iot
+                  ;;
+              esac
+            done < changed-files.txt
+          fi
+
+          valid_targets=(platform core exam notification backup campus iot mongodb)
+          for target in "${targets[@]}"; do
+            valid=false
+            for known in "${valid_targets[@]}"; do
+              if [ "${known}" = "${target}" ]; then
+                valid=true
+                break
+              fi
+            done
+            if [ "${valid}" = false ]; then
+              echo "Unknown target: ${target}" >&2
+              exit 1
+            fi
+          done
+
+          if [ "${#targets[@]}" -eq 0 ]; then
+            echo "No image targets resolved; nothing to build."
+            echo "targets=" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          resolved="$(IFS=,; echo "${targets[*]}")"
+          echo "Resolved targets: ${resolved}"
+          echo "targets=${resolved}" >> "${GITHUB_OUTPUT}"
+
       - name: Check ACR secrets
+        if: steps.resolve.outputs.targets != ''
         env:
           ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME }}
           ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD }}
@@ -48,6 +208,7 @@ jobs:
           fi
 
       - name: Sign in to Aliyun Container Registry
+        if: steps.resolve.outputs.targets != ''
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
         with:
           registry: ${{ env.ACR_REGISTRY }}
@@ -55,9 +216,10 @@ jobs:
           password: ${{ secrets.ALIYUN_ACR_PASSWORD }}
 
       - name: Build and push selected images
+        if: steps.resolve.outputs.targets != ''
         env:
-          RAW_TARGETS: ${{ github.event.inputs.targets }}
-          PUSH_SHA_TAGS: ${{ github.event.inputs.push_sha_tags }}
+          RAW_TARGETS: ${{ steps.resolve.outputs.targets }}
+          PUSH_SHA_TAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.push_sha_tags || 'true' }}
         run: |
           set -euo pipefail
 

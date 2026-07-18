@@ -21,7 +21,53 @@ The password is the Alibaba Cloud Container Registry login password, not a GitHu
 
 ## Build Images
 
-Open GitHub Actions and run the workflow named `Build and push Aliyun ACR images`.
+Pushes to `main` automatically build and push only the images affected by the changed files. Manual runs are still available for rebuilds, retries, and full releases.
+
+The automatic trigger watches these paths:
+
+```text
+Dockerfile
+backup-runner.Dockerfile
+core-api.Dockerfile
+exam-api.Dockerfile
+notification-service.Dockerfile
+campus-service.Dockerfile
+iot-service.Dockerfile
+apps/admin-console/**
+apps/core-admin/**
+apps/exam-admin/**
+config/platform.services.docker.json
+packages/platform-auth/**
+services/platform-api/**
+services/core-api/**
+services/exam-api/**
+services/notification-service/**
+services/campus-service/**
+services/iot-service/**
+scripts/backup-runner.mjs
+scripts/backup-mongodb-container.mjs
+scripts/restore-mongodb-container.mjs
+infra/docker/mongodb.Dockerfile
+infra/docker/mongodb-entrypoint.sh
+infra/docker/mongo-init.sh
+infra/docker/ensure-users.js
+```
+
+Automatic target selection:
+
+| Changed path | Built target |
+| --- | --- |
+| `Dockerfile`, `apps/admin-console/**`, `config/platform.services.docker.json`, `services/platform-api/**` | `platform` |
+| `backup-runner.Dockerfile`, `apps/admin-console/src/backups.js`, backup runner scripts | `backup` |
+| `core-api.Dockerfile`, `apps/core-admin/**`, `services/core-api/**` | `core` |
+| `exam-api.Dockerfile`, `apps/exam-admin/**`, `services/exam-api/**` | `exam` |
+| `notification-service.Dockerfile`, `services/notification-service/**` | `notification` |
+| `campus-service.Dockerfile`, `services/campus-service/**` | `campus` |
+| `iot-service.Dockerfile`, `services/iot-service/**` | `iot` |
+| `infra/docker/mongodb.Dockerfile`, MongoDB entrypoint/init/user scripts | `mongodb` |
+| `packages/platform-auth/**` | `platform`, `core`, `exam`, `campus`, `iot` |
+
+For manual rebuilds, open GitHub Actions and run the workflow named `Build and push Aliyun ACR images`.
 
 Use the `targets` input to select the images to build:
 

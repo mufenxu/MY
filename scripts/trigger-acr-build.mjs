@@ -110,8 +110,9 @@ function main() {
   const services = selected.map((target) => TARGETS[target].composeService).join(' ');
 
   console.log('Alibaba Cloud ACR is now used as an image registry only.');
-  console.log('Builds are run from GitHub Actions, not from ACR source build rules.\n');
-  console.log('Open GitHub -> Actions -> "Build and push Aliyun ACR images" -> Run workflow.');
+  console.log('Builds are run from GitHub Actions, not from ACR source build rules.');
+  console.log('Pushes to main automatically build affected images based on changed files.\n');
+  console.log('For retries or explicit target selection, open GitHub -> Actions -> "Build and push Aliyun ACR images" -> Run workflow.');
   console.log(`Set targets to: ${targetsInput}`);
   console.log('Keep push_sha_tags enabled unless you are intentionally skipping immutable tags.\n');
   console.log('Required GitHub repository secrets:');
