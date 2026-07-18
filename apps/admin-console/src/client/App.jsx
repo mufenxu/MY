@@ -14,6 +14,7 @@ import {
   Clock3,
   CloudCog,
   Database,
+  Download,
   GraduationCap,
   LayoutDashboard,
   Layers3,
@@ -30,6 +31,8 @@ import {
   ShieldCheck,
   Sun,
   Timer,
+  Trash2,
+  Upload,
   Workflow,
   X,
   Zap,
@@ -1010,10 +1013,13 @@ function BackupRecoveryView({ session }) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBackup, setSelectedBackup] = useState(null);
   const [activeJob, setActiveJob] = useState(null);
+  const [deletingBackup, setDeletingBackup] = useState('');
+  const [uploadingBackup, setUploadingBackup] = useState(false);
   const [restorePassword, setRestorePassword] = useState('');
   const [confirmText, setConfirmText] = useState('');
   const [actionError, setActionError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
+  const uploadInputRef = useRef(null);
 
   const loadBackupStatus = useCallback(async (force = false, options = {}) => {
     const preserveMissingRunningJob = options.preserveMissingRunningJob !== false;
@@ -1112,6 +1118,68 @@ function BackupRecoveryView({ session }) {
     }
   }
 
+  function handleBackupRowKeyDown(event, backup) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    setSelectedBackup(backup);
+  }
+
+  function handleDownloadBackup(backup) {
+    setActionError('');
+    setActionMessage('');
+    if (!backup?.restorable) {
+      setActionError('这个备份包不可下载');
+      return;
+    }
+    window.location.assign(`/api/backups/${encodeURIComponent(backup.name)}/download`);
+  }
+
+  async function handleDeleteBackup(backup) {
+    setActionError('');
+    setActionMessage('');
+    if (!backup?.name) return;
+    const accepted = window.confirm(`确定删除备份 ${backup.name}？删除后不可恢复。`);
+    if (!accepted) return;
+
+    setDeletingBackup(backup.name);
+    try {
+      await requestJson(`/api/backups/${encodeURIComponent(backup.name)}`, { method: 'DELETE' });
+      if (selectedBackup?.name === backup.name) setSelectedBackup(null);
+      setActionMessage('备份已删除');
+      await loadBackupStatus(true);
+    } catch (error) {
+      setActionError(error.message);
+    } finally {
+      setDeletingBackup('');
+    }
+  }
+
+  async function handleUploadBackup(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setActionError('');
+    setActionMessage('');
+    setUploadingBackup(true);
+    try {
+      const result = await requestJson(`/api/backups/upload?filename=${encodeURIComponent(file.name)}`, {
+        method: 'POST',
+        body: file,
+        headers: {
+          'Content-Type': file.type || 'application/gzip',
+        },
+      });
+      if (result.backup) setSelectedBackup(result.backup);
+      setActionMessage('备份包已上传');
+      await loadBackupStatus(true);
+    } catch (error) {
+      setActionError(error.message);
+    } finally {
+      setUploadingBackup(false);
+    }
+  }
+
   async function handleStartRestore() {
     setActionError('');
     setActionMessage('');
@@ -1206,23 +1274,53 @@ function BackupRecoveryView({ session }) {
             <span className="section-count">{backups.filter((backup) => backup.restorable).length}</span>
           </header>
           <div className="backup-table-head">
-            <span>备份</span><span>时间</span><span>大小</span><span>状态</span>
+            <span>备份</span><span>时间</span><span>大小</span><span>状态</span><span>操作</span>
           </div>
           <div className="backup-table-body">
             {loading ? (
               <div className="view-loading"><LoaderCircle className="spin" size={20} /> 正在加载备份清单</div>
             ) : backups.length > 0 ? backups.map((backup) => (
-              <button
+              <div
                 key={backup.name}
                 className={`backup-row ${selectedBackup?.name === backup.name ? 'selected' : ''} ${backup.restorable ? '' : 'invalid'}`}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedBackup(backup)}
+                onKeyDown={(event) => handleBackupRowKeyDown(event, backup)}
               >
                 <span><strong>{backup.name}</strong><small>{backup.includes?.join(' / ') || '清单不可读'}</small></span>
                 <span>{formatDateTime(backup.createdAt)}</span>
                 <span>{formatBytes(backup.sizeBytes)}</span>
                 <span className={backup.restorable ? 'healthy' : 'degraded'}>{backup.restorable ? '可恢复' : '不可用'}</span>
-              </button>
+                <span className="backup-row-actions">
+                  <button
+                    className="backup-row-action"
+                    type="button"
+                    aria-label={`下载备份 ${backup.name}`}
+                    title="下载备份"
+                    disabled={!backup.restorable}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDownloadBackup(backup);
+                    }}
+                  >
+                    <Download size={15} />
+                  </button>
+                  <button
+                    className="backup-row-action danger"
+                    type="button"
+                    aria-label={`删除备份 ${backup.name}`}
+                    title="删除备份"
+                    disabled={Boolean(runningJob) || deletingBackup === backup.name}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDeleteBackup(backup);
+                    }}
+                  >
+                    {deletingBackup === backup.name ? <LoaderCircle className="spin" size={15} /> : <Trash2 size={15} />}
+                  </button>
+                </span>
+              </div>
             )) : (
               <div className="view-empty">暂无备份归档</div>
             )}
@@ -1240,6 +1338,22 @@ function BackupRecoveryView({ session }) {
             <small>{selectedBackup ? formatDateTime(selectedBackup.createdAt) : '请从备份清单选择'}</small>
           </div>
           <p className="restore-warning">恢复提交后会先创建当前状态备份，再执行覆写。</p>
+          <input
+            ref={uploadInputRef}
+            className="backup-upload-input"
+            type="file"
+            accept=".tar.gz,.tgz,application/gzip,application/x-gzip"
+            onChange={handleUploadBackup}
+          />
+          <button
+            className="secondary-action backup-upload-action"
+            type="button"
+            disabled={Boolean(runningJob) || uploadingBackup}
+            onClick={() => uploadInputRef.current?.click()}
+          >
+            {uploadingBackup ? <LoaderCircle className="spin" size={17} /> : <Upload size={17} />}
+            {uploadingBackup ? '正在上传' : '上传备份包'}
+          </button>
           {!session.authDisabled && (
             <label className="restore-field">
               <span>管理员密码</span>

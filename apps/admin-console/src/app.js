@@ -43,6 +43,10 @@ function secureTokenEqual(actual, expected) {
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
+function safeDownloadName(filename) {
+  return String(filename || 'backup.tar.gz').replace(/[^A-Za-z0-9_.-]/g, '_');
+}
+
 export function createApp({
   config = loadConfig(),
   fetchImpl = fetch,
@@ -237,6 +241,52 @@ export function createApp({
   app.get('/api/backups/jobs/:id', async (req, res, next) => {
     try {
       res.json({ job: await backups.getJob(req.params.id) });
+    } catch (error) {
+      try {
+        sendBackupError(res, error);
+      } catch (unexpectedError) {
+        next(unexpectedError);
+      }
+    }
+  });
+
+  app.get('/api/backups/:backupName/download', async (req, res, next) => {
+    try {
+      const download = await backups.downloadBackup({ backupName: req.params.backupName });
+      res.setHeader('Content-Type', download.contentType || 'application/gzip');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeDownloadName(download.filename)}"`);
+      download.stream.once('error', next);
+      download.stream.pipe(res);
+    } catch (error) {
+      try {
+        sendBackupError(res, error);
+      } catch (unexpectedError) {
+        next(unexpectedError);
+      }
+    }
+  });
+
+  app.delete('/api/backups/:backupName', requireConsoleRequest, async (req, res, next) => {
+    try {
+      res.json(await backups.deleteBackup({ backupName: req.params.backupName }));
+    } catch (error) {
+      try {
+        sendBackupError(res, error);
+      } catch (unexpectedError) {
+        next(unexpectedError);
+      }
+    }
+  });
+
+  app.post('/api/backups/upload', requireConsoleRequest, async (req, res, next) => {
+    try {
+      const filename = String(req.query.filename || req.get('X-Backup-Filename') || '');
+      const result = await backups.uploadBackup({
+        filename,
+        stream: req,
+        contentType: req.get('content-type') || 'application/gzip',
+      });
+      res.status(201).json(result);
     } catch (error) {
       try {
         sendBackupError(res, error);

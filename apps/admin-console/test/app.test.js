@@ -42,6 +42,8 @@ test('metrics require the configured bearer token', async () => {
 test('backup mutations require the console request header', async () => {
   const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
   let backupStarted = false;
+  let deletedBackup = '';
+  let uploadedBackup = null;
   const app = createApp({
     config,
     backupManager: {
@@ -52,12 +54,28 @@ test('backup mutations require the console request header', async () => {
       },
       getJob: async () => ({ id: 'job-1', type: 'backup', status: 'succeeded' }),
       startRestore: async () => ({ id: 'job-2', type: 'restore', status: 'running' }),
+      deleteBackup: async ({ backupName }) => {
+        deletedBackup = backupName;
+        return { backupName };
+      },
+      uploadBackup: async ({ filename, stream }) => {
+        let size = 0;
+        for await (const chunk of stream) size += chunk.length;
+        uploadedBackup = { filename, size };
+        return { backup: { name: 'uploaded-backup', restorable: true } };
+      },
     },
   });
 
   await withServer(app, async (origin) => {
     assert.equal((await fetch(`${origin}/api/backups/status`)).status, 200);
     assert.equal((await fetch(`${origin}/api/backups/run`, { method: 'POST' })).status, 403);
+    assert.equal((await fetch(`${origin}/api/backups/old-backup`, { method: 'DELETE' })).status, 403);
+    assert.equal((await fetch(`${origin}/api/backups/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/gzip' },
+      body: Buffer.from('backup'),
+    })).status, 403);
 
     const response = await fetch(`${origin}/api/backups/run`, {
       method: 'POST',
@@ -69,5 +87,23 @@ test('backup mutations require the console request header', async () => {
     const jobResponse = await fetch(`${origin}/api/backups/jobs/job-1`);
     assert.equal(jobResponse.status, 200);
     assert.deepEqual((await jobResponse.json()).job, { id: 'job-1', type: 'backup', status: 'succeeded' });
+
+    const deleteResponse = await fetch(`${origin}/api/backups/old-backup`, {
+      method: 'DELETE',
+      headers: { 'X-Platform-Request': 'console' },
+    });
+    assert.equal(deleteResponse.status, 200);
+    assert.equal(deletedBackup, 'old-backup');
+
+    const uploadResponse = await fetch(`${origin}/api/backups/upload?filename=uploaded-backup.tar.gz`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/gzip',
+        'X-Platform-Request': 'console',
+      },
+      body: Buffer.from('backup'),
+    });
+    assert.equal(uploadResponse.status, 201);
+    assert.deepEqual(uploadedBackup, { filename: 'uploaded-backup.tar.gz', size: 6 });
   });
 });

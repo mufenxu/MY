@@ -2564,7 +2564,7 @@ input:focus-visible {
 .backup-table-head,
 .backup-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.25fr) 88px 72px 62px;
+  grid-template-columns: minmax(160px, 1.25fr) 82px 66px 58px 72px;
   align-items: center;
   gap: 10px;
 }
@@ -2593,10 +2593,12 @@ input:focus-visible {
   border-bottom: 1px solid var(--line);
   cursor: pointer;
   font: inherit;
+  outline: 0;
   text-align: left;
 }
 
 .backup-row:hover,
+.backup-row:focus-visible,
 .backup-row.selected {
   background: var(--blue-soft);
 }
@@ -2644,6 +2646,57 @@ input:focus-visible {
 .backup-row .degraded {
   color: var(--orange);
   font-weight: 800;
+}
+
+.backup-row > span.backup-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  overflow: visible;
+}
+
+.backup-row-action {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  align-items: center;
+  justify-content: center;
+  color: var(--blue);
+  background: var(--blue-soft);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.backup-row-action:hover:not(:disabled) {
+  border-color: rgba(37, 99, 235, 0.2);
+}
+
+.backup-row-action.danger {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.backup-row-action.danger:hover:not(:disabled) {
+  border-color: rgba(215, 84, 103, 0.24);
+}
+
+.backup-row-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.backup-upload-input {
+  display: none;
+}
+
+.backup-upload-action {
+  width: 100%;
+  justify-content: center;
+  margin-bottom: 14px;
+  box-shadow: none;
 }
 
 .restore-card > header {
@@ -3046,7 +3099,7 @@ input:focus-visible {
   .backup-row {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 6px 12px;
-    min-height: 88px;
+    min-height: 96px;
     padding: 12px 4px;
   }
 
@@ -3056,8 +3109,16 @@ input:focus-visible {
     justify-self: end;
   }
 
+  .backup-row > span:nth-child(5) {
+    grid-column: 2;
+    grid-row: 2 / span 2;
+    align-self: end;
+    justify-self: end;
+  }
+
   .backup-row > span:nth-child(2),
   .backup-row > span:nth-child(3) {
+    grid-column: 1;
     color: var(--muted);
     font-size: 11px;
   }

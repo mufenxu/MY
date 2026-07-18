@@ -17,7 +17,7 @@ RUN apt-get update \
 
 COPY --from=mongo-tools /usr/bin/mongodump /usr/bin/mongorestore /usr/local/bin/
 COPY --chown=node:node apps/admin-console/package.json ./apps/admin-console/package.json
-COPY --chown=node:node apps/admin-console/src/backups.js ./apps/admin-console/src/backups.js
+COPY --chown=node:node apps/admin-console/src/backups.js apps/admin-console/src/backupArchives.js ./apps/admin-console/src/
 COPY --chown=node:node scripts/backup-runner.mjs scripts/backup-mongodb-container.mjs scripts/restore-mongodb-container.mjs ./scripts/
 
 RUN mongodump --version >/dev/null \

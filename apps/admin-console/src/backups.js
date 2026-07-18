@@ -7,14 +7,20 @@ import {
   mkdir,
   readdir,
   readFile,
+  rename,
+  rm,
   stat,
 } from 'node:fs/promises';
+import { Readable } from 'node:stream';
 import path from 'node:path';
+import { createBackupArchiveStream, extractBackupArchive } from './backupArchives.js';
 
 const MAX_LOG_CHARS = 12_000;
 const BACKUP_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const IN_PROGRESS_SUFFIX = '.in-progress';
 const DEFAULT_COMMAND_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_TRANSFER_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024 * 1024;
 
 export class BackupOperationError extends Error {
   constructor(status, code, message) {
@@ -39,7 +45,16 @@ function fallbackRemoteStatus(config, issue) {
   };
 }
 
-async function requestRunner(config, resource, { method = 'GET', body, timeoutMs } = {}) {
+function isNodeStream(value) {
+  return value && typeof value.pipe === 'function';
+}
+
+async function requestRunnerResponse(config, resource, {
+  method = 'GET',
+  body,
+  headers = {},
+  timeoutMs,
+} = {}) {
   if (!config.backupRunnerToken) {
     throw new BackupOperationError(503, 'BACKUP_RUNNER_TOKEN_MISSING', '备份执行器令牌未配置。');
   }
@@ -51,21 +66,21 @@ async function requestRunner(config, resource, { method = 'GET', body, timeoutMs
       method,
       signal: controller.signal,
       headers: {
-        Accept: 'application/json',
         Authorization: `Bearer ${config.backupRunnerToken}`,
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...headers,
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body,
+      ...(isNodeStream(body) ? { duplex: 'half' } : {}),
     });
-    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
       throw new BackupOperationError(
         response.status,
         data.code || 'BACKUP_RUNNER_ERROR',
         data.error || `备份执行器请求失败（HTTP ${response.status}）。`,
       );
     }
-    return data;
+    return response;
   } catch (error) {
     if (error instanceof BackupOperationError) throw error;
     const isAbort = error.name === 'AbortError';
@@ -77,6 +92,19 @@ async function requestRunner(config, resource, { method = 'GET', body, timeoutMs
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function requestRunner(config, resource, { method = 'GET', body, timeoutMs } = {}) {
+  const response = await requestRunnerResponse(config, resource, {
+    method,
+    body: body ? JSON.stringify(body) : undefined,
+    timeoutMs,
+    headers: {
+      Accept: 'application/json',
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+    },
+  });
+  return response.json().catch(() => ({}));
 }
 
 function jobTime(job) {
@@ -149,6 +177,39 @@ export function createBackupRunnerClient({ config } = {}) {
     async getJob(id) {
       const data = await requestRunner(config, `/backups/jobs/${encodeURIComponent(id)}`);
       return data.job;
+    },
+    async downloadBackup({ backupName } = {}) {
+      const response = await requestRunnerResponse(config, `/backups/${encodeURIComponent(backupName)}/download`, {
+        timeoutMs: config.backupTransferTimeoutMs ?? DEFAULT_TRANSFER_TIMEOUT_MS,
+        headers: { Accept: 'application/gzip' },
+      });
+      return {
+        filename: `${backupName}.tar.gz`,
+        contentType: response.headers.get('content-type') || 'application/gzip',
+        stream: Readable.fromWeb(response.body),
+      };
+    },
+    async deleteBackup({ backupName } = {}) {
+      const data = await requestRunner(config, `/backups/${encodeURIComponent(backupName)}`, {
+        method: 'DELETE',
+      });
+      return data;
+    },
+    async uploadBackup({ filename, stream, contentType } = {}) {
+      const response = await requestRunnerResponse(
+        config,
+        `/backups/upload?filename=${encodeURIComponent(filename || '')}`,
+        {
+          method: 'POST',
+          body: stream,
+          timeoutMs: config.backupTransferTimeoutMs ?? DEFAULT_TRANSFER_TIMEOUT_MS,
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': contentType || 'application/gzip',
+          },
+        },
+      );
+      return response.json().catch(() => ({}));
     },
   };
 }
@@ -555,14 +616,19 @@ export function createBackupManager({
     return serializeJob(job);
   }
 
-  async function resolveBackupDirectory(backupName) {
-    if (!isSafeBackupName(backupName)) {
+  function resolveBackupPath(backupName) {
+    if (!isVisibleBackupDirectory(backupName)) {
       throw new BackupOperationError(400, 'INVALID_BACKUP_NAME', '备份名称无效。');
     }
     const directory = path.resolve(backupRoot, backupName);
     if (!directory.startsWith(`${backupRoot}${path.sep}`)) {
       throw new BackupOperationError(400, 'INVALID_BACKUP_NAME', '备份名称无效。');
     }
+    return directory;
+  }
+
+  async function resolveBackupDirectory(backupName) {
+    const directory = resolveBackupPath(backupName);
     const manifest = await readManifest(directory).catch(() => null);
     if (!manifest?.restorable) {
       throw new BackupOperationError(400, 'BACKUP_NOT_RESTORABLE', '备份包不完整或清单无效。');
@@ -572,6 +638,66 @@ export function createBackupManager({
       throw new BackupOperationError(400, 'BACKUP_CHECKSUM_MISMATCH', '备份校验失败。');
     }
     return directory;
+  }
+
+  async function downloadBackup({ backupName } = {}) {
+    const directory = await resolveBackupDirectory(backupName);
+    return {
+      filename: `${backupName}.tar.gz`,
+      contentType: 'application/gzip',
+      stream: createBackupArchiveStream(directory, backupName),
+    };
+  }
+
+  async function deleteBackup({ backupName } = {}) {
+    if (activeJob()) {
+      throw new BackupOperationError(409, 'BACKUP_JOB_RUNNING', '已有备份或恢复任务正在执行。');
+    }
+    const directory = resolveBackupPath(backupName);
+    const stats = await stat(directory).catch((error) => {
+      if (error.code === 'ENOENT') {
+        throw new BackupOperationError(404, 'BACKUP_NOT_FOUND', '备份不存在。');
+      }
+      throw error;
+    });
+    if (!stats.isDirectory()) throw new BackupOperationError(404, 'BACKUP_NOT_FOUND', '备份不存在。');
+    await rm(directory, { recursive: true, force: true });
+    return { backupName };
+  }
+
+  async function uploadBackup({ filename, stream } = {}) {
+    if (activeJob()) {
+      throw new BackupOperationError(409, 'BACKUP_JOB_RUNNING', '已有备份或恢复任务正在执行。');
+    }
+    await mkdir(backupRoot, { recursive: true, mode: 0o700 });
+    const workDirectory = path.join(backupRoot, `.upload-${crypto.randomUUID()}.in-progress`);
+    let completed = false;
+    try {
+      const extracted = await extractBackupArchive({
+        source: stream,
+        targetDirectory: workDirectory,
+        fallbackName: filename,
+        backupNameAllowed: isVisibleBackupDirectory,
+        maxExtractedBytes: config.backupUploadMaxBytes || DEFAULT_UPLOAD_MAX_BYTES,
+      });
+      const targetDirectory = resolveBackupPath(extracted.backupName);
+      if (await exists(targetDirectory)) {
+        throw new BackupOperationError(409, 'BACKUP_ALREADY_EXISTS', '同名备份已存在，请先删除后再上传。');
+      }
+      const manifest = await readManifest(workDirectory).catch(() => null);
+      if (!manifest?.restorable) {
+        throw new BackupOperationError(400, 'BACKUP_UPLOAD_INVALID', '上传的备份包不完整或清单无效。');
+      }
+      const archivePath = path.join(workDirectory, manifest.mongoArchive);
+      if (await sha256(archivePath) !== manifest.mongoSha256) {
+        throw new BackupOperationError(400, 'BACKUP_CHECKSUM_MISMATCH', '上传的备份校验失败。');
+      }
+      await rename(workDirectory, targetDirectory);
+      completed = true;
+      return { backup: await readManifest(targetDirectory) };
+    } finally {
+      if (!completed) await rm(workDirectory, { recursive: true, force: true });
+    }
   }
 
   async function startRestore({ backupName, requestedBy } = {}) {
@@ -620,5 +746,8 @@ export function createBackupManager({
     startBackup,
     startRestore,
     getJob,
+    downloadBackup,
+    deleteBackup,
+    uploadBackup,
   };
 }

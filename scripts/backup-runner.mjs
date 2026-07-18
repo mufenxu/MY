@@ -35,6 +35,10 @@ const manager = createBackupManager({
       min: 60 * 1000,
       max: 6 * 60 * 60 * 1000,
     }),
+    backupUploadMaxBytes: parseInteger(process.env.PLATFORM_BACKUP_UPLOAD_MAX_BYTES, 5 * 1024 * 1024 * 1024, {
+      min: 1024 * 1024,
+      max: 50 * 1024 * 1024 * 1024,
+    }),
   },
 });
 
@@ -51,6 +55,21 @@ function writeJson(res, status, payload) {
     'X-Content-Type-Options': 'nosniff',
   });
   res.end(JSON.stringify(payload));
+}
+
+function safeDownloadName(filename) {
+  return String(filename || 'backup.tar.gz').replace(/[^A-Za-z0-9_.-]/g, '_');
+}
+
+function writeDownload(res, download) {
+  res.writeHead(200, {
+    'Content-Type': download.contentType || 'application/gzip',
+    'Content-Disposition': `attachment; filename="${safeDownloadName(download.filename)}"`,
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  download.stream.once('error', (error) => res.destroy(error));
+  download.stream.pipe(res);
 }
 
 function requireToken(req, res) {
@@ -122,9 +141,31 @@ async function route(req, res) {
     return;
   }
 
+  if (req.method === 'POST' && url.pathname === '/backups/upload') {
+    const result = await manager.uploadBackup({
+      filename: url.searchParams.get('filename') || '',
+      stream: req,
+      contentType: req.headers['content-type'] || 'application/gzip',
+    });
+    writeJson(res, 201, result);
+    return;
+  }
+
   const jobMatch = /^\/backups\/jobs\/([^/]+)$/.exec(url.pathname);
   if (req.method === 'GET' && jobMatch) {
     writeJson(res, 200, { job: manager.getJob(decodeURIComponent(jobMatch[1])) });
+    return;
+  }
+
+  const downloadMatch = /^\/backups\/([^/]+)\/download$/.exec(url.pathname);
+  if (req.method === 'GET' && downloadMatch) {
+    writeDownload(res, await manager.downloadBackup({ backupName: decodeURIComponent(downloadMatch[1]) }));
+    return;
+  }
+
+  const backupMatch = /^\/backups\/([^/]+)$/.exec(url.pathname);
+  if (req.method === 'DELETE' && backupMatch) {
+    writeJson(res, 200, await manager.deleteBackup({ backupName: decodeURIComponent(backupMatch[1]) }));
     return;
   }
 

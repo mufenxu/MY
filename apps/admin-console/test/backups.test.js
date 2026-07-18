@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { once } from 'node:events';
 import http from 'node:http';
-import { PassThrough } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -28,6 +28,14 @@ async function createBackupFixture(root, name = '2026-07-17T12-00-00-000Z') {
     includes: ['platform_app', 'core_app', 'exam_app', 'campus_app', 'iot_app', 'core_uploads'],
   }));
   return directory;
+}
+
+async function collectStream(stream) {
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
 }
 
 function fakeSpawnFactory({ stdout = '', stderr = '', exitCode = 0 } = {}) {
@@ -128,6 +136,47 @@ test('backup status hides in-progress work directories', async (t) => {
 
   const status = await manager.getStatus();
   assert.deepEqual(status.backups.map((backup) => backup.name), ['2026-07-17T12-00-00-000Z']);
+});
+
+test('backup archives can be downloaded, deleted, and uploaded again', async (t) => {
+  const backupRoot = await mkdtemp(join(tmpdir(), 'my-platform-backups-'));
+  const workspaceRoot = await mkdtemp(join(tmpdir(), 'my-platform-workspace-'));
+  t.after(() => rm(backupRoot, { recursive: true, force: true }));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  const backupName = '2026-07-18T12-06-48-304Z';
+  await createBackupFixture(backupRoot, backupName);
+
+  const manager = createBackupManager({
+    config: {
+      backupRoot,
+      workspaceRoot,
+      backupOperationsEnabled: true,
+      restoreOperationsEnabled: true,
+      backupCommand: 'node backup.js',
+      restoreCommand: 'node restore.js',
+      restoreConfirmText: 'RESTORE ALL DATA',
+    },
+  });
+
+  const download = await manager.downloadBackup({ backupName });
+  assert.equal(download.filename, `${backupName}.tar.gz`);
+  assert.equal(download.contentType, 'application/gzip');
+  const archive = await collectStream(download.stream);
+  assert.ok(archive.length > 0);
+
+  await manager.deleteBackup({ backupName });
+  const afterDelete = await manager.getStatus();
+  assert.deepEqual(afterDelete.backups.map((backup) => backup.name), []);
+
+  const upload = await manager.uploadBackup({
+    filename: `${backupName}.tar.gz`,
+    stream: Readable.from(archive),
+  });
+  assert.equal(upload.backup.name, backupName);
+  assert.equal(upload.backup.restorable, true);
+
+  const afterUpload = await manager.getStatus();
+  assert.deepEqual(afterUpload.backups.map((backup) => backup.name), [backupName]);
 });
 
 test('backup command starts a tracked job', async (t) => {

@@ -31,7 +31,7 @@
     "restore": "node --env-file=.env scripts/restore-mongodb.mjs",
     "migrate:sqlite": "node --env-file=.env scripts/migrate-sqlite-data.mjs",
     "verify:mongodb": "node --env-file=.env scripts/verify-mongodb-isolation.mjs .env",
-    "check:backup-scripts": "node --check scripts/backup-mongodb.mjs && node --check scripts/restore-mongodb.mjs && node --check scripts/backup-mongodb-container.mjs && node --check scripts/restore-mongodb-container.mjs",
+    "check:backup-scripts": "node --check scripts/backup-mongodb.mjs && node --check scripts/restore-mongodb.mjs && node --check scripts/backup-mongodb-container.mjs && node --check scripts/restore-mongodb-container.mjs && node --check scripts/backup-runner.mjs",
     "check:supply-chain": "node scripts/check-supply-chain.mjs",
     "acr:build": "node scripts/trigger-acr-build.mjs",
     "compose:config": "npm run env:check && docker compose --env-file .env -f infra/docker/compose.yml config --quiet",
