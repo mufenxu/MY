@@ -1,0 +1,684 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Activity,
+  AlertTriangle,
+  BellRing,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  CircleAlert,
+  Clock3,
+  Cloud,
+  DatabaseBackup,
+  ExternalLink,
+  FileClock,
+  Gauge,
+  HardDrive,
+  History,
+  KeyRound,
+  LoaderCircle,
+  LockKeyhole,
+  MessageSquareText,
+  PackageCheck,
+  Play,
+  RefreshCw,
+  Rocket,
+  Save,
+  ServerCog,
+  Settings2,
+  ShieldCheck,
+  TerminalSquare,
+  UserRoundCheck,
+  Wrench,
+  XCircle,
+} from 'lucide-react';
+import { requestJson } from './api.js';
+
+const STATE_LABELS = {
+  healthy: '正常',
+  degraded: '异常',
+  offline: '离线',
+  unmonitored: '未监测',
+};
+const INCIDENT_LABELS = { open: '待处理', acknowledged: '已确认', resolved: '已恢复' };
+const ROLE_LABELS = { viewer: '只读管理员', operator: '运维管理员', super_admin: '超级管理员' };
+const ACTION_LABELS = {
+  'auth.login': '管理员登录',
+  'auth.logout': '退出登录',
+  'incident.opened': '产生事件',
+  'incident.resolved': '事件恢复',
+  'incident.acknowledge': '确认事件',
+  'incident.mute': '静默事件',
+  'incident.assign': '指派事件',
+  'incident.note': '添加备注',
+  'backup.started': '启动备份',
+  'backup.restore': '恢复备份',
+  'backup.deleted': '删除备份',
+  'backup.uploaded': '上传备份',
+  'backup.downloaded': '下载备份',
+  'backup.backup_succeeded': '备份完成',
+  'backup.backup_failed': '备份失败',
+  'backup.restore_succeeded': '恢复完成',
+  'backup.restore_failed': '恢复失败',
+  'notification.opened': '发送告警通知',
+  'notification.resolved': '发送恢复通知',
+  'release.build': '触发构建',
+  'release.deploy': '部署版本',
+  'release.rollback': '回滚版本',
+  'diagnostics.run': '运行诊断',
+  'security.session_revoked': '撤销会话',
+  'operations.settings_updated': '更新运维设置',
+  'gateway.proxy_error': '网关请求异常',
+};
+const CHART_COLORS = ['#2877f7', '#11ad78', '#ff8a00', '#8a45ef', '#d75467', '#13bad6'];
+
+function formatDateTime(value) {
+  if (!value) return '--';
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(new Date(value));
+}
+
+function formatRelative(value) {
+  const milliseconds = Date.now() - Date.parse(value || '');
+  if (!Number.isFinite(milliseconds)) return '--';
+  const minutes = Math.max(0, Math.round(milliseconds / 60000));
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return `${Math.round(hours / 24)} 天前`;
+}
+
+function roleAtLeast(role, required) {
+  return ({ viewer: 1, operator: 2, super_admin: 3 }[role] || 0) >= ({ viewer: 1, operator: 2, super_admin: 3 }[required] || 0);
+}
+
+function Feedback({ error, message }) {
+  if (!error && !message) return null;
+  return (
+    <div className={`ops-feedback ${error ? 'error' : 'success'}`} role={error ? 'alert' : 'status'}>
+      {error ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}
+      <span>{error || message}</span>
+    </div>
+  );
+}
+
+function LoadingBlock({ label = '正在加载' }) {
+  return <div className="ops-loading"><LoaderCircle className="spin" size={20} /> {label}</div>;
+}
+
+function StatePill({ value }) {
+  return <span className={`ops-state state-${value}`}><i />{STATE_LABELS[value] || value || '--'}</span>;
+}
+
+function SeverityPill({ value }) {
+  return <span className={`ops-severity severity-${value}`}>{value === 'critical' ? '严重' : value === 'warning' ? '警告' : '提示'}</span>;
+}
+
+function MonitoringChart({ groups }) {
+  const entries = Object.entries(groups).filter(([, samples]) => samples.length).slice(0, 6);
+  if (!entries.length) return <div className="ops-empty">当前时间范围暂无历史样本</div>;
+  const allSamples = entries.flatMap(([, samples]) => samples);
+  const timestamps = allSamples.map((sample) => Date.parse(sample.recordedAt)).filter(Number.isFinite);
+  const latencies = allSamples.map((sample) => sample.latencyMs).filter(Number.isFinite);
+  const start = Math.min(...timestamps);
+  const end = Math.max(...timestamps, start + 1);
+  const maximum = Math.max(...latencies, 1);
+  const minimumPositive = Math.min(...latencies.filter((value) => value > 0), maximum);
+  const useLogScale = maximum / Math.max(minimumPositive, 1) >= 10;
+  const scaleLatency = (value) => useLogScale ? Math.log10(value + 1) : value;
+  const scaledMaximum = scaleLatency(maximum);
+  const width = 880;
+  const height = 250;
+  const x = (value) => 42 + ((Date.parse(value) - start) / (end - start)) * 806;
+  const y = (value) => 212 - (scaleLatency(Math.min(value, maximum)) / scaledMaximum) * 164;
+
+  return (
+    <div className="ops-history-chart">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="服务响应时间历史趋势">
+        {[48, 102, 157, 212].map((position) => <line key={position} x1="40" x2="850" y1={position} y2={position} />)}
+        {entries.map(([serviceId, samples], index) => {
+          const points = samples
+            .filter((sample) => Number.isFinite(sample.latencyMs))
+            .map((sample) => `${x(sample.recordedAt)},${y(sample.latencyMs)}`)
+            .join(' ');
+          return points ? <polyline key={serviceId} points={points} style={{ stroke: CHART_COLORS[index] }} /> : null;
+        })}
+      </svg>
+      <div className="ops-chart-legend">
+        {entries.map(([serviceId], index) => <span key={serviceId}><i style={{ background: CHART_COLORS[index] }} />{serviceId}</span>)}
+      </div>
+    </div>
+  );
+}
+
+export function MonitoringView({ services }) {
+  const [hours, setHours] = useState(24);
+  const [selected, setSelected] = useState('all');
+  const [samples, setSamples] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const query = new URLSearchParams({ hours: String(hours), limit: '3000' });
+      if (selected !== 'all') query.set('serviceId', selected);
+      setSamples((await requestJson(`/api/operations/history?${query}`)).samples || []);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [hours, selected]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const groups = useMemo(() => samples.reduce((result, sample) => {
+    const id = sample.serviceId || selected;
+    if (!result[id]) result[id] = [];
+    result[id].push(sample);
+    return result;
+  }, {}), [samples, selected]);
+  const summaries = Object.entries(groups).map(([serviceId, values]) => {
+    const monitored = values.filter((sample) => !sample.maintenance && sample.state !== 'unmonitored');
+    const healthy = monitored.filter((sample) => sample.state === 'healthy').length;
+    const sortedLatency = monitored.map((sample) => sample.latencyMs).filter(Number.isFinite).sort((a, b) => a - b);
+    return {
+      serviceId,
+      samples: values.length,
+      availability: monitored.length ? (healthy / monitored.length) * 100 : null,
+      p95: sortedLatency.length ? sortedLatency[Math.max(0, Math.ceil(sortedLatency.length * 0.95) - 1)] : null,
+      latest: values.at(-1),
+    };
+  });
+  const averageAvailability = summaries.filter((item) => item.availability !== null);
+  const availability = averageAvailability.length
+    ? averageAvailability.reduce((sum, item) => sum + item.availability, 0) / averageAvailability.length
+    : null;
+  const p95Values = summaries.map((item) => item.p95).filter(Number.isFinite);
+
+  return (
+    <section className="page-view ops-page" aria-label="监控分析">
+      <div className="ops-toolbar">
+        <div className="ops-segmented" aria-label="时间范围">
+          {[1, 24, 168, 720].map((value) => <button key={value} className={hours === value ? 'active' : ''} type="button" onClick={() => setHours(value)}>{value === 1 ? '1 小时' : value === 24 ? '24 小时' : value === 168 ? '7 天' : '30 天'}</button>)}
+        </div>
+        <label className="ops-select-label">服务
+          <select value={selected} onChange={(event) => setSelected(event.target.value)}>
+            <option value="all">全部服务</option>
+            {services.filter((service) => service.healthPath).map((service) => <option key={service.id} value={service.id}>{service.shortName || service.name}</option>)}
+          </select>
+        </label>
+        <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />刷新</button>
+      </div>
+      <Feedback error={error} />
+      <div className="ops-kpis">
+        <article><Activity size={20} /><div><span>平均可用率</span><strong>{availability === null ? '--' : `${availability.toFixed(2)}%`}</strong><small>排除维护窗口</small></div></article>
+        <article><Gauge size={20} /><div><span>最高 P95</span><strong>{p95Values.length ? `${Math.max(...p95Values)} ms` : '--'}</strong><small>健康检查响应</small></div></article>
+        <article><History size={20} /><div><span>历史样本</span><strong>{samples.length}</strong><small>{hours === 720 ? '最近 30 天' : `最近 ${hours} 小时`}</small></div></article>
+        <article><ServerCog size={20} /><div><span>监测服务</span><strong>{summaries.length}</strong><small>服务端持续采集</small></div></article>
+      </div>
+      <section className="ops-panel">
+        <header><div><span>性能趋势</span><h3>真实响应时间序列</h3></div><Gauge size={20} /></header>
+        {loading ? <LoadingBlock label="正在读取历史样本" /> : <MonitoringChart groups={groups} />}
+      </section>
+      <section className="ops-panel ops-table-panel">
+        <div className="ops-table-head monitoring-table"><span>服务</span><span>当前</span><span>可用率</span><span>P95</span><span>样本</span><span>最近采集</span></div>
+        {summaries.map((item) => (
+          <div className="ops-table-row monitoring-table" key={item.serviceId}>
+            <strong>{services.find((service) => service.id === item.serviceId)?.shortName || item.serviceId}</strong>
+            <StatePill value={item.latest?.state} />
+            <span>{item.availability === null ? '--' : `${item.availability.toFixed(2)}%`}</span>
+            <span>{Number.isFinite(item.p95) ? `${item.p95} ms` : '--'}</span>
+            <span>{item.samples}</span>
+            <span>{formatRelative(item.latest?.recordedAt)}</span>
+          </div>
+        ))}
+      </section>
+    </section>
+  );
+}
+
+export function IncidentsView({ session }) {
+  const [filter, setFilter] = useState('active');
+  const [incidents, setIncidents] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [note, setNote] = useState('');
+  const [assignee, setAssignee] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [acting, setActing] = useState('');
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const canOperate = roleAtLeast(session.user?.role, 'operator');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const status = filter === 'active' ? 'open,acknowledged' : filter === 'resolved' ? 'resolved' : '';
+      const query = status ? `?status=${encodeURIComponent(status)}&limit=200` : '?limit=200';
+      const data = await requestJson(`/api/incidents${query}`);
+      setIncidents(data.incidents || []);
+      setSelectedId((current) => (data.incidents || []).some((item) => item.id === current) ? current : data.incidents?.[0]?.id || null);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [filter]);
+
+  useEffect(() => { load(); }, [load]);
+  const selected = incidents.find((incident) => incident.id === selectedId) || null;
+
+  useEffect(() => {
+    setAssignee(selected?.assignedTo || '');
+  }, [selected?.id, selected?.assignedTo]);
+
+  async function act(action, extra = {}) {
+    if (!selected) return;
+    setActing(action);
+    setError('');
+    setMessage('');
+    try {
+      await requestJson(`/api/incidents/${encodeURIComponent(selected.id)}/actions`, {
+        method: 'POST',
+        body: JSON.stringify({ action, note, ...extra }),
+      });
+      setNote('');
+      setMessage(action === 'acknowledge' ? '事件已确认' : action === 'resolve' ? '事件已关闭' : action === 'mute' ? '事件已静默' : '事件已更新');
+      await load();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setActing('');
+    }
+  }
+
+  return (
+    <section className="page-view ops-page" aria-label="告警事件">
+      <div className="ops-toolbar">
+        <div className="ops-segmented">
+          {[['active', '待处理'], ['resolved', '已恢复'], ['all', '全部']].map(([value, label]) => <button key={value} className={filter === value ? 'active' : ''} type="button" onClick={() => setFilter(value)}>{label}</button>)}
+        </div>
+        <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />刷新</button>
+      </div>
+      <Feedback error={error} message={message} />
+      <div className="ops-kpis incident-kpis">
+        <article><BellRing size={20} /><div><span>当前列表</span><strong>{incidents.length}</strong><small>符合筛选条件</small></div></article>
+        <article><AlertTriangle size={20} /><div><span>严重事件</span><strong>{incidents.filter((item) => item.severity === 'critical').length}</strong><small>优先处理</small></div></article>
+        <article><UserRoundCheck size={20} /><div><span>已确认</span><strong>{incidents.filter((item) => item.status === 'acknowledged').length}</strong><small>正在跟进</small></div></article>
+        <article><CheckCircle2 size={20} /><div><span>已恢复</span><strong>{incidents.filter((item) => item.status === 'resolved').length}</strong><small>自动或手动关闭</small></div></article>
+      </div>
+      <div className="incident-workspace">
+        <section className="ops-panel incident-list-panel">
+          {loading ? <LoadingBlock label="正在读取事件" /> : incidents.length ? incidents.map((incident) => (
+            <button type="button" className={`incident-list-row ${selectedId === incident.id ? 'selected' : ''}`} key={incident.id} onClick={() => setSelectedId(incident.id)}>
+              <span className={`incident-mark severity-${incident.severity}`}><CircleAlert size={17} /></span>
+              <span><strong>{incident.title}</strong><small>{incident.description}</small></span>
+              <span><SeverityPill value={incident.severity} /><small>{formatRelative(incident.lastSeenAt)}</small></span>
+              <ChevronRight size={16} />
+            </button>
+          )) : <div className="ops-empty">当前没有事件</div>}
+        </section>
+        <aside className="ops-panel incident-detail-panel">
+          {selected ? (
+            <>
+              <header><div><span>{selected.serviceId || selected.source}</span><h3>{selected.title}</h3></div><SeverityPill value={selected.severity} /></header>
+              <p>{selected.description}</p>
+              <dl className="ops-detail-grid">
+                <div><dt>状态</dt><dd>{INCIDENT_LABELS[selected.status] || selected.status}</dd></div>
+                <div><dt>首次发生</dt><dd>{formatDateTime(selected.firstSeenAt)}</dd></div>
+                <div><dt>最近观测</dt><dd>{formatDateTime(selected.lastSeenAt)}</dd></div>
+                <div><dt>负责人</dt><dd>{selected.assignedTo || '未指派'}</dd></div>
+              </dl>
+              <div className="incident-timeline">
+                {(selected.timeline || []).slice(-8).reverse().map((event, index) => <div key={`${event.at}-${index}`}><i /><span><strong>{event.message}</strong><small>{event.actor} · {formatDateTime(event.at)}</small></span></div>)}
+              </div>
+              {canOperate && selected.status !== 'resolved' && (
+                <div className="incident-actions">
+                  <div className="incident-assignment">
+                    <label>负责人<input value={assignee} maxLength={100} onChange={(event) => setAssignee(event.target.value)} placeholder="管理员账号" /></label>
+                    <button type="button" onClick={() => act('assign', { assignedTo: assignee })} disabled={Boolean(acting) || !assignee}><UserRoundCheck size={16} />指派</button>
+                  </div>
+                  <label>处理备注<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="记录判断和处理结果" /></label>
+                  <div>
+                    <button type="button" onClick={() => act('note')} disabled={Boolean(acting) || !note.trim()}><MessageSquareText size={16} />记录备注</button>
+                    {selected.status === 'open' && <button type="button" onClick={() => act('acknowledge')} disabled={Boolean(acting)}><Check size={16} />确认</button>}
+                    <button type="button" onClick={() => act('mute', { muteMinutes: 60 })} disabled={Boolean(acting)}><Clock3 size={16} />静默 1 小时</button>
+                    <button className="primary-button" type="button" onClick={() => act('resolve')} disabled={Boolean(acting)}>{acting === 'resolve' ? <LoaderCircle className="spin" size={16} /> : <CheckCircle2 size={16} />}关闭事件</button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : <div className="ops-empty">选择一个事件查看详情</div>}
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+export function ReleasesView({ session }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [targets, setTargets] = useState(['platform']);
+  const [credentials, setCredentials] = useState({ password: '', totp: '' });
+  const [deployment, setDeployment] = useState({ action: 'deploy', component: 'platform', image: '', confirmText: '', password: '', totp: '' });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try { setData(await requestJson('/api/releases')); } catch (requestError) { setError(requestError.message); } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  function toggleTarget(target) {
+    setTargets((current) => current.includes(target) ? current.filter((value) => value !== target) : [...current, target]);
+  }
+
+  async function triggerBuild() {
+    setSubmitting(true);
+    setError('');
+    setMessage('');
+    try {
+      await requestJson('/api/releases/build', {
+        method: 'POST',
+        body: JSON.stringify({ targets, ...credentials }),
+      });
+      setCredentials({ password: '', totp: '' });
+      setMessage('构建任务已提交到 GitHub Actions');
+      await load();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function triggerDeployment() {
+    const required = `${deployment.action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${deployment.component}`;
+    if (deployment.confirmText !== required) return;
+    setSubmitting(true);
+    setError('');
+    setMessage('');
+    try {
+      await requestJson('/api/releases/deploy', {
+        method: 'POST',
+        body: JSON.stringify(deployment),
+      });
+      setMessage(deployment.action === 'rollback' ? '回滚请求已提交给内部部署执行器' : '部署请求已提交给内部部署执行器');
+      setDeployment({ ...deployment, image: '', confirmText: '', password: '', totp: '' });
+      await load();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (loading && !data) return <section className="page-view ops-page"><LoadingBlock label="正在读取发布状态" /></section>;
+  const capabilities = data?.capabilities || {};
+  const successfulRuns = (data?.runs || []).filter((run) => run.conclusion === 'success').length;
+  return (
+    <section className="page-view ops-page" aria-label="发布中心">
+      <div className="ops-toolbar"><span className={`integration-state ${capabilities.githubConfigured ? 'ready' : ''}`}><i />{capabilities.githubConfigured ? 'GitHub 已连接' : 'GitHub 只读信息未配置'}</span><button className="secondary-action" type="button" onClick={load}><RefreshCw size={17} />刷新</button></div>
+      <Feedback error={error || capabilities.issue} message={message} />
+      <div className="ops-kpis">
+        <article><Rocket size={20} /><div><span>当前版本</span><strong>{data?.revision?.slice(0, 12) || '--'}</strong><small>{data?.deployedAt ? formatDateTime(data.deployedAt) : '等待镜像版本标识'}</small></div></article>
+        <article><PackageCheck size={20} /><div><span>镜像组件</span><strong>{data?.components?.filter((item) => item.configured).length || 0}</strong><small>生产部署单元</small></div></article>
+        <article><CheckCircle2 size={20} /><div><span>最近成功</span><strong>{successfulRuns}</strong><small>最近 10 次构建</small></div></article>
+        <article><ShieldCheck size={20} /><div><span>操作模式</span><strong>{capabilities.canBuild ? '受保护' : '只读'}</strong><small>高风险操作需二次验证</small></div></article>
+      </div>
+      <div className="release-layout">
+        <section className="ops-panel release-components">
+          <header><div><span>部署清单</span><h3>服务镜像</h3></div><HardDrive size={20} /></header>
+          {(data?.components || []).map((component) => <div className="release-component-row" key={component.id}><span><strong>{component.id}</strong><small>{component.image || '未由环境变量声明'}</small></span><span className={component.configured ? 'configured' : ''}>{component.configured ? '已配置' : '未知'}</span></div>)}
+        </section>
+        <section className="ops-panel release-runs">
+          <header><div><span>GitHub Actions</span><h3>最近构建</h3></div><History size={20} /></header>
+          {(data?.runs || []).length ? data.runs.map((run) => <div className="release-run-row" key={run.id}><span className={`run-state ${run.conclusion || run.status}`}><i /></span><span><strong>{run.name}</strong><small>{run.revision || run.branch} · {formatDateTime(run.createdAt)}</small></span><span>{run.conclusion === 'success' ? '成功' : run.status === 'in_progress' ? '运行中' : run.conclusion || run.status}</span>{run.url ? <a href={run.url} target="_blank" rel="noreferrer" aria-label="打开 GitHub 运行记录"><ExternalLink size={15} /></a> : <span />}</div>) : <div className="ops-empty">暂无构建记录</div>}
+        </section>
+      </div>
+      {roleAtLeast(session.user?.role, 'super_admin') && (
+        <section className="ops-panel protected-operation">
+          <header><div><span>受保护操作</span><h3>重新构建生产镜像</h3></div><LockKeyhole size={20} /></header>
+          <p>提交后由现有 ACR 工作流完成构建；发布写操作默认关闭，只有服务器显式启用后才能执行。</p>
+          <div className="release-targets">
+            {(data?.components || []).map((component) => <label key={component.id}><input type="checkbox" checked={targets.includes(component.id)} onChange={() => toggleTarget(component.id)} /><span>{component.id}</span></label>)}
+          </div>
+          <div className="reauth-fields">
+            <label>管理员密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>
+            {session.user?.totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}
+            <button className="primary-button" type="button" disabled={!capabilities.canBuild || !targets.length || !credentials.password || submitting} onClick={triggerBuild}>{submitting ? <LoaderCircle className="spin" size={17} /> : <Rocket size={17} />}触发构建</button>
+          </div>
+        </section>
+      )}
+      {roleAtLeast(session.user?.role, 'super_admin') && (
+        <section className="ops-panel protected-operation deployment-operation">
+          <header><div><span>原子部署</span><h3>部署或回滚不可变镜像</h3></div><ShieldCheck size={20} /></header>
+          <p>仅向内网部署执行器发送经过验证的镜像引用；未配置执行器时保持禁用，不会让管理容器接触 Docker Socket。</p>
+          <div className="deployment-fields">
+            <label>操作<select value={deployment.action} onChange={(event) => setDeployment({ ...deployment, action: event.target.value, confirmText: '' })}><option value="deploy">部署</option><option value="rollback">回滚</option></select></label>
+            <label>组件<select value={deployment.component} onChange={(event) => setDeployment({ ...deployment, component: event.target.value, confirmText: '' })}>{(data?.components || []).map((component) => <option key={component.id} value={component.id}>{component.id}</option>)}</select></label>
+            <label className="wide">不可变镜像引用<input value={deployment.image} onChange={(event) => setDeployment({ ...deployment, image: event.target.value })} placeholder="registry/repository:image-tag-sha" /></label>
+            <label>管理员密码<input type="password" autoComplete="current-password" value={deployment.password} onChange={(event) => setDeployment({ ...deployment, password: event.target.value })} /></label>
+            {session.user?.totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={deployment.totp} onChange={(event) => setDeployment({ ...deployment, totp: event.target.value.replace(/\D/g, '') })} /></label>}
+            <label className="wide">确认短语<input value={deployment.confirmText} onChange={(event) => setDeployment({ ...deployment, confirmText: event.target.value })} placeholder={`${deployment.action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${deployment.component}`} /></label>
+            <button className="primary-button" type="button" onClick={triggerDeployment} disabled={
+              !(deployment.action === 'rollback' ? capabilities.canRollback : capabilities.canDeploy)
+              || !deployment.image || !deployment.password || submitting
+              || deployment.confirmText !== `${deployment.action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${deployment.component}`
+            }>{submitting ? <LoaderCircle className="spin" size={17} /> : <Rocket size={17} />}{deployment.action === 'rollback' ? '提交回滚' : '提交部署'}</button>
+          </div>
+        </section>
+      )}
+    </section>
+  );
+}
+
+export function SecurityAuditView({ session, onLogout }) {
+  const [tab, setTab] = useState('audit');
+  const [events, setEvents] = useState([]);
+  const [sessionData, setSessionData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [auditResult, sessionsResult] = await Promise.all([requestJson('/api/audit?limit=200'), requestJson('/api/security/sessions')]);
+      setEvents(auditResult.events || []);
+      setSessionData(sessionsResult);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function revoke(nonce) {
+    setError('');
+    setMessage('');
+    try {
+      const result = await requestJson(`/api/security/sessions/${encodeURIComponent(nonce)}`, { method: 'DELETE' });
+      if (result.current) {
+        onLogout();
+        return;
+      }
+      setMessage('会话已撤销');
+      await load();
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
+  const failures = events.filter((event) => event.outcome === 'failure').length;
+  return (
+    <section className="page-view ops-page" aria-label="安全审计">
+      <div className="ops-toolbar"><div className="ops-segmented"><button type="button" className={tab === 'audit' ? 'active' : ''} onClick={() => setTab('audit')}>审计日志</button><button type="button" className={tab === 'sessions' ? 'active' : ''} onClick={() => setTab('sessions')}>登录会话</button></div><button className="secondary-action" type="button" onClick={load}><RefreshCw size={17} />刷新</button></div>
+      <Feedback error={error} message={message} />
+      <div className="ops-kpis">
+        <article><ShieldCheck size={20} /><div><span>当前角色</span><strong>{ROLE_LABELS[session.user?.role] || session.user?.role}</strong><small>最小权限控制</small></div></article>
+        <article><KeyRound size={20} /><div><span>动态验证</span><strong>{session.user?.totpEnabled ? '已启用' : '未启用'}</strong><small>{session.user?.totpEnabled ? '高风险操作受保护' : '建议配置 TOTP'}</small></div></article>
+        <article><UserRoundCheck size={20} /><div><span>有效会话</span><strong>{sessionData?.sessions?.length || 0}</strong><small>支持远程下线</small></div></article>
+        <article><XCircle size={20} /><div><span>失败事件</span><strong>{failures}</strong><small>最近 200 条审计</small></div></article>
+      </div>
+      {loading ? <LoadingBlock /> : tab === 'audit' ? (
+        <section className="ops-panel ops-table-panel">
+          <div className="ops-table-head audit-table"><span>时间</span><span>操作</span><span>操作者</span><span>目标</span><span>来源 IP</span><span>结果</span></div>
+          {events.map((event) => <div className="ops-table-row audit-table" key={event.id}><span>{formatDateTime(event.occurredAt)}</span><strong>{ACTION_LABELS[event.action] || event.action}</strong><span>{event.actor}</span><span className="audit-target"><strong>{event.targetId || event.targetType}</strong><small>{event.requestId || event.details?.errorKind || ''}</small></span><span>{event.ip || '--'}</span><span className={`audit-outcome ${event.outcome}`}>{event.outcome === 'success' ? '成功' : '失败'}</span></div>)}
+        </section>
+      ) : (
+        <section className="ops-panel session-list">
+          {(sessionData?.sessions || []).map((item) => <div className="session-row" key={item.nonce}><span className={item.nonce === sessionData.currentNonce ? 'current' : ''}><UserRoundCheck size={18} /></span><span><strong>{item.subject} · {ROLE_LABELS[item.role] || item.role}</strong><small>{item.ip || '未知 IP'} · {item.userAgent || '未知客户端'}</small></span><span><strong>{item.nonce === sessionData.currentNonce ? '当前会话' : formatRelative(item.createdAt)}</strong><small>到期 {formatDateTime(item.expiresAt)}</small></span>{roleAtLeast(session.user?.role, 'super_admin') && <button type="button" onClick={() => revoke(item.nonce)}><XCircle size={16} />下线</button>}</div>)}
+        </section>
+      )}
+    </section>
+  );
+}
+
+export function SettingsDiagnosticsView({ session }) {
+  const [data, setData] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [diagnostics, setDiagnostics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [maintenance, setMaintenance] = useState({ serviceId: 'all', duration: 60, reason: '' });
+  const canSave = roleAtLeast(session.user?.role, 'super_admin');
+  const canDiagnose = roleAtLeast(session.user?.role, 'operator');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await requestJson('/api/operations/settings');
+      setData(result);
+      setDraft(result.settings);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function save() {
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const result = await requestJson('/api/operations/settings', { method: 'PUT', body: JSON.stringify(draft) });
+      setDraft(result.settings);
+      setMessage('运行设置已保存');
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function addMaintenance() {
+    const startsAt = new Date();
+    const endsAt = new Date(startsAt.getTime() + Number(maintenance.duration) * 60000);
+    setDraft({
+      ...draft,
+      maintenanceWindows: [...(draft.maintenanceWindows || []), {
+        id: crypto.randomUUID(), serviceId: maintenance.serviceId, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), reason: maintenance.reason || '计划维护', createdBy: session.user?.username,
+      }],
+    });
+    setMaintenance({ ...maintenance, reason: '' });
+  }
+
+  async function runDiagnostics() {
+    setRunning(true);
+    setError('');
+    try { setDiagnostics(await requestJson('/api/diagnostics/run', { method: 'POST' })); } catch (requestError) { setError(requestError.message); } finally { setRunning(false); }
+  }
+
+  if (loading || !draft) return <section className="page-view ops-page"><LoadingBlock label="正在读取运行设置" /></section>;
+  return (
+    <section className="page-view ops-page" aria-label="系统设置与诊断">
+      <div className="ops-toolbar"><span className="integration-state ready"><i />配置不包含任何敏感值</span>{canSave && <button className="primary-button compact" type="button" onClick={save} disabled={saving}>{saving ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />}保存设置</button>}</div>
+      <Feedback error={error} message={message} />
+      <div className="settings-layout">
+        <section className="ops-panel settings-section">
+          <header><div><span>监控与告警</span><h3>采集和事件阈值</h3></div><Settings2 size={20} /></header>
+          <div className="settings-grid">
+            <label className="toggle-field"><span><strong>企业微信告警</strong><small>事件产生和恢复时推送</small></span><input type="checkbox" checked={draft.alertingEnabled} disabled={!canSave} onChange={(event) => setDraft({ ...draft, alertingEnabled: event.target.checked })} /></label>
+            <label><span>监控间隔</span><select disabled={!canSave} value={draft.monitorIntervalMs} onChange={(event) => setDraft({ ...draft, monitorIntervalMs: Number(event.target.value) })}><option value={10000}>10 秒</option><option value={30000}>30 秒</option><option value={60000}>1 分钟</option><option value={300000}>5 分钟</option></select></label>
+            <label><span>连续失败次数</span><input type="number" min="1" max="10" disabled={!canSave} value={draft.failureThreshold} onChange={(event) => setDraft({ ...draft, failureThreshold: Number(event.target.value) })} /></label>
+            <label><span>连续恢复次数</span><input type="number" min="1" max="10" disabled={!canSave} value={draft.recoveryThreshold} onChange={(event) => setDraft({ ...draft, recoveryThreshold: Number(event.target.value) })} /></label>
+            <label><span>健康检查延迟阈值（ms）</span><input type="number" min="100" max="30000" disabled={!canSave} value={draft.serviceLatencyThresholdMs} onChange={(event) => setDraft({ ...draft, serviceLatencyThresholdMs: Number(event.target.value) })} /></label>
+            <label><span>网关 P95 阈值（ms）</span><input type="number" min="100" max="120000" disabled={!canSave} value={draft.proxyP95ThresholdMs} onChange={(event) => setDraft({ ...draft, proxyP95ThresholdMs: Number(event.target.value) })} /></label>
+            <label><span>网关 5xx 阈值（%）</span><input type="number" min="1" max="100" disabled={!canSave} value={draft.proxyErrorRatePercent} onChange={(event) => setDraft({ ...draft, proxyErrorRatePercent: Number(event.target.value) })} /></label>
+            <label><span>磁盘使用率阈值（%）</span><input type="number" min="50" max="99" disabled={!canSave} value={draft.diskUsageThresholdPercent} onChange={(event) => setDraft({ ...draft, diskUsageThresholdPercent: Number(event.target.value) })} /></label>
+          </div>
+        </section>
+        <section className="ops-panel settings-section">
+          <header><div><span>灾备策略</span><h3>RPO 与自动备份</h3></div><DatabaseBackup size={20} /></header>
+          <div className="settings-grid">
+            <label className="toggle-field"><span><strong>每日自动备份</strong><small>由内网备份执行器运行</small></span><input type="checkbox" checked={draft.backupSchedule.enabled} disabled={!canSave} onChange={(event) => setDraft({ ...draft, backupSchedule: { ...draft.backupSchedule, enabled: event.target.checked } })} /></label>
+            <label><span>执行时间</span><input type="time" disabled={!canSave} value={draft.backupSchedule.time} onChange={(event) => setDraft({ ...draft, backupSchedule: { ...draft.backupSchedule, time: event.target.value } })} /></label>
+            <label><span>RPO 目标（小时）</span><input type="number" min="1" max="720" disabled={!canSave} value={draft.backupRpoHours} onChange={(event) => setDraft({ ...draft, backupRpoHours: Number(event.target.value) })} /></label>
+          </div>
+        </section>
+      </div>
+      <section className="ops-panel maintenance-panel">
+        <header><div><span>告警抑制</span><h3>维护窗口</h3></div><Wrench size={20} /></header>
+        {canSave && <div className="maintenance-form"><select value={maintenance.serviceId} onChange={(event) => setMaintenance({ ...maintenance, serviceId: event.target.value })}><option value="all">全部服务</option>{data.services.map((service) => <option value={service.id} key={service.id}>{service.shortName || service.name}</option>)}</select><select value={maintenance.duration} onChange={(event) => setMaintenance({ ...maintenance, duration: Number(event.target.value) })}><option value={30}>30 分钟</option><option value={60}>1 小时</option><option value={120}>2 小时</option><option value={240}>4 小时</option></select><input value={maintenance.reason} maxLength={200} placeholder="维护原因" onChange={(event) => setMaintenance({ ...maintenance, reason: event.target.value })} /><button type="button" onClick={addMaintenance}><Clock3 size={16} />添加</button></div>}
+        <div className="maintenance-list">{(draft.maintenanceWindows || []).length ? draft.maintenanceWindows.map((window) => <div key={window.id}><span><strong>{window.serviceId === 'all' ? '全部服务' : data.services.find((service) => service.id === window.serviceId)?.shortName || window.serviceId}</strong><small>{window.reason}</small></span><span>{formatDateTime(window.startsAt)} 至 {formatDateTime(window.endsAt)}</span>{canSave && <button type="button" aria-label="移除维护窗口" onClick={() => setDraft({ ...draft, maintenanceWindows: draft.maintenanceWindows.filter((item) => item.id !== window.id) })}><XCircle size={17} /></button>}</div>) : <div className="ops-empty compact">暂无维护窗口</div>}</div>
+      </section>
+      <section className="ops-panel diagnostics-panel">
+        <header><div><span>一键排查</span><h3>系统诊断</h3></div>{canDiagnose && <button className="primary-button compact" type="button" onClick={runDiagnostics} disabled={running}>{running ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}运行诊断</button>}</header>
+        <p>检查服务健康、运维数据库、平台就绪状态、备份执行器、通知服务和发布集成，不读取或返回任何凭据。</p>
+        {diagnostics && <div className="diagnostics-grid">{diagnostics.checks.map((check) => <div key={check.id} className={check.status}><span>{check.status === 'passed' ? <CheckCircle2 size={18} /> : check.status === 'skipped' ? <Clock3 size={18} /> : <XCircle size={18} />}</span><div><strong>{check.id}</strong><small>{check.status === 'passed' ? '检查通过' : check.status === 'skipped' ? '未配置，已跳过' : typeof check.detail === 'string' ? check.detail : '需要处理'}</small></div></div>)}</div>}
+      </section>
+    </section>
+  );
+}
+
+export function OverviewOperations({ summary, onOpenIncidents, onOpenAudit }) {
+  const incidents = summary?.incidents || [];
+  const audit = summary?.audit || [];
+  return (
+    <section className="overview-operations" aria-label="事件与最近活动">
+      <div className="overview-band">
+        <header><div><BellRing size={18} /><span><strong>未解决事件</strong><small>{incidents.length ? `${incidents.length} 项需要关注` : '当前运行平稳'}</small></span></div><button type="button" onClick={onOpenIncidents}>查看全部 <ChevronRight size={15} /></button></header>
+        <div>{incidents.length ? incidents.slice(0, 3).map((incident) => <button type="button" key={incident.id} onClick={onOpenIncidents}><SeverityPill value={incident.severity} /><span><strong>{incident.title}</strong><small>{formatRelative(incident.lastSeenAt)}</small></span></button>) : <div className="overview-empty"><CheckCircle2 size={18} />没有待处理事件</div>}</div>
+      </div>
+      <div className="overview-band">
+        <header><div><FileClock size={18} /><span><strong>最近活动</strong><small>关键操作均已审计</small></span></div><button type="button" onClick={onOpenAudit}>审计日志 <ChevronRight size={15} /></button></header>
+        <div>{audit.length ? audit.slice(0, 3).map((event) => <button type="button" key={event.id} onClick={onOpenAudit}><span className={`activity-icon ${event.outcome}`}><TerminalSquare size={16} /></span><span><strong>{ACTION_LABELS[event.action] || event.action}</strong><small>{event.actor} · {formatRelative(event.occurredAt)}</small></span></button>) : <div className="overview-empty"><History size={18} />暂无最近活动</div>}</div>
+      </div>
+    </section>
+  );
+}
+
+export function BackupQualityStrip() {
+  const [quality, setQuality] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    requestJson('/api/backups/quality').then(setQuality).catch((requestError) => setError(requestError.message));
+  }, []);
+  if (error) return <Feedback error={error} />;
+  if (!quality) return null;
+  return (
+    <section className="backup-quality-strip" aria-label="灾备质量">
+      <div className={`quality-item ${quality.rpoState}`}><Clock3 size={18} /><span><strong>{quality.ageHours === null ? '暂无' : `${quality.ageHours} 小时`}</strong><small>最近可恢复备份 · RPO {quality.rpoHours}h</small></span></div>
+      <div className={`quality-item ${quality.restoreDrillState === 'verified' ? 'healthy' : 'warning'}`}><DatabaseBackup size={18} /><span><strong>{quality.lastRestoreDrillAt ? formatDateTime(quality.lastRestoreDrillAt) : '尚未演练'}</strong><small>最近恢复验证</small></span></div>
+      <div className={`quality-item ${quality.offsite.healthy === true ? 'healthy' : quality.offsite.configured ? 'warning' : 'unknown'}`}><Cloud size={18} /><span><strong>{quality.offsite.healthy === true ? '同步正常' : quality.offsite.configured ? '同步异常' : '未配置'}</strong><small>异地备份状态</small></span></div>
+      <div className={`quality-item ${quality.schedule.enabled ? 'healthy' : 'unknown'}`}><FileClock size={18} /><span><strong>{quality.schedule.enabled ? `每日 ${quality.schedule.time}` : '手动执行'}</strong><small>自动备份计划</small></span></div>
+    </section>
+  );
+}

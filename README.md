@@ -7,7 +7,7 @@ Unified workspace for the WeChat miniapps, admin consoles, backend services, dep
 ```text
 MY/
 |-- apps/
-|   |-- admin-console/          # unified login and service overview
+|   |-- admin-console/          # unified operations, security, release and disaster-recovery portal
 |   |-- core-admin/             # core business admin console
 |   |-- exam-admin/             # exam admin console
 |   |-- smart-campus-miniapp/   # smart campus WeChat miniapp

@@ -299,6 +299,18 @@ body::before {
   min-width: 0;
 }
 
+#platform-console-link {
+  align-items: center;
+  gap: 7px;
+  color: var(--primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+#platform-console-link svg {
+  flex: 0 0 auto;
+}
+
 h1 {
   font-size: 1.85rem;
   font-weight: 700;

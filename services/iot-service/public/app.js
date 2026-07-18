@@ -55,6 +55,7 @@ const elements = {
   loginPassword: document.getElementById('login-password'),
   loginButton: document.getElementById('login-button'),
   loginMessage: document.getElementById('login-message'),
+  platformConsoleLink: document.getElementById('platform-console-link'),
   logoutButton: document.getElementById('logout-button'),
   serviceBadge: document.getElementById('service-badge'),
   wsBadge: document.getElementById('ws-badge'),
@@ -511,6 +512,7 @@ function updateAuthUi() {
   document.body.classList.toggle('unauthenticated', locked);
   elements.authOverlay.classList.toggle('hidden', !locked);
   elements.authOverlay.setAttribute('aria-hidden', String(!locked));
+  elements.platformConsoleLink.classList.toggle('hidden', !state.platformSso || !state.authenticated);
   elements.logoutButton.classList.toggle('hidden', !state.authEnabled || !state.authenticated);
   elements.logoutButton.disabled = locked || isActionLocked('auth-logout');
   elements.configForm.classList.toggle('locked', locked);

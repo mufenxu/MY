@@ -32,9 +32,9 @@ async function withServer(router, callback) {
   }
 }
 
-async function request(port, pathname, host = 'admin.example.com', headers = {}) {
+async function request(port, pathname, host = 'admin.example.com', headers = {}, method = 'GET') {
   return new Promise((resolve, reject) => {
-    const req = http.request({ host: '127.0.0.1', port, path: pathname, headers: { Host: host, ...headers } }, (res) => {
+    const req = http.request({ host: '127.0.0.1', port, path: pathname, method, headers: { Host: host, ...headers } }, (res) => {
       let body = '';
       res.setEncoding('utf8');
       res.on('data', (chunk) => { body += chunk; });
@@ -68,6 +68,29 @@ test('host routing preserves legacy application URLs', async () => {
     assert.equal((await request(port, '/', 'exam.example.com')).body.name, 'exam');
     assert.equal((await request(port, '/healthz', 'notify.example.com')).body.name, 'notify');
     assert.equal((await request(port, '/')).body.name, 'portal');
+  });
+});
+
+test('viewer sessions can inspect managed apps but cannot mutate them', async () => {
+  const router = createPlatformRouter({
+    portalApp: echoApp('portal'),
+    coreApp: echoApp('core'),
+    examApp: echoApp('exam'),
+    notifyApp: echoApp('notify'),
+    getPlatformSession: () => ({ sub: 'viewer', role: 'viewer', nonce: 'viewer-session' }),
+    internalAuthPrivateKey: TEST_PRIVATE_KEY,
+    platformPublicOrigin: 'https://admin.example.com',
+  });
+
+  await withServer(router, async (port) => {
+    const read = await request(port, '/apps/core/api/users');
+    assert.equal(read.status, 200);
+    const write = await request(port, '/apps/core/api/users', 'admin.example.com', {
+      Origin: 'https://admin.example.com',
+      'Sec-Fetch-Site': 'same-origin',
+    }, 'POST');
+    assert.equal(write.status, 403);
+    assert.equal(write.body.code, 'PLATFORM_READ_ONLY');
   });
 });
 

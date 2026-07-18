@@ -16,6 +16,8 @@ COPY services/platform-api/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
 FROM ${NODE_IMAGE} AS runtime
+ARG BUILD_REVISION=unknown
+ARG BUILD_TIMESTAMP=
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
     && rm -rf /var/lib/apt/lists/*
@@ -24,7 +26,9 @@ ENV NODE_ENV=production \
     PLATFORM_EXTERNAL_SERVICES=true \
     PLATFORM_API_HOST=0.0.0.0 \
     PLATFORM_API_PORT=22100 \
-    PLATFORM_CONFIG_PATH=/app/config/platform.services.docker.json
+    PLATFORM_CONFIG_PATH=/app/config/platform.services.docker.json \
+    PLATFORM_RELEASE_REVISION=${BUILD_REVISION} \
+    PLATFORM_RELEASE_DEPLOYED_AT=${BUILD_TIMESTAMP}
 
 WORKDIR /app
 COPY --chown=node:node packages/platform-auth/ ./packages/platform-auth/

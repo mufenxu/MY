@@ -1426,6 +1426,14 @@ html.dark .route-pending-indicator {
   color: var(--primary-color) !important;
 }
 
+.soybean-header-icon-btn.platform-console-return {
+  width: auto !important;
+  min-width: 36px;
+  padding: 0 10px !important;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 /* 顶栏面包屑 */
 .soybean-breadcrumb {
   font-size: 14px !important;
@@ -1601,6 +1609,12 @@ html.dark .route-pending-indicator {
     width: 28px !important;
     height: 28px !important;
     font-size: 13px !important;
+  }
+
+  .soybean-header-icon-btn.platform-console-return {
+    width: 28px !important;
+    min-width: 28px;
+    padding: 0 !important;
   }
 
   .soybean-header-avatar {

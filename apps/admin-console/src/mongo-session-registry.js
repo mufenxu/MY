@@ -18,7 +18,7 @@ export async function createMongoSessionRegistry({
   ]);
 
   return {
-    async issue({ username, ttlHours, now = Date.now() }) {
+    async issue({ username, role = 'super_admin', ttlHours, ip = '', userAgent = '', now = Date.now() }) {
       const count = await sessions.estimatedDocumentCount();
       if (count >= maxSessions) {
         const overflow = count - maxSessions + 1;
@@ -28,11 +28,14 @@ export async function createMongoSessionRegistry({
           .toArray();
         if (oldest.length > 0) await sessions.deleteMany({ _id: { $in: oldest.map((row) => row._id) } });
       }
-      const token = issueSession({ username, secret, ttlHours, now });
+      const token = issueSession({ username, role, secret, ttlHours, now });
       const session = verifySession(token, secret, now);
       await sessions.insertOne({
         nonce: session.nonce,
         subject: session.sub,
+        role,
+        ip: String(ip || '').slice(0, 128),
+        userAgent: String(userAgent || '').slice(0, 256),
         expiresAt: new Date(session.exp * 1000),
         createdAt: new Date(now),
       });
@@ -47,13 +50,34 @@ export async function createMongoSessionRegistry({
         subject: session.sub,
         expiresAt: { $gt: new Date(now) },
       });
-      return active ? session : null;
+      return active ? { ...session, role: active.role || session.role || 'super_admin' } : null;
     },
 
     async revoke(token, now = Date.now()) {
       const session = verifySession(token, secret, now);
       if (!session) return false;
       return (await sessions.deleteOne({ nonce: session.nonce })).deletedCount === 1;
+    },
+
+    async revokeByNonce(nonce) {
+      return (await sessions.deleteOne({ nonce: String(nonce || '') })).deletedCount === 1;
+    },
+
+    async list({ subject, limit = 100 } = {}) {
+      const query = {
+        expiresAt: { $gt: new Date() },
+        ...(subject ? { subject } : {}),
+      };
+      return sessions.find(query, { projection: { _id: 0 } })
+        .sort({ createdAt: -1 })
+        .limit(Math.min(Math.max(Number(limit) || 100, 1), 500))
+        .toArray()
+        .then((rows) => rows.map((row) => ({
+          ...row,
+          role: row.role || 'super_admin',
+          createdAt: row.createdAt?.toISOString?.() || row.createdAt,
+          expiresAt: row.expiresAt?.toISOString?.() || row.expiresAt,
+        })));
     },
 
     async ping() {

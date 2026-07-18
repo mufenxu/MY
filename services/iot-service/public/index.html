@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MQTT 智能后台管理系统</title>
-    <link rel="stylesheet" href="./styles.css?v=14" />
+    <link rel="stylesheet" href="./styles.css?v=15" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3' fill='%236366f1' stroke='none'%3E%3C/circle%3E%3Cline x1='12' y1='9' x2='12' y2='4'%3E%3C/line%3E%3Ccircle cx='12' cy='3' r='1.5' fill='none' stroke='%236366f1' stroke-width='1.5'%3E%3C/circle%3E%3Cline x1='9.5' y1='13.5' x2='5' y2='16'%3E%3C/line%3E%3Ccircle cx='4' cy='16.5' r='1.5' fill='none' stroke='%236366f1' stroke-width='1.5'%3E%3C/circle%3E%3Cline x1='14.5' y1='13.5' x2='19' y2='16'%3E%3C/line%3E%3Ccircle cx='20' cy='16.5' r='1.5' fill='none' stroke='%236366f1' stroke-width='1.5'%3E%3C/circle%3E%3Cpath d='M5 8a9 9 0 0 1 14 0' stroke-dasharray='2,2'%3E%3C/path%3E%3Cpath d='M19 16a9 9 0 0 1-7 4' stroke-dasharray='2,2'%3E%3C/path%3E%3Cpath d='M5 16a9 9 0 0 1-1-6' stroke-dasharray='2,2'%3E%3C/path%3E%3C/svg%3E" />
     <script src="./js/themeBootstrap.js?v=1"></script>
   </head>
@@ -231,6 +231,10 @@
           <p class="muted" id="current-pane-desc">实时监控多个设备传感器快照、在线状态与继电器控制。</p>
         </div>
         <div class="topbar-actions">
+          <a id="platform-console-link" class="button button-secondary hidden" href="/" title="返回统一服务控制台" aria-label="返回统一服务控制台">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+            <span>统一控制台</span>
+          </a>
           <span id="service-badge" class="badge badge-muted">检查中</span>
           <span id="ws-badge" class="badge badge-muted">实时通道</span>
           <label class="toggle-control" title="开启或暂停自动刷新">
@@ -1160,6 +1164,6 @@ fetch("http://localhost:22102/api/devices/esp8266_living/history?range=24h", {
     <script src="./js/historyView.js?v=1"></script>
     <script src="./js/deviceGridView.js?v=1"></script>
     <script src="./js/deviceConfigView.js?v=1"></script>
-    <script src="./app.js?v=23"></script>
+    <script src="./app.js?v=24"></script>
   </body>
 </html>

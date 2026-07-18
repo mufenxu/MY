@@ -120,6 +120,11 @@ function rejectCrossSiteWrite(res) {
   res.end(JSON.stringify({ error: '跨站管理请求已被拒绝。', code: 'PLATFORM_CSRF_REJECTED' }));
 }
 
+function rejectReadOnlyWrite(res) {
+  res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify({ error: '只读管理员不能修改业务数据。', code: 'PLATFORM_READ_ONLY' }));
+}
+
 export function createCoreWebApp({ coreApp, staticPath }) {
   const app = express();
   app.disable('x-powered-by');
@@ -309,6 +314,10 @@ export function createPlatformRouter({
       rejectCrossSiteWrite(res);
       return false;
     }
+    if (session.role === 'viewer' && !['GET', 'HEAD', 'OPTIONS'].includes(String(req.method || 'GET').toUpperCase())) {
+      rejectReadOnlyWrite(res);
+      return false;
+    }
     rewriteServicePrefix(req, prefix);
     const rewrittenUrl = new URL(req.url || '/', 'http://platform.internal');
     req.headers[PLATFORM_SSO_HEADER] = issueInternalIdentity({
@@ -424,6 +433,7 @@ export function createPlatformRouter({
       const session = await getPlatformSession(req);
       if (
         !session
+        || session.role === 'viewer'
         || !mqttTarget
         || !internalAuthPrivateKey
         || !managedSocketAllowed(req, platformPublicOrigin)

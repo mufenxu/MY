@@ -42,9 +42,10 @@ export function parseCookies(header = '') {
     }, {});
 }
 
-export function issueSession({ username, secret, ttlHours, now = Date.now() }) {
+export function issueSession({ username, role = 'super_admin', secret, ttlHours, now = Date.now() }) {
   const payload = encodeJson({
     sub: username,
+    role,
     iat: Math.floor(now / 1000),
     exp: Math.floor(now / 1000) + ttlHours * 60 * 60,
     nonce: crypto.randomBytes(12).toString('base64url'),
@@ -71,27 +72,33 @@ export function createSessionRegistry({ secret, maxSessions = 1024 } = {}) {
 
   function prune(now = Date.now()) {
     const nowSeconds = Math.floor(now / 1000);
-    for (const [nonce, expiresAt] of activeSessions) {
-      if (expiresAt <= nowSeconds) activeSessions.delete(nonce);
+    for (const [nonce, session] of activeSessions) {
+      if (session.exp <= nowSeconds) activeSessions.delete(nonce);
     }
   }
 
-  function issue({ username, ttlHours, now = Date.now() }) {
+  function issue({ username, role = 'super_admin', ttlHours, ip = '', userAgent = '', now = Date.now() }) {
     prune(now);
     while (activeSessions.size >= maxSessions) {
       activeSessions.delete(activeSessions.keys().next().value);
     }
-    const token = issueSession({ username, secret, ttlHours, now });
+    const token = issueSession({ username, role, secret, ttlHours, now });
     const session = verifySession(token, secret, now);
-    activeSessions.set(session.nonce, session.exp);
+    activeSessions.set(session.nonce, {
+      ...session,
+      ip: String(ip || '').slice(0, 128),
+      userAgent: String(userAgent || '').slice(0, 256),
+      createdAt: new Date(now).toISOString(),
+    });
     return token;
   }
 
   function verify(token, now = Date.now()) {
     prune(now);
     const session = verifySession(token, secret, now);
-    if (!session || activeSessions.get(session.nonce) !== session.exp) return null;
-    return session;
+    const active = session ? activeSessions.get(session.nonce) : null;
+    if (!active || active.exp !== session.exp || active.sub !== session.sub) return null;
+    return { ...session, role: active.role || session.role || 'super_admin' };
   }
 
   function revoke(token, now = Date.now()) {
@@ -100,12 +107,64 @@ export function createSessionRegistry({ secret, maxSessions = 1024 } = {}) {
     return activeSessions.delete(session.nonce);
   }
 
+  function revokeByNonce(nonce) {
+    return activeSessions.delete(String(nonce || ''));
+  }
+
+  function list({ subject } = {}) {
+    prune();
+    return [...activeSessions.values()]
+      .filter((session) => !subject || session.sub === subject)
+      .sort((left, right) => right.iat - left.iat)
+      .map((session) => ({
+        nonce: session.nonce,
+        subject: session.sub,
+        role: session.role || 'super_admin',
+        ip: session.ip,
+        userAgent: session.userAgent,
+        createdAt: session.createdAt,
+        expiresAt: new Date(session.exp * 1000).toISOString(),
+      }));
+  }
+
   return {
     issue,
     verify,
     revoke,
+    revokeByNonce,
+    list,
     size: () => activeSessions.size,
   };
+}
+
+function decodeBase32(value) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const normalized = String(value || '').toUpperCase().replace(/[\s=-]/g, '');
+  if (!normalized || [...normalized].some((character) => !alphabet.includes(character))) return null;
+  let bits = '';
+  for (const character of normalized) bits += alphabet.indexOf(character).toString(2).padStart(5, '0');
+  const bytes = [];
+  for (let index = 0; index + 8 <= bits.length; index += 8) {
+    bytes.push(Number.parseInt(bits.slice(index, index + 8), 2));
+  }
+  return Buffer.from(bytes);
+}
+
+export function verifyTotp(token, secret, now = Date.now(), { window = 1, periodSeconds = 30 } = {}) {
+  const normalizedToken = String(token || '').replace(/\s/g, '');
+  const key = decodeBase32(secret);
+  if (!/^\d{6}$/.test(normalizedToken) || !key?.length) return false;
+
+  const counter = Math.floor(now / 1000 / periodSeconds);
+  for (let offset = -window; offset <= window; offset += 1) {
+    const buffer = Buffer.alloc(8);
+    buffer.writeBigUInt64BE(BigInt(counter + offset));
+    const digest = crypto.createHmac('sha1', key).update(buffer).digest();
+    const position = digest[digest.length - 1] & 0x0f;
+    const code = ((digest.readUInt32BE(position) & 0x7fffffff) % 1_000_000).toString().padStart(6, '0');
+    if (safeEqual(code, normalizedToken)) return true;
+  }
+  return false;
 }
 
 export async function createPasswordHash(password, salt = crypto.randomBytes(16)) {

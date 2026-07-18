@@ -9,6 +9,7 @@ const runtimeFiles = {
   portalApp: ['PORTAL_APP_PATH', 'apps/admin-console/src/app.js'],
   portalConfig: ['PORTAL_CONFIG_PATH', 'apps/admin-console/src/config.js'],
   portalMongoSessionRegistry: ['PORTAL_MONGO_SESSION_REGISTRY_PATH', 'apps/admin-console/src/mongo-session-registry.js'],
+  portalOperationsStore: ['PORTAL_OPERATIONS_STORE_PATH', 'apps/admin-console/src/operations-store.js'],
 };
 const localServiceRuntimeNames = new Set(['coreServer', 'coreStatic', 'examServer', 'notifyApp']);
 

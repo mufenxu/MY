@@ -33,7 +33,7 @@
       "category": "service",
       "description": "校园能耗、一卡通、住宿与教务信息服务",
       "baseUrl": "http://campus-service:22101",
-      "healthPath": "/api/health",
+      "healthPath": "/api/ready",
       "adminUrl": "/apps/campus/",
       "repositoryPath": "services/campus-service",
       "capabilities": ["校园", "能耗", "教务"]
@@ -45,7 +45,7 @@
       "category": "service",
       "description": "设备在线状态、遥测历史、继电器与实时消息",
       "baseUrl": "http://iot-service:22102",
-      "healthPath": "/api/health",
+      "healthPath": "/api/ready",
       "adminUrl": "/apps/iot/",
       "repositoryPath": "services/iot-service",
       "capabilities": ["MQTT", "设备", "WebSocket"]

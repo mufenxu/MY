@@ -37,3 +37,10 @@ test('QR creation requests are cancelled when login surfaces are replaced', () =
     assert.match(source, /signal:\s*controller\.signal/);
   }
 });
+
+test('platform console return is rendered only in the managed SSO shell', () => {
+  const source = readSource('src', 'components', 'MainLayout.jsx');
+
+  assert.match(source, /\{IS_PLATFORM_SSO && \([\s\S]*?返回统一服务控制台/);
+  assert.match(source, /window\.location\.assign\('\/'\)/);
+});

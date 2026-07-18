@@ -107,10 +107,16 @@ function registerSystemRoutes(app, { settingsStore, mqttService, requireSession 
 
   app.get('/api/ready', async (req, res) => {
     try {
-      const ready = await mqttService.db.ping();
-      res.status(ready ? 200 : 503).json({ ok: ready, storage: 'mongodb' });
+      const storageReady = await mqttService.db.ping();
+      const mqttReady = Boolean(mqttService.status?.mqttConnected ?? mqttService.getStatus?.().mqttConnected);
+      const ready = Boolean(storageReady && mqttReady);
+      res.status(ready ? 200 : 503).json({
+        ok: ready,
+        storage: storageReady ? 'ready' : 'unavailable',
+        mqtt: mqttReady ? 'connected' : 'disconnected'
+      });
     } catch {
-      res.status(503).json({ ok: false, storage: 'mongodb' });
+      res.status(503).json({ ok: false, storage: 'unavailable', mqtt: 'unknown' });
     }
   });
 }

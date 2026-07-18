@@ -67,6 +67,15 @@
                     </el-menu-item>
                 </el-menu>
                 <div class="aside-footer mobile-aside-footer">
+                    <a
+                        v-if="IS_PLATFORM_SSO"
+                        class="platform-console-link platform-console-link-mobile"
+                        href="/"
+                        aria-label="返回统一服务控制台"
+                    >
+                        <el-icon><Grid /></el-icon>
+                        <span>统一控制台</span>
+                    </a>
                     <div class="user-info">
                         <el-icon>
                             <User />
@@ -135,6 +144,12 @@
 
                 <!-- User Account Menu -->
                 <div class="aside-footer">
+                    <el-tooltip v-if="IS_PLATFORM_SSO" content="返回统一服务控制台" placement="bottom">
+                        <a class="platform-console-link" href="/" aria-label="返回统一服务控制台">
+                            <el-icon><Grid /></el-icon>
+                            <span>统一控制台</span>
+                        </a>
+                    </el-tooltip>
                     <el-popover
                         v-model:visible="userMenuVisible"
                         trigger="click"
@@ -4346,6 +4361,37 @@ body .cartoon-user-avatar.exam-user-avatar {
 
 .mobile-aside-footer {
     padding: 16px;
+}
+
+.platform-console-link {
+    height: 38px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid rgba(50, 117, 180, 0.2);
+    border-radius: 10px;
+    background: rgba(232, 243, 255, 0.78);
+    color: #2563eb;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.platform-console-link:hover,
+.platform-console-link:focus-visible {
+    border-color: rgba(37, 99, 235, 0.38);
+    background: #eaf2ff;
+    outline: none;
+}
+
+.platform-console-link-mobile {
+    width: 100%;
+    margin-bottom: 10px;
 }
 
 .mobile-logout-button,

@@ -5,9 +5,11 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  BellRing,
   Bot,
   Boxes,
   CheckCircle2,
+  ChartNoAxesCombined,
   ChevronRight,
   CircleAlert,
   CircleOff,
@@ -27,8 +29,10 @@ import {
   Play,
   Radio,
   RefreshCw,
+  Rocket,
   Server,
   ShieldCheck,
+  Settings2,
   Sun,
   Timer,
   Trash2,
@@ -38,13 +42,28 @@ import {
   Zap,
 } from 'lucide-react';
 import { isPlainInternalNavigation } from './navigation.js';
+import { requestJson } from './api.js';
+import {
+  BackupQualityStrip,
+  IncidentsView,
+  MonitoringView,
+  OverviewOperations,
+  ReleasesView,
+  SecurityAuditView,
+  SettingsDiagnosticsView,
+} from './OperationsViews.jsx';
 
 const FILTERS = [
   { id: 'all', label: '运行总览', icon: LayoutDashboard },
   { id: 'miniapp', label: '应用中心', icon: AppWindow },
   { id: 'service', label: '服务运维', icon: Server },
+  { id: 'monitoring', label: '监控分析', icon: ChartNoAxesCombined },
+  { id: 'incidents', label: '告警事件', icon: BellRing },
   { id: 'automation', label: '自动化中心', icon: Bot },
   { id: 'backup', label: '数据灾备', icon: Database },
+  { id: 'releases', label: '发布中心', icon: Rocket },
+  { id: 'security', label: '安全审计', icon: ShieldCheck },
+  { id: 'settings', label: '系统设置', icon: Settings2 },
 ];
 
 const CATEGORY_LABELS = {
@@ -76,28 +95,12 @@ const STATE_PRIORITY = {
   healthy: 3,
 };
 
-const CT8_API_BASE = '/apps/core/api';
-
-async function requestJson(url, options = {}) {
-  const response = await fetch(url, {
-    credentials: 'same-origin',
-    ...options,
-    headers: {
-      Accept: 'application/json',
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.method && options.method !== 'GET' ? { 'X-Platform-Request': 'console' } : {}),
-      ...options.headers,
-    },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(data.message || data.error || `请求失败（HTTP ${response.status}）`);
-    error.status = response.status;
-    error.code = data.code;
-    throw error;
-  }
-  return data;
+function hasRole(role, required) {
+  const levels = { viewer: 1, operator: 2, super_admin: 3 };
+  return (levels[role] || 0) >= (levels[required] || 0);
 }
+
+const CT8_API_BASE = '/apps/core/api';
 
 function formatCheckedAt(value) {
   if (!value) return '尚未检查';
@@ -204,9 +207,10 @@ function getGreeting() {
   return '晚上好';
 }
 
-function LoginScreen({ onAuthenticated }) {
+function LoginScreen({ onAuthenticated, totpRequired = false }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [totp, setTotp] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -217,7 +221,7 @@ function LoginScreen({ onAuthenticated }) {
     try {
       const session = await requestJson('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, totp }),
       });
       onAuthenticated(session);
     } catch (loginError) {
@@ -255,6 +259,20 @@ function LoginScreen({ onAuthenticated }) {
               required
             />
           </label>
+          {totpRequired && (
+            <label>
+              <span>动态验证码</span>
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={totp}
+                onChange={(event) => setTotp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="六位验证码"
+                pattern="\d{6}"
+                required
+              />
+            </label>
+          )}
           <label>
             <span>密码</span>
             <input
@@ -289,7 +307,7 @@ function LoadingScreen() {
   );
 }
 
-function OperationsChart({ services }) {
+function OperationsChart({ services, history = {} }) {
   const chartServices = services
     .filter((service) => Number.isFinite(service.latencyMs))
     .slice(0, 6);
@@ -303,31 +321,32 @@ function OperationsChart({ services }) {
     ? Math.round(onlineValues.reduce((sum, value) => sum + value, 0) / onlineValues.length)
     : null;
   const peak = values.length > 0 ? Math.max(...values) : null;
-  const maximum = Math.max(...values, 1);
-  const minimumPositive = Math.min(...values.filter((value) => value > 0), maximum);
+  const series = items.map((service) => {
+    const persisted = history[service.id]?.samples || [];
+    const samples = persisted.filter((sample) => Number.isFinite(sample.latencyMs));
+    return {
+      service,
+      samples: samples.length ? samples : Number.isFinite(service.latencyMs)
+        ? [{ recordedAt: service.checkedAt || new Date().toISOString(), latencyMs: service.latencyMs }]
+        : [],
+    };
+  });
+  const historyValues = series.flatMap((entry) => entry.samples.map((sample) => sample.latencyMs));
+  const historyTimes = series.flatMap((entry) => entry.samples.map((sample) => Date.parse(sample.recordedAt))).filter(Number.isFinite);
+  const maximum = Math.max(...historyValues, 1);
+  const minimumPositive = Math.min(...historyValues.filter((value) => value > 0), maximum);
   const useLogScale = maximum / Math.max(minimumPositive, 1) >= 10;
-  const scaleValue = (value) => (useLogScale ? Math.log10(value + 1) : value);
-  const scaledMaximum = scaleValue(maximum);
+  const scaleLatency = (value) => useLogScale ? Math.log10(value + 1) : value;
+  const scaledMaximum = scaleLatency(maximum);
+  const startTime = Math.min(...historyTimes, Date.now());
+  const endTime = Math.max(...historyTimes, startTime + 1);
   const width = 620;
   const height = 220;
   const xStart = 28;
   const xEnd = 592;
-  const xFor = (index) => (items.length === 1
-    ? width / 2
-    : xStart + ((xEnd - xStart) * index) / Math.max(items.length - 1, 1));
-  const latencyPoints = items.map((service, index) => ({
-    x: xFor(index),
-    y: 178 - (scaleValue(service.latencyMs || 0) / scaledMaximum) * 116,
-  }));
-  const healthPoints = items.map((service, index) => {
-    const base = { healthy: 76, degraded: 122, offline: 166, unmonitored: 144 }[service.state] || 144;
-    return { x: xFor(index), y: base + ((index % 3) - 1) * 9 };
-  });
-  const loadPoints = items.map((service, index) => ({
-    x: xFor(index),
-    y: 118 + Math.sin((index + 1) * 1.7) * 34 - (scaleValue(service.latencyMs || 0) / scaledMaximum) * 12,
-  }));
-  const pointString = (points) => points.map(({ x, y }) => `${x},${y}`).join(' ');
+  const xFor = (recordedAt) => xStart + ((Date.parse(recordedAt) - startTime) / (endTime - startTime)) * (xEnd - xStart);
+  const yFor = (latencyMs) => 178 - (scaleLatency(latencyMs) / scaledMaximum) * 116;
+  const colors = ['#2877f7', '#11ad78', '#ff8a00', '#8a45ef', '#d75467', '#13bad6'];
 
   return (
     <div className="operations-chart">
@@ -346,19 +365,13 @@ function OperationsChart({ services }) {
               </linearGradient>
             </defs>
             {[60, 118, 178].map((y) => <line className="chart-grid-line" key={y} x1="22" x2="598" y1={y} y2={y} />)}
-            <polygon className="chart-area" points={`${xStart},188 ${pointString(latencyPoints)} ${xEnd},188`} />
-            <polyline className="chart-line chart-line-pink" points={pointString(healthPoints)} />
-            <polyline className="chart-line chart-line-orange" points={pointString(loadPoints)} />
-            <polyline className="chart-line chart-line-cyan" points={pointString(latencyPoints)} />
-            {latencyPoints.map(({ x, y }, index) => (
-              <g key={items[index].id || index}>
-                <circle className="chart-dot-halo" cx={x} cy={y} r="5" />
-                <circle className="chart-dot" cx={x} cy={y} r="2.5" />
-              </g>
-            ))}
+            {series.map((entry, index) => {
+              const points = entry.samples.map((sample) => `${xFor(sample.recordedAt)},${yFor(sample.latencyMs)}`).join(' ');
+              return points ? <polyline className="chart-line" key={entry.service.id} points={points} style={{ stroke: colors[index] }} /> : null;
+            })}
           </svg>
-          <div className="chart-labels" style={{ '--chart-columns': items.length }}>
-            {items.map((service) => <span key={service.id}>{service.shortName || service.name}</span>)}
+          <div className="chart-service-legend">
+            {series.map((entry, index) => <span key={entry.service.id}><i style={{ background: colors[index] }} />{entry.service.shortName || entry.service.name}</span>)}
           </div>
         </>
       ) : (
@@ -368,18 +381,11 @@ function OperationsChart({ services }) {
   );
 }
 
-function makeSparkline(service, index) {
-  const seed = [...String(service.id || index)].reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  const base = Math.max(service.latencyMs || 26, 8);
-  return Array.from({ length: 5 }, (_, pointIndex) => (
-    Math.max(8, base + (((seed + pointIndex * 17) % 23) - 11) * 0.9)
-  ));
-}
-
-function ServicePortfolioRow({ service, index, onLaunch }) {
+function ServicePortfolioRow({ service, history, onLaunch }) {
   const Icon = SERVICE_ICONS[service.id] || Server;
   const meta = STATE_META[service.state] || STATE_META.unmonitored;
-  const values = makeSparkline(service, index);
+  const persistedValues = (history?.samples || []).map((sample) => sample.latencyMs).filter(Number.isFinite).slice(-5);
+  const values = persistedValues.length ? persistedValues : [Math.max(service.latencyMs || 0, 0)];
   const min = Math.min(...values);
   const max = Math.max(...values);
   const points = values.map((value, pointIndex) => {
@@ -498,6 +504,9 @@ function OverviewView({
   primaryService,
   launchService,
   refreshedAt,
+  operationsSummary,
+  onOpenIncidents,
+  onOpenAudit,
 }) {
   const sortedServices = [...services].sort((left, right) => (
     (STATE_PRIORITY[left.state] ?? 4) - (STATE_PRIORITY[right.state] ?? 4)
@@ -505,7 +514,8 @@ function OverviewView({
   ));
 
   return (
-    <section className="dashboard-grid" aria-label="系统运行总览">
+    <div className="overview-page">
+      <section className="dashboard-grid" aria-label="系统运行总览">
       <article className="dashboard-card performance-card">
         <div className="platform-pass">
           <div className="pass-topline">
@@ -532,14 +542,14 @@ function OverviewView({
             <i /> {attentionCount > 0 ? `${attentionCount} 项待处理` : '运行平稳'}
           </span>
         </div>
-        <OperationsChart services={services} />
+        <OperationsChart services={services} history={operationsSummary?.history} />
       </article>
 
       <article className="dashboard-card monitoring-card">
         <div>
           <span className="card-eyebrow">实时监测</span>
-          <h2>{monitoringEnabled ? '自动监测已开启' : '自动监测已暂停'}</h2>
-          <p>{monitoringEnabled ? '每 30 秒自动同步服务状态' : '可随时重新开启状态同步'}</p>
+          <h2>{monitoringEnabled ? '页面自动刷新已开启' : '页面自动刷新已暂停'}</h2>
+          <p>{monitoringEnabled ? '每 30 秒同步服务端监测结果' : '服务端持续监测不受影响'}</p>
         </div>
         <span className="monitoring-icon"><CloudCog size={24} /></span>
         <button
@@ -590,8 +600,8 @@ function OverviewView({
           <span className="portfolio-count">{sortedServices.length}</span>
         </header>
         <div className="portfolio-list">
-          {sortedServices.length > 0 ? sortedServices.map((service, index) => (
-            <ServicePortfolioRow key={service.id} service={service} index={index} onLaunch={launchService} />
+          {sortedServices.length > 0 ? sortedServices.map((service) => (
+            <ServicePortfolioRow key={service.id} service={service} history={operationsSummary?.history?.[service.id]} onLaunch={launchService} />
           )) : (
             <div className="portfolio-empty">暂无服务数据</div>
           )}
@@ -601,7 +611,9 @@ function OverviewView({
           <span>更新于 {formatCheckedAt(refreshedAt)}</span>
         </footer>
       </article>
-    </section>
+      </section>
+      <OverviewOperations summary={operationsSummary} onOpenIncidents={onOpenIncidents} onOpenAudit={onOpenAudit} />
+    </div>
   );
 }
 
@@ -972,6 +984,7 @@ function BackupRecoveryView({ session }) {
   const [deletingBackup, setDeletingBackup] = useState('');
   const [uploadingBackup, setUploadingBackup] = useState(false);
   const [restorePassword, setRestorePassword] = useState('');
+  const [restoreTotp, setRestoreTotp] = useState('');
   const [confirmText, setConfirmText] = useState('');
   const [actionError, setActionError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
@@ -1147,6 +1160,10 @@ function BackupRecoveryView({ session }) {
       setActionError('请输入管理员密码');
       return;
     }
+    if (!session.authDisabled && session.user?.totpEnabled && restoreTotp.length !== 6) {
+      setActionError('请输入六位动态验证码');
+      return;
+    }
     if (confirmText !== restoreConfirmText) {
       setActionError('确认短语不正确');
       return;
@@ -1160,11 +1177,13 @@ function BackupRecoveryView({ session }) {
         body: JSON.stringify({
           backupName: selectedBackup.name,
           password: restorePassword,
+          totp: restoreTotp,
           confirmText,
         }),
       });
       setActiveJob(result.job);
       setRestorePassword('');
+      setRestoreTotp('');
       setConfirmText('');
       setActionMessage('恢复任务已提交');
       await loadBackupStatus(true);
@@ -1173,7 +1192,9 @@ function BackupRecoveryView({ session }) {
     }
   }
 
-  const canUseRestore = Boolean(capabilities.canRestore && selectedBackup?.restorable && !runningJob);
+  const canOperateBackups = hasRole(session.user?.role, 'operator');
+  const canManageBackups = hasRole(session.user?.role, 'super_admin');
+  const canUseRestore = Boolean(canManageBackups && capabilities.canRestore && selectedBackup?.restorable && !runningJob);
   const executorHealthy = capabilities.canBackup && capabilities.canRestore;
 
   return (
@@ -1185,11 +1206,13 @@ function BackupRecoveryView({ session }) {
         </button>
       </div>
 
+      <BackupQualityStrip />
+
       <div className="backup-kpis">
         <article><span className="kpi-icon blue"><Database size={20} /></span><div><span>可用备份</span><strong>{backups.filter((backup) => backup.restorable).length}</strong><small>服务器备份目录</small></div></article>
         <article><span className="kpi-icon green"><CheckCircle2 size={20} /></span><div><span>执行器</span><strong>{executorHealthy ? '就绪' : '受限'}</strong><small>{capabilities.issues?.join('，') || '可执行备份与恢复'}</small></div></article>
         <article><span className="kpi-icon orange"><Clock3 size={20} /></span><div><span>最近备份</span><strong>{formatDateTime(latestBackup?.createdAt)}</strong><small>{latestBackup?.name || '暂无归档'}</small></div></article>
-        <article><span className="kpi-icon purple"><ShieldCheck size={20} /></span><div><span>恢复保护</span><strong>{session.authDisabled ? '确认短语' : '密码验证'}</strong><small>恢复前校验归档哈希</small></div></article>
+        <article><span className="kpi-icon purple"><ShieldCheck size={20} /></span><div><span>恢复保护</span><strong>{session.authDisabled ? '确认短语' : session.user?.totpEnabled ? '双重验证' : '密码验证'}</strong><small>恢复前校验归档哈希</small></div></article>
       </div>
 
       {(actionError || actionMessage) && (
@@ -1213,7 +1236,7 @@ function BackupRecoveryView({ session }) {
             className="primary-button backup-primary-action"
             type="button"
             onClick={handleStartBackup}
-            disabled={!capabilities.canBackup || Boolean(runningJob)}
+            disabled={!canOperateBackups || !capabilities.canBackup || Boolean(runningJob)}
           >
             {runningJob?.type === 'backup' ? <LoaderCircle className="spin" size={18} /> : <Play size={18} />}
             {runningJob?.type === 'backup' ? '正在备份' : '立即备份'}
@@ -1259,7 +1282,7 @@ function BackupRecoveryView({ session }) {
                     type="button"
                     aria-label={`删除备份 ${backup.name}`}
                     title="删除备份"
-                    disabled={Boolean(runningJob) || deletingBackup === backup.name}
+                    disabled={!canManageBackups || Boolean(runningJob) || deletingBackup === backup.name}
                     onClick={(event) => {
                       event.stopPropagation();
                       handleDeleteBackup(backup);
@@ -1296,7 +1319,7 @@ function BackupRecoveryView({ session }) {
           <button
             className="secondary-action backup-upload-action"
             type="button"
-            disabled={Boolean(runningJob) || uploadingBackup}
+            disabled={!canOperateBackups || Boolean(runningJob) || uploadingBackup}
             onClick={() => uploadInputRef.current?.click()}
           >
             {uploadingBackup ? <LoaderCircle className="spin" size={17} /> : <Upload size={17} />}
@@ -1314,6 +1337,18 @@ function BackupRecoveryView({ session }) {
               />
             </label>
           )}
+          {!session.authDisabled && session.user?.totpEnabled && (
+            <label className="restore-field">
+              <span>动态验证码</span>
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={restoreTotp}
+                onChange={(event) => setRestoreTotp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="六位验证码"
+              />
+            </label>
+          )}
           <label className="restore-field">
             <span>确认短语</span>
             <input
@@ -1326,7 +1361,7 @@ function BackupRecoveryView({ session }) {
           <button
             className="danger-button"
             type="button"
-            disabled={!canUseRestore || confirmText !== restoreConfirmText || (!session.authDisabled && !restorePassword)}
+            disabled={!canUseRestore || confirmText !== restoreConfirmText || (!session.authDisabled && (!restorePassword || (session.user?.totpEnabled && restoreTotp.length !== 6)))}
             onClick={handleStartRestore}
           >
             {runningJob?.type === 'restore' ? <LoaderCircle className="spin" size={18} /> : <ShieldCheck size={18} />}
@@ -1363,6 +1398,7 @@ function BackupRecoveryView({ session }) {
 function Dashboard({ session, onLogout }) {
   const [activeFilter, setActiveFilter] = useState('all');
   const [data, setData] = useState(null);
+  const [operationsSummary, setOperationsSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -1391,7 +1427,14 @@ function Dashboard({ session, onLogout }) {
     force ? setRefreshing(true) : setLoading(true);
     setError('');
     try {
-      setData(await requestJson(`/api/services/status${force ? '?refresh=1' : ''}`));
+      const overview = await requestJson(`/api/operations/overview${force ? '?refresh=1' : ''}`);
+      setOperationsSummary(overview);
+      setData({
+        platformName: overview.platformName,
+        services: overview.services,
+        counts: overview.counts,
+        refreshedAt: overview.refreshedAt,
+      });
     } catch (requestError) {
       if (requestError.status === 401) {
         onLogout();
@@ -1494,8 +1537,13 @@ function Dashboard({ session, onLogout }) {
   const viewMeta = {
     miniapp: { title: '应用中心', subtitle: '应用入口与运行状态' },
     service: { title: '服务运维', subtitle: '基础服务健康监测' },
+    monitoring: { title: '监控分析', subtitle: '可用率与真实历史趋势' },
+    incidents: { title: '告警事件', subtitle: '发现、确认与处置异常' },
     automation: { title: '自动化中心', subtitle: '任务能力与观测链路' },
     backup: { title: '数据灾备', subtitle: '备份恢复与灾难演练' },
+    releases: { title: '发布中心', subtitle: '版本、构建与部署保护' },
+    security: { title: '安全审计', subtitle: '会话安全与操作记录' },
+    settings: { title: '系统设置', subtitle: '维护窗口与一键诊断' },
   }[activeFilter];
 
   return (
@@ -1587,12 +1635,13 @@ function Dashboard({ session, onLogout }) {
                 onClick={() => setNotificationOpen((open) => !open)}
               >
                 <Bell size={19} />
-                <i className={attentionCount > 0 ? 'attention' : ''} />
+                <i className={(operationsSummary?.incidents?.length || attentionCount) > 0 ? 'attention' : ''} />
               </button>
               {notificationOpen && (
                 <div className="notification-popover" role="status">
-                  <strong>{attentionCount > 0 ? `${attentionCount} 项服务需要处理` : '系统运行平稳'}</strong>
-                  <span>最近同步：{formatCheckedAt(data?.refreshedAt)}</span>
+                  <strong>{operationsSummary?.incidents?.length > 0 ? `${operationsSummary.incidents.length} 项事件需要处理` : '系统运行平稳'}</strong>
+                  {(operationsSummary?.incidents || []).slice(0, 3).map((incident) => <span key={incident.id}>{incident.title}</span>)}
+                  <button type="button" onClick={() => { setNotificationOpen(false); setActiveFilter('incidents'); }}>进入事件中心</button>
                 </div>
               )}
             </div>
@@ -1622,10 +1671,15 @@ function Dashboard({ session, onLogout }) {
               primaryService={primaryService}
               launchService={launchService}
               refreshedAt={data?.refreshedAt}
+              operationsSummary={operationsSummary}
+              onOpenIncidents={() => setActiveFilter('incidents')}
+              onOpenAudit={() => setActiveFilter('security')}
             />
           )}
           {activeFilter === 'miniapp' && <ApplicationsView services={services} loading={loading} onLaunch={launchService} />}
           {activeFilter === 'service' && <ServicesView services={services} loading={loading} onLaunch={launchService} />}
+          {activeFilter === 'monitoring' && <MonitoringView services={services} />}
+          {activeFilter === 'incidents' && <IncidentsView session={session} />}
           {activeFilter === 'automation' && (
             <AutomationView
               services={services}
@@ -1636,6 +1690,9 @@ function Dashboard({ session, onLogout }) {
             />
           )}
           {activeFilter === 'backup' && <BackupRecoveryView session={session} />}
+          {activeFilter === 'releases' && <ReleasesView session={session} />}
+          {activeFilter === 'security' && <SecurityAuditView session={session} onLogout={onLogout} />}
+          {activeFilter === 'settings' && <SettingsDiagnosticsView session={session} />}
         </div>
       </main>
     </div>
@@ -1662,6 +1719,6 @@ export default function App() {
   }, [finishAuthentication]);
 
   if (checkingSession) return <LoadingScreen />;
-  if (!session?.authenticated) return <LoginScreen onAuthenticated={finishAuthentication} />;
-  return <Dashboard session={session} onLogout={() => setSession({ authenticated: false, authDisabled: false, user: null })} />;
+  if (!session?.authenticated) return <LoginScreen onAuthenticated={finishAuthentication} totpRequired={session?.totpRequired} />;
+  return <Dashboard session={session} onLogout={() => setSession({ authenticated: false, authDisabled: false, totpRequired: Boolean(session.user?.totpEnabled), user: null })} />;
 }

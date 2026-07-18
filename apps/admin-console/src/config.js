@@ -47,6 +47,16 @@ function parseHttpUrl(value) {
   }
 }
 
+function parseRole(value, fallback = 'super_admin') {
+  const role = String(value || fallback).trim().toLowerCase();
+  return ['viewer', 'operator', 'super_admin'].includes(role) ? role : fallback;
+}
+
+function parseRepository(value) {
+  const repository = String(value || '').trim();
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ? repository : '';
+}
+
 function parseTrustProxy(value, fallback = false) {
   if (value === undefined || value === null || value === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
@@ -107,6 +117,8 @@ export function loadConfig(env = process.env) {
     authDisabled,
     adminUsername: env.PLATFORM_ADMIN_USERNAME || '',
     adminPasswordHash: env.PLATFORM_ADMIN_PASSWORD_HASH || '',
+    adminRole: parseRole(env.PLATFORM_ADMIN_ROLE),
+    adminTotpSecret: String(env.PLATFORM_ADMIN_TOTP_SECRET || '').replace(/[\s=-]/g, '').toUpperCase(),
     sessionSecret: env.PLATFORM_SESSION_SECRET || '',
     internalAuthPrivateKey: env.PLATFORM_INTERNAL_AUTH_PRIVATE_KEY || (isProduction ? '' : localInternalPrivateKey),
     internalAuthPublicKey: env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY || (isProduction ? '' : localInternalPublicKey),
@@ -114,6 +126,19 @@ export function loadConfig(env = process.env) {
     metricsToken: env.PLATFORM_METRICS_TOKEN || '',
     sessionTtlHours: parseInteger(env.PLATFORM_SESSION_TTL_HOURS, 12, { min: 1, max: 168 }),
     serviceTimeoutMs: parseInteger(env.PLATFORM_SERVICE_TIMEOUT_MS, 8000, { min: 1000, max: 30000 }),
+    monitorIntervalMs: parseInteger(env.PLATFORM_MONITOR_INTERVAL_MS, 30000, { min: 10000, max: 300000 }),
+    statusRetentionDays: parseInteger(env.PLATFORM_STATUS_RETENTION_DAYS, 30, { min: 1, max: 365 }),
+    auditRetentionDays: parseInteger(env.PLATFORM_AUDIT_RETENTION_DAYS, 180, { min: 30, max: 730 }),
+    incidentFailureThreshold: parseInteger(env.PLATFORM_INCIDENT_FAILURE_THRESHOLD, 2, { min: 1, max: 10 }),
+    incidentRecoveryThreshold: parseInteger(env.PLATFORM_INCIDENT_RECOVERY_THRESHOLD, 2, { min: 1, max: 10 }),
+    serviceLatencyThresholdMs: parseInteger(env.PLATFORM_SERVICE_LATENCY_THRESHOLD_MS, 2000, { min: 100, max: 30000 }),
+    proxyP95ThresholdMs: parseInteger(env.PLATFORM_PROXY_P95_THRESHOLD_MS, 2000, { min: 100, max: 120000 }),
+    proxyErrorRatePercent: parseInteger(env.PLATFORM_PROXY_ERROR_RATE_PERCENT, 1, { min: 1, max: 100 }),
+    proxyAlertMinimumRequests: parseInteger(env.PLATFORM_PROXY_ALERT_MINIMUM_REQUESTS, 20, { min: 5, max: 10000 }),
+    diskUsageThresholdPercent: parseInteger(env.PLATFORM_DISK_USAGE_THRESHOLD_PERCENT, 80, { min: 50, max: 99 }),
+    notificationServiceUrl: parseHttpUrl(env.NOTIFICATION_SERVICE_URL),
+    notificationApiKey: env.PLATFORM_NOTIFICATION_API_KEY || env.NOTIFY_API_KEY || '',
+    incidentNotificationsEnabled: parseBoolean(env.PLATFORM_INCIDENT_NOTIFICATIONS_ENABLED, true),
     backupRoot: path.resolve(env.PLATFORM_BACKUP_DIR || path.join(workspaceRoot, 'backups')),
     backupOperationsEnabled: parseBoolean(env.PLATFORM_BACKUP_ENABLED, true),
     restoreOperationsEnabled: parseBoolean(env.PLATFORM_RESTORE_ENABLED, true),
@@ -127,6 +152,32 @@ export function loadConfig(env = process.env) {
     backupRunnerUrl: parseHttpUrl(env.PLATFORM_BACKUP_RUNNER_URL),
     backupRunnerToken: env.PLATFORM_BACKUP_RUNNER_TOKEN || '',
     backupRunnerTimeoutMs: parseInteger(env.PLATFORM_BACKUP_RUNNER_TIMEOUT_MS, 8000, { min: 1000, max: 60000 }),
+    backupRpoHours: parseInteger(env.PLATFORM_BACKUP_RPO_HOURS, 26, { min: 1, max: 720 }),
+    backupScheduleEnabled: parseBoolean(env.PLATFORM_BACKUP_SCHEDULE_ENABLED, false),
+    backupScheduleTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(env.PLATFORM_BACKUP_SCHEDULE_TIME || '02:30'))
+      ? String(env.PLATFORM_BACKUP_SCHEDULE_TIME || '02:30')
+      : '02:30',
+    offsiteBackupStatusUrl: parseHttpUrl(env.PLATFORM_OFFSITE_BACKUP_STATUS_URL),
+    offsiteBackupStatusToken: env.PLATFORM_OFFSITE_BACKUP_STATUS_TOKEN || '',
+    githubRepository: parseRepository(env.PLATFORM_GITHUB_REPOSITORY || 'mufenxu/MY'),
+    githubToken: env.PLATFORM_GITHUB_TOKEN || '',
+    githubWorkflow: String(env.PLATFORM_GITHUB_WORKFLOW || 'aliyun-acr.yml').trim(),
+    githubRef: String(env.PLATFORM_GITHUB_REF || 'main').trim(),
+    releaseActionsEnabled: parseBoolean(env.PLATFORM_RELEASE_ACTIONS_ENABLED, false),
+    deployHookUrl: parseHttpUrl(env.PLATFORM_DEPLOY_HOOK_URL),
+    deployHookToken: env.PLATFORM_DEPLOY_HOOK_TOKEN || '',
+    releaseRevision: String(env.PLATFORM_RELEASE_REVISION || env.GITHUB_SHA || '').trim().slice(0, 64),
+    releaseDeployedAt: String(env.PLATFORM_RELEASE_DEPLOYED_AT || '').trim(),
+    releaseImages: {
+      platform: env.PLATFORM_API_IMAGE || '',
+      backup: env.BACKUP_RUNNER_IMAGE || '',
+      core: env.CORE_API_IMAGE || '',
+      exam: env.EXAM_API_IMAGE || '',
+      notification: env.NOTIFICATION_SERVICE_IMAGE || '',
+      campus: env.CAMPUS_SERVICE_IMAGE || '',
+      iot: env.IOT_SERVICE_IMAGE || '',
+      mongodb: env.MONGODB_IMAGE || '',
+    },
   };
 
   if (!config.authDisabled) {
@@ -149,6 +200,18 @@ export function loadConfig(env = process.env) {
     if (config.backupRunnerUrl && (config.backupRunnerToken.length < 32 || isTemplatePlaceholder(config.backupRunnerToken))) {
       missing.push('PLATFORM_BACKUP_RUNNER_TOKEN');
     }
+    if (config.notificationServiceUrl && (config.notificationApiKey.length < 32 || isTemplatePlaceholder(config.notificationApiKey))) {
+      missing.push('PLATFORM_NOTIFICATION_API_KEY');
+    }
+    if (config.adminTotpSecret && !/^[A-Z2-7]{16,128}$/.test(config.adminTotpSecret)) {
+      missing.push('PLATFORM_ADMIN_TOTP_SECRET');
+    }
+    if (config.releaseActionsEnabled && (!config.githubToken || !config.githubRepository)) {
+      missing.push('PLATFORM_GITHUB_TOKEN');
+    }
+    if (config.deployHookUrl && (config.deployHookToken.length < 32 || isTemplatePlaceholder(config.deployHookToken))) {
+      missing.push('PLATFORM_DEPLOY_HOOK_TOKEN');
+    }
     if (config.isProduction && !config.publicOrigin.startsWith('https://')) missing.push('PLATFORM_PUBLIC_ORIGIN_HTTPS');
 
     if (missing.length > 0) {
@@ -159,4 +222,4 @@ export function loadConfig(env = process.env) {
   return config;
 }
 
-export { isTemplatePlaceholder, parseBoolean, parseHttpUrl, parseInteger, parseOrigin, parseTrustProxy };
+export { isTemplatePlaceholder, parseBoolean, parseHttpUrl, parseInteger, parseOrigin, parseRepository, parseRole, parseTrustProxy };

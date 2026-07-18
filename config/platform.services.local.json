@@ -33,7 +33,7 @@
       "category": "service",
       "description": "校园能耗、一卡通、住宿与教务信息服务",
       "baseUrl": "https://hgu.pxyb.cn",
-      "healthPath": "/api/health",
+      "healthPath": "/api/ready",
       "adminUrl": "https://hgu.pxyb.cn",
       "repositoryPath": "services/campus-service",
       "capabilities": ["校园", "能耗", "教务"]
@@ -45,7 +45,7 @@
       "category": "service",
       "description": "设备在线状态、遥测历史、继电器与实时消息",
       "baseUrl": "https://mqttapi.pxyb.cn",
-      "healthPath": "/api/health",
+      "healthPath": "/api/ready",
       "adminUrl": "https://mqttapi.pxyb.cn",
       "repositoryPath": "services/iot-service",
       "capabilities": ["MQTT", "设备", "WebSocket"]

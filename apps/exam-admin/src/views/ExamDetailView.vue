@@ -5,6 +5,15 @@
                 <div class="topbar-main">
                     <div class="topbar-title-group">
                         <el-button class="topbar-back" @click="goBack" icon="ArrowLeft" circle aria-label="返回"></el-button>
+                        <el-tooltip v-if="IS_PLATFORM_SSO" content="返回统一服务控制台" placement="bottom">
+                            <el-button
+                                class="topbar-back topbar-platform-return"
+                                icon="Grid"
+                                circle
+                                aria-label="返回统一服务控制台"
+                                @click="returnToPlatformConsole"
+                            ></el-button>
+                        </el-tooltip>
                         <div class="paper-title-block">
                             <span class="paper-kicker">试卷编辑</span>
                             <h1>{{ examInfo.name || '未命名试卷' }}</h1>
@@ -1171,6 +1180,7 @@ import { session } from '@/utils/session';
 import { createExamDetailApi } from '@/api/examDetail';
 import { createMockExamDetailApi } from '@/api/examDetailMock';
 import { isUiPreviewMode } from '@/utils/uiPreview';
+import { IS_PLATFORM_SSO } from '@/utils/runtime';
 import { useAiAnalysis } from '@/features/exam-editor/useAiAnalysis';
 import { useBatchImport } from '@/features/exam-editor/useBatchImport';
 import { useExamDetailData } from '@/features/exam-editor/useExamDetailData';
@@ -1439,6 +1449,22 @@ const goBack = () => {
     }
 
     router.push(getDashboardReturnRoute());
+};
+
+const returnToPlatformConsole = () => {
+    if (isDirty.value && canEdit.value) {
+        ElMessageBox.confirm('当前试卷还有未保存的修改，确定返回统一服务控制台吗？', '未保存修改', {
+            confirmButtonText: '返回控制台',
+            cancelButtonText: '继续编辑',
+            type: 'warning',
+        }).then(() => {
+            isDirty.value = false;
+            window.location.assign('/');
+        }).catch(() => {});
+        return;
+    }
+
+    window.location.assign('/');
 };
 
 const handleBeforeUnload = (event) => {

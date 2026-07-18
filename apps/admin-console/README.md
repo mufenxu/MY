@@ -49,10 +49,46 @@ npm run dev
 - `GET /api/services`：服务目录
 - `GET /api/services/status`：聚合健康状态
 - `GET /api/services/status?refresh=1`：跳过 15 秒缓存并立即检查
+- `GET /api/operations/overview`：状态、历史趋势、未解决事件与最近活动
+- `GET /api/operations/history`：按服务和时间范围读取真实采样
+- `GET/POST /api/incidents`：事件查询与处置
+- `GET /api/audit`：统一审计日志
+- `GET/PUT /api/operations/settings`：非敏感运行设置与维护窗口
+- `POST /api/diagnostics/run`：运行只读系统诊断
+- `GET /api/security/sessions`：有效会话与安全状态
+- `GET /api/releases`：镜像版本与 GitHub Actions 状态
+- `GET /api/backups/quality`：RPO、异地同步与恢复演练状态
 
 ## 安全边界
 
 - MQTT、企业微信和其他服务凭据只能保存在管理门户服务端或目标服务部署环境。
 - 浏览器不能提交任意探测 URL，避免把门户变成 SSRF 入口。
-- 现阶段“进入后台”使用独立后台链接；统一登录将在业务管理 API 迁入门户后实现。
+- `/apps/*` 由平台网关统一校验会话并签发短时内部身份，各业务服务仍保留独立权限和数据边界。
 - 建议在生产环境前再增加 Cloudflare Access、VPN 或入口 IP 白名单作为第二层保护。
+
+## 统一运维能力
+
+管理中心在 `platform_app` 中维护独立的运维数据，不跨库读取业务数据：
+
+- 服务端按 `PLATFORM_MONITOR_INTERVAL_MS` 持续采集健康状态，不依赖浏览器是否打开；
+- 原始状态按 `PLATFORM_STATUS_RETENTION_DAYS` 保留，并生成小时汇总供 7 天和 30 天趋势使用；
+- 连续失败达到阈值后生成事件，连续恢复后自动关闭；维护窗口内继续采样但不产生新事件；
+- 事件产生和恢复可以通过内部通知服务推送企业微信；
+- 登录、事件处置、备份、恢复、发布、会话撤销和设置变更都写入审计日志；
+- 灾备质量页检查 RPO、恢复演练、异地同步状态和每日自动备份计划；
+- 发布中心读取 GitHub Actions 和镜像版本，写操作默认关闭；
+- 安全中心支持 `viewer`、`operator`、`super_admin` 三种角色、可选 TOTP 和会话远程下线。
+
+### 角色权限
+
+| Role | 管理中心 | 业务后台 |
+| --- | --- | --- |
+| `viewer` | 只读 | 仅允许 GET/HEAD/OPTIONS，禁止 IoT WebSocket |
+| `operator` | 可处置事件、运行诊断、创建和上传备份 | 可执行日常管理操作 |
+| `super_admin` | 可删除/恢复备份、修改设置、发布和撤销会话 | 完整管理权限 |
+
+恢复、构建、部署和回滚会再次验证管理员密码；配置 `PLATFORM_ADMIN_TOTP_SECRET` 后还需要六位动态验证码。
+
+### 发布安全
+
+`PLATFORM_RELEASE_ACTIONS_ENABLED` 默认是 `false`。重新构建需要 `PLATFORM_GITHUB_TOKEN`；部署和回滚还需要只在内网开放的 `PLATFORM_DEPLOY_HOOK_URL` 与随机 Bearer Token。平台容器不会挂载 Docker Socket，也不会直接执行宿主机命令。部署钩子必须自行完成不可变镜像校验、原子切换、健康检查和失败回滚。

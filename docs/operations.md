@@ -95,6 +95,10 @@ Recommended policy:
 - campus and IoT expose `/api/ready`.
 - `/api/metrics` exposes Prometheus metrics and requires `Authorization: Bearer $PLATFORM_METRICS_TOKEN`.
 
+The management portal also runs a server-side health collector. It stores raw samples in `service_status_history`, hourly rollups in `service_status_rollups`, and incident state in `operations_incidents`. Browser refresh can be paused without stopping collection or alerts.
+
+Use the management portal to configure consecutive failure/recovery thresholds and maintenance windows. Maintenance windows suppress new incidents but keep collecting evidence. Do not use maintenance windows to hide an unresolved production fault.
+
 Alert on these initial conditions:
 
 - readiness fails for 3 consecutive minutes;
@@ -103,6 +107,30 @@ Alert on these initial conditions:
 - disk usage exceeds 80 percent;
 - MQTT remains disconnected for 5 minutes;
 - no successful off-host backup exists within 26 hours.
+
+## Incident and audit workflow
+
+1. A service must fail the configured number of consecutive checks before an incident opens.
+2. Enterprise WeChat receives the open/recovery transition when the notification integration is configured.
+3. An operator can acknowledge, assign, mute, annotate, or manually close the incident.
+4. Every transition is appended to the incident timeline and `operations_audit`.
+5. A manually closed incident reopens on the next failed sample if the service never recovered.
+
+Audit records intentionally contain request IDs, actor, source IP, target, outcome, and bounded non-secret metadata. They must never contain passwords, TOTP codes, tokens, backup payloads, or environment values.
+
+## Management security
+
+- `PLATFORM_ADMIN_ROLE` defaults to `super_admin`; use `viewer` or `operator` for lower-privilege accounts.
+- `PLATFORM_ADMIN_TOTP_SECRET` is optional Base32 TOTP material. Store it with deployment secrets, not in Git.
+- Active sessions are stored in MongoDB and can be revoked from the security page.
+- Viewer sessions cannot mutate `/apps/*` routes and cannot open the managed IoT WebSocket.
+- Backup restore and release actions require password reauthentication and TOTP when enabled.
+
+## Release center
+
+The release center is read-only by default. `PLATFORM_GITHUB_TOKEN` enables private Actions history, while `PLATFORM_RELEASE_ACTIONS_ENABLED=true` permits guarded workflow dispatch. Deployment and rollback remain disabled unless an internal deployment hook and strong token are configured. The platform container never receives the Docker socket.
+
+Cloud builds stamp the platform image with the source revision and build timestamp. Production should deploy immutable SHA tags, keep the previous image references available, and promote all related services together after smoke checks.
 
 ## Release and rollback
 

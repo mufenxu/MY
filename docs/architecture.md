@@ -76,6 +76,7 @@ Alibaba Cloud Container Registry is the primary production image source. GitHub 
 ## Data ownership
 
 - 管理门户使用 MongoDB 数据库 `platform_app` 保存可撤销会话。
+- `platform_app` 还保存服务状态历史、小时汇总、告警事件、运行设置和统一审计；这些集合只保存运维元数据，不保存其他服务的业务记录。
 - `core-api` 使用 MongoDB 数据库 `core_app`。
 - `exam-api` 使用 MongoDB 数据库 `exam_app`。
 - `campus-service` 使用 MongoDB 数据库 `campus_app`。

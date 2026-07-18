@@ -604,6 +604,7 @@ function handleAppAccessExpired(error) {
 function renderAppGate(error) {
   const unlocked = canUseApp();
   document.body.dataset.appLocked = unlocked ? "false" : "true";
+  document.querySelector("#platformConsoleLink").hidden = !state.appAuth?.platformSso;
   nodes.refreshButton.disabled = !unlocked;
   nodes.appLogoutButton.hidden = !state.appAuth?.required || !unlocked;
   updateAdminVisibility();

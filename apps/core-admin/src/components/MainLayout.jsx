@@ -380,6 +380,10 @@ const MainLayout = () => {
         }
     }, []);
 
+    const returnToPlatformConsole = useCallback(() => {
+        window.location.assign('/');
+    }, []);
+
     const navigateSoftly = useCallback((path) => {
         startTransition(() => {
             navigate(path);
@@ -569,6 +573,19 @@ const MainLayout = () => {
 
                         {/* 鍙充晶锛氬伐鍏峰浘鏍?+ 澶村儚 */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            {IS_PLATFORM_SSO && (
+                                <Tooltip title="返回统一服务控制台">
+                                    <Button
+                                        type="text"
+                                        icon={<AppstoreOutlined />}
+                                        onClick={returnToPlatformConsole}
+                                        className="soybean-header-icon-btn platform-console-return"
+                                        aria-label="返回统一服务控制台"
+                                    >
+                                        {!isMobile && '统一控制台'}
+                                    </Button>
+                                </Tooltip>
+                            )}
                             <Tooltip title={isDarkMode ? '切换到白天模式' : '切换到黑夜模式'}>
                                 <Button
                                     type="text"

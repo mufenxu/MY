@@ -54,7 +54,7 @@ function createSettingsStore() {
 }
 
 async function startTestServer(options = {}) {
-  const { dbOverrides = {} } = options;
+  const { dbOverrides = {}, mqttConnected = true } = options;
   const settingsStore = createSettingsStore();
   const mqttService = new EventEmitter();
   const apiKeyUsages = [];
@@ -88,6 +88,7 @@ async function startTestServer(options = {}) {
     addApiKey: async () => ({}),
     deleteApiKey: async () => {},
     cleanOldData: async () => 0,
+    ping: async () => true,
     ...dbOverrides
   };
   mqttService.getLatestData = () => ({
@@ -104,7 +105,7 @@ async function startTestServer(options = {}) {
     }
   });
   mqttService.getStatus = () => ({
-    mqttConnected: true,
+    mqttConnected,
     subscribed: true,
     lastMsgTimestamp: Date.now(),
     subscribedTopics: [],
@@ -115,6 +116,7 @@ async function startTestServer(options = {}) {
     publishedControls.push({ deviceId, relayId, status });
   };
   mqttService.restart = () => {};
+  mqttService.status = { mqttConnected };
   mqttService.getDiscoveredTopics = () => [];
 
   const { closeRealtime, server, wsServer } = createApiServer({ settingsStore, mqttService });
@@ -159,6 +161,23 @@ async function listenOnAvailablePort(server) {
 
   throw new Error('Unable to find an available test port.');
 }
+
+test('readiness requires both MongoDB and MQTT connectivity', async (t) => {
+  const healthy = await startTestServer();
+  const disconnected = await startTestServer({ mqttConnected: false });
+  t.after(() => Promise.all([
+    new Promise((resolve) => healthy.server.close(resolve)),
+    new Promise((resolve) => disconnected.server.close(resolve))
+  ]));
+
+  const healthyResponse = await fetch(`${healthy.baseUrl}/api/ready`);
+  assert.equal(healthyResponse.status, 200);
+  assert.equal((await healthyResponse.json()).mqtt, 'connected');
+
+  const disconnectedResponse = await fetch(`${disconnected.baseUrl}/api/ready`);
+  assert.equal(disconnectedResponse.status, 503);
+  assert.equal((await disconnectedResponse.json()).mqtt, 'disconnected');
+});
 
 test('telemetry endpoints require authentication when auth is enabled', async (t) => {
   const { baseUrl, server } = await startTestServer();

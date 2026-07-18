@@ -26,25 +26,38 @@ const [{ createApp: createPortalApp }, { loadConfig: loadPortalConfig }] = await
 const { createMongoSessionRegistry } = await import(
   pathToFileURL(paths.portalMongoSessionRegistry).href
 );
+const { createMongoOperationsStore } = await import(
+  pathToFileURL(paths.portalOperationsStore).href
+);
 
 const portalConfig = loadPortalConfig();
 const sessionRegistry = portalConfig.mongoUri
   ? await createMongoSessionRegistry({ uri: portalConfig.mongoUri, secret: portalConfig.sessionSecret })
   : null;
+const operationsStore = portalConfig.mongoUri
+  ? await createMongoOperationsStore({
+    uri: portalConfig.mongoUri,
+    statusRetentionDays: portalConfig.statusRetentionDays,
+    auditRetentionDays: portalConfig.auditRetentionDays,
+  })
+  : null;
 const readinessCheck = async () => {
-  const [servicesReady, sessionReady] = await Promise.all([
+  const [servicesReady, sessionReady, operationsReady] = await Promise.all([
     serviceMode.external
       ? checkExternalServices(serviceMode.targets)
       : Promise.resolve(Boolean(coreRuntime.isCoreRuntimeReady() && examRuntime.isExamRuntimeReady())),
     sessionRegistry ? sessionRegistry.ping() : Promise.resolve(true),
+    operationsStore ? operationsStore.ping() : Promise.resolve(true),
   ]);
-  return Boolean(servicesReady && sessionReady);
+  return Boolean(servicesReady && sessionReady && operationsReady);
 };
 const portalApp = createPortalApp({
   config: portalConfig,
   sessionRegistry,
+  operationsStore,
   readinessCheck,
 });
+portalApp.locals.operationsCenter.start();
 const sessionVerifierCache = createSessionVerifierCache({
   verify: (token) => portalApp.locals.verifyConsoleSession(token),
   ttlMs: process.env.PLATFORM_SESSION_CACHE_TTL_MS || 5_000,
@@ -54,7 +67,7 @@ const sessionVerifierCache = createSessionVerifierCache({
 portalApp.locals.onConsoleSessionRevoked = (token) => sessionVerifierCache.invalidate(token);
 const getPlatformSession = async (req) => {
   if (portalConfig.authDisabled) {
-    return { sub: 'local-admin', nonce: 'local-development-session' };
+    return { sub: 'local-admin', role: 'super_admin', nonce: 'local-development-session' };
   }
   const token = parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME];
   return sessionVerifierCache.verify(token);
@@ -124,6 +137,7 @@ async function shutdown(signal, exitCode = 0) {
   shuttingDown = true;
   console.log(`Received ${signal}, shutting down MY Platform API.`);
   router.close();
+  portalApp.locals.operationsCenter.stop();
   sessionVerifierCache.clear();
   const forceTimer = setTimeout(() => server.closeAllConnections?.(), 10_000);
   forceTimer.unref();
@@ -133,6 +147,7 @@ async function shutdown(signal, exitCode = 0) {
     coreRuntime?.closeCoreRuntime?.(),
     examRuntime?.closeExamRuntime?.(),
     sessionRegistry?.close(),
+    operationsStore?.close(),
   ]);
   for (const result of results) {
     if (result.status === 'rejected') console.error(result.reason);
