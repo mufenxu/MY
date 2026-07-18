@@ -1020,13 +1020,12 @@ function BackupRecoveryView({ session }) {
     try {
       const nextStatus = await requestJson('/api/backups/status');
       setStatusData(nextStatus);
+      const statusJobs = nextStatus.jobs || [];
       const running = nextStatus.jobs?.find((job) => job.status === 'running') || null;
       setActiveJob((current) => {
-        if (running) return running;
-        if (current?.status === 'running') {
-          return nextStatus.jobs?.find((job) => job.id === current.id) || current;
-        }
-        return current;
+        const currentMatch = current?.id ? statusJobs.find((job) => job.id === current.id) : null;
+        if (current?.status === 'running') return currentMatch || current;
+        return currentMatch || running || current;
       });
     } catch (error) {
       setActionError(error.message);
@@ -1066,9 +1065,19 @@ function BackupRecoveryView({ session }) {
     const timer = window.setInterval(async () => {
       try {
         const result = await requestJson(`/api/backups/jobs/${encodeURIComponent(activeJob.id)}`);
+        if (!result.job || result.job.id !== activeJob.id) return;
         setActiveJob(result.job);
         if (result.job.status !== 'running') {
-          setActionMessage(result.job.status === 'succeeded' ? '任务已完成' : result.job.error || '任务执行失败');
+          if (result.job.status === 'succeeded') {
+            setActionError('');
+            setActionMessage('任务已完成');
+          } else if (result.job.status === 'failed') {
+            setActionMessage('');
+            setActionError(result.job.error || '任务执行失败');
+          } else {
+            setActionError('');
+            setActionMessage('任务状态待确认，已刷新清单');
+          }
           loadBackupStatus(true);
         }
       } catch (error) {

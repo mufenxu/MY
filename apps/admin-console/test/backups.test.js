@@ -51,12 +51,15 @@ function fakeSpawnFactory({ stdout = '', stderr = '', exitCode = 0 } = {}) {
 
 async function withHttpServer(handler, callback) {
   const server = http.createServer(handler);
+  server.keepAliveTimeout = 50;
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const address = server.address();
   try {
     await callback(`http://127.0.0.1:${address.port}/`);
   } finally {
+    server.closeIdleConnections?.();
+    server.closeAllConnections?.();
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 }
@@ -244,4 +247,52 @@ test('runner client sends bearer token and proxies backup jobs', async () => {
   });
 
   assert.deepEqual(seen.map((request) => request.authorization), [`Bearer ${token}`, `Bearer ${token}`]);
+});
+
+test('runner client recovers a backup job after the start request times out', async () => {
+  const token = 't'.repeat(32);
+  let jobs = [];
+
+  await withHttpServer(async (req, res) => {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    if (req.headers.authorization !== `Bearer ${token}`) {
+      res.writeHead(401);
+      res.end(JSON.stringify({ error: 'unauthorized', code: 'NOPE' }));
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/backups/run') {
+      jobs = [{
+        id: 'remote-timeout-1',
+        type: 'backup',
+        status: 'running',
+        requestedBy: 'admin',
+        createdAt: new Date().toISOString(),
+      }];
+      setTimeout(() => {
+        if (res.destroyed) return;
+        res.writeHead(202);
+        res.end(JSON.stringify({ job: jobs[0] }));
+      }, 100);
+      return;
+    }
+    if (req.method === 'GET' && req.url === '/status') {
+      res.end(JSON.stringify({ capabilities: { canBackup: true, canRestore: true }, backups: [], jobs }));
+      return;
+    }
+    res.writeHead(404);
+    res.end(JSON.stringify({ error: 'not found' }));
+  }, async (origin) => {
+    const client = createBackupRunnerClient({
+      config: {
+        backupRunnerUrl: origin,
+        backupRunnerToken: token,
+        backupRunnerTimeoutMs: 20,
+        restoreConfirmText: 'RESTORE ALL DATA',
+      },
+    });
+
+    const job = await client.startBackup({ requestedBy: 'admin' });
+    assert.equal(job.id, 'remote-timeout-1');
+    assert.equal(job.status, 'running');
+  });
 });

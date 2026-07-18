@@ -37,13 +37,13 @@ function fallbackRemoteStatus(config, issue) {
   };
 }
 
-async function requestRunner(config, resource, { method = 'GET', body } = {}) {
+async function requestRunner(config, resource, { method = 'GET', body, timeoutMs } = {}) {
   if (!config.backupRunnerToken) {
     throw new BackupOperationError(503, 'BACKUP_RUNNER_TOKEN_MISSING', '备份执行器令牌未配置。');
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), config.backupRunnerTimeoutMs || 8000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs ?? config.backupRunnerTimeoutMs ?? 8000);
   try {
     const response = await fetch(new URL(resource, config.backupRunnerUrl), {
       method,
@@ -77,6 +77,37 @@ async function requestRunner(config, resource, { method = 'GET', body } = {}) {
   }
 }
 
+function jobTime(job) {
+  return Date.parse(job?.createdAt || job?.startedAt || job?.finishedAt || '') || 0;
+}
+
+function findStartedRunnerJob(status, { type, requestedBy, backupName, startedAfter }) {
+  const cutoff = startedAfter - 30_000;
+  const jobs = Array.isArray(status?.jobs) ? status.jobs : [];
+  return jobs
+    .filter((job) => job?.type === type)
+    .filter((job) => ['running', 'succeeded', 'failed'].includes(job.status))
+    .filter((job) => jobTime(job) >= cutoff)
+    .filter((job) => !requestedBy || !job.requestedBy || job.requestedBy === requestedBy)
+    .filter((job) => !backupName || job.backupName === backupName)
+    .sort((left, right) => jobTime(right) - jobTime(left))[0] || null;
+}
+
+async function recoverStartedRunnerJob(config, criteria, originalError) {
+  if (!(originalError instanceof BackupOperationError) || originalError.code !== 'BACKUP_RUNNER_TIMEOUT') {
+    throw originalError;
+  }
+
+  try {
+    const status = await requestRunner(config, '/status');
+    const job = findStartedRunnerJob(status, criteria);
+    if (job) return job;
+  } catch {
+    // Preserve the original start failure; the status probe is best-effort.
+  }
+  throw originalError;
+}
+
 export function createBackupRunnerClient({ config } = {}) {
   return {
     async getStatus() {
@@ -90,18 +121,28 @@ export function createBackupRunnerClient({ config } = {}) {
       }
     },
     async startBackup({ requestedBy } = {}) {
-      const data = await requestRunner(config, '/backups/run', {
-        method: 'POST',
-        body: { requestedBy },
-      });
-      return data.job;
+      const startedAfter = Date.now();
+      try {
+        const data = await requestRunner(config, '/backups/run', {
+          method: 'POST',
+          body: { requestedBy },
+        });
+        return data.job;
+      } catch (error) {
+        return recoverStartedRunnerJob(config, { type: 'backup', requestedBy, startedAfter }, error);
+      }
     },
     async startRestore({ backupName, requestedBy } = {}) {
-      const data = await requestRunner(config, '/backups/restore', {
-        method: 'POST',
-        body: { backupName, requestedBy },
-      });
-      return data.job;
+      const startedAfter = Date.now();
+      try {
+        const data = await requestRunner(config, '/backups/restore', {
+          method: 'POST',
+          body: { backupName, requestedBy },
+        });
+        return data.job;
+      } catch (error) {
+        return recoverStartedRunnerJob(config, { type: 'restore', backupName, requestedBy, startedAfter }, error);
+      }
     },
     async getJob(id) {
       const data = await requestRunner(config, `/backups/jobs/${encodeURIComponent(id)}`);
