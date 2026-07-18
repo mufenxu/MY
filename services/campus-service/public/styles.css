@@ -6852,6 +6852,10 @@ body.dark-theme #themeToggleButton::before {
   }
 }
 
+@media (max-width: 680px) {
+  #platformConsoleLink span { display: none; }
+}
+
 /* Mobile control refinements: keep icons compact and action rows untangled. */
 @media (max-width: 760px) {
   .section-tools,
