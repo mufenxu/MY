@@ -90,6 +90,7 @@ async function requestJson(url, options = {}) {
   if (!response.ok) {
     const error = new Error(data.message || data.error || `请求失败（HTTP ${response.status}）`);
     error.status = response.status;
+    error.code = data.code;
     throw error;
   }
   return data;
@@ -1014,18 +1015,22 @@ function BackupRecoveryView({ session }) {
   const [actionError, setActionError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
 
-  const loadBackupStatus = useCallback(async (force = false) => {
+  const loadBackupStatus = useCallback(async (force = false, options = {}) => {
+    const preserveMissingRunningJob = options.preserveMissingRunningJob !== false;
     force ? setRefreshing(true) : setLoading(true);
     setActionError('');
     try {
       const nextStatus = await requestJson('/api/backups/status');
       setStatusData(nextStatus);
-      const statusJobs = nextStatus.jobs || [];
-      const running = nextStatus.jobs?.find((job) => job.status === 'running') || null;
+      const statusJobs = Array.isArray(nextStatus.jobs) ? nextStatus.jobs : [];
+      const running = statusJobs.find((job) => job.status === 'running') || null;
       setActiveJob((current) => {
         const currentMatch = current?.id ? statusJobs.find((job) => job.id === current.id) : null;
-        if (current?.status === 'running') return currentMatch || current;
-        return currentMatch || running || current;
+        if (currentMatch) return currentMatch;
+        if (current?.status === 'running') {
+          return running || (preserveMissingRunningJob ? current : null);
+        }
+        return running || statusJobs[0] || current;
       });
     } catch (error) {
       setActionError(error.message);
@@ -1081,6 +1086,13 @@ function BackupRecoveryView({ session }) {
           loadBackupStatus(true);
         }
       } catch (error) {
+        if (error.status === 404 || error.code === 'BACKUP_JOB_NOT_FOUND') {
+          setActiveJob((current) => (current?.id === activeJob.id ? null : current));
+          setActionError('');
+          setActionMessage('任务状态已刷新，请查看备份清单');
+          await loadBackupStatus(true, { preserveMissingRunningJob: false });
+          return;
+        }
         setActionError(error.message);
       }
     }, 2200);
