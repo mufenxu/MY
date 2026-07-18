@@ -121,6 +121,7 @@ export function loadConfig(env = process.env) {
     backupCommand: env.PLATFORM_BACKUP_COMMAND || '',
     restoreCommand: env.PLATFORM_RESTORE_COMMAND || '',
     restoreConfirmText: env.PLATFORM_RESTORE_CONFIRM_TEXT || 'RESTORE ALL DATA',
+    backupCommandTimeoutMs: parseInteger(env.PLATFORM_BACKUP_COMMAND_TIMEOUT_MS, 30 * 60 * 1000, { min: 60 * 1000, max: 6 * 60 * 60 * 1000 }),
     backupRunnerUrl: parseHttpUrl(env.PLATFORM_BACKUP_RUNNER_URL),
     backupRunnerToken: env.PLATFORM_BACKUP_RUNNER_TOKEN || '',
     backupRunnerTimeoutMs: parseInteger(env.PLATFORM_BACKUP_RUNNER_TIMEOUT_MS, 8000, { min: 1000, max: 60000 }),

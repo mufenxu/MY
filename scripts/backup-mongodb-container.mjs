@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { access, cp, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
@@ -9,7 +9,9 @@ const backupRoot = path.resolve(process.env.BACKUP_DIR || process.env.PLATFORM_B
 const uploadsRoot = path.resolve(process.env.PLATFORM_CORE_UPLOADS_DIR || '/app/services/core-api/uploads');
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const destination = path.join(backupRoot, stamp);
-const archivePath = path.join(destination, 'mongodb.archive.gz');
+const workDirectory = path.join(backupRoot, `${stamp}.in-progress`);
+const archiveName = 'mongodb.archive.gz';
+const archivePath = path.join(workDirectory, archiveName);
 const applicationDatabases = ['platform_app', 'core_app', 'exam_app', 'campus_app', 'iot_app'];
 
 function required(name) {
@@ -38,7 +40,7 @@ async function copyUploads() {
     if (error.code === 'ENOENT') return false;
     throw error;
   }
-  await cp(uploadsRoot, path.join(destination, 'uploads'), {
+  await cp(uploadsRoot, path.join(workDirectory, 'uploads'), {
     recursive: true,
     force: true,
     preserveTimestamps: true,
@@ -56,7 +58,7 @@ const mongoAuthDb = process.env.PLATFORM_BACKUP_MONGO_AUTH_DB || 'admin';
 if (!mongoUsername) required('PLATFORM_BACKUP_MONGO_USERNAME');
 if (!mongoPassword) required('PLATFORM_BACKUP_MONGO_PASSWORD');
 
-await mkdir(destination, { recursive: true, mode: 0o700 });
+await mkdir(workDirectory, { recursive: true, mode: 0o700 });
 let completed = false;
 try {
   const dump = spawn('mongodump', [
@@ -80,16 +82,17 @@ try {
     formatVersion: 2,
     createdAt: new Date().toISOString(),
     mode: 'backup-runner-container',
-    mongoArchive: path.basename(archivePath),
+    mongoArchive: archiveName,
     mongoSha256: await sha256(archivePath),
     oplog: true,
     applicationsStopped: [],
     includes: uploadsIncluded ? [...applicationDatabases, 'core_uploads'] : applicationDatabases,
   };
-  await writeFile(path.join(destination, 'manifest.json'), `${JSON.stringify(metadata, null, 2)}\n`, { mode: 0o600 });
+  await writeFile(path.join(workDirectory, 'manifest.json'), `${JSON.stringify(metadata, null, 2)}\n`, { mode: 0o600 });
+  await rename(workDirectory, destination);
   completed = true;
 } finally {
-  if (!completed) await rm(destination, { recursive: true, force: true });
+  if (!completed) await rm(workDirectory, { recursive: true, force: true });
 }
 
 const retentionDays = Math.max(1, Number.parseInt(process.env.BACKUP_RETENTION_DAYS || '30', 10));

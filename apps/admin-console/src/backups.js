@@ -13,6 +13,8 @@ import path from 'node:path';
 
 const MAX_LOG_CHARS = 12_000;
 const BACKUP_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
+const IN_PROGRESS_SUFFIX = '.in-progress';
+const DEFAULT_COMMAND_TIMEOUT_MS = 30 * 60 * 1000;
 
 export class BackupOperationError extends Error {
   constructor(status, code, message) {
@@ -257,6 +259,10 @@ function isSafeBackupName(name) {
     && path.basename(String(name || '')) === String(name || '');
 }
 
+function isVisibleBackupDirectory(name) {
+  return isSafeBackupName(name) && !String(name || '').endsWith(IN_PROGRESS_SUFFIX);
+}
+
 async function readManifest(directory) {
   const manifestPath = path.join(directory, 'manifest.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
@@ -294,7 +300,7 @@ async function listBackupManifests(backupRoot) {
 
   const backups = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || !isSafeBackupName(entry.name)) continue;
+    if (!entry.isDirectory() || !isVisibleBackupDirectory(entry.name)) continue;
     const directory = path.join(backupRoot, entry.name);
     try {
       backups.push(await readManifest(directory));
@@ -429,12 +435,20 @@ export function createBackupManager({
     const commandSpec = commandWithVariables(spec, variables, options);
     const stdoutStart = job.stdout.length;
     const stderrStart = job.stderr.length;
+    const commandTimeoutMs = Number.isFinite(Number(options.timeoutMs ?? config.backupCommandTimeoutMs))
+      ? Number(options.timeoutMs ?? config.backupCommandTimeoutMs)
+      : DEFAULT_COMMAND_TIMEOUT_MS;
     return new Promise((resolve) => {
       let child;
       let settled = false;
+      let timeout = null;
+      let killTimer = null;
+      let timeoutError = null;
       const settle = (result) => {
         if (settled) return;
         settled = true;
+        if (timeout) clearTimeout(timeout);
+        if (killTimer) clearTimeout(killTimer);
         resolve({
           ...result,
           stdout: job.stdout.slice(stdoutStart),
@@ -454,10 +468,20 @@ export function createBackupManager({
         return;
       }
 
+      if (commandTimeoutMs > 0) {
+        timeout = setTimeout(() => {
+          const seconds = Math.round(commandTimeoutMs / 1000);
+          timeoutError = new Error(`${options.label || '任务'}命令执行超时（超过 ${seconds} 秒）。`);
+          job.stderr = `${job.stderr}\n${timeoutError.message}\n`.slice(-MAX_LOG_CHARS);
+          child.kill?.('SIGTERM');
+          killTimer = setTimeout(() => child.kill?.('SIGKILL'), 5000);
+        }, commandTimeoutMs);
+      }
+
       child.stdout?.on('data', (chunk) => appendLog(job, 'stdout', chunk));
       child.stderr?.on('data', (chunk) => appendLog(job, 'stderr', chunk));
       child.once('error', (error) => settle({ code: null, error }));
-      child.once('close', (code) => settle({ code, error: null }));
+      child.once('close', (code) => settle({ code, error: timeoutError }));
     });
   }
 
@@ -473,7 +497,7 @@ export function createBackupManager({
 
   async function runJobSteps(job, steps) {
     for (const step of steps) {
-      const result = await runCommand(job, step.spec, step.variables, step.options);
+      const result = await runCommand(job, step.spec, step.variables, { ...step.options, label: step.label });
       job.exitCode = result.code;
       if (result.error) {
         job.status = 'failed';

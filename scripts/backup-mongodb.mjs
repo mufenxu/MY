@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
@@ -9,7 +9,8 @@ const root = path.resolve(import.meta.dirname, '..');
 const backupRoot = path.resolve(process.env.BACKUP_DIR || path.join(root, 'backups'));
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const destination = path.join(backupRoot, stamp);
-const archivePath = path.join(destination, 'mongodb.archive.gz');
+const workDirectory = path.join(backupRoot, `${stamp}.in-progress`);
+const archivePath = path.join(workDirectory, 'mongodb.archive.gz');
 const composeArgs = ['compose', '--env-file', '.env', '-f', 'infra/docker/compose.yml'];
 const applicationServices = [
   'platform-api',
@@ -77,7 +78,7 @@ async function sha256(filePath) {
   return hash.digest('hex');
 }
 
-await mkdir(destination, { recursive: true, mode: 0o700 });
+await mkdir(workDirectory, { recursive: true, mode: 0o700 });
 let completed = false;
 try {
   await withApplicationsStopped(async (stoppedServices) => {
@@ -96,7 +97,7 @@ try {
       waitForChild(dump, 'mongodump')
     ]);
 
-    await run('docker', [...composeArgs, 'cp', 'core-api:/app/services/core-api/uploads', destination]);
+    await run('docker', [...composeArgs, 'cp', 'core-api:/app/services/core-api/uploads', workDirectory]);
     const metadata = {
       formatVersion: 2,
       createdAt: new Date().toISOString(),
@@ -106,11 +107,12 @@ try {
       applicationsStopped: stoppedServices,
       includes: ['platform_app', 'core_app', 'exam_app', 'campus_app', 'iot_app', 'core_uploads']
     };
-    await writeFile(path.join(destination, 'manifest.json'), `${JSON.stringify(metadata, null, 2)}\n`, { mode: 0o600 });
+    await writeFile(path.join(workDirectory, 'manifest.json'), `${JSON.stringify(metadata, null, 2)}\n`, { mode: 0o600 });
   });
+  await rename(workDirectory, destination);
   completed = true;
 } finally {
-  if (!completed) await rm(destination, { recursive: true, force: true });
+  if (!completed) await rm(workDirectory, { recursive: true, force: true });
 }
 
 const retentionDays = Math.max(1, Number.parseInt(process.env.BACKUP_RETENTION_DAYS || '30', 10));

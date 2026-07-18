@@ -15,6 +15,12 @@ if (token.length < 32 || /^(?:replace|change)_with_/i.test(token)) {
   throw new Error('PLATFORM_BACKUP_RUNNER_TOKEN must be at least 32 random characters.');
 }
 
+function parseInteger(value, fallback, { min, max }) {
+  const parsed = Number.parseInt(value ?? '', 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
 const manager = createBackupManager({
   config: {
     workspaceRoot,
@@ -25,6 +31,10 @@ const manager = createBackupManager({
     backupCommand: process.env.PLATFORM_BACKUP_COMMAND || '',
     restoreCommand: process.env.PLATFORM_RESTORE_COMMAND || '',
     restoreConfirmText: process.env.PLATFORM_RESTORE_CONFIRM_TEXT || 'RESTORE ALL DATA',
+    backupCommandTimeoutMs: parseInteger(process.env.PLATFORM_BACKUP_COMMAND_TIMEOUT_MS, 30 * 60 * 1000, {
+      min: 60 * 1000,
+      max: 6 * 60 * 60 * 1000,
+    }),
   },
 });
 

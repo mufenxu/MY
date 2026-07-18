@@ -49,6 +49,23 @@ function fakeSpawnFactory({ stdout = '', stderr = '', exitCode = 0 } = {}) {
   return { calls, spawnImpl };
 }
 
+function hangingSpawnFactory() {
+  const calls = [];
+  const spawnImpl = (command, args, options) => {
+    calls.push({ command, args, options, signals: [] });
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = (signal) => {
+      calls.at(-1).signals.push(signal);
+      queueMicrotask(() => child.emit('close', null));
+      return true;
+    };
+    return child;
+  };
+  return { calls, spawnImpl };
+}
+
 async function withHttpServer(handler, callback) {
   const server = http.createServer(handler);
   server.keepAliveTimeout = 50;
@@ -87,6 +104,30 @@ test('backup status lists restorable manifest directories', async (t) => {
   assert.equal(status.backups.length, 1);
   assert.equal(status.backups[0].restorable, true);
   assert.deepEqual(status.backups[0].includes.slice(0, 2), ['platform_app', 'core_app']);
+});
+
+test('backup status hides in-progress work directories', async (t) => {
+  const backupRoot = await mkdtemp(join(tmpdir(), 'my-platform-backups-'));
+  const workspaceRoot = await mkdtemp(join(tmpdir(), 'my-platform-workspace-'));
+  t.after(() => rm(backupRoot, { recursive: true, force: true }));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  await createBackupFixture(backupRoot, '2026-07-17T12-00-00-000Z');
+  await mkdir(join(backupRoot, '2026-07-17T12-05-00-000Z.in-progress'), { recursive: true });
+
+  const manager = createBackupManager({
+    config: {
+      backupRoot,
+      workspaceRoot,
+      backupOperationsEnabled: true,
+      restoreOperationsEnabled: true,
+      backupCommand: 'node backup.js',
+      restoreCommand: 'node restore.js',
+      restoreConfirmText: 'RESTORE ALL DATA',
+    },
+  });
+
+  const status = await manager.getStatus();
+  assert.deepEqual(status.backups.map((backup) => backup.name), ['2026-07-17T12-00-00-000Z']);
 });
 
 test('backup command starts a tracked job', async (t) => {
@@ -147,6 +188,37 @@ test('failed backup jobs include stderr details', async (t) => {
   assert.equal(finished.status, 'failed');
   assert.match(finished.error, /备份命令退出码 1/);
   assert.match(finished.error, /mongodump failed loudly/);
+});
+
+test('backup commands time out instead of staying running forever', async (t) => {
+  const backupRoot = await mkdtemp(join(tmpdir(), 'my-platform-backups-'));
+  const workspaceRoot = await mkdtemp(join(tmpdir(), 'my-platform-workspace-'));
+  t.after(() => rm(backupRoot, { recursive: true, force: true }));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  const fake = hangingSpawnFactory();
+  await writeFile(join(workspaceRoot, 'backup.js'), '');
+  await writeFile(join(workspaceRoot, 'restore.js'), '');
+
+  const manager = createBackupManager({
+    spawnImpl: fake.spawnImpl,
+    config: {
+      backupRoot,
+      workspaceRoot,
+      backupOperationsEnabled: true,
+      restoreOperationsEnabled: true,
+      backupCommand: 'node backup.js',
+      restoreCommand: 'node restore.js',
+      restoreConfirmText: 'RESTORE ALL DATA',
+      backupCommandTimeoutMs: 5,
+    },
+  });
+
+  const job = await manager.startBackup({ requestedBy: 'admin' });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const finished = manager.getJob(job.id);
+  assert.equal(finished.status, 'failed');
+  assert.match(finished.error, /超时/);
+  assert.deepEqual(fake.calls[0].signals, ['SIGTERM']);
 });
 
 test('restore verifies checksum and appends destructive restore arguments', async (t) => {
