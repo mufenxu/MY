@@ -5,6 +5,7 @@ const Ct8Run = require('../models/Ct8Run');
 const SecretCache = require('../models/SecretCache');
 const AppConfig = require('../models/AppConfig');
 const AppError = require('../utils/AppError');
+const { decrypt } = require('../utils/crypto');
 
 const secretService = require('./secretService');
 const CT8_SECRET_NAMES = new Set(['USERS_LIST']);
@@ -890,12 +891,14 @@ exports.manageSecretCache = async (action, secret_name, secret_value, updated_by
     if (action === 'get') {
         const cache = await SecretCache.findOne({ secret_name: targetSecretName }).lean();
         if (cache) {
+            const value = cache.secret_value ? decrypt(String(cache.secret_value)) : '';
             return {
                 ok: true,
                 data: {
                     secret_name: cache.secret_name,
                     configured: Boolean(cache.secret_value),
                     display_value: cache.secret_value ? '********' : '',
+                    value,
                     updated_at: cache.updated_at,
                     updated_by: cache.updated_by
                 }

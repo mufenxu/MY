@@ -119,7 +119,7 @@ export const request = <T = any>(options: RequestOptions): Promise<T> => {
     try {
         requestFingerprint = stableStringify(options.data);
     } catch {
-        requestFingerprint = String(options.data ?? '');
+        requestFingerprint = String(options.data === null || options.data === undefined ? '' : options.data);
     }
     const requestKey = method === 'GET' && options.dedupe !== false
         ? `${method}:${options.url}:${String(token).slice(-16)}:${requestFingerprint}`

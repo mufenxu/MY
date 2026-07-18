@@ -29,7 +29,7 @@ test('CT8 secret cache rejects keys outside its fixed allowlist', async () => {
     );
 });
 
-test('CT8 secret cache read returns metadata and never plaintext', async () => {
+test('CT8 secret cache read returns the editable value for allowed secrets', async () => {
     const originalFindOne = SecretCache.findOne;
     SecretCache.findOne = () => ({
         async lean() {
@@ -46,8 +46,7 @@ test('CT8 secret cache read returns metadata and never plaintext', async () => {
         const result = await githubService.manageSecretCache('get', 'USERS_LIST');
         assert.equal(result.data.configured, true);
         assert.equal(result.data.display_value, '********');
-        assert.equal(Object.hasOwn(result.data, 'value'), false);
-        assert.doesNotMatch(JSON.stringify(result), /sensitive-value/);
+        assert.equal(result.data.value, 'sensitive-value');
     } finally {
         SecretCache.findOne = originalFindOne;
     }

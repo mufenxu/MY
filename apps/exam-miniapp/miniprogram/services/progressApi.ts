@@ -155,7 +155,10 @@ export const progressApi = {
         const pendingStorageKey = getPendingProgressStorageKey();
         progressApi.clearLocalProgress(categoryId, mode);
         removePendingProgressKey(categoryId, mode, pendingStorageKey);
-        await uploadPromises.get(progressStorageKey)?.catch(() => undefined);
+        const activeUpload = uploadPromises.get(progressStorageKey);
+        if (activeUpload) {
+            await activeUpload.catch(() => undefined);
+        }
         await authApi.ensureAuth();
         return request({ url: '/exam/progress', method: 'DELETE', data: { categoryId, mode } });
     },
