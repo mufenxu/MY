@@ -2030,6 +2030,14 @@ input:focus-visible {
   opacity: 0.64;
 }
 
+.page-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
 .automation-actions {
   display: inline-flex;
   flex: 0 0 auto;
@@ -3693,6 +3701,16 @@ input:focus-visible {
   .automation-kpis,
   .capability-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .page-actions .primary-button,
+  .page-actions .secondary-action {
+    flex: 1 1 160px;
   }
 
   .automation-actions {

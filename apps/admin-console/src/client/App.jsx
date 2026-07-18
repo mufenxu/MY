@@ -485,19 +485,6 @@ function ApplicationTile({ service, onLaunch }) {
   );
 }
 
-function ViewHeading({ eyebrow, title, description, children }) {
-  return (
-    <header className="view-heading">
-      <div>
-        <span className="view-eyebrow">{eyebrow}</span>
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </div>
-      {children}
-    </header>
-  );
-}
-
 function OverviewView({
   services,
   counts,
@@ -624,24 +611,9 @@ function ApplicationsView({ services, loading, onLaunch }) {
   const availability = applications.length > 0 ? Math.round((healthyApplications / applications.length) * 100) : 0;
 
   return (
-    <section className="page-view applications-view" aria-labelledby="applications-title">
-      <ViewHeading
-        eyebrow="应用"
-        title="应用中心"
-        description="统一管理面向用户的应用入口、运行状态与服务能力。"
-      >
-        <div className="view-heading-stats">
-          <span><strong>{applications.length}</strong> 个应用</span>
-          <span><strong>{availability}%</strong> 可用率</span>
-        </div>
-      </ViewHeading>
-
+    <section className="page-view applications-view" aria-label="应用中心">
       <div className="applications-layout">
         <div className="application-catalog">
-          <div className="section-bar">
-            <div><h3>应用目录</h3><span>可直接进入已配置的管理端</span></div>
-            <span className="section-count">{applications.length}</span>
-          </div>
           {loading ? (
             <div className="view-loading"><LoaderCircle className="spin" size={20} /> 正在加载应用</div>
           ) : applications.length > 0 ? applications.map((service) => (
@@ -719,13 +691,7 @@ function ServicesView({ services, loading, onLaunch }) {
     : null;
 
   return (
-    <section className="page-view services-view" aria-labelledby="services-view-title">
-      <ViewHeading
-        eyebrow="运维"
-        title="服务运维"
-        description="集中查看基础服务健康度、响应时间和检查结果。"
-      />
-
+    <section className="page-view services-view" aria-label="服务运维">
       <div className="operations-kpis">
         <article><span className="kpi-icon blue"><Server size={20} /></span><div><span>基础服务</span><strong>{infrastructure.length}</strong><small>已接入运维</small></div></article>
         <article><span className="kpi-icon green"><CheckCircle2 size={20} /></span><div><span>运行正常</span><strong>{healthy}</strong><small>当前在线</small></div></article>
@@ -734,11 +700,7 @@ function ServicesView({ services, loading, onLaunch }) {
       </div>
 
       <div className="services-layout">
-        <section className="view-card service-table-card">
-          <header className="section-bar">
-            <div><h3>基础服务清单</h3><span>状态数据来自实时健康检查</span></div>
-            <span className="section-count">{infrastructure.length}</span>
-          </header>
+        <section className="view-card service-table-card" aria-label="基础服务清单">
           <div className="service-table-head">
             <span>服务</span><span>状态</span><span>响应</span><span>状态码</span><span>检查时间</span><span />
           </div>
@@ -888,23 +850,17 @@ function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) 
   const triggerDisabled = triggering || taskRunning || ct8Loading;
 
   return (
-    <section className="page-view automation-view" aria-labelledby="automation-title">
-      <ViewHeading
-        eyebrow="自动化"
-        title="自动化中心"
-        description="查看自动化任务接入状态、执行能力与监测链路。"
-      >
-        <div className="automation-actions">
-          <button className="secondary-action" type="button" onClick={handleRefresh} disabled={refreshing || ct8Refreshing}>
-            {refreshing || ct8Refreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
-            {refreshing || ct8Refreshing ? '正在同步' : '刷新状态'}
-          </button>
-          <button className="primary-button" type="button" onClick={handleTrigger} disabled={triggerDisabled}>
-            {triggering || taskRunning ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}
-            {taskRunning ? '任务运行中' : '触发任务'}
-          </button>
-        </div>
-      </ViewHeading>
+    <section className="page-view automation-view" aria-label="自动化中心">
+      <div className="page-actions automation-actions">
+        <button className="secondary-action" type="button" onClick={handleRefresh} disabled={refreshing || ct8Refreshing}>
+          {refreshing || ct8Refreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
+          {refreshing || ct8Refreshing ? '正在同步' : '刷新状态'}
+        </button>
+        <button className="primary-button" type="button" onClick={handleTrigger} disabled={triggerDisabled}>
+          {triggering || taskRunning ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}
+          {taskRunning ? '任务运行中' : '触发任务'}
+        </button>
+      </div>
 
       {loading ? (
         <div className="view-loading large"><LoaderCircle className="spin" size={22} /> 正在加载自动化服务</div>
@@ -1221,17 +1177,13 @@ function BackupRecoveryView({ session }) {
   const executorHealthy = capabilities.canBackup && capabilities.canRestore;
 
   return (
-    <section className="page-view backup-view" aria-labelledby="backup-view-title">
-      <ViewHeading
-        eyebrow="灾备"
-        title="数据灾备"
-        description="管理 MongoDB 全库归档、核心上传文件备份和高危恢复任务。"
-      >
+    <section className="page-view backup-view" aria-label="数据灾备">
+      <div className="page-actions">
         <button className="secondary-action" type="button" onClick={() => loadBackupStatus(true)} disabled={refreshing}>
           {refreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
           {refreshing ? '正在刷新' : '刷新清单'}
         </button>
-      </ViewHeading>
+      </div>
 
       <div className="backup-kpis">
         <article><span className="kpi-icon blue"><Database size={20} /></span><div><span>可用备份</span><strong>{backups.filter((backup) => backup.restorable).length}</strong><small>服务器备份目录</small></div></article>
@@ -1268,11 +1220,7 @@ function BackupRecoveryView({ session }) {
           </button>
         </section>
 
-        <section className="view-card backup-list-card">
-          <header className="section-bar">
-            <div><h3>备份清单</h3><span>{loading ? '正在读取' : `${backups.length} 个归档`}</span></div>
-            <span className="section-count">{backups.filter((backup) => backup.restorable).length}</span>
-          </header>
+        <section className="view-card backup-list-card" aria-label="备份清单">
           <div className="backup-table-head">
             <span>备份</span><span>时间</span><span>大小</span><span>状态</span><span>操作</span>
           </div>
