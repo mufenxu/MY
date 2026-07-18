@@ -33,6 +33,7 @@
     "verify:mongodb": "node --env-file=.env scripts/verify-mongodb-isolation.mjs .env",
     "check:backup-scripts": "node --check scripts/backup-mongodb.mjs && node --check scripts/restore-mongodb.mjs && node --check scripts/backup-mongodb-container.mjs && node --check scripts/restore-mongodb-container.mjs",
     "check:supply-chain": "node scripts/check-supply-chain.mjs",
+    "acr:build": "node scripts/trigger-acr-build.mjs",
     "compose:config": "npm run env:check && docker compose --env-file .env -f infra/docker/compose.yml config --quiet",
     "compose:pull": "docker compose --env-file .env -f infra/docker/compose.yml pull",
     "compose:up": "docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build",
