@@ -11,6 +11,10 @@ ENV NODE_ENV=production \
     BACKUP_RUNNER_PORT=22103
 
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=mongo-tools /usr/bin/mongodump /usr/bin/mongorestore /usr/local/bin/
 COPY --chown=node:node apps/admin-console/package.json ./apps/admin-console/package.json
 COPY --chown=node:node apps/admin-console/src/backups.js ./apps/admin-console/src/backups.js
