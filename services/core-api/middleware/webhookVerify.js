@@ -7,8 +7,12 @@ const logger = require('../utils/logger');
 const secretService = require('../services/secretService');
 
 const getWebhookSecret = () => {
-    return secretService.getSecretSync('GH_WEBHOOK_SECRET') || process.env.GH_WEBHOOK_SECRET || '';
+    const value = secretService.getSecretSync('GH_WEBHOOK_SECRET') || process.env.GH_WEBHOOK_SECRET || '';
+    return String(value).trim();
 };
+
+const isWebhookDisabled = () => ['0', 'false', 'off', 'disabled']
+    .includes(String(process.env.GH_WEBHOOK_ENABLED || '').trim().toLowerCase());
 
 const parseBodyObject = (value) => {
     if (!value) return {};
@@ -33,7 +37,7 @@ const parseBodyObject = (value) => {
     }
 };
 
-const extractSecret = (req) => {
+const extractSecret = (req, { allowPayload = false } = {}) => {
     const lowerHeader = (name) => {
         const val = req.headers[name];
         return Array.isArray(val) ? val[0] : val;
@@ -53,6 +57,8 @@ const extractSecret = (req) => {
     if (authHeader && authHeader.startsWith('Bearer ')) {
         return authHeader.slice(7).trim();
     }
+
+    if (!allowPayload) return '';
 
     const bodyObj = parseBodyObject(req.body);
     const rawObj = parseBodyObject(req.rawBody);
@@ -78,19 +84,32 @@ const extractSecret = (req) => {
  * @param {boolean} strict - 是否开启严格模式。开启后，缺少签名的请求将被拒绝。
  */
 const verifyWebhookSignature = (strict = true) => (req, res, next) => {
+    if (isWebhookDisabled()) {
+        return res.status(503).json({
+            error: 'Webhook disabled',
+            code: 'WEBHOOK_DISABLED'
+        });
+    }
+
     const webhookSecret = getWebhookSecret();
 
-    // 如果未配置 webhook secret，记录警告但不阻断
+    // Never accept an unsigned callback because deployment configuration is incomplete.
     if (!webhookSecret) {
-        logger.warn('[Webhook] GH_WEBHOOK_SECRET 未配置，跳过签名验证。建议尽快配置。');
-        return next();
+        logger.error('[Webhook] GH_WEBHOOK_SECRET is not configured; callback rejected.');
+        return res.status(503).json({
+            error: 'Webhook verification is not configured',
+            code: 'WEBHOOK_NOT_CONFIGURED'
+        });
     }
 
     const signature = req.headers['x-hub-signature-256'];
 
     if (!signature) {
         // 兼容旧回调：允许通过 header/body/query 中的 shared secret 校验
-        const providedSecret = extractSecret(req);
+        // Strict endpoints allow legacy shared secrets only in request headers.
+        // Payload/query credentials are retained solely for explicitly non-strict
+        // integrations because URLs and request bodies are commonly logged.
+        const providedSecret = extractSecret(req, { allowPayload: !strict });
         if (providedSecret) {
             const providedBuf = Buffer.from(String(providedSecret).trim());
             const secretBuf = Buffer.from(String(webhookSecret).trim());

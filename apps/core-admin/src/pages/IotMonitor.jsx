@@ -86,9 +86,9 @@ const IotMonitor = () => {
     const [switching, setSwitching] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (signal) => {
         try {
-            const response = await api.get('/iot/info');
+            const response = await api.get('/iot/info', { signal });
             if (response.data.success && response.data.data) {
                 const d = response.data.data;
                 setData({
@@ -102,22 +102,27 @@ const IotMonitor = () => {
                 });
             }
         } catch (error) {
-            console.error('获取IoT数据失败:', error);
+            if (error.code !== 'ERR_CANCELED') console.error('获取IoT数据失败:', error);
         } finally {
-            setLoading(false);
+            if (!signal?.aborted) setLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        fetchData();
-
-        let interval;
-        if (autoRefresh) {
-            interval = setInterval(fetchData, 5000);
-        }
+        let stopped = false;
+        let timer = 0;
+        let controller = null;
+        const poll = async () => {
+            controller = new AbortController();
+            await fetchData(controller.signal);
+            if (!stopped && autoRefresh) timer = window.setTimeout(poll, 5000);
+        };
+        void poll();
 
         return () => {
-            if (interval) clearInterval(interval);
+            stopped = true;
+            window.clearTimeout(timer);
+            controller?.abort();
         };
     }, [fetchData, autoRefresh]);
 

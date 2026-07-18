@@ -78,6 +78,45 @@ walk(miniprogramRoot, (filePath) => {
     }
 });
 
+const questionUtility = fs.readFileSync(path.join(miniprogramRoot, 'utils', 'question.ts'), 'utf8');
+if (/items:\s*\{\s*question:\s*QuestionItem/.test(questionUtility)
+    || /push\(\{\s*question,\s*originalIndex/.test(questionUtility)) {
+    errors.push('Grouped questions must contain only questionId and originalIndex.');
+}
+
+const examTemplate = fs.readFileSync(path.join(miniprogramRoot, 'pages', 'exam', 'exam.wxml'), 'utf8');
+if (/swiper-item[^>]*wx:for="\{\{questions\}\}"/.test(examTemplate)) {
+    errors.push('Exam swiper must render the three-item window instead of all questions.');
+}
+if (!/disable-touch="\{\{mode === 'recite'\}\}"/.test(examTemplate)) {
+    errors.push('Recite mode must disable question swiper touch navigation.');
+}
+
+const examPage = fs.readFileSync(path.join(miniprogramRoot, 'pages', 'exam', 'exam.ts'), 'utf8');
+if (!/onSwiperChange[\s\S]*?this\.data\.mode === 'recite'[\s\S]*?return;/.test(examPage)) {
+    errors.push('Recite mode swiper events must be ignored defensively.');
+}
+
+const learningApi = fs.readFileSync(path.join(miniprogramRoot, 'services', 'learningApi.ts'), 'utf8');
+if (!/question-analysis[\s\S]*?timeout:\s*AI_ANALYSIS_TIMEOUT_MS/.test(learningApi)) {
+    errors.push('AI analysis requests must use the extended endpoint timeout.');
+}
+
+const requestUtility = fs.readFileSync(path.join(miniprogramRoot, 'utils', 'request.ts'), 'utf8');
+if (!/const showError = options\.showError !== false;/.test(requestUtility)) {
+    errors.push('Mini program requests must show errors by default unless explicitly disabled.');
+}
+if (!/shouldClearSession[\s\S]*?clearLocalAuth\(\)/.test(requestUtility)) {
+    errors.push('Expired authentication must preserve local study progress.');
+}
+
+const progressApi = fs.readFileSync(path.join(miniprogramRoot, 'services', 'progressApi.ts'), 'utf8');
+if (!/uploadLatestProgress[\s\S]*?isSameProgressSnapshot/.test(progressApi)
+    || !/flushPromises\s*=\s*new Map/.test(progressApi)
+    || !/uploadPromises\s*=\s*new Map/.test(progressApi)) {
+    errors.push('Progress uploads must serialize per key and preserve newer local snapshots.');
+}
+
 if (errors.length > 0) {
     console.error(errors.join('\n'));
     process.exit(1);

@@ -3,7 +3,7 @@
  * 管理 token、用户信息、认证类型的存储与读取。
  * 从 shared.js IIFE 迁移为 ES Module。
  */
-import { IS_PLATFORM_SSO, resolveAppUrl } from '@/utils/runtime';
+import { fetchWithTimeout, IS_PLATFORM_SSO, resolveAppUrl } from '@/utils/runtime';
 
 const TOKEN_KEY = 'manageToken';
 const USER_KEY = 'manageUser';
@@ -291,7 +291,7 @@ export const session = {
 
 export async function loadRuntimeConfig() {
     if (!runtimeConfigPromise) {
-        runtimeConfigPromise = fetch(resolveAppUrl('/api/public/runtime-config'), {
+        runtimeConfigPromise = fetchWithTimeout(resolveAppUrl('/api/public/runtime-config'), {
             cache: 'no-store',
             credentials: 'same-origin',
         })

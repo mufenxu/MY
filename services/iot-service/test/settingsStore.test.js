@@ -6,8 +6,11 @@ const { defaultConfig } = require('../src/config');
 const {
   applySecretDirectives,
   buildPublicConfigPayload,
-  normalizeConfig
+  normalizeConfig,
+  validateProductionSecrets
 } = require('../src/settings/settingsStore');
+const { AuthManager } = require('../src/security/auth');
+const { isPasswordHash, verifyPassword } = require('../src/security/password');
 
 test('buildPublicConfigPayload redacts secret values but reports presence', () => {
   const config = normalizeConfig(defaultConfig, defaultConfig);
@@ -98,4 +101,45 @@ test('SettingsStore persists normalized configuration in MongoDB storage', async
   const nextStore = new SettingsStore({ storage });
   const restored = await nextStore.initialize();
   assert.equal(restored.dashboard.refreshInterval, 9000);
+});
+
+test('SettingsStore persists administrator passwords only as scrypt hashes', async () => {
+  const storage = new MemoryDatabase();
+  const { SettingsStore } = require('../src/settings/settingsStore');
+  const store = new SettingsStore({ storage });
+  await store.initialize();
+
+  const password = 'correct horse battery staple';
+  await store.saveConfig({
+    auth: { enabled: true, password },
+    secretDirectives: { authPassword: 'replace' }
+  });
+
+  assert.equal(isPasswordHash(storage.settings.auth.password), true);
+  assert.notEqual(storage.settings.auth.password, password);
+  assert.equal(store.getPublicConfig().config.auth.password, '');
+
+  const authManager = new AuthManager(store, storage);
+  assert.equal(authManager.authenticate('admin', password).ok, true);
+  assert.equal(authManager.authenticate('admin', 'wrong-password').ok, false);
+});
+
+test('production auth rejects weak and template credentials', () => {
+  assert.match(
+    validateProductionSecrets({
+      enabled: true,
+      password: 'replace_with_strong_password',
+      sessionSecret: 'replace_with_at_least_32_random_characters'
+    }, 'production').join(' '),
+    /模板默认值/
+  );
+  assert.match(
+    validateProductionSecrets({ enabled: true, password: 'short', sessionSecret: 'also-short' }, 'production').join(' '),
+    /16 个字符.*32 个字符/
+  );
+});
+
+test('scrypt verifier rejects malformed or attacker-controlled parameters', () => {
+  assert.equal(isPasswordHash('scrypt$999999999$8$1$c2FsdA$aGFzaA'), false);
+  assert.equal(verifyPassword('password', 'scrypt$999999999$8$1$c2FsdA$aGFzaA'), false);
 });

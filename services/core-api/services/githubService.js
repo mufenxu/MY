@@ -7,6 +7,17 @@ const AppConfig = require('../models/AppConfig');
 const AppError = require('../utils/AppError');
 
 const secretService = require('./secretService');
+const CT8_SECRET_NAMES = new Set(['USERS_LIST']);
+
+function assertAllowedCt8SecretName(name) {
+    const normalized = String(name || '').trim().toUpperCase();
+    if (!CT8_SECRET_NAMES.has(normalized)) {
+        const error = new AppError('This secret is not available to CT8 management.', 403);
+        error.code = 'CT8_SECRET_NOT_ALLOWED';
+        throw error;
+    }
+    return normalized;
+}
 
 // Use getters to fetch the latest values dynamically
 const getSecretValue = (...names) => {
@@ -799,7 +810,7 @@ exports.checkAndResolveActiveTask = async (activeTask, staleThresholdMs = 2 * 60
 };
 
 exports.updateSecret = async (action, secret_name, value) => {
-    const targetSecretName = secret_name || 'USERS_LIST';
+    const targetSecretName = assertAllowedCt8SecretName(secret_name || 'USERS_LIST');
     const { GH_TOKEN, GH_OWNER, GH_REPO } = getGhOptions();
 
     if (!GH_TOKEN) {
@@ -874,15 +885,17 @@ exports.updateSecret = async (action, secret_name, value) => {
 
 exports.manageSecretCache = async (action, secret_name, secret_value, updated_by) => {
     if (!secret_name) throw new AppError('secret_name is required', 400);
+    const targetSecretName = assertAllowedCt8SecretName(secret_name);
 
     if (action === 'get') {
-        const cache = await SecretCache.findOne({ secret_name }).lean();
+        const cache = await SecretCache.findOne({ secret_name: targetSecretName }).lean();
         if (cache) {
             return {
                 ok: true,
                 data: {
                     secret_name: cache.secret_name,
-                    value: cache.secret_value,
+                    configured: Boolean(cache.secret_value),
+                    display_value: cache.secret_value ? '********' : '',
                     updated_at: cache.updated_at,
                     updated_by: cache.updated_by
                 }
@@ -900,10 +913,10 @@ exports.manageSecretCache = async (action, secret_name, secret_value, updated_by
             throw new AppError('secret_value is required', 400);
         }
 
-        const result = await SecretCache.findOneAndUpdate(
-            { secret_name },
-            { secret_value: String(secret_value), updated_by: updated_by || 'unknown' },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
+        const result = await secretService.setSecret(
+            targetSecretName,
+            String(secret_value),
+            updated_by || 'unknown'
         );
         const createdAt = result.create_time instanceof Date ? result.create_time.getTime() : 0;
         const updatedAt = result.updated_at instanceof Date ? result.updated_at.getTime() : 0;
@@ -914,7 +927,7 @@ exports.manageSecretCache = async (action, secret_name, secret_value, updated_by
         };
 
     } else if (action === 'delete') {
-        await SecretCache.deleteOne({ secret_name });
+        await SecretCache.deleteOne({ secret_name: targetSecretName });
         return { ok: true };
     } else {
         throw new AppError('Invalid action', 400);

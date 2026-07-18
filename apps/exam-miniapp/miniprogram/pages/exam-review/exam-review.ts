@@ -20,7 +20,7 @@ Page({
     data: {
         title: '考试结果',
         questions: [] as Question[],
-        groupedQuestions: [] as { type: string; typeName: string; items: { question: Question; originalIndex: number }[] }[],
+        groupedQuestions: [] as { type: string; typeName: string; items: { questionId: string; originalIndex: number }[] }[],
         currentIndex: 0,
         answers: {} as Record<string, string[]>, // { questionId: [values] }
         results: {} as Record<string, boolean>, // { questionId: isCorrect }

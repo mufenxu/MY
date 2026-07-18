@@ -22,8 +22,29 @@ export function redirectToPlatformLogin() {
     window.location.replace(`/?returnTo=${encodeURIComponent(returnTo)}`);
 }
 
+export async function fetchWithTimeout(input, init = {}, timeout = 12000) {
+    const controller = new AbortController();
+    const upstreamSignal = init.signal;
+    const abortFromUpstream = () => controller.abort(upstreamSignal?.reason);
+    if (upstreamSignal) {
+        if (upstreamSignal.aborted) abortFromUpstream();
+        else upstreamSignal.addEventListener('abort', abortFromUpstream, { once: true });
+    }
+    const timer = window.setTimeout(
+        () => controller.abort(new DOMException('Request timed out', 'TimeoutError')),
+        timeout,
+    );
+
+    try {
+        return await fetch(input, { ...init, signal: controller.signal });
+    } finally {
+        window.clearTimeout(timer);
+        upstreamSignal?.removeEventListener('abort', abortFromUpstream);
+    }
+}
+
 export async function logoutPlatformSession() {
-    await fetch('/api/auth/logout', {
+    await fetchWithTimeout('/api/auth/logout', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'X-Platform-Request': 'console' },

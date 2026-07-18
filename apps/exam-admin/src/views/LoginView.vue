@@ -138,7 +138,8 @@ import {
     getCaptchaVerifyCode,
 } from '@/utils/aliyunAiCaptcha';
 import http from '@/utils/http';
-import { resolveAppUrl } from '@/utils/runtime';
+import { fetchWithTimeout, resolveAppUrl } from '@/utils/runtime';
+import { createSequentialPoller } from '@/utils/sequentialPoller';
 
 const router = useRouter();
 const route = useRoute();
@@ -208,8 +209,10 @@ const qrFallback = reactive({
 });
 const scanLoginEnabled = ref(false);
 const qrStatusClass = computed(() => `is-${qrStatusTone.value}`);
-let qrTimer = null;
+let qrPoller = null;
 let pollErrorCount = 0;
+let qrCreateController = null;
+let qrCreateSequence = 0;
 let scanLoginConfig = { enabled: false, apiBase: '' };
 let qrcodeModulePromise = null;
 
@@ -222,8 +225,14 @@ const loadQrcode = async () => {
 };
 
 const stopPolling = () => {
-    if (qrTimer) clearInterval(qrTimer);
-    qrTimer = null;
+    qrPoller?.stop();
+    qrPoller = null;
+};
+
+const stopQrCreation = () => {
+    qrCreateSequence += 1;
+    qrCreateController?.abort();
+    qrCreateController = null;
 };
 
 const clearStoredTokens = () => {
@@ -284,6 +293,7 @@ const switchTab = (name) => {
     if (name === 'qrcode') initQrcode();
     else {
         stopPolling();
+        stopQrCreation();
         initAccountCaptcha();
     }
 };
@@ -378,11 +388,11 @@ const handleWechatLogin = async (tempAuthCode) => {
 
 const startPolling = () => {
     stopPolling();
-    qrTimer = setInterval(async () => {
-        try {
-            const res = await fetch(
+    qrPoller = createSequentialPoller(async (signal) => {
+            const res = await fetchWithTimeout(
                 `${scanLoginConfig.apiBase}/qrcode/status?qrToken=${encodeURIComponent(qrToken.value)}&pollToken=${encodeURIComponent(pollToken.value)}`,
-                { cache: 'no-store' },
+                { cache: 'no-store', signal },
+                8000,
             );
             const payload = await res.json();
             if (!res.ok || payload.code !== 0) throw new Error(payload.message || '二维码状态获取失败');
@@ -401,26 +411,39 @@ const startPolling = () => {
                 qrStatusTone.value = 'success';
                 qrStatusIcon.value = 'CircleCheckFilled';
                 await handleWechatLogin(data.tempAuthCode);
+                return false;
             } else if (data.status === 'expired' || data.status === 'cancelled') {
                 clearStoredTokens();
                 setQrExpired();
+                return false;
             }
-        } catch {
+            return true;
+    }, {
+        interval: 2000,
+        onError: () => {
             pollErrorCount += 1;
             if (pollErrorCount >= 3) {
                 clearStoredTokens();
                 setQrRetryNotice();
+                return false;
             }
-        }
-    }, 2000);
+            return true;
+        },
+    });
+    qrPoller.start();
 };
 
 const initQrcode = async () => {
+    stopQrCreation();
     stopPolling();
     if (!scanLoginEnabled.value) {
         setQrFailed('扫码登录未开启');
         return;
     }
+
+    const requestSequence = qrCreateSequence;
+    const controller = new AbortController();
+    qrCreateController = controller;
     resetQrState();
 
     const el = qrcodeEl.value;
@@ -432,12 +455,14 @@ const initQrcode = async () => {
         const requestBody = { intent: 'manage_login' };
         if (oldQrToken) requestBody.oldQrToken = oldQrToken;
 
-        const res = await fetch(`${scanLoginConfig.apiBase}/qrcode/create`, {
+        const res = await fetchWithTimeout(`${scanLoginConfig.apiBase}/qrcode/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody),
+            signal: controller.signal,
         });
         const payload = await res.json();
+        if (controller.signal.aborted || requestSequence !== qrCreateSequence) return;
         if (!res.ok || payload.code !== 0) throw new Error(payload.message || '获取二维码失败');
 
         const data = unwrapPayload(payload);
@@ -465,6 +490,7 @@ const initQrcode = async () => {
             } else {
                 // 使用 npm 版 qrcode 库渲染普通二维码到 canvas。
                 const QRCode = await loadQrcode();
+                if (controller.signal.aborted || requestSequence !== qrCreateSequence) return;
                 const qrText = data.qrCodeText || `miniprogram-login://scan?qrToken=${data.qrToken}`;
                 const canvas = document.createElement('canvas');
                 await QRCode.toCanvas(canvas, qrText, {
@@ -473,6 +499,7 @@ const initQrcode = async () => {
                     color: { dark: '#111827', light: '#ffffff' },
                     errorCorrectionLevel: 'H',
                 });
+                if (controller.signal.aborted || requestSequence !== qrCreateSequence) return;
                 canvas.style.width = 'min(200px, 100%)';
                 canvas.style.height = 'auto';
                 el.appendChild(canvas);
@@ -484,7 +511,12 @@ const initQrcode = async () => {
         qrStatusIcon.value = 'FullScreen';
         startPolling();
     } catch (error) {
+        if (controller.signal.aborted || requestSequence !== qrCreateSequence) return;
         setQrFailed(error.message || '二维码获取失败');
+    } finally {
+        if (qrCreateController === controller) {
+            qrCreateController = null;
+        }
     }
 };
 
@@ -567,7 +599,10 @@ onMounted(async () => {
     }
 });
 
-onUnmounted(stopPolling);
+onUnmounted(() => {
+    stopPolling();
+    stopQrCreation();
+});
 </script>
 
 <style scoped>

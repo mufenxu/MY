@@ -1,0 +1,108 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+process.env.CORE_JWT_SECRET = process.env.CORE_JWT_SECRET || 'route-security-test-secret';
+
+const authScanRouter = require('../routes/authScanRoutes');
+const statsRouter = require('../routes/statsRoutes');
+const githubRouter = require('../routes/github');
+const settingsRouter = require('../routes/settings');
+const AuthScanLog = require('../models/AuthScanLog');
+const authScanController = require('../controllers/authScanController');
+
+function routeMiddleware(router, path, index) {
+    const layer = router.stack.find((item) => item.route && item.route.path === path);
+    assert.ok(layer, `route ${path} must exist`);
+    return layer.route.stack[index].handle;
+}
+
+function invoke(middleware, user) {
+    return new Promise((resolve) => {
+        const req = { user };
+        const res = {
+            statusCode: 200,
+            status(code) { this.statusCode = code; return this; },
+            json(body) { resolve({ res: this, body, nextCalled: false }); }
+        };
+        middleware(req, res, (error) => resolve({ res, error, nextCalled: true }));
+    });
+}
+
+test('auth scan list and log management routes require an admin role', async () => {
+    for (const path of ['/qrcode/list', '/logs']) {
+        const authorize = routeMiddleware(authScanRouter, path, 1);
+        const denied = await invoke(authorize, { role: 'user' });
+        assert.equal(denied.res.statusCode, 403);
+        assert.equal(denied.nextCalled, false);
+
+        const accepted = await invoke(authorize, { role: 'admin' });
+        assert.equal(accepted.nextCalled, true);
+    }
+});
+
+test('dashboard statistics require an admin role', async () => {
+    const authorizeLayer = statsRouter.stack[1];
+    assert.ok(authorizeLayer && authorizeLayer.handle);
+
+    const denied = await invoke(authorizeLayer.handle, { role: 'user' });
+    assert.equal(denied.res.statusCode, 403);
+
+    const accepted = await invoke(authorizeLayer.handle, { role: 'super_admin' });
+    assert.equal(accepted.nextCalled, true);
+});
+
+test('CT8 secret cache requires super_admin or explicit manage_ct8 permission', async () => {
+    const authorize = routeMiddleware(githubRouter, '/secret/cache', 1);
+    const denied = await invoke(authorize, { role: 'admin', permissions: [], status: 'active' });
+    assert.equal(denied.res.statusCode, 403);
+
+    const accepted = await invoke(authorize, { role: 'user', permissions: ['manage_ct8'], status: 'active' });
+    assert.equal(accepted.nextCalled, true);
+});
+
+test('global notification settings and manual reminders require super_admin', async () => {
+    for (const path of ['/notify', '/test-notify', '/check-due']) {
+        const authorize = routeMiddleware(settingsRouter, path, 1);
+        const denied = await invoke(authorize, { role: 'admin' });
+        assert.equal(denied.res.statusCode, 403);
+
+        const accepted = await invoke(authorize, { role: 'super_admin' });
+        assert.equal(accepted.nextCalled, true);
+    }
+});
+
+test('auth scan management pagination is capped at 100 records', async () => {
+    let listResponse;
+    await authScanController.listQRCodes(
+        { query: { page: '999999999999', pageSize: '100000' } },
+        { json: (body) => { listResponse = body; }, status() { return this; } }
+    );
+    assert.equal(listResponse.page, 10000);
+    assert.equal(listResponse.pageSize, 100);
+
+    const originalFind = AuthScanLog.find;
+    const originalCount = AuthScanLog.countDocuments;
+    let appliedLimit;
+    AuthScanLog.find = () => ({
+        sort() { return this; },
+        skip() { return this; },
+        limit(value) { appliedLimit = value; return this; },
+        populate() { return this; },
+        async lean() { return []; }
+    });
+    AuthScanLog.countDocuments = async () => 0;
+
+    try {
+        let logResponse;
+        await authScanController.getAuditLogs(
+            { query: { page: '0', limit: '999999' } },
+            { json: (body) => { logResponse = body; }, status() { return this; } }
+        );
+        assert.equal(appliedLimit, 100);
+        assert.equal(logResponse.page, 1);
+        assert.equal(logResponse.limit, 100);
+    } finally {
+        AuthScanLog.find = originalFind;
+        AuthScanLog.countDocuments = originalCount;
+    }
+});

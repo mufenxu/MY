@@ -3,6 +3,7 @@ import { Form, Input, Button, Card, message, Typography, Tabs, QRCode, Spin } fr
 import { UserOutlined, LockOutlined, ReloadOutlined, ScanOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import { createSequentialPoller } from '../utils/sequentialPoller';
 import { Turnstile } from '@marsidev/react-turnstile';
 import './Login.css';
 
@@ -167,7 +168,7 @@ const Login = () => {
             const res = await api.post('/auth/login', { ...values, captchaToken });
             if (res.data.success) {
                 localStorage.setItem('token', res.data.token);
-                if (res.data.refreshToken) localStorage.setItem('refreshToken', res.data.refreshToken);
+                localStorage.removeItem('refreshToken');
                 localStorage.setItem('user', JSON.stringify(res.data.user));
                 message.success('登录成功');
                 navigate('/dashboard');
@@ -359,6 +360,7 @@ const ScanLogin = ({ navigate }) => {
     const [qrToken, setQrToken] = useState('');
     const [status, setStatus] = useState('loading'); 
     const timerRef = useRef(null);
+    const createRequestRef = useRef(null);
     const [qrMode, setQrMode] = useState('wxacode'); // 'wxacode' | 'classic'
     const [wxacodeImg, setWxacodeImg] = useState('');
 
@@ -367,7 +369,7 @@ const ScanLogin = ({ navigate }) => {
             const res = await api.post('/auth/token/exchange-admin', { tempAuthCode: code });
             if (res.data.accessToken) {
                 localStorage.setItem('token', res.data.accessToken);
-                if (res.data.refreshToken) localStorage.setItem('refreshToken', res.data.refreshToken);
+                localStorage.removeItem('refreshToken');
                 if (res.data.user) localStorage.setItem('user', JSON.stringify(res.data.user));
                 sessionStorage.removeItem('active_qr_token');
                 message.success('扫码登录成功');
@@ -380,34 +382,36 @@ const ScanLogin = ({ navigate }) => {
 
     const startPolling = useCallback((token) => {
         const startTime = Date.now();
-        timerRef.current = setInterval(async () => {
+        timerRef.current?.stop();
+        timerRef.current = createSequentialPoller(async (signal) => {
             if (Date.now() - startTime > 5 * 60 * 1000) {
-                clearInterval(timerRef.current);
                 setStatus('expired');
                 message.warning('登录二维码已超时，请刷新重试');
-                return;
+                return false;
             }
-            try {
-                const res = await api.get(`/auth/qrcode/status?qrToken=${token}`);
+                const res = await api.get(`/auth/qrcode/status?qrToken=${token}`, { signal });
                 const { status, tempAuthCode } = res.data;
                 if (status === 'scanned') setStatus('scanned');
                 else if (status === 'confirmed') {
-                    clearInterval(timerRef.current);
                     setStatus('confirmed');
                     handleExchange(tempAuthCode);
+                    return false;
                 } else if (status === 'expired') {
-                    clearInterval(timerRef.current);
                     setStatus('expired');
+                    return false;
                 }
-            } catch {
-                // ignore polling network jitter
-            }
-        }, 2000);
+                return true;
+        }, { interval: 2000, onError: () => true });
+        timerRef.current.start();
     }, [handleExchange]);
 
     const fetchQRCode = useCallback(async () => {
+        createRequestRef.current?.abort();
+        const controller = new AbortController();
+        createRequestRef.current = controller;
+
         try {
-            if (timerRef.current) clearInterval(timerRef.current);
+            timerRef.current?.stop();
             const oldToken = sessionStorage.getItem('active_qr_token');
             setQrToken('');
             setWxacodeImg('');
@@ -416,7 +420,10 @@ const ScanLogin = ({ navigate }) => {
             if (qrMode === 'wxacode') {
                 // 微信扫一扫模式：获取小程序码
                 try {
-                    const res = await api.post('/auth/qrcode/create-wxacode', { appId: 'admin-dashboard', oldToken });
+                    const res = await api.post('/auth/qrcode/create-wxacode', { appId: 'admin-dashboard', oldToken }, {
+                        signal: controller.signal,
+                    });
+                    if (controller.signal.aborted) return;
                     if (res.data && res.data.qrToken && res.data.wxacodeBase64) {
                         setQrToken(res.data.qrToken);
                         setWxacodeImg(res.data.wxacodeBase64);
@@ -432,9 +439,13 @@ const ScanLogin = ({ navigate }) => {
                     } else {
                         setStatus('expired');
                     }
-                } catch {
+                } catch (error) {
+                    if (controller.signal.aborted || error.code === 'ERR_CANCELED') return;
                     // wxacode 接口失败，降级到传统模式
-                    const res = await api.post('/auth/qrcode/create', { appId: 'admin-dashboard', oldToken });
+                    const res = await api.post('/auth/qrcode/create', { appId: 'admin-dashboard', oldToken }, {
+                        signal: controller.signal,
+                    });
+                    if (controller.signal.aborted) return;
                     if (res.data && res.data.qrToken) {
                         setQrToken(res.data.qrToken);
                         sessionStorage.setItem('active_qr_token', res.data.qrToken);
@@ -446,7 +457,10 @@ const ScanLogin = ({ navigate }) => {
                 }
             } else {
                 // 传统模式：小程序内扫码
-                const res = await api.post('/auth/qrcode/create', { appId: 'admin-dashboard', oldToken });
+                const res = await api.post('/auth/qrcode/create', { appId: 'admin-dashboard', oldToken }, {
+                    signal: controller.signal,
+                });
+                if (controller.signal.aborted) return;
                 if (res.data && res.data.qrToken) {
                     setQrToken(res.data.qrToken);
                     sessionStorage.setItem('active_qr_token', res.data.qrToken);
@@ -456,8 +470,13 @@ const ScanLogin = ({ navigate }) => {
                     setStatus('expired');
                 }
             }
-        } catch {
+        } catch (error) {
+            if (controller.signal.aborted || error.code === 'ERR_CANCELED') return;
             setStatus('expired');
+        } finally {
+            if (createRequestRef.current === controller) {
+                createRequestRef.current = null;
+            }
         }
     }, [startPolling, qrMode]);
 
@@ -467,7 +486,8 @@ const ScanLogin = ({ navigate }) => {
         }, 0);
         return () => {
             clearTimeout(kickoffTimer);
-            if (timerRef.current) clearInterval(timerRef.current);
+            timerRef.current?.stop();
+            createRequestRef.current?.abort();
         };
     }, [fetchQRCode]);
 
@@ -509,10 +529,10 @@ const ScanLogin = ({ navigate }) => {
                             style={{ opacity: (status === 'expired' || status === 'scanned') ? 0.3 : 1 }}
                         />
                         {status === 'expired' && (
-                            <div className="qr-expired-overlay" onClick={fetchQRCode}>
+                            <button type="button" className="qr-expired-overlay" onClick={fetchQRCode} aria-label="刷新登录二维码">
                                 <ReloadOutlined style={{ fontSize: 32, color: '#4A7CF7', marginBottom: 8 }} />
                                 <Text strong style={{ fontSize: 14, color: '#4A7CF7' }}>点击刷新</Text>
-                            </div>
+                            </button>
                         )}
                     </div>
                 )}
@@ -541,9 +561,9 @@ const ScanLogin = ({ navigate }) => {
             <Text type="secondary" style={{ marginTop: 24, fontSize: 15, fontWeight: 500 }}>
                 {getStatusText()}
             </Text>
-            <a className="scan-mode-toggle" onClick={handleModeSwitch}>
+            <button type="button" className="scan-mode-toggle" onClick={handleModeSwitch}>
                 {qrMode === 'wxacode' ? '使用小程序内扫码' : '使用微信扫一扫'}
-            </a>
+            </button>
         </div>
     );
 };

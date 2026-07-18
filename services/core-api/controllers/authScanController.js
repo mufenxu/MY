@@ -6,6 +6,7 @@ const AuthScanLog = require('../models/AuthScanLog');
 const logger = require('../utils/logger');
 const authService = require('../services/authService');
 const { getAccessToken, invalidateCache: invalidateWxTokenCache } = require('../utils/wxToken');
+const { setRefreshCookie } = require('../utils/refreshCookie');
 
 // In-memory storage for QR codes
 // Key: qrToken, Value: { status: 'waiting'|'scanned'|'confirmed'|'expired', appId: string, createdTime: number, userId: string, tempAuthCode: string }
@@ -16,6 +17,18 @@ const QR_EXPIRE_TIME = 300 * 1000; // 5 minutes
 const CHECK_INTERVAL = 60 * 1000; // Cleanup interval
 const VALID_WX_ENV_VERSIONS = new Set(['release', 'trial', 'develop']);
 const MAX_QR_STORE_SIZE = 1000; // 内存存储上限，防止 DoS
+const MAX_MANAGEMENT_PAGE = 10000;
+const MAX_MANAGEMENT_PAGE_SIZE = 100;
+
+function boundedPositiveInt(value, fallback, maximum) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isSafeInteger(parsed) || parsed < 1) return fallback;
+    return Math.min(parsed, maximum);
+}
+
+function tokenFingerprint(value) {
+    return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 12);
+}
 
 // Resolve which Mini Program version WeChat should open for generated wxacodes.
 function resolveWxEnvVersion() {
@@ -48,8 +61,10 @@ function cleanupExpiredQRCodes() {
     }
 }
 
-// Periodic cleanup of expired QR codes
-setInterval(cleanupExpiredQRCodes, CHECK_INTERVAL);
+// Periodic cleanup of expired QR codes. Do not keep short-lived CLI/test
+// processes alive solely for this maintenance timer.
+const cleanupTimer = setInterval(cleanupExpiredQRCodes, CHECK_INTERVAL);
+if (typeof cleanupTimer.unref === 'function') cleanupTimer.unref();
 
 /**
  * 1. Create QR Code (Client Side calls this)
@@ -64,7 +79,7 @@ exports.createQRCode = async (req, res) => {
         // Invalidate old token if provided (e.g., on page refresh)
         if (oldToken && qrCodeStore.has(oldToken)) {
             qrCodeStore.delete(oldToken);
-            logger.debug(`Invalidated old QR token: ${oldToken.substring(0, 8)}...`);
+            logger.debug(`Invalidated old QR token fingerprint=${tokenFingerprint(oldToken)}`);
         }
 
         // 容量保护：超出上限时先清理过期，若仍超出则拒绝
@@ -126,7 +141,7 @@ exports.createWxacode = async (req, res) => {
         // Invalidate old token if provided
         if (oldToken && qrCodeStore.has(oldToken)) {
             qrCodeStore.delete(oldToken);
-            logger.debug(`Invalidated old QR token: ${oldToken.substring(0, 8)}...`);
+            logger.debug(`Invalidated old QR token fingerprint=${tokenFingerprint(oldToken)}`);
         }
 
         // 容量保护
@@ -461,7 +476,7 @@ exports.exchangeToken = async (req, res) => {
 
         // Generate real JWT + Refresh Token
         const token = authService.generateToken(user);
-        const refreshToken = await authService.generateRefreshToken(user._id);
+        const refreshToken = await authService.generateRefreshToken(user._id, user.tokenVersion);
 
         // Cleanup used QR
         qrCodeStore.delete(foundToken);
@@ -516,14 +531,14 @@ exports.exchangeTokenAdmin = async (req, res) => {
 
         // Generate real JWT + Refresh Token
         const token = authService.generateToken(user);
-        const refreshToken = await authService.generateRefreshToken(user._id);
+        const refreshToken = await authService.generateRefreshToken(user._id, user.tokenVersion);
 
         // Cleanup used QR
         qrCodeStore.delete(foundToken);
 
+        setRefreshCookie(res, refreshToken);
         res.json({
             accessToken: token,
-            refreshToken: refreshToken,
             user: user
         });
 
@@ -538,6 +553,8 @@ exports.exchangeTokenAdmin = async (req, res) => {
  */
 exports.listQRCodes = async (req, res) => {
     try {
+        const page = boundedPositiveInt(req.query.page, 1, MAX_MANAGEMENT_PAGE);
+        const pageSize = boundedPositiveInt(req.query.pageSize || req.query.limit, 20, MAX_MANAGEMENT_PAGE_SIZE);
         const list = [];
         for (const [qrToken, data] of qrCodeStore.entries()) {
             list.push({
@@ -551,7 +568,9 @@ exports.listQRCodes = async (req, res) => {
         }
         // Sort by createdTime desc
         list.sort((a, b) => b.createdTime - a.createdTime);
-        res.json({ success: true, list });
+        const total = list.length;
+        const start = (page - 1) * pageSize;
+        res.json({ success: true, list: list.slice(start, start + pageSize), total, page, pageSize });
     } catch (error) {
         logger.error('List QR Error:', error);
         res.status(500).json({ message: 'Internal Server Error' });
@@ -563,27 +582,30 @@ exports.listQRCodes = async (req, res) => {
  */
 exports.getAuditLogs = async (req, res) => {
     try {
-        const { appId, page = 1, limit = 20 } = req.query;
+        const { appId } = req.query;
+        const page = boundedPositiveInt(req.query.page, 1, MAX_MANAGEMENT_PAGE);
+        const limit = boundedPositiveInt(req.query.limit || req.query.pageSize, 20, MAX_MANAGEMENT_PAGE_SIZE);
 
         const filter = {};
         if (appId) filter.appId = appId;
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-        const logs = await AuthScanLog.find(filter)
-            .sort({ createTime: -1 })
-            .skip(skip)
-            .limit(parseInt(limit))
-            .populate('userId', 'username avatarUrl') // Pull basic user info if needed
-            .lean();
-
-        const total = await AuthScanLog.countDocuments(filter);
+        const skip = (page - 1) * limit;
+        const [logs, total] = await Promise.all([
+            AuthScanLog.find(filter)
+                .sort({ createTime: -1 })
+                .skip(skip)
+                .limit(limit)
+                .populate('userId', 'userId nickName avatarUrl')
+                .lean(),
+            AuthScanLog.countDocuments(filter)
+        ]);
 
         res.json({
             success: true,
             data: logs,
             total,
-            page: parseInt(page),
-            limit: parseInt(limit)
+            page,
+            limit
         });
     } catch (error) {
         logger.error('Get Audit Logs Error:', error);

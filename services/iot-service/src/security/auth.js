@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { verifyPlatformSso } = require('./platformSso');
+const { verifyPassword } = require('./password');
 
 const COOKIE_NAME = 'mqttapi_session';
 
@@ -194,7 +195,7 @@ class AuthManager {
       };
     }
 
-    if (!safeEqual(username, auth.username) || !safeEqual(password, auth.password)) {
+    if (!safeEqual(username, auth.username) || !verifyPassword(password, auth.password)) {
       return {
         ok: false,
         message: '用户名或密码不正确。'

@@ -175,3 +175,21 @@ test('restart restores service maintenance timers', () => {
 
   service.stop();
 });
+
+test('graceful stop drains the MQTT client before completing', async () => {
+  const { service } = createService(baseConfig);
+  const calls = [];
+  service.client = {
+    removeAllListeners() { calls.push('remove-listeners'); },
+    end(force, options, callback) {
+      calls.push(`end:${force}`);
+      setImmediate(callback);
+    }
+  };
+  service.status.mqttConnected = true;
+
+  await service.stop({ force: false });
+  assert.deepEqual(calls, ['remove-listeners', 'end:false']);
+  assert.equal(service.client, null);
+  assert.equal(service.status.connectionState, 'stopped');
+});

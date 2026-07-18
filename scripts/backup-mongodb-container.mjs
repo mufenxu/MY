@@ -79,7 +79,7 @@ try {
   const metadata = {
     formatVersion: 2,
     createdAt: new Date().toISOString(),
-    mode: 'platform-api-container',
+    mode: 'backup-runner-container',
     mongoArchive: path.basename(archivePath),
     mongoSha256: await sha256(archivePath),
     oplog: true,

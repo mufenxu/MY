@@ -30,13 +30,13 @@ const upload = multer({
 });
 
 // Get Config
-router.get('/notify', auth, authorize('admin', 'super_admin'), getNotifyConfig);
+router.get('/notify', auth, authorize('super_admin'), getNotifyConfig);
 
 // Save Config
-router.post('/notify', auth, authorize('admin', 'super_admin'), validate(notifyConfigSchema), saveNotifyConfig);
+router.post('/notify', auth, authorize('super_admin'), validate(notifyConfigSchema), saveNotifyConfig);
 
 // Test Notify
-router.post('/test-notify', auth, authorize('admin', 'super_admin'), testNotify);
+router.post('/test-notify', auth, authorize('super_admin'), testNotify);
 
 // Get current admin info - 仅限 super_admin
 router.get('/admin', auth, authorize('super_admin'), getAdminInfo);
@@ -45,7 +45,7 @@ router.get('/admin', auth, authorize('super_admin'), getAdminInfo);
 router.post('/admin', auth, authorize('super_admin'), validate(adminInfoSchema), updateAdminInfo);
 
 // Manual trigger for due reminder check
-router.post('/check-due', auth, authorize('admin', 'super_admin'), checkDue);
+router.post('/check-due', auth, authorize('super_admin'), checkDue);
 
 // Get Cron Config - 仅限 super_admin
 router.get('/cron', auth, authorize('super_admin'), getCronConfig);

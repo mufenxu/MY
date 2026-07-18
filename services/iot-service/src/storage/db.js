@@ -1,5 +1,10 @@
 const crypto = require('crypto');
 const { MongoClient } = require('mongodb');
+const { BoundedTtlCache } = require('../utils/boundedTtlCache');
+
+const API_KEY_CACHE_TTL_MS = 60000;
+const API_KEY_NEGATIVE_CACHE_TTL_MS = 5000;
+const API_KEY_CACHE_MAX_ENTRIES = 1024;
 
 const DEFAULT_API_KEY_SCOPES = Object.freeze([
   'devices:read',
@@ -66,7 +71,10 @@ class Database {
     this.client = options.client || null;
     this.ownsClient = !options.client;
     this.db = options.db || null;
-    this.apiKeyCache = new Map();
+    this.apiKeyCache = new BoundedTtlCache({
+      maxEntries: API_KEY_CACHE_MAX_ENTRIES,
+      ttlMs: API_KEY_CACHE_TTL_MS
+    });
   }
 
   async open() {
@@ -241,9 +249,8 @@ class Database {
 
   async verifyApiKey(token) {
     const tokenHash = hashApiKey(token);
-    const now = Date.now();
     const cached = this.apiKeyCache.get(tokenHash);
-    if (cached && now - cached.timestamp < 60_000) return clone(cached.data);
+    if (cached !== undefined) return clone(cached);
 
     const row = await this.db.collection('api_keys').findOne(
       { token_hash: tokenHash },
@@ -252,7 +259,11 @@ class Database {
     const data = row
       ? { keyId: row.key_id || null, name: row.name, scopes: normalizeApiKeyScopes(row.scopes) }
       : null;
-    this.apiKeyCache.set(tokenHash, { data, timestamp: now });
+    this.apiKeyCache.set(
+      tokenHash,
+      data,
+      data ? API_KEY_CACHE_TTL_MS : API_KEY_NEGATIVE_CACHE_TTL_MS
+    );
     return clone(data);
   }
 
@@ -293,7 +304,10 @@ class MemoryDatabase {
     this.relayLogs = [];
     this.apiKeys = new Map();
     this.settings = null;
-    this.apiKeyCache = new Map();
+    this.apiKeyCache = new BoundedTtlCache({
+      maxEntries: API_KEY_CACHE_MAX_ENTRIES,
+      ttlMs: API_KEY_CACHE_TTL_MS
+    });
     this.db = { collection: () => null };
   }
 

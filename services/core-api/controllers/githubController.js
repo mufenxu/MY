@@ -413,8 +413,9 @@ exports.updateSecret = async (req, res, next) => {
 
 exports.manageSecretCache = async (req, res, next) => {
     try {
-        const { action, secret_name, secret_value, updated_by } = req.body;
-        const result = await githubService.manageSecretCache(action, secret_name, secret_value, updated_by);
+        const { action, secret_name, secret_value } = req.body;
+        const updatedBy = req.user && (req.user.userId || req.user._id || req.user.id);
+        const result = await githubService.manageSecretCache(action, secret_name, secret_value, updatedBy || 'unknown');
         res.json(result);
     } catch (err) {
         if (err.statusCode === 404) return res.status(404).json({ ok: false, error: 'Not found', message: '未找到缓存' });

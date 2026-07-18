@@ -100,12 +100,11 @@ export function setupHttpInterceptors() {
                     notifyAuthExpiredOnce();
                     session.clear();
                     redirectToLogin();
-                } else if (status === 429 && !isAuthRequest(requestConfig)) {
-                    ElMessage.warning('操作太频繁了，请稍后再试');
-                } else if (!isAuthRequest(requestConfig)) {
-                    ElMessage.error(message);
+                } else if (requestConfig.showGlobalError !== false && !isAuthRequest(requestConfig)) {
+                    if (status === 429) ElMessage.warning('操作太频繁了，请稍后再试');
+                    else ElMessage.error(message);
                 }
-            } else {
+            } else if (error.config?.showGlobalError !== false) {
                 ElMessage.error('网络连接失败，请检查网络');
             }
             return Promise.reject(error);

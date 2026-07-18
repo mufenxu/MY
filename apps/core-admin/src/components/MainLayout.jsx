@@ -362,8 +362,7 @@ const MainLayout = () => {
             return;
         }
         try {
-            const refreshToken = localStorage.getItem('refreshToken');
-            await api.post('/auth/logout', { refreshToken });
+            await api.post('/auth/logout', {});
         } catch {
             // 即使后端调用失败也继续清理本地状态
         }
@@ -706,4 +705,3 @@ const MainLayout = () => {
 };
 
 export default MainLayout;
-

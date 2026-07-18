@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.7
+
+ARG NODE_IMAGE=node:24-bookworm-slim
+ARG MONGODB_TOOLS_IMAGE=mongo:7.0
+
+FROM ${MONGODB_TOOLS_IMAGE} AS mongo-tools
+
+FROM ${NODE_IMAGE} AS runtime
+ENV NODE_ENV=production \
+    BACKUP_RUNNER_HOST=0.0.0.0 \
+    BACKUP_RUNNER_PORT=22103
+
+WORKDIR /app
+COPY --from=mongo-tools /usr/bin/mongodump /usr/bin/mongorestore /usr/local/bin/
+COPY --chown=node:node apps/admin-console/package.json ./apps/admin-console/package.json
+COPY --chown=node:node apps/admin-console/src/backups.js ./apps/admin-console/src/backups.js
+COPY --chown=node:node scripts/backup-runner.mjs scripts/backup-mongodb-container.mjs scripts/restore-mongodb-container.mjs ./scripts/
+
+RUN mongodump --version >/dev/null \
+    && mongorestore --version >/dev/null \
+    && mkdir -p /app/backups /app/services/core-api/uploads \
+    && chown -R node:node /app
+
+USER node
+EXPOSE 22103
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:22103/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
+
+CMD ["node", "scripts/backup-runner.mjs"]

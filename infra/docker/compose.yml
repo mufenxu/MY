@@ -62,6 +62,8 @@ services:
       MONGO_CAMPUS_PASSWORD: ${MONGO_CAMPUS_PASSWORD:?Set MONGO_CAMPUS_PASSWORD}
       MONGO_IOT_USERNAME: ${MONGO_IOT_USERNAME:-iot_app}
       MONGO_IOT_PASSWORD: ${MONGO_IOT_PASSWORD:?Set MONGO_IOT_PASSWORD}
+      MONGO_BACKUP_USERNAME: ${MONGO_BACKUP_USERNAME:-platform_backup}
+      MONGO_BACKUP_PASSWORD: ${MONGO_BACKUP_PASSWORD:?Set MONGO_BACKUP_PASSWORD}
     logging: *default-logging
     networks:
       - backend
@@ -76,6 +78,10 @@ services:
     depends_on:
       mongodb-init:
         condition: service_completed_successfully
+      core-api:
+        condition: service_healthy
+      exam-api:
+        condition: service_healthy
       campus-service:
         condition: service_started
       iot-service:
@@ -87,10 +93,13 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       PLATFORM_API_HOST: 0.0.0.0
       PLATFORM_API_PORT: 22100
+      PLATFORM_EXTERNAL_SERVICES: "true"
       PLATFORM_CONFIG_PATH: /app/config/platform.services.docker.json
       PLATFORM_TRUST_PROXY: "1"
-      CORE_TRUST_PROXY: ${CORE_TRUST_PROXY:-1}
-      EXAM_TRUST_PROXY: ${EXAM_TRUST_PROXY:-1}
+      PLATFORM_PROXY_TIMEOUT_MS: ${PLATFORM_PROXY_TIMEOUT_MS:-15000}
+      PLATFORM_SESSION_CACHE_TTL_MS: ${PLATFORM_SESSION_CACHE_TTL_MS:-5000}
+      PLATFORM_SESSION_NEGATIVE_CACHE_TTL_MS: ${PLATFORM_SESSION_NEGATIVE_CACHE_TTL_MS:-1000}
+      PLATFORM_SESSION_CACHE_MAX_ENTRIES: ${PLATFORM_SESSION_CACHE_MAX_ENTRIES:-2048}
       PLATFORM_PUBLIC_ORIGIN: ${PLATFORM_PUBLIC_ORIGIN:?Set PLATFORM_PUBLIC_ORIGIN}
       PLATFORM_ADMIN_USERNAME: ${PLATFORM_ADMIN_USERNAME:?Set PLATFORM_ADMIN_USERNAME}
       PLATFORM_ADMIN_PASSWORD_HASH: ${PLATFORM_ADMIN_PASSWORD_HASH:?Set PLATFORM_ADMIN_PASSWORD_HASH}
@@ -99,17 +108,9 @@ services:
       PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: ${PLATFORM_INTERNAL_AUTH_PUBLIC_KEY:?Set PLATFORM_INTERNAL_AUTH_PUBLIC_KEY}
       PLATFORM_SESSION_TTL_HOURS: ${PLATFORM_SESSION_TTL_HOURS:-12}
       PLATFORM_METRICS_TOKEN: ${PLATFORM_METRICS_TOKEN:?Set PLATFORM_METRICS_TOKEN}
-      PLATFORM_BACKUP_DIR: /app/backups
-      PLATFORM_BACKUP_COMMAND: node /app/scripts/backup-mongodb-container.mjs
-      PLATFORM_RESTORE_COMMAND: node /app/scripts/restore-mongodb-container.mjs
+      PLATFORM_BACKUP_RUNNER_URL: http://backup-runner:22103
+      PLATFORM_BACKUP_RUNNER_TOKEN: ${PLATFORM_BACKUP_RUNNER_TOKEN:?Set PLATFORM_BACKUP_RUNNER_TOKEN}
       PLATFORM_RESTORE_CONFIRM_TEXT: ${PLATFORM_RESTORE_CONFIRM_TEXT:-RESTORE ALL DATA}
-      PLATFORM_RESTORE_PRE_BACKUP: ${PLATFORM_RESTORE_PRE_BACKUP:-true}
-      PLATFORM_CORE_UPLOADS_DIR: /app/services/core-api/uploads
-      PLATFORM_BACKUP_MONGO_HOST: mongodb
-      PLATFORM_BACKUP_MONGO_PORT: 27017
-      PLATFORM_BACKUP_MONGO_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}
-      PLATFORM_BACKUP_MONGO_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
-      PLATFORM_BACKUP_MONGO_AUTH_DB: admin
       PLATFORM_SSO_CORE_USERNAME: ${PLATFORM_SSO_CORE_USERNAME:-admin}
       PLATFORM_SSO_EXAM_USERNAME: ${PLATFORM_SSO_EXAM_USERNAME:-admin}
       CORE_HOSTS: ${CORE_HOSTS:-xcx.pxyb.cn}
@@ -117,24 +118,53 @@ services:
       NOTIFY_HOSTS: ${NOTIFY_HOSTS:-tongzhiapi.pxyb.cn}
       CAMPUS_SERVICE_URL: http://campus-service:22101
       MQTT_SERVICE_URL: http://iot-service:22102
+      CORE_SERVICE_URL: http://core-api:3045
+      EXAM_SERVICE_URL: http://exam-api:3110
+      NOTIFICATION_SERVICE_URL: http://notification-service:3000
       PLATFORM_MONGODB_URI: mongodb://${MONGO_PLATFORM_USERNAME:-platform_app}:${MONGO_PLATFORM_PASSWORD}@mongodb:27017/platform_app?authSource=platform_app&replicaSet=rs0
+    read_only: true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: ${PLATFORM_PIDS_LIMIT:-256}
+    mem_limit: ${PLATFORM_MEMORY_LIMIT:-512m}
+    cpus: ${PLATFORM_CPU_LIMIT:-1}
+    stop_grace_period: 30s
+    logging: *default-logging
+    networks:
+      - frontend
+      - backend
+
+  core-api:
+    image: ${CORE_API_IMAGE:-my-platform/core-api:local}
+    build:
+      context: ../..
+      dockerfile: core-api.Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      mongodb-init:
+        condition: service_completed_successfully
+      iot-service:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
+      CORE_PORT: 3045
+      CORE_TRUST_PROXY: ${CORE_TRUST_PROXY:-1}
+      PLATFORM_PUBLIC_ORIGIN: ${PLATFORM_PUBLIC_ORIGIN:?Set PLATFORM_PUBLIC_ORIGIN}
+      PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: ${PLATFORM_INTERNAL_AUTH_PUBLIC_KEY:?Set PLATFORM_INTERNAL_AUTH_PUBLIC_KEY}
+      PLATFORM_SSO_CORE_USERNAME: ${PLATFORM_SSO_CORE_USERNAME:-admin}
       MONGO_URI: mongodb://${MONGO_CORE_USERNAME:-core_app}:${MONGO_CORE_PASSWORD}@mongodb:27017/core_app?authSource=core_app&replicaSet=rs0
-      MONGODB_URI: mongodb://${MONGO_EXAM_USERNAME:-exam_app}:${MONGO_EXAM_PASSWORD}@mongodb:27017/exam_app?authSource=exam_app&replicaSet=rs0
-      EXAM_MONGODB_SERVER_SELECTION_TIMEOUT_MS: ${EXAM_MONGODB_SERVER_SELECTION_TIMEOUT_MS:-5000}
-      EXAM_MONGODB_SOCKET_TIMEOUT_MS: ${EXAM_MONGODB_SOCKET_TIMEOUT_MS:-45000}
-      EXAM_MONGODB_MAX_POOL_SIZE: ${EXAM_MONGODB_MAX_POOL_SIZE:-10}
       CORE_JWT_SECRET: ${CORE_JWT_SECRET:?Set CORE_JWT_SECRET}
-      EXAM_JWT_SECRET: ${EXAM_JWT_SECRET:?Set EXAM_JWT_SECRET}
       ENCRYPTION_KEY: ${CORE_ENCRYPTION_KEY:?Set CORE_ENCRYPTION_KEY}
       WX_APP_ID: ${CORE_WECHAT_APP_ID:?Set CORE_WECHAT_APP_ID}
       WX_APP_SECRET: ${CORE_WECHAT_APP_SECRET:?Set CORE_WECHAT_APP_SECRET}
-      WECHAT_APP_ID: ${EXAM_WECHAT_APP_ID:?Set EXAM_WECHAT_APP_ID}
-      WECHAT_APP_SECRET: ${EXAM_WECHAT_APP_SECRET:?Set EXAM_WECHAT_APP_SECRET}
-      CORS_ORIGINS: ${EXAM_CORS_ORIGINS:?Set EXAM_CORS_ORIGINS}
-      DEFAULT_ADMIN_USERNAME: ${EXAM_DEFAULT_ADMIN_USERNAME:-admin}
-      DEFAULT_ADMIN_DISPLAY_NAME: ${EXAM_DEFAULT_ADMIN_DISPLAY_NAME:-Super Admin}
-      DEFAULT_ADMIN_PASSWORD: ${EXAM_DEFAULT_ADMIN_PASSWORD:-}
-      SEED_SAMPLE_DATA: ${EXAM_SEED_SAMPLE_DATA:-false}
       GH_TOKEN: ${GH_TOKEN:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GH_OWNER: ${GH_OWNER:-}
@@ -143,22 +173,15 @@ services:
       GITHUB_REPOSITORY: ${GITHUB_REPOSITORY:-}
       GH_WORKFLOW: ${GH_WORKFLOW:-ssh-login.yml}
       GH_REF: ${GH_REF:-main}
+      GH_WEBHOOK_ENABLED: ${GH_WEBHOOK_ENABLED:-true}
       GH_WEBHOOK_SECRET: ${GH_WEBHOOK_SECRET:-}
       MQTT_API_KEY: ${MQTT_API_KEY:-}
       MQTT_API_BASE_URL: http://iot-service:22102
-      WECOM_CORP_ID: ${WECOM_CORP_ID:?Set WECOM_CORP_ID}
-      WECOM_AGENT_ID: ${WECOM_AGENT_ID:?Set WECOM_AGENT_ID}
-      WECOM_SECRET: ${WECOM_SECRET:?Set WECOM_SECRET}
-      NOTIFY_API_KEY: ${NOTIFY_API_KEY:?Set NOTIFY_API_KEY}
-      TOKEN_CACHE_MARGIN: ${TOKEN_CACHE_MARGIN:-120}
-      SUB2API_BASE_URL: ${SUB2API_BASE_URL:-}
-      SUB2API_API_KEY: ${SUB2API_API_KEY:-}
-      SUB2API_MODEL: ${SUB2API_MODEL:-gpt-4o-mini}
+      TUYA_API_TIMEOUT_MS: ${TUYA_API_TIMEOUT_MS:-10000}
+      TUYA_MESSAGE_REGION: ${TUYA_MESSAGE_REGION:-CN}
+      TUYA_MESSAGE_CHANNEL: ${TUYA_MESSAGE_CHANNEL:-event}
     read_only: true
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
-      - platform_backups:/app/backups
       - core_uploads:/app/services/core-api/uploads
       - core_logs:/app/services/core-api/logs
     tmpfs:
@@ -167,13 +190,140 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    pids_limit: ${PLATFORM_PIDS_LIMIT:-512}
-    mem_limit: ${PLATFORM_MEMORY_LIMIT:-1g}
-    cpus: ${PLATFORM_CPU_LIMIT:-2}
+    pids_limit: ${CORE_PIDS_LIMIT:-384}
+    mem_limit: ${CORE_MEMORY_LIMIT:-768m}
+    cpus: ${CORE_CPU_LIMIT:-1.5}
     stop_grace_period: 30s
     logging: *default-logging
     networks:
       - frontend
+      - backend
+
+  exam-api:
+    image: ${EXAM_API_IMAGE:-my-platform/exam-api:local}
+    build:
+      context: ../..
+      dockerfile: exam-api.Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      mongodb-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
+      PORT: 3110
+      EXAM_TRUST_PROXY: ${EXAM_TRUST_PROXY:-1}
+      PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: ${PLATFORM_INTERNAL_AUTH_PUBLIC_KEY:?Set PLATFORM_INTERNAL_AUTH_PUBLIC_KEY}
+      PLATFORM_SSO_EXAM_USERNAME: ${PLATFORM_SSO_EXAM_USERNAME:-admin}
+      MONGODB_URI: mongodb://${MONGO_EXAM_USERNAME:-exam_app}:${MONGO_EXAM_PASSWORD}@mongodb:27017/exam_app?authSource=exam_app&replicaSet=rs0
+      EXAM_MONGODB_SERVER_SELECTION_TIMEOUT_MS: ${EXAM_MONGODB_SERVER_SELECTION_TIMEOUT_MS:-5000}
+      EXAM_MONGODB_SOCKET_TIMEOUT_MS: ${EXAM_MONGODB_SOCKET_TIMEOUT_MS:-45000}
+      EXAM_MONGODB_MAX_POOL_SIZE: ${EXAM_MONGODB_MAX_POOL_SIZE:-10}
+      EXAM_JWT_SECRET: ${EXAM_JWT_SECRET:?Set EXAM_JWT_SECRET}
+      WECHAT_APP_ID: ${EXAM_WECHAT_APP_ID:?Set EXAM_WECHAT_APP_ID}
+      WECHAT_APP_SECRET: ${EXAM_WECHAT_APP_SECRET:?Set EXAM_WECHAT_APP_SECRET}
+      CORS_ORIGINS: ${EXAM_CORS_ORIGINS:?Set EXAM_CORS_ORIGINS}
+      DEFAULT_ADMIN_USERNAME: ${EXAM_DEFAULT_ADMIN_USERNAME:-admin}
+      DEFAULT_ADMIN_DISPLAY_NAME: ${EXAM_DEFAULT_ADMIN_DISPLAY_NAME:-Super Admin}
+      DEFAULT_ADMIN_PASSWORD: ${EXAM_DEFAULT_ADMIN_PASSWORD:-}
+      SEED_SAMPLE_DATA: ${EXAM_SEED_SAMPLE_DATA:-false}
+      SUB2API_BASE_URL: ${SUB2API_BASE_URL:-}
+      SUB2API_API_KEY: ${SUB2API_API_KEY:-}
+      SUB2API_MODEL: ${SUB2API_MODEL:-gpt-4o-mini}
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: ${EXAM_PIDS_LIMIT:-384}
+    mem_limit: ${EXAM_MEMORY_LIMIT:-768m}
+    cpus: ${EXAM_CPU_LIMIT:-1.5}
+    stop_grace_period: 30s
+    logging: *default-logging
+    networks:
+      - frontend
+      - backend
+
+  notification-service:
+    image: ${NOTIFICATION_SERVICE_IMAGE:-my-platform/notification-service:local}
+    build:
+      context: ../..
+      dockerfile: notification-service.Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
+      PORT: 3000
+      WECOM_CORP_ID: ${WECOM_CORP_ID:?Set WECOM_CORP_ID}
+      WECOM_AGENT_ID: ${WECOM_AGENT_ID:?Set WECOM_AGENT_ID}
+      WECOM_SECRET: ${WECOM_SECRET:?Set WECOM_SECRET}
+      NOTIFY_API_KEY: ${NOTIFY_API_KEY:?Set NOTIFY_API_KEY}
+      TOKEN_CACHE_MARGIN: ${TOKEN_CACHE_MARGIN:-120}
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: ${NOTIFICATION_PIDS_LIMIT:-128}
+    mem_limit: ${NOTIFICATION_MEMORY_LIMIT:-256m}
+    cpus: ${NOTIFICATION_CPU_LIMIT:-0.5}
+    stop_grace_period: 20s
+    logging: *default-logging
+    networks:
+      - frontend
+      - backend
+
+  backup-runner:
+    image: ${BACKUP_RUNNER_IMAGE:-my-platform/backup-runner:local}
+    build:
+      context: ../..
+      dockerfile: backup-runner.Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      mongodb-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
+      BACKUP_RUNNER_HOST: 0.0.0.0
+      BACKUP_RUNNER_PORT: 22103
+      PLATFORM_BACKUP_RUNNER_TOKEN: ${PLATFORM_BACKUP_RUNNER_TOKEN:?Set PLATFORM_BACKUP_RUNNER_TOKEN}
+      PLATFORM_BACKUP_DIR: /app/backups
+      PLATFORM_BACKUP_ENABLED: "true"
+      PLATFORM_RESTORE_ENABLED: ${PLATFORM_RESTORE_ENABLED:-false}
+      PLATFORM_BACKUP_COMMAND: node /app/scripts/backup-mongodb-container.mjs
+      PLATFORM_RESTORE_COMMAND: node /app/scripts/restore-mongodb-container.mjs
+      PLATFORM_RESTORE_CONFIRM_TEXT: ${PLATFORM_RESTORE_CONFIRM_TEXT:-RESTORE ALL DATA}
+      PLATFORM_RESTORE_PRE_BACKUP: ${PLATFORM_RESTORE_PRE_BACKUP:-true}
+      PLATFORM_CORE_UPLOADS_DIR: /app/services/core-api/uploads
+      PLATFORM_BACKUP_MONGO_HOST: mongodb
+      PLATFORM_BACKUP_MONGO_PORT: 27017
+      PLATFORM_BACKUP_MONGO_USERNAME: ${MONGO_BACKUP_USERNAME:-platform_backup}
+      PLATFORM_BACKUP_MONGO_PASSWORD: ${MONGO_BACKUP_PASSWORD:?Set MONGO_BACKUP_PASSWORD}
+      PLATFORM_BACKUP_MONGO_AUTH_DB: admin
+    read_only: true
+    volumes:
+      - platform_backups:/app/backups
+      - core_uploads:/app/services/core-api/uploads
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: ${BACKUP_RUNNER_PIDS_LIMIT:-256}
+    mem_limit: ${BACKUP_RUNNER_MEMORY_LIMIT:-512m}
+    cpus: ${BACKUP_RUNNER_CPU_LIMIT:-1}
+    stop_grace_period: 60s
+    logging: *default-logging
+    networks:
       - backend
 
   campus-service:

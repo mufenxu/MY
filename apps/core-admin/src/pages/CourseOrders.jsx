@@ -5,6 +5,7 @@ import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
 
 const { Option } = Select;
+const ORDER_REFRESH_TIMEOUT_MS = 120000;
 
 const CourseOrders = () => {
     const isMobile = useIsMobile();
@@ -101,6 +102,8 @@ const CourseOrders = () => {
         try {
             const res = await api.post('/course-order/admin/refresh', {
                 orderIds: keys
+            }, {
+                timeout: ORDER_REFRESH_TIMEOUT_MS,
             });
             if (res.data.code === 200) {
                 message.success(res.data.message);

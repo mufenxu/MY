@@ -50,22 +50,23 @@
 
     <swiper
       class="question-swiper"
-      current="{{currentIndex}}"
+      current="{{swiperCurrent}}"
+      disable-touch="{{mode === 'recite'}}"
       bindchange="onSwiperChange"
       duration="300"
       style="flex: 1; width: 100%;"
     >
-      <swiper-item wx:for="{{questions}}" wx:key="_id">
+      <swiper-item wx:for="{{swiperQuestions}}" wx:key="originalIndex">
         <scroll-view scroll-y class="swiper-scroll-view" style="height: 100%;">
-          <view class="question-area" wx:if="{{index >= currentIndex - 1 && index <= currentIndex + 1}}">
+          <view class="question-area">
             <question-card
-              question="{{item}}"
-              showAnalysis="{{index === currentIndex ? isAnalysisVisible : false}}"
-              userAnswer="{{answers[item._id] || []}}"
+              question="{{item.question}}"
+              showAnalysis="{{item.originalIndex === currentIndex ? isAnalysisVisible : false}}"
+              userAnswer="{{answers[item.question._id] || []}}"
               canUseAiAnalysis="{{canUseAiAnalysis}}"
               canGenerateAiAnalysis="{{canGenerateAiAnalysis}}"
-              aiAnalysis="{{aiAnalysisByQuestionId[item._id] || ''}}"
-              aiAnalysisLoading="{{aiAnalysisLoadingByQuestionId[item._id] || false}}"
+              aiAnalysis="{{aiAnalysisByQuestionId[item.question._id] || ''}}"
+              aiAnalysisLoading="{{aiAnalysisLoadingByQuestionId[item.question._id] || false}}"
               bind:change="onAnswerChange"
               bind:ai-analysis="onAiAnalysisRequest"
             />
@@ -125,7 +126,7 @@
           </view>
           <view class="grid">
             <view
-              class="grid-item {{item.originalIndex === currentIndex ? 'current' : ''}} {{mode === 'recite' ? (reciteMasteryClassMap[item.question._id] || '') : (answers[item.question._id] ? 'answered' : '')}}"
+              class="grid-item {{item.originalIndex === currentIndex ? 'current' : ''}} {{mode === 'recite' ? (reciteMasteryClassMap[item.questionId] || '') : (answers[item.questionId] ? 'answered' : '')}}"
               wx:for="{{group.items}}"
               wx:key="originalIndex"
               bindtap="onJumpToQuestion"

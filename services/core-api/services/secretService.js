@@ -1,7 +1,29 @@
 const SecretCache = require('../models/SecretCache');
 const logger = require('../utils/logger');
+const { encrypt, decrypt, isEncrypted } = require('../utils/crypto');
 
-let memoryCache = {};
+let memoryCache = Object.create(null);
+
+function rawSecretValue(record) {
+    if (!record) return '';
+    if (typeof record.get === 'function') {
+        return record.get('secret_value', null, { getters: false }) || '';
+    }
+    return record.secret_value || '';
+}
+
+function revealStoredSecret(record) {
+    const stored = rawSecretValue(record);
+    return stored ? decrypt(String(stored)) : '';
+}
+
+async function migrateLegacySecret(record, storedValue) {
+    if (!storedValue || isEncrypted(storedValue)) return;
+    const filter = record && record._id
+        ? { _id: record._id }
+        : { secret_name: record.secret_name };
+    await SecretCache.updateOne(filter, { $set: { secret_value: encrypt(String(storedValue)) } });
+}
 
 class SecretService {
     /**
@@ -10,9 +32,11 @@ class SecretService {
     static async initCache() {
         try {
             const secrets = await SecretCache.find();
+            memoryCache = Object.create(null);
             secrets.forEach(s => {
-                memoryCache[s.secret_name] = s.secret_value;
+                memoryCache[s.secret_name] = revealStoredSecret(s);
             });
+            await Promise.all(secrets.map(s => migrateLegacySecret(s, rawSecretValue(s))));
             logger.info(`Loaded ${secrets.length} secrets from database into memory cache.`);
         } catch (error) {
             logger.error('Failed to init secret cache from database', error);
@@ -50,8 +74,11 @@ class SecretService {
         try {
             const s = await SecretCache.findOne({ secret_name: name });
             if (s) {
-                memoryCache[name] = s.secret_value;
-                return s.secret_value;
+                const stored = rawSecretValue(s);
+                const value = revealStoredSecret(s);
+                memoryCache[name] = value;
+                await migrateLegacySecret(s, stored);
+                return value;
             }
         } catch (err) {
             logger.error(`Error fetching secret ${name} from DB`, err);
@@ -73,14 +100,15 @@ class SecretService {
      */
     static async setSecret(name, value, username = 'system') {
         try {
+            const plainValue = String(value ?? '');
             const result = await SecretCache.findOneAndUpdate(
                 { secret_name: name },
-                { secret_value: value, updated_by: username },
+                { secret_value: encrypt(plainValue), updated_by: username },
                 { new: true, upsert: true } // 如果不存在则创建
             );
 
             // 更新内存缓存
-            memoryCache[name] = value;
+            memoryCache[name] = plainValue;
             return result;
         } catch (error) {
             logger.error(`Error setting secret ${name}`, error);
@@ -143,15 +171,9 @@ class SecretService {
             const hasDbValue = !!dbData;
 
             // 返回给前端展示，脱敏处理
-            let displayValue = '';
-            let rawValue = dbData ? dbData.secret_value : (envValue || '');
-
-            if (rawValue && rawValue.length > 8) {
-                // 如果是 token 类，打个码
-                displayValue = rawValue.substring(0, 4) + '......' + rawValue.substring(rawValue.length - 4);
-            } else if (rawValue) {
-                displayValue = '******';
-            }
+            const rawValue = dbData ? rawSecretValue(dbData) : (envValue || '');
+            // Recoverable secrets are never partially disclosed by list APIs.
+            const displayValue = rawValue ? '********' : '';
 
             return {
                 key: conf.key,

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Modal, Spin, QRCode, Button, Typography, message } from 'antd';
 import { CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import api from '../utils/api';
+import { createSequentialPoller } from '../utils/sequentialPoller';
 
 const { Text } = Typography;
 
@@ -9,47 +10,55 @@ const ScanAuthModal = ({ open, onCancel, onSuccess, title = "安全验证" }) =>
     const [qrToken, setQrToken] = useState('');
     const [status, setStatus] = useState('loading'); // loading, waiting, scanned, confirmed, expired
     const timerRef = useRef(null);
+    const createRequestRef = useRef(null);
+    const successTimerRef = useRef(null);
 
     const startPolling = useCallback((token) => {
         const startTime = Date.now();
-        timerRef.current = setInterval(async () => {
+        timerRef.current?.stop();
+        timerRef.current = createSequentialPoller(async (signal) => {
             if (Date.now() - startTime > 5 * 60 * 1000) {
-                clearInterval(timerRef.current);
                 setStatus('expired');
                 message.warning('验证二维码已超时，请重新获取');
-                return;
+                return false;
             }
-            try {
-                const res = await api.get(`/auth/qrcode/status?qrToken=${token}`);
+                const res = await api.get(`/auth/qrcode/status?qrToken=${token}`, { signal });
                 const { status: qrStatus } = res.data;
 
                 if (qrStatus === 'scanned') {
                     setStatus('scanned');
                 } else if (qrStatus === 'confirmed') {
-                    clearInterval(timerRef.current);
                     setStatus('confirmed');
-                    setTimeout(() => {
+                    window.clearTimeout(successTimerRef.current);
+                    successTimerRef.current = window.setTimeout(() => {
                         onSuccess();
                     }, 500);
+                    return false;
                 } else if (qrStatus === 'expired') {
-                    clearInterval(timerRef.current);
                     setStatus('expired');
+                    return false;
                 }
-            } catch (err) {
-                console.error(err);
-            }
-        }, 2000);
+                return true;
+        }, { interval: 2000, onError: () => true });
+        timerRef.current.start();
     }, [onSuccess]);
 
     const fetchQRCode = useCallback(async () => {
+        createRequestRef.current?.abort();
+        const controller = new AbortController();
+        createRequestRef.current = controller;
+        window.clearTimeout(successTimerRef.current);
+
         try {
-            if (timerRef.current) clearInterval(timerRef.current);
+            timerRef.current?.stop();
             setQrToken('');
             setStatus('loading');
 
             const res = await api.post('/auth/qrcode/create', {
                 appId: 'admin-action-auth'
-            });
+            }, { signal: controller.signal });
+
+            if (controller.signal.aborted) return;
 
             if (res.data && res.data.qrToken) {
                 setQrToken(res.data.qrToken);
@@ -60,8 +69,13 @@ const ScanAuthModal = ({ open, onCancel, onSuccess, title = "安全验证" }) =>
                 setStatus('expired');
             }
         } catch (err) {
+            if (controller.signal.aborted || err.code === 'ERR_CANCELED') return;
             console.error(err);
             setStatus('expired');
+        } finally {
+            if (createRequestRef.current === controller) {
+                createRequestRef.current = null;
+            }
         }
     }, [startPolling]);
 
@@ -73,7 +87,7 @@ const ScanAuthModal = ({ open, onCancel, onSuccess, title = "安全验证" }) =>
                 fetchQRCode();
             }, 0);
         } else {
-            if (timerRef.current) clearInterval(timerRef.current);
+            timerRef.current?.stop();
             resetTimer = setTimeout(() => {
                 setStatus('loading');
                 setQrToken('');
@@ -82,7 +96,9 @@ const ScanAuthModal = ({ open, onCancel, onSuccess, title = "安全验证" }) =>
         return () => {
             if (kickoffTimer) clearTimeout(kickoffTimer);
             if (resetTimer) clearTimeout(resetTimer);
-            if (timerRef.current) clearInterval(timerRef.current);
+            timerRef.current?.stop();
+            createRequestRef.current?.abort();
+            window.clearTimeout(successTimerRef.current);
         };
     }, [open, fetchQRCode]);
 

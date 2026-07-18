@@ -7,11 +7,18 @@ const rateLimit = require('express-rate-limit');
 const config = require('../config');
 const logger = require('../config/logger');
 
+const configuredMemoryLimit = Number.parseInt(process.env.RATE_LIMIT_FALLBACK_MAX_KEYS || '', 10);
+const FALLBACK_MEMORY_MAX_KEYS = Number.isFinite(configuredMemoryLimit)
+    ? Math.min(Math.max(configuredMemoryLimit, 100), 100000)
+    : 10000;
+
 class MongoRateLimitStore {
-    constructor(collectionName) {
+    constructor(collectionName, options = {}) {
         this.collectionName = collectionName;
         this.windowMs = 15 * 60 * 1000;
         this.memoryHits = new Map();
+        this.memoryMaxEntries = options.memoryMaxEntries || FALLBACK_MEMORY_MAX_KEYS;
+        this.lastMemoryCleanupAt = 0;
         this.indexPromise = null;
     }
 
@@ -38,11 +45,26 @@ class MongoRateLimitStore {
         return this.indexPromise;
     }
 
-    incrementMemory(key) {
-        const now = Date.now();
+    cleanupMemory(now = Date.now(), force = false) {
+        const cleanupInterval = Math.min(this.windowMs, 60000);
+        if (!force && now - this.lastMemoryCleanupAt < cleanupInterval) return;
+        this.lastMemoryCleanupAt = now;
+        for (const [key, record] of this.memoryHits) {
+            if (record.resetTime.getTime() <= now) this.memoryHits.delete(key);
+        }
+    }
+
+    incrementMemory(key, now = Date.now()) {
+        this.cleanupMemory(now);
         const current = this.memoryHits.get(key);
         if (!current || current.resetTime.getTime() <= now) {
             const resetTime = new Date(now + this.windowMs);
+            if (this.memoryHits.size >= this.memoryMaxEntries) {
+                this.cleanupMemory(now, true);
+            }
+            if (this.memoryHits.size >= this.memoryMaxEntries) {
+                return { totalHits: Number.MAX_SAFE_INTEGER, resetTime };
+            }
             this.memoryHits.set(key, { totalHits: 1, resetTime });
             return { totalHits: 1, resetTime };
         }
@@ -185,6 +207,8 @@ const qrStatusLimiter = rateLimit({
 });
 
 module.exports = {
+    FALLBACK_MEMORY_MAX_KEYS,
+    MongoRateLimitStore,
     authLimiter,
     apiLimiter,
     clientLimiter,

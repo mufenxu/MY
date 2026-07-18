@@ -95,7 +95,7 @@
           </view>
           <view class="grid">
             <view 
-              class="grid-item {{item.originalIndex === currentIndex ? 'current' : ''}} {{results[item.question._id] ? 'correct' : 'wrong'}}" 
+              class="grid-item {{item.originalIndex === currentIndex ? 'current' : ''}} {{results[item.questionId] ? 'correct' : 'wrong'}}"
               wx:for="{{group.items}}" 
               wx:key="originalIndex"
               bindtap="onJumpToQuestion"

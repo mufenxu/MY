@@ -125,7 +125,7 @@
           </view>
           <view class="grid">
             <view 
-              class="grid-item {{item.originalIndex === currentIndex ? 'current' : ''}} {{answers[item.question._id] ? 'answered' : ''}}" 
+              class="grid-item {{item.originalIndex === currentIndex ? 'current' : ''}} {{answers[item.questionId] ? 'answered' : ''}}"
               wx:for="{{group.items}}" 
               wx:key="originalIndex"
               bindtap="onJumpToQuestion"

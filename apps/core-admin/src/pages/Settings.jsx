@@ -29,6 +29,11 @@ import TurnstileSettings from '../components/TurnstileSettings';
 
 const { Option } = Select;
 const { Title, Text } = Typography;
+
+const BACKUP_REQUEST_TIMEOUT_MS = 120000;
+const RESTORE_REQUEST_TIMEOUT_MS = 300000;
+const MANUAL_TASK_TIMEOUT_MS = 120000;
+const NOTIFICATION_TEST_TIMEOUT_MS = 30000;
 const DEFAULT_CRON_SCHEDULE = '0 9 * * *';
 
 const CRON_PRESETS = [
@@ -138,7 +143,9 @@ const CronSettings = ({ title, type }) => {
     const handleRunNow = async () => {
         try {
             setLoading(true);
-            const res = await api.post('/settings/run-task', { type });
+            const res = await api.post('/settings/run-task', { type }, {
+                timeout: MANUAL_TASK_TIMEOUT_MS,
+            });
             if (res.data.success) {
                 const result = res.data.result;
                 if (type === 'ct8_task') {
@@ -231,7 +238,10 @@ const BackupRestoreSettings = () => {
     const handleExport = async () => {
         setExportLoading(true);
         try {
-            const res = await api.post('/settings/backup', {}, { responseType: 'blob' });
+            const res = await api.post('/settings/backup', {}, {
+                responseType: 'blob',
+                timeout: BACKUP_REQUEST_TIMEOUT_MS,
+            });
             const blob = new Blob([res.data], { type: 'application/octet-stream' });
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -270,7 +280,8 @@ const BackupRestoreSettings = () => {
 
         try {
             const res = await api.post('/settings/restore', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+                headers: { 'Content-Type': 'multipart/form-data' },
+                timeout: RESTORE_REQUEST_TIMEOUT_MS,
             });
 
             if (res.data.success) {
@@ -457,7 +468,9 @@ const Settings = () => {
                 return;
             }
             setTestingEmail(true);
-            const res = await api.post('/settings/test-notify', { config: values, testChannel: 'email' });
+            const res = await api.post('/settings/test-notify', { config: values, testChannel: 'email' }, {
+                timeout: NOTIFICATION_TEST_TIMEOUT_MS,
+            });
             if (res.data.success) {
                 message.success('测试邮件已发送');
             } else {
@@ -482,7 +495,9 @@ const Settings = () => {
                 return;
             }
             setTestingWecom(true);
-            const res = await api.post('/settings/test-notify', { config: values, testChannel: 'wecom' });
+            const res = await api.post('/settings/test-notify', { config: values, testChannel: 'wecom' }, {
+                timeout: NOTIFICATION_TEST_TIMEOUT_MS,
+            });
             if (res.data.success) {
                 message.success('测试消息已发送');
             } else {

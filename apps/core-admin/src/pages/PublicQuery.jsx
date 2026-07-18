@@ -18,6 +18,7 @@ import api from '../utils/api';
 import './PublicQuery.css';
 
 const { Title, Text } = Typography;
+const PUBLIC_REFRESH_TIMEOUT_MS = 30000;
 
 const queryTypes = [
   { icon: <MobileOutlined />, label: '手机号' },
@@ -71,7 +72,9 @@ const PublicQuery = () => {
   const handleRefresh = async (tradeNo) => {
     setRefreshingId(tradeNo);
     try {
-      const res = await api.post('/course-order/public-refresh', { tradeNo });
+      const res = await api.post('/course-order/public-refresh', { tradeNo }, {
+        timeout: PUBLIC_REFRESH_TIMEOUT_MS,
+      });
       if (res.data.code === 200) {
         message.success(res.data.message || '记录已刷新');
         if (results) {

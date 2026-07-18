@@ -9,6 +9,12 @@ type ReciteLevel = 'known' | 'fuzzy' | 'unknown';
 type ReciteMasteryMap = Record<string, ReciteLevel>;
 type ReciteClassMap = Record<string, string>;
 type ReciteReviewMap = Record<string, number>;
+type SwiperQuestion = { question: Question; originalIndex: number };
+type GroupedQuestionSummary = {
+    type: string;
+    typeName: string;
+    items: { questionId: string; originalIndex: number }[];
+};
 
 const MIN_FOOTER_BOTTOM_PADDING_PX = 20;
 const FOOTER_BOTTOM_EXTRA_GAP_PX = 8;
@@ -84,7 +90,9 @@ Page({
         categoryId: '',
         questions: [] as Question[],
         totalCount: 0,
-        groupedQuestions: [] as { type: string; typeName: string; items: { question: Question; originalIndex: number }[] }[],
+        groupedQuestions: [] as GroupedQuestionSummary[],
+        swiperQuestions: [] as SwiperQuestion[],
+        swiperCurrent: 0,
         currentIndex: 0,
         answers: {} as Record<string, string[]>,
         loading: true,
@@ -239,6 +247,26 @@ Page({
         this.saveProgress(true);
     },
 
+    buildSwiperState(currentIndex: number, sourceQuestions?: Question[]) {
+        const questions = sourceQuestions || this.data.questions;
+        if (questions.length === 0) {
+            return { currentIndex: 0, swiperCurrent: 0, swiperQuestions: [] as SwiperQuestion[] };
+        }
+
+        const safeIndex = Math.min(Math.max(currentIndex, 0), questions.length - 1);
+        const windowSize = Math.min(3, questions.length);
+        const start = Math.min(Math.max(safeIndex - 1, 0), questions.length - windowSize);
+        const swiperQuestions = questions
+            .slice(start, start + windowSize)
+            .map((question, offset) => ({ question, originalIndex: start + offset }));
+
+        return {
+            currentIndex: safeIndex,
+            swiperCurrent: safeIndex - start,
+            swiperQuestions,
+        };
+    },
+
     buildReciteInitialState(questions: Question[]) {
         const queue = questions.map((_question, index) => index);
         this._reciteQueue = queue;
@@ -274,6 +302,8 @@ Page({
             if (mode === 'recite') {
                 Object.assign(nextData, this.buildReciteInitialState(questions));
             }
+
+            Object.assign(nextData, this.buildSwiperState(nextData.currentIndex || 0, questions));
 
             this.setData(nextData);
         } catch (error) {
@@ -436,10 +466,18 @@ Page({
     },
 
     onSwiperChange(e: WechatMiniprogram.SwiperChange) {
+        if (this.data.mode === 'recite') {
+            return;
+        }
+
         if (e.detail.source === 'touch') {
-            const newIndex = e.detail.current;
+            const swiperQuestion = this.data.swiperQuestions[e.detail.current];
+            if (!swiperQuestion) {
+                return;
+            }
+            const newIndex = swiperQuestion.originalIndex;
             this.setData({
-                currentIndex: newIndex,
+                ...this.buildSwiperState(newIndex),
                 isAnalysisVisible: this.shouldShowAnalysis(newIndex),
             });
             this.saveProgress();
@@ -456,7 +494,7 @@ Page({
         const currentPos = reciteQueue.indexOf(currentIndex);
         if (currentPos < 0) {
             this.setData({
-                currentIndex: reciteQueue[0],
+                ...this.buildSwiperState(reciteQueue[0]),
                 isAnalysisVisible: false,
             });
             this.saveProgress();
@@ -469,7 +507,7 @@ Page({
         }
 
         this.setData({
-            currentIndex: reciteQueue[nextPos],
+            ...this.buildSwiperState(reciteQueue[nextPos]),
             isAnalysisVisible: false,
         });
         this.saveProgress();
@@ -484,7 +522,7 @@ Page({
         if (this.data.currentIndex > 0) {
             const newIndex = this.data.currentIndex - 1;
             this.setData({
-                currentIndex: newIndex,
+                ...this.buildSwiperState(newIndex),
                 isAnalysisVisible: this.shouldShowAnalysis(newIndex),
             });
             this.saveProgress();
@@ -500,7 +538,7 @@ Page({
         if (this.data.currentIndex < this.data.totalCount - 1) {
             const newIndex = this.data.currentIndex + 1;
             this.setData({
-                currentIndex: newIndex,
+                ...this.buildSwiperState(newIndex),
                 isAnalysisVisible: this.shouldShowAnalysis(newIndex),
             });
             this.saveProgress();
@@ -522,7 +560,7 @@ Page({
     onJumpToQuestion(e: WechatMiniprogram.TouchEvent) {
         const { index } = e.currentTarget.dataset as { index: number };
         this.setData({
-            currentIndex: index,
+            ...this.buildSwiperState(index),
             showAnswerSheet: false,
             isAnalysisVisible: this.shouldShowAnalysis(index),
         });
@@ -670,7 +708,7 @@ Page({
             return;
         }
 
-        updateData.currentIndex = reciteQueue[0];
+        Object.assign(updateData, this.buildSwiperState(reciteQueue[0]));
         updateData.isAnalysisVisible = false;
         this.setData(updateData);
         this.saveProgress();
@@ -771,7 +809,7 @@ Page({
         );
 
         return {
-            currentIndex,
+            ...this.buildSwiperState(currentIndex),
             answers: progress.answers || {},
             showResumeModal: false,
             isAnalysisVisible: false,
@@ -799,7 +837,7 @@ Page({
         );
 
         this.setData({
-            currentIndex,
+            ...this.buildSwiperState(currentIndex),
             answers: progress.answers || {},
             showResumeModal: false,
         });

@@ -97,6 +97,8 @@ app.use(requestLogger);
 // Vite build output (SPA) served first with strong caching for hashed assets.
 const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
 const spaIndexPath = path.join(frontendDistPath, 'index.html');
+const HASHED_ASSET_RE = /(?:^|\/)[^/]+-[A-Za-z0-9_-]{8,}\.[^/]+$/;
+const isHashedAsset = (filePath) => HASHED_ASSET_RE.test(filePath.replace(/\\/g, '/'));
 const serveSpaIndex = (req, res, next) => {
     if (fs.existsSync(spaIndexPath)) {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -107,27 +109,32 @@ const serveSpaIndex = (req, res, next) => {
 };
 
 app.use(express.static(frontendDistPath, {
-    maxAge: '1y',
-    immutable: true,
-    setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.html')) {
-            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        }
-    },
-}));
-
-// Legacy public/ fallback serves old assets not yet migrated.
-app.use(express.static(path.join(__dirname, '..', 'public'), {
-    maxAge: '1d',
+    maxAge: '1h',
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.html')) {
             res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
             return;
         }
 
-        if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
-            res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+        if (isHashedAsset(filePath)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            return;
         }
+
+        res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+    },
+}));
+
+// Legacy public/ fallback serves old assets not yet migrated.
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+    maxAge: '1h',
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            return;
+        }
+
+        res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
     },
 }));
 

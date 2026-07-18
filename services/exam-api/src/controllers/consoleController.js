@@ -875,9 +875,10 @@ exports.generateCategoryAiAnalyses = asyncHandler(async (req, res) => {
                 question,
                 forceRefresh,
                 requesterOpenid: ownerOpenid,
+                generationKey: actorKey,
                 allowUpstream: true,
                 beforeUpstream: () => beforeSingleGeneration(actorKey),
-                afterUpstream: (result) => afterSingleGeneration(actorKey, result),
+                afterUpstream: (result, reservation) => afterSingleGeneration(actorKey, result, reservation),
             });
             summary.generated += 1;
         } catch (error) {

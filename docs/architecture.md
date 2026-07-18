@@ -4,7 +4,11 @@
 
 | Container | Source | Responsibility |
 | --- | --- | --- |
-| `platform-api` | `services/platform-api` | 组合核心 API、考试 API、通知 API 和管理门户 |
+| `platform-api` | `services/platform-api` | 统一门户、会话校验、内部身份签发与反向代理；不持有业务或 Mongo root 凭据 |
+| `core-api` | `services/core-api` | 综合业务 API 与管理前端 |
+| `exam-api` | `services/exam-api` | 考试业务 API 与管理前端 |
+| `notification-service` | `services/notification-service` | 企业微信通知 API |
+| `backup-runner` | `scripts/backup-runner.mjs` | 内网限定的备份/恢复执行器，使用专用 Mongo backup/restore 账号 |
 | `campus-service` | `services/campus-service` | 校园系统连接器与用户网页 |
 | `iot-service` | `services/iot-service` | MQTT、设备控制、遥测和 WebSocket |
 | `mongodb` | Official image | 为核心与考试模块提供两个隔离数据库 |
@@ -18,15 +22,15 @@
 | Public path | Purpose | Internal target |
 | --- | --- | --- |
 | `/` | 统一登录与服务总览 | 管理门户 |
-| `/apps/core/` | 综合业务管理后台 | `core-api` + `core-admin` |
-| `/apps/exam/` | 考试学习管理后台 | `exam-api` + `exam-admin` |
+| `/apps/core/` | 综合业务管理后台 | `core-api:3045` |
+| `/apps/exam/` | 考试学习管理后台 | `exam-api:3110` |
 | `/apps/campus/` | 校园服务工作台 | `campus-service:22101` |
 | `/apps/iot/` | IoT / MQTT 管理后台 | `iot-service:22102` |
 | `/api/core/` | 综合业务规范化 API 入口 | `core-api` |
 | `/api/exam/` | 考试业务规范化 API 入口 | `exam-api` |
 | `/api/campus/` | 校园服务规范化 API 入口 | `campus-service:22101` |
 | `/api/iot/` | IoT 规范化 API 入口 | `iot-service:22102` |
-| `/api/notify/` | 通知服务规范化 API 入口 | `notification-service` |
+| `/api/notify/` | 通知服务规范化 API 入口 | `notification-service:3000` |
 
 旧业务域名和原 API 路径继续兼容，便于小程序平滑迁移和快速回滚。某个项目需要独立域名时，可在 Nginx 增加别名入口，不影响统一管理入口。
 
@@ -46,6 +50,10 @@
 | Service | Host port | Container port | Exposure |
 | --- | ---: | ---: | --- |
 | `platform-api` | `22100` | `22100` | Loopback, behind the reverse proxy |
+| `core-api` | none | `3045` | Docker networks only |
+| `exam-api` | none | `3110` | Docker networks only |
+| `notification-service` | none | `3000` | Docker networks only |
+| `backup-runner` | none | `22103` | Internal Docker network only |
 | `campus-service` | `22101` | `22101` | Loopback and Docker network |
 | `iot-service` | `22102` | `22102` | Loopback and Docker network |
 | `mongodb` | `27017` | `27017` | Loopback and Docker internal network |
@@ -54,7 +62,7 @@ Development-only ports such as the Vite preview port are not part of the product
 
 ## Image distribution
 
-Alibaba Cloud Container Registry is the primary production image source. GitHub Container Registry remains a backup produced by CI. Production hosts pull all four images, including the MongoDB 7 mirror, from the Beijing ACR endpoint so deployment does not depend on Docker Hub or GHCR connectivity.
+Alibaba Cloud Container Registry is the primary production image source. GitHub Container Registry remains a backup produced by CI. Production hosts pull all eight images, including the MongoDB 7 mirror, from the Beijing ACR endpoint so deployment does not depend on Docker Hub or GHCR connectivity.
 
 ## Boundaries
 
@@ -72,5 +80,5 @@ Alibaba Cloud Container Registry is the primary production image source. GitHub 
 - `exam-api` 使用 MongoDB 数据库 `exam_app`。
 - `campus-service` 使用 MongoDB 数据库 `campus_app`。
 - `iot-service` 使用 MongoDB 数据库 `iot_app`。
-- 五个数据库分别使用独立的最小权限账号；只有初始化与备份任务使用 root 账号。
+- 五个数据库分别使用独立的最小权限账号；初始化任务使用 root，备份执行器使用独立的 `backup`/`restore` 账号。
 - 服务之间通过 HTTP API 交互，不跨边界直接读取对方数据库。

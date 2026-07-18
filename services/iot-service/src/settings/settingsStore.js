@@ -1,5 +1,20 @@
 const { EventEmitter } = require('events');
 const { defaultConfig } = require('../config');
+const { hashPassword, isPasswordHash } = require('../security/password');
+
+const TEMPLATE_PASSWORDS = new Set([
+  'admin',
+  'changeme',
+  'change-me',
+  'password',
+  'replace_with_strong_password',
+  'secret-password'
+]);
+const TEMPLATE_SESSION_SECRETS = new Set([
+  'change-me-in-production',
+  'replace_with_at_least_32_random_characters',
+  'session-secret'
+]);
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -284,12 +299,41 @@ function validateConfig(config) {
   return errors;
 }
 
+function validateProductionSecrets(auth, nodeEnv = process.env.NODE_ENV) {
+  const errors = [];
+  if (nodeEnv !== 'production' || !auth.enabled) return errors;
+
+  const password = String(auth.password || '');
+  if (!isPasswordHash(password)) {
+    if (password.length < 16) errors.push('生产环境管理员密码至少需要 16 个字符。');
+    if (TEMPLATE_PASSWORDS.has(password.trim().toLowerCase())) {
+      errors.push('生产环境管理员密码不能使用模板默认值。');
+    }
+  }
+
+  const sessionSecret = String(auth.sessionSecret || '').trim();
+  if (sessionSecret.length < 32) errors.push('生产环境 Session Secret 至少需要 32 个字符。');
+  if (TEMPLATE_SESSION_SECRETS.has(sessionSecret.toLowerCase())) {
+    errors.push('生产环境 Session Secret 不能使用模板默认值。');
+  }
+  return errors;
+}
+
+function protectAuthPassword(config) {
+  const protectedConfig = deepClone(config);
+  protectedConfig.auth.password = hashPassword(protectedConfig.auth.password);
+  return protectedConfig;
+}
+
 class SettingsStore extends EventEmitter {
   constructor({ storage } = {}) {
     super();
     if (!storage) throw new Error('SettingsStore requires a MongoDB storage adapter.');
     this.storage = storage;
-    this.defaults = normalizeConfig(defaultConfig, defaultConfig);
+    const normalizedDefaults = normalizeConfig(defaultConfig, defaultConfig);
+    const defaultSecretErrors = validateProductionSecrets(normalizedDefaults.auth);
+    if (defaultSecretErrors.length > 0) throw new Error(defaultSecretErrors.join(' '));
+    this.defaults = protectAuthPassword(normalizedDefaults);
     this.config = deepClone(this.defaults);
   }
 
@@ -298,7 +342,7 @@ class SettingsStore extends EventEmitter {
     let shouldPersist = false;
     if (Object.keys(loaded).length === 0) shouldPersist = true;
 
-    const normalized = normalizeConfig(loaded, this.defaults);
+    let normalized = normalizeConfig(loaded, this.defaults);
 
     // 自动用随机密钥替换不安全的默认 Session Secret，防止签名被伪造漏洞
     if (normalized.auth.sessionSecret === 'change-me-in-production') {
@@ -308,11 +352,15 @@ class SettingsStore extends EventEmitter {
       shouldPersist = true;
     }
 
-    const errors = validateConfig(normalized);
+    const errors = [
+      ...validateConfig(normalized),
+      ...validateProductionSecrets(normalized.auth)
+    ];
     if (errors.length > 0) {
       throw new Error(errors.join(' '));
     }
 
+    normalized = protectAuthPassword(normalized);
     this.config = normalized;
 
     if (JSON.stringify(loaded) !== JSON.stringify(normalized)) {
@@ -327,7 +375,7 @@ class SettingsStore extends EventEmitter {
   }
 
   async persist(config) {
-    await this.storage.saveSettings(config);
+    await this.storage.saveSettings(protectAuthPassword(config));
   }
 
   getConfig() {
@@ -350,8 +398,11 @@ class SettingsStore extends EventEmitter {
     const previous = this.getConfig();
     const input = applySecretDirectives(this.config, partialConfig);
     const merged = mergeObjects(this.config, input);
-    const next = normalizeConfig(merged, this.defaults);
-    const errors = validateConfig(next);
+    let next = normalizeConfig(merged, this.defaults);
+    const errors = [
+      ...validateConfig(next),
+      ...validateProductionSecrets(next.auth)
+    ];
 
     if (errors.length > 0) {
       const error = new Error(errors.join(' '));
@@ -359,6 +410,7 @@ class SettingsStore extends EventEmitter {
       throw error;
     }
 
+    next = protectAuthPassword(next);
     await this.persist(next);
     this.config = next;
     this.emit('updated', { previous, current: this.getConfig() });
@@ -389,5 +441,6 @@ module.exports = {
   applySecretDirectives,
   buildPublicConfigPayload,
   normalizeConfig,
-  sanitizeConfigForPublic
+  sanitizeConfigForPublic,
+  validateProductionSecrets
 };

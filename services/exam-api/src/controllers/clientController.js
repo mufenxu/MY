@@ -1681,9 +1681,10 @@ exports.analyzeQuestion = asyncHandler(async (req, res) => {
         question,
         forceRefresh: canGenerateAiAnalysis && req.body.forceRefresh,
         requesterOpenid: req.user.openid,
+        generationKey: actorKey,
         allowUpstream: canGenerateAiAnalysis,
         beforeUpstream: () => beforeSingleGeneration(actorKey),
-        afterUpstream: (generatedResult) => afterSingleGeneration(actorKey, generatedResult),
+        afterUpstream: (generatedResult, reservation) => afterSingleGeneration(actorKey, generatedResult, reservation),
     });
     success(res, result, result.generated ? 'AI解析已生成' : 'AI解析已读取');
 });

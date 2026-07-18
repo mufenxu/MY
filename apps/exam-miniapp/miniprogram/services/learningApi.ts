@@ -15,6 +15,8 @@ import {
     WrongQuestionState,
 } from './types';
 
+const AI_ANALYSIS_TIMEOUT_MS = 45_000;
+
 export const learningApi = {
     getAiAnalysisStatus: async () => {
         await authApi.ensureAuth();
@@ -31,6 +33,7 @@ export const learningApi = {
             method: 'POST',
             data,
             showError: false,
+            timeout: AI_ANALYSIS_TIMEOUT_MS,
         });
     },
 

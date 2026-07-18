@@ -45,11 +45,15 @@ npm run check
 
 ## Containers
 
-Production uses the unified gateway plus independently deployable service containers:
+Production keeps the public gateway separate from every business runtime and from the privileged backup runner:
 
 | Service | Host port | Container port |
 | --- | ---: | ---: |
 | `platform-api` | `22100` | `22100` |
+| `core-api` | internal only | `3045` |
+| `exam-api` | internal only | `3110` |
+| `notification-service` | internal only | `3000` |
+| `backup-runner` | internal only | `22103` |
 | `campus-service` | `22101` | `22101` |
 | `iot-service` | `22102` | `22102` |
 | `mongodb` | `127.0.0.1:27017` | `27017` |
@@ -62,6 +66,10 @@ npm run compose:up
 Alibaba Cloud Container Registry is the primary deployment registry:
 
 - `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:platform-api-latest`
+- `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:core-api-latest`
+- `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:exam-api-latest`
+- `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:notification-service-latest`
+- `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:backup-runner-latest`
 - `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:campus-service-latest`
 - `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:iot-service-latest`
 - `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:mongodb-7.0`

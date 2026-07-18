@@ -1,10 +1,14 @@
 const assert = require('assert');
-const { EventEmitter } = require('events');
+const { EventEmitter, once } = require('events');
 const test = require('node:test');
+const { WebSocket } = require('ws');
 
 process.env.LOG_HTTP_REQUESTS = '0';
 
 const { createApiServer } = require('../src/http/apiServer');
+const { hashPassword } = require('../src/security/password');
+
+const TEST_PASSWORD_HASH = hashPassword('secret-password');
 
 let nextPort = 18080;
 
@@ -21,7 +25,7 @@ function createSettingsStore() {
     auth: {
       enabled: true,
       username: 'admin',
-      password: 'secret-password',
+      password: TEST_PASSWORD_HASH,
       sessionSecret: 'test-session-secret-with-enough-entropy',
       sessionTtlHours: 1
     },
@@ -113,14 +117,17 @@ async function startTestServer(options = {}) {
   mqttService.restart = () => {};
   mqttService.getDiscoveredTopics = () => [];
 
-  const { server } = createApiServer({ settingsStore, mqttService });
+  const { closeRealtime, server, wsServer } = createApiServer({ settingsStore, mqttService });
   const port = await listenOnAvailablePort(server);
 
   return {
     apiKeyUsages,
     baseUrl: `http://127.0.0.1:${port}`,
+    closeRealtime,
+    mqttService,
     publishedControls,
-    server
+    server,
+    wsServer
   };
 }
 
@@ -435,4 +442,43 @@ test('same-origin session writes can use a configured public origin', async (t) 
     method: 'POST'
   });
   assert.equal(rejectedResponse.status, 403);
+});
+
+test('realtime updates are coalesced and shutdown closes websocket clients', async () => {
+  const { baseUrl, closeRealtime, mqttService, server } = await startTestServer();
+  const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
+    body: JSON.stringify({ username: 'admin', password: 'secret-password' }),
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST'
+  });
+  const cookie = loginResponse.headers.get('set-cookie').split(';')[0];
+  const socket = new WebSocket(`${baseUrl.replace('http:', 'ws:')}/ws`, {
+    headers: { Cookie: cookie, Origin: baseUrl }
+  });
+  const messages = [];
+  socket.on('message', (payload) => messages.push(JSON.parse(payload.toString())));
+
+  await once(socket, 'open');
+  while (messages.length === 0) await new Promise((resolve) => setTimeout(resolve, 5));
+
+  for (let index = 0; index < 20; index += 1) {
+    mqttService.emit(index % 2 === 0 ? 'message' : 'status');
+  }
+  await new Promise((resolve) => setTimeout(resolve, 120));
+
+  assert.equal(messages.length, 2);
+  assert.equal(messages[0].type, 'snapshot');
+  assert.equal(messages[1].type, 'status');
+
+  const closed = once(socket, 'close');
+  await closeRealtime();
+  const [code] = await closed;
+  assert.equal(code, 1001);
+  await new Promise((resolve) => server.close(resolve));
+});
+
+test('realtime shutdown completes when there are no websocket clients', async () => {
+  const { closeRealtime, server } = await startTestServer();
+  await closeRealtime();
+  await new Promise((resolve) => server.close(resolve));
 });

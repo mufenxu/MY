@@ -15,7 +15,14 @@ const directory = path.resolve(backupDirectory);
 const archivePath = path.join(directory, 'mongodb.archive.gz');
 const manifest = JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8'));
 const composeArgs = ['compose', '--env-file', '.env', '-f', 'infra/docker/compose.yml'];
-const applicationServices = ['platform-api', 'campus-service', 'iot-service'];
+const applicationServices = [
+  'platform-api',
+  'core-api',
+  'exam-api',
+  'notification-service',
+  'campus-service',
+  'iot-service',
+];
 await access(archivePath);
 
 const hash = createHash('sha256');

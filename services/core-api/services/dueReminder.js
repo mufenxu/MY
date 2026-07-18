@@ -10,7 +10,6 @@
 const nodemailer = require('nodemailer');
 const dayjs = require('dayjs');
 const axios = require('axios');
-const mongoose = require('mongoose');
 
 const ResourceConfig = require('../models/ResourceConfig');
 const NotifyConfig = require('../models/NotifyConfig');
@@ -27,7 +26,9 @@ function buildTransport(cfg) {
 }
 
 function isWecomEnabled(cfg) {
-    return Boolean(cfg && cfg.qywxEnabled && cfg.qywxApiKey);
+    const hasRecipient = [cfg?.qywxToUser, cfg?.qywxToParty, cfg?.qywxToTag]
+        .some((value) => String(value || '').trim());
+    return Boolean(cfg && cfg.qywxEnabled && cfg.qywxApiKey && hasRecipient);
 }
 
 function isDue(dateStr, advanceDays) {
@@ -53,9 +54,48 @@ function parseAdvanceDays(input, fallback = 7) {
     return Math.round(num);
 }
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function plainText(value, fallback = '') {
+    const text = String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
+    return text || fallback;
+}
+
+function safeHttpUrl(value) {
+    if (!value) return '';
+    try {
+        const url = new URL(String(value));
+        return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : '';
+    } catch (_) {
+        return '';
+    }
+}
+
+// Reminder rendering accepts only non-sensitive fields. This remains a second
+// line of defense even when a database projection is changed later.
+function safeReminderItem(item = {}) {
+    return {
+        name: plainText(item.name),
+        host: plainText(item.host),
+        expiresAt: plainText(item.expiresAt),
+        advanceNoticeDays: item.advanceNoticeDays,
+        registrar: plainText(item.registrar),
+        siteUrl: safeHttpUrl(item.siteUrl),
+        type: plainText(item.type),
+        renewPeriod: plainText(item.renewPeriod)
+    };
+}
+
 function formatWecomItem(item, typeLabel) {
-    const name = item.name || item.host || '未命名';
-    const expiresAt = item.expiresAt || '未填写';
+    const name = plainText(item.name || item.host, '未命名');
+    const expiresAt = plainText(item.expiresAt, '未填写');
     let icon = '🟢'; 
     let statusText = '正常';
     let overdueText = '';
@@ -85,9 +125,8 @@ function formatWecomItem(item, typeLabel) {
         `  · 到期：${expiresAt}`,
     ];
 
-    if (item.siteUrl) lines.push(`  · 链接：${item.siteUrl}`);
-    if (item.registrar) lines.push(`  · 平台：${item.registrar}`);
-    if (item.username) lines.push(`  · 凭据：${item.username}`);
+    if (item.siteUrl) lines.push(`  · 链接：${plainText(item.siteUrl)}`);
+    if (item.registrar) lines.push(`  · 平台：${plainText(item.registrar)}`);
 
     return lines.join('\n');
 }
@@ -167,10 +206,6 @@ function buildWecomPayload(cfg, text, extra = {}) {
         payload.agent_id = agentId;
     }
 
-    if (!payload.touser && !payload.toparty && !payload.totag) {
-        payload.touser = '@all';
-    }
-
     return payload;
 }
 
@@ -197,13 +232,11 @@ function buildItemsHtml(items, title) {
     if (!items.length) return '';
 
     const itemsHtml = items.map(item => {
-        const name = item.name || item.host || '未命名';
-        const expiresAt = item.expiresAt || '-';
-        const registrar = item.registrar || '-';
-        const siteUrl = item.siteUrl || '';
-        const username = item.username || '';
-        const password = item.password || '';
-        const email = item.email || '';
+        const name = escapeHtml(item.name || item.host || '未命名');
+        const expiresAt = escapeHtml(item.expiresAt || '-');
+        const registrar = escapeHtml(item.registrar || '-');
+        const siteUrl = safeHttpUrl(item.siteUrl);
+        const escapedSiteUrl = escapeHtml(siteUrl);
 
         let daysLeft = '-';
         let statusColor = '#6b7280';
@@ -238,23 +271,8 @@ function buildItemsHtml(items, title) {
             <tr>
               <td style="padding:6px 0;color:#6b7280;font-weight:500">管理网址：</td>
               <td style="padding:6px 0">
-                <a href="${siteUrl}" style="color:#2563eb;text-decoration:none" target="_blank">${siteUrl}</a>
+                <a href="${escapedSiteUrl}" style="color:#2563eb;text-decoration:none" target="_blank" rel="noopener noreferrer">${escapedSiteUrl}</a>
               </td>
-            </tr>` : ''}
-            ${username ? `
-            <tr>
-              <td style="padding:6px 0;color:#6b7280;font-weight:500">用户名：</td>
-              <td style="padding:6px 0;color:#111827;font-family:monospace;background:#f3f4f6;padding:4px 8px;border-radius:4px;display:inline-block">${username}</td>
-            </tr>` : ''}
-            ${password ? `
-            <tr>
-              <td style="padding:6px 0;color:#6b7280;font-weight:500">密码：</td>
-              <td style="padding:6px 0;color:#111827;font-family:monospace;background:#f3f4f6;padding:4px 8px;border-radius:4px;display:inline-block">${password}</td>
-            </tr>` : ''}
-            ${email ? `
-            <tr>
-              <td style="padding:6px 0;color:#6b7280;font-weight:500">邮箱：</td>
-              <td style="padding:6px 0;color:#111827">${email}</td>
             </tr>` : ''}
           </table>
         </div>
@@ -264,7 +282,7 @@ function buildItemsHtml(items, title) {
     return `
     <div style="margin:24px 0">
       <h3 style="margin:0 0 16px;color:#111827;font-size:18px;font-weight:600;border-bottom:2px solid #3b82f6;padding-bottom:8px">
-        📋 ${title}到期提醒
+        📋 ${escapeHtml(title)}到期提醒
       </h3>
       ${itemsHtml}
     </div>`
@@ -343,6 +361,12 @@ async function checkAndNotify(force = false) {
             emailEnabled: notifyConfig.emailEnabled !== false,
         };
 
+        const ownerId = String(cfg.ownerId || '').trim();
+        if (!ownerId) {
+            console.log('通知配置未绑定所有者，跳过检查');
+            return { skipped: true, reason: 'owner_not_configured' };
+        }
+
         const emailEnabled = Boolean(cfg.emailEnabled && cfg.smtpUser && cfg.smtpPass && cfg.toList);
         const wecomEnabled = isWecomEnabled(cfg);
 
@@ -351,17 +375,38 @@ async function checkAndNotify(force = false) {
             return { skipped: true, reason: 'no_channel' };
         }
 
-        // 读取所有用户的资源（合并所有用户的服务器和域名）
-        const allResources = await ResourceConfig.find({});
+        // Fetch only fields that are safe to include in a reminder. Credentials,
+        // contact details and arbitrary config never enter the notification path.
+        const allResources = await ResourceConfig.find({ ownerId })
+            .select({
+                ownerId: 1,
+                'servers.name': 1,
+                'servers.host': 1,
+                'servers.expiresAt': 1,
+                'servers.advanceNoticeDays': 1,
+                'servers.registrar': 1,
+                'servers.siteUrl': 1,
+                'servers.type': 1,
+                'servers.renewPeriod': 1,
+                'domains.name': 1,
+                'domains.host': 1,
+                'domains.expiresAt': 1,
+                'domains.advanceNoticeDays': 1,
+                'domains.registrar': 1,
+                'domains.siteUrl': 1,
+                'domains.type': 1,
+                'domains.renewPeriod': 1
+            })
+            .lean();
         let allServers = [];
         let allDomains = [];
 
         allResources.forEach(resource => {
             if (resource.servers && Array.isArray(resource.servers)) {
-                allServers = allServers.concat(resource.servers);
+                allServers = allServers.concat(resource.servers.map(safeReminderItem));
             }
             if (resource.domains && Array.isArray(resource.domains)) {
-                allDomains = allDomains.concat(resource.domains);
+                allDomains = allDomains.concat(resource.domains.map(safeReminderItem));
             }
         });
 
@@ -483,6 +528,13 @@ async function checkAndNotify(force = false) {
 }
 
 module.exports = {
-    checkAndNotify
+    checkAndNotify,
+    // Export pure render helpers for regression tests.
+    escapeHtml,
+    safeReminderItem,
+    buildItemsHtml,
+    buildWecomText,
+    buildWecomPayload,
+    isWecomEnabled
 };
 

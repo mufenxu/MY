@@ -221,7 +221,7 @@
                                         <Folder />
                                     </el-icon></div>
                                 <div class="stat-info">
-                                    <div class="stat-value">{{ dashboardStats.counts.majorCategories || 0 }}</div>
+                                    <div class="stat-value">{{ dashboardStats.error ? '--' : (dashboardStats.counts.majorCategories || 0) }}</div>
                                     <div class="stat-label">{{ dashboardStatLabels.majorCategories }}</div>
                                     <div class="stat-hint">{{ dashboardStatHints.majorCategories }}</div>
                                 </div>
@@ -231,7 +231,7 @@
                                         <Files />
                                     </el-icon></div>
                                 <div class="stat-info">
-                                    <div class="stat-value">{{ dashboardStats.counts.categories || 0 }}</div>
+                                    <div class="stat-value">{{ dashboardStats.error ? '--' : (dashboardStats.counts.categories || 0) }}</div>
                                     <div class="stat-label">{{ dashboardStatLabels.categories }}</div>
                                     <div class="stat-hint">{{ dashboardStatHints.categories }}</div>
                                 </div>
@@ -241,7 +241,7 @@
                                         <Edit />
                                     </el-icon></div>
                                 <div class="stat-info">
-                                    <div class="stat-value">{{ dashboardStats.counts.questions || 0 }}</div>
+                                    <div class="stat-value">{{ dashboardStats.error ? '--' : (dashboardStats.counts.questions || 0) }}</div>
                                     <div class="stat-label">{{ dashboardStatLabels.questions }}</div>
                                     <div class="stat-hint">{{ dashboardStatHints.questions }}</div>
                                 </div>
@@ -1296,7 +1296,7 @@
 
         <!-- Wechat Bind Dialog -->
         <el-dialog v-if="hasAdminSecurityActions" v-model="bindDialog.visible" title="绑定微信" width="360px" :close-on-click-modal="false" append-to-body
-            @close="stopBindPolling">
+            @close="stopBindRequests">
             <div class="bind-dialog-content">
                 <div id="bind-qrcode"></div>
 
@@ -1749,7 +1749,7 @@
 
 <script setup>
 
-import { ref, reactive, onMounted, onBeforeUnmount, computed, nextTick } from 'vue';
+import { defineAsyncComponent, ref, reactive, onMounted, onBeforeUnmount, computed, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { session, loadRuntimeConfig } from '@/utils/session';
@@ -1757,8 +1757,10 @@ import { createAdminApi } from '@/api/admin';
 import { createMockAdminApi } from '@/api/adminMock';
 import { createCartoonAvatar } from '@/utils/cartoonAvatar';
 import { isUiPreviewMode } from '@/utils/uiPreview';
-import MiniLineChart from '@/components/MiniLineChart.vue';
-import { IS_PLATFORM_SSO, logoutPlatformSession, resolveAppUrl } from '@/utils/runtime';
+import { fetchWithTimeout, IS_PLATFORM_SSO, logoutPlatformSession, resolveAppUrl } from '@/utils/runtime';
+import { createSequentialPoller } from '@/utils/sequentialPoller';
+
+const MiniLineChart = defineAsyncComponent(() => import('@/components/MiniLineChart.vue'));
 
 const route = useRoute();
 const router = useRouter();
@@ -1900,6 +1902,7 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
 
         // Dashboard Data
         const dashboardStats = reactive({
+            error: false,
             counts: {
                 majorCategories: 0,
                 categories: 0,
@@ -1910,10 +1913,12 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             },
             chartData: {}
         });
-        fourthStatValue = computed(() => (isConsoleMode.value
-            ? (dashboardStats.counts.publishedCategories || 0)
-            : (dashboardStats.counts.examResults || 0)));
-        consolePracticeCount = computed(() => dashboardStats.counts.practiceRecords || 0);
+        fourthStatValue = computed(() => (dashboardStats.error
+            ? '--'
+            : (isConsoleMode.value
+                ? (dashboardStats.counts.publishedCategories || 0)
+                : (dashboardStats.counts.examResults || 0))));
+        consolePracticeCount = computed(() => (dashboardStats.error ? '--' : (dashboardStats.counts.practiceRecords || 0)));
         let qrcodeModulePromise = null;
         let examResultsRequestSeq = 0;
         let usersRequestSeq = 0;
@@ -2220,8 +2225,10 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             pollToken: '',
             statusText: '正在获取二维码...'
         });
-        let bindTimer = null;
+        let bindPoller = null;
         let bindPollErrorCount = 0;
+        let bindCreateController = null;
+        let bindCreateSequence = 0;
         const runtimeConfig = reactive({
             scanLogin: {
                 enabled: false,
@@ -2554,7 +2561,7 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         });
 
         onBeforeUnmount(() => {
-            stopBindPolling();
+            stopBindRequests();
             if (userSearchTimer) {
                 clearTimeout(userSearchTimer);
                 userSearchTimer = null;
@@ -2571,6 +2578,7 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         const loadDashboardData = async () => {
             try {
                 loading.value = true;
+                dashboardStats.error = false;
                 const res = await adminApi.getDashboardData();
                 if (res.data.code === 0) {
                     Object.assign(dashboardStats.counts, {
@@ -2582,9 +2590,12 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                         practiceRecords: 0,
                     }, res.data.data.counts || {});
                     dashboardStats.chartData = res.data.data.chartData || {};
+                } else {
+                    dashboardStats.error = true;
                 }
                 await loadDashboardRecent();
             } catch (err) {
+                dashboardStats.error = true;
                 ElMessage.error('加载数据失败');
             } finally {
                 loading.value = false;
@@ -3909,13 +3920,17 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         };
 
         const initBindQrcode = async () => {
-            if (bindTimer) clearInterval(bindTimer);
+            stopBindRequests();
             bindPollErrorCount = 0;
 
             if (!getScanLoginConfig().enabled) {
                 bindDialog.statusText = '扫码绑定未开启';
                 return;
             }
+
+            const requestSequence = bindCreateSequence;
+            const controller = new AbortController();
+            bindCreateController = controller;
 
             const oldQrToken = sessionStorage.getItem('bind_qr_token') || '';
 
@@ -3926,12 +3941,14 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                 if (oldQrToken) {
                     requestBody.oldQrToken = oldQrToken;
                 }
-                const res = await fetch(`${getScanLoginConfig().apiBase}/qrcode/create`, {
+                const res = await fetchWithTimeout(`${getScanLoginConfig().apiBase}/qrcode/create`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
+                    body: JSON.stringify(requestBody),
+                    signal: controller.signal,
                 });
                 const payload = await res.json();
+                if (controller.signal.aborted || requestSequence !== bindCreateSequence) return;
                 const data = payload.data || payload;
                 if (res.ok && payload.code === 0 && data.qrToken && data.pollToken) {
                     bindDialog.qrToken = data.qrToken;
@@ -3943,7 +3960,9 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
 
                     nextTick(async () => {
                         try {
+                            if (controller.signal.aborted || requestSequence !== bindCreateSequence) return;
                             await renderQrcodeToElement(document.getElementById('bind-qrcode'), codeContent, 180);
+                            if (controller.signal.aborted || requestSequence !== bindCreateSequence) return;
                         } catch (err) {
                             console.error('Render bind QR code error:', err);
                             bindDialog.statusText = '浜岀淮鐮佺敓鎴愬け璐ワ紝璇峰埛鏂板悗閲嶈瘯';
@@ -3956,7 +3975,12 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                     bindDialog.statusText = '二维码获取失败: ' + ((payload && payload.message) || '未知错误');
                 }
             } catch (err) {
+                if (controller.signal.aborted || requestSequence !== bindCreateSequence) return;
                 bindDialog.statusText = '网络请求失败，请稍后重试';
+            } finally {
+                if (bindCreateController === controller) {
+                    bindCreateController = null;
+                }
             }
         };
 
@@ -4083,11 +4107,12 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         };
 
         const startBindPolling = () => {
-            bindTimer = setInterval(async () => {
-                try {
-                    const res = await fetch(
+            stopBindPolling();
+            bindPoller = createSequentialPoller(async (signal) => {
+                    const res = await fetchWithTimeout(
                         `${getScanLoginConfig().apiBase}/qrcode/status?qrToken=${encodeURIComponent(bindDialog.qrToken)}&pollToken=${encodeURIComponent(bindDialog.pollToken)}`,
-                        { cache: 'no-store' }
+                        { cache: 'no-store', signal },
+                        8000,
                     );
                     const payload = await res.json();
                     if (!res.ok || payload.code !== 0) {
@@ -4099,32 +4124,46 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                     if (data.status === 'scanned') {
                         bindDialog.statusText = '已扫码，请在手机确认';
                     } else if (data.status === 'confirmed') {
-                        clearInterval(bindTimer);
                         sessionStorage.removeItem('bind_qr_token');
                         sessionStorage.removeItem('bind_qr_poll_token');
                         bindDialog.statusText = '验证成功，正在绑定...';
                         await doBind(data.tempAuthCode);
+                        return false;
                     } else if (data.status === 'expired' || data.status === 'cancelled') {
-                        clearInterval(bindTimer);
                         sessionStorage.removeItem('bind_qr_token');
                         sessionStorage.removeItem('bind_qr_poll_token');
                         bindDialog.statusText = '二维码已过期，请刷新';
+                        return false;
                     }
-                } catch (e) {
+                    return true;
+            }, {
+                interval: 2000,
+                onError: () => {
                     bindPollErrorCount += 1;
                     if (bindPollErrorCount >= 3) {
-                        clearInterval(bindTimer);
                         bindDialog.statusText = '二维码状态获取失败，请刷新后重试';
+                        return false;
                     }
-                }
-            }, 2000);
+                    return true;
+                },
+            });
+            bindPoller.start();
         };
 
         const stopBindPolling = () => {
-            if (bindTimer) {
-                clearInterval(bindTimer);
-                bindTimer = null;
-            }
+            bindPoller?.stop();
+            bindPoller = null;
+        };
+
+        const stopBindCreation = () => {
+            bindCreateSequence += 1;
+            bindCreateController?.abort();
+            bindCreateController = null;
+        };
+
+        const stopBindRequests = () => {
+            stopBindPolling();
+            stopBindCreation();
         };
 
         const doBind = async (tempAuthCode) => {

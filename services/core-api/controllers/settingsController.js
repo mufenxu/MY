@@ -8,7 +8,7 @@ exports.getNotifyConfig = asyncHandler(async (req, res) => {
 });
 
 exports.saveNotifyConfig = asyncHandler(async (req, res) => {
-    const result = await settingsService.saveNotifyConfig(req.body);
+    const result = await settingsService.saveNotifyConfig(req.body, req.user._id);
     res.json({ success: true, result });
 });
 

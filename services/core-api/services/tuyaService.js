@@ -3,6 +3,11 @@ const crypto = require('crypto');
 const logger = require('../utils/logger');
 const secretService = require('./secretService');
 
+const configuredTimeout = Number.parseInt(process.env.TUYA_API_TIMEOUT_MS || '', 10);
+const TUYA_API_TIMEOUT_MS = Number.isFinite(configuredTimeout)
+    ? Math.min(Math.max(configuredTimeout, 1000), 30000)
+    : 10000;
+
 /**
  * Tuya OpenAPI Service
  */
@@ -10,6 +15,7 @@ class TuyaService {
     constructor() {
         this.token = null;
         this.tokenExpireTime = 0;
+        this.tokenPromise = null;
     }
 
     get accessKey() { return secretService.getSecretSync('TUYA_ACCESS_KEY'); }
@@ -35,6 +41,18 @@ class TuyaService {
             return this.token;
         }
 
+        if (this.tokenPromise) return this.tokenPromise;
+
+        this.tokenPromise = this._fetchAccessToken();
+        try {
+            return await this.tokenPromise;
+        } finally {
+            this.tokenPromise = null;
+        }
+    }
+
+    async _fetchAccessToken() {
+
         const timestamp = Date.now();
         const url = '/v1.0/token?grant_type=1';
         const sign = this.calcSign('GET', url, '', timestamp);
@@ -48,7 +66,7 @@ class TuyaService {
                     client_id: this.accessKey,
                     sign_method: 'HMAC-SHA256'
                 },
-                timeout: 10000 // 10s timeout
+                timeout: TUYA_API_TIMEOUT_MS
             });
 
             logger.info(`Tuya Auth Token fetched in ${Date.now() - startTime}ms`);
@@ -86,13 +104,13 @@ class TuyaService {
                 sign_method: 'HMAC-SHA256',
                 'Content-Type': 'application/json'
             },
-            timeout: 10000 // 10s timeout
+            timeout: TUYA_API_TIMEOUT_MS
         };
 
         if (body) config.data = body;
 
+        const startTime = Date.now();
         try {
-            const startTime = Date.now();
             const res = await axios(config);
             const duration = Date.now() - startTime;
 

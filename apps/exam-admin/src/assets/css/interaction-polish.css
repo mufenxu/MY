@@ -234,3 +234,8 @@
         animation: none !important;
     }
 }
+
+:where(button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.35);
+    outline-offset: 2px;
+}

@@ -2,17 +2,101 @@ import { createApp } from 'vue';
 import 'element-plus/es/components/message/style/css';
 import 'element-plus/es/components/message-box/style/css';
 import 'element-plus/es/components/loading/style/css';
-import * as ElementPlusIconsVue from '@element-plus/icons-vue';
+import {
+    ArrowDown,
+    ArrowLeft,
+    ArrowRight,
+    ChatDotRound,
+    Check,
+    CircleCheck,
+    CircleCheckFilled,
+    Close,
+    Collection,
+    CopyDocument,
+    DataAnalysis,
+    DataLine,
+    Delete,
+    Document,
+    DocumentAdd,
+    Download,
+    Edit,
+    EditPen,
+    Files,
+    FullScreen,
+    Folder,
+    Key,
+    Link,
+    List,
+    Loading,
+    Location,
+    Lock,
+    MagicStick,
+    Plus,
+    Refresh,
+    Search,
+    Share,
+    SuccessFilled,
+    SwitchButton,
+    TrendCharts,
+    Trophy,
+    Upload,
+    User,
+    Warning,
+    WarningFilled,
+} from '@element-plus/icons-vue';
 import App from './App.vue';
 import router, { preloadDashboardView } from './router';
 import { setupHttpInterceptors } from './utils/setupHttp';
 import './assets/css/interaction-polish.css';
-import { IS_PLATFORM_SSO, redirectToPlatformLogin, resolveAppUrl } from './utils/runtime';
+import { fetchWithTimeout, IS_PLATFORM_SSO, redirectToPlatformLogin, resolveAppUrl } from './utils/runtime';
 import { session } from './utils/session';
+
+const icons = {
+    ArrowDown,
+    ArrowLeft,
+    ArrowRight,
+    ChatDotRound,
+    Check,
+    CircleCheck,
+    CircleCheckFilled,
+    Close,
+    Collection,
+    CopyDocument,
+    DataAnalysis,
+    DataLine,
+    Delete,
+    Document,
+    DocumentAdd,
+    Download,
+    Edit,
+    EditPen,
+    Files,
+    FullScreen,
+    Folder,
+    Key,
+    Link,
+    List,
+    Loading,
+    Location,
+    Lock,
+    MagicStick,
+    Plus,
+    Refresh,
+    Search,
+    Share,
+    SuccessFilled,
+    SwitchButton,
+    TrendCharts,
+    Trophy,
+    Upload,
+    User,
+    Warning,
+    WarningFilled,
+};
 
 async function bootstrapPlatformSession() {
     if (!IS_PLATFORM_SSO) return;
-    const response = await fetch(resolveAppUrl('/api/admin/me'), {
+    const response = await fetchWithTimeout(resolveAppUrl('/api/admin/me'), {
         credentials: 'same-origin',
         cache: 'no-store',
     });
@@ -38,8 +122,8 @@ async function startApplication() {
 
     const app = createApp(App);
 
-    // Icon strings are used across old templates, so icons stay globally available.
-    for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+    // Legacy templates use icon names as strings; register only icons they reference.
+    for (const [key, component] of Object.entries(icons)) {
         app.component(key, component);
     }
 

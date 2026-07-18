@@ -19,9 +19,9 @@
   content: '';
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
+  filter: none;
   z-index: 1;
-  animation: float-blobs 20s infinite alternate ease-in-out;
+  animation: none;
 }
 
 .login-container::before {
@@ -77,8 +77,8 @@
 /* Card Style - Horizon UI Glassmorphism */
 .login-card-wrapper .ant-card {
   background: rgba(255, 255, 255, 0.92) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-radius: 24px !important;
   border: 1px solid rgba(255, 255, 255, 0.8) !important;
   box-shadow: 0 20px 50px rgba(112, 144, 176, 0.18) !important;
@@ -257,6 +257,10 @@
   user-select: none;
   transition: color 0.2s ease, opacity 0.2s ease;
   text-decoration: none;
+  border: 0;
+  padding: 4px;
+  background: transparent;
+  font: inherit;
 }
 
 .scan-mode-toggle:hover {
@@ -290,8 +294,17 @@
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s ease;
+  border: 0;
+  padding: 0;
+  font: inherit;
 }
 
 .qr-expired-overlay:hover {
   background: rgba(255, 255, 255, 0.92);
+}
+
+.scan-mode-toggle:focus-visible,
+.qr-expired-overlay:focus-visible {
+  outline: 3px solid rgba(74, 124, 247, 0.35);
+  outline-offset: 3px;
 }

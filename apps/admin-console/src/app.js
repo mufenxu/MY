@@ -78,6 +78,8 @@ export function createApp({
   }
 
   app.locals.verifyConsoleSession = async (token, now) => sessions.verify(token, now);
+  app.locals.onConsoleSessionRevoked = () => {};
+  app.locals.recordProxyMetric = (metric) => metrics.recordProxy(metric);
   app.locals.sessionRegistry = sessions;
 
   app.disable('x-powered-by');
@@ -174,7 +176,9 @@ export function createApp({
   });
 
   app.post('/api/auth/logout', requireConsoleRequest, async (req, res) => {
-    await sessions.revoke(readSessionToken(req));
+    const token = readSessionToken(req);
+    await sessions.revoke(token);
+    await app.locals.onConsoleSessionRevoked(token);
     res.clearCookie(SESSION_COOKIE_NAME, { ...sessionCookieOptions(config), maxAge: 0 });
     res.json({ authenticated: false });
   });

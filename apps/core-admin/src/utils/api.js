@@ -3,6 +3,9 @@ import { API_BASE_PATH, IS_PLATFORM_SSO, redirectToPlatformLogin } from './runti
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL || API_BASE_PATH,
+    timeout: 12000,
+    withCredentials: true,
+    headers: { 'X-Core-Admin-Client': 'web' },
 });
 
 // 标记是否正在刷新 token，防止多个请求同时触发刷新
@@ -63,29 +66,21 @@ api.interceptors.response.use(
             originalRequest._retry = true;
             isRefreshing = true;
 
-            const refreshToken = localStorage.getItem('refreshToken');
-            if (!refreshToken) {
-                isRefreshing = false;
-                localStorage.removeItem('token');
-                localStorage.removeItem('refreshToken');
-                if (window.location.pathname !== '/login') {
-                    window.location.href = '/login';
-                }
-                return Promise.reject(error);
-            }
-
             try {
                 const res = await axios.post(
                     (import.meta.env.VITE_API_URL || API_BASE_PATH) + '/auth/refresh',
-                    { refreshToken }
+                    {},
+                    {
+                        timeout: 12000,
+                        withCredentials: true,
+                        headers: { 'X-Core-Admin-Client': 'web' },
+                    }
                 );
 
                 if (res.data.success && res.data.token) {
                     const newToken = res.data.token;
                     localStorage.setItem('token', newToken);
-                    if (res.data.refreshToken) {
-                        localStorage.setItem('refreshToken', res.data.refreshToken);
-                    }
+                    localStorage.removeItem('refreshToken');
                     if (res.data.user) {
                         localStorage.setItem('user', JSON.stringify(res.data.user));
                     }

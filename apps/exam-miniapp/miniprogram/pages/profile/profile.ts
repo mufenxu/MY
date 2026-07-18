@@ -20,7 +20,10 @@ Page({
         },
         consoleProfile: {
             hasConsoleAccount: false,
+            role: '',
+            displayName: '',
             categoryCount: 0,
+            consolePath: '',
         },
         consoleStatusText: DEFAULT_CONSOLE_TEXT,
         consoleDialogVisible: false,
@@ -74,7 +77,10 @@ Page({
                 userInfo: { nickname: '', avatarUrl: '' },
                 consoleProfile: {
                     hasConsoleAccount: false,
+                    role: '',
+                    displayName: '',
                     categoryCount: 0,
+                    consolePath: '',
                 },
                 consoleStatusText: DEFAULT_CONSOLE_TEXT,
             });

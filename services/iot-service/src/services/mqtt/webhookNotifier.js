@@ -30,16 +30,21 @@ function postJson(webhookUrl, payload, timeout = 5000) {
     timeout
   };
 
-  const req = httpLib.request(options, (res) => {
-    res.resume();
-  });
+  return new Promise((resolve, reject) => {
+    const req = httpLib.request(options, (res) => {
+      res.resume();
+      res.once('end', () => resolve(res.statusCode));
+    });
 
-  req.on('error', (error) => {
-    console.error('Webhook notification failed:', error.message);
+    req.once('timeout', () => {
+      const error = new Error(`Webhook request timed out after ${timeout}ms`);
+      error.code = 'ETIMEDOUT';
+      req.destroy(error);
+    });
+    req.once('error', reject);
+    req.write(postData);
+    req.end();
   });
-
-  req.write(postData);
-  req.end();
 }
 
 async function sendDevicePresenceWebhook(config, type, device) {
@@ -50,13 +55,14 @@ async function sendDevicePresenceWebhook(config, type, device) {
   const payload = createDevicePresencePayload(type, device, config.api.deviceOnlineThreshold);
 
   try {
-    postJson(config.api.webhookUrl, payload);
+    await postJson(config.api.webhookUrl, payload);
   } catch (error) {
-    console.error('Webhook URL parse error:', error.message);
+    console.error('Webhook notification failed:', error.message);
   }
 }
 
 module.exports = {
   createDevicePresencePayload,
+  postJson,
   sendDevicePresenceWebhook
 };

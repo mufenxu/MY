@@ -1,12 +1,36 @@
 const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 const { verifyPlatformSso } = require('./platformSso');
 const { resolvePlatformSsoUser } = require('../services/platformSsoAccountService');
 
-exports.verifyToken = (req, res, next) => {
+function normalizeTokenVersion(value) {
+    const version = Number(value);
+    return Number.isSafeInteger(version) && version >= 0 ? version : 0;
+}
+
+function sendJwtError(res, error) {
+    if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({
+            success: false,
+            error: 'Token expired.',
+            code: 'AUTH_TOKEN_EXPIRED',
+            tokenExpired: true
+        });
+    }
+
+    return res.status(401).json({
+        success: false,
+        error: 'Invalid token.',
+        code: 'AUTH_TOKEN_INVALID'
+    });
+}
+
+exports.verifyToken = async (req, res, next) => {
     const platformIdentity = verifyPlatformSso(req);
     if (platformIdentity) {
-        const mappedUsername = process.env.PLATFORM_SSO_CORE_USERNAME || platformIdentity.sub;
-        return resolvePlatformSsoUser({ mappedUserId: mappedUsername }).then((user) => {
+        try {
+            const mappedUsername = process.env.PLATFORM_SSO_CORE_USERNAME || platformIdentity.sub;
+            const user = await resolvePlatformSsoUser({ mappedUserId: mappedUsername });
             if (!user) {
                 return res.status(403).json({
                     success: false,
@@ -22,13 +46,17 @@ exports.verifyToken = (req, res, next) => {
                 nickName: user.nickName,
                 avatarUrl: user.avatarUrl,
                 role: user.role,
-                permissions: user.permissions || []
+                permissions: user.permissions || [],
+                status: user.status || 'active'
             };
             return next();
-        }).catch(next);
+        } catch (error) {
+            return next(error);
+        }
     }
 
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    const authorization = req.header('Authorization') || '';
+    const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
 
     if (!token) {
         return res.status(401).json({
@@ -38,28 +66,63 @@ exports.verifyToken = (req, res, next) => {
         });
     }
 
+    let decoded;
     try {
-        const decoded = jwt.verify(token, process.env.CORE_JWT_SECRET || process.env.JWT_SECRET, {
+        decoded = jwt.verify(token, process.env.CORE_JWT_SECRET || process.env.JWT_SECRET, {
             issuer: 'miniprogram-admin',
             audience: 'miniprogram-api'
         });
-        req.user = { ...decoded, _id: decoded.id || decoded._id };
-        next();
-    } catch (ex) {
-        // 区分 token 过期和 token 无效，便于前端自动刷新
-        if (ex.name === 'TokenExpiredError') {
+    } catch (error) {
+        return sendJwtError(res, error);
+    }
+
+    try {
+        const userId = decoded.id || decoded._id;
+        const user = await User.findById(userId)
+            .select('_id openid userId nickName avatarUrl role permissions status tokenVersion')
+            .lean();
+
+        if (!user) {
             return res.status(401).json({
                 success: false,
-                error: 'Token expired.',
-                code: 'AUTH_TOKEN_EXPIRED',
-                tokenExpired: true
+                error: 'User no longer exists.',
+                code: 'AUTH_USER_NOT_FOUND'
             });
         }
-        res.status(401).json({
-            success: false,
-            error: 'Invalid token.',
-            code: 'AUTH_TOKEN_INVALID'
-        });
+
+        const currentStatus = user.status || 'active';
+        if (currentStatus !== 'active') {
+            return res.status(403).json({
+                success: false,
+                error: 'Account is disabled.',
+                code: 'AUTH_ACCOUNT_DISABLED'
+            });
+        }
+
+        // Tokens issued before tokenVersion was introduced are treated as version 0.
+        if (normalizeTokenVersion(decoded.tokenVersion) !== normalizeTokenVersion(user.tokenVersion)) {
+            return res.status(401).json({
+                success: false,
+                error: 'Token has been revoked.',
+                code: 'AUTH_TOKEN_REVOKED'
+            });
+        }
+
+        req.user = {
+            id: user._id,
+            _id: user._id,
+            openid: user.openid,
+            userId: user.userId,
+            nickName: user.nickName,
+            avatarUrl: user.avatarUrl,
+            role: user.role,
+            permissions: user.permissions || [],
+            status: currentStatus,
+            tokenVersion: normalizeTokenVersion(user.tokenVersion)
+        };
+        return next();
+    } catch (error) {
+        return next(error);
     }
 };
 

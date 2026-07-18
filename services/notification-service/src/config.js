@@ -12,6 +12,17 @@ function ensureEnv(name) {
   return value;
 }
 
+function ensureStrongSecret(name, { minLength = 32 } = {}) {
+  const value = ensureEnv(name);
+  if (process.env.NODE_ENV === "production") {
+    const placeholder = /^(?:replace|change)_with_/i.test(value);
+    if (value.length < minLength || placeholder) {
+      throw new Error(`环境变量 ${name} 必须是至少 ${minLength} 位的随机值`);
+    }
+  }
+  return value;
+}
+
 const parseInteger = (value, name) => {
   const parsed = Number.parseInt(value, 10);
   if (Number.isNaN(parsed)) {
@@ -22,7 +33,7 @@ const parseInteger = (value, name) => {
 
 const config = {
   port: parseInt(process.env.PORT || "3000", 10),
-  apiKey: ensureEnv("NOTIFY_API_KEY"),
+  apiKey: ensureStrongSecret("NOTIFY_API_KEY"),
   wecom: {
     corpId: ensureEnv("WECOM_CORP_ID"),
     agentId: parseInteger(ensureEnv("WECOM_AGENT_ID"), "WECOM_AGENT_ID"),

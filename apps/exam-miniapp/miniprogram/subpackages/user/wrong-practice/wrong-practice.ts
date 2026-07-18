@@ -35,7 +35,7 @@ Page({
         title: '错题练习',
         categoryId: '',
         questions: [] as any[],
-        groupedQuestions: [] as { type: string; typeName: string; items: { question: any; originalIndex: number }[] }[],
+        groupedQuestions: [] as { type: string; typeName: string; items: { questionId: string; originalIndex: number }[] }[],
         currentIndex: 0,
         answers: {} as Record<string, string[]>,
         loading: true,

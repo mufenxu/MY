@@ -715,6 +715,9 @@ body.exam-detail-active .mobile-drawer-header .close-btn {
     cursor: pointer;
     color: var(--text-secondary);
     transition: background 0.2s;
+    border: 0;
+    padding: 0;
+    font: inherit;
 }
 
 body.exam-detail-active .mobile-drawer-header .close-btn:active {
@@ -741,6 +744,9 @@ body.exam-detail-active .mobile-tool-item {
     transition: all 0.2s;
     border: 1px solid transparent;
     cursor: pointer;
+    width: 100%;
+    color: inherit;
+    font: inherit;
 }
 
 body.exam-detail-active .mobile-tool-item:active {
@@ -808,6 +814,18 @@ body.exam-detail-active .mobile-tool-row {
     gap: 16px;
     transition: all 0.2s;
     cursor: pointer;
+    width: 100%;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+
+body.exam-detail-active .close-btn:focus-visible,
+body.exam-detail-active .mobile-tool-item:focus-visible,
+body.exam-detail-active .mobile-tool-row:focus-visible {
+    outline: 3px solid rgba(27, 110, 243, 0.35);
+    outline-offset: 2px;
 }
 
 body.exam-detail-active .mobile-tool-row:active {

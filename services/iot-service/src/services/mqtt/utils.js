@@ -2,10 +2,16 @@ function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function createEmptyTopicStats(topics = []) {
+function truncatePayload(value, maxBytes = 1024) {
+  const buffer = Buffer.from(String(value ?? ''), 'utf8');
+  if (buffer.length <= maxBytes) return buffer.toString('utf8');
+  return buffer.subarray(0, maxBytes).toString('utf8').replace(/\uFFFD$/, '');
+}
+
+function createEmptyTopicStats(topics = [], maxEntries = 256) {
   return Object.fromEntries(
-    topics
-      .filter(Boolean)
+    Array.from(new Set(topics.filter(Boolean)))
+      .slice(0, maxEntries)
       .map((topic) => [topic, { count: 0, lastMessageAt: null, lastPayload: null }])
   );
 }
@@ -18,5 +24,6 @@ function parseOnlineStatus(message) {
 module.exports = {
   createEmptyTopicStats,
   deepClone,
-  parseOnlineStatus
+  parseOnlineStatus,
+  truncatePayload
 };

@@ -25,7 +25,8 @@ export default defineConfig({
   plugins: [react(), buildVersionPlugin()],
   build: {
     cssCodeSplit: true,
-    chunkSizeWarningLimit: 1200
+    manifest: true,
+    chunkSizeWarningLimit: 650
   },
   server: {
     proxy: {

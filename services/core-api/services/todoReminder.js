@@ -10,9 +10,16 @@ const NotifyConfig = require('../models/NotifyConfig');
 
 const WECOM_NOTIFY_URL = 'https://tongzhiapi.pxyb.cn/notify';
 
+function normalizeRequestTimeout(value, fallback = 8000) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(Math.max(parsed, 1000), 30000);
+}
+
 function isWecomEnabled(cfg) {
-    if (!cfg) return false;
-    return Boolean(cfg.qywxEnabled && cfg.qywxApiKey);
+    const hasRecipient = [cfg?.qywxToUser, cfg?.qywxToParty, cfg?.qywxToTag]
+        .some((value) => String(value || '').trim());
+    return Boolean(cfg && cfg.qywxEnabled && cfg.qywxApiKey && hasRecipient);
 }
 
 function buildSummaryMessage(groups) {
@@ -77,10 +84,6 @@ function buildWecomPayload(cfg, text, extra) {
         payload.agent_id = agentId;
     }
 
-    if (!payload.touser && !payload.toparty && !payload.totag) {
-        payload.touser = '@all';
-    }
-
     if (cfg.qywxSafe !== undefined && cfg.qywxSafe !== '') {
         payload.safe = Number(cfg.qywxSafe) ? 1 : 0;
     }
@@ -100,7 +103,13 @@ async function checkAndNotifyTodos() {
             return { skipped: true, reason: 'wecom_disabled' };
         }
 
-        const docs = await TodoList.find({});
+        const ownerId = String(cfg.ownerId || '').trim();
+        if (!ownerId) {
+            console.log('通知配置未绑定所有者，跳过 todoReminder');
+            return { skipped: true, reason: 'owner_not_configured' };
+        }
+
+        const docs = await TodoList.find({ _id: ownerId });
         if (!docs || docs.length === 0) {
             console.log('待办集合为空，无需发送提醒');
             return { sent: false, pendingUsers: 0, pendingCount: 0 };
@@ -138,7 +147,7 @@ async function checkAndNotifyTodos() {
         const text = buildSummaryMessage(groups);
         const payload = buildWecomPayload(cfg, text);
 
-        const timeout = Number(cfg.qywxTimeout || 8000);
+        const timeout = normalizeRequestTimeout(cfg.qywxTimeout);
         const response = await axios.post(WECOM_NOTIFY_URL, payload, {
             headers: { 'X-API-KEY': cfg.qywxApiKey },
             timeout,

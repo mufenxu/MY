@@ -17,7 +17,7 @@ exports.updateSecret = async (req, res, next) => {
         }
 
         // 调用服务更新
-        const username = req.user && req.user.username ? req.user.username : 'admin';
+        const username = req.user && (req.user.userId || req.user._id || req.user.id) || 'unknown';
         await secretService.setSecret(key, value, username);
 
         res.json({ success: true, message: '密钥更新成功并且已即刻生效' });
@@ -33,7 +33,7 @@ exports.deleteSecret = async (req, res, next) => {
             return res.status(400).json({ success: false, error: '缺少密钥键名' });
         }
 
-        const username = req.user && req.user.username ? req.user.username : 'admin';
+        const username = req.user && (req.user.userId || req.user._id || req.user.id) || 'unknown';
         await secretService.deleteSecret(key, username);
 
         res.json({ success: true, message: '密钥已被移除，系统已降级回退至 .env 本地配置' });

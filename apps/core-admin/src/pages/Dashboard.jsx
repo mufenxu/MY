@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import { Card, Row, Col, Statistic, List, Tag, Space, Spin, Typography, Button, Badge } from 'antd';
 import {
     UserOutlined,
@@ -17,23 +17,12 @@ import {
     FileSearchOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { 
-    AreaChart, 
-    Area, 
-    XAxis, 
-    YAxis, 
-    CartesianGrid, 
-    Tooltip, 
-    ResponsiveContainer,
-    BarChart,
-    Bar,
-    Legend
-} from 'recharts';
 import api from '../utils/api';
 import UserAvatar from '../components/UserAvatar';
 import { useResponsive } from '../hooks/useIsMobile';
 
 const { Title, Text } = Typography;
+const DashboardTrendChart = lazy(() => import('../components/DashboardTrendChart'));
 
 const StatCard = ({ title, value, icon, color, subText, loading }) => (
     <Card
@@ -85,7 +74,8 @@ const StatCard = ({ title, value, icon, color, subText, loading }) => (
 );
 
 const QuickAction = ({ icon, title, onClick, color }) => (
-    <div 
+    <button
+        type="button"
         onClick={onClick}
         style={{
             cursor: 'pointer',
@@ -93,6 +83,7 @@ const QuickAction = ({ icon, title, onClick, color }) => (
             borderRadius: 20,
             background: 'var(--component-bg)',
             border: 'none',
+            font: 'inherit',
             textAlign: 'center',
             transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
             height: '100%',
@@ -152,7 +143,7 @@ const QuickAction = ({ icon, title, onClick, color }) => (
             width: '100%',
             textShadow: '0 1px 1px rgba(0,0,0,0.1)'
         }}>{title}</Text>
-    </div>
+    </button>
 );
 
 const Dashboard = () => {
@@ -160,6 +151,8 @@ const Dashboard = () => {
     const [news, setNews] = useState(null);
     const [loading, setLoading] = useState(true);
     const [newsLoading, setNewsLoading] = useState(false);
+    const [showTrendChart, setShowTrendChart] = useState(false);
+    const [statsError, setStatsError] = useState(false);
     const navigate = useNavigate();
     const { isMobile } = useResponsive();
 
@@ -168,15 +161,31 @@ const Dashboard = () => {
         fetchNews();
     }, []);
 
+    useEffect(() => {
+        const reveal = () => setShowTrendChart(true);
+        const idleId = 'requestIdleCallback' in window
+            ? window.requestIdleCallback(reveal, { timeout: 1200 })
+            : window.setTimeout(reveal, 250);
+
+        return () => {
+            if ('cancelIdleCallback' in window) window.cancelIdleCallback(idleId);
+            else window.clearTimeout(idleId);
+        };
+    }, []);
+
     const fetchStats = async () => {
         try {
             setLoading(true);
+            setStatsError(false);
             const response = await api.get('/stats/dashboard');
             if (response.data.success) {
                 setStats(response.data.data);
+            } else {
+                setStatsError(true);
             }
         } catch (error) {
             console.error('获取统计数据失败:', error);
+            setStatsError(true);
         } finally {
             setLoading(false);
         }
@@ -221,28 +230,6 @@ const Dashboard = () => {
         { icon: <SettingOutlined />, title: '系统设置', path: '/settings', color: 'var(--text-primary)' }
     ];
 
-    const CustomTooltip = ({ active, payload, label }) => {
-        if (active && payload && payload.length) {
-            return (
-                <div style={{ 
-                    background: 'var(--component-bg)', 
-                    padding: '12px', 
-                    border: '1px solid var(--border-color)', 
-                    borderRadius: '12px',
-                    boxShadow: 'var(--box-shadow)' 
-                }}>
-                    <Text strong style={{ display: 'block', marginBottom: 8 }}>{label}</Text>
-                    {payload.map((item, index) => (
-                        <div key={index} style={{ color: item.color, fontSize: 12 }}>
-                            {item.name}: {item.value}
-                        </div>
-                    ))}
-                </div>
-            );
-        }
-        return null;
-    };
-
     return (
         <div style={{ maxWidth: 1600, margin: '0 auto', padding: '0 2px' }}>
             {/* 顶层统计卡片 - 移动端2列，平板2列，电脑4列 */}
@@ -250,40 +237,40 @@ const Dashboard = () => {
                 <Col xs={12} sm={12} lg={6}>
                     <StatCard
                         title="用户总数"
-                        value={stats?.users?.total || 0}
+                        value={statsError ? '--' : (stats?.users?.total ?? 0)}
                         icon={<TeamOutlined />}
                         color="#4A7CF7"
-                        subText={`活跃 ${stats?.users?.active || 0}`}
+                        subText={statsError ? '数据暂不可用' : `活跃 ${stats?.users?.active ?? 0}`}
                         loading={loading}
                     />
                 </Col>
                 <Col xs={12} sm={12} lg={6}>
                     <StatCard
                         title="网课订单"
-                        value={stats?.orders?.total || 0}
+                        value={statsError ? '--' : (stats?.orders?.total ?? 0)}
                         icon={<ShoppingOutlined />}
                         color="#5CC9A7"
-                        subText={`待处理/进行中 ${stats?.orders?.active || 0}`}
+                        subText={statsError ? '数据暂不可用' : `待处理/进行中 ${stats?.orders?.active ?? 0}`}
                         loading={loading}
                     />
                 </Col>
                 <Col xs={12} sm={12} lg={6}>
                     <StatCard
                         title="扫码认证"
-                        value={stats?.scans?.total || 0}
+                        value={statsError ? '--' : (stats?.scans?.total ?? 0)}
                         icon={<ScanOutlined />}
                         color="#7551FF"
-                        subText={`今日通过 ${stats?.scans?.today || 0}`}
+                        subText={statsError ? '数据暂不可用' : `今日通过 ${stats?.scans?.today ?? 0}`}
                         loading={loading}
                     />
                 </Col>
                 <Col xs={12} sm={12} lg={6}>
                     <StatCard
                         title="系统日志"
-                        value={stats?.auditLogs?.total || 0}
+                        value={statsError ? '--' : (stats?.auditLogs?.total ?? 0)}
                         icon={<FileTextOutlined />}
                         color="#FFB547"
-                        subText={`今日新增 ${stats?.auditLogs?.today || 0}`}
+                        subText={statsError ? '数据暂不可用' : `今日新增 ${stats?.auditLogs?.today ?? 0}`}
                         loading={loading}
                     />
                 </Col>
@@ -312,55 +299,13 @@ const Dashboard = () => {
                             <Tag color="blue" icon={<AreaChartOutlined />}>最近一周</Tag>
                         </div>
                         <div style={{ flex: 1, minHeight: 320, width: '100%', minWidth: 0 }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={stats?.trend || []} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
-                                    <defs>
-                                        <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#4A7CF7" stopOpacity={0.1}/>
-                                            <stop offset="95%" stopColor="#4A7CF7" stopOpacity={0}/>
-                                        </linearGradient>
-                                        <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#5CC9A7" stopOpacity={0.1}/>
-                                            <stop offset="95%" stopColor="#5CC9A7" stopOpacity={0}/>
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F5F7FB" />
-                                    <XAxis 
-                                        dataKey="date" 
-                                        axisLine={false} 
-                                        tickLine={false} 
-                                        tick={{ fill: '#A3AED0', fontSize: 12 }}
-                                        dy={10}
-                                    />
-                                    <YAxis 
-                                        axisLine={false} 
-                                        tickLine={false} 
-                                        tick={{ fill: '#A3AED0', fontSize: 12 }}
-                                    />
-                                    <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#4A7CF7', strokeWidth: 1 }} />
-                                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 20 }} />
-                                    <Area 
-                                        name="新增用户"
-                                        type="monotone" 
-                                        dataKey="users" 
-                                        stroke="#4A7CF7" 
-                                        strokeWidth={3}
-                                        fillOpacity={1} 
-                                        fill="url(#colorUsers)" 
-                                        animationDuration={1500}
-                                    />
-                                    <Area 
-                                        name="新增订单"
-                                        type="monotone" 
-                                        dataKey="orders" 
-                                        stroke="#5CC9A7" 
-                                        strokeWidth={3}
-                                        fillOpacity={1} 
-                                        fill="url(#colorOrders)" 
-                                        animationDuration={1500}
-                                    />
-                                </AreaChart>
-                            </ResponsiveContainer>
+                            {showTrendChart ? (
+                                <Suspense fallback={<Spin style={{ width: '100%', paddingTop: 120 }} />}>
+                                    <DashboardTrendChart data={stats?.trend || []} />
+                                </Suspense>
+                            ) : (
+                                <Spin style={{ width: '100%', paddingTop: 120 }} />
+                            )}
                         </div>
                     </Card>
                 </Col>

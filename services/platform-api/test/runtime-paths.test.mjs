@@ -27,3 +27,13 @@ test('explicit runtime paths still override workspace defaults', () => {
 
   assert.equal(runtime.paths.coreServer, override);
 });
+
+test('external mode does not resolve local service runtime paths', () => {
+  const { paths } = resolveRuntimePaths({ includeLocalServices: false });
+  assert.equal(paths.coreServer, undefined);
+  assert.equal(paths.coreStatic, undefined);
+  assert.equal(paths.examServer, undefined);
+  assert.equal(paths.notifyApp, undefined);
+  assert.ok(paths.portalApp);
+  assert.ok(paths.portalConfig);
+});

@@ -10,17 +10,23 @@ const runtimeFiles = {
   portalConfig: ['PORTAL_CONFIG_PATH', 'apps/admin-console/src/config.js'],
   portalMongoSessionRegistry: ['PORTAL_MONGO_SESSION_REGISTRY_PATH', 'apps/admin-console/src/mongo-session-registry.js'],
 };
+const localServiceRuntimeNames = new Set(['coreServer', 'coreStatic', 'examServer', 'notifyApp']);
 
 export function resolveWorkspaceRoot(moduleUrl = import.meta.url) {
   const moduleDirectory = path.dirname(fileURLToPath(moduleUrl));
   return path.resolve(moduleDirectory, '..', '..', '..');
 }
 
-export function resolveRuntimePaths({ env = process.env, moduleUrl = import.meta.url } = {}) {
+export function resolveRuntimePaths({
+  env = process.env,
+  includeLocalServices = true,
+  moduleUrl = import.meta.url,
+} = {}) {
   const workspaceRoot = resolveWorkspaceRoot(moduleUrl);
   const paths = {};
 
   for (const [name, [envName, fallback]] of Object.entries(runtimeFiles)) {
+    if (!includeLocalServices && localServiceRuntimeNames.has(name)) continue;
     paths[name] = env[envName]
       ? path.resolve(env[envName])
       : path.join(workspaceRoot, fallback);

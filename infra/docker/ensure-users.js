@@ -24,3 +24,32 @@ for (const [databaseName, username, password] of definitions) {
     { upsert: true }
   );
 }
+
+const backupUsername = process.env.MONGO_BACKUP_USERNAME;
+const backupPassword = process.env.MONGO_BACKUP_PASSWORD;
+if (!backupUsername || !backupPassword) throw new Error('Missing MongoDB backup credentials');
+
+const adminDb = db.getSiblingDB('admin');
+const backupRoles = [
+  { role: 'backup', db: 'admin' },
+  { role: 'restore', db: 'admin' },
+];
+if (adminDb.getUser(backupUsername)) {
+  adminDb.updateUser(backupUsername, { pwd: backupPassword, roles: backupRoles });
+} else {
+  adminDb.createUser({ user: backupUsername, pwd: backupPassword, roles: backupRoles });
+}
+
+const previousBackup = managedUsers.findOne({ _id: 'backup' });
+if (
+  previousBackup?.username
+  && previousBackup.username !== backupUsername
+  && adminDb.getUser(previousBackup.username)
+) {
+  adminDb.dropUser(previousBackup.username);
+}
+managedUsers.updateOne(
+  { _id: 'backup' },
+  { $set: { username: backupUsername, updatedAt: new Date() } },
+  { upsert: true }
+);

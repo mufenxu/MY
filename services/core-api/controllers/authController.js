@@ -5,6 +5,7 @@ const secretService = require('../services/secretService');
 const logger = require('../utils/logger');
 const asyncHandler = require('../middleware/asyncHandler');
 const logAudit = require('../utils/auditLogger');
+const { isWebAdminRequest, setRefreshCookie } = require('../utils/refreshCookie');
 
 // @desc    WeChat Login
 // @route   POST /api/auth/wechat-login
@@ -24,6 +25,7 @@ exports.wechatLogin = asyncHandler(async (req, res) => {
     res.json({
         success: true,
         token: result.token,
+        refreshToken: result.refreshToken,
         user: result.user
     });
 });
@@ -44,6 +46,7 @@ exports.login = asyncHandler(async (req, res) => {
         const secretKey = await secretService.getSecret('TURNSTILE_SECRET_KEY');
         if (!secretKey) {
             logger.warn('Turnstile is enabled but TURNSTILE_SECRET_KEY is not configured.');
+            return res.status(503).json({ success: false, error: '验证服务未配置' });
         } else {
             try {
                 const verifyResponse = await axios.post(
@@ -88,10 +91,13 @@ exports.login = asyncHandler(async (req, res) => {
         actorId: result.user._id
     });
 
+    const webAdmin = isWebAdminRequest(req);
+    if (webAdmin) setRefreshCookie(res, result.refreshToken);
+
     res.json({
         success: true,
         token: result.token,
-        refreshToken: result.refreshToken,
+        refreshToken: webAdmin ? undefined : result.refreshToken,
         user: {
             _id: result.user._id,
             userId: result.user.userId,

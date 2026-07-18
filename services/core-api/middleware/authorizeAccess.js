@@ -11,6 +11,17 @@ function normalizeList(values) {
 async function getUserAccess(req) {
     if (req.userAccess) return req.userAccess;
 
+    // verifyToken already loaded the current database-backed authorization state.
+    // Reuse it so permission removals cannot be hidden by this middleware's cache.
+    if (req.user && req.user.role && Array.isArray(req.user.permissions) && req.user.status) {
+        req.userAccess = {
+            role: req.user.role,
+            permissions: req.user.permissions,
+            status: req.user.status,
+        };
+        return req.userAccess;
+    }
+
     const userId = req.user && (req.user._id || req.user.id);
     if (!userId) return null;
 
@@ -81,5 +92,10 @@ function clearUserAccessCache(userId) {
     }
 }
 
+function clearAllAccessCache() {
+    accessCache.clear();
+}
+
 module.exports = authorizeAccess;
 module.exports.clearCache = clearUserAccessCache;
+module.exports.clearAll = clearAllAccessCache;

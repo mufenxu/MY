@@ -21,11 +21,25 @@ const ACCESS_TOKEN_EXPIRY = '4h';
 // Refresh Token 有效期: 7 天
 const REFRESH_TOKEN_EXPIRY_DAYS = 7;
 
+const normalizeTokenVersion = (value) => {
+    const version = Number(value);
+    return Number.isSafeInteger(version) && version >= 0 ? version : 0;
+};
+
+const hashRefreshToken = (token) => crypto
+    .createHash('sha256')
+    .update(String(token), 'utf8')
+    .digest('hex');
+
 /**
  * 生成 Access Token (短有效期)
  */
 const generateToken = (user) => {
-    return jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, {
+    return jwt.sign({
+        id: user._id,
+        role: user.role,
+        tokenVersion: normalizeTokenVersion(user.tokenVersion)
+    }, JWT_SECRET, {
         expiresIn: ACCESS_TOKEN_EXPIRY,
         issuer: 'miniprogram-admin',
         audience: 'miniprogram-api'
@@ -37,13 +51,16 @@ const generateToken = (user) => {
  * @param {string} userId - 用户 ID
  * @returns {Promise<string>} refresh token 字符串
  */
-const generateRefreshToken = async (userId) => {
+const generateRefreshToken = async (userId, tokenVersion = 0, familyId = crypto.randomUUID()) => {
     const token = crypto.randomBytes(40).toString('hex');
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
     await RefreshToken.create({
-        token,
+        token: hashRefreshToken(token),
         userId: String(userId),
+        familyId,
+        status: 'active',
+        tokenVersion: normalizeTokenVersion(tokenVersion),
         expiresAt
     });
 
@@ -60,34 +77,66 @@ const refreshAccessToken = async (refreshToken) => {
         throw new AppError('Refresh token is required', 400);
     }
 
-    const tokenDoc = await RefreshToken.findOne({ token: refreshToken });
-    if (!tokenDoc) {
+    const rawToken = String(refreshToken);
+    if (rawToken.length > 1024) {
         throw new AppError('Invalid or expired refresh token', 401);
     }
 
-    // 检查是否过期（MongoDB TTL 可能有延迟，手动检查更安全）
-    if (tokenDoc.expiresAt < new Date()) {
-        await RefreshToken.deleteOne({ _id: tokenDoc._id });
-        throw new AppError('Refresh token has expired', 401);
+    const tokenCandidates = [hashRefreshToken(rawToken), rawToken];
+    // Marking the token used preserves a short-lived tombstone. If the same token
+    // appears again, the whole family is treated as compromised.
+    const tokenDoc = await RefreshToken.findOneAndUpdate({
+        token: { $in: tokenCandidates },
+        expiresAt: { $gt: new Date() },
+        $or: [
+            { status: 'active' },
+            { status: { $exists: false } }
+        ]
+    }, {
+        $set: { status: 'used', usedAt: new Date() }
+    }, { new: false });
+    if (!tokenDoc) {
+        const reused = await RefreshToken.findOne({
+            token: { $in: tokenCandidates },
+            status: 'used',
+            expiresAt: { $gt: new Date() }
+        });
+        if (reused) {
+            await User.updateOne(
+                { _id: reused.userId },
+                { $inc: { tokenVersion: 1 } }
+            );
+            await revokeAllRefreshTokens(reused.userId);
+            const error = new AppError('Refresh token reuse detected', 401);
+            error.code = 'AUTH_REFRESH_TOKEN_REUSED';
+            throw error;
+        }
+        throw new AppError('Invalid or expired refresh token', 401);
     }
 
     const user = await User.findById(tokenDoc.userId);
     if (!user) {
-        await RefreshToken.deleteOne({ _id: tokenDoc._id });
         throw new AppError('User not found', 401);
     }
 
-    if (user.status !== 'active') {
-        await RefreshToken.deleteOne({ _id: tokenDoc._id });
+    if (user.status && user.status !== 'active') {
+        await revokeAllRefreshTokens(user._id);
         throw new AppError('账号已被禁用', 403);
     }
 
-    // 1. 旋转 Token：删除当前已使用的 Refresh Token
-    await RefreshToken.deleteOne({ _id: tokenDoc._id });
+    if (normalizeTokenVersion(tokenDoc.tokenVersion) !== normalizeTokenVersion(user.tokenVersion)) {
+        await revokeAllRefreshTokens(user._id);
+        const error = new AppError('Refresh token has been revoked', 401);
+        error.code = 'AUTH_REFRESH_TOKEN_REVOKED';
+        throw error;
+    }
 
-    // 2. 生成新的 Access Token 和新的 Refresh Token
     const accessToken = generateToken(user);
-    const newRefreshToken = await generateRefreshToken(user._id);
+    const newRefreshToken = await generateRefreshToken(
+        user._id,
+        user.tokenVersion,
+        tokenDoc.familyId || crypto.randomUUID()
+    );
 
     return { accessToken, refreshToken: newRefreshToken, user };
 };
@@ -97,6 +146,17 @@ const refreshAccessToken = async (refreshToken) => {
  */
 const revokeAllRefreshTokens = async (userId) => {
     await RefreshToken.deleteMany({ userId: String(userId) });
+};
+
+const revokeRefreshToken = async (refreshToken, userId) => {
+    if (!refreshToken) return;
+    const rawToken = String(refreshToken);
+    if (rawToken.length > 1024) return;
+
+    await RefreshToken.deleteOne({
+        token: { $in: [hashRefreshToken(rawToken), rawToken] },
+        userId: String(userId)
+    });
 };
 
 exports.wechatLogin = async (code, userInfo) => {
@@ -170,13 +230,13 @@ exports.wechatLogin = async (code, userInfo) => {
         }
     }
 
-    if (user.status !== 'active') {
+    if (user.status && user.status !== 'active') {
         throw new AppError('账号已被禁用', 403);
     }
 
     // 3. Generate Tokens
     const token = generateToken(user);
-    const refreshToken = await generateRefreshToken(user._id);
+    const refreshToken = await generateRefreshToken(user._id, user.tokenVersion);
 
     return { token, refreshToken, user };
 };
@@ -230,7 +290,7 @@ exports.adminLogin = async (username, password) => {
         throw new AppError(`用户名或密码错误，还可尝试 ${remaining} 次`, 401);
     }
 
-    if (user.status !== 'active') {
+    if (user.status && user.status !== 'active') {
         throw new AppError('账号已被禁用', 403);
     }
 
@@ -245,7 +305,7 @@ exports.adminLogin = async (username, password) => {
 
     // Generate Tokens
     const token = generateToken(user);
-    const refreshToken = await generateRefreshToken(user._id);
+    const refreshToken = await generateRefreshToken(user._id, user.tokenVersion);
 
     return { token, refreshToken, user };
 };
@@ -255,3 +315,5 @@ exports.generateToken = generateToken;
 exports.generateRefreshToken = generateRefreshToken;
 exports.refreshAccessToken = refreshAccessToken;
 exports.revokeAllRefreshTokens = revokeAllRefreshTokens;
+exports.revokeRefreshToken = revokeRefreshToken;
+exports.hashRefreshToken = hashRefreshToken;

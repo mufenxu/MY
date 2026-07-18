@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const auth = require('../middleware/auth');
 const authorize = require('../middleware/authorize');
 const validate = require('../middleware/validate');
 const { globalResourceSchema, userResourceSchema } = require('../schemas/resourceSchemas');
 
 const ResourceConfig = require('../models/ResourceConfig');
+const { prepareResourceList, maskResourceSecrets } = require('../utils/resourceSecrets');
 
 function buildDocId(ownerId) {
     const safe = (ownerId || 'anonymous').replace(/[^a-zA-Z0-9_:\-]/g, '_');
@@ -85,10 +85,26 @@ router.get('/', auth, async (req, res) => {
         const id = buildDocId(userId);
         const doc = await ResourceConfig.findById(id);
 
-        // If not found, maybe return default? MP code handles "not found" by returning empty.
-        // But it also tries to sync to 'default'.
-        // Let's just return what we find.
-        res.json({ success: true, result: doc });
+        if (!doc) {
+            return res.json({ success: true, result: null });
+        }
+
+        const stored = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+        const servers = prepareResourceList(stored.servers, stored.servers);
+        const domains = prepareResourceList(stored.domains, stored.domains);
+
+        // Transparently migrate plaintext legacy values and add stable item IDs.
+        if (JSON.stringify(servers) !== JSON.stringify(stored.servers || [])
+            || JSON.stringify(domains) !== JSON.stringify(stored.domains || [])) {
+            await ResourceConfig.findByIdAndUpdate(id, {
+                $set: { servers, domains, updatedAt: stored.updatedAt || Date.now() }
+            });
+        }
+
+        return res.json({
+            success: true,
+            result: maskResourceSecrets({ ...stored, servers, domains })
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -102,12 +118,16 @@ router.post('/', auth, validate(userResourceSchema), async (req, res) => {
         const userId = req.user._id;
         const { servers, domains } = req.body;
         const id = buildDocId(userId);
+        const existingDoc = await ResourceConfig.findById(id);
+        const existing = existingDoc
+            ? (typeof existingDoc.toObject === 'function' ? existingDoc.toObject() : existingDoc)
+            : {};
 
         const doc = {
             _id: id,
             ownerId: userId,
-            servers: sanitizeResourceList(servers),
-            domains: sanitizeResourceList(domains),
+            servers: prepareResourceList(sanitizeResourceList(servers), existing.servers),
+            domains: prepareResourceList(sanitizeResourceList(domains), existing.domains),
             updatedAt: Date.now()
         };
 
@@ -124,7 +144,8 @@ router.post('/', auth, validate(userResourceSchema), async (req, res) => {
         // I'll skip updating 'default' for now unless requested, as it seems like a legacy or specific requirement.
         // Actually, let's just stick to user's own config.
 
-        res.json({ success: true, result });
+        const stored = typeof result.toObject === 'function' ? result.toObject() : result;
+        res.json({ success: true, result: maskResourceSecrets(stored) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

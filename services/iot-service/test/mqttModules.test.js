@@ -2,7 +2,14 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { parseTopicsAndDevices } = require('../src/services/mqtt/topicMapper');
-const { processIncomingMessage } = require('../src/services/mqtt/messageProcessor');
+const {
+  MAX_DISCOVERED_TOPICS,
+  MAX_TOPIC_PAYLOAD_BYTES,
+  MAX_TOPIC_STATS,
+  processIncomingMessage,
+  pruneDiscoveredTopics,
+  updateTopicStats
+} = require('../src/services/mqtt/messageProcessor');
 const { markTimedOutDevicesOffline } = require('../src/services/mqtt/onlineScanner');
 const { resolveRelayControl } = require('../src/services/mqtt/relayControl');
 const { getRetentionDays, shouldRunRetentionCleanup } = require('../src/services/mqtt/retentionPolicy');
@@ -149,6 +156,44 @@ test('processIncomingMessage remembers unmatched discovered topics', () => {
   assert.equal(result.shouldEmitStatus, true);
   assert.equal(discoveredTopics.get('unknown/topic').count, 1);
   assert.equal(discoveredTopics.get('unknown/topic').lastPayload, 'payload-value');
+});
+
+test('topic statistics and discovery caches stay bounded with truncated payloads', () => {
+  const status = { messagesReceived: 0, topicStats: {} };
+  const discoveredTopics = new Map();
+  const oversizedPayload = '测'.repeat(MAX_TOPIC_PAYLOAD_BYTES);
+
+  for (let index = 0; index < MAX_TOPIC_STATS + 20; index += 1) {
+    const topic = `dynamic/${index}`;
+    updateTopicStats(status, topic, oversizedPayload, 10_000 + index);
+    processIncomingMessage({
+      topic,
+      message: oversizedPayload,
+      now: 10_000 + index,
+      status,
+      topicMap: {},
+      latest: { devices: {} },
+      discoveredTopics,
+      discoveryTopic: '+/+/+',
+      lastControlTriggeredBy: {}
+    });
+  }
+
+  assert.equal(Object.keys(status.topicStats).length, MAX_TOPIC_STATS);
+  assert.equal(discoveredTopics.size, MAX_DISCOVERED_TOPICS);
+  const newestStat = status.topicStats[`dynamic/${MAX_TOPIC_STATS + 19}`];
+  assert.ok(Buffer.byteLength(newestStat.lastPayload, 'utf8') <= MAX_TOPIC_PAYLOAD_BYTES);
+
+  pruneDiscoveredTopics(discoveredTopics, 2 * 60 * 60 * 1000);
+  assert.equal(discoveredTopics.size, 0);
+});
+
+test('topic names cannot mutate the topic statistics object prototype', () => {
+  const status = { messagesReceived: 0, topicStats: {} };
+  updateTopicStats(status, '__proto__', 'payload', 1000);
+  assert.equal(Object.getPrototypeOf(status.topicStats), Object.prototype);
+  assert.equal(Object.hasOwn(status.topicStats, '__proto__'), true);
+  assert.equal(status.topicStats.__proto__.lastPayload, 'payload');
 });
 
 test('resolveRelayControl validates relay commands', () => {

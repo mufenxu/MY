@@ -34,6 +34,7 @@ const definitions = [
   ['campus_app', required('MONGO_CAMPUS_USERNAME'), required('MONGO_CAMPUS_PASSWORD')],
   ['iot_app', required('MONGO_IOT_USERNAME'), required('MONGO_IOT_PASSWORD')],
 ];
+const backupUsername = process.env.MONGO_BACKUP_USERNAME || 'platform_backup';
 
 runMongo({
   username: required('MONGO_ROOT_USERNAME'),
@@ -51,6 +52,15 @@ runMongo({
       }
       const record = managed.findOne({ _id: item.databaseName });
       if (!record || record.username !== item.username) throw new Error('Managed user registry mismatch');
+    }
+    const backupUser = db.getSiblingDB('admin').getUser(${JSON.stringify(backupUsername)});
+    const backupRoles = new Set((backupUser?.roles || []).map((role) => role.role + '@' + role.db));
+    if (backupRoles.size !== 2 || !backupRoles.has('backup@admin') || !backupRoles.has('restore@admin')) {
+      throw new Error('Unexpected roles for the backup account');
+    }
+    const backupRecord = managed.findOne({ _id: 'backup' });
+    if (!backupRecord || backupRecord.username !== ${JSON.stringify(backupUsername)}) {
+      throw new Error('Backup user registry mismatch');
     }
   `,
 });
@@ -80,4 +90,4 @@ for (let index = 0; index < definitions.length; index += 1) {
   });
 }
 
-console.log('MongoDB replica set and five least-privilege application accounts verified.');
+console.log('MongoDB replica set, five application accounts and the dedicated backup account verified.');

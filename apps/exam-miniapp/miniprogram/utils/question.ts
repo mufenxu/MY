@@ -15,7 +15,7 @@ export interface QuestionItem {
 export interface GroupedQuestion {
     type: string;
     typeName: string;
-    items: { question: QuestionItem; originalIndex: number }[];
+    items: { questionId: string; originalIndex: number }[];
 }
 
 export function groupQuestionsByType(questions: QuestionItem[]): GroupedQuestion[] {
@@ -27,14 +27,14 @@ export function groupQuestionsByType(questions: QuestionItem[]): GroupedQuestion
         fill: '填空题',
     };
 
-    const groups: Record<string, { question: QuestionItem; originalIndex: number }[]> = {};
+    const groups: Record<string, { questionId: string; originalIndex: number }[]> = {};
 
     questions.forEach((question, index) => {
         const type = question.type;
         if (!groups[type]) {
             groups[type] = [];
         }
-        groups[type].push({ question, originalIndex: index });
+        groups[type].push({ questionId: question._id, originalIndex: index });
     });
 
     return typeOrder

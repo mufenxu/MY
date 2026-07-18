@@ -9,8 +9,10 @@ const WebSocket = require('ws');
 const crypto = require('crypto');
 const CryptoJS = require('crypto-js');
 const EventEmitter = require('events');
+const mongoose = require('mongoose');
 const TuyaDevice = require('../models/TuyaDevice');
 const TuyaDeviceLog = require('../models/TuyaDeviceLog');
+const TuyaMessageReceipt = require('../models/TuyaMessageReceipt');
 const logger = require('../utils/logger');
 const secretService = require('./secretService');
 
@@ -27,6 +29,84 @@ const ENV_CONFIG = {
     PROD: 'event',
     TEST: 'event-test'
 };
+
+function positiveInteger(value, fallback, minimum = 1, maximum = Number.MAX_SAFE_INTEGER) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(Math.max(parsed, minimum), maximum);
+}
+
+function resolveMessageConfig(env = process.env) {
+    const region = String(env.TUYA_MESSAGE_REGION || 'CN').trim().toUpperCase();
+    if (!WS_URLS[region]) {
+        throw new Error(`Unsupported TUYA_MESSAGE_REGION: ${region}`);
+    }
+
+    const channelInput = String(env.TUYA_MESSAGE_CHANNEL || ENV_CONFIG.PROD).trim().toLowerCase();
+    const channel = channelInput === 'test' ? ENV_CONFIG.TEST
+        : channelInput === 'prod' ? ENV_CONFIG.PROD
+            : channelInput;
+    if (!Object.values(ENV_CONFIG).includes(channel)) {
+        throw new Error(`Unsupported TUYA_MESSAGE_CHANNEL: ${channelInput}`);
+    }
+    if (env.NODE_ENV === 'production' && channel === ENV_CONFIG.TEST) {
+        throw new Error('TUYA_MESSAGE_CHANNEL=event-test is forbidden in production');
+    }
+
+    return {
+        wsUrl: WS_URLS[region],
+        region,
+        channel,
+        maxQueueSize: positiveInteger(env.TUYA_MESSAGE_MAX_QUEUE, 1000, 1, 10000),
+        maxDeviceQueueSize: positiveInteger(env.TUYA_MESSAGE_MAX_DEVICE_QUEUE, 100, 1, 1000),
+        maxConcurrency: positiveInteger(env.TUYA_MESSAGE_MAX_CONCURRENCY, 8, 1, 64),
+        receiptTtlDays: positiveInteger(env.TUYA_MESSAGE_RECEIPT_TTL_DAYS, 7, 1, 30)
+    };
+}
+
+function isDuplicateKeyError(error) {
+    return error?.code === 11000 || error?.code === 11001;
+}
+
+function receiptId(messageId) {
+    return crypto.createHash('sha256').update(String(messageId)).digest('hex');
+}
+
+function createMongoMessageDeduplicator({
+    receiptModel = TuyaMessageReceipt,
+    startSession = () => mongoose.startSession(),
+    ttlDays = 7,
+} = {}) {
+    return {
+        async runOnce(messageId, processMessage) {
+            const id = receiptId(messageId);
+            const session = await startSession();
+            let processed = false;
+            let value = null;
+            try {
+                await session.withTransaction(async () => {
+                    const existing = await receiptModel.findById(id).session(session).lean();
+                    if (existing) return;
+
+                    value = await processMessage(session);
+                    await receiptModel.create([{
+                        _id: id,
+                        processedAt: new Date(),
+                        expiresAt: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
+                    }], { session });
+                    processed = true;
+                });
+            } catch (error) {
+                if (!isDuplicateKeyError(error) || !await receiptModel.exists({ _id: id })) throw error;
+                processed = false;
+                value = null;
+            } finally {
+                await session.endSession();
+            }
+            return { processed, value };
+        },
+    };
+}
 
 // ========================= 工具函数 =========================
 
@@ -100,17 +180,35 @@ function decrypt(data, accessKey, mode) {
 // ========================= 消息订阅服务 =========================
 
 class TuyaMessageService extends EventEmitter {
-    constructor() {
+    constructor(options = {}) {
         super();
-        this.wsUrl = WS_URLS.CN;
-        this.env = ENV_CONFIG.TEST; // 切换到测试环境 (event-test)以接收调试设备消息
+        this.WebSocket = options.WebSocket || WebSocket;
+        const messageConfig = options.messageConfig || resolveMessageConfig(options.env || process.env);
+        this.wsUrl = messageConfig.wsUrl;
+        this.region = messageConfig.region;
+        this.maxQueueSize = messageConfig.maxQueueSize;
+        this.maxDeviceQueueSize = messageConfig.maxDeviceQueueSize;
+        this.maxConcurrency = messageConfig.maxConcurrency || 8;
+        this.messageDeduplicator = options.messageDeduplicator || createMongoMessageDeduplicator({
+            ttlDays: messageConfig.receiptTtlDays || 7,
+        });
+        this.env = messageConfig.channel;
         this.maxRetryTimes = 100;
         this.retryTimeout = 5000;
 
         this.ws = null;
         this.timer = null;
+        this.reconnectTimer = null;
         this.retryTimes = 0;
         this.isConnected = false;
+        this.shouldRun = false;
+        this.deviceQueues = new Map();
+        this.processingQueues = new Set();
+        this.scheduledQueues = new Set();
+        this.readyQueues = [];
+        this.pendingMessageIds = new Set();
+        this.totalQueued = 0;
+        this.activeWorkers = 0;
     }
 
     get accessId() { return secretService.getSecretSync('TUYA_ACCESS_KEY'); }
@@ -125,7 +223,12 @@ class TuyaMessageService extends EventEmitter {
             return;
         }
 
-        logger.info('Tuya Message Service: Initializing...');
+        if (process.env.NODE_ENV === 'production' && this.env === ENV_CONFIG.TEST) {
+            throw new Error('Tuya Message Service refuses to use the test channel in production');
+        }
+
+        this.shouldRun = true;
+        logger.info(`Tuya Message Service: Initializing region=${this.region} channel=${this.env}`);
         this._connect(true);
     }
 
@@ -133,8 +236,11 @@ class TuyaMessageService extends EventEmitter {
      * 停止服务
      */
     stop() {
+        this.shouldRun = false;
         this._clearTimer();
+        this._clearReconnectTimer();
         if (this.ws) {
+            this.ws.removeAllListeners('close');
             this.ws.close();
             this.ws = null;
         }
@@ -145,30 +251,41 @@ class TuyaMessageService extends EventEmitter {
     /**
      * 确认消息已处理
      */
-    ackMessage(messageId) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ messageId }));
+    ackMessage(messageId, socket = this.ws) {
+        if (!socket || socket.readyState !== this.WebSocket.OPEN) {
+            return Promise.reject(new Error('Tuya message socket is not open'));
         }
+
+        return new Promise((resolve, reject) => {
+            socket.send(JSON.stringify({ messageId }), (error) => {
+                if (error) reject(error);
+                else resolve();
+            });
+        });
     }
 
     /**
      * 建立 WebSocket 连接
      */
     _connect(isInit = false) {
+        if (!this.shouldRun) return;
+
         const topicUrl = getTopicUrl(this.wsUrl, this.accessId, this.env);
         const password = buildPassword(this.accessId, this.accessKey);
 
         logger.info(`Tuya Message Service: Connecting to ${this.wsUrl.replace('wss://', '').split(':')[0]}...`);
 
-        this.ws = new WebSocket(topicUrl, {
-            rejectUnauthorized: false,
+        const socket = new this.WebSocket(topicUrl, {
+            rejectUnauthorized: true,
             headers: {
                 'username': this.accessId,
                 'password': password
             }
         });
+        this.ws = socket;
 
-        this.ws.on('open', () => {
+        socket.on('open', () => {
+            if (this.ws !== socket) return;
             this.retryTimes = 0;
             this.isConnected = true;
             this._keepAlive();
@@ -176,36 +293,39 @@ class TuyaMessageService extends EventEmitter {
             this.emit(isInit ? 'open' : 'reconnect');
         });
 
-        this.ws.on('message', (data) => {
+        socket.on('message', (data) => {
+            if (this.ws !== socket) return;
             this._keepAlive();
             try {
-                const message = this._handleMessage(data.toString());
-                if (message) {
-                    this._processDeviceMessage(message);
-                }
+                const envelope = this._handleMessage(data.toString());
+                if (envelope) this._enqueueMessage({ ...envelope, socket });
             } catch (e) {
                 logger.error('Tuya Message Service: Message handling error:', e.message);
             }
         });
 
-        this.ws.on('ping', () => {
+        socket.on('ping', () => {
+            if (this.ws !== socket) return;
             this._keepAlive();
-            this.ws.pong(this.accessId);
+            socket.pong(this.accessId);
         });
 
-        this.ws.on('pong', () => {
+        socket.on('pong', () => {
+            if (this.ws !== socket) return;
             this._keepAlive();
         });
 
-        this.ws.on('error', (err) => {
+        socket.on('error', (err) => {
             logger.error('Tuya Message Service: WebSocket error:', err.message);
         });
 
-        this.ws.on('close', (code, reason) => {
+        socket.on('close', (code, reason) => {
+            if (this.ws !== socket) return;
             this._clearTimer();
+            this.ws = null;
             this.isConnected = false;
             logger.warn(`Tuya Message Service: Connection closed (${code})`);
-            this._reconnect();
+            if (this.shouldRun) this._reconnect();
         });
     }
 
@@ -215,12 +335,7 @@ class TuyaMessageService extends EventEmitter {
     _handleMessage(data) {
         const { payload, properties, messageId } = JSON.parse(data);
 
-        // 自动 ACK
-        if (messageId) {
-            this.ackMessage(messageId);
-        }
-
-        if (!payload) return null;
+        if (!payload) return messageId ? { messageId, payload: null } : null;
 
         const encryptMode = properties?.em;
         const payloadStr = Buffer.from(payload, 'base64').toString('utf-8');
@@ -228,32 +343,122 @@ class TuyaMessageService extends EventEmitter {
 
         // 解密数据部分
         if (payloadJson.data && typeof payloadJson.data === 'string') {
-            payloadJson.data = decrypt(payloadJson.data, this.accessKey, encryptMode);
+            const decrypted = decrypt(payloadJson.data, this.accessKey, encryptMode);
+            if (!decrypted) throw new Error('Tuya message payload decryption failed');
+            payloadJson.data = decrypted;
         }
 
-        return payloadJson;
+        return { messageId, payload: payloadJson };
+    }
+
+    _getQueueKey(payload) {
+        const bizData = payload?.bizCode ? payload.data : payload?.data?.bizData;
+        return String(bizData?.devId || '__unscoped__');
+    }
+
+    _enqueueMessage(envelope) {
+        const { messageId } = envelope;
+        if (messageId && this.pendingMessageIds.has(messageId)) return false;
+
+        const queueKey = this._getQueueKey(envelope.payload);
+        const queue = this.deviceQueues.get(queueKey) || [];
+        if (this.totalQueued >= this.maxQueueSize || queue.length >= this.maxDeviceQueueSize) {
+            logger.warn(`Tuya Message Service: Queue full, leaving message unacked (device=${queueKey})`);
+            return false;
+        }
+
+        queue.push(envelope);
+        this.deviceQueues.set(queueKey, queue);
+        this.totalQueued += 1;
+        if (messageId) this.pendingMessageIds.add(messageId);
+        this._scheduleQueue(queueKey);
+        return true;
+    }
+
+    _scheduleQueue(queueKey) {
+        if (this.processingQueues.has(queueKey) || this.scheduledQueues.has(queueKey)) return;
+        this.scheduledQueues.add(queueKey);
+        this.readyQueues.push(queueKey);
+        this._pumpQueues();
+    }
+
+    _pumpQueues() {
+        while (this.activeWorkers < this.maxConcurrency && this.readyQueues.length > 0) {
+            const queueKey = this.readyQueues.shift();
+            this.scheduledQueues.delete(queueKey);
+            if (!(this.deviceQueues.get(queueKey) || []).length || this.processingQueues.has(queueKey)) continue;
+
+            this.activeWorkers += 1;
+            this.processingQueues.add(queueKey);
+            this._processNextMessage(queueKey).catch((error) => {
+                logger.error('Tuya Message Service: Queue drain error:', error.message);
+            }).finally(() => {
+                this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+                this.processingQueues.delete(queueKey);
+                const queue = this.deviceQueues.get(queueKey) || [];
+                if (queue.length > 0) this._scheduleQueue(queueKey);
+                else this.deviceQueues.delete(queueKey);
+                this._pumpQueues();
+            });
+        }
+    }
+
+    _emitProcessedEvent(event) {
+        if (event?.name) this.emit(event.name, event.payload);
+    }
+
+    async _processEnvelope(envelope) {
+        const processMessage = async (session = null) => {
+            if (!envelope.payload) return null;
+            return this._processDeviceMessage(envelope.payload, { session });
+        };
+
+        if (!envelope.messageId) {
+            this._emitProcessedEvent(await processMessage());
+            return;
+        }
+
+        const result = await this.messageDeduplicator.runOnce(envelope.messageId, processMessage);
+        if (result.processed) this._emitProcessedEvent(result.value);
+    }
+
+    async _processNextMessage(queueKey) {
+        const queue = this.deviceQueues.get(queueKey);
+        if (!queue || queue.length === 0) return;
+        const envelope = queue[0];
+        try {
+            await this._processEnvelope(envelope);
+            if (envelope.messageId) await this.ackMessage(envelope.messageId, envelope.socket);
+        } catch (error) {
+            logger.error(`Tuya Message Service: Processing failed, message left unacked: ${error.message}`);
+        } finally {
+            queue.shift();
+            this.totalQueued = Math.max(0, this.totalQueued - 1);
+            if (envelope.messageId) this.pendingMessageIds.delete(envelope.messageId);
+            if (queue.length === 0 && !this.processingQueues.has(queueKey)) {
+                this.deviceQueues.delete(queueKey);
+            }
+        }
     }
 
     /**
      * 处理设备消息
      */
-    async _processDeviceMessage(payload) {
+    async _processDeviceMessage(payload, { session = null } = {}) {
         // Tuya V2 Message Structure:
         // payload = { data: { bizCode: '...', bizData: { ... } }, protocol: 20, ... }
         // We need to handle both direct structure (if V1) and nested structure (V2) safely.
 
-        let bizCode, bizData, ts;
+        let bizCode, bizData;
 
         if (payload.bizCode) {
             // V1 or simplified structure
             bizCode = payload.bizCode;
             bizData = payload.data;
-            ts = payload.ts;
         } else if (payload.data && payload.data.bizCode) {
             // V2 structure (as seen in logs)
             bizCode = payload.data.bizCode;
             bizData = payload.data.bizData;
-            ts = payload.data.ts;
         } else {
             logger.debug('Unknown Tuya payload structure', JSON.stringify(payload).substring(0, 200));
             return;
@@ -266,37 +471,29 @@ class TuyaMessageService extends EventEmitter {
 
         logger.debug(`Tuya Message [${bizCode}] for device ${devId}`);
 
-        try {
-            switch (bizCode) {
-                case 'statusReport':
-                case 'devicePropertyMessage': // Added support for V2 property message
-                    // V2 reports properties in 'properties' array, V1 in 'status'
-                    // Normalize to 'status' for internal handler
-                    if (bizData.properties) {
-                        bizData.status = bizData.properties;
-                    }
-                    await this._handleStatusReport(devId, bizData);
-                    break;
-                case 'online':
-                case 'deviceOnline':
-                    await this._handleDeviceOnline(devId);
-                    break;
-                case 'offline':
-                case 'deviceOffline':
-                    await this._handleDeviceOffline(devId);
-                    break;
-                default:
-                    logger.debug(`Tuya Message: Unhandled bizCode ${bizCode}`);
-            }
-        } catch (err) {
-            logger.error('Tuya Message: Process device message error:', err.message);
+        switch (bizCode) {
+            case 'statusReport':
+            case 'devicePropertyMessage':
+                if (bizData.properties) {
+                    bizData.status = bizData.properties;
+                }
+                return this._handleStatusReport(devId, bizData, { session });
+            case 'online':
+            case 'deviceOnline':
+                return this._handleDeviceOnline(devId, { session });
+            case 'offline':
+            case 'deviceOffline':
+                return this._handleDeviceOffline(devId, { session });
+            default:
+                logger.debug(`Tuya Message: Unhandled bizCode ${bizCode}`);
+                return null;
         }
     }
 
     /**
      * 处理状态上报
      */
-    async _handleStatusReport(devId, data) {
+    async _handleStatusReport(devId, data, { session = null } = {}) {
         const { status } = data;
         if (!status || !Array.isArray(status)) return;
 
@@ -304,7 +501,9 @@ class TuyaMessageService extends EventEmitter {
 
         // 更新数据库中的设备状态
         try {
-            let device = await TuyaDevice.findOne({ deviceId: devId });
+            let deviceQuery = TuyaDevice.findOne({ deviceId: devId });
+            if (session) deviceQuery = deviceQuery.session(session);
+            let device = await deviceQuery;
 
             if (!device) {
                 // 如果设备不存在，创建新记录
@@ -341,55 +540,55 @@ class TuyaMessageService extends EventEmitter {
 
             device.updatedAt = now;
             device.lastMessageAt = now;
-            await device.save();
+            await device.save(session ? { session } : undefined);
 
             if (logDocs.length > 0) {
-                TuyaDeviceLog.insertMany(logDocs, { ordered: false }).catch((insertErr) => {
-                    logger.error('Tuya Message: Batch write log error:', insertErr.message);
-                });
+                await TuyaDeviceLog.insertMany(logDocs, { ordered: false, ...(session ? { session } : {}) });
             }
 
-            // 触发事件，可用于 WebSocket 推送给前端
-            this.emit('statusUpdate', { devId, status });
+            return { name: 'statusUpdate', payload: { devId, status } };
 
         } catch (err) {
             logger.error('Tuya Message: Save status to DB error:', err.message);
+            throw err;
         }
     }
 
     /**
      * 处理设备上线
      */
-    async _handleDeviceOnline(devId) {
+    async _handleDeviceOnline(devId, { session = null } = {}) {
         logger.info(`Tuya Device Online: ${devId}`);
 
         try {
             await TuyaDevice.findOneAndUpdate(
                 { deviceId: devId },
                 { $set: { online: true, updatedAt: new Date() } },
-                { upsert: true }
+                { upsert: true, ...(session ? { session } : {}) }
             );
-            this.emit('deviceOnline', { devId });
+            return { name: 'deviceOnline', payload: { devId } };
         } catch (err) {
             logger.error('Tuya Message: Update online status error:', err.message);
+            throw err;
         }
     }
 
     /**
      * 处理设备下线
      */
-    async _handleDeviceOffline(devId) {
+    async _handleDeviceOffline(devId, { session = null } = {}) {
         logger.warn(`Tuya Device Offline: ${devId}`);
 
         try {
             await TuyaDevice.findOneAndUpdate(
                 { deviceId: devId },
                 { $set: { online: false, updatedAt: new Date() } },
-                { upsert: true }
+                { upsert: true, ...(session ? { session } : {}) }
             );
-            this.emit('deviceOffline', { devId });
+            return { name: 'deviceOffline', payload: { devId } };
         } catch (err) {
             logger.error('Tuya Message: Update offline status error:', err.message);
+            throw err;
         }
     }
 
@@ -399,7 +598,7 @@ class TuyaMessageService extends EventEmitter {
     _keepAlive() {
         this._clearTimer();
         this.timer = setTimeout(() => {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            if (this.ws && this.ws.readyState === this.WebSocket.OPEN) {
                 this.ws.ping(this.accessId);
             }
         }, 30000);
@@ -415,14 +614,26 @@ class TuyaMessageService extends EventEmitter {
         }
     }
 
+    _clearReconnectTimer() {
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+    }
+
     /**
      * 自动重连
      */
     _reconnect() {
+        if (!this.shouldRun || this.reconnectTimer) return;
         if (this.retryTimes < this.maxRetryTimes) {
             this.retryTimes++;
             logger.info(`Tuya Message Service: Reconnecting in ${this.retryTimeout / 1000}s (${this.retryTimes}/${this.maxRetryTimes})`);
-            setTimeout(() => this._connect(false), this.retryTimeout);
+            this.reconnectTimer = setTimeout(() => {
+                this.reconnectTimer = null;
+                this._connect(false);
+            }, this.retryTimeout);
+            this.reconnectTimer.unref?.();
         } else {
             logger.error('Tuya Message Service: Max retry attempts reached');
         }
@@ -440,3 +651,5 @@ class TuyaMessageService extends EventEmitter {
 }
 
 module.exports = new TuyaMessageService();
+module.exports.TuyaMessageService = TuyaMessageService;
+module.exports.resolveMessageConfig = resolveMessageConfig;

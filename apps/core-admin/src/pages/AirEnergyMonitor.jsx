@@ -224,43 +224,56 @@ const AirEnergyMonitor = () => {
         });
     }, []);
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (signal) => {
         try {
-            const res = await api.get('/tuya/heat-pump/status');
+            const res = await api.get('/tuya/heat-pump/status', { signal });
             if (res.data.success && res.data.result) {
                 parseStatus(res.data.result);
             }
         } catch (error) {
-            console.error('获取热泵数据失败:', error);
+            if (error.code !== 'ERR_CANCELED') console.error('获取热泵数据失败:', error);
         } finally {
-            setLoading(false);
+            if (!signal?.aborted) setLoading(false);
         }
     }, [parseStatus]);
 
-    const fetchChartData = useCallback(async () => {
+    const fetchChartData = useCallback(async (signal) => {
         setChartLoading(true);
         try {
-            const res = await api.get('/tuya/heat-pump/chart-data');
+            const res = await api.get('/tuya/heat-pump/chart-data', { signal });
             if (res.data.success) {
                 setChartData(res.data.result);
             }
         } catch (error) {
-            console.error('获取趋势数据失败:', error);
+            if (error.code !== 'ERR_CANCELED') console.error('获取趋势数据失败:', error);
         } finally {
-            setChartLoading(false);
+            if (!signal?.aborted) setChartLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        fetchData();
-        fetchChartData();
+        let stopped = false;
+        let timer = 0;
+        let controller = null;
+        const poll = async () => {
+            controller = new AbortController();
+            if (timer === 0) {
+                await Promise.all([
+                    fetchData(controller.signal),
+                    fetchChartData(controller.signal),
+                ]);
+            } else {
+                await fetchData(controller.signal);
+            }
+            if (!stopped && autoRefresh) timer = window.setTimeout(poll, 5000);
+        };
+        void poll();
 
-        let interval;
-        if (autoRefresh) {
-            interval = setInterval(fetchData, 5000);
-        }
-
-        return () => interval && clearInterval(interval);
+        return () => {
+            stopped = true;
+            window.clearTimeout(timer);
+            controller?.abort();
+        };
     }, [fetchData, fetchChartData, autoRefresh]);
 
     const handlePowerChange = async (checked) => {

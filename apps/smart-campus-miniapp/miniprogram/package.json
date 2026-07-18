@@ -8,10 +8,12 @@
   "devDependencies": {
     "@babel/parser": "^8.0.4",
     "miniprogram-api-typings": "^2.8.3-1",
-    "prettier": "^3.2.5"
+    "prettier": "^3.2.5",
+    "typescript": "^5.9.3"
   },
   "scripts": {
     "format:wxss": "npx prettier --write \"pages/**/*.wxss\" \"components/**/*.wxss\" app.wxss",
-    "check": "node scripts/check-miniprogram.mjs"
+    "typecheck": "tsc --noEmit --project ../tsconfig.json",
+    "check": "npm run typecheck && node scripts/check-miniprogram.mjs"
   }
 }

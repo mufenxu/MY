@@ -385,41 +385,41 @@
             <div class="mobile-drawer-content">
                 <div class="mobile-drawer-header">
                     <span class="title">添加题目</span>
-                    <div class="close-btn" @click="mobileAddVisible = false">
+                    <button type="button" class="close-btn" aria-label="关闭添加题目面板" @click="mobileAddVisible = false">
                         <el-icon><Close /></el-icon>
-                    </div>
+                    </button>
                 </div>
 
                 <div class="mobile-tool-grid">
-                    <div class="mobile-tool-item" @click="addQuestion('single'); mobileAddVisible = false">
+                    <button type="button" class="mobile-tool-item" @click="addQuestion('single'); mobileAddVisible = false">
                         <div class="tool-icon-wrapper blue">
                             <el-icon><CircleCheck /></el-icon>
                         </div>
                         <span class="tool-label">单选题</span>
-                    </div>
-                    <div class="mobile-tool-item" @click="addQuestion('multiple'); mobileAddVisible = false">
+                    </button>
+                    <button type="button" class="mobile-tool-item" @click="addQuestion('multiple'); mobileAddVisible = false">
                         <div class="tool-icon-wrapper purple">
                             <el-icon><CopyDocument /></el-icon>
                         </div>
                         <span class="tool-label">多选题</span>
-                    </div>
-                    <div class="mobile-tool-item" @click="addQuestion('judge'); mobileAddVisible = false">
+                    </button>
+                    <button type="button" class="mobile-tool-item" @click="addQuestion('judge'); mobileAddVisible = false">
                         <div class="tool-icon-wrapper green">
                             <el-icon><Check /></el-icon>
                         </div>
                         <span class="tool-label">判断题</span>
-                    </div>
-                    <div class="mobile-tool-item" @click="addQuestion('fill'); mobileAddVisible = false">
+                    </button>
+                    <button type="button" class="mobile-tool-item" @click="addQuestion('fill'); mobileAddVisible = false">
                         <div class="tool-icon-wrapper orange">
                             <el-icon><EditPen /></el-icon>
                         </div>
                         <span class="tool-label">填空题</span>
-                    </div>
+                    </button>
                 </div>
 
                 <div class="mobile-tool-divider">其他功能</div>
 
-                <div class="mobile-tool-row" @click="openBatchDialog(); mobileAddVisible = false">
+                <button type="button" class="mobile-tool-row" @click="openBatchDialog(); mobileAddVisible = false">
                     <div class="tool-icon-wrapper teal mobile-row-icon">
                         <el-icon><Upload /></el-icon>
                     </div>
@@ -428,9 +428,9 @@
                         <span class="tool-row-desc">支持智能识别文本题目</span>
                     </div>
                     <el-icon class="arrow-icon"><ArrowRight /></el-icon>
-                </div>
+                </button>
 
-                <div v-if="canBatchGenerateAi" class="mobile-tool-row" @click="openAiBatchDialog(); mobileAddVisible = false">
+                <button v-if="canBatchGenerateAi" type="button" class="mobile-tool-row" @click="openAiBatchDialog(); mobileAddVisible = false">
                     <div class="tool-icon-wrapper purple mobile-row-icon">
                         <el-icon><MagicStick /></el-icon>
                     </div>
@@ -439,9 +439,9 @@
                         <span class="tool-row-desc">提前生成可复用的 AI 解析</span>
                     </div>
                     <el-icon class="arrow-icon"><ArrowRight /></el-icon>
-                </div>
+                </button>
 
-                <div class="mobile-tool-row" @click="openEditDialog(); mobileAddVisible = false">
+                <button type="button" class="mobile-tool-row" @click="openEditDialog(); mobileAddVisible = false">
                     <div class="tool-icon-wrapper blue mobile-row-icon">
                         <el-icon><Edit /></el-icon>
                     </div>
@@ -450,7 +450,7 @@
                         <span class="tool-row-desc">维护名称、时长和及格分数</span>
                     </div>
                     <el-icon class="arrow-icon"><ArrowRight /></el-icon>
-                </div>
+                </button>
             </div>
         </el-drawer>
 

@@ -1,4 +1,10 @@
-const { parseOnlineStatus } = require('./utils');
+const { parseOnlineStatus, truncatePayload } = require('./utils');
+
+const MAX_TOPIC_STATS = 256;
+const MAX_DISCOVERED_TOPICS = 256;
+const DISCOVERED_TOPIC_TTL_MS = 60 * 60 * 1000;
+const MAX_TOPIC_PAYLOAD_BYTES = 1024;
+const MAX_DISCOVERED_PAYLOAD_BYTES = 256;
 
 function createEffects() {
   return {
@@ -26,22 +32,45 @@ function updateTopicStats(status, topic, message, now) {
   status.lastMessageTopic = topic;
   status.messagesReceived += 1;
 
-  if (!status.topicStats[topic]) {
-    status.topicStats[topic] = { count: 0, lastMessageAt: null, lastPayload: null };
+  if (!Object.prototype.hasOwnProperty.call(status.topicStats, topic)) {
+    const entries = Object.entries(status.topicStats);
+    if (entries.length >= MAX_TOPIC_STATS) {
+      entries.sort(([, left], [, right]) => (left.lastMessageAt || 0) - (right.lastMessageAt || 0));
+      delete status.topicStats[entries[0][0]];
+    }
+    Object.defineProperty(status.topicStats, topic, {
+      configurable: true,
+      enumerable: true,
+      value: { count: 0, lastMessageAt: null, lastPayload: null },
+      writable: true
+    });
   }
 
   status.topicStats[topic].count += 1;
   status.topicStats[topic].lastMessageAt = now;
-  status.topicStats[topic].lastPayload = message;
+  status.topicStats[topic].lastPayload = truncatePayload(message, MAX_TOPIC_PAYLOAD_BYTES);
 }
 
 function rememberDiscoveredTopic(discoveredTopics, topic, message, now) {
+  pruneDiscoveredTopics(discoveredTopics, now);
+  const previous = discoveredTopics.get(topic);
+  if (previous) discoveredTopics.delete(topic);
   discoveredTopics.set(topic, {
     topic,
-    lastPayload: message.slice(0, 128),
+    lastPayload: truncatePayload(message, MAX_DISCOVERED_PAYLOAD_BYTES),
     lastMessageAt: now,
-    count: (discoveredTopics.get(topic)?.count || 0) + 1
+    count: (previous?.count || 0) + 1
   });
+  while (discoveredTopics.size > MAX_DISCOVERED_TOPICS) {
+    discoveredTopics.delete(discoveredTopics.keys().next().value);
+  }
+}
+
+function pruneDiscoveredTopics(discoveredTopics, now = Date.now()) {
+  const cutoff = now - DISCOVERED_TOPIC_TTL_MS;
+  for (const [topic, entry] of discoveredTopics) {
+    if (!entry?.lastMessageAt || entry.lastMessageAt < cutoff) discoveredTopics.delete(topic);
+  }
 }
 
 function markDeviceOnline(deviceId, device, effects) {
@@ -167,6 +196,11 @@ function processIncomingMessage({
 }
 
 module.exports = {
+  DISCOVERED_TOPIC_TTL_MS,
+  MAX_DISCOVERED_TOPICS,
+  MAX_TOPIC_PAYLOAD_BYTES,
+  MAX_TOPIC_STATS,
+  pruneDiscoveredTopics,
   processIncomingMessage,
   processTargetMessage,
   updateTopicStats

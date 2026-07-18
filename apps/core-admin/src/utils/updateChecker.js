@@ -1,4 +1,4 @@
-import { resolveAppUrl } from './runtime';
+import { fetchWithTimeout, resolveAppUrl } from './runtime';
 
 const CURRENT_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
 const RELOAD_MARKER_KEY = 'admin-web-reloaded-version';
@@ -13,13 +13,13 @@ const getVersionUrl = () => {
 const normalizeVersion = (version) => (typeof version === 'string' ? version.trim() : '');
 
 const fetchLatestVersion = async () => {
-    const response = await fetch(getVersionUrl(), {
+    const response = await fetchWithTimeout(getVersionUrl(), {
         cache: 'no-store',
         headers: {
             'Cache-Control': 'no-cache',
             Pragma: 'no-cache',
         },
-    });
+    }, 6000);
 
     if (!response.ok) return '';
 
@@ -68,12 +68,21 @@ export const startUpdateChecker = () => {
     if (import.meta.env.DEV || typeof window === 'undefined') return;
 
     let timerId = 0;
+    let checkInFlight = null;
+    const runCheck = () => {
+        if (!checkInFlight) {
+            checkInFlight = checkForAppUpdate().finally(() => {
+                checkInFlight = null;
+            });
+        }
+        return checkInFlight;
+    };
     const scheduleCheck = () => {
         if (document.visibilityState === 'hidden') return;
 
         window.clearTimeout(timerId);
         timerId = window.setTimeout(() => {
-            void checkForAppUpdate();
+            void runCheck();
         }, 300);
     };
 

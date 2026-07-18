@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema({
     avatarUrl: { type: String, default: '' },
     role: { type: String, default: 'user', enum: ['user', 'admin', 'super_admin'] },
     permissions: { type: [String], default: [] },
+    tokenVersion: { type: Number, default: 0 },
     password: { type: String, select: false }, // Hashed password for web login
     status: { type: String, default: 'active' },
     // 暴力破解防护

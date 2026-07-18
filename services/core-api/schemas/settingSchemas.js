@@ -1,9 +1,22 @@
 const Joi = require('joi');
 
 exports.notifyConfigSchema = Joi.object({
-    provider: Joi.string().valid('wechat', 'email', 'sms', 'none').required(),
-    webhookUrl: Joi.string().uri().allow(''),
-    secret: Joi.string().allow('')
+    emailEnabled: Joi.boolean().default(false),
+    smtpHost: Joi.string().hostname().allow('').max(255),
+    smtpPort: Joi.alternatives().try(
+        Joi.number().integer().min(1).max(65535),
+        Joi.string().pattern(/^\d{1,5}$/)
+    ).allow(''),
+    smtpUser: Joi.string().email().allow('').max(320),
+    smtpPass: Joi.string().allow('').max(1024),
+    toList: Joi.string().allow('').max(4000),
+    qywxEnabled: Joi.boolean().default(false),
+    qywxApiKey: Joi.string().allow('').max(1024),
+    qywxToUser: Joi.string().allow('').max(2000),
+    qywxToParty: Joi.string().allow('').max(2000),
+    qywxToTag: Joi.string().allow('').max(2000),
+    qywxAgentId: Joi.alternatives().try(Joi.string(), Joi.number()).allow(''),
+    advanceDays: Joi.alternatives().try(Joi.string(), Joi.number().integer().min(0).max(3650)).allow('')
 });
 
 exports.adminInfoSchema = Joi.object({

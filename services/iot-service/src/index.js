@@ -3,10 +3,10 @@ const { MqttService } = require('./services/mqttClient');
 const { SettingsStore } = require('./settings/settingsStore');
 const { getDatabase } = require('./storage/db');
 
-function registerShutdown(server, mqttService) {
+function registerShutdown(server, mqttService, closeRealtime) {
   let shuttingDown = false;
 
-  const shutdown = (signal) => {
+  const shutdown = async (signal) => {
     if (shuttingDown) {
       return;
     }
@@ -14,21 +14,23 @@ function registerShutdown(server, mqttService) {
     shuttingDown = true;
     console.log(`${signal} received, shutting down...`);
 
-    server.close(async () => {
-      mqttService.stop();
+    const serverClosed = new Promise((resolve) => server.close(resolve));
+    const forceTimer = setTimeout(() => server.closeAllConnections?.(), 5000);
+    forceTimer.unref?.();
 
-      try {
-        await mqttService.db?.close?.();
-        process.exit(0);
-      } catch (error) {
-        console.error('Failed to close database cleanly:', error);
-        process.exit(1);
-      }
-    });
-
-    setTimeout(() => {
+    try {
+      await Promise.allSettled([
+        mqttService.stop({ force: false }),
+        closeRealtime?.()
+      ]);
+      await serverClosed;
+      await mqttService.db?.close?.();
+      clearTimeout(forceTimer);
+      process.exit(0);
+    } catch (error) {
+      console.error('Failed to shut down cleanly:', error);
       process.exit(1);
-    }, 5000).unref();
+    }
   };
 
   process.on('SIGINT', () => shutdown('SIGINT'));
@@ -60,7 +62,7 @@ async function main() {
   const settingsStore = new SettingsStore({ storage: database });
   const initialConfig = await settingsStore.initialize();
   const mqttService = new MqttService(settingsStore, database);
-  const { server } = createApiServer({ settingsStore, mqttService });
+  const { closeRealtime, server } = createApiServer({ settingsStore, mqttService });
 
   await mqttService.start({ databaseInitialized: true });
   await listen(server, initialConfig.api.port);
@@ -68,7 +70,7 @@ async function main() {
   console.log(`API server listening on port ${initialConfig.api.port}`);
   console.log(`Dashboard: http://localhost:${initialConfig.api.port}`);
 
-  registerShutdown(server, mqttService);
+  registerShutdown(server, mqttService, closeRealtime);
 }
 
 main().catch((error) => {

@@ -5,6 +5,10 @@ import express from 'express';
 import httpProxy from 'http-proxy';
 import { PLATFORM_SSO_HEADER, issueInternalIdentity } from './internal-auth.mjs';
 
+const PROXY_CONTEXT = Symbol('platformProxyContext');
+const PROXY_TIMEOUT_MIN_MS = 1_000;
+const PROXY_TIMEOUT_MAX_MS = 120_000;
+
 function normalizeHost(value) {
   return String(value || '').trim().toLowerCase().replace(/:\d+$/, '');
 }
@@ -32,11 +36,46 @@ function rewriteServicePrefix(req, prefix, { apiByDefault = false, preserve = []
   return pathname;
 }
 
+function normalizeProxyError(error) {
+  const code = String(error?.code || '').toUpperCase();
+  if (['ETIMEDOUT', 'ESOCKETTIMEDOUT', 'ERR_HTTP_REQUEST_TIMEOUT'].includes(code)) return 'timeout';
+  if (['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN'].includes(code)) return 'connect';
+  if (['ECONNRESET', 'EPIPE', 'ABORT_ERR'].includes(code)) return 'aborted';
+  return 'other';
+}
+
+function statusClass(statusCode) {
+  const numeric = Number(statusCode);
+  return Number.isFinite(numeric) && numeric >= 100 ? `${Math.floor(numeric / 100)}xx` : 'unknown';
+}
+
 function writeProxyError(res, error) {
-  if (!res || res.headersSent || res.destroyed) return;
-  res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-  res.end(JSON.stringify({ error: '内部服务暂不可用。', code: 'UPSTREAM_UNAVAILABLE' }));
+  if (!res || res.destroyed) return;
+  if (res.headersSent) {
+    res.destroy(error);
+    return;
+  }
+  if (typeof res.writeHead !== 'function') {
+    res.destroy?.(error);
+    return;
+  }
+  const timedOut = normalizeProxyError(error) === 'timeout';
+  res.writeHead(timedOut ? 504 : 502, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify({
+    error: timedOut ? 'Upstream service timed out.' : 'Upstream service is unavailable.',
+    code: timedOut ? 'UPSTREAM_TIMEOUT' : 'UPSTREAM_UNAVAILABLE',
+  }));
   console.error('Platform proxy error:', error.message);
+}
+
+function boundedProxyTimeout(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return 15_000;
+  return Math.min(Math.max(parsed, PROXY_TIMEOUT_MIN_MS), PROXY_TIMEOUT_MAX_MS);
+}
+
+function isHashedStaticAsset(filePath) {
+  return /[\\/]assets[\\/][^\\/]+-[A-Za-z0-9_-]{8,}\.[^\\/]+$/.test(String(filePath || ''));
 }
 
 function isDocumentRequest(req, pathname) {
@@ -103,14 +142,16 @@ export function createCoreWebApp({ coreApp, staticPath }) {
   if (staticPath && fs.existsSync(staticPath)) {
     app.use(express.static(staticPath, {
       index: false,
-      maxAge: '1y',
-      immutable: true,
       dotfiles: 'deny',
       setHeaders(res, filePath) {
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('X-Frame-Options', 'DENY');
         if (filePath.endsWith('.html') || filePath.endsWith('version.json')) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else if (isHashedStaticAsset(filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+          res.setHeader('Cache-Control', 'no-cache');
         }
       },
     }));
@@ -134,6 +175,9 @@ export function createPlatformRouter({
   notifyApp,
   campusTarget,
   mqttTarget,
+  coreTarget = '',
+  examTarget = '',
+  notifyTarget = '',
   coreHosts = '',
   examHosts = '',
   notifyHosts = '',
@@ -142,6 +186,8 @@ export function createPlatformRouter({
   getPlatformSession = () => null,
   internalAuthPrivateKey = '',
   platformPublicOrigin = '',
+  proxyTimeoutMs = 15_000,
+  recordProxyMetric = () => {},
 }) {
   const hostSets = {
     core: parseHosts(coreHosts),
@@ -150,16 +196,107 @@ export function createPlatformRouter({
     campus: parseHosts(campusHosts),
     mqtt: parseHosts(mqttHosts),
   };
-  const proxy = httpProxy.createProxyServer({ xfwd: true, ws: true });
-  proxy.on('error', (error, req, res) => writeProxyError(res, error));
+  const upstreamTimeout = boundedProxyTimeout(proxyTimeoutMs);
+  const proxy = httpProxy.createProxyServer({
+    xfwd: true,
+    ws: true,
+    proxyTimeout: upstreamTimeout + 250,
+  });
 
-  function proxyRequest(req, res, target) {
+  function finishProxyMetric(req, res, error = null) {
+    const context = req?.[PROXY_CONTEXT];
+    if (!context || context.finished) return;
+    context.finished = true;
+    const upstreamFailure = !error && Number(res?.statusCode) >= 500;
+    const metric = {
+      service: context.service,
+      outcome: error || upstreamFailure ? 'error' : 'success',
+      statusClass: error ? '5xx' : statusClass(res?.statusCode),
+      errorKind: error ? normalizeProxyError(error) : (upstreamFailure ? 'upstream' : 'none'),
+      durationMs: Math.max(Math.round(performance.now() - context.startedAt), 0),
+    };
+    try { recordProxyMetric(metric); } catch (metricError) {
+      console.error('Platform proxy metric callback failed:', metricError.message);
+    }
+  }
+
+  proxy.on('proxyReq', (proxyReq, req, res) => {
+    const context = req?.[PROXY_CONTEXT];
+    if (!context) return;
+    context.proxyReq = proxyReq;
+
+    const timeout = setTimeout(() => {
+      const error = new Error('Upstream request timed out');
+      error.code = 'ETIMEDOUT';
+      finishProxyMetric(req, res, error);
+      writeProxyError(res, error);
+      if (!context.proxyRes?.destroyed) context.proxyRes?.destroy(error);
+      if (!proxyReq.destroyed) proxyReq.destroy(error);
+    }, upstreamTimeout);
+    timeout.unref?.();
+    context.timeout = timeout;
+
+    const abort = () => {
+      const error = new Error('Client disconnected before upstream completed');
+      error.code = 'ABORT_ERR';
+      if (!context.proxyRes?.destroyed) context.proxyRes?.destroy(error);
+      if (!proxyReq.destroyed) proxyReq.destroy(error);
+    };
+    const onResponseClose = () => {
+      if (!res.writableEnded) abort();
+      cleanup();
+    };
+    const cleanup = () => {
+      clearTimeout(timeout);
+      req.off('aborted', abort);
+      res.off('finish', cleanup);
+      res.off('close', onResponseClose);
+    };
+    context.cleanup = cleanup;
+
+    req.once('aborted', abort);
+    res.once('finish', cleanup);
+    res.once('close', onResponseClose);
+  });
+  proxy.on('proxyRes', (proxyRes, req) => {
+    const context = req?.[PROXY_CONTEXT];
+    if (context) context.proxyRes = proxyRes;
+  });
+  proxy.on('error', (error, req, res) => {
+    req?.[PROXY_CONTEXT]?.cleanup?.();
+    finishProxyMetric(req, res, error);
+    writeProxyError(res, error);
+  });
+
+  function proxyRequest(req, res, target, service) {
     if (!target) {
       res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: '内部服务未配置。', code: 'UPSTREAM_NOT_CONFIGURED' }));
       return;
     }
-    proxy.web(req, res, { target });
+    req[PROXY_CONTEXT] = {
+      finished: false,
+      service,
+      startedAt: performance.now(),
+    };
+    res.once('finish', () => finishProxyMetric(req, res));
+    res.once('close', () => {
+      if (!res.writableEnded) {
+        const error = new Error('Client connection closed');
+        error.code = 'ABORT_ERR';
+        finishProxyMetric(req, res, error);
+      }
+    });
+    proxy.web(req, res, {
+      target,
+      proxyTimeout: upstreamTimeout + 250,
+    });
+  }
+
+  function dispatchApp(req, res, app, target, service) {
+    if (target) return proxyRequest(req, res, target, service);
+    if (typeof app === 'function') return app(req, res);
+    return proxyRequest(req, res, '', service);
   }
 
   async function authorizeManagedApp(req, res, service, prefix) {
@@ -193,11 +330,11 @@ export function createPlatformRouter({
     const host = normalizeHost(req.headers.host);
     const requestUrl = new URL(req.url || '/', 'http://platform.internal');
 
-    if (hostSets.core.has(host)) return coreApp(req, res);
-    if (hostSets.exam.has(host)) return examApp(req, res);
-    if (hostSets.notify.has(host)) return notifyApp(req, res);
-    if (hostSets.campus.has(host)) return proxyRequest(req, res, campusTarget);
-    if (hostSets.mqtt.has(host)) return proxyRequest(req, res, mqttTarget);
+    if (hostSets.core.has(host)) return dispatchApp(req, res, coreApp, coreTarget, 'core');
+    if (hostSets.exam.has(host)) return dispatchApp(req, res, examApp, examTarget, 'exam');
+    if (hostSets.notify.has(host)) return dispatchApp(req, res, notifyApp, notifyTarget, 'notify');
+    if (hostSets.campus.has(host)) return proxyRequest(req, res, campusTarget, 'campus');
+    if (hostSets.mqtt.has(host)) return proxyRequest(req, res, mqttTarget, 'iot');
 
     if (['/apps/core', '/apps/exam', '/apps/campus', '/apps/iot'].includes(requestUrl.pathname)) {
       res.writeHead(308, {
@@ -210,65 +347,65 @@ export function createPlatformRouter({
 
     if (requestUrl.pathname.startsWith('/apps/core/')) {
       if (!await authorizeManagedApp(req, res, 'core', '/apps/core')) return;
-      return coreApp(req, res);
+      return dispatchApp(req, res, coreApp, coreTarget, 'core');
     }
     if (requestUrl.pathname.startsWith('/apps/exam/')) {
       if (!await authorizeManagedApp(req, res, 'exam', '/apps/exam')) return;
-      return examApp(req, res);
+      return dispatchApp(req, res, examApp, examTarget, 'exam');
     }
     if (requestUrl.pathname.startsWith('/apps/campus/')) {
       if (!await authorizeManagedApp(req, res, 'campus', '/apps/campus')) return;
-      return proxyRequest(req, res, campusTarget);
+      return proxyRequest(req, res, campusTarget, 'campus');
     }
     if (requestUrl.pathname.startsWith('/apps/iot/')) {
       if (!await authorizeManagedApp(req, res, 'iot', '/apps/iot')) return;
-      return proxyRequest(req, res, mqttTarget);
+      return proxyRequest(req, res, mqttTarget, 'iot');
     }
 
     if (requestUrl.pathname === '/api/core' || requestUrl.pathname.startsWith('/api/core/')) {
       rewriteServicePrefix(req, '/api/core', { apiByDefault: true, preserve: ['/uploads', '/public'] });
-      return coreApp(req, res);
+      return dispatchApp(req, res, coreApp, coreTarget, 'core');
     }
     if (requestUrl.pathname === '/api/exam/client' || requestUrl.pathname.startsWith('/api/exam/client/')) {
       rewriteServicePrefix(req, '/api/exam/client');
-      return examApp(req, res);
+      return dispatchApp(req, res, examApp, examTarget, 'exam');
     }
     if (requestUrl.pathname === '/api/exam' || requestUrl.pathname.startsWith('/api/exam/')) {
       rewriteServicePrefix(req, '/api/exam', { apiByDefault: true });
-      return examApp(req, res);
+      return dispatchApp(req, res, examApp, examTarget, 'exam');
     }
     if (requestUrl.pathname === '/api/notify' || requestUrl.pathname.startsWith('/api/notify/')) {
       rewriteServicePrefix(req, '/api/notify');
-      return notifyApp(req, res);
+      return dispatchApp(req, res, notifyApp, notifyTarget, 'notify');
     }
     if (requestUrl.pathname === '/api/campus' || requestUrl.pathname.startsWith('/api/campus/')) {
       rewriteServicePrefix(req, '/api/campus', { apiByDefault: true });
-      return proxyRequest(req, res, campusTarget);
+      return proxyRequest(req, res, campusTarget, 'campus');
     }
     if (requestUrl.pathname === '/api/iot' || requestUrl.pathname.startsWith('/api/iot/')) {
       rewriteServicePrefix(req, '/api/iot', { apiByDefault: true, preserve: ['/api-docs'] });
-      return proxyRequest(req, res, mqttTarget);
+      return proxyRequest(req, res, mqttTarget, 'iot');
     }
 
     if (requestUrl.pathname === '/core' || requestUrl.pathname.startsWith('/core/')) {
       rewriteServicePrefix(req, '/core', { apiByDefault: true, preserve: ['/uploads', '/public'] });
-      return coreApp(req, res);
+      return dispatchApp(req, res, coreApp, coreTarget, 'core');
     }
     if (requestUrl.pathname === '/exam' || requestUrl.pathname.startsWith('/exam/')) {
       rewriteServicePrefix(req, '/exam', { apiByDefault: true });
-      return examApp(req, res);
+      return dispatchApp(req, res, examApp, examTarget, 'exam');
     }
     if (requestUrl.pathname === '/notify-service' || requestUrl.pathname.startsWith('/notify-service/')) {
       rewriteServicePrefix(req, '/notify-service');
-      return notifyApp(req, res);
+      return dispatchApp(req, res, notifyApp, notifyTarget, 'notify');
     }
     if (requestUrl.pathname === '/campus' || requestUrl.pathname.startsWith('/campus/')) {
       rewriteServicePrefix(req, '/campus', { apiByDefault: true });
-      return proxyRequest(req, res, campusTarget);
+      return proxyRequest(req, res, campusTarget, 'campus');
     }
     if (requestUrl.pathname === '/iot' || requestUrl.pathname.startsWith('/iot/')) {
       rewriteServicePrefix(req, '/iot', { apiByDefault: true });
-      return proxyRequest(req, res, mqttTarget);
+      return proxyRequest(req, res, mqttTarget, 'iot');
     }
 
     return portalApp(req, res);
@@ -281,7 +418,7 @@ export function createPlatformRouter({
     const requestUrl = new URL(req.url || '/', 'http://platform.internal');
     if (hostSets.mqtt.has(host)) {
       if (!mqttTarget) return socket.destroy();
-      return proxy.ws(req, socket, head, { target: mqttTarget });
+      return proxy.ws(req, socket, head, { target: mqttTarget, proxyTimeout: upstreamTimeout });
     }
     if (requestUrl.pathname === '/apps/iot/ws' || requestUrl.pathname.startsWith('/apps/iot/ws/')) {
       const session = await getPlatformSession(req);
@@ -302,12 +439,12 @@ export function createPlatformRouter({
           new URL(req.url || '/', 'http://platform.internal').search,
         ),
       });
-      return proxy.ws(req, socket, head, { target: mqttTarget });
+      return proxy.ws(req, socket, head, { target: mqttTarget, proxyTimeout: upstreamTimeout });
     }
     if (requestUrl.pathname === '/iot/ws' || requestUrl.pathname.startsWith('/iot/ws/')) {
       rewriteServicePrefix(req, '/iot');
       if (!mqttTarget) return socket.destroy();
-      return proxy.ws(req, socket, head, { target: mqttTarget });
+      return proxy.ws(req, socket, head, { target: mqttTarget, proxyTimeout: upstreamTimeout });
     }
     return socket.destroy();
   }
@@ -315,4 +452,13 @@ export function createPlatformRouter({
   return { handler, handleUpgrade, close: () => proxy.close() };
 }
 
-export { managedSocketAllowed, managedWriteAllowed, normalizeHost, parseHosts, rewriteServicePrefix };
+export {
+  boundedProxyTimeout,
+  isHashedStaticAsset,
+  managedSocketAllowed,
+  managedWriteAllowed,
+  normalizeHost,
+  normalizeProxyError,
+  parseHosts,
+  rewriteServicePrefix,
+};

@@ -2,7 +2,7 @@ const mqtt = require('mqtt');
 const { EventEmitter } = require('events');
 const { getDatabase } = require('../storage/db');
 const { testMqttConnection } = require('./mqtt/connectionTest');
-const { processIncomingMessage } = require('./mqtt/messageProcessor');
+const { processIncomingMessage, pruneDiscoveredTopics } = require('./mqtt/messageProcessor');
 const { markTimedOutDevicesOffline } = require('./mqtt/onlineScanner');
 const { resolveRelayControl } = require('./mqtt/relayControl');
 const { getRetentionDays, shouldRunRetentionCleanup } = require('./mqtt/retentionPolicy');
@@ -129,7 +129,8 @@ class MqttService extends EventEmitter {
     this.startDataRetentionCleanup({ runNow: true });
   }
 
-  stop() {
+  stop({ force = true } = {}) {
+    this.connectionVersion += 1;
     if (this.onlineCheckTimer) {
       clearInterval(this.onlineCheckTimer);
       this.onlineCheckTimer = null;
@@ -143,21 +144,42 @@ class MqttService extends EventEmitter {
     Object.values(this.sensorPersistTimers).forEach((timer) => clearTimeout(timer));
     this.sensorPersistTimers = {};
 
-    if (!this.client) {
-      return;
+    const client = this.client;
+    this.client = null;
+    this.status.mqttConnected = false;
+    this.status.subscribed = false;
+    this.status.connectionState = 'stopped';
+    this.status.disconnectedAt = Date.now();
+    this.emit('status', this.getStatus());
+    if (!client) return Promise.resolve();
+
+    client.removeAllListeners();
+    if (force) {
+      client.end(true);
+      return Promise.resolve();
     }
 
-    try {
-      this.client.removeAllListeners();
-      this.client.end(true);
-    } finally {
-      this.client = null;
-      this.status.mqttConnected = false;
-      this.status.subscribed = false;
-      this.status.connectionState = 'stopped';
-      this.status.disconnectedAt = Date.now();
-      this.emit('status', this.getStatus());
-    }
+    return new Promise((resolve) => {
+      let finished = false;
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(forceTimer);
+        resolve();
+      };
+      const forceTimer = setTimeout(() => {
+        try { client.end(true); } catch (error) { console.error('Failed to force-close MQTT client:', error.message); }
+        done();
+      }, 2000);
+      forceTimer.unref?.();
+
+      try {
+        client.end(false, {}, done);
+      } catch (error) {
+        console.error('Failed to close MQTT client cleanly:', error.message);
+        done();
+      }
+    });
   }
 
   restart(reason = 'manual') {
@@ -400,6 +422,7 @@ class MqttService extends EventEmitter {
 
   // 获取所有自动嗅探到的未匹配主题
   getDiscoveredTopics() {
+    pruneDiscoveredTopics(this.discoveredTopics);
     return Array.from(this.discoveredTopics.values()).sort((a, b) => b.lastMessageAt - a.lastMessageAt);
   }
 

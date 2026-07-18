@@ -102,11 +102,13 @@ input:focus-visible {
 }
 
 .app-shell {
+  position: fixed;
+  inset: 20px;
   display: grid;
-  width: calc(100% - 40px);
-  min-height: calc(100vh - 40px);
+  width: auto;
+  min-height: 0;
   grid-template-columns: 92px minmax(0, 1fr);
-  margin: 20px;
+  margin: 0;
   overflow: hidden;
   background: var(--shell);
   border: 1px solid rgba(40, 119, 247, 0.55);
@@ -115,13 +117,12 @@ input:focus-visible {
 }
 
 .sidebar {
-  position: sticky;
-  top: 20px;
+  position: relative;
   z-index: 40;
   display: flex;
   width: 72px;
-  height: calc(100vh - 80px);
-  min-height: 620px;
+  height: calc(100% - 40px);
+  min-height: 0;
   flex-direction: column;
   align-items: center;
   justify-self: center;
@@ -141,10 +142,18 @@ input:focus-visible {
 .main-nav {
   display: flex;
   width: 100%;
+  min-height: 0;
   flex: 1;
   flex-direction: column;
   align-items: center;
   gap: 13px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.main-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .main-nav button,
@@ -237,8 +246,11 @@ input:focus-visible {
 
 .workspace {
   position: relative;
+  display: flex;
+  height: 100%;
   min-width: 0;
-  min-height: calc(100vh - 40px);
+  min-height: 0;
+  flex-direction: column;
   overflow: clip;
   background:
     linear-gradient(135deg, rgba(247, 245, 255, 0.93), rgba(240, 249, 255, 0.94) 58%, rgba(237, 252, 250, 0.93));
@@ -274,6 +286,7 @@ input:focus-visible {
   position: relative;
   z-index: 25;
   display: flex;
+  flex: 0 0 auto;
   min-height: 130px;
   align-items: center;
   justify-content: space-between;
@@ -467,9 +480,15 @@ input:focus-visible {
 
 .workspace-content {
   width: 100%;
+  min-height: 0;
+  flex: 1;
   max-width: 1760px;
   margin: 0 auto;
   padding: 0 28px 54px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .error-banner {
@@ -3094,10 +3113,11 @@ input:focus-visible {
 
 @media (max-width: 980px) {
   .app-shell {
-    width: calc(100% - 24px);
-    min-height: calc(100vh - 24px);
+    inset: 12px;
+    width: auto;
+    min-height: 0;
     grid-template-columns: minmax(0, 1fr);
-    margin: 12px;
+    margin: 0;
     border-radius: 20px;
   }
 
@@ -3109,6 +3129,7 @@ input:focus-visible {
     z-index: 60;
     width: 276px;
     height: 100vh;
+    height: 100dvh;
     min-height: 0;
     align-items: stretch;
     justify-self: auto;
@@ -3190,7 +3211,7 @@ input:focus-visible {
   }
 
   .workspace {
-    min-height: calc(100vh - 24px);
+    min-height: 0;
   }
 
   .mobile-menu-button {
@@ -3348,15 +3369,16 @@ input:focus-visible {
 
 @media (max-width: 460px) {
   .app-shell {
-    width: 100%;
-    min-height: 100vh;
+    inset: 0;
+    width: auto;
+    min-height: 0;
     margin: 0;
     border: 0;
     border-radius: 0;
   }
 
   .workspace {
-    min-height: 100vh;
+    min-height: 0;
   }
 
   .topbar {

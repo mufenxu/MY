@@ -26,6 +26,10 @@ const AiGenerationUsageSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+        lastReservedAt: {
+            type: Date,
+            default: null,
+        },
     },
     {
         timestamps: { createdAt: 'createTime', updatedAt: 'updateTime' },

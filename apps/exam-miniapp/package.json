@@ -4,9 +4,10 @@
   "description": "",
   "scripts": {
     "check:miniprogram": "node scripts/check-miniprogram-paths.js && node scripts/check-miniprogram-source.js",
+    "typecheck": "tsc --noEmit",
     "lint:backend": "npm --prefix ../../services/exam-api run lint",
     "build:admin": "npm --prefix ../exam-admin run build",
-    "check": "npm run check:miniprogram && npm run lint:backend && npm run build:admin"
+    "check": "npm run check:miniprogram && npm run typecheck && npm run lint:backend && npm run build:admin"
   },
   "keywords": [],
   "author": "",
@@ -14,6 +15,7 @@
   "dependencies": {
   },
   "devDependencies": {
-    "miniprogram-api-typings": "^2.8.3-1"
+    "miniprogram-api-typings": "^2.8.3-1",
+    "typescript": "^5.9.3"
   }
 }

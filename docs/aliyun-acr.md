@@ -13,11 +13,15 @@ Enable automatic builds for source changes and keep overseas builders enabled. C
 | Image | Build context directory | Dockerfile filename | Image tag |
 | --- | --- | --- | --- |
 | Unified platform API | `/` | `Dockerfile` | `platform-api-latest` |
+| Core API | `/` | `core-api.Dockerfile` | `core-api-latest` |
+| Exam API | `/` | `exam-api.Dockerfile` | `exam-api-latest` |
+| Notification service | `/` | `notification-service.Dockerfile` | `notification-service-latest` |
+| Backup runner | `/` | `backup-runner.Dockerfile` | `backup-runner-latest` |
 | Campus service | `/` | `campus-service.Dockerfile` | `campus-service-latest` |
 | IoT service | `/` | `iot-service.Dockerfile` | `iot-service-latest` |
 | MongoDB 7 mirror | `/infra/docker/` | `mongodb.Dockerfile` | `mongodb-7.0` |
 
-The platform, campus, and IoT images use the repository root as build context so they can copy shared code from `packages/` as well as service files from `services/`. ACR's Dockerfile field accepts a filename, not a nested path, so the service Dockerfiles live at the repository root.
+Application images use the repository root as build context so they can copy shared code from `packages/` as well as service files from `services/`. ACR's Dockerfile field accepts a filename, not a nested path, so the service Dockerfiles live at the repository root.
 
 ## Deployment
 

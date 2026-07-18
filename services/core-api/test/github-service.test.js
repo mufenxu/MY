@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const axios = require('axios');
+
+process.env.CORE_JWT_SECRET = process.env.CORE_JWT_SECRET || 'github-service-security-test-key';
+
 const secretService = require('../services/secretService');
 const githubService = require('../services/githubService');
 

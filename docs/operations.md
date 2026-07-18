@@ -34,28 +34,31 @@ Do not delete the SQLite files until the migrated user counts, settings, devices
 
 ## Backup and restore
 
-统一控制中心的 **数据灾备** 页面已经内置到 `platform-api` 容器，不需要额外启动备份 runner，也不需要新增容器。生产部署时，Compose 会把 Docker 命名卷 `my-platform_platform_backups` 挂载到容器内的 `/app/backups`：
+统一控制中心保留 **数据灾备** 页面，但实际命令由只连接内部网络的 `backup-runner` 执行。Mongo root 不再注入 `platform-api`；执行器使用独立的 Mongo `backup`/`restore` 账号和随机 Bearer Token。生产部署时，Compose 会把 `my-platform_platform_backups` 卷只挂载到执行器：
 
 ```env
 PLATFORM_RESTORE_CONFIRM_TEXT=RESTORE ALL DATA
+PLATFORM_RESTORE_ENABLED=false
 PLATFORM_RESTORE_PRE_BACKUP=true
+PLATFORM_BACKUP_RUNNER_TOKEN=<至少 32 位独立随机值>
+MONGO_BACKUP_PASSWORD=<独立随机密码>
 ```
 
-更新镜像后重建并重启 `platform-api`：
+更新镜像后重建并重启门户与执行器：
 
 ```bash
-docker compose --env-file .env -f infra/docker/compose.yml build platform-api
-docker compose --env-file .env -f infra/docker/compose.yml up -d --force-recreate platform-api
+docker compose --env-file .env -f infra/docker/compose.yml build platform-api backup-runner
+docker compose --env-file .env -f infra/docker/compose.yml up -d --force-recreate platform-api backup-runner
 ```
 
-如果控制中心显示“备份命令退出码 1”，先确认已经执行过上面的 `build platform-api`。旧镜像没有容器内备份脚本和 MongoDB 工具，只重启容器不会把这些文件放进去。
+如果控制中心显示执行器不可用，先检查 `backup-runner` 健康状态和两端 Token 是否一致。执行器不发布宿主机端口，不能从公网直接调用。
 
-网页点击“立即备份”后，`platform-api` 会在容器内直接执行 `mongodump --oplog`，创建 MongoDB 副本集归档，覆盖平台使用的五个数据库，并复制核心上传文件。备份清单、校验和与恢复任务都保存在 `platform_backups` 卷中。恢复会先自动创建一份当前状态备份，再校验所选归档的 SHA-256，要求平台管理员密码和确认短语，然后执行 `mongorestore --drop --oplogReplay` 并恢复上传文件。
+网页点击“立即备份”后，`platform-api` 通过内网鉴权调用 `backup-runner`。执行器运行 `mongodump --oplog`，创建五个数据库的副本集归档并复制核心上传文件。备份清单和校验和保存在 `platform_backups` 卷中。
 
-恢复会覆盖现有数据，只在维护窗口执行。恢复过程中不要让用户继续上传文件或提交业务数据；恢复完成后建议重启业务容器，清掉进程内缓存和长连接状态：
+网页进程无法可靠停止所有独立业务容器，因此生产 Compose 默认设置 `PLATFORM_RESTORE_ENABLED=false`，控制台不执行在线恢复。恢复只在维护窗口通过下面的命令行入口执行；命令会先停止当前正在运行的全部业务容器，避免 `mongorestore --drop` 与在线写入并发。恢复数据库后，按命令输出恢复上传目录，再启动业务容器以清掉进程内缓存和长连接状态：
 
 ```bash
-docker compose --env-file .env -f infra/docker/compose.yml restart platform-api campus-service iot-service
+docker compose --env-file .env -f infra/docker/compose.yml restart core-api exam-api notification-service campus-service iot-service
 ```
 
 命令行仍保留宿主机备份入口，可在服务器项目根目录创建一份本地备份：
@@ -72,7 +75,7 @@ npm run backup
 npm run restore -- /path/to/backup-directory --confirm-drop
 ```
 
-该命令会校验 SHA-256，停止正在运行的业务容器，并使用 `mongorestore --drop --oplogReplay` 恢复数据库。它保留给低频、人工维护使用；日常优先使用控制中心。
+该命令会校验 SHA-256，停止正在运行的全部业务容器，并使用 `mongorestore --drop --oplogReplay` 恢复数据库。它保留给低频、人工维护使用；不要通过修改生产开关绕过维护窗口。
 
 Recommended policy:
 

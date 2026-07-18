@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -10,9 +11,12 @@ const errorHandler = require('./middleware/errorHandler');
 const requestId = require('./middleware/requestId');
 const { initCron, stopTask, TASKS } = require('./services/cronScheduler');
 const logger = require('./utils/logger');
+const { contentSecurityPolicyDirectives, sanitizeRequestUrl } = require('./utils/httpSecurity');
+const { setAdminStaticCacheHeaders, isSpaNavigationRequest } = require('./utils/staticAssets');
 const tuyaMessageService = require('./services/tuyaMessageService');
 const tuyaAutomationService = require('./services/tuyaAutomationService');
 const secretService = require('./services/secretService');
+const settingsService = require('./services/settingsService');
 
 const app = express();
 const PORT = process.env.CORE_PORT || process.env.PORT || 3045;
@@ -40,18 +44,7 @@ app.use(requestId); // 全局请求 ID（必须最先注册）
 app.use(compression());
 app.use(helmet({
     contentSecurityPolicy: {
-        directives: {
-            "default-src": ["'self'"],
-            "script-src": ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://challenges.cloudflare.com"],
-            "script-src-attr": ["'unsafe-inline'"],
-            "img-src": ["'self'", "data:", "blob:", "https://*"],
-            "connect-src": ["'self'", "https://xcx.pxyb.cn", "http://xcx.pxyb.cn", "https://challenges.cloudflare.com"],
-            "frame-src": ["'self'", "https://challenges.cloudflare.com"],
-            "worker-src": ["'self'", "blob:"],
-            "child-src": ["'self'", "https://challenges.cloudflare.com"],
-            "style-src": ["'self'", "'unsafe-inline'"],
-            "upgrade-insecure-requests": null,
-        },
+        directives: contentSecurityPolicyDirectives,
     },
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -60,7 +53,8 @@ app.use(helmet({
 }));
 // HTTP 请求日志 - 精简格式，跳过高频无意义请求
 morgan.token('request-id', (req) => req.id || '-');
-app.use(morgan(':request-id :method :url :status :response-time[0]ms :res[content-length]', {
+morgan.token('safe-url', sanitizeRequestUrl);
+app.use(morgan(':request-id :method :safe-url :status :response-time[0]ms :res[content-length]', {
     stream: logger.stream,
     skip: (req, _res) => {
         // 跳过健康检查和根路径等高频请求
@@ -89,7 +83,7 @@ app.use(cors({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'X-App-Id', 'X-Request-Id']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'X-App-Id', 'X-Request-Id', 'X-Core-Admin-Client']
 }));
 app.use(express.json({
     limit: '1mb',
@@ -125,10 +119,6 @@ const { globalLimiter } = require('./middleware/rateLimit');
 app.use('/api/', globalLimiter);
 app.use('/api', require('./routes'));
 
-app.get('/', (req, res) => {
-    res.send('Admin Server is running');
-});
-
 app.get('/health', (req, res) => {
     const dbState = mongoose.connection.readyState;
     const isDbConnected = dbState === 1;
@@ -138,6 +128,34 @@ app.get('/health', (req, res) => {
         database: isDbConnected ? 'CONNECTED' : 'DISCONNECTED'
     });
 });
+
+const configuredAdminDist = String(process.env.CORE_ADMIN_DIST || '').trim();
+const adminDist = configuredAdminDist
+    ? path.resolve(configuredAdminDist)
+    : path.resolve(__dirname, '../../apps/core-admin/dist');
+const adminIndex = path.join(adminDist, 'index.html');
+const hasAdminSpa = fs.existsSync(adminIndex);
+
+if (hasAdminSpa) {
+    app.use(express.static(adminDist, {
+        dotfiles: 'deny',
+        index: false,
+        fallthrough: true,
+        etag: true,
+        lastModified: true,
+        setHeaders: (res, filePath) => setAdminStaticCacheHeaders(adminDist, res, filePath)
+    }));
+
+    app.use((req, res, next) => {
+        if (!isSpaNavigationRequest(req)) return next();
+        res.setHeader('Cache-Control', 'no-cache, max-age=0, must-revalidate');
+        return res.sendFile(adminIndex);
+    });
+} else {
+    app.get('/', (_req, res) => {
+        res.send('Admin Server is running');
+    });
+}
 
 // Error Handler
 app.use(errorHandler);
@@ -158,6 +176,7 @@ async function initializeCoreRuntime() {
         });
         logger.info('MongoDB connected');
         await secretService.initCache();
+        await settingsService.migrateNotifySecrets();
         await initCron();
         tuyaMessageService.init();
         tuyaAutomationService.startScheduler();

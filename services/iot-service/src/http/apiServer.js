@@ -24,6 +24,11 @@ const { registerDeviceRoutes } = require('./routes/devices');
 const { registerKeyRoutes } = require('./routes/keys');
 const { registerSystemRoutes } = require('./routes/system');
 
+const WS_COALESCE_MS = 50;
+const WS_RETRY_MS = 250;
+const WS_MAX_BUFFERED_BYTES = 512 * 1024;
+const WS_BACKPRESSURE_TIMEOUT_MS = 10000;
+
 function rejectUpgrade(socket, statusCode, message) {
   socket.write(
     `HTTP/1.1 ${statusCode} ${message}\r\n` +
@@ -63,18 +68,62 @@ function createApiServer({ settingsStore, mqttService }) {
     };
   }
 
-  function broadcast(type) {
-    const payload = JSON.stringify(createRealtimePayload(type));
+  const socketStates = new WeakMap();
 
-    wsServer.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(payload);
+  function clearSocketState(socket) {
+    const state = socketStates.get(socket);
+    if (state?.timer) clearTimeout(state.timer);
+    socketStates.delete(socket);
+  }
+
+  function scheduleRealtimePayload(socket, type, { immediate = false } = {}) {
+    if (socket.readyState !== WebSocket.OPEN) return;
+    const state = socketStates.get(socket) || {
+      blockedSince: 0,
+      pendingType: type,
+      timer: null
+    };
+    state.pendingType = type;
+    socketStates.set(socket, state);
+
+    const flush = () => {
+      state.timer = null;
+      if (socket.readyState !== WebSocket.OPEN) return;
+      if (socket.bufferedAmount > WS_MAX_BUFFERED_BYTES) {
+        state.blockedSince ||= Date.now();
+        if (Date.now() - state.blockedSince >= WS_BACKPRESSURE_TIMEOUT_MS) {
+          socket.close(1013, 'Realtime client is too slow');
+          return;
+        }
+        state.timer = setTimeout(flush, WS_RETRY_MS);
+        state.timer.unref?.();
+        return;
       }
+
+      state.blockedSince = 0;
+      const payload = JSON.stringify(createRealtimePayload(state.pendingType));
+      socket.send(payload, (error) => {
+        if (error) socket.terminate();
+      });
+    };
+
+    if (state.timer) return;
+    if (immediate) flush();
+    else {
+      state.timer = setTimeout(flush, WS_COALESCE_MS);
+      state.timer.unref?.();
+    }
+  }
+
+  function broadcast(type) {
+    wsServer.clients.forEach((client) => {
+      scheduleRealtimePayload(client, type);
     });
   }
 
   wsServer.on('connection', (socket) => {
-    socket.send(JSON.stringify(createRealtimePayload('snapshot')));
+    socket.once('close', () => clearSocketState(socket));
+    scheduleRealtimePayload(socket, 'snapshot', { immediate: true });
   });
 
   server.on('upgrade', (req, socket, head) => {
@@ -99,8 +148,10 @@ function createApiServer({ settingsStore, mqttService }) {
     });
   });
 
-  mqttService.on('message', () => broadcast('message'));
-  mqttService.on('status', () => broadcast('status'));
+  const onMqttMessage = () => broadcast('message');
+  const onMqttStatus = () => broadcast('status');
+  mqttService.on('message', onMqttMessage);
+  mqttService.on('status', onMqttStatus);
 
   app.use(setSecurityHeaders);
 
@@ -152,12 +203,42 @@ function createApiServer({ settingsStore, mqttService }) {
     res.status(statusCode).json(createErrorPayload(req, statusCode, error.message, code));
   });
 
+  async function closeRealtime() {
+    mqttService.off('message', onMqttMessage);
+    mqttService.off('status', onMqttStatus);
+    for (const client of wsServer.clients) {
+      clearSocketState(client);
+      client.close(1001, 'Service shutting down');
+    }
+
+    await new Promise((resolve) => {
+      let finished = false;
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(forceTimer);
+        resolve();
+      };
+      const forceTimer = setTimeout(() => {
+        for (const client of wsServer.clients) client.terminate();
+        done();
+      }, 1000);
+      forceTimer.unref?.();
+      wsServer.close(done);
+    });
+  }
+
   return {
     app,
-    server
+    closeRealtime,
+    server,
+    wsServer
   };
 }
 
 module.exports = {
+  WS_BACKPRESSURE_TIMEOUT_MS,
+  WS_COALESCE_MS,
+  WS_MAX_BUFFERED_BYTES,
   createApiServer
 };

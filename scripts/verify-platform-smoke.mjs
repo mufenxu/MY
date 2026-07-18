@@ -34,6 +34,17 @@ const authenticated = await expectStatus(await fetch(`${origin}/api/auth/status`
 }), 200, 'authenticated status');
 if (!(await authenticated.json()).authenticated) throw new Error('MongoDB-backed session was not accepted.');
 
+for (const [path, label] of [['/apps/core/', 'core admin'], ['/apps/exam/', 'exam admin']]) {
+  const response = await expectStatus(await fetch(`${origin}${path}`, {
+    headers: { Cookie: cookie, Accept: 'text/html' },
+  }), 200, label);
+  if (!String(response.headers.get('content-type') || '').includes('text/html')) {
+    throw new Error(`${label} did not return its independently deployed SPA.`);
+  }
+}
+
+await expectStatus(await fetch(`${origin}/api/notify/healthz`), 200, 'notification proxy');
+
 const metrics = await expectStatus(await fetch(`${origin}/api/metrics`, {
   headers: { Authorization: `Bearer ${metricsToken}` },
 }), 200, 'metrics');

@@ -2,13 +2,57 @@ const nodemailer = require('nodemailer');
 const axios = require('axios');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const RefreshToken = require('../models/RefreshToken');
 const NotifyConfig = require('../models/NotifyConfig');
 const CronConfig = require('../models/CronConfig');
 const AppError = require('../utils/AppError');
 const { TASKS, startTask, stopTask } = require('./cronScheduler');
 const cron = require('node-cron');
+const { encrypt, decrypt, isEncrypted } = require('../utils/crypto');
 
 const WECOM_NOTIFY_URL = 'https://tongzhiapi.pxyb.cn/notify';
+const SECRET_MASK = '********';
+const NOTIFY_SECRET_FIELDS = ['smtpPass', 'qywxApiKey'];
+
+function isSecretMask(value) {
+    return typeof value === 'string' && /^\*{4,}$/.test(value);
+}
+
+function transformNotifySecrets(data, transform) {
+    const result = { ...(data || {}) };
+    for (const field of NOTIFY_SECRET_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(result, field)
+            && result[field] !== undefined
+            && result[field] !== null) {
+            result[field] = transform(String(result[field]));
+        }
+    }
+    return result;
+}
+
+function decryptNotifySecrets(data) {
+    return transformNotifySecrets(data, decrypt);
+}
+
+function encryptNotifySecrets(data) {
+    return transformNotifySecrets(data, encrypt);
+}
+
+async function hydrateNotifySecrets(data) {
+    const result = { ...(data || {}) };
+    const needsExisting = NOTIFY_SECRET_FIELDS.some((field) => (
+        !Object.prototype.hasOwnProperty.call(result, field) || isSecretMask(result[field])
+    ));
+    const stored = needsExisting ? await NotifyConfig.findById('default').lean() : null;
+    const existing = decryptNotifySecrets(stored);
+
+    for (const field of NOTIFY_SECRET_FIELDS) {
+        if (!Object.prototype.hasOwnProperty.call(result, field) || isSecretMask(result[field])) {
+            result[field] = existing && existing[field] || '';
+        }
+    }
+    return result;
+}
 
 // Helpers
 function buildTransport(cfg) {
@@ -23,8 +67,11 @@ function buildTransport(cfg) {
 function buildWecomPayload(cfg, text) {
     const payload = { msg_type: 'text', data: { content: text } };
     const touser = (cfg.qywxToUser || '').trim();
+    const toparty = (cfg.qywxToParty || '').trim();
+    const totag = (cfg.qywxToTag || '').trim();
     if (touser) payload.touser = touser;
-    if (!payload.touser && !cfg.qywxToParty && !cfg.qywxToTag) payload.touser = '@all';
+    if (toparty) payload.toparty = toparty;
+    if (totag) payload.totag = totag;
 
     const agentId = Number(cfg.qywxAgentId);
     if (!Number.isNaN(agentId) && cfg.qywxAgentId) payload.agent_id = agentId;
@@ -34,20 +81,38 @@ function buildWecomPayload(cfg, text) {
 
 exports.getNotifyConfig = async () => {
     const doc = await NotifyConfig.findById('default').lean();
-    return doc || {};
+    if (!doc) return {};
+    const result = decryptNotifySecrets(doc);
+    for (const field of NOTIFY_SECRET_FIELDS) {
+        if (result[field]) result[field] = SECRET_MASK;
+    }
+    return result;
 };
 
-exports.saveNotifyConfig = async (data) => {
-    data.updatedAt = Date.now();
-    return await NotifyConfig.findByIdAndUpdate('default', { $set: data }, { upsert: true, new: true });
+exports.saveNotifyConfig = async (data, ownerId = '') => {
+    const hydrated = await hydrateNotifySecrets(data);
+    if (ownerId) hydrated.ownerId = String(ownerId);
+    hydrated.updatedAt = Date.now();
+    const protectedConfig = encryptNotifySecrets(hydrated);
+    const saved = await NotifyConfig.findByIdAndUpdate('default', { $set: protectedConfig }, { upsert: true, new: true });
+    const stored = typeof saved.toObject === 'function' ? saved.toObject() : { ...saved };
+    const result = decryptNotifySecrets(stored);
+    for (const field of NOTIFY_SECRET_FIELDS) {
+        if (result[field]) result[field] = SECRET_MASK;
+    }
+    return result;
 };
 
 exports.testNotify = async (config, testChannel) => {
     if (!config) throw new AppError('Missing config', 400);
+    config = await hydrateNotifySecrets(config);
 
     if (testChannel === 'wecom') {
         if (!config.qywxEnabled) throw new AppError('WeCom disabled', 400);
         if (!config.qywxApiKey) throw new AppError('Missing API Key', 400);
+        if (![config.qywxToUser, config.qywxToParty, config.qywxToTag].some((value) => String(value || '').trim())) {
+            throw new AppError('Missing WeCom recipient', 400);
+        }
 
         const nowTime = new Date().toLocaleString('zh-CN', { hour12: false });
         const text = `✨ 星轨轻具坊 · 系统通知
@@ -89,6 +154,21 @@ exports.testNotify = async (config, testChannel) => {
     return { success: true };
 };
 
+exports.migrateNotifySecrets = async () => {
+    const stored = await NotifyConfig.findById('default').lean();
+    if (!stored) return { migrated: false };
+
+    const updates = {};
+    for (const field of NOTIFY_SECRET_FIELDS) {
+        const value = stored[field];
+        if (value && !isEncrypted(String(value))) updates[field] = encrypt(String(value));
+    }
+    if (Object.keys(updates).length === 0) return { migrated: false };
+
+    await NotifyConfig.updateOne({ _id: 'default' }, { $set: updates });
+    return { migrated: true, fields: Object.keys(updates) };
+};
+
 exports.getAdminInfo = async (userId) => {
     const user = await User.findById(userId).lean();
     if (!user) throw new AppError('User not found', 404);
@@ -108,7 +188,8 @@ exports.updateAdminInfo = async (id, data) => {
             if (!valid) throw new AppError('密码错误', 400);
         }
         // 如果没有设置过密码，直接哈希保存新密码，无需对比当前密码
-        user.password = await bcrypt.hash(newPassword, 10);
+        user.password = await bcrypt.hash(newPassword, 12);
+        user.tokenVersion = (Number(user.tokenVersion) || 0) + 1;
     }
 
     if (newUsername && newUsername !== user.userId) {
@@ -119,6 +200,9 @@ exports.updateAdminInfo = async (id, data) => {
 
     user.updatedAt = Date.now();
     await user.save();
+    if (newPassword) {
+        await RefreshToken.deleteMany({ userId: String(id) });
+    }
     return { userId: user.userId };
 };
 

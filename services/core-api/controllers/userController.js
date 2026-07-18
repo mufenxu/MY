@@ -4,6 +4,28 @@ const logAudit = require('../utils/auditLogger');
 const asyncHandler = require('../middleware/asyncHandler');
 const { escapeRegex } = require('../utils/helpers');
 const { clearCache } = require('../middleware/authorizeAccess');
+const { revokeAllRefreshTokens } = require('../services/authService');
+const { acquirePrivilegedMutationLock } = require('../utils/privilegedMutationLock');
+
+const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+
+async function ensureAnotherActiveSuperAdmin(targetId) {
+    const count = await User.countDocuments({
+        _id: { $ne: targetId },
+        role: 'super_admin',
+        $or: [
+            { status: 'active' },
+            { status: { $exists: false } },
+            { status: null }
+        ]
+    });
+
+    if (count === 0) {
+        const error = new Error('Cannot remove or disable the last active super_admin.');
+        error.statusCode = 409;
+        throw error;
+    }
+}
 
 // @desc    Get all users
 // @route   GET /api/users
@@ -69,44 +91,79 @@ exports.updateUser = asyncHandler(async (req, res) => {
     const { role, status, nickName, permissions } = req.body;
     const actor = req.user;
     const targetId = req.params.id;
+    const roleRequested = hasOwn(req.body, 'role');
+    const permissionsRequested = hasOwn(req.body, 'permissions');
 
-    // Permission check
-    if (actor.role !== 'super_admin') {
+    if (actor.role !== 'super_admin' && (roleRequested || permissionsRequested)) {
+        res.status(403);
+        throw new Error('Only super_admin can change roles or permissions.');
+    }
+
+    const releaseMutationLock = await acquirePrivilegedMutationLock();
+    let updateData;
+    let user;
+    try {
         const targetUser = await User.findById(targetId);
-        if (targetUser && targetUser.role === 'super_admin') {
+        if (!targetUser) {
+            res.status(404);
+            throw new Error('User not found.');
+        }
+
+        if (actor.role !== 'super_admin' && targetUser.role === 'super_admin') {
             res.status(403);
             throw new Error('Cannot modify super_admin.');
         }
-    }
 
-    const updateData = { updatedAt: Date.now() };
+        updateData = { updatedAt: Date.now() };
 
-    if (role) updateData.role = role;
-    if (status) updateData.status = status;
-    if (nickName) updateData.nickName = nickName;
-    if (permissions) updateData.permissions = permissions;
+        if (roleRequested) updateData.role = role;
+        if (hasOwn(req.body, 'status')) updateData.status = status;
+        if (hasOwn(req.body, 'nickName')) updateData.nickName = nickName;
+        if (permissionsRequested) updateData.permissions = permissions;
 
-    // UID Auto-fix: if current user doesn't have a numeric userId or it's too short (legacy '1', '2'), assign a new one
-    const userToFix = await User.findById(targetId);
-    if (userToFix && (!userToFix.userId || userToFix.userId.length < 5 || isNaN(Number(userToFix.userId)))) {
-        let counter = await Counter.findByIdAndUpdate(
-            'userId',
-            { $inc: { seq: 1 } },
-            { new: true, upsert: true, setDefaultsOnInsert: true }
-        );
+        const roleChanged = roleRequested && role !== targetUser.role;
+        const currentStatus = targetUser.status || 'active';
+        const statusChanged = hasOwn(req.body, 'status') && status !== currentStatus;
+        const permissionsChanged = permissionsRequested
+            && JSON.stringify(permissions || []) !== JSON.stringify(targetUser.permissions || []);
+        const securityChanged = roleChanged || statusChanged || permissionsChanged;
 
-        // Self-healing: reset if low
-        if (counter.seq < 10000) {
-            counter = await Counter.findByIdAndUpdate(
-                'userId',
-                { $set: { seq: 10001 } },
-                { new: true }
-            );
+        const removesActiveSuperAdmin = targetUser.role === 'super_admin'
+            && currentStatus === 'active'
+            && ((roleChanged && role !== 'super_admin') || (statusChanged && status !== 'active'));
+        if (removesActiveSuperAdmin) {
+            await ensureAnotherActiveSuperAdmin(targetId);
         }
-        updateData.userId = String(counter.seq);
-    }
 
-    const user = await User.findByIdAndUpdate(targetId, { $set: updateData }, { new: true });
+        // UID Auto-fix: if current user doesn't have a numeric userId or it's too short (legacy '1', '2'), assign a new one
+        if (!targetUser.userId || targetUser.userId.length < 5 || isNaN(Number(targetUser.userId))) {
+            let counter = await Counter.findByIdAndUpdate(
+                'userId',
+                { $inc: { seq: 1 } },
+                { new: true, upsert: true, setDefaultsOnInsert: true }
+            );
+
+            // Self-healing: reset if low
+            if (counter.seq < 10000) {
+                counter = await Counter.findByIdAndUpdate(
+                    'userId',
+                    { $set: { seq: 10001 } },
+                    { new: true }
+                );
+            }
+            updateData.userId = String(counter.seq);
+        }
+
+        const update = { $set: updateData };
+        if (securityChanged) update.$inc = { tokenVersion: 1 };
+        user = await User.findByIdAndUpdate(targetId, update, { new: true });
+
+        if (securityChanged) {
+            await revokeAllRefreshTokens(targetId);
+        }
+    } finally {
+        await releaseMutationLock();
+    }
 
     // 主动清空鉴权缓存以使角色/权限变更立即生效
     clearCache(targetId);
@@ -134,27 +191,33 @@ exports.deleteUser = asyncHandler(async (req, res) => {
         throw new Error('Only super_admin can delete users.');
     }
 
-    // Check if target user exists
-    const targetUser = await User.findById(targetId);
-    if (!targetUser) {
-        res.status(404);
-        throw new Error('User not found.');
-    }
+    const releaseMutationLock = await acquirePrivilegedMutationLock();
+    let targetUser;
+    try {
+        // Check if target user exists
+        targetUser = await User.findById(targetId);
+        if (!targetUser) {
+            res.status(404);
+            throw new Error('User not found.');
+        }
 
-    // Prevent deleting super_admin
-    if (targetUser.role === 'super_admin') {
-        res.status(403);
-        throw new Error('Cannot delete super_admin.');
-    }
+        // Deleting a super admin is allowed only when another active one remains.
+        if (targetUser.role === 'super_admin') {
+            await ensureAnotherActiveSuperAdmin(targetId);
+        }
 
-    // Prevent self-deletion
-    if (targetId === actor._id) {
-        res.status(403);
-        throw new Error('Cannot delete yourself.');
-    }
+        // Prevent self-deletion
+        if (targetId === actor._id) {
+            res.status(403);
+            throw new Error('Cannot delete yourself.');
+        }
 
-    // Delete user
-    await User.findByIdAndDelete(targetId);
+        // Delete user
+        await User.findByIdAndDelete(targetId);
+        await revokeAllRefreshTokens(targetId);
+    } finally {
+        await releaseMutationLock();
+    }
 
     // 清除已删除用户的鉴权缓存
     clearCache(targetId);

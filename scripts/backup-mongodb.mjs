@@ -11,7 +11,14 @@ const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const destination = path.join(backupRoot, stamp);
 const archivePath = path.join(destination, 'mongodb.archive.gz');
 const composeArgs = ['compose', '--env-file', '.env', '-f', 'infra/docker/compose.yml'];
-const applicationServices = ['platform-api', 'campus-service', 'iot-service'];
+const applicationServices = [
+  'platform-api',
+  'core-api',
+  'exam-api',
+  'notification-service',
+  'campus-service',
+  'iot-service',
+];
 
 function waitForChild(child, label) {
   return new Promise((resolve, reject) => {
@@ -89,7 +96,7 @@ try {
       waitForChild(dump, 'mongodump')
     ]);
 
-    await run('docker', [...composeArgs, 'cp', 'platform-api:/app/services/core-api/uploads', destination]);
+    await run('docker', [...composeArgs, 'cp', 'core-api:/app/services/core-api/uploads', destination]);
     const metadata = {
       formatVersion: 2,
       createdAt: new Date().toISOString(),

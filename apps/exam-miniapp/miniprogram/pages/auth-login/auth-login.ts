@@ -3,10 +3,12 @@ import { api } from '../../services/api';
 import { getNavBarInfo } from '../../utils/nav';
 import { ROUTES } from '../../utils/routes';
 
-const TAB_PAGES = new Set([
+type TabPage = typeof ROUTES.INDEX | typeof ROUTES.PROFILE;
+const TAB_PAGES: ReadonlySet<string> = new Set([
     ROUTES.INDEX,
     ROUTES.PROFILE,
 ]);
+const isTabPage = (path: string): path is TabPage => TAB_PAGES.has(path);
 const DEFAULT_GUEST_AVATAR = '/assets/guest-avatar.png';
 
 Page({
@@ -108,7 +110,7 @@ Page({
         const nextUrl = this.data.nextUrl;
         if (nextUrl) {
             const path = nextUrl.split('?')[0];
-            if (TAB_PAGES.has(path)) {
+            if (isTabPage(path)) {
                 wx.switchTab({ url: path });
                 return;
             }

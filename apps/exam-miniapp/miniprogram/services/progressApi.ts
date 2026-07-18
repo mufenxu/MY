@@ -3,6 +3,9 @@ import { authApi } from './authApi';
 import { buildQuery } from './shared';
 import { ExamProgress, ProgressPayload } from './types';
 
+const flushPromises = new Map<string, Promise<void>>();
+const uploadPromises = new Map<string, Promise<any>>();
+
 function getProgressStorageKey(categoryId: string, mode: string) {
     const uid = wx.getStorageSync('wechat_openid') || 'guest';
     return `exam_progress_${uid}_${categoryId}_${mode}`;
@@ -13,23 +16,31 @@ function getPendingProgressStorageKey() {
     return `pending_exam_progress_keys_${uid}`;
 }
 
-function readPendingProgressKeys() {
-    const keys = wx.getStorageSync(getPendingProgressStorageKey());
+function readPendingProgressKeys(pendingStorageKey = getPendingProgressStorageKey()) {
+    const keys = wx.getStorageSync(pendingStorageKey);
     return Array.isArray(keys) ? keys.filter((key) => typeof key === 'string') : [];
 }
 
-function addPendingProgressKey(categoryId: string, mode: string) {
+function addPendingProgressKey(categoryId: string, mode: string, pendingStorageKey = getPendingProgressStorageKey()) {
     const key = getProgressStorageKey(categoryId, mode);
-    const keys = readPendingProgressKeys();
+    const keys = readPendingProgressKeys(pendingStorageKey);
     if (!keys.includes(key)) {
-        wx.setStorageSync(getPendingProgressStorageKey(), [...keys, key]);
+        wx.setStorageSync(pendingStorageKey, [...keys, key]);
     }
 }
 
-function removePendingProgressKey(categoryId: string, mode: string) {
-    const key = getProgressStorageKey(categoryId, mode);
-    const keys = readPendingProgressKeys().filter((item) => item !== key);
-    wx.setStorageSync(getPendingProgressStorageKey(), keys);
+function removePendingProgressStorageKey(progressStorageKey: string, pendingStorageKey = getPendingProgressStorageKey()) {
+    const storedKeys = wx.getStorageSync(pendingStorageKey);
+    if (!Array.isArray(storedKeys)) {
+        return;
+    }
+
+    const keys = storedKeys.filter((item) => item !== progressStorageKey);
+    wx.setStorageSync(pendingStorageKey, keys);
+}
+
+function removePendingProgressKey(categoryId: string, mode: string, pendingStorageKey = getPendingProgressStorageKey()) {
+    removePendingProgressStorageKey(getProgressStorageKey(categoryId, mode), pendingStorageKey);
 }
 
 function isPendingProgressKey(categoryId: string, mode: string) {
@@ -45,14 +56,64 @@ function getProgressUpdatedAt(progress?: Pick<ExamProgress, 'updateTime'> | null
     return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+function isSameProgressSnapshot(left: ProgressPayload | '', right: ProgressPayload | '') {
+    if (!left || !right) {
+        return left === right;
+    }
+
+    try {
+        return JSON.stringify(left) === JSON.stringify(right);
+    } catch {
+        return false;
+    }
+}
+
+function uploadLatestProgress(progressStorageKey: string, pendingStorageKey: string) {
+    const activeUpload = uploadPromises.get(progressStorageKey);
+    if (activeUpload) {
+        return activeUpload;
+    }
+
+    let uploadPromise: Promise<any>;
+    uploadPromise = (async () => {
+        let result: any;
+        while (true) {
+            const progress = wx.getStorageSync(progressStorageKey) as ProgressPayload | '';
+            if (!progress || !progress.categoryId || !progress.mode) {
+                removePendingProgressStorageKey(progressStorageKey, pendingStorageKey);
+                return result;
+            }
+
+            result = await request({ url: '/exam/progress', method: 'POST', data: progress });
+            const latestProgress = wx.getStorageSync(progressStorageKey) as ProgressPayload | '';
+            if (isSameProgressSnapshot(progress, latestProgress)) {
+                removePendingProgressStorageKey(progressStorageKey, pendingStorageKey);
+                return result;
+            }
+
+            if (!latestProgress) {
+                removePendingProgressStorageKey(progressStorageKey, pendingStorageKey);
+                return result;
+            }
+        }
+    })().finally(() => {
+        if (uploadPromises.get(progressStorageKey) === uploadPromise) {
+            uploadPromises.delete(progressStorageKey);
+        }
+    });
+
+    uploadPromises.set(progressStorageKey, uploadPromise);
+    return uploadPromise;
+}
+
 export const progressApi = {
     saveProgress: async (data: ProgressPayload) => {
+        const progressStorageKey = getProgressStorageKey(data.categoryId, data.mode);
+        const pendingStorageKey = getPendingProgressStorageKey();
         progressApi.saveLocalProgress(data);
-        addPendingProgressKey(data.categoryId, data.mode);
+        addPendingProgressKey(data.categoryId, data.mode, pendingStorageKey);
         await authApi.ensureAuth();
-        const result = await request({ url: '/exam/progress', method: 'POST', data });
-        removePendingProgressKey(data.categoryId, data.mode);
-        return result;
+        return uploadLatestProgress(progressStorageKey, pendingStorageKey);
     },
 
     getProgress: async (categoryId: string, mode: string) => {
@@ -90,17 +151,22 @@ export const progressApi = {
     },
 
     clearProgress: async (categoryId: string, mode: string) => {
+        const progressStorageKey = getProgressStorageKey(categoryId, mode);
+        const pendingStorageKey = getPendingProgressStorageKey();
         progressApi.clearLocalProgress(categoryId, mode);
-        removePendingProgressKey(categoryId, mode);
+        removePendingProgressKey(categoryId, mode, pendingStorageKey);
+        await uploadPromises.get(progressStorageKey)?.catch(() => undefined);
         await authApi.ensureAuth();
         return request({ url: '/exam/progress', method: 'DELETE', data: { categoryId, mode } });
     },
 
     saveLocalProgress: (data: ProgressPayload) => {
-        wx.setStorageSync(getProgressStorageKey(data.categoryId, data.mode), {
+        const storedProgress = {
             ...data,
             updateTime: data.updateTime || new Date().toISOString(),
-        });
+        };
+        wx.setStorageSync(getProgressStorageKey(data.categoryId, data.mode), storedProgress);
+        return storedProgress;
     },
 
     getLocalProgress: (categoryId: string, mode: string) => {
@@ -116,20 +182,33 @@ export const progressApi = {
             return;
         }
 
-        const keys = readPendingProgressKeys();
-        for (const key of keys) {
-            const progress = wx.getStorageSync(key) as ProgressPayload | '';
-            if (!progress || !progress.categoryId || !progress.mode) {
-                wx.setStorageSync(getPendingProgressStorageKey(), readPendingProgressKeys().filter((item) => item !== key));
-                continue;
-            }
+        const pendingStorageKey = getPendingProgressStorageKey();
+        const activeFlush = flushPromises.get(pendingStorageKey);
+        if (activeFlush) return activeFlush;
 
-            try {
-                await request({ url: '/exam/progress', method: 'POST', data: progress });
-                removePendingProgressKey(progress.categoryId, progress.mode);
-            } catch (error) {
-                console.error('Flush progress failed', error);
+        let flushPromise: Promise<void>;
+        flushPromise = (async () => {
+            const keys = readPendingProgressKeys(pendingStorageKey);
+            for (const key of keys) {
+                const progress = wx.getStorageSync(key) as ProgressPayload | '';
+                if (!progress || !progress.categoryId || !progress.mode) {
+                    removePendingProgressStorageKey(key, pendingStorageKey);
+                    continue;
+                }
+
+                try {
+                    await uploadLatestProgress(key, pendingStorageKey);
+                } catch (error) {
+                    console.error('Flush progress failed', error);
+                }
             }
-        }
+        })().finally(() => {
+            if (flushPromises.get(pendingStorageKey) === flushPromise) {
+                flushPromises.delete(pendingStorageKey);
+            }
+        });
+
+        flushPromises.set(pendingStorageKey, flushPromise);
+        return flushPromise;
     },
 };
