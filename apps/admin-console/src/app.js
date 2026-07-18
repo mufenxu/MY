@@ -236,7 +236,7 @@ export function createApp({
 
   app.get('/api/backups/jobs/:id', async (req, res, next) => {
     try {
-      res.json({ job: backups.getJob(req.params.id) });
+      res.json({ job: await backups.getJob(req.params.id) });
     } catch (error) {
       try {
         sendBackupError(res, error);

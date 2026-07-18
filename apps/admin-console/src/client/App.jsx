@@ -1187,7 +1187,7 @@ function BackupRecoveryView({ session }) {
           </header>
           <div className="backup-action-copy">
             <strong>{capabilities.canBackup ? '全量备份已接入' : '备份执行器不可用'}</strong>
-            <span>备份会短暂停止业务容器，生成包含五个 MongoDB 数据库和核心上传文件的归档。</span>
+            <span>备份由独立执行器在线创建 MongoDB 归档并复制核心上传文件，不主动停止业务容器。</span>
           </div>
           <button
             className="primary-button backup-primary-action"

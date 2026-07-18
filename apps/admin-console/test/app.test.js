@@ -50,7 +50,7 @@ test('backup mutations require the console request header', async () => {
         backupStarted = true;
         return { id: 'job-1', type: 'backup', status: 'running' };
       },
-      getJob: () => ({ id: 'job-1', type: 'backup', status: 'running' }),
+      getJob: async () => ({ id: 'job-1', type: 'backup', status: 'succeeded' }),
       startRestore: async () => ({ id: 'job-2', type: 'restore', status: 'running' }),
     },
   });
@@ -65,5 +65,9 @@ test('backup mutations require the console request header', async () => {
     });
     assert.equal(response.status, 202);
     assert.equal(backupStarted, true);
+
+    const jobResponse = await fetch(`${origin}/api/backups/jobs/job-1`);
+    assert.equal(jobResponse.status, 200);
+    assert.deepEqual((await jobResponse.json()).job, { id: 'job-1', type: 'backup', status: 'succeeded' });
   });
 });
