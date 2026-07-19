@@ -52,6 +52,14 @@ function parseJsonRows(value) {
   }
 }
 
+export function parseDockerTemplateRows(value, fields) {
+  return String(value || '').trim().split(/\r?\n/).filter(Boolean).map((line) => {
+    const columns = line.split('\t');
+    if (columns.length !== fields.length) throw new Error('Docker inspect returned an unexpected field count.');
+    return Object.fromEntries(fields.map((field, index) => [field, JSON.parse(columns[index])]));
+  });
+}
+
 export function parseEnvSource(source) {
   const values = new Map();
   for (const rawLine of String(source || '').split(/\r?\n/)) {
@@ -294,12 +302,16 @@ export function createDeploymentRunner({
     const rows = parseJsonRows(stdout);
     const containerIds = rows.map((row) => row.ID).filter(Boolean);
     const containerDetails = containerIds.length
-      ? JSON.parse((await runDocker(['inspect', ...containerIds], 30_000)).stdout)
+      ? parseDockerTemplateRows((await runDocker([
+        'inspect', '--format', '{{json .Id}}\t{{json .Image}}\t{{json .State}}', ...containerIds,
+      ], 30_000)).stdout, ['Id', 'Image', 'State'])
       : [];
     const containers = new Map(containerDetails.map((item) => [item.Id, item]));
     const imageIds = [...new Set(containerDetails.map((item) => item.Image).filter(Boolean))];
     const imageDetails = imageIds.length
-      ? JSON.parse((await runDocker(['image', 'inspect', ...imageIds], 30_000)).stdout)
+      ? parseDockerTemplateRows((await runDocker([
+        'image', 'inspect', '--format', '{{json .Id}}\t{{json .RepoDigests}}\t{{json .Config.Labels}}', ...imageIds,
+      ], 30_000)).stdout, ['Id', 'RepoDigests', 'Labels'])
       : [];
     const images = new Map(imageDetails.map((item) => [item.Id, item]));
     const byService = new Map(rows.map((row) => [row.Service, row]));
@@ -310,7 +322,7 @@ export function createDeploymentRunner({
       const configuredImage = envValues.get(definition.envKey) || '';
       const trustedRepoDigest = (image?.RepoDigests || []).find((value) => value.startsWith(`${config.allowedImageRepository}@sha256:`)) || '';
       const digest = trustedRepoDigest.split('@')[1] || '';
-      const labels = image?.Config?.Labels || {};
+      const labels = image?.Labels || {};
       const configuredDigest = configuredImage.split('@')[1] || '';
       return {
         component,

@@ -5,6 +5,7 @@ import {
   createDeploymentRunner,
   loadRunnerConfig,
   normalizeComponents,
+  parseDockerTemplateRows,
   parseEnvSource,
   updateEnvSource,
   validateRunnerArtifact,
@@ -64,6 +65,19 @@ test('deployment runner accepts an allowlisted digest reference', () => {
 test('deployment runner requires matching host and container workspace paths', () => {
   assert.equal(validateWorkspaceMount({ Mounts: [{ Source: '/srv/my-platform', Destination: '/srv/my-platform' }] }, '/srv/my-platform'), '/srv/my-platform');
   assert.throws(() => validateWorkspaceMount({ Mounts: [{ Source: '/host/project', Destination: '/workspace' }] }, '/workspace'), /identical host\/container workspace path/);
+});
+
+test('deployment runner parses compact Docker inspect fields without container environment data', () => {
+  const rows = parseDockerTemplateRows(
+    '"container-id"\t"sha256:image-id"\t{"Running":true,"Health":{"Status":"healthy"}}\n',
+    ['Id', 'Image', 'State'],
+  );
+  assert.deepEqual(rows, [{
+    Id: 'container-id',
+    Image: 'sha256:image-id',
+    State: { Running: true, Health: { Status: 'healthy' } },
+  }]);
+  assert.throws(() => parseDockerTemplateRows('"only-one-field"\n', ['Id', 'Image']), /unexpected field count/);
 });
 
 test('deployment runner exposes only a minimal unauthenticated health endpoint', async () => {
