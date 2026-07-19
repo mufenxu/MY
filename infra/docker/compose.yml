@@ -91,6 +91,7 @@ services:
       DEPLOY_RUNNER_ENV_FILE: ${DEPLOY_RUNNER_WORKSPACE_ROOT:?Set DEPLOY_RUNNER_WORKSPACE_ROOT}/${DEPLOY_RUNNER_ENV_FILE:-.env}
       DEPLOY_RUNNER_STATE_DIR: /state
       DEPLOY_RUNNER_EXPECT_SELF_MOUNT: "true"
+      DEPLOY_RUNNER_DOCKER_GID: ${DEPLOY_RUNNER_DOCKER_GID:?Run release:sidecar:configure on the Docker host}
       DEPLOY_RUNNER_ALLOW_MONGODB: ${DEPLOY_RUNNER_ALLOW_MONGODB:-false}
       DEPLOY_RUNNER_MINIMUM_FREE_BYTES: ${DEPLOY_RUNNER_MINIMUM_FREE_BYTES:-2147483648}
       DEPLOY_RUNNER_COMMAND_TIMEOUT_MS: ${DEPLOY_RUNNER_COMMAND_TIMEOUT_MS:-600000}
@@ -100,8 +101,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ../..:${DEPLOY_RUNNER_WORKSPACE_ROOT:?Set DEPLOY_RUNNER_WORKSPACE_ROOT}
-      - ${DEPLOY_RUNNER_DOCKER_CONFIG_PATH:-/root/.docker}:/root/.docker:ro
       - deployment_runner_state:/state
+    group_add:
+      - ${DEPLOY_RUNNER_DOCKER_GID:?Run release:sidecar:configure on the Docker host}
     tmpfs:
       - /tmp:size=32m,noexec,nosuid,nodev
     security_opt:

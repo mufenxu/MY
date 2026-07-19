@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { chmod, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { chmod, chown, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -53,6 +53,7 @@ export function configureSidecar(
   command,
   tokenFactory = () => crypto.randomBytes(32).toString('base64url'),
   workspaceRoot = defaultWorkspaceRoot(),
+  dockerGid = '0',
 ) {
   const values = parseEnv(source);
   if (!['configure', 'enable-actions', 'disable'].includes(command)) {
@@ -88,10 +89,14 @@ export function configureSidecar(
   if (!path.posix.isAbsolute(deploymentWorkspaceRoot) || deploymentWorkspaceRoot.includes('..')) {
     throw new Error('DEPLOY_RUNNER_WORKSPACE_ROOT must be an absolute Linux host path.');
   }
+  if (!/^\d+$/.test(String(dockerGid))) {
+    throw new Error('DEPLOY_RUNNER_DOCKER_GID must be a numeric group ID.');
+  }
 
   return updateEnv(source, {
     COMPOSE_PROFILES: updateProfiles(values.get('COMPOSE_PROFILES'), true),
     DEPLOYMENT_RUNNER_IMAGE: values.get('DEPLOYMENT_RUNNER_IMAGE') || `${repository}:deployment-runner-latest`,
+    DEPLOY_RUNNER_DOCKER_GID: String(dockerGid),
     DEPLOY_RUNNER_WORKSPACE_ROOT: path.posix.normalize(deploymentWorkspaceRoot),
     PLATFORM_DEPLOY_HOOK_URL: 'http://deployment-runner:22104',
     PLATFORM_DEPLOY_HOOK_TOKEN: deployToken,
@@ -105,11 +110,25 @@ async function main() {
   const command = process.argv[2] || 'configure';
   const filename = path.resolve(process.argv[3] || '.env');
   const source = await readFile(filename, 'utf8');
-  const updated = configureSidecar(source, command);
+  const dockerGid = command === 'disable' || process.platform === 'win32'
+    ? '0'
+    : String((await stat('/var/run/docker.sock')).gid);
+  const updated = configureSidecar(source, command, undefined, undefined, dockerGid);
   const fileStat = await stat(filename);
   const temporary = `${filename}.${process.pid}.tmp`;
+  if (command !== 'disable' && process.platform !== 'win32') {
+    const directory = path.dirname(filename);
+    const directoryStat = await stat(directory);
+    await chown(directory, directoryStat.uid, Number(dockerGid));
+    await chmod(directory, (directoryStat.mode & 0o777) | 0o2070);
+  }
   await writeFile(temporary, updated, { encoding: 'utf8', mode: 0o600 });
-  await chmod(temporary, fileStat.mode & 0o777);
+  if (command !== 'disable' && process.platform !== 'win32') {
+    await chown(temporary, fileStat.uid, Number(dockerGid));
+    await chmod(temporary, (fileStat.mode & 0o777) | 0o060);
+  } else {
+    await chmod(temporary, fileStat.mode & 0o777);
+  }
   await rename(temporary, filename);
   console.log(`Deployment Sidecar ${command} configuration applied to ${path.basename(filename)}.`);
 }

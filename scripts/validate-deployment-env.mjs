@@ -86,6 +86,9 @@ if (composeProfiles.has('release')) {
   if (!values.get('DEPLOYMENT_RUNNER_IMAGE')) {
     errors.push('DEPLOYMENT_RUNNER_IMAGE is required when the release profile is enabled');
   }
+  if (!/^\d+$/.test(values.get('DEPLOY_RUNNER_DOCKER_GID') || '')) {
+    errors.push('DEPLOY_RUNNER_DOCKER_GID must be numeric when the release profile is enabled');
+  }
 }
 
 if (String(values.get('PLATFORM_RELEASE_ACTIONS_ENABLED') || '').toLowerCase() === 'true') {

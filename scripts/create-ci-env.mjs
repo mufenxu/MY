@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { chmod, chown, stat, writeFile } from 'node:fs/promises';
 import { createPasswordHash } from '../apps/admin-console/src/auth.js';
 
 const random = (bytes = 32) => crypto.randomBytes(bytes).toString('base64url');
@@ -8,6 +8,7 @@ const privateValue = privateKey.export({ format: 'der', type: 'pkcs8' }).toStrin
 const publicValue = publicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
 const adminPassword = `Aa1!${random(18)}`;
 const adminPasswordHash = await createPasswordHash(adminPassword);
+const dockerGid = process.platform === 'win32' ? 0 : (await stat('/var/run/docker.sock')).gid;
 
 const values = {
   TZ: 'Asia/Shanghai',
@@ -20,6 +21,7 @@ const values = {
   BACKUP_RUNNER_IMAGE: 'my-platform/backup-runner:ci',
   DEPLOYMENT_RUNNER_IMAGE: 'my-platform/deployment-runner:ci',
   DEPLOY_RUNNER_WORKSPACE_ROOT: process.platform === 'win32' ? '/opt/my-platform' : process.cwd(),
+  DEPLOY_RUNNER_DOCKER_GID: String(dockerGid),
   CAMPUS_SERVICE_IMAGE: 'my-platform/campus-service:ci',
   IOT_SERVICE_IMAGE: 'my-platform/iot-service:ci',
   PLATFORM_BIND_ADDRESS: '127.0.0.1',
@@ -106,5 +108,11 @@ const values = {
 
 const output = `${Object.entries(values).map(([key, value]) => `${key}=${value}`).join('\n')}\n`;
 const destination = process.argv[2];
-if (destination) await writeFile(destination, output, { encoding: 'utf8', mode: 0o600 });
+if (destination) {
+  await writeFile(destination, output, { encoding: 'utf8', mode: 0o600 });
+  if (process.platform !== 'win32') {
+    await chown(destination, process.getuid(), dockerGid);
+    await chmod(destination, 0o640);
+  }
+}
 else process.stdout.write(output);

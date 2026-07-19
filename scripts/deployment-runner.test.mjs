@@ -92,6 +92,9 @@ test('deployment Sidecar is backend-only and isolates the Docker socket from pla
   assert.match(sidecar, /\/var\/run\/docker\.sock:\/var\/run\/docker\.sock/);
   assert.match(sidecar, /\.\.\/\.\.:\$\{DEPLOY_RUNNER_WORKSPACE_ROOT:\?Set DEPLOY_RUNNER_WORKSPACE_ROOT\}/);
   assert.match(sidecar, /DEPLOY_RUNNER_EXPECT_SELF_MOUNT: "true"/);
+  assert.match(sidecar, /group_add:/);
+  assert.match(sidecar, /DEPLOY_RUNNER_DOCKER_GID/);
+  assert.doesNotMatch(sidecar, /:\/root\/\.docker/);
   assert.match(sidecar, /- backend/);
   assert.doesNotMatch(sidecar, /^\s+ports:/m);
   assert.doesNotMatch(platform, /\/var\/run\/docker\.sock/);

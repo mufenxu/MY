@@ -80,7 +80,7 @@ The recommended runner is an internal Compose Sidecar. It is not published throu
    npm run release:sidecar:configure
    ```
 
-2. Ensure the Docker account that starts Compose is already signed in to ACR. The Sidecar mounts that Docker config read-only. Set `DEPLOY_RUNNER_DOCKER_CONFIG_PATH` only when the config is not `/root/.docker`.
+2. The configuration command records the Docker Socket group ID and grants only that group read/write access to `.env` and the repository root. The Sidecar itself runs as a non-root user. The current public ACR repository needs no registry credentials inside the Sidecar.
 3. Pull and start the Sidecar and platform:
 
    ```bash
@@ -96,7 +96,7 @@ The recommended runner is an internal Compose Sidecar. It is not published throu
    docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build --no-deps --force-recreate --wait --wait-timeout 240 platform-api
    ```
 
-The Sidecar mounts the Docker socket, workspace, production environment file, protected state volume, and Docker client configuration. Docker Socket access is effectively host-administrator access, so the Sidecar remains isolated on the internal network, accepts only its bearer token, validates repository Digests, and never serves browser traffic.
+The Sidecar mounts the Docker socket, workspace, production environment file, and protected state volume. Docker Socket access is effectively host-administrator access even for a non-root process in the socket group, so the Sidecar remains isolated on the internal network, accepts only its bearer token, validates repository Digests, and never serves browser traffic.
 
 The release page checks for newer verified builds every minute and offers `一键更新` when one or more of the eight product components differ from the latest successful build. The deployment runner itself is deliberately excluded from this button: update the privileged infrastructure image explicitly with Compose so the executor never replaces itself mid-job.
 
