@@ -1,12 +1,28 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
+  createDeploymentRunner,
   loadRunnerConfig,
   normalizeComponents,
   parseEnvSource,
   updateEnvSource,
   validateRunnerArtifact,
+  validateWorkspaceMount,
 } from './deployment-runner.mjs';
+
+async function withServer(server, callback) {
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  try {
+    const { port } = server.address();
+    await callback(`http://127.0.0.1:${port}`);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
 
 test('deployment runner preserves unrelated environment values', () => {
   const source = '# production\nPLATFORM_API_IMAGE=registry/old:tag\nSECRET=value=with=equals\n';
@@ -43,4 +59,40 @@ test('deployment runner accepts an allowlisted digest reference', () => {
   }, config);
   assert.equal(artifact.component, 'platform');
   assert.equal(artifact.digest, digest);
+});
+
+test('deployment runner requires matching host and container workspace paths', () => {
+  assert.equal(validateWorkspaceMount({ Mounts: [{ Source: '/srv/my-platform', Destination: '/srv/my-platform' }] }, '/srv/my-platform'), '/srv/my-platform');
+  assert.throws(() => validateWorkspaceMount({ Mounts: [{ Source: '/host/project', Destination: '/workspace' }] }, '/workspace'), /identical host\/container workspace path/);
+});
+
+test('deployment runner exposes only a minimal unauthenticated health endpoint', async () => {
+  const runner = createDeploymentRunner({
+    config: loadRunnerConfig({
+      DEPLOY_RUNNER_ENABLED: 'true',
+      DEPLOY_RUNNER_TOKEN: 't'.repeat(32),
+      DEPLOY_RUNNER_CALLBACK_TOKEN: 'c'.repeat(32),
+      DEPLOY_RUNNER_CALLBACK_URL: 'http://platform-api:22100/api/releases/callback',
+      DEPLOY_RUNNER_ALLOWED_IMAGE_REPOSITORY: 'registry.example.com/team/app',
+    }),
+  });
+  await withServer(runner.createServer(), async (origin) => {
+    const health = await fetch(`${origin}/healthz`);
+    assert.equal(health.status, 200);
+    assert.deepEqual(await health.json(), { status: 'ok' });
+    assert.equal((await fetch(`${origin}/status`)).status, 401);
+  });
+});
+
+test('deployment Sidecar is backend-only and isolates the Docker socket from platform-api', async () => {
+  const compose = await readFile(new URL('../infra/docker/compose.yml', import.meta.url), 'utf8');
+  const sidecar = compose.slice(compose.indexOf('  deployment-runner:'), compose.indexOf('  platform-api:'));
+  const platform = compose.slice(compose.indexOf('  platform-api:'), compose.indexOf('  core-api:'));
+  assert.match(sidecar, /profiles: \["release"\]/);
+  assert.match(sidecar, /\/var\/run\/docker\.sock:\/var\/run\/docker\.sock/);
+  assert.match(sidecar, /\.\.\/\.\.:\$\{DEPLOY_RUNNER_WORKSPACE_ROOT:\?Set DEPLOY_RUNNER_WORKSPACE_ROOT\}/);
+  assert.match(sidecar, /DEPLOY_RUNNER_EXPECT_SELF_MOUNT: "true"/);
+  assert.match(sidecar, /- backend/);
+  assert.doesNotMatch(sidecar, /^\s+ports:/m);
+  assert.doesNotMatch(platform, /\/var\/run\/docker\.sock/);
 });

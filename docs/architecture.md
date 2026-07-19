@@ -4,6 +4,7 @@
 
 | Container | Source | Responsibility |
 | --- | --- | --- |
+| `deployment-runner` | `scripts/deployment-runner.mjs` | Internal release Sidecar with restricted Docker and Compose execution; never exposed through Nginx |
 | `platform-api` | `services/platform-api` | 统一门户、会话校验、内部身份签发与反向代理；不持有业务或 Mongo root 凭据 |
 | `core-api` | `services/core-api` | 综合业务 API 与管理前端 |
 | `exam-api` | `services/exam-api` | 考试业务 API 与管理前端 |
@@ -54,6 +55,7 @@
 | `exam-api` | none | `3110` | Docker networks only |
 | `notification-service` | none | `3000` | Docker networks only |
 | `backup-runner` | none | `22103` | Internal Docker network only |
+| `deployment-runner` | none | `22104` | Internal backend network only |
 | `campus-service` | `22101` | `22101` | Loopback and Docker network |
 | `iot-service` | `22102` | `22102` | Loopback and Docker network |
 | `mongodb` | `27017` | `27017` | Loopback and Docker internal network |
@@ -62,7 +64,7 @@ Development-only ports such as the Vite preview port are not part of the product
 
 ## Image distribution
 
-Alibaba Cloud Container Registry is the primary production image source. GitHub Container Registry remains a backup produced by CI. Production hosts pull all eight images, including the MongoDB 7 mirror, from the Beijing ACR endpoint so deployment does not depend on Docker Hub or GHCR connectivity.
+Alibaba Cloud Container Registry is the primary production image source. GitHub Container Registry remains a backup produced by CI. Production hosts pull eight product images plus the `deployment-runner` infrastructure image from the Beijing ACR endpoint so deployment does not depend on Docker Hub or GHCR connectivity. The one-shot `mongodb-init` service reuses the MongoDB image and does not add another image.
 
 ## Boundaries
 

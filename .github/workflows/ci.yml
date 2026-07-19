@@ -114,6 +114,9 @@ jobs:
           - image: backup-runner
             context: .
             file: backup-runner.Dockerfile
+          - image: deployment-runner
+            context: .
+            file: deployment-runner.Dockerfile
           - image: campus-service
             context: .
             file: campus-service.Dockerfile

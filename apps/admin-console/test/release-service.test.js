@@ -153,6 +153,44 @@ test('workflow callbacks persist complete immutable artifacts and reject other r
   );
 });
 
+test('release summary reports components that differ from the latest verified build', async () => {
+  const store = createMemoryReleaseStore();
+  const releases = createReleaseService({
+    config: config({
+      releaseCallbackToken: 'c'.repeat(32),
+      releaseAllowedImageRepository: imageRepository,
+      deployHookUrl: 'http://deployment-runner:22104',
+      deployHookToken: 'd'.repeat(32),
+    }),
+    store,
+    fetchImpl: async () => jsonResponse({
+      components: [{
+        component: 'platform',
+        configuredImage: `${imageRepository}@sha256:${'b'.repeat(64)}`,
+        digest: `sha256:${'b'.repeat(64)}`,
+        state: 'running',
+        health: 'healthy',
+        inSync: true,
+      }],
+      jobs: [],
+    }),
+  });
+  await releases.acceptCallback({
+    type: 'build',
+    releaseId: 'gha-update-1',
+    status: 'succeeded',
+    event: 'push',
+    targets: ['platform'],
+    artifacts: [artifact()],
+    revision: 'e'.repeat(40),
+    runId: '456',
+  });
+  const summary = await releases.getSummary();
+  assert.equal(summary.metrics.availableUpdates, 1);
+  assert.deepEqual(summary.metrics.availableUpdateComponents, ['platform']);
+  assert.equal(summary.metrics.latestBuildId, 'gha-update-1');
+});
+
 test('deployment uses build digests only after runner and platform preflight checks pass', async () => {
   const store = createMemoryReleaseStore();
   const requests = [];

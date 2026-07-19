@@ -54,6 +54,7 @@ Production keeps the public gateway separate from every business runtime and fro
 | `exam-api` | internal only | `3110` |
 | `notification-service` | internal only | `3000` |
 | `backup-runner` | internal only | `22103` |
+| `deployment-runner` | internal only | `22104` |
 | `campus-service` | `22101` | `22101` |
 | `iot-service` | `22102` | `22102` |
 | `mongodb` | `127.0.0.1:27017` | `27017` |
@@ -73,9 +74,10 @@ Alibaba Cloud Container Registry is the primary deployment registry:
 - `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:campus-service-latest`
 - `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:iot-service-latest`
 - `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:mongodb-7.0`
+- `crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:deployment-runner-latest`
 
 ACR registry and image release instructions are documented in [docs/aliyun-acr.md](./docs/aliyun-acr.md). Architecture boundaries are in [docs/architecture.md](./docs/architecture.md), and single-domain deployment steps are in [docs/single-domain-deployment.md](./docs/single-domain-deployment.md).
 
 Pushes to `main` rebuild affected ACR images automatically through the GitHub Actions workflow named `Build and push Aliyun ACR images`. Run that workflow manually only for retries, full releases, or explicit target selection such as `platform,backup`.
 
-The workflow now waits for the exact commit's CI result, smoke-tests immutable SHA candidates, and only then promotes deployment tags. The admin release center persists build artifacts and controlled deployment history; see [`docs/release-center.md`](docs/release-center.md).
+The workflow now waits for the exact commit's CI result, smoke-tests immutable SHA candidates, and only then promotes deployment tags. The eight product images are managed by the release center; the privileged `deployment-runner` is a ninth infrastructure image and is upgraded explicitly through Compose so it never attempts to replace itself. The admin release center persists build artifacts and controlled deployment history; see [`docs/release-center.md`](docs/release-center.md).

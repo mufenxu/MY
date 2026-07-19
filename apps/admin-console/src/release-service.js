@@ -290,6 +290,11 @@ export function createReleaseService({
     const successfulBuilds = completedBuilds.filter((item) => item.status === 'succeeded').length;
     const components = mapRuntimeComponents(componentImages, runtimeStatus);
     const driftCount = components.filter((item) => item.inSync === false).length;
+    const latestBuild = builds.find((item) => item.status === 'succeeded' && item.artifacts?.length);
+    const runtimeDigests = new Map(components.map((item) => [item.id, item.runtime?.digest || '']));
+    const availableUpdateComponents = (latestBuild?.artifacts || [])
+      .filter((artifact) => runtimeDigests.get(artifact.component) && runtimeDigests.get(artifact.component) !== artifact.digest)
+      .map((artifact) => artifact.component);
     return {
       capabilities: {
         githubConfigured,
@@ -317,6 +322,10 @@ export function createReleaseService({
         configuredComponents: components.filter((item) => item.configured).length,
         observedComponents: components.filter((item) => item.runtime).length,
         driftCount,
+        availableUpdates: availableUpdateComponents.length,
+        availableUpdateComponents,
+        latestBuildId: latestBuild?.id || null,
+        latestRevision: latestBuild?.revision || null,
         successfulBuilds,
         completedBuilds: completedBuilds.length,
         activeOperations: builds.filter((item) => ACTIVE_BUILD_STATES.has(item.status)).length

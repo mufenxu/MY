@@ -49,4 +49,7 @@ test('ACR workflow consumes Buildx metadata without an immediate registry lookup
   assert.match(workflow, /--metadata-file "\$\{metadata_file\}"/);
   assert.match(workflow, /node scripts\/buildx-metadata\.mjs "\$\{metadata_file\}"/);
   assert.doesNotMatch(workflow, /imagetools inspect "\$\{candidate\}"/);
+  assert.match(workflow, /\[runner\]="deployment-runner\.Dockerfile"/);
+  assert.match(workflow, /if \[ "\$\{target\}" != "runner" \]; then/);
+  assert.match(workflow, /RELEASE_TARGETS: \$\{\{ steps\.resolve\.outputs\.release_targets \}\}/);
 });

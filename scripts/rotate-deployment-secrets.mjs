@@ -8,6 +8,7 @@ const rotations = new Map([
   ['NOTIFY_API_KEY', () => crypto.randomBytes(32).toString('base64url')],
   ['IOT_ADMIN_PASSWORD', () => crypto.randomBytes(24).toString('base64url')],
   ['PLATFORM_BACKUP_RUNNER_TOKEN', () => crypto.randomBytes(32).toString('base64url')],
+  ['PLATFORM_DEPLOY_HOOK_TOKEN', () => crypto.randomBytes(32).toString('base64url')],
   ['MONGO_BACKUP_PASSWORD', () => crypto.randomBytes(32).toString('base64url')],
   ['MQTT_PASSWORD', () => crypto.randomBytes(24).toString('base64url')],
 ]);

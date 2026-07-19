@@ -36,6 +36,7 @@ const policies = new Map([
   ['PLATFORM_INTERNAL_AUTH_PRIVATE_KEY', 32],
   ['PLATFORM_METRICS_TOKEN', 32],
   ['PLATFORM_BACKUP_RUNNER_TOKEN', 32],
+  ['PLATFORM_DEPLOY_HOOK_TOKEN', 32],
   ['CORE_JWT_SECRET', 32],
   ['CORE_WECHAT_APP_SECRET', 16],
   ['EXAM_JWT_SECRET', 32],
@@ -51,7 +52,6 @@ const policies = new Map([
 const optionalPolicies = new Map([
   ['PLATFORM_GITHUB_TOKEN', 20],
   ['PLATFORM_RELEASE_CALLBACK_TOKEN', 32],
-  ['PLATFORM_DEPLOY_HOOK_TOKEN', 32],
   ['GH_TOKEN', 20],
   ['GH_WEBHOOK_SECRET', 16],
   ['MQTT_API_KEY', 16],
@@ -71,6 +71,26 @@ for (const [key, minLength] of optionalPolicies) {
   const value = values.get(key) || '';
   if (value && (value.length < minLength || placeholderPattern.test(value))) {
     errors.push(`${key} is configured but does not meet its minimum strength`);
+  }
+}
+
+const composeProfiles = new Set(String(values.get('COMPOSE_PROFILES') || '').split(',').map((value) => value.trim()).filter(Boolean));
+if (composeProfiles.has('release')) {
+  const workspaceRoot = values.get('DEPLOY_RUNNER_WORKSPACE_ROOT') || '';
+  if (!workspaceRoot.startsWith('/') || workspaceRoot.includes('..') || workspaceRoot.includes('\\')) {
+    errors.push('DEPLOY_RUNNER_WORKSPACE_ROOT must be an absolute Linux host path when the release profile is enabled');
+  }
+  if (values.get('PLATFORM_DEPLOY_HOOK_URL') !== 'http://deployment-runner:22104') {
+    errors.push('PLATFORM_DEPLOY_HOOK_URL must use the internal deployment Sidecar URL when the release profile is enabled');
+  }
+  if (!values.get('DEPLOYMENT_RUNNER_IMAGE')) {
+    errors.push('DEPLOYMENT_RUNNER_IMAGE is required when the release profile is enabled');
+  }
+}
+
+if (String(values.get('PLATFORM_RELEASE_ACTIONS_ENABLED') || '').toLowerCase() === 'true') {
+  for (const key of ['PLATFORM_GITHUB_TOKEN', 'PLATFORM_RELEASE_CALLBACK_TOKEN', 'PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY', 'PLATFORM_DEPLOY_HOOK_URL']) {
+    if (!values.get(key)) errors.push(`${key} is required when release actions are enabled`);
   }
 }
 

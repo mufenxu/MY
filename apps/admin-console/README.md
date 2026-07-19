@@ -92,4 +92,4 @@ npm run dev
 
 ### 发布安全
 
-`PLATFORM_RELEASE_ACTIONS_ENABLED` 默认是 `false`。重新构建需要 `PLATFORM_GITHUB_TOKEN`、专用回调令牌和允许的 ACR 仓库；部署和回滚还需要只在内网开放的 `PLATFORM_DEPLOY_HOOK_URL` 与独立随机 Bearer Token。平台容器不会挂载 Docker Socket，也不会直接执行宿主机命令。仓库提供的宿主机部署执行器负责 Digest 白名单、串行锁、Compose 预检、健康检查和失败自动回滚。完整启用顺序见 [`docs/release-center.md`](../../docs/release-center.md)。
+`PLATFORM_RELEASE_ACTIONS_ENABLED` 默认是 `false`。重新构建需要 `PLATFORM_GITHUB_TOKEN`、专用回调令牌和允许的 ACR 仓库；部署和回滚还需要只在后端网络开放的 `deployment-runner` Sidecar 与独立随机 Bearer Token。平台容器不会挂载 Docker Socket，也不会直接执行宿主机命令。Sidecar 负责 Digest 白名单、串行锁、Compose 预检、健康检查和失败自动回滚，并可通过 `release:sidecar:configure`、`release:sidecar:enable`、`release:sidecar:disable` 幂等管理。完整启用顺序见 [`docs/release-center.md`](../../docs/release-center.md)。

@@ -83,6 +83,15 @@ export function updateEnvSource(source, updates) {
   return lines.join(newline);
 }
 
+export function validateWorkspaceMount(container, workspaceRoot) {
+  const expected = path.posix.resolve(workspaceRoot);
+  const mount = (container?.Mounts || []).find((item) => item.Destination === expected);
+  if (!mount || path.posix.resolve(mount.Source) !== expected) {
+    throw new Error(`Expected identical host/container workspace path: ${expected}`);
+  }
+  return expected;
+}
+
 export function normalizeComponents(values) {
   const components = [...new Set((Array.isArray(values) ? values : [values])
     .map((value) => String(value || '').trim().toLowerCase())
@@ -124,6 +133,7 @@ export function loadRunnerConfig(env = process.env) {
     envFile: path.resolve(workspaceRoot, env.DEPLOY_RUNNER_ENV_FILE || '.env'),
     stateDir: path.resolve(env.DEPLOY_RUNNER_STATE_DIR || path.join(workspaceRoot, '.deployment-runner')),
     enabled: parseBoolean(env.DEPLOY_RUNNER_ENABLED, false),
+    expectSelfMount: parseBoolean(env.DEPLOY_RUNNER_EXPECT_SELF_MOUNT, false),
     allowMongoDb: parseBoolean(env.DEPLOY_RUNNER_ALLOW_MONGODB, false),
     minimumFreeBytes: parseInteger(env.DEPLOY_RUNNER_MINIMUM_FREE_BYTES, 2 * 1024 * 1024 * 1024, 128 * 1024 * 1024, Number.MAX_SAFE_INTEGER),
     commandTimeoutMs: parseInteger(env.DEPLOY_RUNNER_COMMAND_TIMEOUT_MS, 10 * 60 * 1000, 10_000, 30 * 60 * 1000),
@@ -341,6 +351,17 @@ export function createDeploymentRunner({
       checks.push({ id: 'compose_configuration', label: 'Compose 配置', status: 'passed', detail: '配置有效' });
     } catch (error) {
       checks.push({ id: 'compose_configuration', label: 'Compose 配置', status: 'blocked', detail: truncate(error.message, 240) });
+    }
+    if (config.expectSelfMount) {
+      try {
+        const containerId = String(process.env.HOSTNAME || '').trim();
+        if (!containerId) throw new Error('Container identity is unavailable.');
+        const [self] = JSON.parse((await runDocker(['inspect', containerId], 15_000)).stdout);
+        validateWorkspaceMount(self, config.workspaceRoot);
+        checks.push({ id: 'workspace_mount', label: '工作区路径', status: 'passed', detail: config.workspaceRoot });
+      } catch (error) {
+        checks.push({ id: 'workspace_mount', label: '工作区路径', status: 'blocked', detail: truncate(error.message, 240) });
+      }
     }
     try {
       const capacity = await statfs(config.workspaceRoot);
@@ -602,10 +623,13 @@ export function createDeploymentRunner({
 
   async function handle(req, res) {
     try {
+      const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+      if (req.method === 'GET' && url.pathname === '/healthz') {
+        return sendJson(res, 200, { status: 'ok' });
+      }
       if (!safeEqual(req.headers.authorization, `Bearer ${config.token}`)) {
         return sendJson(res, 401, { error: '部署执行器凭据无效。', code: 'UNAUTHORIZED' });
       }
-      const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
       if (req.method === 'GET' && url.pathname === '/status') {
         const runtime = await inspectRuntime();
         return sendJson(res, 200, {

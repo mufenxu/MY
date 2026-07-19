@@ -34,6 +34,17 @@ const authenticated = await expectStatus(await fetch(`${origin}/api/auth/status`
 }), 200, 'authenticated status');
 if (!(await authenticated.json()).authenticated) throw new Error('MongoDB-backed session was not accepted.');
 
+const releaseSummary = await expectStatus(await fetch(`${origin}/api/releases`, {
+  headers: { Cookie: cookie },
+}), 200, 'release center summary');
+const releaseData = await releaseSummary.json();
+if (!releaseData.capabilities?.deployRunnerHealthy) {
+  throw new Error('Deployment Sidecar was not connected to the release center.');
+}
+if (releaseData.metrics?.observedComponents !== 8) {
+  throw new Error(`Deployment Sidecar observed ${releaseData.metrics?.observedComponents || 0}/8 components.`);
+}
+
 for (const [path, label] of [['/apps/core/', 'core admin'], ['/apps/exam/', 'exam admin']]) {
   const response = await expectStatus(await fetch(`${origin}${path}`, {
     headers: { Cookie: cookie, Accept: 'text/html' },
@@ -61,4 +72,4 @@ const revoked = await expectStatus(await fetch(`${origin}/api/auth/status`, {
 }), 200, 'revoked status');
 if ((await revoked.json()).authenticated) throw new Error('Revoked MongoDB-backed session remained active.');
 
-console.log('Platform readiness, MongoDB session issue/revoke, and metrics verified.');
+console.log('Platform readiness, deployment Sidecar, MongoDB session issue/revoke, and metrics verified.');

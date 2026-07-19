@@ -420,10 +420,9 @@ export function ReleasesView({ session }) {
   useEffect(() => { load(); }, [load]);
   const hasActiveOperations = Boolean(data?.metrics?.activeOperations);
   useEffect(() => {
-    if (!hasActiveOperations) return undefined;
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') load();
-    }, 10000);
+    }, hasActiveOperations ? 10000 : 60000);
     return () => window.clearInterval(timer);
   }, [hasActiveOperations, load]);
 
@@ -437,6 +436,18 @@ export function ReleasesView({ session }) {
     setOperation({
       action: 'deploy', buildId: build.id, sourceDeploymentId: '',
       components: (build.artifacts || []).map((artifact) => artifact.component),
+      confirmText: '', password: '', totp: '', maintenanceApproved: false,
+    });
+  }
+
+  function selectLatestUpdates() {
+    const build = (data?.builds || []).find((item) => item.id === data?.metrics?.latestBuildId);
+    const components = data?.metrics?.availableUpdateComponents || [];
+    if (!build || !components.length) return;
+    setHistoryTab('builds');
+    setPreflight(null);
+    setOperation({
+      action: 'deploy', buildId: build.id, sourceDeploymentId: '', components,
       confirmText: '', password: '', totp: '', maintenanceApproved: false,
     });
   }
@@ -557,8 +568,12 @@ export function ReleasesView({ session }) {
           <span className={`integration-state ${capabilities.githubConfigured ? 'ready' : ''}`}><i />{capabilities.githubConfigured ? 'GitHub 已连接' : 'GitHub 未配置'}</span>
           <span className={`integration-state ${capabilities.deployRunnerHealthy ? 'ready' : ''}`}><i />{capabilities.deployRunnerHealthy ? '部署执行器已连接' : capabilities.deployRunnerConfigured ? '部署执行器不可用' : '部署执行器未配置'}</span>
           <span className="release-environment"><Cloud size={15} />{data?.environment || 'production'}</span>
+          {data?.metrics?.availableUpdates > 0 && <span className="integration-state ready"><i />{data.metrics.availableUpdates} 个更新可用</span>}
         </div>
-        <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />刷新</button>
+        <div className="release-capabilities">
+          {roleAtLeast(session.user?.role, 'super_admin') && data?.metrics?.availableUpdates > 0 && <button className="primary-button" type="button" onClick={selectLatestUpdates} disabled={!capabilities.canDeploy || loading}><Rocket size={17} />一键更新</button>}
+          <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />检查更新</button>
+        </div>
       </div>
       <Feedback error={error || capabilities.issue} message={message} />
       <div className="ops-kpis">

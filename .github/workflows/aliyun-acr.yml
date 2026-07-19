@@ -6,6 +6,7 @@ on:
     paths:
       - Dockerfile
       - backup-runner.Dockerfile
+      - deployment-runner.Dockerfile
       - core-api.Dockerfile
       - exam-api.Dockerfile
       - notification-service.Dockerfile
@@ -25,6 +26,9 @@ on:
       - scripts/backup-runner.mjs
       - scripts/backup-mongodb-container.mjs
       - scripts/restore-mongodb-container.mjs
+      - scripts/deployment-runner.mjs
+      - scripts/configure-deployment-sidecar.mjs
+      - infra/docker/compose.yml
       - infra/docker/mongodb.Dockerfile
       - infra/docker/mongodb-entrypoint.sh
       - infra/docker/mongo-init.sh
@@ -34,7 +38,7 @@ on:
   workflow_dispatch:
     inputs:
       targets:
-        description: "Images to build: platform,backup,core,exam,notification,campus,iot,mongodb,all"
+        description: "Images to build: platform,backup,runner,core,exam,notification,campus,iot,mongodb,all"
         required: true
         default: "platform,backup"
       push_sha_tags:
@@ -131,7 +135,7 @@ jobs:
               target="$(printf '%s' "${item}" | tr '[:upper:]' '[:lower:]' | xargs)"
               [ -z "${target}" ] && continue
               if [ "${target}" = "all" ]; then
-                targets=(platform core exam notification backup campus iot mongodb)
+                targets=(platform core exam notification backup runner campus iot mongodb)
                 break
               fi
               case "${target}" in
@@ -140,6 +144,7 @@ jobs:
                 exam-api) target="exam" ;;
                 notification-service) target="notification" ;;
                 backup-runner) target="backup" ;;
+                deployment-runner) target="runner" ;;
                 campus-service) target="campus" ;;
                 iot-service) target="iot" ;;
                 mongo) target="mongodb" ;;
@@ -156,7 +161,7 @@ jobs:
             while IFS= read -r file; do
               case "${file}" in
                 .github/workflows/aliyun-acr.yml|scripts/buildx-metadata.mjs)
-                  targets=(platform core exam notification backup campus iot mongodb)
+                  targets=(platform core exam notification backup runner campus iot mongodb)
                   ;;
               esac
               case "${file}" in
@@ -170,6 +175,15 @@ jobs:
                   ;;
                 apps/admin-console/package.json|apps/admin-console/src/backups.js)
                   add_target backup
+                  ;;
+              esac
+              case "${file}" in
+                deployment-runner.Dockerfile|scripts/deployment-runner.mjs|scripts/configure-deployment-sidecar.mjs)
+                  add_target runner
+                  ;;
+                infra/docker/compose.yml)
+                  add_target platform
+                  add_target runner
                   ;;
               esac
               case "${file}" in
@@ -214,7 +228,7 @@ jobs:
             done < changed-files.txt
           fi
 
-          valid_targets=(platform core exam notification backup campus iot mongodb)
+          valid_targets=(platform core exam notification backup runner campus iot mongodb)
           for target in "${targets[@]}"; do
             valid=false
             for known in "${valid_targets[@]}"; do
@@ -236,18 +250,24 @@ jobs:
           fi
 
           resolved="$(IFS=,; echo "${targets[*]}")"
+          release_targets=()
+          for target in "${targets[@]}"; do
+            [ "${target}" = "runner" ] || release_targets+=("${target}")
+          done
+          release_resolved="$(IFS=,; echo "${release_targets[*]}")"
           echo "Resolved targets: ${resolved}"
           echo "targets=${resolved}" >> "${GITHUB_OUTPUT}"
+          echo "release_targets=${release_resolved}" >> "${GITHUB_OUTPUT}"
 
       - name: Synchronize build start with release center
-        if: steps.resolve.outputs.targets != ''
+        if: steps.resolve.outputs.release_targets != ''
         continue-on-error: true
         env:
           RELEASE_CALLBACK_URL: ${{ github.event.inputs.callback_url || vars.PLATFORM_RELEASE_CALLBACK_URL }}
           RELEASE_CALLBACK_TOKEN: ${{ secrets.PLATFORM_RELEASE_CALLBACK_TOKEN }}
           RELEASE_ID: ${{ github.event.inputs.release_id || format('gha-{0}-{1}', github.run_id, github.run_attempt) }}
           RELEASE_STATUS: building
-          RELEASE_TARGETS: ${{ steps.resolve.outputs.targets }}
+          RELEASE_TARGETS: ${{ steps.resolve.outputs.release_targets }}
           RELEASE_REVISION: ${{ github.sha }}
         run: node scripts/release-workflow-callback.mjs
 
@@ -289,6 +309,7 @@ jobs:
             [exam]="exam-api.Dockerfile"
             [notification]="notification-service.Dockerfile"
             [backup]="backup-runner.Dockerfile"
+            [runner]="deployment-runner.Dockerfile"
             [campus]="campus-service.Dockerfile"
             [iot]="iot-service.Dockerfile"
             [mongodb]="infra/docker/mongodb.Dockerfile"
@@ -299,6 +320,7 @@ jobs:
             [exam]="."
             [notification]="."
             [backup]="."
+            [runner]="."
             [campus]="."
             [iot]="."
             [mongodb]="infra/docker"
@@ -309,6 +331,7 @@ jobs:
             [exam]="exam-api-latest"
             [notification]="notification-service-latest"
             [backup]="backup-runner-latest"
+            [runner]="deployment-runner-latest"
             [campus]="campus-service-latest"
             [iot]="iot-service-latest"
             [mongodb]="mongodb-7.0"
@@ -324,7 +347,7 @@ jobs:
             target="$(normalize_target "${item}")"
             [ -z "${target}" ] && continue
             if [ "${target}" = "all" ]; then
-              targets=(platform core exam notification backup campus iot mongodb)
+              targets=(platform core exam notification backup runner campus iot mongodb)
               break
             fi
             case "${target}" in
@@ -333,6 +356,7 @@ jobs:
               exam-api) target="exam" ;;
               notification-service) target="notification" ;;
               backup-runner) target="backup" ;;
+              deployment-runner) target="runner" ;;
               campus-service) target="campus" ;;
               iot-service) target="iot" ;;
               mongo) target="mongodb" ;;
@@ -387,7 +411,9 @@ jobs:
             digest="$(node scripts/buildx-metadata.mjs "${metadata_file}")"
             rm -f "${metadata_file}"
             reference="${ACR_IMAGE}@${digest}"
-            printf '%s\t%s\t%s\t%s\t%s\n' "${target}" "${image}" "${digest}" "${reference}" "${candidate}" >> release-artifacts.tsv
+            if [ "${target}" != "runner" ]; then
+              printf '%s\t%s\t%s\t%s\t%s\n' "${target}" "${image}" "${digest}" "${reference}" "${candidate}" >> release-artifacts.tsv
+            fi
             echo "::endgroup::"
           done
 
@@ -398,12 +424,14 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/create-ci-env.mjs .env.release-smoke
+          sed -i "s|^PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY=.*|PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY=${ACR_IMAGE}|" .env.release-smoke
           declare -A tags=(
             [platform]="platform-api-latest"
             [core]="core-api-latest"
             [exam]="exam-api-latest"
             [notification]="notification-service-latest"
             [backup]="backup-runner-latest"
+            [runner]="deployment-runner-latest"
             [campus]="campus-service-latest"
             [iot]="iot-service-latest"
             [mongodb]="mongodb-7.0"
@@ -414,12 +442,13 @@ jobs:
             [exam]="EXAM_API_IMAGE"
             [notification]="NOTIFICATION_SERVICE_IMAGE"
             [backup]="BACKUP_RUNNER_IMAGE"
+            [runner]="DEPLOYMENT_RUNNER_IMAGE"
             [campus]="CAMPUS_SERVICE_IMAGE"
             [iot]="IOT_SERVICE_IMAGE"
             [mongodb]="MONGODB_IMAGE"
           )
           short_sha="${GITHUB_SHA::12}"
-          for target in platform core exam notification backup campus iot mongodb; do
+          for target in platform core exam notification backup runner campus iot mongodb; do
             suffix="${tags[$target]}"
             if printf ',%s,' "${RAW_TARGETS}" | grep -q ",${target},"; then
               suffix="${suffix}-${short_sha}"
@@ -451,6 +480,7 @@ jobs:
             [exam]="exam-api-latest"
             [notification]="notification-service-latest"
             [backup]="backup-runner-latest"
+            [runner]="deployment-runner-latest"
             [campus]="campus-service-latest"
             [iot]="iot-service-latest"
             [mongodb]="mongodb-7.0"
@@ -464,14 +494,14 @@ jobs:
           done
 
       - name: Synchronize final build result with release center
-        if: always()
+        if: always() && steps.resolve.outputs.release_targets != ''
         continue-on-error: true
         env:
           RELEASE_CALLBACK_URL: ${{ github.event.inputs.callback_url || vars.PLATFORM_RELEASE_CALLBACK_URL }}
           RELEASE_CALLBACK_TOKEN: ${{ secrets.PLATFORM_RELEASE_CALLBACK_TOKEN }}
           RELEASE_ID: ${{ github.event.inputs.release_id || format('gha-{0}-{1}', github.run_id, github.run_attempt) }}
           RELEASE_STATUS: ${{ job.status }}
-          RELEASE_TARGETS: ${{ steps.resolve.outputs.targets }}
+          RELEASE_TARGETS: ${{ steps.resolve.outputs.release_targets }}
           RELEASE_REVISION: ${{ github.sha }}
           RELEASE_ARTIFACTS_FILE: release-artifacts.tsv
         run: node scripts/release-workflow-callback.mjs

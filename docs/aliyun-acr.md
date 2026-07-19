@@ -28,6 +28,7 @@ The automatic trigger watches these paths:
 ```text
 Dockerfile
 backup-runner.Dockerfile
+deployment-runner.Dockerfile
 core-api.Dockerfile
 exam-api.Dockerfile
 notification-service.Dockerfile
@@ -47,6 +48,9 @@ services/iot-service/**
 scripts/backup-runner.mjs
 scripts/backup-mongodb-container.mjs
 scripts/restore-mongodb-container.mjs
+scripts/deployment-runner.mjs
+scripts/configure-deployment-sidecar.mjs
+infra/docker/compose.yml
 infra/docker/mongodb.Dockerfile
 infra/docker/mongodb-entrypoint.sh
 infra/docker/mongo-init.sh
@@ -59,6 +63,8 @@ Automatic target selection:
 | --- | --- |
 | `Dockerfile`, `apps/admin-console/**`, `config/platform.services.docker.json`, `services/platform-api/**` | `platform` |
 | `backup-runner.Dockerfile`, `apps/admin-console/src/backups.js`, backup runner scripts | `backup` |
+| `deployment-runner.Dockerfile`, deployment runner/configuration scripts | `runner` |
+| `infra/docker/compose.yml` | `platform`, `runner` |
 | `core-api.Dockerfile`, `apps/core-admin/**`, `services/core-api/**` | `core` |
 | `exam-api.Dockerfile`, `apps/exam-admin/**`, `services/exam-api/**` | `exam` |
 | `notification-service.Dockerfile`, `services/notification-service/**` | `notification` |
@@ -81,6 +87,7 @@ Use the `targets` input to select the images to build:
 | `campus` | `campus-service.Dockerfile` | `campus-service-latest` | `campus-service` |
 | `iot` | `iot-service.Dockerfile` | `iot-service-latest` | `iot-service` |
 | `mongodb` | `infra/docker/mongodb.Dockerfile` | `mongodb-7.0` | `mongodb` |
+| `runner` | `deployment-runner.Dockerfile` | `deployment-runner-latest` | `deployment-runner` |
 | `all` | all Dockerfiles | all image tags | all services |
 
 Examples:
@@ -103,7 +110,9 @@ The existing `npm run acr:build -- <target>` command is now informational. It pr
 
 ## Deploy Images
 
-The preferred path is to select the successful build in the release center. It deploys the callback-verified `repository@sha256:...` reference through the restricted host runner, records the deployment in MongoDB, verifies health, and automatically restores the previous runtime Digest on failure.
+The preferred path is to select the successful build in the release center. It deploys the callback-verified `repository@sha256:...` reference through the restricted internal Sidecar, records the deployment in MongoDB, verifies health, and automatically restores the previous runtime Digest on failure.
+
+The release center manages the eight product images. The `deployment-runner` image is built and smoke-tested by the same workflow but is intentionally excluded from release callbacks and one-click deployment because a privileged executor must not replace itself. Upgrade it explicitly with `docker compose --env-file .env -f infra/docker/compose.yml pull deployment-runner` followed by `docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build --wait deployment-runner`.
 
 For a break-glass manual deployment, preserve the current runtime Digest first, point the affected image variable at the exact verified Digest, then pull and recreate only the affected services:
 
