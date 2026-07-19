@@ -86,6 +86,7 @@ test('deployment runner exposes only a minimal unauthenticated health endpoint',
 
 test('deployment Sidecar is backend-only and isolates the Docker socket from platform-api', async () => {
   const compose = await readFile(new URL('../infra/docker/compose.yml', import.meta.url), 'utf8');
+  const dockerfile = await readFile(new URL('../deployment-runner.Dockerfile', import.meta.url), 'utf8');
   const sidecar = compose.slice(compose.indexOf('  deployment-runner:'), compose.indexOf('  platform-api:'));
   const platform = compose.slice(compose.indexOf('  platform-api:'), compose.indexOf('  core-api:'));
   assert.match(sidecar, /profiles: \["release"\]/);
@@ -95,6 +96,8 @@ test('deployment Sidecar is backend-only and isolates the Docker socket from pla
   assert.match(sidecar, /group_add:/);
   assert.match(sidecar, /DEPLOY_RUNNER_DOCKER_GID/);
   assert.doesNotMatch(sidecar, /:\/root\/\.docker/);
+  assert.match(dockerfile, /^USER runner$/m);
+  assert.match(dockerfile, /^ENTRYPOINT \["node", "\/app\/scripts\/deployment-runner\.mjs"\]$/m);
   assert.match(sidecar, /- backend/);
   assert.doesNotMatch(sidecar, /^\s+ports:/m);
   assert.doesNotMatch(platform, /\/var\/run\/docker\.sock/);

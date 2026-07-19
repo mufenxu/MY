@@ -25,4 +25,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 USER runner
 
-CMD ["node", "/app/scripts/deployment-runner.mjs"]
+ENTRYPOINT ["node", "/app/scripts/deployment-runner.mjs"]
