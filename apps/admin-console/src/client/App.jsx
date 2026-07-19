@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { isPlainInternalNavigation } from './navigation.js';
 import { requestJson } from './api.js';
+import { ConfirmDialog } from './UiControls.jsx';
 import {
   BackupQualityStrip,
   IncidentsView,
@@ -988,6 +989,8 @@ function BackupRecoveryView({ session }) {
   const [confirmText, setConfirmText] = useState('');
   const [actionError, setActionError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
+  const [confirmation, setConfirmation] = useState(null);
+  const [confirmationBusy, setConfirmationBusy] = useState(false);
   const uploadInputRef = useRef(null);
 
   const loadBackupStatus = useCallback(async (force = false, options = {}) => {
@@ -1103,24 +1106,11 @@ function BackupRecoveryView({ session }) {
     window.location.assign(`/api/backups/${encodeURIComponent(backup.name)}/download`);
   }
 
-  async function handleDeleteBackup(backup) {
+  function handleDeleteBackup(backup) {
     setActionError('');
     setActionMessage('');
     if (!backup?.name) return;
-    const accepted = window.confirm(`确定删除备份 ${backup.name}？删除后不可恢复。`);
-    if (!accepted) return;
-
-    setDeletingBackup(backup.name);
-    try {
-      await requestJson(`/api/backups/${encodeURIComponent(backup.name)}`, { method: 'DELETE' });
-      if (selectedBackup?.name === backup.name) setSelectedBackup(null);
-      setActionMessage('备份已删除');
-      await loadBackupStatus(true);
-    } catch (error) {
-      setActionError(error.message);
-    } finally {
-      setDeletingBackup('');
-    }
+    setConfirmation({ type: 'delete', backup });
   }
 
   async function handleUploadBackup(event) {
@@ -1168,27 +1158,45 @@ function BackupRecoveryView({ session }) {
       setActionError('确认短语不正确');
       return;
     }
-    const accepted = window.confirm(`即将使用备份 ${selectedBackup.name} 覆写当前数据库。是否继续？`);
-    if (!accepted) return;
+    setConfirmation({ type: 'restore', backup: selectedBackup });
+  }
 
+  async function handleConfirmBackupAction() {
+    if (!confirmation?.backup?.name) return;
+    const pending = confirmation;
+    setConfirmationBusy(true);
+    setActionError('');
+    setActionMessage('');
     try {
-      const result = await requestJson('/api/backups/restore', {
-        method: 'POST',
-        body: JSON.stringify({
-          backupName: selectedBackup.name,
-          password: restorePassword,
-          totp: restoreTotp,
-          confirmText,
-        }),
-      });
-      setActiveJob(result.job);
-      setRestorePassword('');
-      setRestoreTotp('');
-      setConfirmText('');
-      setActionMessage('恢复任务已提交');
-      await loadBackupStatus(true);
+      if (pending.type === 'delete') {
+        setDeletingBackup(pending.backup.name);
+        await requestJson(`/api/backups/${encodeURIComponent(pending.backup.name)}`, { method: 'DELETE' });
+        if (selectedBackup?.name === pending.backup.name) setSelectedBackup(null);
+        setActionMessage('备份已删除');
+        await loadBackupStatus(true);
+      } else {
+        const result = await requestJson('/api/backups/restore', {
+          method: 'POST',
+          body: JSON.stringify({
+            backupName: pending.backup.name,
+            password: restorePassword,
+            totp: restoreTotp,
+            confirmText,
+          }),
+        });
+        setActiveJob(result.job);
+        setRestorePassword('');
+        setRestoreTotp('');
+        setConfirmText('');
+        setActionMessage('恢复任务已提交');
+        await loadBackupStatus(true);
+      }
     } catch (error) {
       setActionError(error.message);
+    } finally {
+      setDeletingBackup('');
+      setConfirmationBusy(false);
+      setConfirmation(null);
     }
   }
 
@@ -1391,6 +1399,19 @@ function BackupRecoveryView({ session }) {
           )}
         </section>
       )}
+      <ConfirmDialog
+        open={Boolean(confirmation)}
+        tone="danger"
+        title={confirmation?.type === 'restore' ? '确认恢复数据库' : '确认删除备份'}
+        description={confirmation?.type === 'restore'
+          ? '恢复操作会先备份当前状态，再使用所选归档覆写现有数据库。执行期间请勿关闭服务。'
+          : '删除后该备份归档将无法找回，请确认它不再用于恢复或审计。'}
+        detail={confirmation?.backup?.name}
+        confirmLabel={confirmation?.type === 'restore' ? '确认恢复' : '删除备份'}
+        busy={confirmationBusy}
+        onCancel={() => setConfirmation(null)}
+        onConfirm={handleConfirmBackupAction}
+      />
     </section>
   );
 }
@@ -1415,6 +1436,7 @@ function Dashboard({ session, onLogout }) {
   });
   const mobileMenuButtonRef = useRef(null);
   const sidebarRef = useRef(null);
+  const notificationRef = useRef(null);
 
   const closeMobileNav = useCallback(() => {
     setMobileNavOpen(false);
@@ -1507,6 +1529,21 @@ function Dashboard({ session, onLogout }) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [closeMobileNav, mobileNavOpen]);
 
+  useEffect(() => {
+    if (!notificationOpen) return undefined;
+    function closeNotification(event) {
+      if (event.type === 'keydown' && event.key !== 'Escape') return;
+      if (event.type === 'pointerdown' && notificationRef.current?.contains(event.target)) return;
+      setNotificationOpen(false);
+    }
+    document.addEventListener('pointerdown', closeNotification);
+    document.addEventListener('keydown', closeNotification);
+    return () => {
+      document.removeEventListener('pointerdown', closeNotification);
+      document.removeEventListener('keydown', closeNotification);
+    };
+  }, [notificationOpen]);
+
   const services = data?.services || [];
   const counts = data?.counts || {};
   const total = services.length;
@@ -1550,8 +1587,10 @@ function Dashboard({ session, onLogout }) {
     <div className="app-shell">
       {launchingService && (
         <div className="navigation-transition" role="status" aria-live="polite">
-          <LoaderCircle className="spin" size={24} />
-          <strong>正在进入{launchingService.shortName || launchingService.name}</strong>
+          <div className="navigation-transition-panel">
+            <span><LoaderCircle className="spin" size={23} /></span>
+            <div><strong>正在进入{launchingService.shortName || launchingService.name}</strong><small>正在建立安全连接，请稍候</small></div>
+          </div>
         </div>
       )}
 
@@ -1626,7 +1665,7 @@ function Dashboard({ session, onLogout }) {
               <Moon size={14} />
               <span className={theme === 'dark' ? 'dark' : ''}><Sun size={14} /></span>
             </button>
-            <div className="notification-wrap">
+            <div ref={notificationRef} className="notification-wrap">
               <button
                 className="icon-button notification-button"
                 type="button"

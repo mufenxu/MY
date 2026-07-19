@@ -34,6 +34,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { requestJson } from './api.js';
+import { SelectControl } from './UiControls.jsx';
 
 const STATE_LABELS = {
   healthy: '正常',
@@ -237,12 +238,17 @@ export function MonitoringView({ services }) {
         <div className="ops-segmented" aria-label="时间范围">
           {[1, 24, 168, 720].map((value) => <button key={value} className={hours === value ? 'active' : ''} type="button" onClick={() => setHours(value)}>{value === 1 ? '1 小时' : value === 24 ? '24 小时' : value === 168 ? '7 天' : '30 天'}</button>)}
         </div>
-        <label className="ops-select-label">服务
-          <select value={selected} onChange={(event) => setSelected(event.target.value)}>
-            <option value="all">全部服务</option>
-            {services.filter((service) => service.healthPath).map((service) => <option key={service.id} value={service.id}>{service.shortName || service.name}</option>)}
-          </select>
-        </label>
+        <div className="ops-select-label"><span>服务</span>
+          <SelectControl
+            ariaLabel="筛选监控服务"
+            value={selected}
+            onChange={setSelected}
+            options={[
+              { value: 'all', label: '全部服务' },
+              ...services.filter((service) => service.healthPath).map((service) => ({ value: service.id, label: service.shortName || service.name })),
+            ]}
+          />
+        </div>
         <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />刷新</button>
       </div>
       <Feedback error={error} />
@@ -789,7 +795,7 @@ export function SettingsDiagnosticsView({ session }) {
           <header><div><span>监控与告警</span><h3>采集和事件阈值</h3></div><Settings2 size={20} /></header>
           <div className="settings-grid">
             <label className="toggle-field"><span><strong>企业微信告警</strong><small>事件产生和恢复时推送</small></span><input type="checkbox" checked={draft.alertingEnabled} disabled={!canSave} onChange={(event) => setDraft({ ...draft, alertingEnabled: event.target.checked })} /></label>
-            <label><span>监控间隔</span><select disabled={!canSave} value={draft.monitorIntervalMs} onChange={(event) => setDraft({ ...draft, monitorIntervalMs: Number(event.target.value) })}><option value={10000}>10 秒</option><option value={30000}>30 秒</option><option value={60000}>1 分钟</option><option value={300000}>5 分钟</option></select></label>
+            <div className="settings-control-field"><span>监控间隔</span><SelectControl ariaLabel="监控间隔" disabled={!canSave} value={draft.monitorIntervalMs} onChange={(value) => setDraft({ ...draft, monitorIntervalMs: value })} options={[{ value: 10000, label: '10 秒' }, { value: 30000, label: '30 秒' }, { value: 60000, label: '1 分钟' }, { value: 300000, label: '5 分钟' }]} /></div>
             <label><span>连续失败次数</span><input type="number" min="1" max="10" disabled={!canSave} value={draft.failureThreshold} onChange={(event) => setDraft({ ...draft, failureThreshold: Number(event.target.value) })} /></label>
             <label><span>连续恢复次数</span><input type="number" min="1" max="10" disabled={!canSave} value={draft.recoveryThreshold} onChange={(event) => setDraft({ ...draft, recoveryThreshold: Number(event.target.value) })} /></label>
             <label><span>健康检查延迟阈值（ms）</span><input type="number" min="100" max="30000" disabled={!canSave} value={draft.serviceLatencyThresholdMs} onChange={(event) => setDraft({ ...draft, serviceLatencyThresholdMs: Number(event.target.value) })} /></label>
@@ -809,7 +815,7 @@ export function SettingsDiagnosticsView({ session }) {
       </div>
       <section className="ops-panel maintenance-panel">
         <header><div><span>告警抑制</span><h3>维护窗口</h3></div><Wrench size={20} /></header>
-        {canSave && <div className="maintenance-form"><select value={maintenance.serviceId} onChange={(event) => setMaintenance({ ...maintenance, serviceId: event.target.value })}><option value="all">全部服务</option>{data.services.map((service) => <option value={service.id} key={service.id}>{service.shortName || service.name}</option>)}</select><select value={maintenance.duration} onChange={(event) => setMaintenance({ ...maintenance, duration: Number(event.target.value) })}><option value={30}>30 分钟</option><option value={60}>1 小时</option><option value={120}>2 小时</option><option value={240}>4 小时</option></select><input value={maintenance.reason} maxLength={200} placeholder="维护原因" onChange={(event) => setMaintenance({ ...maintenance, reason: event.target.value })} /><button type="button" onClick={addMaintenance}><Clock3 size={16} />添加</button></div>}
+        {canSave && <div className="maintenance-form"><SelectControl ariaLabel="维护服务" value={maintenance.serviceId} onChange={(value) => setMaintenance({ ...maintenance, serviceId: value })} options={[{ value: 'all', label: '全部服务' }, ...data.services.map((service) => ({ value: service.id, label: service.shortName || service.name }))]} /><SelectControl ariaLabel="维护时长" value={maintenance.duration} onChange={(value) => setMaintenance({ ...maintenance, duration: value })} options={[{ value: 30, label: '30 分钟' }, { value: 60, label: '1 小时' }, { value: 120, label: '2 小时' }, { value: 240, label: '4 小时' }]} /><input value={maintenance.reason} maxLength={200} placeholder="维护原因" onChange={(event) => setMaintenance({ ...maintenance, reason: event.target.value })} /><button type="button" onClick={addMaintenance}><Clock3 size={16} />添加</button></div>}
         <div className="maintenance-list">{(draft.maintenanceWindows || []).length ? draft.maintenanceWindows.map((window) => <div key={window.id}><span><strong>{window.serviceId === 'all' ? '全部服务' : data.services.find((service) => service.id === window.serviceId)?.shortName || window.serviceId}</strong><small>{window.reason}</small></span><span>{formatDateTime(window.startsAt)} 至 {formatDateTime(window.endsAt)}</span>{canSave && <button type="button" aria-label="移除维护窗口" onClick={() => setDraft({ ...draft, maintenanceWindows: draft.maintenanceWindows.filter((item) => item.id !== window.id) })}><XCircle size={17} /></button>}</div>) : <div className="ops-empty compact">暂无维护窗口</div>}</div>
       </section>
       <section className="ops-panel diagnostics-panel">
