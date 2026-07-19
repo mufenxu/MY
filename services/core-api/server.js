@@ -17,6 +17,11 @@ const tuyaMessageService = require('./services/tuyaMessageService');
 const tuyaAutomationService = require('./services/tuyaAutomationService');
 const secretService = require('./services/secretService');
 const settingsService = require('./services/settingsService');
+const { migrateSensitiveData } = require('./services/sensitiveDataMigration');
+const courseOrderSubmissionWorker = require('./services/courseOrderSubmissionWorker');
+const User = require('./models/User');
+const CourseOrder = require('./models/CourseOrder');
+const CourseOrderBatch = require('./models/CourseOrderBatch');
 
 const app = express();
 const PORT = process.env.CORE_PORT || process.env.PORT || 3045;
@@ -83,7 +88,8 @@ app.use(cors({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'X-App-Id', 'X-Request-Id', 'X-Core-Admin-Client']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'X-App-Id', 'X-Request-Id', 'X-Core-Admin-Client', 'X-CSRF-Token', 'Idempotency-Key', 'If-Match'],
+    exposedHeaders: ['X-CSRF-Token', 'ETag', 'X-Todo-Revision']
 }));
 app.use(express.json({
     limit: '1mb',
@@ -175,9 +181,20 @@ async function initializeCoreRuntime() {
             maxPoolSize: 10,
         });
         logger.info('MongoDB connected');
+        await Promise.all([
+            User.init(),
+            CourseOrder.init(),
+            CourseOrderBatch.init()
+        ]);
+        logger.info('Critical Core indexes ready');
+        const migratedSecrets = await migrateSensitiveData();
+        if (migratedSecrets.appClientSecrets || migratedSecrets.platformSecrets) {
+            logger.info('Encrypted legacy Core secrets at rest', migratedSecrets);
+        }
         await secretService.initCache();
         await settingsService.migrateNotifySecrets();
         await initCron();
+        await courseOrderSubmissionWorker.start();
         tuyaMessageService.init();
         tuyaAutomationService.startScheduler();
         initialized = true;
@@ -194,6 +211,7 @@ async function initializeCoreRuntime() {
 async function closeCoreRuntime() {
     Object.keys(TASKS).forEach((taskId) => stopTask(taskId));
     tuyaMessageService.stop();
+    await courseOrderSubmissionWorker.stop();
     tuyaAutomationService.stopScheduler();
     if (mongoose.connection.readyState !== 0) {
         await mongoose.connection.close();

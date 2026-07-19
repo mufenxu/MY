@@ -163,6 +163,10 @@ Page({
   _updateDisplayTimer: null,
   _isFetchingLatest: false,
   _isAlive: false,
+  _pendingRelay: null,
+  _pendingRelay2: null,
+  _relayConfirmTimer: null,
+  _relay2ConfirmTimer: null,
   data: {
     relayOn: false,
     switching: false,
@@ -198,6 +202,8 @@ Page({
 
   onUnload() {
     this._isAlive = false
+    this.clearRelayConfirmation('primary')
+    this.clearRelayConfirmation('secondary')
     this.cleanup()
   },
 
@@ -254,7 +260,6 @@ Page({
 
     const prevState = this.data.relayOn
     this.setData({
-      relayOn: nextState,
       switching: true,
       statusText: nextState ? '正在开启…' : '正在关闭…',
     })
@@ -268,20 +273,20 @@ Page({
           this.handleRelayError(prevState)
           return
         }
-        this.setData({
-          statusText: nextState ? '继电器已开启' : '继电器已关闭',
-          relayStatusDisplay: nextState ? '已开启' : '已关闭',
-        })
+        this._pendingRelay = {
+          desiredState: nextState,
+          commandId: res && (res.commandId || (res.data && res.data.commandId)),
+        }
+        this.setData({ statusText: '指令已入队，等待设备确认' })
+        this.scheduleRelayConfirmation('primary')
+        this.fetchLatestData()
         wx.showToast({
-          title: nextState ? '已开启' : '已关闭',
-          icon: 'success',
+          title: '等待设备确认',
+          icon: 'none',
         })
       })
       .catch(() => {
         this.handleRelayError(prevState)
-      })
-      .finally(() => {
-        this.setData({ switching: false })
       })
   },
 
@@ -293,7 +298,6 @@ Page({
 
     const prevState = this.data.relay2On
     this.setData({
-      relay2On: nextState,
       switching2: true,
       statusText2: nextState ? '正在开启…' : '正在关闭…',
     })
@@ -307,26 +311,28 @@ Page({
           this.handleRelay2Error(prevState)
           return
         }
-        this.setData({
-          statusText2: nextState ? '继电器已开启' : '继电器已关闭',
-          relayStatusDisplay2: nextState ? '已开启' : '已关闭',
-        })
+        this._pendingRelay2 = {
+          desiredState: nextState,
+          commandId: res && (res.commandId || (res.data && res.data.commandId)),
+        }
+        this.setData({ statusText2: '指令已入队，等待设备确认' })
+        this.scheduleRelayConfirmation('secondary')
+        this.fetchLatestData()
         wx.showToast({
-          title: nextState ? '已开启' : '已关闭',
-          icon: 'success',
+          title: '等待设备确认',
+          icon: 'none',
         })
       })
       .catch(() => {
         this.handleRelay2Error(prevState)
       })
-      .finally(() => {
-        this.setData({ switching2: false })
-      })
   },
 
   handleRelayError(prevState) {
+    this.clearRelayConfirmation('primary')
     this.setData({
       relayOn: prevState,
+      switching: false,
       statusText: '控制失败，请稍后重试',
       relayStatusDisplay: prevState ? '已开启' : '已关闭',
     })
@@ -334,12 +340,47 @@ Page({
   },
 
   handleRelay2Error(prevState) {
+    this.clearRelayConfirmation('secondary')
     this.setData({
       relay2On: prevState,
+      switching2: false,
       statusText2: '控制失败，请稍后重试',
       relayStatusDisplay2: prevState ? '已开启' : '已关闭',
     })
     wx.showToast({ title: '控制失败', icon: 'none' })
+  },
+
+  scheduleRelayConfirmation(slot) {
+    const isSecondary = slot === 'secondary'
+    const timerKey = isSecondary ? '_relay2ConfirmTimer' : '_relayConfirmTimer'
+    if (this[timerKey]) clearTimeout(this[timerKey])
+    this[timerKey] = setTimeout(() => {
+      this[timerKey] = null
+      if (isSecondary) {
+        this._pendingRelay2 = null
+        this.setData({
+          switching2: false,
+          statusText2: '未收到设备确认，请刷新状态',
+        })
+      } else {
+        this._pendingRelay = null
+        this.setData({
+          switching: false,
+          statusText: '未收到设备确认，请刷新状态',
+        })
+      }
+    }, 10000)
+  },
+
+  clearRelayConfirmation(slot) {
+    const isSecondary = slot === 'secondary'
+    const timerKey = isSecondary ? '_relay2ConfirmTimer' : '_relayConfirmTimer'
+    if (this[timerKey]) {
+      clearTimeout(this[timerKey])
+      this[timerKey] = null
+    }
+    if (isSecondary) this._pendingRelay2 = null
+    else this._pendingRelay = null
   },
 
   // ========== 温湿度数据相关方法 ==========
@@ -455,6 +496,17 @@ Page({
       relayOn: isOn,
       relayStatusDisplay,
     }
+    if (this._pendingRelay) {
+      if (this._pendingRelay.desiredState === isOn) {
+        this.clearRelayConfirmation('primary')
+        dataToSet.switching = false
+        dataToSet.statusText = `设备已确认${relayStatusDisplay}`
+      } else {
+        dataToSet.switching = true
+        dataToSet.statusText = '指令已入队，等待设备确认'
+      }
+      return dataToSet
+    }
     if (!this.data.switching) {
       dataToSet.statusText = `继电器${relayStatusDisplay}`
     }
@@ -471,6 +523,17 @@ Page({
     const dataToSet = {
       relay2On: isOn,
       relayStatusDisplay2: relayStatusDisplay,
+    }
+    if (this._pendingRelay2) {
+      if (this._pendingRelay2.desiredState === isOn) {
+        this.clearRelayConfirmation('secondary')
+        dataToSet.switching2 = false
+        dataToSet.statusText2 = `设备已确认${relayStatusDisplay}`
+      } else {
+        dataToSet.switching2 = true
+        dataToSet.statusText2 = '指令已入队，等待设备确认'
+      }
+      return dataToSet
     }
     if (!this.data.switching2) {
       dataToSet.statusText2 = `继电器${relayStatusDisplay}`

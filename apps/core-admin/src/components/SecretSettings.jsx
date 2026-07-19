@@ -3,7 +3,8 @@ import { Table, Button, Space, Modal, Form, Input, message, Tag, Typography, Lis
 import { EditOutlined, DeleteOutlined, KeyOutlined, ReloadOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
-import ScanAuthModal from './ScanAuthModal';
+import ReauthenticationModal from './ReauthenticationModal';
+import { establishSensitiveSession } from '../utils/reauth';
 
 const { Text } = Typography;
 
@@ -13,9 +14,9 @@ const SecretSettings = () => {
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [currentSecret, setCurrentSecret] = useState(null);
 
-    // ScanAuth Modal State
-    const [scanAuthVisible, setScanAuthVisible] = useState(false);
-    const [pendingAction, setPendingAction] = useState(null); // { type: 'edit' | 'delete', record: object, key: string }
+    const [reauthVisible, setReauthVisible] = useState(false);
+    const [reauthLoading, setReauthLoading] = useState(false);
+    const [pendingAction, setPendingAction] = useState(null);
 
     const [form] = Form.useForm();
     const isMobile = useIsMobile();
@@ -40,50 +41,21 @@ const SecretSettings = () => {
         fetchSecrets();
     }, []);
 
-    const triggerAuth = (action) => {
-        setPendingAction(action);
-        setScanAuthVisible(true);
-    };
-
-    const handleAuthSuccess = () => {
-        setScanAuthVisible(false);
-        if (pendingAction) {
-            if (pendingAction.type === 'edit') {
-                const { record } = pendingAction;
-                setCurrentSecret(record);
-                form.setFieldsValue({
-                    key: record.key,
-                    value: '' // 不要把打了🐎的值放进去，让用户输新的
-                });
-                setIsModalVisible(true);
-            } else if (pendingAction.type === 'delete') {
-                executeDelete(pendingAction.key);
-            }
-        }
-    };
-
-    const executeDelete = async (key) => {
-        try {
-            const res = await api.delete(`/secrets/${key}`);
-            if (res.data.success) {
-                message.success('已清空数据库配置，系统将默认使用 .env 中的配置');
-                fetchSecrets();
-            } else {
-                message.error(res.data.error || '删除失败');
-            }
-        } catch (err) {
-            message.error(err.response?.data?.error || '删除出错');
-        }
+    const openEdit = (record) => {
+        setCurrentSecret(record);
+        form.setFieldsValue({ key: record.key, value: '' });
+        setIsModalVisible(true);
     };
 
     const handleDeleteClick = (key) => {
         Modal.confirm({
             title: '确定要清空数据库中的配置吗？',
-            content: '清空后将默认使用本地 .env 文件中的值。继续操作将需要扫码授权。',
-            okText: '确认并授权',
+            content: '清空后将默认使用本地 .env 文件中的值。继续操作需要二次验证。',
+            okText: '确认并验证',
             cancelText: '取消',
             onOk: () => {
-                triggerAuth({ type: 'delete', key });
+                setPendingAction({ type: 'delete', key });
+                setReauthVisible(true);
             }
         });
     };
@@ -91,17 +63,42 @@ const SecretSettings = () => {
     const handleOk = async () => {
         try {
             const values = await form.validateFields();
-            const res = await api.post('/secrets/update', values);
-            if (res.data.success) {
-                message.success('密钥更新成功，已即刻生效');
-                setIsModalVisible(false);
-                fetchSecrets();
-            } else {
-                message.error(res.data.error || '更新失败');
-            }
+            setPendingAction({ type: 'update', values });
+            setIsModalVisible(false);
+            form.resetFields();
+            setReauthVisible(true);
         } catch (error) {
-            console.error(error);
+            if (!error?.errorFields) message.error('请检查密钥内容');
         }
+    };
+
+    const handleReauthentication = async (credentials) => {
+        if (!pendingAction) return;
+        setReauthLoading(true);
+        try {
+            const proof = await establishSensitiveSession(credentials);
+            const res = pendingAction.type === 'delete'
+                ? await api.delete(`/secrets/${pendingAction.key}`, { data: proof })
+                : await api.post('/secrets/update', { ...pendingAction.values, ...proof });
+            if (!res.data.success) throw new Error(res.data.error || '操作失败');
+            message.success(pendingAction.type === 'delete'
+                ? '已清空数据库配置，系统将默认使用 .env 中的配置'
+                : '密钥更新成功，已即刻生效');
+            setReauthVisible(false);
+            setPendingAction(null);
+            setCurrentSecret(null);
+            await fetchSecrets();
+        } catch (error) {
+            message.error(error.response?.data?.message || error.response?.data?.error || error.message || '二次验证失败');
+        } finally {
+            setReauthLoading(false);
+        }
+    };
+
+    const cancelReauthentication = () => {
+        setReauthVisible(false);
+        setPendingAction(null);
+        setCurrentSecret(null);
     };
 
     const columns = [
@@ -148,7 +145,7 @@ const SecretSettings = () => {
             key: 'action',
             render: (_, record) => (
                 <Space size="middle">
-                    <Button type="link" icon={<EditOutlined />} onClick={() => triggerAuth({ type: 'edit', record })}>
+                    <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(record)}>
                         覆盖配置
                     </Button>
                     {record.isUsingDb && (
@@ -164,7 +161,7 @@ const SecretSettings = () => {
     return (
         <div style={{ padding: '0 0' }}>
             <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: 12 }}>
-                <Text type="secondary" style={{ flex: 1 }}>在此处修改的密钥配置将存储至数据库中。修改前需进行管理员扫码安全验证，以确保系统稳定与安全。</Text>
+                <Text type="secondary" style={{ flex: 1 }}>在此处修改的密钥配置将加密存储至数据库中，并要求管理员二次验证。</Text>
                 <Button icon={<ReloadOutlined />} onClick={fetchSecrets} loading={loading} style={{ alignSelf: isMobile ? 'flex-end' : 'auto' }}>
                     刷新状态
                 </Button>
@@ -198,7 +195,7 @@ const SecretSettings = () => {
                                     {record.updated_at ? new Date(record.updated_at).toLocaleString() : '-'}
                                 </Text>
                                 <Space>
-                                    <Button type="primary" size="small" ghost icon={<EditOutlined />} onClick={() => triggerAuth({ type: 'edit', record })}>
+                                    <Button type="primary" size="small" ghost icon={<EditOutlined />} onClick={() => openEdit(record)}>
                                         修改
                                     </Button>
                                     {record.isUsingDb && (
@@ -223,19 +220,25 @@ const SecretSettings = () => {
                 />
             )}
 
-            <ScanAuthModal
-                open={scanAuthVisible}
-                onCancel={() => setScanAuthVisible(false)}
-                onSuccess={handleAuthSuccess}
-                title={pendingAction?.type === 'edit' ? '安全操作授权 - 修改配置' : '安全操作授权 - 恢复默认'}
+            <ReauthenticationModal
+                open={reauthVisible}
+                title={pendingAction?.type === 'delete' ? '恢复默认配置二次验证' : '更新密钥二次验证'}
+                danger={pendingAction?.type === 'delete'}
+                confirmLoading={reauthLoading}
+                onCancel={cancelReauthentication}
+                onConfirm={handleReauthentication}
             />
 
             <Modal
                 title={`修改配置: ${currentSecret?.desc}`}
                 open={isModalVisible}
                 onOk={handleOk}
-                onCancel={() => setIsModalVisible(false)}
-                destroyOnClose
+                onCancel={() => {
+                    setIsModalVisible(false);
+                    setCurrentSecret(null);
+                    form.resetFields();
+                }}
+                destroyOnHidden
             >
                 <Form layout="vertical" form={form}>
                     <Form.Item name="key" hidden>

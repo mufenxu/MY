@@ -158,9 +158,25 @@ export function createApp({
     return passwordValid && totpValid;
   }
 
+  async function requireBackupDownloadAccess(req, res, next) {
+    const current = ROLE_LEVELS[req.consoleUser?.role] || 0;
+    if (current < ROLE_LEVELS.super_admin) {
+      await recordAudit(req, {
+        action: 'backup.download',
+        outcome: 'failure',
+        targetType: 'backup',
+        targetId: req.params.backupName,
+        details: { reason: 'insufficient_role' },
+      });
+      return res.status(403).json({ error: '仅超级管理员可以下载备份。', code: 'INSUFFICIENT_ROLE' });
+    }
+    return next();
+  }
+
   const proxyAuditTimes = new Map();
   app.locals.verifyConsoleSession = async (token, now) => sessions.verify(token, now);
   app.locals.onConsoleSessionRevoked = () => {};
+  app.locals.onConsoleSessionChanged = () => {};
   app.locals.recordProxyMetric = (metric) => {
     metrics.recordProxy(metric);
     operations.recordProxyMetric(metric).catch(() => {});
@@ -367,6 +383,31 @@ export function createApp({
     req.consoleSession = session;
     req.consoleUser = { username: session.sub, role: session.role || config.adminRole };
     return next();
+  });
+
+  app.post('/api/auth/reauth', loginLimiter, requireConsoleRequest, requireRole('super_admin'), async (req, res) => {
+    if (!await verifyReauthentication(req)) {
+      await recordAudit(req, {
+        action: 'auth.reauthenticate',
+        outcome: 'failure',
+        targetType: 'session',
+        targetId: req.consoleSession?.nonce || '',
+        details: { reason: 'invalid_credentials' },
+      });
+      return res.status(403).json({ error: '管理员二次验证失败。', code: 'REAUTHENTICATION_FAILED' });
+    }
+    const sessionToken = readSessionToken(req);
+    const expiresAt = await sessions.markReauthenticated(sessionToken);
+    if (!expiresAt) {
+      return res.status(401).json({ error: '当前会话已失效。', code: 'UNAUTHORIZED' });
+    }
+    await app.locals.onConsoleSessionChanged(sessionToken);
+    await recordAudit(req, {
+      action: 'auth.reauthenticate',
+      targetType: 'session',
+      targetId: req.consoleSession?.nonce || '',
+    });
+    return res.json({ reauthenticated: true, expiresAt: new Date(expiresAt * 1000).toISOString() });
   });
 
   app.get('/api/services', (req, res) => {
@@ -645,8 +686,21 @@ export function createApp({
     }
   });
 
-  app.get('/api/backups/:backupName/download', async (req, res, next) => {
+  app.all('/api/backups/:backupName/download', requireConsoleRequest, requireBackupDownloadAccess, async (req, res, next) => {
     try {
+      if (req.method !== 'POST') {
+        return res.status(405).set('Allow', 'POST').json({ error: '备份下载仅支持安全 POST 请求。', code: 'METHOD_NOT_ALLOWED' });
+      }
+      if (!await verifyReauthentication(req)) {
+        await recordAudit(req, {
+          action: 'backup.download',
+          outcome: 'failure',
+          targetType: 'backup',
+          targetId: req.params.backupName,
+          details: { reason: 'reauthentication_failed' },
+        });
+        return res.status(403).json({ error: '管理员二次验证失败。', code: 'REAUTHENTICATION_FAILED' });
+      }
       const download = await backups.downloadBackup({ backupName: req.params.backupName });
       await recordAudit(req, { action: 'backup.downloaded', targetType: 'backup', targetId: req.params.backupName });
       res.setHeader('Content-Type', download.contentType || 'application/gzip');
@@ -654,6 +708,13 @@ export function createApp({
       download.stream.once('error', next);
       download.stream.pipe(res);
     } catch (error) {
+      await recordAudit(req, {
+        action: 'backup.download',
+        outcome: 'failure',
+        targetType: 'backup',
+        targetId: req.params.backupName,
+        details: { reason: 'download_failed', error: String(error.message || error).slice(0, 200) },
+      });
       try {
         sendBackupError(res, error);
       } catch (unexpectedError) {

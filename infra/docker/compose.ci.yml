@@ -1,0 +1,28 @@
+services:
+  mqtt-ci:
+    image: eclipse-mosquitto:2.0.22@sha256:212f89e1eaeb2c322d6441b64396e3346026674db8fa9c27beac293405c32b3c
+    command: ["mosquitto", "-c", "/mosquitto/config/ci.conf"]
+    volumes:
+      - ./mosquitto-ci.conf:/mosquitto/config/ci.conf:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+      - /mosquitto/data:size=16m,noexec,nosuid,nodev
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "127.0.0.1", "-t", "ci/health", "-m", "ok"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - backend
+
+  iot-service:
+    depends_on:
+      mqtt-ci:
+        condition: service_healthy
+    environment:
+      MQTT_URL: mqtt://mqtt-ci:1883

@@ -144,6 +144,7 @@ page {
   background: var(--status-pending-bg);
 }
 
+.status-badge.Submitting,
 .status-badge.Processing,
 .status-badge.Refushing {
   color: var(--status-processing-color);
@@ -153,6 +154,12 @@ page {
 .status-badge.Completed {
   color: var(--status-completed-color);
   background: var(--status-completed-bg);
+}
+
+.status-badge.ReconcilePending,
+.status-badge.Unknown {
+  color: #b45309;
+  background: #fffbeb;
 }
 
 .status-badge.Failed {

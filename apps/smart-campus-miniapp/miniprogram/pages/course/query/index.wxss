@@ -10,7 +10,6 @@ page {
   --text-muted: #999999;
   --bg-input: rgba(240, 244, 248, 0.8);
   --border-light: #EBEDF0;
-  transform: none !important; /* 彻底覆盖 app.wxss 全局 translateZ(0) 带来的 fixed 定位失效问题 */
 }
 
 .page {

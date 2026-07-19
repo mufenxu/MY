@@ -31,6 +31,14 @@ test('global HTTP errors remain visible unless a request opts out', () => {
   assert.match(source, /error\.config\?\.showGlobalError !== false/);
 });
 
+test('bearer credentials remain memory-only while cookie auth survives reloads', () => {
+  const source = readSource('src', 'utils', 'session.js');
+
+  assert.match(source, /function getTokenValue\(\)[\s\S]*?memoryStore\[TOKEN_KEY\]/);
+  assert.match(source, /function setTokenValue\(token\)[\s\S]*?removeStorage\(durableStorage, TOKEN_KEY\)/);
+  assert.doesNotMatch(source, /setStoredValue\(TOKEN_KEY/);
+});
+
 test('platform console return stays scoped to verified managed sessions', () => {
   const dashboard = readSource('src', 'views', 'DashboardView.vue');
   const detail = readSource('src', 'views', 'ExamDetailView.vue');
@@ -38,4 +46,15 @@ test('platform console return stays scoped to verified managed sessions', () => 
   assert.match(dashboard, /v-if="IS_PLATFORM_SSO"[\s\S]*?返回统一服务控制台/);
   assert.match(detail, /v-if="IS_PLATFORM_SSO"[\s\S]*?returnToPlatformConsole/);
   assert.match(detail, /未保存的修改[\s\S]*?window\.location\.assign\('\/'\)/);
+});
+
+test('logout preserves the session until server-side revocation succeeds', () => {
+  const dashboard = readSource('src', 'views', 'DashboardView.vue');
+  const runtime = readSource('src', 'utils', 'runtime.js');
+
+  assert.match(dashboard, /await logoutPlatformSession\(\);[\s\S]*return;/);
+  assert.match(dashboard, /await adminApi\.logout\(\);[\s\S]*session\.clear\(\);/);
+  assert.match(dashboard, /catch \(error\)[\s\S]*退出失败/);
+  assert.doesNotMatch(dashboard, /adminApi\.logout\(\)\.catch\(\(\) => \{\}\)/);
+  assert.match(runtime, /if \(!response\.ok\)[\s\S]*throw new Error/);
 });

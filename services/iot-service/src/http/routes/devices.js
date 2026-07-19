@@ -1,4 +1,5 @@
 const { createInfoPayload } = require('../payloads/infoPayload');
+const crypto = require('crypto');
 
 const MAX_HISTORY_LIMIT = 500;
 
@@ -40,7 +41,7 @@ function registerDeviceRoutes(app, {
     }
   });
 
-  app.post('/api/devices/:deviceId/relays/:relayId/control', requireRelayControl, (req, res, next) => {
+  app.post('/api/devices/:deviceId/relays/:relayId/control', requireRelayControl, async (req, res, next) => {
     try {
       const { deviceId, relayId } = req.params;
       const { status } = req.body || {};
@@ -49,8 +50,19 @@ function registerDeviceRoutes(app, {
         return res.status(400).json({ error: '必须提供 status 参数 (ON 或 OFF)。' });
       }
 
-      mqttService.publishControl(deviceId, relayId, status);
-      res.json({ message: '控制指令已发送。' });
+      const publishResult = await mqttService.publishControl(deviceId, relayId, status);
+      const commandId = crypto.randomUUID();
+      const brokerAcknowledged = Number(publishResult?.qos) > 0;
+      res.status(202).json({
+        commandId,
+        state: 'queued',
+        brokerAcknowledged,
+        deviceConfirmed: false,
+        acceptedAt: publishResult?.queuedAt || Date.now(),
+        message: brokerAcknowledged
+          ? 'Broker 已确认控制指令，正在等待设备遥测确认。'
+          : '控制指令已写入 MQTT 发送队列，正在等待设备遥测确认。'
+      });
     } catch (error) {
       next(error);
     }

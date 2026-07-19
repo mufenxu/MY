@@ -11,11 +11,13 @@ const { createEmptyTopicStats, deepClone } = require('./mqtt/utils');
 const { sendDevicePresenceWebhook } = require('./mqtt/webhookNotifier');
 
 const DATA_RETENTION_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const CONTROL_MARKER_TTL_MS = 30 * 1000;
 
 class MqttService extends EventEmitter {
-  constructor(settingsStore, database = getDatabase()) {
+  constructor(settingsStore, database = getDatabase(), connectMqtt = mqtt.connect) {
     super();
     this.settingsStore = settingsStore;
+    this.connectMqtt = connectMqtt;
     this.client = null;
     this.connectionVersion = 0;
     this.startedAt = Date.now();
@@ -224,7 +226,7 @@ class MqttService extends EventEmitter {
       return;
     }
 
-    const client = mqtt.connect(mqttConfig.url, {
+    const client = this.connectMqtt(mqttConfig.url, {
       clientId: mqttConfig.clientId,
       username: mqttConfig.username,
       password: mqttConfig.password,
@@ -254,10 +256,14 @@ class MqttService extends EventEmitter {
         if (error) {
           this.status.subscribed = false;
           this.status.lastError = error.message;
+          this.status.connectionState = 'subscription_error';
+          this.emit('status', this.getStatus());
           return;
         }
 
         this.status.subscribed = true;
+        this.status.lastError = null;
+        this.status.connectionState = 'connected';
         this.emit('status', this.getStatus());
       });
     });
@@ -390,7 +396,11 @@ class MqttService extends EventEmitter {
   // 继电器远程控制发布
   publishControl(deviceId, relayId, status) {
     if (!this.client || !this.status.mqttConnected) {
-      throw new Error('MQTT 客户端未连接，无法发送控制指令。');
+      const error = new Error('MQTT 客户端未连接，无法发送控制指令。');
+      error.statusCode = 503;
+      error.code = 'MQTT_NOT_CONNECTED';
+      error.expose = true;
+      return Promise.reject(error);
     }
 
     const config = this.settingsStore.getConfig();
@@ -398,13 +408,59 @@ class MqttService extends EventEmitter {
 
     // 记录这是由 Web 控制台触发的
     const key = `${deviceId}:${relayId}`;
-    this.lastControlTriggeredBy[key] = 'web_ui';
+    this.lastControlTriggeredBy[key] = {
+      triggeredBy: 'web_ui',
+      expectedStatus: control.value,
+      expiresAt: Date.now() + CONTROL_MARKER_TTL_MS
+    };
 
-    this.client.publish(control.topic, control.value, { qos: control.qos }, (error) => {
-      if (error) {
-        console.error(`Failed to publish relay control [Topic: ${control.topic}]:`, error);
-      } else {
-        console.log(`Relay control command sent [Topic: ${control.topic}, Payload: ${control.value}]`);
+    const rawTimeout = Number.parseInt(process.env.MQTT_PUBLISH_TIMEOUT_MS || '5000', 10);
+    const timeoutMs = Number.isFinite(rawTimeout)
+      ? Math.min(Math.max(rawTimeout, 500), 15000)
+      : 5000;
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (handler, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        handler(value);
+      };
+      const timer = setTimeout(() => {
+        delete this.lastControlTriggeredBy[key];
+        const error = new Error('MQTT Broker 未在限定时间内确认控制指令。');
+        error.statusCode = 504;
+        error.code = 'MQTT_PUBLISH_TIMEOUT';
+        error.expose = true;
+        finish(reject, error);
+      }, timeoutMs);
+      timer.unref?.();
+
+      try {
+        this.client.publish(control.topic, control.value, { qos: control.qos }, (error) => {
+          if (error) {
+            delete this.lastControlTriggeredBy[key];
+            error.statusCode = 502;
+            error.code = error.code || 'MQTT_PUBLISH_FAILED';
+            error.expose = true;
+            console.error(`Failed to publish relay control [Topic: ${control.topic}]:`, error);
+            finish(reject, error);
+            return;
+          }
+          console.log(`Relay control command queued [Topic: ${control.topic}, Payload: ${control.value}]`);
+          finish(resolve, {
+            topic: control.topic,
+            qos: control.qos,
+            queuedAt: Date.now()
+          });
+        });
+      } catch (error) {
+        delete this.lastControlTriggeredBy[key];
+        error.statusCode = 502;
+        error.code = error.code || 'MQTT_PUBLISH_FAILED';
+        error.expose = true;
+        finish(reject, error);
       }
     });
   }

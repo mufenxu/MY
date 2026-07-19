@@ -3,6 +3,19 @@ const qs = require('querystring');
 const PlatformConfig = require('../models/PlatformConfig');
 const logger = require('./logger');
 
+function getRequestTimeoutMs() {
+    const parsed = Number.parseInt(process.env.MX_REQUEST_TIMEOUT_MS || '10000', 10);
+    return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1000), 14000) : 10000;
+}
+
+function appendClientTradeNo(data, value, envKey, fallbackField) {
+    if (!value) return;
+    const field = String(process.env[envKey] || fallbackField).trim();
+    if (/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(field)) {
+        data[field] = String(value);
+    }
+}
+
 // 敏感字段脱敏
 function sanitizeLogData(data) {
     const sensitive = ['key', 'pass', 'password', 'secretKey', 'token'];
@@ -46,7 +59,7 @@ async function platformRequest(url, data) {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.62 Safari/537.36'
             },
-            timeout: 20000 
+            timeout: getRequestTimeoutMs()
         });
 
         let resData = response.data;
@@ -65,7 +78,13 @@ async function platformRequest(url, data) {
         if (error.response) {
             logger.error(`[Platform Error Response] Status: ${error.response.status}, Data: ${JSON.stringify(error.response.data).substring(0, 500)}`);
         }
-        throw new Error(`连接远程服务器失败: ${error.message}`);
+        const wrapped = new Error(`连接远程服务器失败: ${error.message}`);
+        wrapped.code = error.code || 'UPSTREAM_REQUEST_FAILED';
+        wrapped.statusCode = error.response?.status;
+        wrapped.outcomeUnknown = !error.response
+            || ['ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET'].includes(error.code)
+            || Number(error.response?.status) >= 500;
+        throw wrapped;
     }
 }
 
@@ -168,6 +187,7 @@ async function submitOrder(options) {
             shichang: String(options.duration || ''),
             score: String(options.score || '')
         };
+        appendClientTradeNo(data, options.clientTradeNo, 'MX_CLIENT_TRADE_NO_FIELD', 'trade_no');
     } else if (channel === 'joker') {
         url = `${config.url}/api.php?act=submitcourse`;
         data = {
@@ -180,6 +200,7 @@ async function submitOrder(options) {
             kcname: String(options.courseName || ''),
             kcid: String(options.courseId || '')
         };
+        appendClientTradeNo(data, options.clientTradeNo, 'JOKER_CLIENT_TRADE_NO_FIELD', 'client_order_no');
     }
 
     logger.info(`[Platform Submit] Channel: ${channel}, URL: ${url}, User: ${options.user}, Course: ${options.courseName}`);
@@ -431,5 +452,6 @@ module.exports = {
     submitOrder,
     queryProgress,
     queryProgressEnhanced,
-    retryOrder
+    retryOrder,
+    getRequestTimeoutMs
 };

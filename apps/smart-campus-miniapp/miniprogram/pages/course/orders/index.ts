@@ -7,6 +7,7 @@ Page({
   _refreshingTradeNoMap: {} as Record<string, boolean>,
   _retryingTradeNoMap: {} as Record<string, boolean>,
   _autoRefreshSession: 0,
+  _queueRefreshTimer: null as ReturnType<typeof setTimeout> | null,
   data: {
     orders: [] as any[],
     loading: true,
@@ -44,6 +45,8 @@ Page({
     this._autoRefreshSession += 1
     this._refreshingTradeNoMap = {}
     this._retryingTradeNoMap = {}
+    if (this._queueRefreshTimer) clearTimeout(this._queueRefreshTimer)
+    this._queueRefreshTimer = null
   },
 
   onUnload() {
@@ -51,6 +54,8 @@ Page({
     this._autoRefreshSession += 1
     this._refreshingTradeNoMap = {}
     this._retryingTradeNoMap = {}
+    if (this._queueRefreshTimer) clearTimeout(this._queueRefreshTimer)
+    this._queueRefreshTimer = null
   },
 
   async fetchOrders(isInitialOrPull: boolean = false) {
@@ -99,11 +104,17 @@ Page({
         const fiveMinutes = 5 * 60 * 1000
         
         if (isInitialOrPull && !keyword && page === 1 && (now - this.lastAutoRefreshTime > fiveMinutes)) {
-          const ongoingOrders = list.filter((o: any) => o.status !== 'Completed')
+          const ongoingOrders = list.filter((o: any) =>
+            o.canRefresh && ['Processing', 'Refushing'].includes(o.status)
+          )
           if (ongoingOrders.length > 0) {
             this.lastAutoRefreshTime = now // 更新冷却时间
             this._autoRefreshConcurrent(ongoingOrders.map((o: any) => o.tradeNo))
           }
+        }
+
+        if (page === 1 && list.some((order: any) => ['Pending', 'Submitting'].includes(order.status))) {
+          this.scheduleQueueRefresh()
         }
 
       } else {
@@ -117,6 +128,17 @@ Page({
         this.setData({ loading: false, loadingMore: false })
       }
     }
+  },
+
+  scheduleQueueRefresh() {
+    if (this._queueRefreshTimer || !this._isAlive) return
+    const session = this._autoRefreshSession
+    this._queueRefreshTimer = setTimeout(() => {
+      this._queueRefreshTimer = null
+      if (!this._isAlive || session !== this._autoRefreshSession) return
+      this.setData({ page: 1 })
+      this.fetchOrders(false)
+    }, 2000)
   },
 
   /** 自动刷新进行中订单，限制并发防止上游服务器过载 */

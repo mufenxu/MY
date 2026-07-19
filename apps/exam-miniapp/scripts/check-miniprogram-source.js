@@ -96,6 +96,22 @@ const examPage = fs.readFileSync(path.join(miniprogramRoot, 'pages', 'exam', 'ex
 if (!/onSwiperChange[\s\S]*?this\.data\.mode === 'recite'[\s\S]*?return;/.test(examPage)) {
     errors.push('Recite mode swiper events must be ignored defensively.');
 }
+if (!/syncExamAttempt[\s\S]*?startDeadlineTimer/.test(examPage)
+    || !/onShow\(\)[\s\S]*?syncExamAttempt/.test(examPage)
+    || !/handleSubmissionFailure[\s\S]*?startDeadlineTimer/.test(examPage)) {
+    errors.push('Timed exams must calibrate against the server deadline and recover after submission failures.');
+}
+if (!/initializePersonalExamAttempt[\s\S]*?attemptInitializationError/.test(examPage)
+    || !/saveProgress\(immediate = false\)[\s\S]*?!this\.isExamSessionReady\(\)/.test(examPage)
+    || !/onSubmit\(isAuto = false\)[\s\S]*?!this\.isExamSessionReady\(\)/.test(examPage)
+    || !/bindtap="onRetryAttemptInitialization"/.test(examTemplate)) {
+    errors.push('Personal exams must remain blocked until the server attempt is initialized.');
+}
+
+const runtimeConfig = fs.readFileSync(path.join(miniprogramRoot, 'config', 'runtime.ts'), 'utf8');
+if (!/envVersion !== 'develop'[\s\S]*?assertDistributionCompliance/.test(runtimeConfig)) {
+    errors.push('Trial and release builds must enforce distribution compliance metadata.');
+}
 
 const learningApi = fs.readFileSync(path.join(miniprogramRoot, 'services', 'learningApi.ts'), 'utf8');
 if (!/question-analysis[\s\S]*?timeout:\s*AI_ANALYSIS_TIMEOUT_MS/.test(learningApi)) {

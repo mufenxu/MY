@@ -65,6 +65,11 @@ const {
     beforeSingleGeneration,
     afterSingleGeneration,
 } = require('../services/aiGenerationGuard');
+const {
+    assertExamAttemptCanSubmit,
+    resolveExamAttempt,
+    startOrResumeExamAttempt,
+} = require('../services/examAttemptService');
 const { canUseQuestionAiAnalysis } = require('../middleware/aiAccess');
 const { QUESTION_ORDER_SORT } = require('../utils/questionOrder');
 
@@ -265,7 +270,7 @@ function hasUsefulProgressData(progress = {}) {
     }
 
     return Number(progress.currentIndex) > 0
-        && hasAnsweredValue(progress.answers);
+        || hasAnsweredValue(progress.answers);
 }
 
 function buildMyQuestionBaseQuery(categories, userOpenid) {
@@ -1178,13 +1183,74 @@ exports.acceptPaperShare = asyncHandler(async (req, res) => {
     }, result.created ? '分享接收成功' : '你已接收过该分享');
 });
 
-exports.submitExam = asyncHandler(async (req, res) => {
-    const { categoryId, answers } = req.body;
+exports.startExamAttempt = asyncHandler(async (req, res) => {
+    const { categoryId, restart = false, requestId = '' } = req.body;
     const userId = req.user.openid;
     const category = await getAccessibleMyCategoryById(categoryId, userId);
     if (!category) {
         throw new NotFoundError('你可访问的题库不存在或未发布');
     }
+
+    const attempt = await startOrResumeExamAttempt({
+        progressModel: ExamProgress,
+        userId,
+        category,
+        restart,
+        requestId,
+        submissionGraceMs: config.examSubmissionGraceMs,
+    });
+
+    success(res, attempt, restart ? '考试已重新开始' : '考试场次已就绪');
+});
+
+async function sendExamSubmission(res, result, category) {
+    return success(res, {
+        _id: result._id,
+        score: result.score,
+        correctCount: result.correctCount,
+        totalCount: result.totalCount,
+        details: await attachStoredAiAnalysesToReviewDetails(toReviewDetails(result.details)),
+        categoryName: result.categorySnapshot?.name || category.name,
+        scopeType: result.scopeType,
+        ownerOpenid: result.ownerOpenid,
+    });
+}
+
+async function findExamProgressCandidates(userId, categoryId) {
+    return ExamProgress.find({ userId, categoryId, mode: 'exam' })
+        .sort({ updateTime: -1 })
+        .limit(2);
+}
+
+exports.submitExam = asyncHandler(async (req, res) => {
+    const { categoryId, answers, attemptId = '' } = req.body;
+    const userId = req.user.openid;
+    const category = await getAccessibleMyCategoryById(categoryId, userId);
+    if (!category) {
+        throw new NotFoundError('你可访问的题库不存在或未发布');
+    }
+
+    if (attemptId) {
+        const existingResult = await ExamResult.findOne({ userId, categoryId, attemptId });
+        if (existingResult) {
+            return sendExamSubmission(res, existingResult, category);
+        }
+    }
+
+    const attempt = resolveExamAttempt({
+        progresses: await findExamProgressCandidates(userId, categoryId),
+        attemptId,
+        categoryDuration: category.duration,
+    });
+    const progress = attempt.progress;
+    const effectiveAttemptId = attempt.attemptId;
+
+    assertExamAttemptCanSubmit({
+        progress,
+        attemptId: effectiveAttemptId,
+        categoryDuration: category.duration,
+        submissionGraceMs: config.examSubmissionGraceMs,
+    });
 
     const questions = await Question.find(buildScopedQueryForMyCategory(category, userId, {
         categoryId,
@@ -1198,30 +1264,50 @@ exports.submitExam = asyncHandler(async (req, res) => {
     const score = Math.round((correctCount / totalCount) * 100);
     const resultScopeType = getCategoryRecordScope(category);
 
-    const result = await ExamResult.create({
-        userId,
-        categoryId,
-        score,
-        correctCount,
-        totalCount,
-        answers,
-        categorySnapshot: buildCategorySnapshot(category),
-        details,
-        scopeType: resultScopeType,
-        ownerOpenid: resultScopeType === PERSONAL_SCOPE ? (category.ownerOpenid || userId) : null,
-    });
-    await syncQuestionStatesFromExam(userId, category, details);
+    let result;
+    let created = false;
+    try {
+        result = await ExamResult.create({
+            userId,
+            categoryId,
+            attemptId: effectiveAttemptId || null,
+            score,
+            correctCount,
+            totalCount,
+            answers,
+            categorySnapshot: buildCategorySnapshot(category),
+            details,
+            scopeType: resultScopeType,
+            ownerOpenid: resultScopeType === PERSONAL_SCOPE ? (category.ownerOpenid || userId) : null,
+        });
+        created = true;
+    } catch (error) {
+        if (error.code !== 11000 || !effectiveAttemptId) {
+            throw error;
+        }
+        result = await ExamResult.findOne({ userId, categoryId, attemptId: effectiveAttemptId });
+        if (!result) {
+            throw error;
+        }
+    }
 
-    success(res, {
-        _id: result._id,
-        score,
-        correctCount,
-        totalCount,
-        details: await attachStoredAiAnalysesToReviewDetails(toReviewDetails(details)),
-        categoryName: category.name,
-        scopeType: result.scopeType,
-        ownerOpenid: result.ownerOpenid,
-    });
+    if (created) {
+        await syncQuestionStatesFromExam(userId, category, details);
+        if (effectiveAttemptId) {
+            await ExamProgress.updateOne(
+                { userId, categoryId, mode: 'exam', attemptId: effectiveAttemptId },
+                {
+                    $set: {
+                        attemptSubmittedAt: new Date(),
+                        isCleared: true,
+                        timeLeft: 0,
+                    },
+                },
+            );
+        }
+    }
+
+    return sendExamSubmission(res, result, category);
 });
 
 exports.getLatestResult = asyncHandler(async (req, res) => {
@@ -1285,6 +1371,7 @@ exports.saveProgress = asyncHandler(async (req, res) => {
         reciteMastery,
         reciteReviewTimes,
         updateTime,
+        attemptId = '',
     } = req.body;
     const userId = req.user.openid;
     const category = await getAccessibleMyCategoryById(categoryId, userId);
@@ -1297,7 +1384,19 @@ exports.saveProgress = asyncHandler(async (req, res) => {
     }
 
     const progressScopeType = category.scopeType === PERSONAL_SCOPE ? PERSONAL_SCOPE : ADMIN_SCOPE;
-    const existingProgress = await ExamProgress.findOne({ userId, categoryId, mode });
+    let existingProgress;
+    let effectiveAttemptId = attemptId;
+    if (mode === 'exam') {
+        const attempt = resolveExamAttempt({
+            progresses: await findExamProgressCandidates(userId, categoryId),
+            attemptId,
+            categoryDuration: category.duration,
+        });
+        existingProgress = attempt.progress;
+        effectiveAttemptId = attempt.attemptId;
+    } else {
+        existingProgress = await ExamProgress.findOne({ userId, categoryId, mode });
+    }
     const incomingUpdatedAt = updateTime ? new Date(updateTime).getTime() : Date.now();
     const existingUpdatedAt = existingProgress?.updateTime
         ? new Date(existingProgress.updateTime).getTime()
@@ -1308,6 +1407,10 @@ exports.saveProgress = asyncHandler(async (req, res) => {
         && Number.isFinite(incomingUpdatedAt)
         && incomingUpdatedAt <= existingUpdatedAt
     ) {
+        return success(res, null, 'Progress ignored');
+    }
+
+    if (mode === 'exam' && existingProgress?.attemptSubmittedAt) {
         return success(res, null, 'Progress ignored');
     }
 
@@ -1324,21 +1427,32 @@ exports.saveProgress = asyncHandler(async (req, res) => {
         ownerOpenid: progressScopeType === PERSONAL_SCOPE ? userId : null,
     };
 
+    if (mode === 'exam' && existingProgress?.deadlineAt) {
+        progressData.timeLeft = Math.max(
+            0,
+            Math.ceil((new Date(existingProgress.deadlineAt).getTime() - Date.now()) / 1000),
+        );
+    }
+
     Object.keys(progressData).forEach((key) => {
         if (progressData[key] === undefined) {
             delete progressData[key];
         }
     });
 
-    await ExamProgress.findOneAndUpdate(
-        {
-            userId,
-            categoryId,
-            mode,
-        },
+    const progressFilter = { userId, categoryId, mode };
+    if (mode === 'exam') {
+        progressFilter.attemptId = effectiveAttemptId;
+        progressFilter.attemptSubmittedAt = null;
+    }
+    const updatedProgress = await ExamProgress.findOneAndUpdate(
+        progressFilter,
         progressData,
-        { upsert: true, new: true },
+        { upsert: mode !== 'exam', new: true },
     );
+    if (mode === 'exam' && !updatedProgress) {
+        throw new AppError('考试场次已失效，请重新开始', 409);
+    }
     success(res, null, 'Progress saved');
 });
 
@@ -1367,7 +1481,7 @@ exports.getProgress = asyncHandler(async (req, res) => {
 });
 
 exports.clearProgress = asyncHandler(async (req, res) => {
-    const { categoryId, mode } = req.body;
+    const { categoryId, mode, attemptId = '' } = req.body;
     const userId = req.user.openid;
     const category = await getAccessibleMyCategoryById(categoryId, userId);
     if (!category) {
@@ -1375,6 +1489,15 @@ exports.clearProgress = asyncHandler(async (req, res) => {
     }
 
     const progressScopeType = category.scopeType === PERSONAL_SCOPE ? PERSONAL_SCOPE : ADMIN_SCOPE;
+    let effectiveAttemptId = attemptId;
+    if (mode === 'exam') {
+        const attempt = resolveExamAttempt({
+            progresses: await findExamProgressCandidates(userId, categoryId),
+            attemptId,
+            categoryDuration: category.duration,
+        });
+        effectiveAttemptId = attempt.attemptId;
+    }
     const clearedProgress = {
         currentIndex: 0,
         answers: {},
@@ -1388,13 +1511,21 @@ exports.clearProgress = asyncHandler(async (req, res) => {
         ownerOpenid: progressScopeType === PERSONAL_SCOPE ? userId : null,
     };
 
-    const result = await ExamProgress.updateMany({
+    const clearFilter = {
         userId,
         categoryId,
         mode,
-    }, { $set: clearedProgress });
+    };
+    if (mode === 'exam') {
+        clearFilter.attemptId = effectiveAttemptId;
+        clearFilter.attemptSubmittedAt = null;
+    }
+    const result = await ExamProgress.updateMany(clearFilter, { $set: clearedProgress });
 
     if (!result.matchedCount) {
+        if (mode === 'exam') {
+            throw new AppError('考试场次已失效，请重新开始', 409);
+        }
         await ExamProgress.create({
             userId,
             categoryId,

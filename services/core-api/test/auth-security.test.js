@@ -8,6 +8,7 @@ const User = require('../models/User');
 const RefreshToken = require('../models/RefreshToken');
 const authService = require('../services/authService');
 const auth = require('../middleware/auth');
+const { ACCESS_COOKIE_NAME, CSRF_COOKIE_NAME } = require('../utils/refreshCookie');
 
 function userQuery(user) {
     return {
@@ -27,6 +28,30 @@ function invokeAuth(token) {
         const res = {
             statusCode: 200,
             status(code) { this.statusCode = code; return this; },
+            setHeader() {},
+            json(body) { resolve({ req, res: this, body }); }
+        };
+        auth.verifyToken(req, res, (error) => resolve({ req, res, error }));
+    });
+}
+
+function invokeCookieAuth(token, { method = 'GET', csrfHeader = '', csrfCookie = '' } = {}) {
+    return new Promise((resolve) => {
+        const headers = {
+            'x-core-admin-client': 'web',
+            cookie: `${ACCESS_COOKIE_NAME}=${encodeURIComponent(token)}${csrfCookie ? `; ${CSRF_COOKIE_NAME}=${encodeURIComponent(csrfCookie)}` : ''}`
+        };
+        if (csrfHeader) headers['x-csrf-token'] = csrfHeader;
+        const req = {
+            method,
+            headers,
+            header(name) { return this.headers[String(name).toLowerCase()]; },
+            get(name) { return this.headers[String(name).toLowerCase()]; }
+        };
+        const res = {
+            statusCode: 200,
+            status(code) { this.statusCode = code; return this; },
+            setHeader() {},
             json(body) { resolve({ req, res: this, body }); }
         };
         auth.verifyToken(req, res, (error) => resolve({ req, res, error }));
@@ -83,6 +108,38 @@ test('disabled account is rejected even when JWT is otherwise valid', async () =
         const result = await invokeAuth(token);
         assert.equal(result.res.statusCode, 403);
         assert.equal(result.body.code, 'AUTH_ACCOUNT_DISABLED');
+    } finally {
+        User.findById = originalFindById;
+    }
+});
+
+test('web access cookie supports safe reads and enforces CSRF on mutations', async () => {
+    const originalFindById = User.findById;
+    const token = authService.generateToken({ _id: 'cookie-admin', role: 'admin', tokenVersion: 0 });
+    User.findById = () => userQuery({
+        _id: 'cookie-admin',
+        role: 'admin',
+        permissions: [],
+        status: 'active',
+        tokenVersion: 0
+    });
+
+    try {
+        const read = await invokeCookieAuth(token);
+        assert.equal(read.error, undefined);
+        assert.equal(read.req.user._id, 'cookie-admin');
+
+        const rejectedWrite = await invokeCookieAuth(token, { method: 'POST' });
+        assert.equal(rejectedWrite.res.statusCode, 403);
+        assert.equal(rejectedWrite.body.code, 'AUTH_CSRF_INVALID');
+
+        const acceptedWrite = await invokeCookieAuth(token, {
+            method: 'POST',
+            csrfCookie: 'csrf-token',
+            csrfHeader: 'csrf-token'
+        });
+        assert.equal(acceptedWrite.error, undefined);
+        assert.equal(acceptedWrite.req.user._id, 'cookie-admin');
     } finally {
         User.findById = originalFindById;
     }

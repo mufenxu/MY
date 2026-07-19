@@ -62,10 +62,11 @@ npm run preview
 
 ## 认证说明
 
-- 访问管理后台时，前端会从 `localStorage` 读取 `token`
-- 请求头自动附带 `Authorization: Bearer <token>`
-- 当后端返回 `tokenExpired` 时，会自动尝试刷新 token
-- 401 且刷新失败时会清理本地登录态并跳转 `/login`
+- Access Token 和 Refresh Token 仅保存在 `HttpOnly`、`SameSite=Strict` Cookie 中，前端脚本无法读取
+- 写请求会自动携带双提交 `X-CSRF-Token`，服务端校验通过后才执行
+- Access Token 失效后会用轮换式 Refresh Token 自动恢复会话并重放排队请求
+- 401 且刷新失败时会清理非敏感的本地用户摘要并跳转 `/login`
+- 小程序等非浏览器客户端仍使用 `Authorization: Bearer <token>`，兼容既有接口
 
 相关实现见 [src/utils/api.js](./src/utils/api.js)。
 

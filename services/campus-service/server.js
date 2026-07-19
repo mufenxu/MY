@@ -21,6 +21,7 @@ import { hashPassword, isValidUsername, normalizeUsername, verifyPassword } from
 import { createSensitiveJsonCodec, deriveDataEncryptionKey } from "./src/lib/sensitive-json.js";
 import { normalizeAllowedSchoolUrl } from "./src/lib/school-url.js";
 import { verifyPlatformSso } from "./src/lib/platform-sso.js";
+import { platformRoleAllowsRequest } from "./src/lib/platform-role.js";
 import { createStaticAssetHandler } from "./src/lib/static-assets.js";
 import { createCampusRepository } from "./src/storage/campus-repository.js";
 import {
@@ -816,6 +817,7 @@ async function getAppSession(req) {
     return {
       required: true,
       platformSso: true,
+      platformRole: platformIdentity.role,
       ...appSessionData(user, {
         csrfToken: platformIdentity.csrf,
         expiresAt: new Date((platformIdentity.session_exp || platformIdentity.exp) * 1000).toISOString()
@@ -923,6 +925,16 @@ function methodNeedsCsrf(method) {
 
 async function requireAppAccess(req) {
   const session = await getAppSession(req);
+  if (
+    session.platformSso
+    && !platformRoleAllowsRequest(
+      session.platformRole,
+      req.method,
+      new URL(req.url || '/', 'http://campus.internal').pathname
+    )
+  ) {
+    throw new HttpError(403, "The unified-platform role cannot perform this operation.");
+  }
   if (methodNeedsCsrf(req.method)) {
     const supplied = req.headers["x-csrf-token"];
     if (!session.csrfToken || !supplied || !safeEqualString(String(supplied), session.csrfToken)) {

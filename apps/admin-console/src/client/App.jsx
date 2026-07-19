@@ -308,6 +308,20 @@ function LoadingScreen() {
   );
 }
 
+function SessionUnavailableScreen({ error, onRetry, retrying }) {
+  return (
+    <main className="session-error-screen" role="alert">
+      <CircleOff size={32} aria-hidden="true" />
+      <strong>管理服务暂时不可用</strong>
+      <span>{error?.message || '无法确认当前会话，请稍后重试。'}</span>
+      <button className="primary-button compact" type="button" onClick={onRetry} disabled={retrying}>
+        {retrying ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
+        {retrying ? '正在重试' : '重新连接'}
+      </button>
+    </main>
+  );
+}
+
 function OperationsChart({ services, history = {} }) {
   const chartServices = services
     .filter((service) => Number.isFinite(service.latencyMs))
@@ -983,6 +997,7 @@ function BackupRecoveryView({ session }) {
   const [selectedBackup, setSelectedBackup] = useState(null);
   const [activeJob, setActiveJob] = useState(null);
   const [deletingBackup, setDeletingBackup] = useState('');
+  const [downloadingBackup, setDownloadingBackup] = useState('');
   const [uploadingBackup, setUploadingBackup] = useState(false);
   const [restorePassword, setRestorePassword] = useState('');
   const [restoreTotp, setRestoreTotp] = useState('');
@@ -1096,14 +1111,60 @@ function BackupRecoveryView({ session }) {
     setSelectedBackup(backup);
   }
 
-  function handleDownloadBackup(backup) {
+  async function handleDownloadBackup(backup) {
     setActionError('');
     setActionMessage('');
     if (!backup?.restorable) {
       setActionError('这个备份包不可下载');
       return;
     }
-    window.location.assign(`/api/backups/${encodeURIComponent(backup.name)}/download`);
+    if (!canManageBackups) {
+      setActionError('仅超级管理员可以下载备份归档。');
+      return;
+    }
+    if (!session.authDisabled && !restorePassword) {
+      setActionError('请先输入当前管理员密码。');
+      return;
+    }
+    if (!session.authDisabled && session.user?.totpEnabled && restoreTotp.length !== 6) {
+      setActionError('请先输入六位动态验证码。');
+      return;
+    }
+
+    setDownloadingBackup(backup.name);
+    try {
+      const response = await fetch(`/api/backups/${encodeURIComponent(backup.name)}/download`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Platform-Request': 'console',
+        },
+        body: JSON.stringify({ password: restorePassword, totp: restoreTotp }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || `备份下载失败（HTTP ${response.status}）。`);
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get('content-disposition') || '';
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || `${backup.name}.tar.gz`;
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+      setRestorePassword('');
+      setRestoreTotp('');
+      setActionMessage('备份下载已开始。');
+    } catch (error) {
+      setActionError(error.message);
+    } finally {
+      setDownloadingBackup('');
+    }
   }
 
   function handleDeleteBackup(backup) {
@@ -1220,7 +1281,7 @@ function BackupRecoveryView({ session }) {
         <article><span className="kpi-icon blue"><Database size={20} /></span><div><span>可用备份</span><strong>{backups.filter((backup) => backup.restorable).length}</strong><small>服务器备份目录</small></div></article>
         <article><span className="kpi-icon green"><CheckCircle2 size={20} /></span><div><span>执行器</span><strong>{executorHealthy ? '就绪' : '受限'}</strong><small>{capabilities.issues?.join('，') || '可执行备份与恢复'}</small></div></article>
         <article><span className="kpi-icon orange"><Clock3 size={20} /></span><div><span>最近备份</span><strong>{formatDateTime(latestBackup?.createdAt)}</strong><small>{latestBackup?.name || '暂无归档'}</small></div></article>
-        <article><span className="kpi-icon purple"><ShieldCheck size={20} /></span><div><span>恢复保护</span><strong>{session.authDisabled ? '确认短语' : session.user?.totpEnabled ? '双重验证' : '密码验证'}</strong><small>恢复前校验归档哈希</small></div></article>
+        <article><span className="kpi-icon purple"><ShieldCheck size={20} /></span><div><span>高危操作保护</span><strong>{session.authDisabled ? '确认短语' : session.user?.totpEnabled ? '双重验证' : '密码验证'}</strong><small>下载与恢复均需二次验证</small></div></article>
       </div>
 
       {(actionError || actionMessage) && (
@@ -1277,13 +1338,13 @@ function BackupRecoveryView({ session }) {
                     type="button"
                     aria-label={`下载备份 ${backup.name}`}
                     title="下载备份"
-                    disabled={!backup.restorable}
+                    disabled={!canManageBackups || !backup.restorable || downloadingBackup === backup.name}
                     onClick={(event) => {
                       event.stopPropagation();
                       handleDownloadBackup(backup);
                     }}
                   >
-                    <Download size={15} />
+                    {downloadingBackup === backup.name ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />}
                   </button>
                   <button
                     className="backup-row-action danger"
@@ -1335,7 +1396,7 @@ function BackupRecoveryView({ session }) {
           </button>
           {!session.authDisabled && (
             <label className="restore-field">
-              <span>管理员密码</span>
+              <span>管理员密码（下载 / 恢复）</span>
               <input
                 type="password"
                 autoComplete="current-password"
@@ -1347,7 +1408,7 @@ function BackupRecoveryView({ session }) {
           )}
           {!session.authDisabled && session.user?.totpEnabled && (
             <label className="restore-field">
-              <span>动态验证码</span>
+              <span>动态验证码（下载 / 恢复）</span>
               <input
                 inputMode="numeric"
                 autoComplete="one-time-code"
@@ -1437,6 +1498,7 @@ function Dashboard({ session, onLogout }) {
   const mobileMenuButtonRef = useRef(null);
   const sidebarRef = useRef(null);
   const notificationRef = useRef(null);
+  const loadRequestRef = useRef(null);
 
   const closeMobileNav = useCallback(() => {
     setMobileNavOpen(false);
@@ -1445,28 +1507,36 @@ function Dashboard({ session, onLogout }) {
     }
   }, []);
 
-  const loadServices = useCallback(async (force = false) => {
+  const loadServices = useCallback((force = false) => {
+    if (loadRequestRef.current) return loadRequestRef.current;
     force ? setRefreshing(true) : setLoading(true);
     setError('');
-    try {
-      const overview = await requestJson(`/api/operations/overview${force ? '?refresh=1' : ''}`);
-      setOperationsSummary(overview);
-      setData({
-        platformName: overview.platformName,
-        services: overview.services,
-        counts: overview.counts,
-        refreshedAt: overview.refreshedAt,
-      });
-    } catch (requestError) {
-      if (requestError.status === 401) {
-        onLogout();
-        return;
+    const request = (async () => {
+      try {
+        const overview = await requestJson(`/api/operations/overview${force ? '?refresh=1' : ''}`);
+        setOperationsSummary(overview);
+        setData({
+          platformName: overview.platformName,
+          services: overview.services,
+          counts: overview.counts,
+          refreshedAt: overview.refreshedAt,
+        });
+      } catch (requestError) {
+        if (requestError.status === 401) {
+          onLogout();
+          return;
+        }
+        setError(requestError.message);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    })();
+    loadRequestRef.current = request;
+    request.finally(() => {
+      if (loadRequestRef.current === request) loadRequestRef.current = null;
+    });
+    return request;
   }, [onLogout]);
 
   useEffect(() => {
@@ -1484,8 +1554,38 @@ function Dashboard({ session, onLogout }) {
 
   useEffect(() => {
     if (!monitoringEnabled) return undefined;
-    const interval = window.setInterval(() => loadServices(true), 30000);
-    return () => window.clearInterval(interval);
+    let disposed = false;
+    let timer = null;
+    const canPoll = () => document.visibilityState === 'visible' && navigator.onLine !== false;
+    const clearTimer = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = null;
+    };
+    const schedule = () => {
+      clearTimer();
+      if (!disposed && canPoll()) timer = window.setTimeout(run, 30000);
+    };
+    const run = async () => {
+      if (canPoll()) await loadServices(true);
+      schedule();
+    };
+    const resume = () => {
+      clearTimer();
+      if (!disposed && canPoll()) loadServices(true).finally(schedule);
+    };
+    const handleVisibility = () => (canPoll() ? resume() : clearTimer());
+
+    schedule();
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('online', resume);
+    window.addEventListener('offline', clearTimer);
+    return () => {
+      disposed = true;
+      clearTimer();
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('online', resume);
+      window.removeEventListener('offline', clearTimer);
+    };
   }, [loadServices, monitoringEnabled]);
 
   useEffect(() => {
@@ -1741,6 +1841,7 @@ function Dashboard({ session, onLogout }) {
 export default function App() {
   const [session, setSession] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [sessionError, setSessionError] = useState(null);
 
   const finishAuthentication = useCallback((nextSession) => {
     setSession(nextSession);
@@ -1750,14 +1851,28 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    requestJson('/api/auth/status')
-      .then(finishAuthentication)
-      .catch(() => setSession({ authenticated: false, authDisabled: false, user: null }))
-      .finally(() => setCheckingSession(false));
+  const checkSession = useCallback(async () => {
+    setCheckingSession(true);
+    setSessionError(null);
+    try {
+      finishAuthentication(await requestJson('/api/auth/status'));
+    } catch (error) {
+      if (error.status === 401) {
+        setSession({ authenticated: false, authDisabled: false, user: null });
+      } else {
+        setSessionError(error);
+      }
+    } finally {
+      setCheckingSession(false);
+    }
   }, [finishAuthentication]);
 
+  useEffect(() => {
+    checkSession();
+  }, [checkSession]);
+
   if (checkingSession) return <LoadingScreen />;
+  if (sessionError) return <SessionUnavailableScreen error={sessionError} onRetry={checkSession} retrying={checkingSession} />;
   if (!session?.authenticated) return <LoginScreen onAuthenticated={finishAuthentication} totpRequired={session?.totpRequired} />;
   return <Dashboard session={session} onLogout={() => setSession({ authenticated: false, authDisabled: false, totpRequired: Boolean(session.user?.totpEnabled), user: null })} />;
 }

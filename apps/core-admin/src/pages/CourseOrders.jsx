@@ -94,14 +94,15 @@ const CourseOrders = () => {
     };
 
     const handleRefreshStatus = async (keys = selectedRowKeys) => {
-        if (!keys.length) {
+        const refreshableKeys = keys.filter((key) => orders.find((order) => order.tradeNo === key)?.status !== 'Submitting');
+        if (!refreshableKeys.length) {
             message.warning('请先选择要刷新进度的订单');
             return;
         }
         setRefreshing(true);
         try {
             const res = await api.post('/course-order/admin/refresh', {
-                orderIds: keys
+                orderIds: refreshableKeys
             }, {
                 timeout: ORDER_REFRESH_TIMEOUT_MS,
             });
@@ -222,13 +223,16 @@ const CourseOrders = () => {
     const getStatusTag = (status, text) => {
         const statusMap = {
             'Pending': { color: 'orange', label: '待处理' },
+            'Submitting': { color: 'processing', label: '提交中' },
             'Processing': { color: 'processing', label: '进行中' },
             'Completed': { color: 'success', label: '已完成' },
             'Failed': { color: 'error', label: '异常/失败' },
             'Cancelled': { color: 'default', label: '已取消' },
-            'Refushing': { color: 'magenta', label: '补刷中' }
+            'Refushing': { color: 'magenta', label: '补刷中' },
+            'ReconcilePending': { color: 'warning', label: '待人工核对' },
+            'Unknown': { color: 'default', label: '结果未知' }
         };
-        const st = statusMap[status] || statusMap['Pending'];
+        const st = statusMap[status] || { color: 'default', label: '未知状态' };
         return <Tag color={st.color}>{text || st.label}</Tag>;
     };
 
@@ -326,12 +330,13 @@ const CourseOrders = () => {
             width: 120,
             render: (_, record) => (
                 <Space size="small">
-                    <Tooltip title="从上游实时获取更新状态">
+                    <Tooltip title={record.status === 'ReconcilePending' ? '仅查询上游状态，不会重新提交订单' : '从上游实时获取更新状态'}>
                         <Button 
                             type="dashed" 
                             size="small" 
                             icon={<SyncOutlined />} 
                             onClick={() => handleRefreshStatus([record.tradeNo])}
+                            disabled={record.status === 'Submitting'}
                         >
                             进度
                         </Button>
@@ -342,6 +347,7 @@ const CourseOrders = () => {
                             size="small" 
                             icon={record.isHidden ? <EyeOutlined /> : <EyeInvisibleOutlined />} 
                             onClick={() => handleToggleVisibility(record)}
+                            aria-label={record.isHidden ? '在小程序显示订单' : '在小程序隐藏订单'}
                         />
                     </Tooltip>
                     <Tooltip title="编辑订单信息">
@@ -350,6 +356,7 @@ const CourseOrders = () => {
                             size="small" 
                             icon={<EditOutlined />} 
                             onClick={() => openEditModal(record)}
+                            aria-label="编辑订单"
                         />
                     </Tooltip>
                     <Button 
@@ -414,10 +421,13 @@ const CourseOrders = () => {
                     onChange={(val) => handleSearch(val || '', 'status')}
                 >
                     <Option value="Pending">待处理</Option>
+                    <Option value="Submitting">提交中</Option>
                     <Option value="Processing">进行中</Option>
                     <Option value="Completed">已完成</Option>
                     <Option value="Failed">异常/失败</Option>
                     <Option value="Refushing">补刷中</Option>
+                    <Option value="ReconcilePending">待人工核对</Option>
+                    <Option value="Unknown">结果未知</Option>
                 </Select>
                 
                 <Button 
@@ -447,6 +457,10 @@ const CourseOrders = () => {
                     rowSelection={{
                         selectedRowKeys,
                         onChange: setSelectedRowKeys,
+                        getCheckboxProps: (record) => ({
+                            disabled: record.status === 'Submitting',
+                            name: record.tradeNo,
+                        }),
                     }}
                     columns={columns} 
                     dataSource={orders} 
@@ -522,6 +536,7 @@ const CourseOrders = () => {
                                             size="small" 
                                             icon={<SyncOutlined />} 
                                             onClick={() => handleRefreshStatus([record.tradeNo])}
+                                            disabled={record.status === 'Submitting'}
                                         >
                                             刷新
                                         </Button>
@@ -529,12 +544,14 @@ const CourseOrders = () => {
                                             size="small" 
                                             icon={<EditOutlined />} 
                                             onClick={() => openEditModal(record)}
+                                            aria-label="编辑订单"
                                         />
                                         <Button 
                                             size="small" 
                                             danger 
                                             icon={<DeleteOutlined />} 
                                             onClick={() => handleDelete(record.tradeNo)}
+                                            aria-label="删除订单"
                                         />
                                     </Space>
                                 </div>
@@ -691,10 +708,13 @@ const CourseOrders = () => {
                         <Col xs={24} sm={12}>
                             <Form.Item name="status" label={<span style={{ fontWeight: 600, fontSize: 12 }}>初始处理状态</span>} initialValue="Processing">
                                 <Select dropdownStyle={{ borderRadius: 12 }}>
-                                    <Option value="Pending">待处理 (Pending)</Option>
+                                    <Option value="Pending" disabled>待处理 (Pending)</Option>
+                                    <Option value="Submitting" disabled>提交中 (Submitting)</Option>
                                     <Option value="Processing">进行中 (Processing)</Option>
                                     <Option value="Completed">已完成 (Completed)</Option>
                                     <Option value="Failed">异常/失败 (Failed)</Option>
+                                    <Option value="ReconcilePending" disabled>待人工核对 (ReconcilePending)</Option>
+                                    <Option value="Unknown" disabled>结果未知 (Unknown)</Option>
                                 </Select>
                             </Form.Item>
                         </Col>

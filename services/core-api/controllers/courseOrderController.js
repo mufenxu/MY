@@ -1,11 +1,13 @@
 const crypto = require('crypto');
 const CourseOrder = require('../models/CourseOrder');
+const CourseOrderBatch = require('../models/CourseOrderBatch');
 const CourseCategory = require('../models/CourseCategory');
 const PlatformConfig = require('../models/PlatformConfig');
 const mxPlatform = require('../utils/mxPlatform');
 const logger = require('../utils/logger');
 const { encrypt, decrypt } = require('../utils/crypto');
 const { escapeRegex } = require('../utils/helpers');
+const courseOrderSubmissionWorker = require('../services/courseOrderSubmissionWorker');
 
 // 全局记录正在进行的查课账号（同分类同账号防止并发多次向第三方发起请求）
 const activeQueries = new Set();
@@ -16,21 +18,38 @@ function generateTradeNo() {
     return `WK${Date.now()}${crypto.randomBytes(4).toString('hex')}`;
 }
 
-async function runWithConcurrency(items, limit, handler) {
-    const results = new Array(items.length);
-    let cursor = 0;
-    const workerCount = Math.min(limit, items.length);
+function sha256(value) {
+    return crypto.createHash('sha256').update(String(value), 'utf8').digest('hex');
+}
 
-    const workers = Array.from({ length: workerCount }, async () => {
-        while (true) {
-            const index = cursor++;
-            if (index >= items.length) break;
-            results[index] = await handler(items[index], index);
-        }
-    });
+function keyedRequestDigest(value) {
+    const secret = process.env.CORE_IDEMPOTENCY_SECRET
+        || process.env.ENCRYPTION_KEY
+        || process.env.CORE_JWT_SECRET
+        || process.env.JWT_SECRET;
+    if (!secret) throw new Error('Order idempotency digest secret is not configured');
+    return crypto.createHmac('sha256', secret).update(String(value), 'utf8').digest('hex');
+}
 
-    await Promise.all(workers);
-    return results;
+function normalizeCourse(course) {
+    return {
+        courseId: String(course?.id ?? course?.kcid ?? '').trim(),
+        courseName: String(course?.name ?? course?.kcname ?? '').trim()
+    };
+}
+
+function buildOrderRequestDigest({ school, user, pass, categoryId, courses, duration }) {
+    const canonicalCourses = [...courses].sort((a, b) =>
+        `${a.courseId}:${a.courseName}`.localeCompare(`${b.courseId}:${b.courseName}`)
+    );
+    return keyedRequestDigest(JSON.stringify({
+        school: String(school || ''),
+        user: String(user || ''),
+        password: String(pass || ''),
+        categoryId: String(categoryId || ''),
+        courses: canonicalCourses,
+        duration: Number(duration || 30)
+    }));
 }
 
 function serializeOrderForClient(order) {
@@ -151,13 +170,16 @@ exports.queryCourseList = async (req, res) => {
 /**
  * 提交订单 (本地生成订单 -> 向上游请求 -> 写入 remoteOrderId)
  */
-exports.submitOrder = async (req, res, next) => {
+exports.submitOrder = async (req, res) => {
     try {
         const userId = req.user._id;
-        const { school, user, pass, categoryId, courseList, duration } = req.body;
+        const { school, user, pass, categoryId, courseList, duration, idempotencyKey } = req.body;
 
-        if (!courseList || !courseList.length) {
+        if (!Array.isArray(courseList) || courseList.length === 0) {
             return res.status(400).json({ code: 400, message: '请至少选择一门课程' });
+        }
+        if (courseList.length > 20) {
+            return res.status(400).json({ code: 400, message: '单次最多提交20门课程' });
         }
 
         const category = await CourseCategory.findById(categoryId);
@@ -165,78 +187,149 @@ exports.submitOrder = async (req, res, next) => {
             return res.status(404).json({ code: 404, message: '系统不存在此网课' });
         }
         
-        const platformId = category.noun; 
-        
-        const configuredConcurrency = Number(process.env.ORDER_SUBMIT_CONCURRENCY || 3);
-        const concurrency = Number.isFinite(configuredConcurrency)
-            ? Math.min(Math.max(Math.floor(configuredConcurrency), 1), 10)
-            : 3;
+        const courses = courseList.map(normalizeCourse);
+        const courseKeys = courses.map((course) => sha256(`${course.courseId}\n${course.courseName}`));
+        if (new Set(courseKeys).size !== courseKeys.length) {
+            return res.status(400).json({ code: 400, message: '课程列表包含重复项目' });
+        }
 
-        const submitResults = await runWithConcurrency(courseList, concurrency, async (course) => {
-            const tradeNo = generateTradeNo();
-
-            const orderRecord = new CourseOrder({
-                userId,
-                tradeNo,
-                platformCode: category.docking || 'mx',
-                platformId: platformId,
-                platformName: category.name || category.title || '未知平台',
-                school,
-                account: user,
-                password: encrypt(pass),
-                courseId: course.id || course.kcid,
-                courseName: course.name || course.kcname,
-                duration: duration || 30,
-                status: 'Pending',
-                statusText: '请求中'
-            });
-            await orderRecord.save();
-
-            try {
-                const mxRes = await mxPlatform.submitOrder({
-                    school, user, pass, category,
-                    courseId: course.id || course.kcid,
-                    courseName: course.name || course.kcname,
-                    duration
-                });
-
-                if (mxRes && mxRes.code == 0) {
-                    orderRecord.remoteOrderId = mxRes.id || mxRes.yid;
-                    orderRecord.status = 'Processing';
-                    orderRecord.statusText = '进行中';
-                    orderRecord.remarks = '第三方受理成功';
-                    await orderRecord.save();
-                    return true;
-                } else {
-                    orderRecord.status = 'Failed';
-                    orderRecord.statusText = '异常';
-                    orderRecord.remarks = mxRes.msg || '第三方受理失败';
-                    await orderRecord.save();
-                    return false;
-                }
-            } catch (err) {
-                orderRecord.status = 'Failed';
-                orderRecord.statusText = '网络错误';
-                orderRecord.remarks = err.message;
-                await orderRecord.save();
-                return false;
-            }
+        const requestDigest = buildOrderRequestDigest({
+            school, user, pass, categoryId, courses, duration
         });
+        const suppliedKey = String(idempotencyKey || req.get('Idempotency-Key') || '').trim();
+        const legacyKey = !suppliedKey;
+        const effectiveKey = suppliedKey || `legacy:${requestDigest}:${Math.floor(Date.now() / 300000)}`;
+        const idempotencyKeyHash = sha256(effectiveKey);
+        const candidateBatchId = crypto.randomUUID();
 
-        const successCount = submitResults.filter(Boolean).length;
-        const failCount = submitResults.length - successCount;
+        let batch;
+        try {
+            batch = await CourseOrderBatch.findOneAndUpdate(
+                { userId, idempotencyKeyHash },
+                {
+                    $setOnInsert: {
+                        batchId: candidateBatchId,
+                        userId,
+                        idempotencyKeyHash,
+                        requestDigest,
+                        legacyKey,
+                        orderCount: courses.length,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now()
+                    }
+                },
+                { new: true, upsert: true, setDefaultsOnInsert: true }
+            );
+        } catch (error) {
+            if (error?.code !== 11000) throw error;
+            batch = await CourseOrderBatch.findOne({ userId, idempotencyKeyHash });
+        }
 
-        res.json({
-            code: 200,
-            message: `提交完毕！成功: ${successCount} 单，失败: ${failCount} 单。`
+        if (!batch || batch.requestDigest !== requestDigest) {
+            return res.status(409).json({
+                code: 'ORDER_IDEMPOTENCY_CONFLICT',
+                message: '同一幂等键不能用于不同的订单内容'
+            });
+        }
+
+        const encryptedPassword = encrypt(pass);
+        const orders = [];
+        for (let index = 0; index < courses.length; index += 1) {
+            const course = courses[index];
+            const submissionKey = sha256(`${batch.batchId}:${courseKeys[index]}`);
+            const tradeNo = generateTradeNo();
+            let order;
+            try {
+                order = await CourseOrder.findOneAndUpdate(
+                    { submissionKey },
+                    {
+                        $setOnInsert: {
+                            userId,
+                            tradeNo,
+                            batchId: batch.batchId,
+                            submissionKey,
+                            categoryId: String(categoryId),
+                            platformCode: category.docking || 'mx',
+                            platformId: category.noun,
+                            platformName: category.name || category.title || '未知平台',
+                            school,
+                            account: user,
+                            password: encryptedPassword,
+                            courseId: course.courseId,
+                            courseName: course.courseName,
+                            duration: duration || 30,
+                            status: 'Pending',
+                            statusText: '已入队',
+                            createTime: Date.now(),
+                            updateTime: Date.now()
+                        }
+                    },
+                    { new: true, upsert: true, setDefaultsOnInsert: true }
+                );
+            } catch (error) {
+                if (error?.code !== 11000) throw error;
+                order = await CourseOrder.findOne({ submissionKey });
+            }
+            if (!order) throw new Error('Unable to persist course order');
+            orders.push({ tradeNo: order.tradeNo, status: order.status });
+        }
+
+        courseOrderSubmissionWorker.kick();
+        res.setHeader('Retry-After', '2');
+        res.setHeader('Location', `/api/course-order/batch/${encodeURIComponent(batch.batchId)}`);
+        return res.status(202).json({
+            code: 202,
+            message: '订单已安全入队，请在订单列表查看处理结果',
+            data: {
+                batchId: batch.batchId,
+                duplicate: batch.batchId !== candidateBatchId,
+                legacyIdempotency: legacyKey,
+                orders
+            }
         });
 
     } catch (error) {
         logger.error(`[SubmitOrder] ${error.message}`, { stack: error.stack });
-        res.status(500).json({ 
-            code: 500, 
-            message: '订单提交失败，请稍后重试'
+        return res.status(500).json({
+            code: 500,
+            message: '订单入队失败；若请求结果不明确，请先查看订单列表，不要直接重复提交'
         });
+    }
+};
+
+exports.getOrderBatchStatus = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const batchId = String(req.params.batchId || '').trim();
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(batchId)) {
+            return res.status(400).json({ code: 400, message: '无效的订单批次号' });
+        }
+        const batch = await CourseOrderBatch.findOne({ batchId, userId }).lean();
+        if (!batch) {
+            return res.status(404).json({ code: 404, message: '订单批次不存在' });
+        }
+        const orders = await CourseOrder.find({ batchId, userId })
+            .select('tradeNo status statusText remarks remoteOrderId updateTime')
+            .sort({ createTime: 1 })
+            .lean();
+        const statuses = orders.map((order) => order.status);
+        let state = 'completed';
+        if (orders.length < batch.orderCount || statuses.some((status) => ['Pending', 'Submitting'].includes(status))) state = 'processing';
+        else if (statuses.some((status) => ['ReconcilePending', 'Unknown'].includes(status))) state = 'attention_required';
+        else if (statuses.some((status) => status === 'Failed')) state = 'completed_with_failures';
+
+        return res.json({
+            code: 200,
+            data: {
+                batchId,
+                state,
+                orderCount: batch.orderCount,
+                orders
+            }
+        });
+    } catch (error) {
+        logger.error(`[OrderBatchStatus] ${error.message}`, { stack: error.stack });
+        return res.status(500).json({ code: 500, message: '订单批次查询失败' });
     }
 };
 

@@ -3,6 +3,7 @@ import { Table, Card, Button, message, Modal, Form, Input, Switch, Tag, Space, P
 import UserAvatar from '../components/UserAvatar';
 import { PlusOutlined, DeleteOutlined, EditOutlined, GlobalOutlined, KeyOutlined, CodeOutlined, CopyOutlined, ReloadOutlined, HistoryOutlined } from '@ant-design/icons';
 import api from '../utils/api';
+import { IS_PLATFORM_SSO } from '../utils/runtime';
 import dayjs from 'dayjs';
 import useIsMobile from '../hooks/useIsMobile';
 
@@ -14,7 +15,11 @@ const ScanManagement = () => {
     const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
     const [currentApp, setCurrentApp] = useState(null);
     const [currentSecret, setCurrentSecret] = useState('');
+    const [secretConfigured, setSecretConfigured] = useState(false);
     const [secretLoading, setSecretLoading] = useState(false);
+    const [reauthModalOpen, setReauthModalOpen] = useState(false);
+    const [reauthAction, setReauthAction] = useState('reveal');
+    const [reauthLoading, setReauthLoading] = useState(false);
 
     const [isLogDrawerOpen, setIsLogDrawerOpen] = useState(false);
     const [logsData, setLogsData] = useState([]);
@@ -23,7 +28,16 @@ const ScanManagement = () => {
     const [logsCurrentPage, setLogsCurrentPage] = useState(1);
 
     const [form] = Form.useForm();
+    const [reauthForm] = Form.useForm();
     const [editingId, setEditingId] = useState(null);
+    const [currentUser] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem('user')) || {};
+        } catch {
+            return {};
+        }
+    });
+    const canManageSecrets = currentUser.role === 'super_admin';
     const isMobile = useIsMobile();
 
     const fetchData = async () => {
@@ -87,11 +101,12 @@ const ScanManagement = () => {
         setCurrentApp(record);
         setSecretLoading(true);
         setIsSecretModalOpen(true);
-        setCurrentSecret(''); // Clear previous
+        setCurrentSecret('');
+        setSecretConfigured(false);
         try {
             const res = await api.get(`/apps/${record._id}/secret`);
             if (res.data.success) {
-                setCurrentSecret(res.data.secret);
+                setSecretConfigured(Boolean(res.data.configured));
             }
         } catch {
             message.error('获取密钥失败');
@@ -100,17 +115,49 @@ const ScanManagement = () => {
         }
     };
 
-    const handleResetSecret = async () => {
+    const openSensitiveAction = (action) => {
+        setReauthAction(action);
+        reauthForm.resetFields();
+        setReauthModalOpen(true);
+    };
+
+    const handleSensitiveAction = async () => {
         try {
+            const values = await reauthForm.validateFields();
+            setReauthLoading(true);
             setSecretLoading(true);
-            const res = await api.post(`/apps/${currentApp._id}/reset-secret`);
+            if (IS_PLATFORM_SSO) {
+                const reauthResponse = await fetch('/api/auth/reauth', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Platform-Request': 'console',
+                    },
+                    body: JSON.stringify({ password: values.password, totp: values.totp || '' }),
+                });
+                if (!reauthResponse.ok) {
+                    const payload = await reauthResponse.json().catch(() => ({}));
+                    throw new Error(payload.error || '统一管理账号二次验证失败');
+                }
+            }
+
+            const endpoint = reauthAction === 'reset'
+                ? `/apps/${currentApp._id}/reset-secret`
+                : `/apps/${currentApp._id}/secret/reveal`;
+            const res = await api.post(endpoint, IS_PLATFORM_SSO ? {} : { currentPassword: values.password });
             if (res.data.success) {
                 setCurrentSecret(res.data.secret);
-                message.success('密钥重置成功');
+                setSecretConfigured(Boolean(res.data.secret));
+                setReauthModalOpen(false);
+                reauthForm.resetFields();
+                message.success(reauthAction === 'reset' ? '密钥重置成功' : '密钥已安全显示');
             }
-        } catch {
-            message.error('重置失败');
+        } catch (error) {
+            if (error?.errorFields) return;
+            message.error(error.response?.data?.message || error.message || '二次验证失败');
         } finally {
+            setReauthLoading(false);
             setSecretLoading(false);
         }
     };
@@ -319,29 +366,68 @@ const ScanManagement = () => {
                 title="应用密钥管理 (App Secret)"
                 open={isSecretModalOpen}
                 footer={null}
-                onCancel={() => setIsSecretModalOpen(false)}
+                onCancel={() => {
+                    setIsSecretModalOpen(false);
+                    setCurrentSecret('');
+                    setCurrentApp(null);
+                    setSecretConfigured(false);
+                }}
                 centered
+                destroyOnHidden
             >
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
                     <p style={{ color: '#666', marginBottom: 10 }}>App Secret 是应用进行后端接口调用的凭证，请妥善保管。</p>
                     <div style={{ background: '#F4F7FE', padding: '15px', borderRadius: '16px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <span style={{ fontSize: '16px', fontFamily: 'monospace', marginRight: '10px', color: 'var(--text-primary)' }}>
-                            {secretLoading ? '加载中...' : (currentSecret || '****************')}
+                            {secretLoading
+                                ? '加载中...'
+                                : currentSecret || (secretConfigured ? '已配置（需二次验证后显示）' : '尚未配置')}
                         </span>
                         <Button type="text" icon={<CopyOutlined />} onClick={() => copyToClipboard(currentSecret)} disabled={!currentSecret} />
                     </div>
 
-                    <Popconfirm
-                        title="重置密钥会导致旧密钥立即失效，确定重置吗？"
-                        onConfirm={handleResetSecret}
-                        okText="确认重置"
-                        cancelText="取消"
-                    >
-                        <Button type="primary" danger icon={<ReloadOutlined />} loading={secretLoading}>
-                            重置密钥
-                        </Button>
-                    </Popconfirm>
+                    {canManageSecrets ? (
+                        <Space wrap style={{ justifyContent: 'center' }}>
+                            <Button icon={<KeyOutlined />} loading={secretLoading} disabled={!secretConfigured} onClick={() => openSensitiveAction('reveal')}>
+                                显示密钥
+                            </Button>
+                            <Button type="primary" danger icon={<ReloadOutlined />} loading={secretLoading} onClick={() => openSensitiveAction('reset')}>
+                                重置密钥
+                            </Button>
+                        </Space>
+                    ) : (
+                        <Tag>只读权限</Tag>
+                    )}
                 </div>
+            </Modal>
+
+            <Modal
+                title={reauthAction === 'reset' ? '重置密钥二次验证' : '显示密钥二次验证'}
+                open={reauthModalOpen}
+                onOk={handleSensitiveAction}
+                onCancel={() => {
+                    setReauthModalOpen(false);
+                    reauthForm.resetFields();
+                }}
+                confirmLoading={reauthLoading}
+                okText={reauthAction === 'reset' ? '验证并重置' : '验证并显示'}
+                okButtonProps={{ danger: reauthAction === 'reset' }}
+                destroyOnHidden
+            >
+                <Form form={reauthForm} layout="vertical" preserve={false}>
+                    <Form.Item
+                        name="password"
+                        label={IS_PLATFORM_SSO ? '统一管理账号密码' : '当前 Core 管理员密码'}
+                        rules={[{ required: true, message: '请输入当前密码' }]}
+                    >
+                        <Input.Password autoComplete="current-password" />
+                    </Form.Item>
+                    {IS_PLATFORM_SSO && (
+                        <Form.Item name="totp" label="动态验证码（已启用时必填）">
+                            <Input inputMode="numeric" autoComplete="one-time-code" maxLength={6} />
+                        </Form.Item>
+                    )}
+                </Form>
             </Modal>
 
             {/* Integration Guide Modal */}

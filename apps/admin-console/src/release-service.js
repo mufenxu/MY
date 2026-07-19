@@ -367,7 +367,6 @@ export function createReleaseService({
             targets: normalized.join(','),
             push_sha_tags: 'true',
             release_id: id,
-            callback_url: new URL('/api/releases/callback', config.publicOrigin).toString(),
           },
         }),
       });

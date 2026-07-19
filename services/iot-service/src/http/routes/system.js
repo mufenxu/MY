@@ -108,15 +108,23 @@ function registerSystemRoutes(app, { settingsStore, mqttService, requireSession 
   app.get('/api/ready', async (req, res) => {
     try {
       const storageReady = await mqttService.db.ping();
-      const mqttReady = Boolean(mqttService.status?.mqttConnected ?? mqttService.getStatus?.().mqttConnected);
-      const ready = Boolean(storageReady && mqttReady);
+      const mqttStatus = mqttService.getStatus?.() || mqttService.status || {};
+      const mqttConnected = Boolean(mqttStatus.mqttConnected);
+      const mqttSubscribed = Boolean(mqttStatus.subscribed);
+      const ready = Boolean(storageReady && mqttConnected && mqttSubscribed);
       res.status(ready ? 200 : 503).json({
         ok: ready,
         storage: storageReady ? 'ready' : 'unavailable',
-        mqtt: mqttReady ? 'connected' : 'disconnected'
+        mqtt: mqttConnected ? 'connected' : 'disconnected',
+        subscription: mqttSubscribed ? 'subscribed' : 'unsubscribed'
       });
     } catch {
-      res.status(503).json({ ok: false, storage: 'unavailable', mqtt: 'unknown' });
+      res.status(503).json({
+        ok: false,
+        storage: 'unavailable',
+        mqtt: 'unknown',
+        subscription: 'unknown'
+      });
     }
   });
 }

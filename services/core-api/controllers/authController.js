@@ -5,7 +5,7 @@ const secretService = require('../services/secretService');
 const logger = require('../utils/logger');
 const asyncHandler = require('../middleware/asyncHandler');
 const logAudit = require('../utils/auditLogger');
-const { isWebAdminRequest, setRefreshCookie } = require('../utils/refreshCookie');
+const { isWebAdminRequest, setWebAdminCookies } = require('../utils/refreshCookie');
 
 // @desc    WeChat Login
 // @route   POST /api/auth/wechat-login
@@ -92,11 +92,17 @@ exports.login = asyncHandler(async (req, res) => {
     });
 
     const webAdmin = isWebAdminRequest(req);
-    if (webAdmin) setRefreshCookie(res, result.refreshToken);
+    if (webAdmin) {
+        const csrfToken = setWebAdminCookies(res, {
+            accessToken: result.token,
+            refreshToken: result.refreshToken
+        });
+        res.setHeader('X-CSRF-Token', csrfToken);
+    }
 
     res.json({
         success: true,
-        token: result.token,
+        token: webAdmin ? undefined : result.token,
         refreshToken: webAdmin ? undefined : result.refreshToken,
         user: {
             _id: result.user._id,

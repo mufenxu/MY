@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const authorize = require('../middleware/authorize');
+const requireReauthentication = require('../middleware/reauthenticate');
 const validate = require('../middleware/validate');
 const { 
     notifyConfigSchema, 
@@ -23,6 +24,14 @@ const {
 const appConfigController = require('../controllers/appConfigController');
 const multer = require('multer');
 const backupController = require('../controllers/backupController');
+
+const requireSuperAdmin = authorize('super_admin');
+const requireTurnstileReauthentication = requireReauthentication('TURNSTILE_CONFIG_UPDATE');
+
+function protectSensitiveAppConfig(req, res, next) {
+    if (req.body?.key !== 'turnstile_config') return next();
+    return requireSuperAdmin(req, res, () => requireTurnstileReauthentication(req, res, next));
+}
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -58,7 +67,7 @@ router.post('/run-task', auth, authorize('super_admin'), runTask);
 
 // App Config
 router.get('/app-config/:key', auth, authorize('admin', 'super_admin'), appConfigController.getAppConfig);
-router.post('/app-config', auth, authorize('admin', 'super_admin'), validate(appConfigSchema), appConfigController.saveAppConfig);
+router.post('/app-config', auth, authorize('admin', 'super_admin'), protectSensitiveAppConfig, validate(appConfigSchema), appConfigController.saveAppConfig);
 
 // 数据备份与恢复 (限 super_admin)
 router.post('/backup', auth, authorize('super_admin'), backupController.exportBackup);

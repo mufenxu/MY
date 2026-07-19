@@ -36,10 +36,15 @@ export async function fetchWithTimeout(input, init = {}, timeout = 12000) {
 }
 
 export async function logoutPlatformSession() {
-  await fetchWithTimeout('/api/auth/logout', {
+  const response = await fetchWithTimeout('/api/auth/logout', {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'X-Platform-Request': 'console' },
-  }).catch(() => {});
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || '统一平台退出失败');
+  }
+  localStorage.removeItem('user');
   window.location.replace('/');
 }

@@ -10,7 +10,13 @@ test('internal identities are audience-bound, short-lived and tamper-resistant',
   const now = Date.UTC(2026, 6, 15, 12, 0, 0);
   const token = issueInternalIdentity({
     audience: 'core',
-    session: { sub: 'admin', nonce: 'nonce-1' },
+    session: {
+      sub: 'admin',
+      role: 'viewer',
+      nonce: 'nonce-1',
+      exp: Math.floor(now / 1000) + 3600,
+      reauthenticatedUntil: Math.floor(now / 1000) + 300,
+    },
     privateKey: privateKeyValue,
     pathname: '/api/users?limit=1',
     now,
@@ -23,7 +29,8 @@ test('internal identities are audience-bound, short-lived and tamper-resistant',
     now: now + 1_000,
   });
   assert.equal(claims.sub, 'admin');
-  assert.equal(claims.role, 'platform_admin');
+  assert.equal(claims.role, 'viewer');
+  assert.equal(claims.reauth_exp, Math.floor(now / 1000) + 300);
   assert.ok(claims.csrf);
   assert.equal(validateInternalKeyPair(privateKeyValue, publicKeyValue), true);
   const validPath = { audience: 'core', publicKey: publicKeyValue, pathname: '/api/users?limit=1' };
@@ -32,4 +39,16 @@ test('internal identities are audience-bound, short-lived and tamper-resistant',
   assert.equal(verifyInternalIdentity(token, { ...validPath, pathname: '/api/users?limit=2', now }), null);
   assert.equal(verifyInternalIdentity(token, { ...validPath, method: 'POST', now }), null);
   assert.equal(verifyInternalIdentity(token, { ...validPath, now: now + 25_000 }), null);
+});
+
+test('internal identities reject unknown or missing central roles', () => {
+  const { privateKey } = crypto.generateKeyPairSync('ed25519');
+  const privateKeyValue = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url');
+  for (const role of [undefined, 'platform_admin', 'admin']) {
+    assert.throws(() => issueInternalIdentity({
+      audience: 'core',
+      session: { sub: 'admin', role, nonce: 'nonce-1' },
+      privateKey: privateKeyValue,
+    }), /\u53c2\u6570|arguments|identity/i);
+  }
 });

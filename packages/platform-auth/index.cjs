@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 
 const PLATFORM_SSO_HEADER = 'x-my-platform-sso';
 const TOKEN_ISSUER = 'my-platform-gateway';
+const PLATFORM_ROLES = new Set(['viewer', 'operator', 'super_admin']);
 
 function encodeJson(value) {
   return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
@@ -45,11 +46,17 @@ function issueInternalIdentity({
   now = Date.now(),
   ttlSeconds = 15,
 }) {
-  if (!audience || !session?.sub || !session?.nonce || !privateKey) {
+  if (!audience || !session?.sub || !session?.nonce || !PLATFORM_ROLES.has(session?.role) || !privateKey) {
     throw new Error('无法签发内部身份：参数不完整。');
   }
 
   const issuedAt = Math.floor(now / 1000);
+  const sessionExpiresAt = Number.isFinite(session.exp) ? session.exp : issuedAt + ttlSeconds;
+  if (sessionExpiresAt <= issuedAt) throw new Error('Cannot issue an internal identity for an expired session.');
+  const ticketExpiresAt = Math.min(issuedAt + ttlSeconds, sessionExpiresAt);
+  const reauthenticatedUntil = Number.isFinite(session.reauthenticatedUntil)
+    ? Math.min(session.reauthenticatedUntil, sessionExpiresAt)
+    : 0;
   const csrf = crypto.createHash('sha256')
     .update(`csrf:${audience}:${session.nonce}`)
     .digest('base64url');
@@ -58,13 +65,14 @@ function issueInternalIdentity({
     iss: TOKEN_ISSUER,
     aud: audience,
     sub: session.sub,
-    role: 'platform_admin',
+    role: session.role,
     csrf,
     m: String(method).toUpperCase(),
     p: String(pathname || '/'),
-    session_exp: Number.isFinite(session.exp) ? session.exp : issuedAt + ttlSeconds,
+    session_exp: sessionExpiresAt,
+    reauth_exp: reauthenticatedUntil > issuedAt ? reauthenticatedUntil : 0,
     iat: issuedAt,
-    exp: issuedAt + ttlSeconds,
+    exp: ticketExpiresAt,
   });
   const signature = crypto.sign(null, Buffer.from(payload), privateKeyFromBase64Url(privateKey));
   return `${payload}.${signature.toString('base64url')}`;
@@ -98,12 +106,16 @@ function verifyInternalIdentity(token, {
       || claims.iss !== TOKEN_ISSUER
       || claims.aud !== audience
       || !claims.sub
-      || claims.role !== 'platform_admin'
+      || !PLATFORM_ROLES.has(claims.role)
       || !claims.csrf
       || claims.m !== String(method).toUpperCase()
       || claims.p !== String(pathname || '/')
       || !Number.isFinite(claims.iat)
       || !Number.isFinite(claims.exp)
+      || !Number.isFinite(claims.session_exp)
+      || !Number.isFinite(claims.reauth_exp)
+      || claims.exp > claims.session_exp
+      || claims.reauth_exp > claims.session_exp
       || claims.iat > nowSeconds + clockSkewSeconds
       || claims.exp <= nowSeconds - clockSkewSeconds
     ) return null;

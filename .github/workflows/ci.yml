@@ -173,13 +173,16 @@ jobs:
         run: node scripts/validate-deployment-env.mjs .env.ci
 
       - name: Build the complete stack
-        run: docker compose --env-file .env.ci -f infra/docker/compose.yml build
+        run: docker compose --env-file .env.ci -f infra/docker/compose.yml -f infra/docker/compose.ci.yml build
 
       - name: Start and wait for readiness
-        run: docker compose --env-file .env.ci -f infra/docker/compose.yml up -d --wait --wait-timeout 240
+        run: docker compose --env-file .env.ci -f infra/docker/compose.yml -f infra/docker/compose.ci.yml up -d --wait --wait-timeout 240
 
       - name: Verify platform readiness
         run: curl --fail --retry 10 --retry-delay 3 http://127.0.0.1:22100/api/readyz
+
+      - name: Verify IoT broker subscription readiness
+        run: curl --fail --retry 10 --retry-delay 3 http://127.0.0.1:22102/api/ready
 
       - name: Verify platform session and metrics
         run: node --env-file=.env.ci scripts/verify-platform-smoke.mjs
@@ -189,8 +192,8 @@ jobs:
 
       - name: Show container logs on failure
         if: failure()
-        run: docker compose --env-file .env.ci -f infra/docker/compose.yml logs --no-color
+        run: docker compose --env-file .env.ci -f infra/docker/compose.yml -f infra/docker/compose.ci.yml logs --no-color
 
       - name: Stop the stack
         if: always()
-        run: docker compose --env-file .env.ci -f infra/docker/compose.yml down -v
+        run: docker compose --env-file .env.ci -f infra/docker/compose.yml -f infra/docker/compose.ci.yml down -v

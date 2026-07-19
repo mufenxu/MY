@@ -1,5 +1,25 @@
 const crypto = require('crypto');
 const { verifyPlatformSso } = require('./platformSso');
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const PLATFORM_ROLE_SCOPES = Object.freeze({
+  viewer: Object.freeze(['devices:read', 'history:read']),
+  operator: Object.freeze(['devices:read', 'history:read', 'relays:write']),
+  super_admin: Object.freeze(['*'])
+});
+
+function platformScopesForRole(role) {
+  return [...(PLATFORM_ROLE_SCOPES[role] || [])];
+}
+
+function platformRoleAllowsRequest(role, method = 'GET', requiredScopes = []) {
+  const normalizedMethod = String(method || 'GET').toUpperCase();
+  if (role === 'super_admin') return true;
+  if (role === 'viewer') return SAFE_METHODS.has(normalizedMethod);
+  if (role !== 'operator') return false;
+  if (SAFE_METHODS.has(normalizedMethod)) return true;
+  return requiredScopes.length > 0 && requiredScopes.every((scope) => scope === 'relays:write');
+}
 const { verifyPassword } = require('./password');
 
 const COOKIE_NAME = 'mqttapi_session';
@@ -158,8 +178,9 @@ class AuthManager {
         username: platformIdentity.sub,
         isApiKey: false,
         platformSso: true,
+        platformRole: platformIdentity.role,
         csrfToken: platformIdentity.csrf,
-        scopes: ['*']
+        scopes: platformScopesForRole(platformIdentity.role)
       };
     }
 
@@ -309,6 +330,17 @@ class AuthManager {
       const authState = this.getRequestAuth(req);
       req.auth = authState;
 
+      if (authState.platformSso) {
+        if (!platformRoleAllowsRequest(authState.platformRole, req.method, requiredScopes)) {
+          return res.status(403).json({
+            error: 'The unified-platform role cannot perform this operation.'
+          });
+        }
+        if (!hasRequiredScopes(authState.scopes, requiredScopes)) {
+          return res.status(403).json({ error: insufficientScopeMessage });
+        }
+      }
+
       if (!allowSession) {
         if (!authState.enabled) {
           return next();
@@ -340,5 +372,7 @@ class AuthManager {
 }
 
 module.exports = {
-  AuthManager
+  AuthManager,
+  platformRoleAllowsRequest,
+  platformScopesForRole
 };

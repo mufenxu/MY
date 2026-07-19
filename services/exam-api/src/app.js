@@ -12,6 +12,7 @@ const config = require('./config');
 const errorHandler = require('./middleware/errorHandler');
 const requestLogger = require('./middleware/requestLogger');
 const { NotFoundError } = require('./utils/errors');
+const { readinessHandler } = require('./runtimeState');
 
 const app = express();
 app.set('trust proxy', config.trustProxy);
@@ -159,6 +160,8 @@ app.use('/api/public', publicRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/manage', manageRoutes);
 app.use('/api/console', consoleRoutes);
+
+app.get('/ready', readinessHandler);
 
 app.get('/version', (req, res) => {
     res.json({ version: '2.0.0', status: 'public-ready', timestamp: Date.now() });

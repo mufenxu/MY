@@ -5,8 +5,8 @@
         <view class="card-title">继电器模块</view>
         <view class="card-sub">{{ statusText }}</view>
       </view>
-      <view class="custom-switch {{ relayOn ? 'active' : '' }} {{ switching ? 'loading' : '' }}" bindtap="onSwitchTap">
-        <view class="switch-track"></view>
+      <view class="custom-switch {{ relayOn ? 'active' : '' }} {{ switching ? 'loading' : '' }}" bindtap="onSwitchTap" aria-role="switch" aria-label="继电器模块" aria-checked="{{relayOn}}" aria-disabled="{{switching}}">
+        <view class="switch-track" aria-hidden="true"></view>
         <view class="switch-thumb">
           <view class="loading-spinner" wx:if="{{switching}}"></view>
         </view>
@@ -27,8 +27,8 @@
         <view class="card-title">ESP01S 继电器</view>
         <view class="card-sub">{{ statusText2 }}</view>
       </view>
-      <view class="custom-switch {{ relay2On ? 'active' : '' }} {{ switching2 ? 'loading' : '' }}" bindtap="onSwitchTap2">
-        <view class="switch-track"></view>
+      <view class="custom-switch {{ relay2On ? 'active' : '' }} {{ switching2 ? 'loading' : '' }}" bindtap="onSwitchTap2" aria-role="switch" aria-label="ESP01S 继电器" aria-checked="{{relay2On}}" aria-disabled="{{switching2}}">
+        <view class="switch-track" aria-hidden="true"></view>
         <view class="switch-thumb">
           <view class="loading-spinner" wx:if="{{switching2}}"></view>
         </view>
@@ -51,7 +51,7 @@
     <view class="sensor-head">
       <view>
         <view class="card-title">环境监测</view>
-        <view class="sensor-status {{ sensorConnected ? 'online' : '' }}">{{ sensorStatus }}</view>
+        <view class="sensor-status {{ sensorConnected ? 'online' : '' }}" aria-live="polite">{{ sensorStatus }}</view>
       </view>
       <view class="sensor-updated" wx:if="{{ lastUpdated }}">
         最近同步 {{ lastUpdated }}
@@ -97,4 +97,3 @@
     <view class="sensor-error" wx:if="{{ sensorError }}">{{ sensorError }}</view>
   </view>
 </view>
-

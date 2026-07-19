@@ -22,7 +22,9 @@ const EXCLUDED_BACKUP_MODELS = new Set([
 const { encrypt } = require('../utils/crypto');
 
 const BACKUP_SECRET_FIELDS = {
-    NotifyConfig: ['smtpPass', 'qywxApiKey']
+    NotifyConfig: ['smtpPass', 'qywxApiKey'],
+    AppClient: ['secret'],
+    PlatformConfig: ['secretKey']
 };
 
 function protectBackupDocuments(modelName, docs) {
@@ -59,6 +61,8 @@ exports.exportBackup = asyncHandler(async (req, res) => {
         if (name === 'User') {
             // 对 User 模型，必须主动加上 select('+password ...') 获取哈希密码，否则恢复后会导致所有管理员无法登录！
             docs = await model.find({}).select('+password +failedLoginAttempts +lockUntil').lean();
+        } else if (name === 'AppClient') {
+            docs = await model.find({}).select('+secret').lean();
         } else {
             docs = await model.find({}).lean();
         }

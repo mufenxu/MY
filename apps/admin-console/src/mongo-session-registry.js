@@ -50,7 +50,34 @@ export async function createMongoSessionRegistry({
         subject: session.sub,
         expiresAt: { $gt: new Date(now) },
       });
-      return active ? { ...session, role: active.role || session.role || 'super_admin' } : null;
+      if (!active) return null;
+      const reauthenticatedUntil = active.reauthenticatedUntil instanceof Date
+        && active.reauthenticatedUntil.getTime() > now
+        ? Math.floor(active.reauthenticatedUntil.getTime() / 1000)
+        : 0;
+      return {
+        ...session,
+        role: active.role || session.role || 'super_admin',
+        reauthenticatedUntil,
+      };
+    },
+
+    async markReauthenticated(token, { now = Date.now(), ttlSeconds = 300 } = {}) {
+      const session = verifySession(token, secret, now);
+      if (!session) return null;
+      const nowSeconds = Math.floor(now / 1000);
+      const reauthenticatedUntil = Math.min(
+        session.exp,
+        nowSeconds + Math.min(Math.max(Number(ttlSeconds) || 300, 30), 300),
+      );
+      const result = await sessions.updateOne({
+        nonce: session.nonce,
+        subject: session.sub,
+        expiresAt: { $gt: new Date(now) },
+      }, {
+        $set: { reauthenticatedUntil: new Date(reauthenticatedUntil * 1000) },
+      });
+      return result.matchedCount === 1 ? reauthenticatedUntil : null;
     },
 
     async revoke(token, now = Date.now()) {

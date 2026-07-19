@@ -1899,20 +1899,26 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             return map[loggedInUser.value.role] || '个人题库身份';
         });
 
-        const handleLogout = () => {
-            const message = isConsoleMode.value ? '确定退出个人题库后台吗？' : '确定退出登录吗？';
-            ElMessageBox.confirm(message, '提示', { type: 'warning' })
-                .then(async () => {
-                    if (IS_PLATFORM_SSO) {
-                        session.clear();
-                        await logoutPlatformSession();
-                        return;
-                    }
-                    await adminApi.logout().catch(() => {});
+        const handleLogout = async () => {
+            const confirmation = isConsoleMode.value ? '确定退出个人题库后台吗？' : '确定退出登录吗？';
+            try {
+                await ElMessageBox.confirm(confirmation, '提示', { type: 'warning' });
+            } catch {
+                return;
+            }
+
+            try {
+                if (IS_PLATFORM_SSO) {
+                    await logoutPlatformSession();
                     session.clear();
-                    router.push('/login');
-                })
-                .catch(() => { });
+                    return;
+                }
+                await adminApi.logout();
+                session.clear();
+                router.push('/login');
+            } catch (error) {
+                ElMessage.error(error.response?.data?.message || error.message || '退出失败，请检查网络后重试');
+            }
         };
 
         // Dashboard Data

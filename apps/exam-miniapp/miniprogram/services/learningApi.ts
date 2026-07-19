@@ -7,6 +7,7 @@ import {
     AiQuestionAnalysisResult,
     ConsoleProfile,
     ExamHistoryItem,
+    ExamAttempt,
     ExamResult,
     StudyReport,
     UserProfile,
@@ -42,12 +43,32 @@ export const learningApi = {
             url: '/demo/exam/preview-submit',
             method: 'POST',
             data,
+            showError: false,
         });
     },
 
-    submitExam: async (data: { categoryId: string; answers: Record<string, string[]> }) => {
+    startExamAttempt: async (data: { categoryId: string; restart?: boolean; requestId?: string }) => {
         await authApi.ensureAuth();
-        return request<ExamResult>({ url: '/exam/submit', method: 'POST', data });
+        return request<ExamAttempt>({
+            url: '/exam/attempt',
+            method: 'POST',
+            data,
+            showError: false,
+        });
+    },
+
+    submitExam: async (data: {
+        categoryId: string;
+        answers: Record<string, string[]>;
+        attemptId?: string;
+    }) => {
+        await authApi.ensureAuth();
+        return request<ExamResult>({
+            url: '/exam/submit',
+            method: 'POST',
+            data,
+            showError: false,
+        });
     },
 
     getLatestExamResult: async (categoryId: string) => {

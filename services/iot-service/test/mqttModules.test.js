@@ -114,7 +114,13 @@ test('processIncomingMessage records relay logs and consumes control markers', (
       }
     }
   };
-  const markers = { 'device_1:relay_1': 'web_ui' };
+  const markers = {
+    'device_1:relay_1': {
+      triggeredBy: 'web_ui',
+      expectedStatus: 'ON',
+      expiresAt: 2000
+    }
+  };
   const result = processIncomingMessage({
     topic: 'device/relay/status',
     message: 'ON',
@@ -136,6 +142,100 @@ test('processIncomingMessage records relay logs and consumes control markers', (
     triggeredBy: 'web_ui'
   }]);
   assert.equal(markers['device_1:relay_1'], undefined);
+});
+
+test('relay acknowledgements consume matching markers even when status is unchanged', () => {
+  const latest = {
+    devices: {
+      device_1: {
+        id: 'device_1',
+        name: 'Device 1',
+        onlineStatus: 'online',
+        relays: { relay_1: 'ON' }
+      }
+    }
+  };
+  const markers = {
+    'device_1:relay_1': {
+      triggeredBy: 'web_ui',
+      expectedStatus: 'ON',
+      expiresAt: 2000
+    }
+  };
+
+  const result = processIncomingMessage({
+    topic: 'device/relay/status',
+    message: 'ON',
+    now: 1000,
+    status: { messagesReceived: 0, topicStats: {} },
+    topicMap: {
+      'device/relay/status': [{ deviceId: 'device_1', type: 'relay', relayId: 'relay_1' }]
+    },
+    latest,
+    discoveredTopics: new Map(),
+    discoveryTopic: '+/+/+',
+    lastControlTriggeredBy: markers
+  });
+
+  assert.deepEqual(result.relayLogs, []);
+  assert.equal(markers['device_1:relay_1'], undefined);
+});
+
+test('expired and mismatched control markers cannot misattribute relay changes', () => {
+  const createLatest = () => ({
+    devices: {
+      device_1: {
+        id: 'device_1',
+        name: 'Device 1',
+        onlineStatus: 'online',
+        relays: { relay_1: 'OFF' }
+      }
+    }
+  });
+  const topicMap = {
+    'device/relay/status': [{ deviceId: 'device_1', type: 'relay', relayId: 'relay_1' }]
+  };
+  const expired = {
+    'device_1:relay_1': {
+      triggeredBy: 'web_ui',
+      expectedStatus: 'ON',
+      expiresAt: 999
+    }
+  };
+  const expiredResult = processIncomingMessage({
+    topic: 'device/relay/status',
+    message: 'ON',
+    now: 1000,
+    status: { messagesReceived: 0, topicStats: {} },
+    topicMap,
+    latest: createLatest(),
+    discoveredTopics: new Map(),
+    discoveryTopic: '+/+/+',
+    lastControlTriggeredBy: expired
+  });
+  assert.equal(expiredResult.relayLogs[0].triggeredBy, 'manual');
+  assert.equal(expired['device_1:relay_1'], undefined);
+
+  const mismatched = {
+    'device_1:relay_1': {
+      triggeredBy: 'web_ui',
+      expectedStatus: 'OFF',
+      expiresAt: 2000
+    }
+  };
+  const mismatchResult = processIncomingMessage({
+    topic: 'device/relay/status',
+    message: 'ON',
+    now: 1000,
+    status: { messagesReceived: 0, topicStats: {} },
+    topicMap,
+    latest: createLatest(),
+    discoveredTopics: new Map(),
+    discoveryTopic: '+/+/+',
+    lastControlTriggeredBy: mismatched
+  });
+  assert.equal(mismatchResult.relayLogs[0].triggeredBy, 'manual');
+  assert.ok(mismatched['device_1:relay_1']);
 });
 
 test('processIncomingMessage remembers unmatched discovered topics', () => {

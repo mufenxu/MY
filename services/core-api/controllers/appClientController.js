@@ -1,6 +1,20 @@
 const AppClient = require('../models/AppClient');
 const crypto = require('crypto');
 const corsService = require('../services/corsService');
+const logAudit = require('../utils/auditLogger');
+
+const SECRET_MASK = '********';
+
+function publicApp(app, { includeSecretStatus = false } = {}) {
+    const source = typeof app?.toObject === 'function' ? app.toObject() : { ...(app || {}) };
+    const configured = Boolean(source.secret);
+    delete source.secret;
+    if (includeSecretStatus) {
+        source.secretConfigured = configured;
+        source.secret = configured ? SECRET_MASK : '';
+    }
+    return source;
+}
 
 // List all apps
 exports.listApps = async (req, res) => {
@@ -34,7 +48,7 @@ exports.createApp = async (req, res) => {
         // 刷新 CORS 白名单缓存
         await corsService.refreshCache();
 
-        res.json({ success: true, data: newApp });
+        res.json({ success: true, data: publicApp(newApp, { includeSecretStatus: true }) });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Creation failed' });
@@ -79,17 +93,31 @@ exports.deleteApp = async (req, res) => {
     }
 };
 
-// Get App Secret (Admin only)
-exports.getSecret = async (req, res) => {
+// Regular reads expose only whether a secret is configured.
+exports.getSecretMetadata = async (req, res) => {
     try {
         const { id } = req.params;
-        // explicitly select secret
         const app = await AppClient.findById(id).select('+secret');
         if (!app) return res.status(404).json({ message: 'App not found' });
 
-        res.json({ success: true, secret: app.secret });
+        const configured = Boolean(app.secret);
+        res.json({ success: true, configured, secret: configured ? SECRET_MASK : '' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Plaintext disclosure is a separately authorized, reauthenticated and audited action.
+exports.revealSecret = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const app = await AppClient.findById(id).select('+secret');
+        if (!app) return res.status(404).json({ message: 'App not found' });
+
+        await logAudit(req, { action: 'APP_SECRET_REVEAL', targetId: id });
+        return res.json({ success: true, secret: app.secret || '' });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -106,6 +134,7 @@ exports.resetSecret = async (req, res) => {
 
         if (!app) return res.status(404).json({ message: 'App not found' });
 
+        await logAudit(req, { action: 'APP_SECRET_RESET', targetId: id });
         res.json({ success: true, secret: newSecret });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

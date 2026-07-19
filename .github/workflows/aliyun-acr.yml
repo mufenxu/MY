@@ -50,10 +50,6 @@ on:
         description: "Release center correlation id (normally supplied by the platform)"
         required: false
         default: ""
-      callback_url:
-        description: "Release center callback URL (normally supplied by the platform)"
-        required: false
-        default: ""
 
 permissions:
   contents: read
@@ -72,11 +68,21 @@ jobs:
     name: Build selected ACR images
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
+
+      - name: Verify protected release branch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "Manual image promotion is restricted to main." >&2
+            exit 1
+          fi
 
       - name: Verify this commit passed required CI
         env:
@@ -263,7 +269,8 @@ jobs:
         if: steps.resolve.outputs.release_targets != ''
         continue-on-error: true
         env:
-          RELEASE_CALLBACK_URL: ${{ github.event.inputs.callback_url || vars.PLATFORM_RELEASE_CALLBACK_URL }}
+          RELEASE_CALLBACK_URL: ${{ vars.PLATFORM_RELEASE_CALLBACK_URL }}
+          RELEASE_CALLBACK_ALLOWED_ORIGIN: ${{ vars.PLATFORM_RELEASE_CALLBACK_ORIGIN }}
           RELEASE_CALLBACK_TOKEN: ${{ secrets.PLATFORM_RELEASE_CALLBACK_TOKEN }}
           RELEASE_ID: ${{ github.event.inputs.release_id || format('gha-{0}-{1}', github.run_id, github.run_attempt) }}
           RELEASE_STATUS: building
@@ -497,7 +504,8 @@ jobs:
         if: always() && steps.resolve.outputs.release_targets != ''
         continue-on-error: true
         env:
-          RELEASE_CALLBACK_URL: ${{ github.event.inputs.callback_url || vars.PLATFORM_RELEASE_CALLBACK_URL }}
+          RELEASE_CALLBACK_URL: ${{ vars.PLATFORM_RELEASE_CALLBACK_URL }}
+          RELEASE_CALLBACK_ALLOWED_ORIGIN: ${{ vars.PLATFORM_RELEASE_CALLBACK_ORIGIN }}
           RELEASE_CALLBACK_TOKEN: ${{ secrets.PLATFORM_RELEASE_CALLBACK_TOKEN }}
           RELEASE_ID: ${{ github.event.inputs.release_id || format('gha-{0}-{1}', github.run_id, github.run_attempt) }}
           RELEASE_STATUS: ${{ job.status }}

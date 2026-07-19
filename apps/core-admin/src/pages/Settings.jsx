@@ -524,9 +524,10 @@ const Settings = () => {
     }, [adminForm]);
 
     useEffect(() => {
+        if (!isSuperAdmin) return;
         loadConfig();
         loadAdminInfo();
-    }, [loadConfig, loadAdminInfo]);
+    }, [isSuperAdmin, loadConfig, loadAdminInfo]);
 
     const onAdminFinish = async (values) => {
         setAdminLoading(true);
@@ -853,7 +854,7 @@ const Settings = () => {
             ),
             children: <CourseCategoryConfig />,
         }
-    ];
+    ].filter((item) => isSuperAdmin || !['1', '2', '3', '4'].includes(item.key));
 
     if (isSuperAdmin) {
         items.push({
@@ -870,7 +871,7 @@ const Settings = () => {
 
     return (
         <div>
-            <Tabs className="settings-tabs" defaultActiveKey="1" items={items} type="card" />
+            <Tabs className="settings-tabs" defaultActiveKey={isSuperAdmin ? '1' : '6'} items={items} type="card" />
         </div>
     );
 };

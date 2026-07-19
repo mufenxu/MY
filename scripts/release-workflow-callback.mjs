@@ -1,4 +1,7 @@
 import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+
+const CALLBACK_PATH = '/api/releases/callback';
 
 function normalizeStatus(value) {
   return {
@@ -10,7 +13,7 @@ function normalizeStatus(value) {
   }[String(value || '').toLowerCase()] || String(value || '').toLowerCase();
 }
 
-async function readArtifacts(filename) {
+export async function readArtifacts(filename) {
   if (!filename) return [];
   try {
     const source = await readFile(filename, 'utf8');
@@ -24,37 +27,71 @@ async function readArtifacts(filename) {
   }
 }
 
-async function sendCallback() {
-  const url = String(process.env.RELEASE_CALLBACK_URL || '').trim();
-  const token = String(process.env.RELEASE_CALLBACK_TOKEN || '');
-  if (!url || !token) {
+export function validateCallbackTarget(value, allowedOriginValue) {
+  let target;
+  let allowedOrigin;
+  try {
+    target = new URL(String(value || '').trim());
+    allowedOrigin = new URL(String(allowedOriginValue || '').trim());
+  } catch {
+    throw new Error('Release callback URL and allowed origin must be valid absolute HTTPS URLs.');
+  }
+  if (
+    target.protocol !== 'https:'
+    || allowedOrigin.protocol !== 'https:'
+    || allowedOrigin.origin !== allowedOrigin.href.replace(/\/$/, '')
+    || target.origin !== allowedOrigin.origin
+    || target.pathname !== CALLBACK_PATH
+    || target.search
+    || target.hash
+    || target.username
+    || target.password
+  ) {
+    throw new Error(`Release callback must use the protected HTTPS origin and exact ${CALLBACK_PATH} path.`);
+  }
+  return target.href;
+}
+
+export async function sendCallback({
+  env = process.env,
+  fetchImpl = fetch,
+  sleep = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
+} = {}) {
+  const urlValue = String(env.RELEASE_CALLBACK_URL || '').trim();
+  const allowedOriginValue = String(env.RELEASE_CALLBACK_ALLOWED_ORIGIN || '').trim();
+  const token = String(env.RELEASE_CALLBACK_TOKEN || '');
+  if (!urlValue && !allowedOriginValue && !token) {
     console.log('Release callback is not configured; skipping status synchronization.');
     return;
   }
+  if (!urlValue || !allowedOriginValue || !token) {
+    throw new Error('Release callback URL, allowed origin and token must be configured together.');
+  }
   if (token.length < 32) throw new Error('RELEASE_CALLBACK_TOKEN must contain at least 32 characters.');
-  const artifacts = await readArtifacts(process.env.RELEASE_ARTIFACTS_FILE);
-  const targets = String(process.env.RELEASE_TARGETS || '')
+  const url = validateCallbackTarget(urlValue, allowedOriginValue);
+  const artifacts = await readArtifacts(env.RELEASE_ARTIFACTS_FILE);
+  const targets = String(env.RELEASE_TARGETS || '')
     .split(',').map((value) => value.trim()).filter(Boolean);
-  const repository = process.env.GITHUB_REPOSITORY || '';
-  const runId = process.env.GITHUB_RUN_ID || '';
+  const repository = env.GITHUB_REPOSITORY || '';
+  const runId = env.GITHUB_RUN_ID || '';
   const payload = {
     type: 'build',
-    releaseId: process.env.RELEASE_ID,
-    status: normalizeStatus(process.env.RELEASE_STATUS),
+    releaseId: env.RELEASE_ID,
+    status: normalizeStatus(env.RELEASE_STATUS),
     repository,
-    workflow: process.env.GITHUB_WORKFLOW || '',
-    ref: process.env.GITHUB_REF_NAME || '',
-    revision: process.env.RELEASE_REVISION || process.env.GITHUB_SHA || '',
+    workflow: env.GITHUB_WORKFLOW || '',
+    ref: env.GITHUB_REF_NAME || '',
+    revision: env.RELEASE_REVISION || env.GITHUB_SHA || '',
     targets: targets.length ? targets : artifacts.map((artifact) => artifact.component),
     artifacts,
-    actor: process.env.GITHUB_ACTOR || 'github-actions',
-    event: process.env.GITHUB_EVENT_NAME || '',
+    actor: env.GITHUB_ACTOR || 'github-actions',
+    event: env.GITHUB_EVENT_NAME || '',
     runId,
-    runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT) || 1,
-    url: process.env.GITHUB_SERVER_URL && repository && runId
-      ? `${process.env.GITHUB_SERVER_URL}/${repository}/actions/runs/${runId}`
+    runAttempt: Number(env.GITHUB_RUN_ATTEMPT) || 1,
+    url: env.GITHUB_SERVER_URL && repository && runId
+      ? `${env.GITHUB_SERVER_URL}/${repository}/actions/runs/${runId}`
       : '',
-    error: process.env.RELEASE_ERROR || '',
+    error: env.RELEASE_ERROR || '',
   };
 
   let lastError;
@@ -62,8 +99,9 @@ async function sendCallback() {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10_000);
     try {
-      const response = await fetch(url, {
+      const response = await fetchImpl(url, {
         method: 'POST',
+        redirect: 'error',
         signal: controller.signal,
         headers: {
           Accept: 'application/json',
@@ -79,13 +117,15 @@ async function sendCallback() {
     } catch (error) {
       clearTimeout(timer);
       lastError = error;
-      if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      if (attempt < 4) await sleep(1000 * (attempt + 1));
     }
   }
   throw lastError;
 }
 
-sendCallback().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  sendCallback().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });
+}

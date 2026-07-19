@@ -19,9 +19,9 @@ function createSettingsStore(config) {
   return store;
 }
 
-function createService(config) {
+function createService(config, connectMqtt) {
   const settingsStore = createSettingsStore(config);
-  const service = new MqttService(settingsStore);
+  const service = new MqttService(settingsStore, undefined, connectMqtt);
   const updates = [];
   const notifications = [];
   const cleanups = [];
@@ -86,6 +86,80 @@ const baseConfig = {
     dataRetentionDays: 0
   }
 };
+
+test('publishControl resolves only after the MQTT publish callback succeeds', async () => {
+  const { service } = createService(baseConfig);
+  let callbackCompleted = false;
+  service.status.mqttConnected = true;
+  service.client = {
+    publish(topic, value, options, callback) {
+      assert.equal(topic, 'device/relay/control');
+      assert.equal(value, 'ON');
+      assert.equal(options.qos, 0);
+      setImmediate(() => {
+        callbackCompleted = true;
+        callback(null);
+      });
+    }
+  };
+
+  const result = await service.publishControl('device_1', 'relay_1', 'ON');
+  assert.equal(callbackCompleted, true);
+  assert.equal(result.topic, 'device/relay/control');
+  assert.equal(service.lastControlTriggeredBy['device_1:relay_1'].triggeredBy, 'web_ui');
+  assert.equal(service.lastControlTriggeredBy['device_1:relay_1'].expectedStatus, 'ON');
+  assert.ok(service.lastControlTriggeredBy['device_1:relay_1'].expiresAt > result.queuedAt);
+});
+
+test('publishControl rejects when the MQTT publish callback fails', async () => {
+  const { service } = createService(baseConfig);
+  service.status.mqttConnected = true;
+  service.client = {
+    publish(_topic, _value, _options, callback) {
+      setImmediate(() => callback(new Error('publish failed')));
+    }
+  };
+
+  await assert.rejects(
+    service.publishControl('device_1', 'relay_1', 'OFF'),
+    (error) => error.statusCode === 502 && error.code === 'MQTT_PUBLISH_FAILED'
+  );
+});
+
+test('publishControl clears attribution when the MQTT client throws synchronously', async () => {
+  const { service } = createService(baseConfig);
+  service.status.mqttConnected = true;
+  service.client = {
+    publish() {
+      throw new Error('client closed');
+    }
+  };
+
+  await assert.rejects(
+    service.publishControl('device_1', 'relay_1', 'ON'),
+    (error) => error.statusCode === 502 && error.code === 'MQTT_PUBLISH_FAILED'
+  );
+  assert.equal(service.lastControlTriggeredBy['device_1:relay_1'], undefined);
+});
+
+test('subscription failures are emitted as a non-ready service state', async () => {
+  const client = new EventEmitter();
+  client.subscribe = (_topics, _options, callback) => callback(new Error('subscribe denied'));
+  client.end = () => {};
+  const { service } = createService(baseConfig, () => client);
+  const statuses = [];
+  service.on('status', (status) => statuses.push(status));
+
+  service.connect();
+  client.emit('connect');
+
+  assert.equal(service.status.mqttConnected, true);
+  assert.equal(service.status.subscribed, false);
+  assert.equal(service.status.connectionState, 'subscription_error');
+  assert.equal(service.status.lastError, 'subscribe denied');
+  assert.equal(statuses.at(-1).connectionState, 'subscription_error');
+  await service.stop();
+});
 
 test('explicit offline status does not trigger a false online transition', async () => {
   const { service, updates, notifications } = createService(baseConfig);

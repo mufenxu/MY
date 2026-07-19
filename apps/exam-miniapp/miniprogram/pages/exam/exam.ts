@@ -3,6 +3,8 @@ import { buildPageUrl, promptLogin } from '../../utils/auth';
 import { getNavBarInfo } from '../../utils/nav';
 import { hasUsefulProgress } from '../../utils/progress';
 import { groupQuestionsByType } from '../../utils/question';
+import { getRemainingSeconds, getServerClockOffset } from '../../utils/examTimer';
+import { canUseExamSession } from '../../utils/examAttemptGuard';
 
 type StudyMode = 'exam' | 'practice' | 'recite';
 type ReciteLevel = 'known' | 'fuzzy' | 'unknown';
@@ -79,11 +81,28 @@ function getErrorMessage(error: any, fallback: string) {
     return error && error.message ? error.message : fallback;
 }
 
+function createRequestId() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (token) => {
+        const value = Math.floor(Math.random() * 16);
+        return (token === 'x' ? value : (value & 0x3) | 0x8).toString(16);
+    });
+}
+
 Page({
     _reciteQueue: [] as number[],
     _reciteMastery: {} as ReciteMasteryMap,
     _reciteReviewTimes: {} as ReciteReviewMap,
     _skipSaveOnExit: false,
+    _serverClockOffsetMs: 0,
+    _attemptInitialized: false,
+    _attemptCanSubmit: true,
+    _autoSubmitEnabled: false,
+    _autoSubmitTriggered: false,
+    _startupRestartRequested: false,
+    _startupResumeRequested: false,
+    _startupRestartRequestId: '',
+    _startupCompleted: false,
+    _attemptInitializationInFlight: false,
 
     data: {
         title: '',
@@ -102,6 +121,11 @@ Page({
         timeLeft: 0,
         timerStr: '',
         timerId: 0 as number,
+        deadlineAt: 0,
+        attemptId: '',
+        isSubmitting: false,
+        attemptInitializationPending: false,
+        attemptInitializationError: '',
         mode: 'exam' as StudyMode,
         sourceType: 'demo' as LibraryScope,
         saveTimer: 0 as any,
@@ -145,8 +169,20 @@ Page({
             sourceType,
             showResumeModal: false,
             pendingProgress: null,
+            attemptInitializationPending: mode === 'exam' && sourceType === 'personal',
+            attemptInitializationError: '',
         });
         this._skipSaveOnExit = false;
+        this._serverClockOffsetMs = 0;
+        this._attemptInitialized = false;
+        this._attemptCanSubmit = true;
+        this._autoSubmitEnabled = false;
+        this._autoSubmitTriggered = false;
+        this._startupRestartRequested = options.restart === '1';
+        this._startupResumeRequested = options.resume === '1';
+        this._startupRestartRequestId = this._startupRestartRequested ? createRequestId() : '';
+        this._startupCompleted = false;
+        this._attemptInitializationInFlight = false;
         this.loadAiAnalysisStatus();
 
         if (sourceType === 'personal' && !api.isLoggedIn()) {
@@ -160,28 +196,134 @@ Page({
                     sourceType: options.sourceType || 'my',
                 }),
             });
-            this.setData({ loading: false });
+            this.setData({ loading: false, attemptInitializationPending: false });
             return;
         }
 
-        await this.fetchQuestions(options.categoryId, mode, sourceType);
+        const questionsLoaded = await this.fetchQuestions(options.categoryId, mode, sourceType);
+        if (!questionsLoaded) {
+            this.setData({ attemptInitializationPending: false });
+            return;
+        }
 
-        if (options.restart === '1') {
-            this.clearSavedProgress();
-            if (mode === 'exam' && Number(options.duration) > 0) {
-                this.startTimer(Number(options.duration));
+        if (mode === 'exam' && sourceType === 'personal') {
+            const initialized = await this.initializePersonalExamAttempt();
+            if (!initialized) {
+                return;
             }
+        }
+
+        await this.completeExamStartup();
+    },
+
+    async completeExamStartup() {
+        if (this._startupCompleted) {
+            return;
+        }
+        this._startupCompleted = true;
+
+        const { mode, sourceType, duration } = this.data;
+
+        if (this._startupRestartRequested) {
+            if (sourceType !== 'personal') {
+                this.clearSavedProgress();
+            }
+            if (mode === 'exam' && sourceType !== 'personal' && Number(duration) > 0) {
+                this.startTimer(Number(duration));
+            }
+            this._autoSubmitEnabled = true;
+            await this.finalizeExamTimer();
             return;
         }
 
         const hasProgress = await this.checkProgress();
-        if (hasProgress && options.resume === '1') {
+        if (hasProgress && mode === 'exam' && this.data.duration > 0) {
             await this.onResumeConfirm();
+            this._autoSubmitEnabled = true;
+            await this.finalizeExamTimer();
+            return;
+        }
+        if (hasProgress && this._startupResumeRequested) {
+            await this.onResumeConfirm();
+            this._autoSubmitEnabled = true;
+            await this.finalizeExamTimer();
             return;
         }
 
-        if (!hasProgress && mode === 'exam' && Number(options.duration) > 0) {
-            this.startTimer(Number(options.duration));
+        if (!hasProgress && mode === 'exam' && sourceType !== 'personal' && Number(duration) > 0) {
+            this.startTimer(Number(duration));
+        }
+        this._autoSubmitEnabled = true;
+        await this.finalizeExamTimer();
+    },
+
+    async initializePersonalExamAttempt() {
+        if (this._attemptInitializationInFlight) {
+            return false;
+        }
+
+        this._attemptInitializationInFlight = true;
+        this.setData({ attemptInitializationPending: true });
+        try {
+            await this.syncExamAttempt(
+                this._startupRestartRequested,
+                this._startupRestartRequestId,
+            );
+            this.setData({
+                attemptInitializationPending: false,
+                attemptInitializationError: '',
+            });
+            return true;
+        } catch (error) {
+            this.stopTimer();
+            this._attemptInitialized = false;
+            this._autoSubmitEnabled = false;
+            this.setData({
+                attemptId: '',
+                deadlineAt: 0,
+                timeLeft: 0,
+                timerStr: '',
+                attemptInitializationPending: false,
+                attemptInitializationError: getErrorMessage(error, '考试场次初始化失败，请稍后重试'),
+            });
+            return false;
+        } finally {
+            this._attemptInitializationInFlight = false;
+        }
+    },
+
+    async onRetryAttemptInitialization() {
+        const initialized = await this.initializePersonalExamAttempt();
+        if (initialized) {
+            await this.completeExamStartup();
+        }
+    },
+
+    onExitAttemptInitialization() {
+        this._skipSaveOnExit = true;
+        wx.navigateBack({ delta: 1 });
+    },
+
+    async onShow() {
+        if (
+            this.data.mode === 'exam'
+            && this.data.sourceType === 'demo'
+            && this.data.deadlineAt > 0
+        ) {
+            this.startDeadlineTimer(this.data.deadlineAt);
+            return;
+        }
+
+        if (!this._attemptInitialized || this.data.isSubmitting) {
+            return;
+        }
+
+        try {
+            await this.syncExamAttempt();
+            await this.finalizeExamTimer();
+        } catch (error) {
+            console.warn('Exam clock calibration failed', error);
+            this.startDeadlineTimer(this.data.deadlineAt);
         }
     },
 
@@ -234,13 +376,12 @@ Page({
     },
 
     onHide() {
+        this.stopTimer();
         this.saveProgress(true);
     },
 
     onUnload() {
-        if (this.data.timerId) {
-            clearInterval(this.data.timerId);
-        }
+        this.stopTimer();
         if (this.data.saveTimer) {
             clearTimeout(this.data.saveTimer);
         }
@@ -306,10 +447,12 @@ Page({
             Object.assign(nextData, this.buildSwiperState(nextData.currentIndex || 0, questions));
 
             this.setData(nextData);
+            return true;
         } catch (error) {
             console.error(error);
             wx.showToast({ title: '加载题目失败', icon: 'none' });
             this.setData({ loading: false });
+            return false;
         }
     },
 
@@ -335,8 +478,16 @@ Page({
         return false;
     },
 
+    isExamSessionReady() {
+        return canUseExamSession(
+            this.data.mode,
+            this.data.sourceType,
+            this._attemptInitialized,
+        );
+    },
+
     buildProgressPayload() {
-        return {
+        const payload: Record<string, any> = {
             categoryId: this.data.categoryId,
             mode: this.data.mode,
             currentIndex: this.data.currentIndex,
@@ -347,10 +498,26 @@ Page({
             reciteMastery: this.data.mode === 'recite' ? this._reciteMastery : {},
             reciteReviewTimes: this.data.mode === 'recite' ? this._reciteReviewTimes : {},
         };
+
+        if (this.data.sourceType === 'demo' && this.data.deadlineAt > 0) {
+            payload.deadlineAt = new Date(this.data.deadlineAt).toISOString();
+        }
+        if (this.data.mode === 'exam' && this.data.attemptId) {
+            payload.attemptId = this.data.attemptId;
+        }
+
+        return payload;
     },
 
     persistProgress(payload: any) {
-        if (!hasUsefulProgress(payload)) {
+        if (!this.isExamSessionReady()) {
+            return;
+        }
+
+        const hasTimedDemoAttempt = this.data.sourceType === 'demo'
+            && this.data.mode === 'exam'
+            && this.data.deadlineAt > 0;
+        if (!hasUsefulProgress(payload) && !hasTimedDemoAttempt) {
             return;
         }
 
@@ -366,7 +533,7 @@ Page({
     },
 
     saveProgress(immediate = false) {
-        if (this._skipSaveOnExit) {
+        if (this._skipSaveOnExit || !this.isExamSessionReady()) {
             return;
         }
 
@@ -389,6 +556,10 @@ Page({
     },
 
     clearSavedProgress() {
+        if (!this.isExamSessionReady()) {
+            return;
+        }
+
         if (this.data.saveTimer) {
             clearTimeout(this.data.saveTimer);
             this.setData({ saveTimer: 0 });
@@ -396,7 +567,7 @@ Page({
 
         if (this.data.sourceType === 'personal') {
             if (api.isLoggedIn()) {
-                api.clearProgress(this.data.categoryId, this.data.mode).catch((error) => console.error(error));
+                api.clearProgress(this.data.categoryId, this.data.mode, this.data.attemptId).catch((error) => console.error(error));
             }
             return;
         }
@@ -404,34 +575,144 @@ Page({
         api.clearLocalProgress(this.data.categoryId, this.data.mode);
     },
 
+    stopTimer() {
+        if (this.data.timerId) {
+            clearInterval(this.data.timerId);
+            this.setData({ timerId: 0 });
+        }
+    },
+
+    async syncExamAttempt(restart = false, requestId = '') {
+        if (this.data.mode !== 'exam' || this.data.sourceType !== 'personal') {
+            return;
+        }
+
+        const previousAttemptId = this.data.attemptId;
+        const attempt = await api.startExamAttempt({
+            categoryId: this.data.categoryId,
+            restart,
+            requestId: restart ? requestId : undefined,
+        });
+        const deadlineAt = attempt.deadlineAt ? new Date(attempt.deadlineAt).getTime() : 0;
+        this._serverClockOffsetMs = getServerClockOffset(attempt.serverNow);
+        this._attemptInitialized = true;
+        this._attemptCanSubmit = attempt.canSubmit;
+        if (restart || previousAttemptId !== attempt.attemptId) {
+            this._autoSubmitTriggered = false;
+        }
+        this.setData({
+            attemptId: attempt.attemptId,
+            deadlineAt,
+            duration: attempt.durationSeconds > 0 ? Math.ceil(attempt.durationSeconds / 60) : 0,
+        });
+
+        if (deadlineAt > 0) {
+            this.startDeadlineTimer(deadlineAt);
+        } else {
+            this.stopTimer();
+            this.setData({ timeLeft: 0, timerStr: '' });
+        }
+    },
+
+    startDeadlineTimer(deadlineAt: number) {
+        if (!deadlineAt || deadlineAt <= 0) {
+            return;
+        }
+
+        this.stopTimer();
+        this.setData({ deadlineAt });
+
+        const updateTimer = () => {
+            const timeLeft = getRemainingSeconds(
+                deadlineAt,
+                this.data.sourceType === 'personal' ? this._serverClockOffsetMs : 0,
+            );
+            this.setData({ timeLeft, timerStr: this.formatTime(timeLeft) });
+            if (timeLeft > 0) {
+                if (timeLeft % 30 === 0) {
+                    this.saveProgress();
+                }
+                return;
+            }
+
+            this.stopTimer();
+            if (
+                this._autoSubmitEnabled
+                && this._attemptCanSubmit
+                && !this._autoSubmitTriggered
+                && !this.data.isSubmitting
+            ) {
+                this._autoSubmitTriggered = true;
+                this.autoSubmit();
+            }
+        };
+
+        updateTimer();
+        if (getRemainingSeconds(
+            deadlineAt,
+            this.data.sourceType === 'personal' ? this._serverClockOffsetMs : 0,
+        ) > 0) {
+            const timerId = setInterval(updateTimer, 1000);
+            this.setData({ timerId });
+        }
+    },
+
     startTimer(durationMinutes: number, initialSeconds?: number) {
         if (!durationMinutes || durationMinutes <= 0) {
             return;
         }
 
-        if (this.data.timerId) {
-            clearInterval(this.data.timerId);
+        const seconds = initialSeconds && initialSeconds > 0
+            ? initialSeconds
+            : durationMinutes * 60;
+        this.startDeadlineTimer(Date.now() + seconds * 1000);
+    },
+
+    async finalizeExamTimer() {
+        if (this.data.mode !== 'exam' || this.data.deadlineAt <= 0) {
+            return;
         }
 
-        let timeLeft = initialSeconds && initialSeconds > 0 ? initialSeconds : durationMinutes * 60;
-        this.setData({ timeLeft, timerStr: this.formatTime(timeLeft) });
-
-        const timerId = setInterval(() => {
-            timeLeft -= 1;
-            if (timeLeft <= 0) {
-                clearInterval(timerId);
-                this.setData({ timeLeft: 0, timerStr: '00:00' });
-                this.autoSubmit();
-                return;
+        if (!this._attemptCanSubmit) {
+            const result = await wx.showModal({
+                title: '本场考试已结束',
+                content: '该考试场次已超过提交宽限时间，需要重新开始。',
+                confirmText: '重新开始',
+                cancelText: '返回',
+            });
+            if (result.confirm) {
+                await this.restartExamSession();
+            } else {
+                wx.navigateBack({ delta: 1 });
             }
+            return;
+        }
 
-            this.setData({ timeLeft, timerStr: this.formatTime(timeLeft) });
-            if (timeLeft % 30 === 0) {
-                this.saveProgress();
+        this.startDeadlineTimer(this.data.deadlineAt);
+    },
+
+    async restartExamSession() {
+        this._skipSaveOnExit = true;
+        try {
+            if (this.data.sourceType === 'personal') {
+                await this.syncExamAttempt(true, createRequestId());
+            } else {
+                api.clearLocalProgress(this.data.categoryId, this.data.mode);
+                this._attemptCanSubmit = true;
+                this._autoSubmitTriggered = false;
+                this.startTimer(this.data.duration);
             }
-        }, 1000);
-
-        this.setData({ timerId });
+            this.setData({
+                ...this.buildSwiperState(0),
+                answers: {},
+                showResumeModal: false,
+                pendingProgress: null,
+                isAnalysisVisible: false,
+            });
+        } finally {
+            this._skipSaveOnExit = false;
+            this._autoSubmitEnabled = true;
+        }
     },
 
     formatTime(seconds: number) {
@@ -443,6 +724,49 @@ Page({
     autoSubmit() {
         wx.showToast({ title: '考试时间到，自动交卷', icon: 'none' });
         this.onSubmit(true);
+    },
+
+    async handleSubmissionFailure(error: any, isAuto: boolean) {
+        const message = getErrorMessage(error, '提交失败，请稍后重试');
+        const isExpiredAttempt = Number(error && error.statusCode) === 409
+            && /超时|失效|重新开始/.test(message);
+
+        if (isExpiredAttempt) {
+            const result = await wx.showModal({
+                title: '无法提交',
+                content: message,
+                confirmText: '重新开始',
+                cancelText: '返回',
+            });
+            if (result.confirm) {
+                await this.restartExamSession();
+            } else {
+                wx.navigateBack({ delta: 1 });
+            }
+            return;
+        }
+
+        if (this.data.deadlineAt > 0 && this.data.timeLeft <= 0) {
+            const result = await wx.showModal({
+                title: '提交未完成',
+                content: `${message}。答案已保留，是否立即重试？`,
+                confirmText: '重试提交',
+                cancelText: '稍后重试',
+            });
+            if (result.confirm) {
+                this._autoSubmitTriggered = false;
+                await this.onSubmit(true);
+            }
+            return;
+        }
+
+        wx.showToast({ title: message, icon: 'none' });
+        if (this.data.deadlineAt > 0) {
+            this._autoSubmitTriggered = false;
+            this.startDeadlineTimer(this.data.deadlineAt);
+        } else if (isAuto) {
+            this._autoSubmitTriggered = false;
+        }
     },
 
     onAnswerChange(e: WechatMiniprogram.CustomEvent<{ value: string[] }>) {
@@ -715,7 +1039,11 @@ Page({
     },
 
     async onSubmit(isAuto = false) {
-        if (this.data.mode === 'recite') {
+        if (this.data.mode === 'recite' || this.data.isSubmitting) {
+            return;
+        }
+        if (!this.isExamSessionReady()) {
+            wx.showToast({ title: '考试场次尚未就绪，请先重试', icon: 'none' });
             return;
         }
 
@@ -737,9 +1065,8 @@ Page({
             }
         }
 
-        if (this.data.timerId) {
-            clearInterval(this.data.timerId);
-        }
+        this.setData({ isSubmitting: true });
+        this.stopTimer();
 
         wx.showLoading({ title: '提交中...' });
 
@@ -748,6 +1075,7 @@ Page({
                 ? await api.submitExam({
                     categoryId: this.data.categoryId,
                     answers,
+                    attemptId: this.data.attemptId || undefined,
                 })
                 : await api.previewDemoExam({
                     categoryId: this.data.categoryId,
@@ -771,9 +1099,11 @@ Page({
                 url: `/pages/result/result?categoryId=${this.data.categoryId}`,
             });
         } catch (error) {
-            wx.showToast({ title: '提交失败', icon: 'none' });
+            this.setData({ isSubmitting: false });
+            await this.handleSubmissionFailure(error, isAuto);
         } finally {
             wx.hideLoading();
+            this.setData({ isSubmitting: false });
             if (submitted) {
                 this.clearSavedProgress();
             }
@@ -849,16 +1179,26 @@ Page({
         }
 
         if (this.data.mode === 'exam' && this.data.duration > 0) {
-            this.startTimer(this.data.duration, progress.timeLeft);
+            if (this.data.sourceType === 'personal' && this.data.deadlineAt > 0) {
+                this.startDeadlineTimer(this.data.deadlineAt);
+            } else {
+                const savedDeadline = progress.deadlineAt ? new Date(progress.deadlineAt).getTime() : 0;
+                if (savedDeadline > 0) {
+                    this.startDeadlineTimer(savedDeadline);
+                } else {
+                    this.startTimer(this.data.duration, progress.timeLeft);
+                }
+            }
         }
     },
 
     async onResumeCancel() {
         this.setData({ showResumeModal: false });
-        this.clearSavedProgress();
-
-        if (this.data.mode === 'exam' && this.data.duration > 0) {
-            this.startTimer(this.data.duration);
+        if (this.data.mode === 'exam') {
+            await this.restartExamSession();
+            return;
         }
+
+        this.clearSavedProgress();
     },
 });

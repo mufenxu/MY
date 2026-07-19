@@ -18,10 +18,12 @@ test('core accepts only valid audience-bound platform identities', () => {
         iss: 'my-platform-gateway',
         aud: 'core',
         sub: 'admin',
-        role: 'platform_admin',
+        role: 'viewer',
         csrf: 'csrf-token',
         m: 'GET',
         p: '/api/users/me',
+        session_exp: Math.floor(now / 1000) + 3600,
+        reauth_exp: 0,
         iat: Math.floor(now / 1000),
         exp: Math.floor(now / 1000) + 30,
     };

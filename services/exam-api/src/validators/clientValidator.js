@@ -44,6 +44,21 @@ const submitExam = {
         answers: Joi.object().required().messages({
             'any.required': 'answers is required',
         }),
+        attemptId: Joi.string().guid({ version: ['uuidv4'] }).optional(),
+    }),
+};
+
+const startExamAttempt = {
+    body: Joi.object({
+        categoryId: objectId.required().messages({
+            'any.required': 'categoryId is required',
+        }),
+        restart: Joi.boolean().default(false),
+        requestId: Joi.string().guid({ version: ['uuidv4'] }).when('restart', {
+            is: true,
+            then: Joi.required(),
+            otherwise: Joi.optional(),
+        }),
     }),
 };
 
@@ -60,7 +75,7 @@ const saveProgress = {
         categoryId: objectId.required().messages({
             'any.required': 'categoryId is required',
         }),
-        mode: Joi.string().optional(),
+        mode: Joi.string().valid('exam', 'practice', 'recite').default('exam'),
         currentIndex: Joi.number().integer().min(0).optional(),
         answers: Joi.object().optional(),
         timeLeft: Joi.number().integer().min(0).optional(),
@@ -69,6 +84,7 @@ const saveProgress = {
         reciteMastery: Joi.object().optional(),
         reciteReviewTimes: Joi.object().optional(),
         updateTime: Joi.date().iso().optional(),
+        attemptId: Joi.string().guid({ version: ['uuidv4'] }).optional(),
     }),
 };
 
@@ -77,7 +93,7 @@ const getProgress = {
         categoryId: objectId.required().messages({
             'any.required': 'categoryId is required',
         }),
-        mode: Joi.string().optional(),
+        mode: Joi.string().valid('exam', 'practice', 'recite').default('exam'),
     }),
 };
 
@@ -86,7 +102,8 @@ const clearProgress = {
         categoryId: objectId.required().messages({
             'any.required': 'categoryId is required',
         }),
-        mode: Joi.string().optional(),
+        mode: Joi.string().valid('exam', 'practice', 'recite').default('exam'),
+        attemptId: Joi.string().guid({ version: ['uuidv4'] }).optional(),
     }),
 };
 
@@ -186,6 +203,7 @@ module.exports = {
     getCategories,
     questionSearch,
     submitExam,
+    startExamAttempt,
     getLatestResult,
     saveProgress,
     getProgress,

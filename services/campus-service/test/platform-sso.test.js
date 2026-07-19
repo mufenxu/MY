@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { verifyPlatformSso } from '../src/lib/platform-sso.js';
+import { platformRoleAllowsRequest } from '../src/lib/platform-role.js';
 
 function issue(claims, privateKey) {
   const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
@@ -18,10 +19,12 @@ test('campus verifies gateway identities without trusting unsigned headers', () 
     iss: 'my-platform-gateway',
     aud: 'campus',
     sub: 'admin',
-    role: 'platform_admin',
+    role: 'viewer',
     csrf: 'csrf-token',
     m: 'GET',
     p: '/api/app-auth/status',
+    session_exp: Math.floor(now / 1000) + 3600,
+    reauth_exp: 0,
     iat: Math.floor(now / 1000),
     exp: Math.floor(now / 1000) + 30,
   };
@@ -34,4 +37,13 @@ test('campus verifies gateway identities without trusting unsigned headers', () 
     if (previous === undefined) delete process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY;
     else process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY = previous;
   }
+});
+
+test('campus central roles enforce read-only viewer and reserve account administration', () => {
+  assert.equal(platformRoleAllowsRequest('viewer', 'GET', '/api/campus/summary'), true);
+  assert.equal(platformRoleAllowsRequest('viewer', 'POST', '/api/campus/water-code/refresh'), false);
+  assert.equal(platformRoleAllowsRequest('operator', 'POST', '/api/campus/water-code/refresh'), true);
+  assert.equal(platformRoleAllowsRequest('operator', 'POST', '/api/users'), false);
+  assert.equal(platformRoleAllowsRequest('operator', 'DELETE', '/api/invites/1'), false);
+  assert.equal(platformRoleAllowsRequest('super_admin', 'DELETE', '/api/users/1'), true);
 });

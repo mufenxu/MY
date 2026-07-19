@@ -71,6 +71,47 @@ test('global notification settings and manual reminders require super_admin', as
     }
 });
 
+test('Turnstile app config requires super_admin reauthentication while other app config remains delegated', async () => {
+    const protectSensitiveAppConfig = routeMiddleware(settingsRouter, '/app-config', 2);
+    const response = () => ({
+        statusCode: 200,
+        status(code) { this.statusCode = code; return this; },
+        json(body) { this.body = body; return body; }
+    });
+
+    let ordinaryNext = false;
+    protectSensitiveAppConfig(
+        { user: { role: 'admin' }, body: { key: 'feature_visibility' } },
+        response(),
+        () => { ordinaryNext = true; }
+    );
+    assert.equal(ordinaryNext, true);
+
+    const deniedResponse = response();
+    protectSensitiveAppConfig(
+        { user: { role: 'admin' }, body: { key: 'turnstile_config' } },
+        deniedResponse,
+        () => assert.fail('admin must not pass the Turnstile guard')
+    );
+    assert.equal(deniedResponse.statusCode, 403);
+
+    let superNext = false;
+    protectSensitiveAppConfig(
+        {
+            user: { _id: 'root', role: 'super_admin' },
+            platformSso: {
+                role: 'super_admin',
+                reauth_exp: Math.floor(Date.now() / 1000) + 60
+            },
+            body: { key: 'turnstile_config' },
+            headers: {}
+        },
+        response(),
+        () => { superNext = true; }
+    );
+    assert.equal(superNext, true);
+});
+
 test('auth scan management pagination is capped at 100 records', async () => {
     let listResponse;
     await authScanController.listQRCodes(

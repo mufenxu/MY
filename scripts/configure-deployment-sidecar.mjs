@@ -48,6 +48,18 @@ function defaultWorkspaceRoot() {
   return process.platform === 'win32' ? '/opt/my-platform' : process.cwd();
 }
 
+function normalizeWorkspaceFile(value, fallback, key) {
+  const raw = String(value || fallback).trim();
+  if (!raw || raw.includes('\\') || path.posix.isAbsolute(raw)) {
+    throw new Error(`${key} must be a relative Linux path inside DEPLOY_RUNNER_WORKSPACE_ROOT.`);
+  }
+  const normalized = path.posix.normalize(raw).replace(/^\.\//, '');
+  if (normalized === '..' || normalized.startsWith('../') || !/\.ya?ml$/i.test(normalized)) {
+    throw new Error(`${key} must be a .yml or .yaml file inside DEPLOY_RUNNER_WORKSPACE_ROOT.`);
+  }
+  return normalized;
+}
+
 export function configureSidecar(
   source,
   command,
@@ -92,12 +104,18 @@ export function configureSidecar(
   if (!/^\d+$/.test(String(dockerGid))) {
     throw new Error('DEPLOY_RUNNER_DOCKER_GID must be a numeric group ID.');
   }
+  const composePath = normalizeWorkspaceFile(
+    values.get('DEPLOY_RUNNER_COMPOSE_PATH'),
+    'infra/docker/compose.yml',
+    'DEPLOY_RUNNER_COMPOSE_PATH',
+  );
 
   return updateEnv(source, {
     COMPOSE_PROFILES: updateProfiles(values.get('COMPOSE_PROFILES'), true),
     DEPLOYMENT_RUNNER_IMAGE: values.get('DEPLOYMENT_RUNNER_IMAGE') || `${repository}:deployment-runner-latest`,
     DEPLOY_RUNNER_DOCKER_GID: String(dockerGid),
     DEPLOY_RUNNER_WORKSPACE_ROOT: path.posix.normalize(deploymentWorkspaceRoot),
+    DEPLOY_RUNNER_COMPOSE_PATH: composePath,
     PLATFORM_DEPLOY_HOOK_URL: 'http://deployment-runner:22104',
     PLATFORM_DEPLOY_HOOK_TOKEN: deployToken,
     DEPLOY_RUNNER_ENV_FILE: path.basename(values.get('DEPLOY_RUNNER_ENV_FILE') || '.env'),

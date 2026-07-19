@@ -1502,6 +1502,13 @@ html.dark .route-pending-indicator {
     inset -1px -1px 2px rgba(112, 144, 176, 0.05);
 }
 
+.soybean-tab-item:focus-visible,
+.soybean-tab-close:focus-visible,
+.soybean-header-icon-btn:focus-visible {
+  outline: 3px solid rgba(74, 124, 247, 0.42);
+  outline-offset: 2px;
+}
+
 .soybean-tab-item.soybean-tab-active:hover {
   color: #ffffff !important;
   background: var(--primary-color) !important;
@@ -1534,8 +1541,8 @@ html.dark .route-pending-indicator {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   font-size: 10px;
   margin-left: 6px;

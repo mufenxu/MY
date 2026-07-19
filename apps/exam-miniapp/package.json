@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "check:miniprogram": "node scripts/check-miniprogram-paths.js && node scripts/check-miniprogram-source.js",
+    "check:miniprogram": "node scripts/check-miniprogram-paths.js && node scripts/check-miniprogram-source.js && node --test scripts/*.test.js",
+    "check:compliance:trial": "node scripts/check-compliance-config.js trial",
+    "check:compliance:release": "node scripts/check-compliance-config.js release",
     "typecheck": "tsc --noEmit",
     "lint:backend": "npm --prefix ../../services/exam-api run lint",
     "build:admin": "npm --prefix ../exam-admin run build",

@@ -9,10 +9,14 @@ const { AuthError, ForbiddenError } = require('../utils/errors');
 const { ADMIN_AUTH_COOKIE, getAuthToken } = require('../utils/authCookies');
 const { verifyPlatformSso } = require('./platformSso');
 const { resolvePlatformSsoAdmin } = require('../services/platformSsoAccountService');
+const { platformRoleAllowsRequest } = require('./platformRole');
 
 async function authenticateAdmin(req, res, next) {
     const platformIdentity = verifyPlatformSso(req);
     if (platformIdentity) {
+        if (!platformRoleAllowsRequest(platformIdentity.role, req.method, req.originalUrl || req.url)) {
+            throw new ForbiddenError('The unified-platform role cannot perform this operation.');
+        }
         const mappedUsername = process.env.PLATFORM_SSO_EXAM_USERNAME || platformIdentity.sub;
         const admin = await resolvePlatformSsoAdmin({ mappedUsername });
         if (!admin) {
@@ -23,6 +27,7 @@ async function authenticateAdmin(req, res, next) {
             id: admin._id.toString(),
             username: admin.username,
             role: 'admin',
+            centralRole: platformIdentity.role,
             tokenVersion: admin.tokenVersion || 0,
         };
         return next();

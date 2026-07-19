@@ -2,6 +2,30 @@ const SecretCache = require('../models/SecretCache');
 const logger = require('../utils/logger');
 const { encrypt, decrypt, isEncrypted } = require('../utils/crypto');
 
+const ADMIN_CONFIGURABLE_SECRETS = Object.freeze([
+    { key: 'GH_TOKEN', desc: 'GitHub Personal Access Token' },
+    { key: 'GH_OWNER', desc: 'GitHub 仓库所有者' },
+    { key: 'GH_REPO', desc: 'GitHub 仓库名' },
+    { key: 'GH_WORKFLOW', desc: 'GitHub Actions 工作流文件名' },
+    { key: 'GH_REF', desc: 'GitHub Actions 运行分支 (如: main)' },
+    { key: 'GH_WEBHOOK_SECRET', desc: 'GitHub Webhook 密钥' },
+    { key: 'EMQX_API_KEY', desc: 'EMQX MQTT 服务 API Key' },
+    { key: 'EMQX_SECRET_KEY', desc: 'EMQX MQTT 服务 Secret Key' },
+    { key: 'MQTT_API_KEY', desc: 'MQTT Smart Dashboard API Bearer Token' },
+    { key: 'MQTT_API_BASE_URL', desc: 'MQTT Smart Dashboard API 域名' },
+    { key: 'MQTT_PRIMARY_DEVICE_ID', desc: '智能控制主设备 ID' },
+    { key: 'MQTT_PRIMARY_RELAY_ID', desc: '智能控制主继电器 ID' },
+    { key: 'MQTT_SECONDARY_DEVICE_ID', desc: '智能控制第二设备 ID' },
+    { key: 'MQTT_SECONDARY_RELAY_ID', desc: '智能控制第二继电器 ID' },
+    { key: 'TUYA_ACCESS_KEY', desc: '涂鸦 IoT Client ID (Access Key)' },
+    { key: 'TUYA_SECRET_KEY', desc: '涂鸦 IoT Client Secret' },
+    { key: 'TUYA_ENDPOINT', desc: '涂鸦 OpenAPI 域名' },
+    { key: 'TUYA_DEVICE_ID', desc: '涂鸦关联的设备 ID' },
+    { key: 'TURNSTILE_SITE_KEY', desc: 'Cloudflare Turnstile Site Key' },
+    { key: 'TURNSTILE_SECRET_KEY', desc: 'Cloudflare Turnstile Secret Key' },
+]);
+const ADMIN_CONFIGURABLE_SECRET_NAMES = new Set(ADMIN_CONFIGURABLE_SECRETS.map(({ key }) => key));
+
 let memoryCache = Object.create(null);
 
 function rawSecretValue(record) {
@@ -26,6 +50,10 @@ async function migrateLegacySecret(record, storedValue) {
 }
 
 class SecretService {
+    static isAdminConfigurableSecret(name) {
+        return ADMIN_CONFIGURABLE_SECRET_NAMES.has(String(name || ''));
+    }
+
     /**
      * 初始化缓存，系统启动时调用
      */
@@ -137,35 +165,10 @@ class SecretService {
      * 将预设允许配置的键名和数据库/env 的当前值进行合并展示
      */
     static async getAllSecrets() {
-        // 定义允许在后台被修改的变量白名单和描述
-        const configurableSecrets = [
-
-            { key: 'GH_TOKEN', desc: 'GitHub Personal Access Token' },
-            { key: 'GH_OWNER', desc: 'GitHub 仓库所有者' },
-            { key: 'GH_REPO', desc: 'GitHub 仓库名' },
-            { key: 'GH_WORKFLOW', desc: 'GitHub Actions 工作流文件名' },
-            { key: 'GH_REF', desc: 'GitHub Actions 运行分支 (如: main)' },
-            { key: 'GH_WEBHOOK_SECRET', desc: 'GitHub Webhook 密钥' },
-            { key: 'EMQX_API_KEY', desc: 'EMQX MQTT 服务 API Key' },
-            { key: 'EMQX_SECRET_KEY', desc: 'EMQX MQTT 服务 Secret Key' },
-            { key: 'MQTT_API_KEY', desc: 'MQTT Smart Dashboard API Bearer Token' },
-            { key: 'MQTT_API_BASE_URL', desc: 'MQTT Smart Dashboard API 域名' },
-            { key: 'MQTT_PRIMARY_DEVICE_ID', desc: '智能控制主设备 ID' },
-            { key: 'MQTT_PRIMARY_RELAY_ID', desc: '智能控制主继电器 ID' },
-            { key: 'MQTT_SECONDARY_DEVICE_ID', desc: '智能控制第二设备 ID' },
-            { key: 'MQTT_SECONDARY_RELAY_ID', desc: '智能控制第二继电器 ID' },
-            { key: 'TUYA_ACCESS_KEY', desc: '涂鸦 IoT Client ID (Access Key)' },
-            { key: 'TUYA_SECRET_KEY', desc: '涂鸦 IoT Client Secret' },
-            { key: 'TUYA_ENDPOINT', desc: '涂鸦 OpenAPI 域名' },
-            { key: 'TUYA_DEVICE_ID', desc: '涂鸦关联的设备 ID' },
-            { key: 'TURNSTILE_SITE_KEY', desc: 'Cloudflare Turnstile Site Key' },
-            { key: 'TURNSTILE_SECRET_KEY', desc: 'Cloudflare Turnstile Secret Key' },
-        ];
-
         const dbSecrets = await SecretCache.find();
         const dbSecretMap = new Map(dbSecrets.map(s => [s.secret_name, s]));
 
-        return configurableSecrets.map(conf => {
+        return ADMIN_CONFIGURABLE_SECRETS.map(conf => {
             const dbData = dbSecretMap.get(conf.key);
             const envValue = process.env[conf.key];
             const hasDbValue = !!dbData;

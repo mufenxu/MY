@@ -1,6 +1,6 @@
 import React, { Suspense, useState, useEffect, useCallback, useMemo, useTransition } from 'react';
 import api from '../utils/api';
-import { Layout, Menu, Button, Drawer, Dropdown, Breadcrumb, Tooltip, Spin } from 'antd';
+import { Layout, Menu, Button, Drawer, Dropdown, Breadcrumb, Tooltip, Spin, message } from 'antd';
 import {
     UserOutlined,
     SettingOutlined,
@@ -356,20 +356,20 @@ const MainLayout = () => {
     }, []);
 
     const handleLogout = useCallback(async () => {
-        if (IS_PLATFORM_SSO) {
-            localStorage.removeItem('user');
-            await logoutPlatformSession();
-            return;
-        }
         try {
+            if (IS_PLATFORM_SSO) {
+                await logoutPlatformSession();
+                return;
+            }
             await api.post('/auth/logout', {});
-        } catch {
-            // 即使后端调用失败也继续清理本地状态
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('user');
+            window.dispatchEvent(new Event('core-auth-expired'));
+            navigate('/login');
+        } catch (error) {
+            message.error(error.response?.data?.message || error.message || '退出失败，请检查网络后重试');
         }
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
-        navigate('/login');
     }, [navigate]);
 
     const toggleFullscreen = useCallback(() => {
@@ -541,6 +541,7 @@ const MainLayout = () => {
                                     icon={<MenuUnfoldOutlined />}
                                     onClick={() => setDrawerVisible(true)}
                                     className="soybean-header-icon-btn"
+                                    aria-label="打开导航菜单"
                                 />
                             ) : (
                                 <Button
@@ -548,6 +549,7 @@ const MainLayout = () => {
                                     icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
                                     onClick={() => setCollapsed(!collapsed)}
                                     className="soybean-header-icon-btn"
+                                    aria-label={collapsed ? '展开导航栏' : '收起导航栏'}
                                 />
                             )}
                             {/* 鎵嬫満绔樉绀虹畝娲侀〉闈㈡爣棰橈紝骞虫澘/妗岄潰鏄剧ず闈㈠寘灞?*/}
@@ -592,6 +594,7 @@ const MainLayout = () => {
                                     icon={isDarkMode ? <SunOutlined /> : <MoonOutlined />}
                                     onClick={toggleTheme}
                                     className="soybean-header-icon-btn"
+                                    aria-label={isDarkMode ? '切换到白天模式' : '切换到黑夜模式'}
                                 />
                             </Tooltip>
                             {!isMobile && (
@@ -601,6 +604,7 @@ const MainLayout = () => {
                                         icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
                                         onClick={toggleFullscreen}
                                         className="soybean-header-icon-btn"
+                                        aria-label={isFullscreen ? '退出全屏' : '进入全屏'}
                                     />
                                 </Tooltip>
                             )}
@@ -610,6 +614,7 @@ const MainLayout = () => {
                                         type="text"
                                         icon={<BellOutlined />}
                                         className="soybean-header-icon-btn"
+                                        aria-label="通知"
                                     />
                                 </Tooltip>
                             )}
@@ -630,7 +635,7 @@ const MainLayout = () => {
                     </div>
 
                     {/* 绗簩灞傦細澶氭爣绛鹃〉 */}
-                    <div className="soybean-tabs-bar" style={{
+                    <div className="soybean-tabs-bar" role="tablist" aria-label="已打开的管理页面" style={{
                         height: isMobile ? 36 : (isTablet ? 44 : 54),
                         padding: isMobile ? '0 8px' : '0 16px',
                         display: 'flex',
@@ -655,6 +660,16 @@ const MainLayout = () => {
                                     <div
                                         className={`soybean-tab-item ${isActive ? 'soybean-tab-active' : ''}`}
                                         onClick={() => handleTabClick(path)}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault();
+                                                handleTabClick(path);
+                                            }
+                                        }}
+                                        role="tab"
+                                        tabIndex={0}
+                                        aria-selected={isActive}
+                                        aria-current={isActive ? 'page' : undefined}
                                     >
                                         <span className="soybean-tab-icon">{config.icon}</span>
                                         <span className="soybean-tab-label">{config.label}</span>
@@ -662,6 +677,15 @@ const MainLayout = () => {
                                             <span
                                                 className="soybean-tab-close"
                                                 onClick={(e) => handleTabClose(e, path)}
+                                                onKeyDown={(event) => {
+                                                    if (event.key === 'Enter' || event.key === ' ') {
+                                                        event.preventDefault();
+                                                        handleTabClose(event, path);
+                                                    }
+                                                }}
+                                                role="button"
+                                                tabIndex={0}
+                                                aria-label={`关闭${config.label}页签`}
                                             >
                                                 <CloseOutlined />
                                             </span>
@@ -685,6 +709,7 @@ const MainLayout = () => {
                                         setRefreshKey(prev => prev + 1);
                                     }}
                                     style={{ fontSize: 13 }}
+                                    aria-label="刷新当前页"
                                 />
                             </Tooltip>
                         </div>

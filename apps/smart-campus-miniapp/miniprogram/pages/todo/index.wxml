@@ -36,55 +36,78 @@
         confirm-type="done"
         bindinput="onInputChange"
         bindconfirm="onAddTask"
+        aria-label="待办事项内容"
       />
-      <view class="add-btn-wrapper" bindtap="onAddTask" style="opacity: {{canSubmit ? 1 : 0.5}}">
-        <view class="add-icon"></view>
+      <view
+        class="add-btn-wrapper"
+        bindtap="onAddTask"
+        style="opacity: {{canSubmit ? 1 : 0.5}}"
+        aria-role="button"
+        aria-label="添加待办事项"
+        aria-disabled="{{!canSubmit}}"
+      >
+        <view class="add-icon" aria-hidden="true"></view>
       </view>
     </view>
 
     <!-- 过滤器 -->
-    <view class="filter-bar">
+    <view class="filter-bar" aria-role="tablist" aria-label="待办筛选">
       <view
         class="filter-item {{filter==='all'?'filter-item--active':''}}"
         data-filter="all"
         bindtap="onFilterChange"
+        aria-role="tab"
+        aria-selected="{{filter === 'all'}}"
       >全部</view>
       <view
         class="filter-item {{filter==='active'?'filter-item--active':''}}"
         data-filter="active"
         bindtap="onFilterChange"
+        aria-role="tab"
+        aria-selected="{{filter === 'active'}}"
       >进行中</view>
       <view
         class="filter-item {{filter==='completed'?'filter-item--active':''}}"
         data-filter="completed"
         bindtap="onFilterChange"
+        aria-role="tab"
+        aria-selected="{{filter === 'completed'}}"
       >已完成</view>
     </view>
 
     <!-- 任务列表 -->
     <scroll-view scroll-y class="todo-list" wx:if="{{filteredTasks.length}}" show-scrollbar="{{false}}" enhanced="{{true}}">
       <block wx:for="{{filteredTasks}}" wx:key="id">
-        <view class="todo-item {{item.completed?'todo-item--done':''}}" bindtap="onToggleTask" data-id="{{item.id}}">
-          <view class="checkbox {{item.completed?'checkbox--checked':''}}">
-            <view class="checkmark" wx:if="{{item.completed}}"></view>
-          </view>
-          <view class="todo-content">
-            <view class="todo-title">{{item.title}}</view>
-            <view class="todo-time" wx:if="{{item._createdText}}">{{item._createdText}}</view>
+        <view class="todo-item {{item.completed?'todo-item--done':''}}">
+          <view
+            class="todo-toggle"
+            bindtap="onToggleTask"
+            data-id="{{item.id}}"
+            aria-role="checkbox"
+            aria-checked="{{item.completed}}"
+            aria-label="{{item.completed ? '标记为未完成' : '标记为已完成'}}：{{item.title}}"
+          >
+            <view class="checkbox {{item.completed?'checkbox--checked':''}}" aria-hidden="true">
+              <view class="checkmark" wx:if="{{item.completed}}"></view>
+            </view>
+            <view class="todo-content">
+              <view class="todo-title">{{item.title}}</view>
+              <view class="todo-time" wx:if="{{item._createdText}}">{{item._createdText}}</view>
+            </view>
           </view>
           <view class="todo-actions">
-            <view class="action-btn edit-btn" catchtap="onEditTask" data-id="{{item.id}}">
-              <view class="icon-edit"></view>
+            <view class="action-btn edit-btn" catchtap="onEditTask" data-id="{{item.id}}" aria-role="button" aria-label="编辑：{{item.title}}">
+              <view class="icon-edit" aria-hidden="true"></view>
             </view>
-            <view class="action-btn delete-btn" catchtap="onDeleteTask" data-id="{{item.id}}">
-              <view class="icon-delete"></view>
+            <view class="action-btn delete-btn" catchtap="onDeleteTask" data-id="{{item.id}}" aria-role="button" aria-label="删除：{{item.title}}">
+              <view class="icon-delete" aria-hidden="true"></view>
             </view>
           </view>
         </view>
       </block>
       
       <view class="clear-btn-wrapper" wx:if="{{completedCount > 0 && filter !== 'active'}}">
-        <view class="clear-btn" bindtap="onClearCompleted">清除已完成任务</view>
+        <view class="clear-btn" bindtap="onClearCompleted" aria-role="button">清除已完成任务</view>
       </view>
     </scroll-view>
 
@@ -96,8 +119,8 @@
   </view>
 
   <!-- 编辑弹窗 -->
-  <view class="glass-modal-mask {{showEditor?'visible':''}}" bindtap="onCloseEditor">
-    <view class="glass-modal {{showEditor?'visible':''}}" catchtap="stopProp">
+  <view class="glass-modal-mask {{showEditor?'visible':''}}" bindtap="onCloseEditor" aria-hidden="{{!showEditor}}">
+    <view class="glass-modal {{showEditor?'visible':''}}" catchtap="stopProp" aria-role="dialog" aria-modal="true" aria-label="{{editingTaskId?'编辑任务':'新建任务'}}">
       <view class="modal-header">
         <text>{{editingTaskId?'编辑任务':'新建任务'}}</text>
       </view>
@@ -108,10 +131,11 @@
         placeholder-class="modal-input__placeholder"
         auto-height
         bindinput="onEditorInput"
+        aria-label="任务内容"
       />
       <view class="modal-footer">
-        <view class="modal-btn cancel-btn" bindtap="onCloseEditor">取消</view>
-        <view class="modal-btn confirm-btn {{!editorCanSubmit?'disabled':''}}" bindtap="onSubmitEditor">保存</view>
+        <view class="modal-btn cancel-btn" bindtap="onCloseEditor" aria-role="button">取消</view>
+        <view class="modal-btn confirm-btn {{!editorCanSubmit?'disabled':''}}" bindtap="onSubmitEditor" aria-role="button" aria-disabled="{{!editorCanSubmit}}">保存</view>
       </view>
     </view>
   </view>

@@ -88,7 +88,6 @@ test('release builds create a persistent release and dispatch allowlisted target
     targets: 'platform,core',
     push_sha_tags: 'true',
     release_id: 'release-1',
-    callback_url: 'https://admin.example.com/api/releases/callback',
   });
   assert.equal((await store.getBuild('release-1')).requestedBy, 'admin');
   await assert.rejects(

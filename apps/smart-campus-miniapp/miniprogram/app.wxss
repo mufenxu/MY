@@ -6,8 +6,6 @@ page {
   text-rendering: optimizeLegibility;
   /* 彻底禁用原生的点击黑色半透明高亮，全盘使用自建的 3D 按压动画 */
   -webkit-tap-highlight-color: transparent;
-  /* 启用 GPU 硬件加速整个页面层 */
-  transform: translateZ(0);
 }
 
 scroll-view {
@@ -23,10 +21,8 @@ image {
 
 /* 统一提速各类拟态按键和卡片的触发与回弹，通过触发 3D 加速极大提升点击手感 */
 .btn, .card, .todo-item, .news-item, .server-card, .auth-card, .mini-card, .profile-card {
-  transform: translateZ(0); 
-  will-change: transform, box-shadow;
   /* 0.15s 是人眼感知按压反馈极佳区间，比 0.3s 更干脆 */
-  transition: all 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
 }
 .container {
   box-sizing: border-box;
@@ -70,14 +66,13 @@ image {
     opacity 0.1s cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 0.1s cubic-bezier(0.4, 0, 0.2, 1),
     -webkit-transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: transform;
 }
 .btn:active {
   box-shadow: 
     inset 4px 4px 8px rgba(166, 180, 200, 0.5),
     inset -4px -4px 8px rgba(255, 255, 255, 0.9);
   opacity: 0.96;
-  transform: translateY(2rpx) translateZ(0) scale(0.98);
+  transform: translateY(2rpx) scale(0.98);
 }
 .btn--primary {
   background: linear-gradient(180deg, #7aa7ff, #4f83ff);
@@ -275,7 +270,7 @@ image {
 .splash-text {
   font-size: 26rpx;
   color: #64748b;
-  letter-spacing: 4rpx;
+  letter-spacing: 0;
   animation: pulseOpacity 1.5s infinite ease-in-out;
   font-weight: 500;
 }
@@ -298,4 +293,28 @@ image {
   height: 100%;
   z-index: 0;
   pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-shape-1,
+  .bg-shape-2,
+  .bg-shape-3,
+  .splash-spinner,
+  .splash-text,
+  .loading-spinner {
+    animation: none !important;
+  }
+
+  .btn,
+  .card,
+  .todo-item,
+  .news-item,
+  .server-card,
+  .auth-card,
+  .mini-card,
+  .profile-card,
+  .bottom-tab__item,
+  .tab-icon {
+    transition: none !important;
+  }
 }

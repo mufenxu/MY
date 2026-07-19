@@ -67,14 +67,6 @@
       ]
     }
   ],
-  "preloadRule": {
-    "pages/me/index": {
-      "network": "all",
-      "packages": [
-        "pages/login/"
-      ]
-    }
-  },
   "window": {
     "navigationBarTitleText": "首页",
     "navigationBarBackgroundColor": "#ffffff",

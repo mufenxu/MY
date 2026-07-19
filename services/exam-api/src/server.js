@@ -12,7 +12,11 @@ const Admin = require('./models/Admin');
 const MajorCategory = require('./models/MajorCategory');
 const Category = require('./models/Category');
 const Question = require('./models/Question');
+const ExamProgress = require('./models/ExamProgress');
+const ExamResult = require('./models/ExamResult');
 const { DEMO_SCOPE, buildScopeAssignment } = require('./utils/libraryScope');
+const { isRuntimeReady, setRuntimeReady } = require('./runtimeState');
+const { closeHttpServer } = require('./services/httpShutdown');
 
 const BCRYPT_ROUNDS = 12;
 const MIN_ADMIN_PASSWORD_LENGTH = config.adminPasswordMinLength;
@@ -20,6 +24,7 @@ const MIN_ADMIN_PASSWORD_LENGTH = config.adminPasswordMinLength;
 let server;
 let initialized = false;
 let initializationPromise = null;
+let shutdownPromise = null;
 
 function isStrongAdminPassword(password) {
     return typeof password === 'string'
@@ -109,22 +114,38 @@ async function initData() {
     logger.info('Sample data seeded.');
 }
 
-async function gracefulShutdown(signal) {
-    logger.info({ signal }, 'Received shutdown signal, shutting down gracefully...');
+async function gracefulShutdown(signal, exitCode = 0) {
+    if (shutdownPromise) {
+        return shutdownPromise;
+    }
 
-    if (server) {
-        server.close(() => {
+    shutdownPromise = (async () => {
+        logger.info({ signal }, 'Received shutdown signal, shutting down gracefully...');
+        setRuntimeReady(false);
+
+        try {
+            await closeHttpServer(server, {
+                timeoutMs: config.shutdownTimeoutMs,
+                onForce: () => logger.warn('Forcing remaining HTTP connections to close.'),
+            });
+            server = null;
             logger.info('HTTP server stopped.');
-        });
-    }
+        } catch (error) {
+            logger.error({ err: error }, 'Failed to close HTTP server');
+            exitCode = 1;
+        }
 
-    try {
-        await disconnectDatabase();
-    } catch (error) {
-        logger.error({ err: error }, 'Failed to close database connection');
-    }
+        try {
+            await closeExamRuntime();
+        } catch (error) {
+            logger.error({ err: error }, 'Failed to close database connection');
+            exitCode = 1;
+        }
 
-    process.exit(0);
+        process.exitCode = exitCode;
+    })();
+
+    return shutdownPromise;
 }
 
 async function initializeExamRuntime() {
@@ -137,9 +158,11 @@ async function initializeExamRuntime() {
 
     initializationPromise = (async () => {
         await connectDatabase();
+        await initializeCriticalIndexes();
         await initAdmin();
         await initData();
         initialized = true;
+        setRuntimeReady(true);
         return app;
     })();
 
@@ -150,7 +173,12 @@ async function initializeExamRuntime() {
     }
 }
 
+async function initializeCriticalIndexes(models = [Admin, ExamProgress, ExamResult]) {
+    await Promise.all(models.map((Model) => Model.init()));
+}
+
 async function closeExamRuntime() {
+    setRuntimeReady(false);
     if (initialized) {
         await disconnectDatabase();
         initialized = false;
@@ -158,7 +186,7 @@ async function closeExamRuntime() {
 }
 
 function isExamRuntimeReady() {
-    return initialized && mongoose.connection.readyState === 1;
+    return initialized && isRuntimeReady() && mongoose.connection.readyState === 1;
 }
 
 async function startStandalone() {
@@ -178,7 +206,7 @@ async function startStandalone() {
 
         process.on('uncaughtException', (error) => {
             logger.fatal({ err: error }, 'Uncaught exception');
-            gracefulShutdown('uncaughtException');
+            gracefulShutdown('uncaughtException', 1);
         });
     } catch (error) {
         logger.fatal({ err: error }, 'Server startup failed');
@@ -195,5 +223,7 @@ module.exports = {
     initializeExamRuntime,
     closeExamRuntime,
     isExamRuntimeReady,
+    initializeCriticalIndexes,
+    gracefulShutdown,
     startStandalone,
 };

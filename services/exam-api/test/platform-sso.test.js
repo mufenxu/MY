@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('crypto');
 const { verifyPlatformSso } = require('../src/middleware/platformSso');
+const { platformRoleAllowsRequest } = require('../src/middleware/platformRole');
 
 function issue(claims, privateKey) {
     const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
@@ -18,10 +19,12 @@ test('exam accepts only gateway identities issued for the exam audience', () => 
         iss: 'my-platform-gateway',
         aud: 'exam',
         sub: 'admin',
-        role: 'platform_admin',
+        role: 'viewer',
         csrf: 'csrf-token',
         m: 'GET',
         p: '/api/admin/me',
+        session_exp: Math.floor(now / 1000) + 3600,
+        reauth_exp: 0,
         iat: Math.floor(now / 1000),
         exp: Math.floor(now / 1000) + 30,
     };
@@ -35,4 +38,13 @@ test('exam accepts only gateway identities issued for the exam audience', () => 
         if (previous === undefined) delete process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY;
         else process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY = previous;
     }
+});
+
+test('exam central roles enforce read-only viewer and reserve destructive operations', () => {
+    assert.equal(platformRoleAllowsRequest('viewer', 'GET', '/api/manage/questions'), true);
+    assert.equal(platformRoleAllowsRequest('viewer', 'POST', '/api/manage/questions'), false);
+    assert.equal(platformRoleAllowsRequest('operator', 'POST', '/api/manage/questions'), true);
+    assert.equal(platformRoleAllowsRequest('operator', 'DELETE', '/api/manage/questions/1'), false);
+    assert.equal(platformRoleAllowsRequest('operator', 'POST', '/api/admin/change-password'), false);
+    assert.equal(platformRoleAllowsRequest('super_admin', 'DELETE', '/api/manage/users'), true);
 });

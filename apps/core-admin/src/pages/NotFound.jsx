@@ -35,20 +35,20 @@ const NotFound = () => {
         return () => window.clearInterval(timer);
     }, []);
 
-    const hasToken = useMemo(() => {
+    const hasSessionHint = useMemo(() => {
         try {
-            return Boolean(localStorage.getItem('token'));
+            return Boolean(localStorage.getItem('user'));
         } catch {
             return false;
         }
     }, []);
 
-    const fallbackPath = hasToken ? '/dashboard' : '/login';
+    const fallbackPath = hasSessionHint ? '/dashboard' : '/login';
     const bonkText = BONK_LINES[bonkCount % BONK_LINES.length];
     const currentPath = location.pathname || '/';
 
     const handleRandomJump = () => {
-        if (!hasToken) {
+        if (!hasSessionHint) {
             navigate('/login');
             return;
         }
@@ -82,7 +82,7 @@ const NotFound = () => {
 
                 <Space wrap className="notfound-actions" size={[10, 10]}>
                     <Button type="primary" size="large" icon={<HomeOutlined />} onClick={() => navigate(fallbackPath)}>
-                        {hasToken ? '带我回仪表盘' : '带我去登录'}
+                        {hasSessionHint ? '带我回仪表盘' : '带我去登录'}
                     </Button>
                     <Button size="large" icon={<RocketOutlined />} onClick={handleRandomJump}>
                         随机传送

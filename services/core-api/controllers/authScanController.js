@@ -6,7 +6,7 @@ const AuthScanLog = require('../models/AuthScanLog');
 const logger = require('../utils/logger');
 const authService = require('../services/authService');
 const { getAccessToken, invalidateCache: invalidateWxTokenCache } = require('../utils/wxToken');
-const { setRefreshCookie } = require('../utils/refreshCookie');
+const { isWebAdminRequest, setWebAdminCookies } = require('../utils/refreshCookie');
 
 // In-memory storage for QR codes
 // Key: qrToken, Value: { status: 'waiting'|'scanned'|'confirmed'|'expired', appId: string, createdTime: number, userId: string, tempAuthCode: string }
@@ -536,9 +536,17 @@ exports.exchangeTokenAdmin = async (req, res) => {
         // Cleanup used QR
         qrCodeStore.delete(foundToken);
 
-        setRefreshCookie(res, refreshToken);
+        const webAdmin = isWebAdminRequest(req);
+        if (webAdmin) {
+            const csrfToken = setWebAdminCookies(res, {
+                accessToken: token,
+                refreshToken
+            });
+            res.setHeader('X-CSRF-Token', csrfToken);
+        }
         res.json({
-            accessToken: token,
+            accessToken: webAdmin ? undefined : token,
+            refreshToken: webAdmin ? undefined : refreshToken,
             user: user
         });
 

@@ -65,11 +65,11 @@
       <view class="card-footer">
         <text class="dateline">{{item.createdAt}}</text>
         <view class="btn-group">
-          <view class="btn-retry" bindtap="onRetryOrder" data-id="{{item.tradeNo}}">
+          <view class="btn-retry" wx:if="{{item.canRetry}}" bindtap="onRetryOrder" data-id="{{item.tradeNo}}">
             <text class="btn-retry-icon">↻</text>
             <text>{{item.isRetrying ? '提交中' : '补刷'}}</text>
           </view>
-          <view class="btn-refresh {{item.isRefreshing ? 'is-loading' : ''}}" bindtap="onRefreshProgress" data-id="{{item.tradeNo}}">
+          <view class="btn-refresh {{item.isRefreshing ? 'is-loading' : ''}}" wx:if="{{item.canRefresh}}" bindtap="onRefreshProgress" data-id="{{item.tradeNo}}">
             <text>{{item.isRefreshing ? '同步中..' : '刷新进度'}}</text>
           </view>
         </view>

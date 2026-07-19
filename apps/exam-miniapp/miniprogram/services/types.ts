@@ -115,6 +115,8 @@ export interface ExamProgress {
     currentIndex: number;
     answers: Record<string, string[]>;
     timeLeft?: number;
+    deadlineAt?: string;
+    attemptId?: string;
     questionCount?: number;
     reciteQueue?: number[];
     reciteMastery?: Record<string, 'known' | 'fuzzy' | 'unknown'>;
@@ -129,6 +131,8 @@ export type ProgressPayload = {
     currentIndex: number;
     answers: any;
     timeLeft?: number;
+    deadlineAt?: string;
+    attemptId?: string;
     questionCount?: number;
     reciteQueue?: number[];
     reciteMastery?: Record<string, string>;
@@ -136,6 +140,17 @@ export type ProgressPayload = {
     isCleared?: boolean;
     updateTime?: string;
 };
+
+export interface ExamAttempt {
+    attemptId: string;
+    startedAt: string | null;
+    deadlineAt: string | null;
+    durationSeconds: number;
+    serverNow: string;
+    submissionGraceSeconds: number;
+    expired: boolean;
+    canSubmit: boolean;
+}
 
 export interface WrongQuestionCategory {
     categoryId: string;

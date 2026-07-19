@@ -167,9 +167,10 @@ const Login = () => {
         try {
             const res = await api.post('/auth/login', { ...values, captchaToken });
             if (res.data.success) {
-                localStorage.setItem('token', res.data.token);
+                localStorage.removeItem('token');
                 localStorage.removeItem('refreshToken');
                 localStorage.setItem('user', JSON.stringify(res.data.user));
+                window.dispatchEvent(new Event('core-auth-changed'));
                 message.success('登录成功');
                 navigate('/dashboard');
             }
@@ -367,10 +368,11 @@ const ScanLogin = ({ navigate }) => {
     const handleExchange = useCallback(async (code) => {
         try {
             const res = await api.post('/auth/token/exchange-admin', { tempAuthCode: code });
-            if (res.data.accessToken) {
-                localStorage.setItem('token', res.data.accessToken);
+            if (res.data.user) {
+                localStorage.removeItem('token');
                 localStorage.removeItem('refreshToken');
                 if (res.data.user) localStorage.setItem('user', JSON.stringify(res.data.user));
+                window.dispatchEvent(new Event('core-auth-changed'));
                 sessionStorage.removeItem('active_qr_token');
                 message.success('扫码登录成功');
                 navigate('/dashboard');

@@ -188,6 +188,8 @@ const config = {
     bodyLimit: process.env.BODY_LIMIT || '10mb',
     adminPasswordMinLength: MIN_ADMIN_PASSWORD_LENGTH,
     externalApiTimeoutMs: parsePositiveInt(process.env.EXTERNAL_API_TIMEOUT_MS, 8000),
+    examSubmissionGraceMs: parsePositiveInt(process.env.EXAM_SUBMISSION_GRACE_MS, 30000),
+    shutdownTimeoutMs: parsePositiveInt(process.env.EXAM_SHUTDOWN_TIMEOUT_MS, 10000),
     shouldSeedSampleData:
         process.env.SEED_SAMPLE_DATA === 'true'
         || (!isProduction && process.env.SEED_SAMPLE_DATA !== 'false'),

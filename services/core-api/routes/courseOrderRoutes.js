@@ -12,6 +12,7 @@ router.get('/public-search', publicSearchLimiter, courseOrderController.publicSe
 router.post('/public-refresh', publicRefreshLimiter, courseOrderController.publicRefresh);
 router.post('/query', verifyToken, validate(queryCourseSchema), courseOrderController.queryCourseList);
 router.post('/submit', verifyToken, validate(submitOrderSchema), courseOrderController.submitOrder);
+router.get('/batch/:batchId', verifyToken, courseOrderController.getOrderBatchStatus);
 router.get('/my-orders', verifyToken, courseOrderController.getMyOrders);
 router.post('/refresh', verifyToken, courseOrderController.refreshProgress);
 router.post('/retry', verifyToken, courseOrderController.retryOrder);

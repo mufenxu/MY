@@ -1,5 +1,5 @@
 .bottom-tab {
-  position: absolute;
+  position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
@@ -48,7 +48,7 @@
   flex: none; /* 取消等宽拉伸 */
   border-radius: 14px;
   box-sizing: border-box;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .bottom-tab__item--active {
   /* 效果图选中项颜色：深茶色 */

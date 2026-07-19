@@ -77,8 +77,12 @@ for (const [key, minLength] of optionalPolicies) {
 const composeProfiles = new Set(String(values.get('COMPOSE_PROFILES') || '').split(',').map((value) => value.trim()).filter(Boolean));
 if (composeProfiles.has('release')) {
   const workspaceRoot = values.get('DEPLOY_RUNNER_WORKSPACE_ROOT') || '';
+  const composePath = values.get('DEPLOY_RUNNER_COMPOSE_PATH') || '';
   if (!workspaceRoot.startsWith('/') || workspaceRoot.includes('..') || workspaceRoot.includes('\\')) {
     errors.push('DEPLOY_RUNNER_WORKSPACE_ROOT must be an absolute Linux host path when the release profile is enabled');
+  }
+  if (!composePath || composePath.startsWith('/') || composePath.includes('\\') || composePath.split('/').includes('..') || !/\.ya?ml$/i.test(composePath)) {
+    errors.push('DEPLOY_RUNNER_COMPOSE_PATH must be a relative .yml or .yaml file inside DEPLOY_RUNNER_WORKSPACE_ROOT when the release profile is enabled');
   }
   if (values.get('PLATFORM_DEPLOY_HOOK_URL') !== 'http://deployment-runner:22104') {
     errors.push('PLATFORM_DEPLOY_HOOK_URL must use the internal deployment Sidecar URL when the release profile is enabled');
@@ -103,14 +107,11 @@ if (encryptionKey.length < 32 || placeholderPattern.test(encryptionKey)) {
 }
 
 const owners = new Map();
-const allowedSharedSecretPairs = new Set([
-  ['GH_TOKEN', 'PLATFORM_GITHUB_TOKEN'].sort().join(':'),
-]);
 for (const key of [...policies.keys(), 'CORE_ENCRYPTION_KEY', ...optionalPolicies.keys()]) {
   const value = values.get(key) || '';
   if (!value) continue;
   const previous = owners.get(value);
-  if (previous && !allowedSharedSecretPairs.has([key, previous].sort().join(':'))) {
+  if (previous) {
     errors.push(`${key} must not reuse the value assigned to ${previous}`);
   }
   else owners.set(value, key);

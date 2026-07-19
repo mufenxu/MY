@@ -1,6 +1,6 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7.1@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
-ARG MONGODB_BASE_IMAGE=mongo:7.0
+ARG MONGODB_BASE_IMAGE=mongo:7.0@sha256:d5b3ca8c3f3cdce78d44870dc0871b76d5235e9b2ad4ea6bea5d1fbff8027703
 FROM ${MONGODB_BASE_IMAGE}
 
 COPY mongodb-entrypoint.sh /usr/local/bin/my-mongodb-entrypoint

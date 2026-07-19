@@ -121,7 +121,7 @@ test('managed app paths require the platform session and inject an internal iden
     examApp: echoApp('exam'),
     notifyApp: echoApp('notify'),
     getPlatformSession: (req) => req.headers.cookie === 'session=valid'
-      ? { sub: 'admin', nonce: 'session-nonce' }
+      ? { sub: 'admin', role: 'super_admin', nonce: 'session-nonce' }
       : null,
     internalAuthPrivateKey: TEST_PRIVATE_KEY,
     platformPublicOrigin: 'https://admin.example.com',

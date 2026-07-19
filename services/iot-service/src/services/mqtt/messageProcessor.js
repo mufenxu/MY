@@ -112,17 +112,44 @@ function applySensorMessage(deviceId, device, type, message) {
   return effects;
 }
 
-function applyRelayMessage(deviceId, device, relayId, message, lastControlTriggeredBy) {
+function consumeMatchingControlMarker(markers, key, status, now) {
+  const marker = markers[key];
+  if (!marker) return 'manual';
+
+  // String values only exist in an older in-memory representation. Consume
+  // them on the next relay acknowledgement so upgrades remain harmless.
+  if (typeof marker === 'string') {
+    delete markers[key];
+    return marker || 'manual';
+  }
+
+  const expiresAt = Number(marker.expiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= now) {
+    delete markers[key];
+    return 'manual';
+  }
+
+  const expectedStatus = String(marker.expectedStatus || '').trim().toUpperCase();
+  if (!expectedStatus || expectedStatus !== status) return 'manual';
+
+  delete markers[key];
+  return String(marker.triggeredBy || 'manual');
+}
+
+function applyRelayMessage(deviceId, device, relayId, message, lastControlTriggeredBy, now) {
   const effects = createEffects();
   const previousStatus = device.relays[relayId];
   const status = message.trim().toUpperCase();
+  const key = `${deviceId}:${relayId}`;
+  const triggeredBy = consumeMatchingControlMarker(
+    lastControlTriggeredBy,
+    key,
+    status,
+    now
+  );
   device.relays[relayId] = status;
 
   if (previousStatus !== status) {
-    const key = `${deviceId}:${relayId}`;
-    const triggeredBy = lastControlTriggeredBy[key] || 'manual';
-    delete lastControlTriggeredBy[key];
-
     effects.changed = true;
     effects.relayLogs.push({ deviceId, relayId, status, triggeredBy });
   }
@@ -152,7 +179,14 @@ function processTargetMessage({ latest, target, message, now, lastControlTrigger
   }
 
   if (type === 'relay') {
-    return mergeEffects(effects, applyRelayMessage(deviceId, device, relayId, message, lastControlTriggeredBy));
+    return mergeEffects(effects, applyRelayMessage(
+      deviceId,
+      device,
+      relayId,
+      message,
+      lastControlTriggeredBy,
+      now
+    ));
   }
 
   return effects;

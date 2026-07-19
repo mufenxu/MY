@@ -6,6 +6,7 @@ const { escapeRegex } = require('../utils/helpers');
 const { clearCache } = require('../middleware/authorizeAccess');
 const { revokeAllRefreshTokens } = require('../services/authService');
 const { acquirePrivilegedMutationLock } = require('../utils/privilegedMutationLock');
+const { applyEffectiveAccessToProfile } = require('../utils/platformAccess');
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 
@@ -68,7 +69,7 @@ exports.getMe = asyncHandler(async (req, res) => {
         res.status(404);
         throw new Error('User not found');
     }
-    res.json({ success: true, user });
+    res.json({ success: true, user: applyEffectiveAccessToProfile(user, req.user) });
 });
 
 // @desc    Update current user profile

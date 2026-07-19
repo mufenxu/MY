@@ -2,6 +2,48 @@ import * as logger from '../../../utils/logger'
 import request from '../../../utils/request'
 import { ROUTES } from '../../../utils/constants'
 
+const ORDER_IDEMPOTENCY_STORAGE_KEY = 'course_order_idempotency_v1'
+
+function hashSubmissionPayload(value: unknown): string {
+  const text = JSON.stringify(value)
+  let hash = 2166136261
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16)
+}
+
+function getSubmissionKey(payload: Record<string, unknown>): string {
+  const fingerprint = hashSubmissionPayload(payload)
+  const now = Date.now()
+  try {
+    const stored = wx.getStorageSync(ORDER_IDEMPOTENCY_STORAGE_KEY)
+    if (stored && stored.fingerprint === fingerprint && now - Number(stored.createdAt) < 86400000) {
+      return String(stored.key)
+    }
+  } catch (error) {
+    logger.warn('Read order idempotency key failed', error, 'CourseQuery')
+  }
+
+  const key = `course-${now.toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+  try {
+    wx.setStorageSync(ORDER_IDEMPOTENCY_STORAGE_KEY, { fingerprint, key, createdAt: now })
+  } catch (error) {
+    logger.warn('Persist order idempotency key failed', error, 'CourseQuery')
+  }
+  return key
+}
+
+function clearSubmissionKey(key: string): void {
+  try {
+    const stored = wx.getStorageSync(ORDER_IDEMPOTENCY_STORAGE_KEY)
+    if (stored && stored.key === key) wx.removeStorageSync(ORDER_IDEMPOTENCY_STORAGE_KEY)
+  } catch (error) {
+    logger.warn('Clear order idempotency key failed', error, 'CourseQuery')
+  }
+}
+
 Page({
   data: {
     platforms: [] as any[],
@@ -194,18 +236,24 @@ Page({
     this.setData({ submitting: true })
 
     try {
-      const res = await request<any>('/course-order/submit', 'POST', {
+      const submissionPayload = {
         school,
         user,
         pass,
         categoryId,
         courseList,
         duration: 30 // 默认值
-      });
+      }
+      const idempotencyKey = getSubmissionKey(submissionPayload)
+      const res = await request<any>('/course-order/submit', 'POST', {
+        ...submissionPayload,
+        idempotencyKey,
+      }, false, { timeout: 10000 })
 
-      if (res && res.code === 200) {
+      if (res && (res.code === 202 || res.code === 200)) {
+        clearSubmissionKey(idempotencyKey)
         wx.showModal({
-          title: '提交成功',
+          title: '订单已入队',
           content: res.message || '订单已加入系统列队。',
           showCancel: false,
           success: () => {
@@ -221,7 +269,15 @@ Page({
       }
     } catch (err: any) {
       logger.error('Submit Course Order Error', err, 'CourseQuery')
-      wx.showToast({ title: '网络失败', icon: 'error' })
+      wx.showModal({
+        title: '提交结果待确认',
+        content: '网络中断时订单仍可能已经入队。请先查看订单列表；再次提交相同内容时系统会使用同一幂等键去重。',
+        confirmText: '查看订单',
+        cancelText: '留在此页',
+        success: (result) => {
+          if (result.confirm) wx.redirectTo({ url: ROUTES.COURSE_ORDERS })
+        },
+      })
     } finally {
       this.setData({ submitting: false })
     }

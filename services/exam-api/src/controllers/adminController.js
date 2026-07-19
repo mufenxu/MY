@@ -17,6 +17,10 @@ const { buildAdminScopeQuery } = require('../utils/libraryScope');
 const { consumeTempAuthCode } = require('../utils/scanLogin');
 const { clearAuthCookies, setAdminAuthCookie } = require('../utils/authCookies');
 const { buildCookieAuthPayload } = require('../utils/authResponse');
+const {
+    registerFailedLoginAtomic,
+    resetFailedLoginAtomic,
+} = require('../services/adminLoginSecurity');
 
 const BCRYPT_ROUNDS = 12;
 const MAX_FAILED_LOGIN_ATTEMPTS = 5;
@@ -46,13 +50,14 @@ function buildAdminToken(admin) {
 }
 
 async function registerFailedLogin(admin) {
-    admin.failedLoginCount = (admin.failedLoginCount || 0) + 1;
-    if (admin.failedLoginCount >= MAX_FAILED_LOGIN_ATTEMPTS) {
-        admin.lockedUntil = new Date(Date.now() + LOGIN_LOCK_MS);
-    }
-    await admin.save();
+    const updated = await registerFailedLoginAtomic({
+        adminModel: Admin,
+        adminId: admin._id,
+        maxAttempts: MAX_FAILED_LOGIN_ATTEMPTS,
+        lockMs: LOGIN_LOCK_MS,
+    });
 
-    if (admin.lockedUntil && admin.lockedUntil.getTime() > Date.now()) {
+    if (!updated || (updated.lockedUntil && updated.lockedUntil.getTime() > Date.now())) {
         throw new AppError('登录尝试过多，请 15 分钟后再试', 429);
     }
 
@@ -100,22 +105,24 @@ exports.login = asyncHandler(async (req, res) => {
         await registerFailedLogin(admin);
     }
 
-    if (admin.failedLoginCount || admin.lockedUntil) {
-        admin.failedLoginCount = 0;
-        admin.lockedUntil = null;
-        await admin.save();
+    const authenticatedAdmin = await resetFailedLoginAtomic({
+        adminModel: Admin,
+        adminId: admin._id,
+    });
+    if (!authenticatedAdmin) {
+        throw new AppError('登录尝试过多，请 15 分钟后再试', 429);
     }
 
-    const token = buildAdminToken(admin);
+    const token = buildAdminToken(authenticatedAdmin);
     setAdminAuthCookie(res, token);
 
     success(res, {
         ...buildCookieAuthPayload(token),
         user: {
-            id: admin._id,
-            username: admin.username,
-            displayName: admin.displayName,
-            isWechatBound: !!admin.wechatOpenId,
+            id: authenticatedAdmin._id,
+            username: authenticatedAdmin.username,
+            displayName: authenticatedAdmin.displayName,
+            isWechatBound: !!authenticatedAdmin.wechatOpenId,
         },
     }, '登录成功');
 });

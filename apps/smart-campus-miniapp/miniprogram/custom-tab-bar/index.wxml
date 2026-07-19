@@ -1,4 +1,4 @@
-<view class="bottom-tab">
+<view class="bottom-tab" aria-role="tablist" aria-label="主导航">
   <view 
     wx:for="{{list}}" 
     wx:key="index" 
@@ -6,8 +6,11 @@
     data-path="{{item.pagePath}}" 
     data-index="{{index}}" 
     bindtap="switchTab"
+    aria-role="tab"
+    aria-label="{{item.text}}"
+    aria-selected="{{selected === index}}"
   >
-    <image class="tab-icon" mode="aspectFit" src="{{selected === index ? item.selectedIconPath : item.iconPath}}"></image>
+    <image class="tab-icon" mode="aspectFit" src="{{selected === index ? item.selectedIconPath : item.iconPath}}" aria-hidden="true"></image>
     <view class="bottom-tab__label">{{item.text}}</view>
   </view>
 </view>

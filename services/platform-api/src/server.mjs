@@ -65,6 +65,7 @@ const sessionVerifierCache = createSessionVerifierCache({
   maxEntries: process.env.PLATFORM_SESSION_CACHE_MAX_ENTRIES || 2_048,
 });
 portalApp.locals.onConsoleSessionRevoked = (token) => sessionVerifierCache.invalidate(token);
+portalApp.locals.onConsoleSessionChanged = (token) => sessionVerifierCache.invalidate(token);
 const getPlatformSession = async (req) => {
   if (portalConfig.authDisabled) {
     return { sub: 'local-admin', role: 'super_admin', nonce: 'local-development-session' };

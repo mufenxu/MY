@@ -155,7 +155,14 @@ async function _refreshSingleOrder(tradeNo) {
 exports.adminDeleteOrder = async (req, res) => {
     try {
         const { tradeNo } = req.params;
-        await CourseOrder.deleteOne({ tradeNo });
+        const result = await CourseOrder.deleteOne({ tradeNo, status: { $ne: 'Submitting' } });
+        if (!result.deletedCount) {
+            const inFlight = await CourseOrder.exists({ tradeNo, status: 'Submitting' });
+            if (inFlight) {
+                return res.status(409).json({ code: 409, message: '订单正在提交，暂不能删除' });
+            }
+            return res.status(404).json({ code: 404, message: '订单不存在' });
+        }
         res.json({ code: 200, message: '删除成功' });
     } catch (e) {
         logger.error(`[AdminDeleteOrder] ${e.message}`, { stack: e.stack });
@@ -194,6 +201,15 @@ exports.adminCreateOrder = async (req, res) => {
             return res.status(404).json({ code: 404, message: '无效的网课分类' });
         }
 
+        const manualStatus = status || 'Processing';
+        const allowedManualStatuses = new Set(['Processing', 'Completed', 'Failed', 'Cancelled', 'Refushing']);
+        if (!allowedManualStatuses.has(manualStatus)) {
+            return res.status(400).json({
+                code: 400,
+                message: '手工订单不能进入自动提交状态'
+            });
+        }
+
         const tradeNo = generateTradeNo();
 
         const orderData = {
@@ -209,8 +225,8 @@ exports.adminCreateOrder = async (req, res) => {
             courseName: courseName || '',
             remoteOrderId: remoteOrderId || '',
             remoteOid: remoteOid || '',
-            status: status || 'Processing',
-            statusText: status === 'Completed' ? '已完成' : (status === 'Failed' ? '异常' : '进行中'),
+            status: manualStatus,
+            statusText: manualStatus === 'Completed' ? '已完成' : (manualStatus === 'Failed' ? '异常' : '进行中'),
             progress: '0%',
             remarks: remarks || '管理员手动录入',
             isManual: true
@@ -246,6 +262,15 @@ exports.adminUpdateOrder = async (req, res) => {
         if (!order) {
             return res.status(404).json({ code: 404, message: '订单不存在' });
         }
+        if (order.status === 'Submitting') {
+            return res.status(409).json({ code: 409, message: '订单正在提交，暂不能修改' });
+        }
+        if (updates.status && ['Pending', 'Submitting'].includes(updates.status)) {
+            return res.status(400).json({
+                code: 400,
+                message: '不能由管理员把订单转入自动提交状态'
+            });
+        }
 
         // 允许修改的字段白名单
         const allowedFields = [
@@ -253,13 +278,15 @@ exports.adminUpdateOrder = async (req, res) => {
             'remoteOrderId', 'remoteOid', 'platformCode', 'platformId', 'platformName',
             'status', 'statusText', 'progress', 'remarks', 'userId', 'isHidden'
         ];
+        const updateData = { updateTime: Date.now() };
 
         if (updates.categoryId) {
             const category = await CourseCategory.findById(updates.categoryId);
             if (category) {
-                order.platformCode = category.docking || 'mx';
-                order.platformId = category.noun;
-                order.platformName = category.name || '未知平台';
+                updateData.categoryId = String(category._id);
+                updateData.platformCode = category.docking || 'mx';
+                updateData.platformId = category.noun;
+                updateData.platformName = category.name || '未知平台';
             }
         }
 
@@ -274,11 +301,11 @@ exports.adminUpdateOrder = async (req, res) => {
                 if (!rawPassword || rawPassword === '***') {
                     return;
                 }
-                order.password = encrypt(rawPassword);
+                updateData.password = encrypt(rawPassword);
                 return;
             }
 
-            order[field] = updates[field];
+            updateData[field] = updates[field];
         });
 
         // 自动同步 statusText
@@ -291,12 +318,19 @@ exports.adminUpdateOrder = async (req, res) => {
                 'Cancelled': '已取消',
                 'Refushing': '补刷中'
             };
-            order.statusText = statusTextMap[updates.status] || order.statusText;
+            updateData.statusText = statusTextMap[updates.status] || order.statusText;
         }
 
-        await order.save();
+        const updatedOrder = await CourseOrder.findOneAndUpdate(
+            { tradeNo, status: { $ne: 'Submitting' } },
+            { $set: updateData },
+            { new: true, runValidators: true }
+        );
+        if (!updatedOrder) {
+            return res.status(409).json({ code: 409, message: '订单正在提交，暂不能修改' });
+        }
 
-        res.json({ code: 200, message: '订单已更新', data: order });
+        res.json({ code: 200, message: '订单已更新', data: updatedOrder });
     } catch (error) {
         logger.error(`[AdminUpdateOrder] ${error.message}`, { stack: error.stack });
         res.status(500).json({ code: 500, message: '服务器内部错误，请稍后重试' });

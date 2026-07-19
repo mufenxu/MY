@@ -11,6 +11,19 @@ const DEFAULT_PRIMARY_DEVICE_ID = 'esp8266_living';
 const DEFAULT_SECONDARY_DEVICE_ID = 'esp01s_relay';
 const DEFAULT_RELAY_ID = 'relay1';
 
+function getMqttRequestTimeoutMs() {
+    const parsed = Number.parseInt(process.env.CORE_MQTT_API_TIMEOUT_MS || '8000', 10);
+    return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1000), 9000) : 8000;
+}
+
+function getMqttProxyStatus(error) {
+    if (['ECONNABORTED', 'ETIMEDOUT'].includes(error?.code)) return 504;
+    const upstreamStatus = Number(error?.response?.status || error?.status);
+    return Number.isInteger(upstreamStatus) && upstreamStatus >= 400 && upstreamStatus <= 599
+        ? upstreamStatus
+        : 502;
+}
+
 const smartControlViewAccess = authorizeAccess({
     roles: ['admin', 'super_admin'],
     permissions: ['smart_control', 'view_smart_control', 'manage_smart_control'],
@@ -471,7 +484,7 @@ router.get('/info', auth.verifyToken, smartControlViewAccess, async (req, res) =
     try {
         const response = await axios.get(`${getMqttApiBaseUrl()}/api/devices`, {
             headers: getMqttApiHeaders(),
-            timeout: 10000,
+            timeout: getMqttRequestTimeoutMs(),
         });
 
         res.json({
@@ -480,10 +493,11 @@ router.get('/info', auth.verifyToken, smartControlViewAccess, async (req, res) =
         });
     } catch (error) {
         logger.error('IoT Info Error:', error.response ? error.response.data : error.message);
-        res.status(error.status || error.response?.status || 500).json({
+        const statusCode = getMqttProxyStatus(error);
+        res.status(statusCode).json({
             success: false,
-            error: error.message,
-            details: error.response ? error.response.data : null,
+            code: statusCode === 504 ? 'IOT_UPSTREAM_TIMEOUT' : 'IOT_UPSTREAM_UNAVAILABLE',
+            error: statusCode >= 500 ? 'IoT service is temporarily unavailable' : error.message,
             data: null,
         });
     }
@@ -506,27 +520,32 @@ router.post('/control', auth.verifyToken, smartControlManageAccess, async (req, 
             { status: controlStatus },
             {
                 headers: getMqttApiHeaders(),
-                timeout: 10000,
+                timeout: getMqttRequestTimeoutMs(),
             }
         );
 
-        logger.info('IoT control command sent', {
+        logger.info('IoT control command queued', {
             deviceId: target.deviceId,
             relayId: target.relayId,
             status: controlStatus,
+            commandId: response.data?.commandId,
         });
 
-        res.json({
+        res.status(202).json({
             success: true,
+            commandId: response.data?.commandId,
+            state: response.data?.state || 'queued',
+            deviceConfirmed: false,
             data: response.data,
         });
 
     } catch (error) {
         logger.error('IoT Control Error:', error.response ? error.response.data : error.message);
-        res.status(error.status || (error.response ? error.response.status : 500)).json({
+        const statusCode = getMqttProxyStatus(error);
+        res.status(statusCode).json({
             success: false,
-            error: error.message,
-            details: error.response ? error.response.data : null,
+            code: statusCode === 504 ? 'IOT_COMMAND_TIMEOUT' : 'IOT_COMMAND_REJECTED',
+            error: statusCode >= 500 ? 'IoT command was not accepted' : error.message,
         });
     }
 });

@@ -83,6 +83,10 @@ const ExamResultSchema = new mongoose.Schema(
             required: [true, '用户ID不能为空'],
             index: true,
         },
+        attemptId: {
+            type: String,
+            default: null,
+        },
         categoryId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Category',
@@ -135,6 +139,10 @@ const ExamResultSchema = new mongoose.Schema(
 );
 
 ExamResultSchema.index({ userId: 1, createTime: -1 });
+ExamResultSchema.index(
+    { userId: 1, categoryId: 1, attemptId: 1 },
+    { unique: true, partialFilterExpression: { attemptId: { $type: 'string' } } },
+);
 ExamResultSchema.index({ categoryId: 1, createTime: -1 });
 ExamResultSchema.index({ scopeType: 1, ownerOpenid: 1, createTime: -1 });
 ExamResultSchema.index({ createTime: -1 });

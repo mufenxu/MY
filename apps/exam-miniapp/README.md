@@ -65,7 +65,7 @@ typings/        小程序类型定义
 
 ## 小程序运行时配置
 
-小程序请求域名和合规页展示信息在 [runtime.ts](./miniprogram/config/runtime.ts) 中维护。
+小程序请求域名和通用配置在 [runtime.ts](./miniprogram/config/runtime.ts) 中维护；体验版、正式版的真实运营主体和联系邮箱在 [compliance-profile.js](./miniprogram/config/compliance-profile.js) 中分别维护。
 
 发布前至少要改这几项：
 
@@ -74,6 +74,13 @@ typings/        小程序类型定义
 - `supportEmail`
 - `privacyPolicyVersion`
 - `userAgreementVersion`
+
+体验版和正式版会在运行时拒绝占位信息。上传前还应显式执行对应闸门：
+
+```bash
+npm run check:compliance:trial
+npm run check:compliance:release
+```
 
 ## 开发运行
 

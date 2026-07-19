@@ -38,5 +38,6 @@ exports.appConfigSchema = Joi.object({
     key: Joi.string().required(),
     value: Joi.any().required(),
     remark: Joi.string().allow(''),
-    description: Joi.string().allow('')
+    description: Joi.string().allow(''),
+    currentPassword: Joi.string().max(128).allow('')
 });

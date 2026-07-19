@@ -245,6 +245,43 @@ exports.wechatLogin = async (code, userInfo) => {
 const MAX_LOGIN_ATTEMPTS = 5;  // 最大连续失败次数
 const LOCK_DURATION_MS = 15 * 60 * 1000; // 锁定 15 分钟
 
+function buildFailedLoginUpdate(now) {
+    const previousLockUntil = { $ifNull: ['$lockUntil', 0] };
+    const previousAttempts = { $ifNull: ['$failedLoginAttempts', 0] };
+    const lockExpired = {
+        $and: [
+            { $gt: [previousLockUntil, 0] },
+            { $lte: [previousLockUntil, now] }
+        ]
+    };
+    const attemptsBeforeIncrement = {
+        $cond: [lockExpired, 0, previousAttempts]
+    };
+    const nextAttempts = { $add: [attemptsBeforeIncrement, 1] };
+
+    return [{
+        $set: {
+            failedLoginAttempts: nextAttempts,
+            lockUntil: {
+                $cond: [
+                    { $gte: [nextAttempts, MAX_LOGIN_ATTEMPTS] },
+                    now + LOCK_DURATION_MS,
+                    { $cond: [lockExpired, 0, previousLockUntil] }
+                ]
+            }
+        }
+    }];
+}
+
+function unlockedUserFilter(userId, now) {
+    return {
+        _id: userId,
+        $expr: {
+            $lte: [{ $ifNull: ['$lockUntil', 0] }, now]
+        }
+    };
+}
+
 exports.adminLogin = async (username, password) => {
     if (!username || !password) {
         throw new AppError('请输入用户名和密码', 400);
@@ -264,29 +301,23 @@ exports.adminLogin = async (username, password) => {
         throw new AppError(`账号已被锁定，请 ${remainMinutes} 分钟后再试`, 423);
     }
 
-    // 如果之前被锁定但已过期，重置锁定状态
-    if (user.lockUntil && user.lockUntil <= Date.now()) {
-        user.failedLoginAttempts = 0;
-        user.lockUntil = 0;
-    }
-
     // 验证密码
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-        // 密码错误：递增失败计数
-        const attempts = (user.failedLoginAttempts || 0) + 1;
-        const updateData = { failedLoginAttempts: attempts };
+        const now = Date.now();
+        const updatedUser = await User.findOneAndUpdate(
+            unlockedUserFilter(user._id, now),
+            buildFailedLoginUpdate(now),
+            { new: true }
+        ).select('+failedLoginAttempts +lockUntil');
 
-        if (attempts >= MAX_LOGIN_ATTEMPTS) {
-            // 达到上限，锁定账号
-            updateData.lockUntil = Date.now() + LOCK_DURATION_MS;
-            await User.findByIdAndUpdate(user._id, { $set: updateData });
+        // Another concurrent failure may have crossed the threshold first.
+        if (!updatedUser || (updatedUser.lockUntil && updatedUser.lockUntil > now)) {
             throw new AppError(`密码连续错误 ${MAX_LOGIN_ATTEMPTS} 次，账号已被锁定 15 分钟`, 423);
         }
 
-        await User.findByIdAndUpdate(user._id, { $set: updateData });
-        const remaining = MAX_LOGIN_ATTEMPTS - attempts;
+        const remaining = Math.max(MAX_LOGIN_ATTEMPTS - (updatedUser.failedLoginAttempts || 0), 0);
         throw new AppError(`用户名或密码错误，还可尝试 ${remaining} 次`, 401);
     }
 
@@ -294,20 +325,29 @@ exports.adminLogin = async (username, password) => {
         throw new AppError('账号已被禁用', 403);
     }
 
-    // 登录成功：重置失败计数，更新最后登录时间
-    await User.findByIdAndUpdate(user._id, {
-        $set: {
-            failedLoginAttempts: 0,
-            lockUntil: 0,
-            lastLoginAt: Date.now()
-        }
-    });
+    // The reset is conditional so a concurrent failed attempt that just locked
+    // the account cannot be overwritten by this successful password check.
+    const now = Date.now();
+    const loggedInUser = await User.findOneAndUpdate(
+        unlockedUserFilter(user._id, now),
+        {
+            $set: {
+                failedLoginAttempts: 0,
+                lockUntil: 0,
+                lastLoginAt: now
+            }
+        },
+        { new: true }
+    );
+    if (!loggedInUser) {
+        throw new AppError('账号已被锁定，请稍后再试', 423);
+    }
 
     // Generate Tokens
-    const token = generateToken(user);
-    const refreshToken = await generateRefreshToken(user._id, user.tokenVersion);
+    const token = generateToken(loggedInUser);
+    const refreshToken = await generateRefreshToken(loggedInUser._id, loggedInUser.tokenVersion);
 
-    return { token, refreshToken, user };
+    return { token, refreshToken, user: loggedInUser };
 };
 
 // 导出供 authScanController 等使用
@@ -317,3 +357,4 @@ exports.refreshAccessToken = refreshAccessToken;
 exports.revokeAllRefreshTokens = revokeAllRefreshTokens;
 exports.revokeRefreshToken = revokeRefreshToken;
 exports.hashRefreshToken = hashRefreshToken;
+exports.buildFailedLoginUpdate = buildFailedLoginUpdate;

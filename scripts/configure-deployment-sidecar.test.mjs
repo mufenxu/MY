@@ -22,6 +22,7 @@ test('Sidecar configuration preserves unrelated values and generates a separate 
   assert.equal(values.get('PLATFORM_DEPLOY_HOOK_TOKEN'), deployToken);
   assert.equal(values.get('DEPLOYMENT_RUNNER_IMAGE'), 'registry.example.com/team/platform:deployment-runner-latest');
   assert.equal(values.get('DEPLOY_RUNNER_WORKSPACE_ROOT'), '/srv/my-platform');
+  assert.equal(values.get('DEPLOY_RUNNER_COMPOSE_PATH'), 'infra/docker/compose.yml');
   assert.equal(values.get('DEPLOY_RUNNER_DOCKER_GID'), '998');
   assert.equal(values.get('DEPLOY_RUNNER_ALLOW_MONGODB'), 'false');
 });
@@ -44,6 +45,20 @@ test('disable returns the platform to read-only without deleting the deployment 
 test('Sidecar configuration rejects paths that cannot match the Linux Docker host', () => {
   assert.throws(() => configureSidecar(base, 'configure', () => deployToken, 'relative/path'), /absolute Linux host path/);
   assert.throws(() => configureSidecar(base, 'configure', () => deployToken, 'C:\\workspace'), /absolute Linux host path/);
+});
+
+test('Sidecar configuration supports an image-only deployment bundle', () => {
+  const bundle = `${base}DEPLOY_RUNNER_COMPOSE_PATH=docker-compose.yaml\n`;
+  const values = parseEnv(configureSidecar(bundle, 'configure', () => deployToken, '/www/server/panel/data/compose/my', '998'));
+  assert.equal(values.get('DEPLOY_RUNNER_WORKSPACE_ROOT'), '/www/server/panel/data/compose/my');
+  assert.equal(values.get('DEPLOY_RUNNER_COMPOSE_PATH'), 'docker-compose.yaml');
+});
+
+test('Sidecar configuration keeps the Compose file inside the mounted workspace', () => {
+  for (const invalid of ['/etc/docker-compose.yaml', '../docker-compose.yaml', 'nested\\docker-compose.yaml', '.']) {
+    const source = `${base}DEPLOY_RUNNER_COMPOSE_PATH=${invalid}\n`;
+    assert.throws(() => configureSidecar(source, 'configure', () => deployToken, '/srv/my-platform', '998'), /DEPLOY_RUNNER_COMPOSE_PATH/);
+  }
 });
 
 test('Sidecar configuration rejects a non-numeric Docker Socket group', () => {

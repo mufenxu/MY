@@ -64,6 +64,10 @@ function getStoredValue(key) {
         || '';
 }
 
+function getTokenValue() {
+    return memoryStore[TOKEN_KEY] || '';
+}
+
 function setStoredValue(key, value) {
     const v = String(value || '');
     memoryStore[key] = v;
@@ -123,17 +127,19 @@ function setSessionExpiresAtValue(value) {
     removeStoredValue(SESSION_EXPIRES_AT_KEY);
 }
 
-function setTokenValue(token, { persistent = true } = {}) {
+function setTokenValue(token) {
     const value = String(token || '');
-    if (persistent) {
-        setStoredValue(TOKEN_KEY, value);
+    removeStorage(durableStorage, TOKEN_KEY);
+    removeStorage(tabStorage, TOKEN_KEY);
+
+    if (value) {
+        memoryStore[TOKEN_KEY] = value;
         setSessionExpiresAt(value);
         return;
     }
 
     delete memoryStore[TOKEN_KEY];
-    removeStorage(durableStorage, TOKEN_KEY);
-    removeStorage(tabStorage, TOKEN_KEY);
+    removeStoredValue(SESSION_EXPIRES_AT_KEY);
 }
 
 function decodeJwtPayload(token) {
@@ -193,7 +199,7 @@ function getSessionStatus() {
     if (IS_PLATFORM_SSO && platformSsoActive) {
         return { active: true, expired: false };
     }
-    const token = getStoredValue(TOKEN_KEY);
+    const token = getTokenValue();
     if (token) {
         const expiresAt = getTokenExpiresAt(token);
         if (expiresAt) setStoredValue(SESSION_EXPIRES_AT_KEY, String(expiresAt));
@@ -217,36 +223,26 @@ function getSessionStatus() {
 
 // 初始化时迁移旧版存储
 function migrateLegacySession() {
-    const currentToken = getStoredValue(TOKEN_KEY);
-    if (currentToken) {
-        setStoredValue(TOKEN_KEY, currentToken);
-        setStoredValue(USER_KEY, getStoredValue(USER_KEY) || '{}');
-        setStoredValue(AUTH_TYPE_KEY, normalizeAuthType(getStoredValue(AUTH_TYPE_KEY), currentToken));
-        setSessionExpiresAt(currentToken);
-        clearLegacyKeys();
-        return;
-    }
-
     const consoleToken = getStoredValue('consoleToken');
     const adminToken = getStoredValue('adminToken');
-    const token = consoleToken || adminToken;
-    if (!token) {
-        clearLegacyKeys();
-        return;
+    const userValue = consoleToken ? getStoredValue('consoleUser') : getStoredValue('adminUser');
+    if (!hasStoredUser() && userValue) {
+        setStoredValue(USER_KEY, userValue);
+    }
+    if (!getStoredValue(AUTH_TYPE_KEY) && (consoleToken || adminToken)) {
+        setStoredValue(AUTH_TYPE_KEY, consoleToken ? 'console' : 'admin');
     }
 
-    const userValue = consoleToken ? getStoredValue('consoleUser') : getStoredValue('adminUser');
-    setStoredValue(TOKEN_KEY, token);
-    setStoredValue(USER_KEY, userValue || '{}');
-    setStoredValue(AUTH_TYPE_KEY, consoleToken ? 'console' : normalizeAuthType('', token));
-    setSessionExpiresAt(token);
+    delete memoryStore[TOKEN_KEY];
+    removeStorage(durableStorage, TOKEN_KEY);
+    removeStorage(tabStorage, TOKEN_KEY);
     clearLegacyKeys();
 }
 
 migrateLegacySession();
 
 export const session = {
-    getToken: () => getStoredValue(TOKEN_KEY),
+    getToken: () => getTokenValue(),
     getStatus() {
         const status = getSessionStatus();
         if (status.expired) clearSessionValues();
@@ -267,7 +263,7 @@ export const session = {
         setStoredValue(AUTH_TYPE_KEY, normalizeAuthType(authType, this.getToken()));
     },
     setAuth(token, user, authType = '', options = {}) {
-        setTokenValue(token || '', { persistent: !options.cookieAuth });
+        setTokenValue(token || '');
         if (Object.prototype.hasOwnProperty.call(options, 'expiresAt')) {
             setSessionExpiresAtValue(options.expiresAt);
         } else {

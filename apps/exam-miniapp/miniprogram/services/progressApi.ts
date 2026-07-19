@@ -150,9 +150,10 @@ export const progressApi = {
         return null;
     },
 
-    clearProgress: async (categoryId: string, mode: string) => {
+    clearProgress: async (categoryId: string, mode: string, attemptId = '') => {
         const progressStorageKey = getProgressStorageKey(categoryId, mode);
         const pendingStorageKey = getPendingProgressStorageKey();
+        const storedAttemptId = progressApi.getLocalProgress(categoryId, mode)?.attemptId || '';
         progressApi.clearLocalProgress(categoryId, mode);
         removePendingProgressKey(categoryId, mode, pendingStorageKey);
         const activeUpload = uploadPromises.get(progressStorageKey);
@@ -160,7 +161,11 @@ export const progressApi = {
             await activeUpload.catch(() => undefined);
         }
         await authApi.ensureAuth();
-        return request({ url: '/exam/progress', method: 'DELETE', data: { categoryId, mode } });
+        return request({
+            url: '/exam/progress',
+            method: 'DELETE',
+            data: { categoryId, mode, attemptId: attemptId || storedAttemptId || undefined },
+        });
     },
 
     saveLocalProgress: (data: ProgressPayload) => {

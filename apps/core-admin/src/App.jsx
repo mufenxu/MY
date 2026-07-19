@@ -4,7 +4,7 @@ import { Button, ConfigProvider, Result, Spin, theme, message } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import ErrorBoundary from './components/ErrorBoundary';
 import api from './utils/api';
-import { APP_BASE_PATH, IS_PLATFORM_SSO } from './utils/runtime';
+import { APP_BASE_PATH, IS_PLATFORM_SSO, redirectToPlatformLogin } from './utils/runtime';
 
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -36,40 +36,18 @@ const RouteFallback = memo(() => (
   </div>
 ));
 
-const isAdminRoleToken = (token) => {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return false;
-    // 安全解码 base64（兼容非 ASCII 字符）
-    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const payload = JSON.parse(decodeURIComponent(
-      atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-    ));
-    // 必须显式包含 admin 或 super_admin 角色，缺少 role 字段一律拒绝
-    return ['admin', 'super_admin'].includes(payload.role);
-  } catch {
-    return false;
-  }
-};
-
-const PrivateRoute = ({ children, platformSsoReady }) => {
-  if (IS_PLATFORM_SSO) return platformSsoReady ? children : <RouteFallback />;
-  const token = localStorage.getItem('token');
-  if (!token) return <Navigate to="/login" />;
-
-  if (!isAdminRoleToken(token)) {
-    localStorage.removeItem('token');
-    return <Navigate to="/login" />;
-  }
-
-  return children;
+const PrivateRoute = ({ children, session }) => {
+  if (!session.ready) return <RouteFallback />;
+  return session.authenticated ? children : <Navigate to="/login" replace />;
 };
 
 function App() {
-  const [platformSso, setPlatformSso] = useState(() => ({
-    ready: !IS_PLATFORM_SSO,
+  const [session, setSession] = useState(() => ({
+    ready: false,
+    authenticated: false,
     error: null,
   }));
+  const [sessionRetry, setSessionRetry] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(
     localStorage.getItem('theme') === 'dark' || document.documentElement.classList.contains('dark')
   );
@@ -94,29 +72,65 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!IS_PLATFORM_SSO) return undefined;
     let cancelled = false;
-    api.get('/users/me')
+    api.get('/users/me', { skipAuthRedirect: true })
       .then((response) => {
         if (cancelled) return;
-        localStorage.setItem('user', JSON.stringify(response.data.user || {}));
-        setPlatformSso({ ready: true, error: null });
+        const user = response.data.user || {};
+        const authenticated = ['admin', 'super_admin'].includes(user.role);
+        if (authenticated) localStorage.setItem('user', JSON.stringify(user));
+        else localStorage.removeItem('user');
+        setSession({ ready: true, authenticated, error: null });
       })
       .catch((error) => {
-        if (!cancelled && error.response?.status !== 401) {
-          setPlatformSso({ ready: false, error });
+        if (cancelled) return;
+        if (IS_PLATFORM_SSO && error.response?.status === 401) return redirectToPlatformLogin();
+        if (!IS_PLATFORM_SSO && error.response?.status === 401) {
+          setSession({ ready: true, authenticated: false, error: null });
+          return;
         }
+        setSession({ ready: false, authenticated: false, error });
       });
     return () => { cancelled = true; };
+  }, [sessionRetry]);
+
+  useEffect(() => {
+    const refreshSession = () => {
+      setSession({ ready: false, authenticated: false, error: null });
+      setSessionRetry((value) => value + 1);
+    };
+    const expireSession = () => setSession({ ready: true, authenticated: false, error: null });
+    window.addEventListener('core-auth-changed', refreshSession);
+    window.addEventListener('core-auth-expired', expireSession);
+    return () => {
+      window.removeEventListener('core-auth-changed', refreshSession);
+      window.removeEventListener('core-auth-expired', expireSession);
+    };
   }, []);
 
-  if (platformSso.error) {
+  if (session.error) {
+    const status = session.error.response?.status;
+    const isMappingError = IS_PLATFORM_SSO && status === 403;
+    const isPermissionError = !IS_PLATFORM_SSO && status === 403;
+    const isRateLimited = status === 429;
     return (
       <Result
-        status="403"
-        title="统一账号尚未完成映射"
-        subTitle={platformSso.error.response?.data?.error || '请检查综合平台的统一登录账号映射配置。'}
-        extra={<Button type="primary" onClick={() => { window.location.href = '/'; }}>返回管理中心</Button>}
+        status={isMappingError || isPermissionError ? '403' : isRateLimited ? 'warning' : '500'}
+        title={isMappingError ? '统一账号尚未完成映射' : isPermissionError ? '当前账号无后台权限' : isRateLimited ? '请求过于频繁' : '综合管理服务暂时不可用'}
+        subTitle={isMappingError
+          ? (session.error.response?.data?.error || '请检查综合平台的统一登录账号映射配置。')
+          : isPermissionError
+            ? '请联系管理员确认账号状态和角色。'
+          : isRateLimited
+            ? '请稍后重试，当前会话不会因此退出。'
+            : '无法确认当前账号状态，请检查网络或稍后重试。'}
+        extra={[
+          !isMappingError && <Button type="primary" key="retry" onClick={() => {
+            setSession({ ready: false, authenticated: false, error: null });
+            setSessionRetry((value) => value + 1);
+          }}>重试</Button>,
+          <Button key="home" onClick={() => { window.location.href = '/'; }}>返回管理中心</Button>,
+        ].filter(Boolean)}
       />
     );
   }
@@ -150,9 +164,9 @@ function App() {
         <Suspense fallback={<RouteFallback />}>
           <Router basename={APP_BASE_PATH || undefined}>
             <Routes>
-              <Route path="/login" element={IS_PLATFORM_SSO ? <Navigate to="/dashboard" replace /> : <Login />} />
+              <Route path="/login" element={IS_PLATFORM_SSO || session.authenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
               <Route path="/query" element={<PublicQuery />} />
-              <Route path="/" element={<PrivateRoute platformSsoReady={platformSso.ready}><MainLayout /></PrivateRoute>}>
+              <Route path="/" element={<PrivateRoute session={session}><MainLayout /></PrivateRoute>}>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="iot-monitor" element={<IotMonitor />} />
@@ -176,4 +190,3 @@ function App() {
 }
 
 export default App;
-

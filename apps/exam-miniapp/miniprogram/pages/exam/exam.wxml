@@ -5,13 +5,35 @@
     </view>
   </view>
 
-  <view wx:if="{{loading}}" style="margin-top: {{navBarHeight}}px; padding: 40rpx 0;">
+  <view wx:if="{{loading || (attemptInitializationPending && !attemptInitializationError)}}" style="margin-top: {{navBarHeight}}px; padding: 40rpx 0;">
     <skeleton type="exam"></skeleton>
   </view>
 
   <view
+    class="attempt-error-state"
+    wx:if="{{!loading && attemptInitializationError}}"
+    style="padding-top: {{navBarHeight}}px;"
+  >
+    <text class="attempt-error-title">考试暂时无法开始</text>
+    <text class="attempt-error-message">{{attemptInitializationError}}</text>
+    <view class="attempt-error-actions">
+      <button
+        class="attempt-retry-button"
+        bindtap="onRetryAttemptInitialization"
+        loading="{{attemptInitializationPending}}"
+        disabled="{{attemptInitializationPending}}"
+      >重新加载</button>
+      <button
+        class="attempt-exit-button"
+        bindtap="onExitAttemptInitialization"
+        disabled="{{attemptInitializationPending}}"
+      >返回</button>
+    </view>
+  </view>
+
+  <view
     class="main-content"
-    wx:if="{{!loading && totalCount > 0}}"
+    wx:if="{{!loading && !attemptInitializationPending && !attemptInitializationError && totalCount > 0}}"
     style="height: calc(100vh - {{navBarHeight}}px); margin-top: {{navBarHeight}}px; display: flex; flex-direction: column;"
   >
     <view class="header-bar">
@@ -77,7 +99,7 @@
     </swiper>
   </view>
 
-  <view class="footer-bar" wx:if="{{!loading}}" style="padding-bottom: {{footerBottomPadding}}px;">
+  <view class="footer-bar" wx:if="{{!loading && !attemptInitializationPending && !attemptInitializationError}}" style="padding-bottom: {{footerBottomPadding}}px;">
     <view class="btn-group recite-group" wx:if="{{mode === 'recite'}}">
       <button class="btn-nav btn-reveal" bindtap="onToggleAnalysis">
         {{isAnalysisVisible ? '隐藏答案' : '显示答案'}}
@@ -96,7 +118,13 @@
         bindtap="onConfirmAnswer"
       >确认作答</button>
 
-      <button class="btn-submit" wx:elif="{{currentIndex === totalCount - 1}}" bindtap="onSubmit">提交试卷</button>
+      <button
+        class="btn-submit"
+        wx:elif="{{currentIndex === totalCount - 1}}"
+        bindtap="onSubmit"
+        loading="{{isSubmitting}}"
+        disabled="{{isSubmitting}}"
+      >{{isSubmitting ? '提交中' : '提交试卷'}}</button>
       <button class="btn-nav btn-next" wx:else bindtap="onNext">下一题</button>
     </view>
   </view>
@@ -141,7 +169,7 @@
   </view>
 
   <custom-modal
-    show="{{mode !== 'recite' && showResumeModal}}"
+    show="{{mode !== 'recite' && !attemptInitializationError && showResumeModal}}"
     title="提示"
     content="检测到云端未完成的进度，是否继续？"
     confirmText="继续"

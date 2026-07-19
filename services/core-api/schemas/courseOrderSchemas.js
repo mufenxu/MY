@@ -38,11 +38,13 @@ const submitOrderSchema = Joi.object({
         kcid: Joi.alternatives().try(Joi.string().allow(''), Joi.number()).optional(),
         name: Joi.string().allow('').optional(),
         kcname: Joi.string().allow('').optional()
-    }).unknown(true)).min(1).required().messages({
+    }).unknown(true)).min(1).max(20).required().messages({
         'array.min': '请至少选择一门课程',
+        'array.max': '单次最多提交20门课程',
         'any.required': '请选择课程'
     }),
-    duration: Joi.number().integer().min(1).max(365).optional()
+    duration: Joi.number().integer().min(1).max(365).optional(),
+    idempotencyKey: Joi.string().trim().min(16).max(128).optional()
 });
 
 module.exports = {

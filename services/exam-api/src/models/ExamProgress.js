@@ -31,6 +31,31 @@ const ExamProgressSchema = new mongoose.Schema(
             default: 0,
             min: 0,
         },
+        attemptId: {
+            type: String,
+            default: null,
+        },
+        attemptRequestId: {
+            type: String,
+            default: null,
+        },
+        attemptStartedAt: {
+            type: Date,
+            default: null,
+        },
+        deadlineAt: {
+            type: Date,
+            default: null,
+        },
+        attemptDurationSeconds: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+        attemptSubmittedAt: {
+            type: Date,
+            default: null,
+        },
         questionCount: {
             type: Number,
             default: 0,
@@ -76,6 +101,7 @@ ExamProgressSchema.index({ scopeType: 1, ownerOpenid: 1, updateTime: -1 });
 ExamProgressSchema.set('toJSON', {
     transform: (doc, ret) => {
         delete ret.__v;
+        delete ret.attemptRequestId;
         return ret;
     },
 });

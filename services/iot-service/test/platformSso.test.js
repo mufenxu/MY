@@ -2,6 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('crypto');
 const { verifyPlatformSso } = require('../src/security/platformSso');
+const {
+  platformRoleAllowsRequest,
+  platformScopesForRole
+} = require('../src/security/auth');
 
 function issue(claims, privateKey) {
   const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
@@ -18,10 +22,12 @@ test('iot SSO tokens are signed, short-lived and audience-bound', () => {
     iss: 'my-platform-gateway',
     aud: 'iot',
     sub: 'admin',
-    role: 'platform_admin',
+    role: 'viewer',
     csrf: 'csrf-token',
     m: 'GET',
     p: '/api/auth/status',
+    session_exp: Math.floor(now / 1000) + 3600,
+    reauth_exp: 0,
     iat: Math.floor(now / 1000),
     exp: Math.floor(now / 1000) + 30,
   };
@@ -34,4 +40,15 @@ test('iot SSO tokens are signed, short-lived and audience-bound', () => {
     if (previous === undefined) delete process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY;
     else process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY = previous;
   }
+});
+
+test('iot central roles map to least-privilege scopes and mutation policy', () => {
+  assert.deepEqual(platformScopesForRole('viewer'), ['devices:read', 'history:read']);
+  assert.deepEqual(platformScopesForRole('operator'), ['devices:read', 'history:read', 'relays:write']);
+  assert.deepEqual(platformScopesForRole('super_admin'), ['*']);
+  assert.equal(platformRoleAllowsRequest('viewer', 'GET', ['devices:read']), true);
+  assert.equal(platformRoleAllowsRequest('viewer', 'POST', ['relays:write']), false);
+  assert.equal(platformRoleAllowsRequest('operator', 'POST', ['relays:write']), true);
+  assert.equal(platformRoleAllowsRequest('operator', 'PUT', []), false);
+  assert.equal(platformRoleAllowsRequest('super_admin', 'DELETE', []), true);
 });

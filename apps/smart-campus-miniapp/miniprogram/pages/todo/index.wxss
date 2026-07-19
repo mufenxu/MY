@@ -61,7 +61,7 @@
   font-size: 28px;
   font-weight: 800;
   color: #0f172a;
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
 }
 
 .hero-date {
@@ -150,7 +150,7 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
-  transition: all 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
 }
 
 .add-btn-wrapper:active {
@@ -192,7 +192,7 @@
   color: #64748b;
   background: #f1f5f9;
   border: 1px solid transparent;
-  transition: all 0.3s;
+  transition: background-color 0.3s, color 0.3s, box-shadow 0.3s;
 }
 
 .filter-item--active {
@@ -226,8 +226,15 @@
   background: #f0f4f8;
   border: none;
   box-shadow: 4px 6px 12px rgba(166, 180, 200, 0.4);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box; /* 控制盒子模型，防止超出 */
+}
+
+.todo-toggle {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
 }
 
 .todo-item:active {
@@ -244,7 +251,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s;
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .checkbox--checked {
@@ -269,7 +276,7 @@
   font-size: 16px;
   color: #334155;
   margin-bottom: 4px;
-  transition: all 0.3s;
+  transition: color 0.3s;
 }
 
 .todo-time {
@@ -290,13 +297,13 @@
 }
 
 .action-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: background-color 0.2s, transform 0.2s;
 }
 
 .edit-btn {
@@ -393,7 +400,7 @@
   z-index: 100;
   opacity: 0;
   pointer-events: none;
-  transition: all 0.3s;
+  transition: opacity 0.3s;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -411,7 +418,7 @@
   padding: 24px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);
   transform: scale(0.9);
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
 }
 
 .glass-modal.visible {
@@ -470,4 +477,3 @@
   background: #cbd5e1;
   box-shadow: none;
 }
-

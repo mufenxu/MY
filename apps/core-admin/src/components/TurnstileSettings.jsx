@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Switch, Form, Input, Button, message, Typography, Space, Divider, Alert, Row, Col } from 'antd';
 import { SafetyCertificateOutlined, SaveOutlined, KeyOutlined, GlobalOutlined } from '@ant-design/icons';
 import api from '../utils/api';
+import ReauthenticationModal from './ReauthenticationModal';
+import { establishSensitiveSession } from '../utils/reauth';
 
 const { Text, Link } = Typography;
 
@@ -9,6 +11,8 @@ const TurnstileSettings = () => {
     const [form] = Form.useForm();
     const [, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [reauthVisible, setReauthVisible] = useState(false);
+    const [pendingValues, setPendingValues] = useState(null);
 
     const loadConfig = useCallback(async () => {
         setLoading(true);
@@ -40,39 +44,60 @@ const TurnstileSettings = () => {
         loadConfig();
     }, [loadConfig]);
 
-    const onFinish = async (values) => {
+    const saveConfig = async (values, proof = {}) => {
         setSaving(true);
         try {
-            // 1. 保存开关和 Site Key 到 AppConfig
+            // Update the secret before enabling a configuration that depends on it.
+            if (values.secretKey && values.secretKey !== '********') {
+                await api.post('/secrets/update', {
+                    key: 'TURNSTILE_SECRET_KEY',
+                    value: values.secretKey,
+                    ...proof
+                });
+            }
+
             const appConfigRes = await api.post('/settings/app-config', {
                 key: 'turnstile_config',
                 value: {
                     enabled: values.enabled,
                     siteKey: values.siteKey
                 },
-                remark: 'Cloudflare Turnstile 人机验证配置'
+                remark: 'Cloudflare Turnstile 人机验证配置',
+                ...proof
             });
-
-            // 2. 如果用户输入了新的 Secret Key (不是那个 8 个星号的占位符)，则保存到 SecretService
-            if (values.secretKey && values.secretKey !== '********') {
-                await api.post('/secrets/update', {
-                    key: 'TURNSTILE_SECRET_KEY',
-                    value: values.secretKey
-                });
-            }
 
             if (appConfigRes.data.success) {
                 message.success('人机验证配置已保存');
+                setReauthVisible(false);
+                setPendingValues(null);
                 loadConfig();
             }
-        } catch {
-            message.error('保存失败');
+        } catch (error) {
+            message.error(error.response?.data?.message || error.response?.data?.error || error.message || '保存失败');
         } finally {
             setSaving(false);
         }
     };
 
+    const onFinish = async (values) => {
+        setPendingValues(values);
+        setReauthVisible(true);
+    };
+
+    const handleReauthentication = async (credentials) => {
+        if (!pendingValues) return;
+        setSaving(true);
+        try {
+            const proof = await establishSensitiveSession(credentials);
+            await saveConfig(pendingValues, proof);
+        } catch (error) {
+            message.error(error.response?.data?.message || error.message || '二次验证失败');
+            setSaving(false);
+        }
+    };
+
     return (
+        <>
         <Card 
             title={<span><SafetyCertificateOutlined style={{ marginRight: 8, color: '#4A7CF7' }} />人机验证 (Cloudflare Turnstile)</span>} 
             bordered={false}
@@ -152,6 +177,17 @@ const TurnstileSettings = () => {
                 </div>
             </Form>
         </Card>
+        <ReauthenticationModal
+            open={reauthVisible}
+            title="更新 Turnstile 密钥二次验证"
+            confirmLoading={saving}
+            onCancel={() => {
+                setReauthVisible(false);
+                setPendingValues(null);
+            }}
+            onConfirm={handleReauthentication}
+        />
+        </>
     );
 };
 

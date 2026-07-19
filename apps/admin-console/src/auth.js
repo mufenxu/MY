@@ -98,7 +98,25 @@ export function createSessionRegistry({ secret, maxSessions = 1024 } = {}) {
     const session = verifySession(token, secret, now);
     const active = session ? activeSessions.get(session.nonce) : null;
     if (!active || active.exp !== session.exp || active.sub !== session.sub) return null;
-    return { ...session, role: active.role || session.role || 'super_admin' };
+    return {
+      ...session,
+      role: active.role || session.role || 'super_admin',
+      reauthenticatedUntil: active.reauthenticatedUntil > Math.floor(now / 1000)
+        ? active.reauthenticatedUntil
+        : 0,
+    };
+  }
+
+  function markReauthenticated(token, { now = Date.now(), ttlSeconds = 300 } = {}) {
+    const session = verifySession(token, secret, now);
+    const active = session ? activeSessions.get(session.nonce) : null;
+    if (!active || active.exp !== session.exp || active.sub !== session.sub) return null;
+    const nowSeconds = Math.floor(now / 1000);
+    active.reauthenticatedUntil = Math.min(
+      active.exp,
+      nowSeconds + Math.min(Math.max(Number(ttlSeconds) || 300, 30), 300),
+    );
+    return active.reauthenticatedUntil;
   }
 
   function revoke(token, now = Date.now()) {
@@ -130,6 +148,7 @@ export function createSessionRegistry({ secret, maxSessions = 1024 } = {}) {
   return {
     issue,
     verify,
+    markReauthenticated,
     revoke,
     revokeByNonce,
     list,

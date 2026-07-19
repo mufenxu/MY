@@ -2,6 +2,14 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { verifyPlatformSso } = require('./platformSso');
 const { resolvePlatformSsoUser } = require('../services/platformSsoAccountService');
+const { intersectPlatformAccess, platformRoleAllowsRequest } = require('../utils/platformAccess');
+const {
+    hasValidCsrfToken,
+    isTrustedWebAdminOrigin,
+    isWebAdminRequest,
+    readAccessCookie,
+    readCsrfCookie
+} = require('../utils/refreshCookie');
 
 function normalizeTokenVersion(value) {
     const version = Number(value);
@@ -29,6 +37,15 @@ exports.verifyToken = async (req, res, next) => {
     const platformIdentity = verifyPlatformSso(req);
     if (platformIdentity) {
         try {
+            if (
+                !platformRoleAllowsRequest(platformIdentity.role, req.method)
+            ) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'The unified-platform viewer role is read-only.',
+                    code: 'PLATFORM_READ_ONLY'
+                });
+            }
             const mappedUsername = process.env.PLATFORM_SSO_CORE_USERNAME || platformIdentity.sub;
             const user = await resolvePlatformSsoUser({ mappedUserId: mappedUsername });
             if (!user) {
@@ -38,6 +55,14 @@ exports.verifyToken = async (req, res, next) => {
                     code: 'PLATFORM_SSO_ACCOUNT_NOT_MAPPED'
                 });
             }
+            const effectiveAccess = intersectPlatformAccess(platformIdentity.role, user);
+            if (!effectiveAccess) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Invalid unified-platform role mapping.',
+                    code: 'PLATFORM_SSO_ROLE_INVALID'
+                });
+            }
             req.platformSso = platformIdentity;
             req.user = {
                 id: user._id,
@@ -45,8 +70,10 @@ exports.verifyToken = async (req, res, next) => {
                 userId: user.userId,
                 nickName: user.nickName,
                 avatarUrl: user.avatarUrl,
-                role: user.role,
-                permissions: user.permissions || [],
+                role: effectiveAccess.role,
+                localRole: effectiveAccess.localRole,
+                centralRole: effectiveAccess.centralRole,
+                permissions: effectiveAccess.permissions,
                 status: user.status || 'active'
             };
             return next();
@@ -56,13 +83,31 @@ exports.verifyToken = async (req, res, next) => {
     }
 
     const authorization = req.header('Authorization') || '';
-    const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+    const bearerToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+    const cookieToken = !bearerToken && isWebAdminRequest(req) ? readAccessCookie(req) : '';
+    const token = bearerToken || cookieToken;
 
     if (!token) {
         return res.status(401).json({
             success: false,
             error: 'Access denied. No token provided.',
             code: 'AUTH_TOKEN_MISSING'
+        });
+    }
+
+    if (cookieToken && !isTrustedWebAdminOrigin(req)) {
+        return res.status(403).json({
+            success: false,
+            error: 'Web admin origin is not trusted.',
+            code: 'AUTH_ORIGIN_INVALID'
+        });
+    }
+
+    if (cookieToken && !hasValidCsrfToken(req)) {
+        return res.status(403).json({
+            success: false,
+            error: 'CSRF validation failed. Refresh the page and try again.',
+            code: 'AUTH_CSRF_INVALID'
         });
     }
 
@@ -120,6 +165,9 @@ exports.verifyToken = async (req, res, next) => {
             status: currentStatus,
             tokenVersion: normalizeTokenVersion(user.tokenVersion)
         };
+        if (cookieToken) {
+            res.setHeader('X-CSRF-Token', readCsrfCookie(req));
+        }
         return next();
     } catch (error) {
         return next(error);

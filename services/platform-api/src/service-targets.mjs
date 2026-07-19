@@ -47,7 +47,7 @@ export async function checkServiceTarget(
 export async function checkExternalServices(targets, options = {}) {
   const checks = await Promise.all([
     checkServiceTarget(targets.core, '/health', options),
-    checkServiceTarget(targets.exam, '/version', options),
+    checkServiceTarget(targets.exam, '/ready', options),
   ]);
   return checks.every(Boolean);
 }

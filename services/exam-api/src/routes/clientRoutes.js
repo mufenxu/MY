@@ -40,6 +40,7 @@ router.post(
     clientController.analyzeQuestion,
 );
 router.post('/exam/submit', authenticateUser, validate(cv.submitExam), clientController.submitExam);
+router.post('/exam/attempt', authenticateUser, validate(cv.startExamAttempt), clientController.startExamAttempt);
 router.get('/exam/latest', authenticateUser, validate(cv.getLatestResult), clientController.getLatestResult);
 router.post('/exam/progress', authenticateUser, validate(cv.saveProgress), clientController.saveProgress);
 router.get('/exam/progress', authenticateUser, validate(cv.getProgress), clientController.getProgress);

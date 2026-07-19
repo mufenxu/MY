@@ -54,7 +54,12 @@ function createSettingsStore() {
 }
 
 async function startTestServer(options = {}) {
-  const { dbOverrides = {}, mqttConnected = true } = options;
+  const {
+    dbOverrides = {},
+    mqttConnected = true,
+    mqttSubscribed = true,
+    publishControlError = null
+  } = options;
   const settingsStore = createSettingsStore();
   const mqttService = new EventEmitter();
   const apiKeyUsages = [];
@@ -106,17 +111,19 @@ async function startTestServer(options = {}) {
   });
   mqttService.getStatus = () => ({
     mqttConnected,
-    subscribed: true,
+    subscribed: mqttSubscribed,
     lastMsgTimestamp: Date.now(),
     subscribedTopics: [],
     messagesReceived: 0,
     topicStats: {}
   });
-  mqttService.publishControl = (deviceId, relayId, status) => {
+  mqttService.publishControl = async (deviceId, relayId, status) => {
     publishedControls.push({ deviceId, relayId, status });
+    if (publishControlError) throw publishControlError;
+    return { queuedAt: 12345, qos: 0 };
   };
   mqttService.restart = () => {};
-  mqttService.status = { mqttConnected };
+  mqttService.status = { mqttConnected, subscribed: mqttSubscribed };
   mqttService.getDiscoveredTopics = () => [];
 
   const { closeRealtime, server, wsServer } = createApiServer({ settingsStore, mqttService });
@@ -162,21 +169,35 @@ async function listenOnAvailablePort(server) {
   throw new Error('Unable to find an available test port.');
 }
 
-test('readiness requires both MongoDB and MQTT connectivity', async (t) => {
+test('readiness requires MongoDB plus an active MQTT subscription', async (t) => {
   const healthy = await startTestServer();
   const disconnected = await startTestServer({ mqttConnected: false });
+  const unsubscribed = await startTestServer({ mqttSubscribed: false });
   t.after(() => Promise.all([
     new Promise((resolve) => healthy.server.close(resolve)),
-    new Promise((resolve) => disconnected.server.close(resolve))
+    new Promise((resolve) => disconnected.server.close(resolve)),
+    new Promise((resolve) => unsubscribed.server.close(resolve))
   ]));
 
   const healthyResponse = await fetch(`${healthy.baseUrl}/api/ready`);
   assert.equal(healthyResponse.status, 200);
-  assert.equal((await healthyResponse.json()).mqtt, 'connected');
+  assert.deepEqual(
+    await healthyResponse.json(),
+    {
+      ok: true,
+      storage: 'ready',
+      mqtt: 'connected',
+      subscription: 'subscribed'
+    }
+  );
 
   const disconnectedResponse = await fetch(`${disconnected.baseUrl}/api/ready`);
   assert.equal(disconnectedResponse.status, 503);
   assert.equal((await disconnectedResponse.json()).mqtt, 'disconnected');
+
+  const unsubscribedResponse = await fetch(`${unsubscribed.baseUrl}/api/ready`);
+  assert.equal(unsubscribedResponse.status, 503);
+  assert.equal((await unsubscribedResponse.json()).subscription, 'unsubscribed');
 });
 
 test('telemetry endpoints require authentication when auth is enabled', async (t) => {
@@ -241,8 +262,36 @@ test('relay control requires relays:write scope', async (t) => {
     },
     method: 'POST'
   });
-  assert.equal(allowedResponse.status, 200);
+  assert.equal(allowedResponse.status, 202);
+  const allowedBody = await allowedResponse.json();
+  assert.equal(allowedBody.state, 'queued');
+  assert.equal(allowedBody.brokerAcknowledged, false);
+  assert.equal(allowedBody.deviceConfirmed, false);
+  assert.ok(allowedBody.commandId);
   assert.deepEqual(publishedControls, [{ deviceId: 'device_1', relayId: 'relay_1', status: 'ON' }]);
+});
+
+test('relay control reports broker publish failures instead of false success', async (t) => {
+  const publishError = new Error('broker rejected publish');
+  publishError.statusCode = 502;
+  publishError.code = 'MQTT_PUBLISH_FAILED';
+  publishError.expose = true;
+  const { baseUrl, server } = await startTestServer({ publishControlError: publishError });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const response = await fetch(`${baseUrl}/api/devices/device_1/relays/relay_1/control`, {
+    body: JSON.stringify({ status: 'ON' }),
+    headers: {
+      Authorization: 'Bearer sk_relay',
+      'Content-Type': 'application/json'
+    },
+    method: 'POST'
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 502);
+  assert.equal(body.code, 'REQUEST_FAILED');
+  assert.match(body.error, /服务器内部错误/);
 });
 
 test('console session can access console-only endpoints', async (t) => {

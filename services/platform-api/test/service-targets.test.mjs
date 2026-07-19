@@ -35,7 +35,7 @@ test('external readiness probes only fixed low-cardinality health paths', async 
   assert.equal(ready, true);
   assert.deepEqual(urls.sort(), [
     'http://core:1/health',
-    'http://exam:2/version',
+    'http://exam:2/ready',
   ]);
 });
 

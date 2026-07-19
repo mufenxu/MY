@@ -1,5 +1,6 @@
 const AppConfig = require('../models/AppConfig');
 const asyncHandler = require('../middleware/asyncHandler');
+const logAudit = require('../utils/auditLogger');
 
 const setNoStoreHeaders = (res) => {
     res.set({
@@ -52,6 +53,12 @@ exports.saveAppConfig = asyncHandler(async (req, res) => {
             runValidators: true
         }
     ).lean();
+
+    await logAudit(req, {
+        action: key === 'turnstile_config' ? 'TURNSTILE_CONFIG_UPDATE' : 'APP_CONFIG_UPDATE',
+        targetId: key,
+        payload: { remarkUpdated: nextRemark !== undefined }
+    });
 
     res.json({
         success: true,

@@ -60,6 +60,18 @@ test('registered sessions expose safe metadata and support remote revocation', (
   assert.equal(sessions.list().length, 0);
 });
 
+test('reauthentication grants are server-side, short-lived and session-bound', () => {
+  const now = Date.UTC(2026, 6, 19, 12, 0, 0);
+  const sessions = createSessionRegistry({ secret: 'r'.repeat(32) });
+  const token = sessions.issue({ username: 'root', role: 'super_admin', ttlHours: 1, now });
+  const expiresAt = sessions.markReauthenticated(token, { now, ttlSeconds: 9999 });
+
+  assert.equal(expiresAt, Math.floor(now / 1000) + 300);
+  assert.equal(sessions.verify(token, now + 299_000).reauthenticatedUntil, expiresAt);
+  assert.equal(sessions.verify(token, now + 301_000).reauthenticatedUntil, 0);
+  assert.equal(sessions.markReauthenticated(`${token}x`, { now }), null);
+});
+
 test('TOTP verification accepts the current step and rejects malformed codes', () => {
   const secret = 'JBSWY3DPEHPK3PXP';
   const now = Date.UTC(2026, 6, 18, 12, 0, 0);
