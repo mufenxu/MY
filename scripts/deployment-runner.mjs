@@ -654,6 +654,7 @@ export function createDeploymentRunner({
       return sendJson(res, 404, { error: '接口不存在。', code: 'NOT_FOUND' });
     } catch (error) {
       const status = error instanceof RunnerError ? error.status : 500;
+      console.error(`[deployment-runner] ${error.code || 'INTERNAL_ERROR'}: ${truncate(error.message, 1000)}`);
       return sendJson(res, status, {
         error: error instanceof RunnerError ? error.message : '部署执行器内部错误。',
         code: error instanceof RunnerError ? error.code : 'INTERNAL_ERROR',

@@ -39,7 +39,7 @@ const releaseSummary = await expectStatus(await fetch(`${origin}/api/releases`, 
 }), 200, 'release center summary');
 const releaseData = await releaseSummary.json();
 if (!releaseData.capabilities?.deployRunnerHealthy) {
-  throw new Error('Deployment Sidecar was not connected to the release center.');
+  throw new Error(`Deployment Sidecar was not connected to the release center: ${releaseData.capabilities?.issue || 'unknown issue'}`);
 }
 if (releaseData.metrics?.observedComponents !== 8) {
   throw new Error(`Deployment Sidecar observed ${releaseData.metrics?.observedComponents || 0}/8 components.`);
