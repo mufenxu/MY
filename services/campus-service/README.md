@@ -43,7 +43,7 @@ server.js    学校系统连接器、业务编排和 API 路由
 
 修改系统登录、Cookie、静态资源加载或浏览器兼容代码时，必须遵守以下约束：
 
-1. 不要删除 `server.js` 中的微信会话头兜底，也不要把微信登录改回依赖 303 跳转后 Cookie 立即生效的原生表单流程。
+1. 不要删除 `server.js` 中的微信会话头兜底，也不要把微信登录的主路径改回依赖 303 跳转后 Cookie 立即生效的原生表单流程；原生表单只作为异步登录失败或超时后的兼容兜底。
 2. 保持 `public/browser-check.js` 在 `public/app.js` 之前加载；前者负责在主应用启动前提供微信会话存储兼容层。
 3. 修改上述两个浏览器脚本后，必须同步更新 `public/index.html` 中的 `?v=` 版本。版本化资源使用一年 immutable 缓存，不更新版本会让微信继续执行旧代码。
 4. 必须运行 `npm run verify`。`test/embedded-session.test.js` 验证关闭并重建 WebView 后仍能恢复令牌、普通浏览器不能启用兜底且过期记录会被删除；`test/server.integration.test.js` 验证 30 天 TTL、无 Cookie、残留旧 Cookie 以及普通浏览器隔离场景。
@@ -109,6 +109,7 @@ HGU_APP_SESSION_SECRET=另一段足够长的随机签名密钥
 HGU_DATA_ENCRYPTION_KEY=32字节随机数据的Base64URL编码
 HGU_APP_SESSION_TTL_HOURS=720
 HGU_APP_COOKIE_SECURE=true
+HGU_PUBLIC_ORIGIN=https://hgu.pxyb.cn
 ```
 
 建议用 Nginx / Caddy / Traefik 反向代理 HTTPS，再把服务绑定到内网地址：
@@ -118,7 +119,7 @@ HGU_HOST=127.0.0.1
 PORT=22101
 ```
 
-如果放在 Docker 容器内，容器内部继续使用 `HGU_HOST=0.0.0.0`，宿主机端口默认只绑定 `127.0.0.1`。只有在所有流量均经过可信反向代理时才设置 `HGU_TRUST_PROXY=true`；HTTPS 重定向也只会在该开关启用后信任代理传入的协议头。本地 HTTP 调试才可以临时设置 `HGU_APP_COOKIE_SECURE=false` 和 `HGU_ENABLE_HSTS=false`。
+如果放在 Docker 容器内，容器内部继续使用 `HGU_HOST=0.0.0.0`，宿主机端口默认只绑定 `127.0.0.1`。只有在所有流量均经过可信反向代理时才设置 `HGU_TRUST_PROXY=true`；HTTPS 重定向也只会在该开关启用后信任代理传入的协议头。公网独立域名还应设置 `HGU_PUBLIC_ORIGIN=https://hgu.pxyb.cn`，这样即使反向代理把上游 `Host` 改成 `127.0.0.1`，微信从 `http://hgu.pxyb.cn` 打开时也会跳到正确 HTTPS 域名。本地 HTTP 调试才可以临时设置 `HGU_APP_COOKIE_SECURE=false` 和 `HGU_ENABLE_HSTS=false`。
 
 备份 `campus_app` 时必须同时安全备份 `HGU_DATA_ENCRYPTION_KEY`，但两者应分开保存。`/api/health` 是存活检查，`/api/ready` 会验证 MongoDB 可用性。
 

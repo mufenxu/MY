@@ -572,6 +572,13 @@ function readStoredAppSessionToken() {
   return window.__HGU_EMBEDDED_SESSION__?.read() || "";
 }
 
+function isEmbeddedWechatBrowser() {
+  return Boolean(
+    window.__HGU_EMBEDDED_SESSION__?.isEmbeddedWechat?.()
+    || /MicroMessenger/i.test(window.navigator?.userAgent || "")
+  );
+}
+
 function storeAppSessionToken(token, expiresAt) {
   window.__HGU_EMBEDDED_SESSION__?.store(token, expiresAt);
 }
@@ -653,6 +660,8 @@ async function loadAppAuthStatus() {
 async function loginApp() {
   const username = nodes.appUsernameInput?.value.trim();
   const password = nodes.appPasswordInput.value;
+  const embeddedWechat = isEmbeddedWechatBrowser();
+  let nativeFallbackSubmitted = false;
   if (!password) {
     renderAppGate(new Error("请输入系统密码。"));
     nodes.appPasswordInput.focus();
@@ -665,7 +674,8 @@ async function loginApp() {
     state.appAuth = rememberAppAuthSession(await api("/api/app-auth/login", {
       method: "POST",
       body: { username, password },
-      skipCsrf: true
+      skipCsrf: true,
+      timeoutMs: embeddedWechat ? 20_000 : undefined
     }));
     appSessionExpiredHandled = false;
     if (nodes.appUsernameInput) nodes.appUsernameInput.value = "";
@@ -675,10 +685,19 @@ async function loginApp() {
     await loadAuthStatus();
     await refresh();
   } catch (error) {
+    if (embeddedWechat && (!error?.status || error.status === 504)) {
+      nativeFallbackSubmitted = true;
+      nodes.appLoginButton.textContent = "切换登录";
+      nodes.appAuthStatusText.textContent = "微信客户端响应较慢，正在切换兼容登录方式...";
+      HTMLFormElement.prototype.submit.call(nodes.appLoginForm);
+      return;
+    }
     renderAppGate(error);
   } finally {
-    nodes.appLoginButton.disabled = false;
-    nodes.appLoginButton.textContent = "解锁系统";
+    if (!nativeFallbackSubmitted) {
+      nodes.appLoginButton.disabled = false;
+      nodes.appLoginButton.textContent = "解锁系统";
+    }
   }
 }
 
@@ -2368,6 +2387,11 @@ async function api(path, options = {}) {
     if (shouldHandleAppAccessError(path, options, error)) {
       handleAppAccessExpired(error);
     }
+    throw error;
+  }
+  if (payload.ok !== true) {
+    const error = new Error("服务响应格式异常，请刷新后重试。");
+    error.status = response.status;
     throw error;
   }
   return payload.data;

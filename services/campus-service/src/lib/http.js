@@ -36,12 +36,31 @@ export function sanitizeHostHeader(value) {
   return host;
 }
 
+export function sanitizePublicHttpsOrigin(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return "";
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+    return "";
+  }
+  const host = sanitizeHostHeader(url.host);
+  return host ? `https://${host}` : "";
+}
+
 export function createHttpToolkit({
   enableHsts = false,
   enableHttpsRedirect = false,
+  publicOrigin = "",
   trustProxy = false,
   getRequestId = () => ""
 } = {}) {
+  const publicHttpsOrigin = sanitizePublicHttpsOrigin(publicOrigin);
+
   function securityHeaders(extra = {}) {
     const headers = {
       "x-content-type-options": "nosniff",
@@ -103,12 +122,13 @@ export function createHttpToolkit({
   function maybeRedirectHttps(req, res, url) {
     if (!enableHttpsRedirect || !trustProxy || forwardedProto(req) !== "http") return false;
     const host = sanitizeHostHeader(req.headers.host);
-    if (!host) return false;
+    const origin = publicHttpsOrigin || (host ? `https://${host}` : "");
+    if (!origin) return false;
     res.writeHead(308, {
       ...securityHeaders(),
       "x-request-id": getRequestId(),
       "cache-control": "no-store",
-      location: `https://${host}${url.pathname}${url.search}`,
+      location: `${origin}${url.pathname}${url.search}`,
       "content-length": "0"
     });
     res.end();

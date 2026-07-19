@@ -393,6 +393,7 @@ services:
       HGU_TRUST_PROXY: "true"
       HGU_ENABLE_HSTS: "true"
       HGU_ENABLE_HTTPS_REDIRECT: "true"
+      HGU_PUBLIC_ORIGIN: ${HGU_PUBLIC_ORIGIN:-}
       HGU_EXTRA_ALLOWED_SCHOOL_HOSTS: ${HGU_EXTRA_ALLOWED_SCHOOL_HOSTS:-}
     read_only: true
     tmpfs:

@@ -124,12 +124,13 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         # The application trusts one local reverse proxy. Do not preserve a client-supplied X-Forwarded-For value.
         proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
 配置完成后，请确保宿主机上的防火墙不要直接对公网暴露 `22101` 端口，只允许反向代理本地转发即可。
-此时可以在 `.env` 中设置 `HGU_TRUST_PROXY=true`。Compose 默认将端口绑定到 `127.0.0.1`；如确需修改，可显式设置 `HGU_BIND_ADDRESS`，不建议设为公网地址。
+此时可以在 `.env` 中设置 `HGU_TRUST_PROXY=true` 和 `HGU_PUBLIC_ORIGIN=https://hgu.pxyb.cn`。Compose 默认将端口绑定到 `127.0.0.1`；如确需修改，可显式设置 `HGU_BIND_ADDRESS`，不建议设为公网地址。
 
 ### 微信客户端发布检查
 
@@ -137,7 +138,7 @@ server {
 
 1. 从当前源码部署时先运行 `docker build -t mufenxu/hgu:latest .`，再运行 `docker compose up -d --force-recreate`；当前 Compose 服务使用 `image` 而不是 `build`，单独添加 `--build` 不会重建镜像。使用镜像仓库部署时则运行 `docker compose pull && docker compose up -d --force-recreate`。
 2. 确认 `public/index.html` 已更新上述脚本的 `?v=` 版本，否则微信可能继续使用一年 immutable 缓存中的旧脚本。
-3. 保持公网 HTTPS、`HGU_APP_COOKIE_SECURE=true`，并按前述代理配置传递正确的协议头。
+3. 保持公网 HTTPS、`HGU_APP_COOKIE_SECURE=true`、`HGU_PUBLIC_ORIGIN=https://hgu.pxyb.cn`，并按前述代理配置传递正确的协议头；在微信里同时测试手输 `hgu.pxyb.cn` 和打开 `https://hgu.pxyb.cn/`。
 4. 确认 `HGU_APP_SESSION_TTL_HOURS=720`，然后使用真实微信客户端完成登录、关闭页面、重新打开和刷新测试。若重新打开后要求登录，检查微信专用持久化令牌逻辑；若登录后立刻返回登录页，先检查镜像版本和脚本版本，再检查 README 中的“微信内置浏览器登录兼容性（维护必读）”约束是否被破坏。
 
 ## 6. 构建本地镜像并推送到仓库 (`mufenxu/hgu`)

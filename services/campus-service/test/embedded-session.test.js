@@ -39,6 +39,7 @@ async function embeddedSessionFor(userAgent, {
 test("embedded WeChat persists its fallback across WebView sessions", async () => {
   const context = await embeddedSessionFor("Mozilla/5.0 Mobile MicroMessenger/8.0.48");
 
+  assert.equal(context.session.isEmbeddedWechat(), true);
   context.session.store("current-token", "2099-01-01T00:00:00.000Z");
 
   assert.equal(context.session.read(), "current-token");
@@ -60,6 +61,7 @@ test("embedded WeChat persists its fallback across WebView sessions", async () =
 test("regular browsers cannot enable the embedded session fallback", async () => {
   const context = await embeddedSessionFor("Mozilla/5.0 Chrome/126.0 Safari/537.36");
 
+  assert.equal(context.session.isEmbeddedWechat(), false);
   context.session.store("must-not-persist");
 
   assert.equal(context.session.read(), "");

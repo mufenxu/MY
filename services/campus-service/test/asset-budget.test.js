@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { stat } from "node:fs/promises";
 
 const budgets = {
-  "public/app.js": 160 * 1024,
+  "public/app.js": 161 * 1024,
   "public/admin.js": 4 * 1024,
   "public/browser-check.js": 4 * 1024,
   "public/styles.css": 240 * 1024,

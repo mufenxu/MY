@@ -5,6 +5,8 @@
 ### Compatibility
 
 - Keep the teaching-evaluation actions on one mobile row and render eight-digit water codes as a single tabular-number line without overflowing narrow screens.
+- Use `HGU_PUBLIC_ORIGIN` for trusted-proxy HTTPS redirects so a WeChat visit to `hgu.pxyb.cn` cannot be redirected to the loopback upstream host.
+- Fall back to native form submission in WeChat only when the asynchronous system-login request fails or times out, preserving the persistent header-token flow as the primary path.
 - Replace the WeChat top-level form-navigation workaround with the normal asynchronous login flow, avoiding the redirect boundary where X5 WebViews can discard an otherwise valid session cookie.
 - Keep Secure, HttpOnly cookies as the primary authentication mechanism and add a persistent, origin-scoped header fallback only for `MicroMessenger` clients. Regular browsers cannot use this fallback.
 - Persist the signed WeChat fallback in the dedicated `hgu_wechat_app_session_v1` key so closing and reopening the WebView retains the login, while expired records, logout and account session revocation still invalidate it.

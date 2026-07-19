@@ -297,6 +297,7 @@ for (const [name, value] of [
 const { json, maybeRedirectHttps, redirect, securityHeaders } = createHttpToolkit({
   enableHsts: ENABLE_HSTS,
   enableHttpsRedirect: ENABLE_HTTPS_REDIRECT,
+  publicOrigin: process.env.HGU_PUBLIC_ORIGIN || "",
   trustProxy: TRUST_PROXY,
   getRequestId: () => userContextStorage.getStore()?.requestId || ""
 });

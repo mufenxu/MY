@@ -68,6 +68,9 @@
   }
 
   window.__HGU_EMBEDDED_SESSION__ = {
+    isEmbeddedWechat: function () {
+      return embeddedWechat;
+    },
     read: readSessionToken,
     store: storeSessionToken
   };

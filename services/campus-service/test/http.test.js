@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHttpToolkit, sanitizeHostHeader } from "../src/lib/http.js";
+import { createHttpToolkit, sanitizeHostHeader, sanitizePublicHttpsOrigin } from "../src/lib/http.js";
 
 function responseRecorder() {
   return {
@@ -52,10 +52,31 @@ test("HTTPS redirects only trust proxy headers when explicitly enabled", () => {
   assert.equal(trustedResponse.headers.location, "https://campus.example.edu:22101/path?value=1");
 });
 
+test("HTTPS redirects can use a configured public origin behind local proxies", () => {
+  const request = { headers: { host: "127.0.0.1:22101", "x-forwarded-proto": "http" } };
+  const url = new URL("http://localhost/path?value=1");
+  const response = responseRecorder();
+
+  assert.equal(createHttpToolkit({
+    enableHttpsRedirect: true,
+    publicOrigin: "https://hgu.pxyb.cn",
+    trustProxy: true
+  }).maybeRedirectHttps(request, response, url), true);
+  assert.equal(response.status, 308);
+  assert.equal(response.headers.location, "https://hgu.pxyb.cn/path?value=1");
+});
+
 test("host sanitization rejects redirect injection and invalid ports", () => {
   assert.equal(sanitizeHostHeader("example.edu"), "example.edu");
   assert.equal(sanitizeHostHeader("[::1]:22101"), "[::1]:22101");
   assert.equal(sanitizeHostHeader("example.edu:99999"), "");
   assert.equal(sanitizeHostHeader("example.edu/path"), "");
   assert.equal(sanitizeHostHeader("example..edu"), "");
+});
+
+test("public HTTPS origin sanitization rejects non-origin values", () => {
+  assert.equal(sanitizePublicHttpsOrigin("https://hgu.pxyb.cn"), "https://hgu.pxyb.cn");
+  assert.equal(sanitizePublicHttpsOrigin("http://hgu.pxyb.cn"), "");
+  assert.equal(sanitizePublicHttpsOrigin("https://hgu.pxyb.cn/app"), "");
+  assert.equal(sanitizePublicHttpsOrigin("https://user:pass@example.com"), "");
 });
