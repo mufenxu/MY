@@ -22,6 +22,7 @@ import {
   PackageCheck,
   Play,
   RefreshCw,
+  RotateCcw,
   Rocket,
   Save,
   ServerCog,
@@ -63,14 +64,32 @@ const ACTION_LABELS = {
   'notification.opened': '发送告警通知',
   'notification.resolved': '发送恢复通知',
   'release.build': '触发构建',
+  'release.build_succeeded': '镜像构建成功',
+  'release.build_failed': '镜像构建失败',
+  'release.build_cancelled': '镜像构建取消',
   'release.deploy': '部署版本',
+  'release.deploy_succeeded': '生产部署成功',
+  'release.deploy_failed': '生产部署失败',
+  'release.deploy_rolled_back': '部署失败自动回滚',
   'release.rollback': '回滚版本',
+  'release.rollback_succeeded': '生产回滚成功',
+  'release.rollback_failed': '生产回滚失败',
+  'release.rollback_rolled_back': '回滚失败自动恢复',
   'diagnostics.run': '运行诊断',
   'security.session_revoked': '撤销会话',
   'operations.settings_updated': '更新运维设置',
   'gateway.proxy_error': '网关请求异常',
 };
 const CHART_COLORS = ['#2877f7', '#11ad78', '#ff8a00', '#8a45ef', '#d75467', '#13bad6'];
+const RELEASE_STATUS_LABELS = {
+  queued: '已排队',
+  building: '构建中',
+  running: '执行中',
+  succeeded: '成功',
+  failed: '失败',
+  cancelled: '已取消',
+  rolled_back: '已自动回滚',
+};
 
 function formatDateTime(value) {
   if (!value) return '--';
@@ -88,6 +107,18 @@ function formatRelative(value) {
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours} 小时前`;
   return `${Math.round(hours / 24)} 天前`;
+}
+
+function shortValue(value, length = 12) {
+  const text = String(value || '');
+  return text ? text.slice(0, length) : '--';
+}
+
+function releaseStateClass(status) {
+  if (status === 'succeeded') return 'success';
+  if (['failed', 'cancelled'].includes(status)) return 'failure';
+  if (status === 'rolled_back') return 'warning';
+  return status || 'unknown';
 }
 
 function roleAtLeast(role, required) {
@@ -366,9 +397,14 @@ export function ReleasesView({ session }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [historyTab, setHistoryTab] = useState('builds');
   const [targets, setTargets] = useState(['platform']);
   const [credentials, setCredentials] = useState({ password: '', totp: '' });
-  const [deployment, setDeployment] = useState({ action: 'deploy', component: 'platform', image: '', confirmText: '', password: '', totp: '' });
+  const [operation, setOperation] = useState({
+    action: 'deploy', buildId: '', sourceDeploymentId: '', components: [], confirmText: '',
+    password: '', totp: '', maintenanceApproved: false,
+  });
+  const [preflight, setPreflight] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -376,9 +412,49 @@ export function ReleasesView({ session }) {
     try { setData(await requestJson('/api/releases')); } catch (requestError) { setError(requestError.message); } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  const hasActiveOperations = Boolean(data?.metrics?.activeOperations);
+  useEffect(() => {
+    if (!hasActiveOperations) return undefined;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') load();
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [hasActiveOperations, load]);
 
   function toggleTarget(target) {
     setTargets((current) => current.includes(target) ? current.filter((value) => value !== target) : [...current, target]);
+  }
+
+  function selectBuild(build) {
+    setHistoryTab('builds');
+    setPreflight(null);
+    setOperation({
+      action: 'deploy', buildId: build.id, sourceDeploymentId: '',
+      components: (build.artifacts || []).map((artifact) => artifact.component),
+      confirmText: '', password: '', totp: '', maintenanceApproved: false,
+    });
+  }
+
+  function selectRollback(deployment) {
+    setHistoryTab('deployments');
+    setPreflight(null);
+    setOperation({
+      action: 'rollback', buildId: '', sourceDeploymentId: deployment.id,
+      components: [...(deployment.components || [])],
+      confirmText: '', password: '', totp: '', maintenanceApproved: false,
+    });
+  }
+
+  function toggleOperationComponent(component) {
+    setPreflight(null);
+    setOperation((current) => ({
+      ...current,
+      components: current.components.includes(component)
+        ? current.components.filter((value) => value !== component)
+        : [...current.components, component],
+      confirmText: '',
+      maintenanceApproved: component === 'mongodb' ? false : current.maintenanceApproved,
+    }));
   }
 
   async function triggerBuild() {
@@ -400,19 +476,44 @@ export function ReleasesView({ session }) {
     }
   }
 
+  async function runPreflight() {
+    setSubmitting(true);
+    setError('');
+    setMessage('');
+    setPreflight(null);
+    try {
+      const result = await requestJson('/api/releases/preflight', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: operation.action,
+          components: operation.components,
+          maintenanceApproved: operation.maintenanceApproved,
+        }),
+      });
+      setPreflight(result);
+      setMessage('发布前检查已通过');
+    } catch (requestError) {
+      if (requestError.details?.checks) setPreflight(requestError.details);
+      setError(requestError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function triggerDeployment() {
-    const required = `${deployment.action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${deployment.component}`;
-    if (deployment.confirmText !== required) return;
+    const required = `${operation.action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${operation.components.join(',')}`;
+    if (operation.confirmText !== required) return;
     setSubmitting(true);
     setError('');
     setMessage('');
     try {
       await requestJson('/api/releases/deploy', {
         method: 'POST',
-        body: JSON.stringify(deployment),
+        body: JSON.stringify(operation),
       });
-      setMessage(deployment.action === 'rollback' ? '回滚请求已提交给内部部署执行器' : '部署请求已提交给内部部署执行器');
-      setDeployment({ ...deployment, image: '', confirmText: '', password: '', totp: '' });
+      setMessage(operation.action === 'rollback' ? '回滚任务已进入受控执行队列' : '部署任务已进入受控执行队列');
+      setOperation((current) => ({ ...current, confirmText: '', password: '', totp: '' }));
+      setPreflight(null);
       await load();
     } catch (requestError) {
       setError(requestError.message);
@@ -423,57 +524,129 @@ export function ReleasesView({ session }) {
 
   if (loading && !data) return <section className="page-view ops-page"><LoadingBlock label="正在读取发布状态" /></section>;
   const capabilities = data?.capabilities || {};
-  const successfulRuns = (data?.runs || []).filter((run) => run.conclusion === 'success').length;
+  const metrics = data?.metrics || {};
+  const successRate = metrics.completedBuilds ? Math.round((metrics.successfulBuilds / metrics.completedBuilds) * 100) : null;
+  const buildRows = (data?.builds || []).length
+    ? data.builds
+    : (data?.runs || []).map((run) => ({
+      ...run,
+      status: run.conclusion || run.status,
+      workflowRun: { url: run.url, actor: run.actor, event: run.event },
+      targets: [],
+      legacy: true,
+    }));
+  const deployments = data?.deployments || [];
+  const selectedSource = operation.action === 'deploy'
+    ? (data?.builds || []).find((build) => build.id === operation.buildId)
+    : deployments.find((deployment) => deployment.id === operation.sourceDeploymentId);
+  const availableArtifacts = selectedSource?.artifacts || [];
+  const confirmation = `${operation.action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${operation.components.join(',')}`;
+  const operationAllowed = operation.action === 'rollback' ? capabilities.canRollback : capabilities.canDeploy;
+  const totpReady = !session.user?.totpEnabled || operation.totp.length === 6;
+  const mode = capabilities.canDeploy ? '受控发布' : capabilities.canBuild ? '仅构建' : '只读';
   return (
     <section className="page-view ops-page" aria-label="发布中心">
-      <div className="ops-toolbar"><span className={`integration-state ${capabilities.githubConfigured ? 'ready' : ''}`}><i />{capabilities.githubConfigured ? 'GitHub 已连接' : 'GitHub 只读信息未配置'}</span><button className="secondary-action" type="button" onClick={load}><RefreshCw size={17} />刷新</button></div>
+      <div className="ops-toolbar">
+        <div className="release-capabilities">
+          <span className={`integration-state ${capabilities.githubConfigured ? 'ready' : ''}`}><i />{capabilities.githubConfigured ? 'GitHub 已连接' : 'GitHub 未配置'}</span>
+          <span className={`integration-state ${capabilities.deployRunnerHealthy ? 'ready' : ''}`}><i />{capabilities.deployRunnerHealthy ? '部署执行器已连接' : capabilities.deployRunnerConfigured ? '部署执行器不可用' : '部署执行器未配置'}</span>
+          <span className="release-environment"><Cloud size={15} />{data?.environment || 'production'}</span>
+        </div>
+        <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />刷新</button>
+      </div>
       <Feedback error={error || capabilities.issue} message={message} />
       <div className="ops-kpis">
-        <article><Rocket size={20} /><div><span>当前版本</span><strong>{data?.revision?.slice(0, 12) || '--'}</strong><small>{data?.deployedAt ? formatDateTime(data.deployedAt) : '等待镜像版本标识'}</small></div></article>
-        <article><PackageCheck size={20} /><div><span>镜像组件</span><strong>{data?.components?.filter((item) => item.configured).length || 0}</strong><small>生产部署单元</small></div></article>
-        <article><CheckCircle2 size={20} /><div><span>最近成功</span><strong>{successfulRuns}</strong><small>最近 10 次构建</small></div></article>
-        <article><ShieldCheck size={20} /><div><span>操作模式</span><strong>{capabilities.canBuild ? '受保护' : '只读'}</strong><small>高风险操作需二次验证</small></div></article>
+        <article><Rocket size={20} /><div><span>平台版本</span><strong>{data?.revision?.slice(0, 12) || '--'}</strong><small>{data?.deployedAt ? formatDateTime(data.deployedAt) : '等待镜像版本标识'}</small></div></article>
+        <article><PackageCheck size={20} /><div><span>运行观测</span><strong>{metrics.observedComponents || 0}/{data?.components?.length || 0}</strong><small>实际运行组件</small></div></article>
+        <article className={metrics.driftCount ? 'warning' : ''}><AlertTriangle size={20} /><div><span>版本漂移</span><strong>{metrics.driftCount || 0}</strong><small>{metrics.driftCount ? '期望与实际不一致' : '未发现版本漂移'}</small></div></article>
+        <article><ShieldCheck size={20} /><div><span>操作模式</span><strong>{mode}</strong><small>{successRate === null ? '暂无持久化构建结果' : `最近构建成功率 ${successRate}%`}</small></div></article>
       </div>
-      <div className="release-layout">
-        <section className="ops-panel release-components">
-          <header><div><span>部署清单</span><h3>服务镜像</h3></div><HardDrive size={20} /></header>
-          {(data?.components || []).map((component) => <div className="release-component-row" key={component.id}><span><strong>{component.id}</strong><small>{component.image || '未由环境变量声明'}</small></span><span className={component.configured ? 'configured' : ''}>{component.configured ? '已配置' : '未知'}</span></div>)}
-        </section>
-        <section className="ops-panel release-runs">
-          <header><div><span>GitHub Actions</span><h3>最近构建</h3></div><History size={20} /></header>
-          {(data?.runs || []).length ? data.runs.map((run) => <div className="release-run-row" key={run.id}><span className={`run-state ${run.conclusion || run.status}`}><i /></span><span><strong>{run.name}</strong><small>{run.revision || run.branch} · {formatDateTime(run.createdAt)}</small></span><span>{run.conclusion === 'success' ? '成功' : run.status === 'in_progress' ? '运行中' : run.conclusion || run.status}</span>{run.url ? <a href={run.url} target="_blank" rel="noreferrer" aria-label="打开 GitHub 运行记录"><ExternalLink size={15} /></a> : <span />}</div>) : <div className="ops-empty">暂无构建记录</div>}
-        </section>
-      </div>
+
+      <section className="ops-panel release-inventory">
+        <header><div><span>生产事实源</span><h3>组件版本与运行状态</h3></div><HardDrive size={20} /></header>
+        <div className="release-inventory-head"><span>组件</span><span>期望镜像</span><span>实际运行</span><span>状态</span></div>
+        {(data?.components || []).map((component) => (
+          <div className={`release-inventory-row ${component.inSync === false ? 'drift' : ''}`} key={component.id}>
+            <span><strong>{component.id}</strong><small>{component.serviceId}</small></span>
+            <span className="release-reference"><strong>{component.desiredImage || '未配置'}</strong><small>{component.configured ? '环境配置已声明' : '环境配置缺失'}</small></span>
+            <span className="release-reference"><strong>{shortValue(component.runtime?.revision)}</strong><small>{component.runtime?.digest ? shortValue(component.runtime.digest, 22) : component.runtime ? `${component.runtime.state} · ${component.runtime.health}` : '部署执行器未返回状态'}</small></span>
+            <span className={`release-sync ${component.inSync === true ? 'synced' : component.inSync === false ? 'drifted' : ''}`}><i />{component.inSync === true ? '同步' : component.inSync === false ? '漂移' : '未观测'}</span>
+          </div>
+        ))}
+      </section>
+
+      <section className="ops-panel release-history">
+        <header>
+          <div><span>发布记录</span><h3>{historyTab === 'builds' ? '构建与产物' : '部署与回滚'}</h3></div>
+          <div className="ops-segmented">
+            <button type="button" className={historyTab === 'builds' ? 'active' : ''} onClick={() => setHistoryTab('builds')}>构建</button>
+            <button type="button" className={historyTab === 'deployments' ? 'active' : ''} onClick={() => setHistoryTab('deployments')}>部署</button>
+          </div>
+        </header>
+        {historyTab === 'builds' && (buildRows.length ? buildRows.map((build) => (
+          <div className="release-history-row" key={build.id}>
+            <span className={`run-state ${releaseStateClass(build.status)}`}><i /></span>
+            <span><strong>{shortValue(build.revision || build.id)}</strong><small>{build.targets?.length ? build.targets.join('、') : build.name || '历史 Actions 记录'}</small></span>
+            <span><strong>{build.requestedBy || build.workflowRun?.actor || '--'}</strong><small>{formatDateTime(build.createdAt)}</small></span>
+            <span className={`release-status status-${releaseStateClass(build.status)}`}>{RELEASE_STATUS_LABELS[build.status] || (build.status === 'success' ? '成功' : build.status)}</span>
+            <span className="release-row-actions">
+              {build.workflowRun?.url && <a href={build.workflowRun.url} target="_blank" rel="noreferrer" aria-label="打开 GitHub 运行记录"><ExternalLink size={15} /></a>}
+              {roleAtLeast(session.user?.role, 'super_admin') && build.status === 'succeeded' && build.artifacts?.length > 0 && <button type="button" onClick={() => selectBuild(build)} disabled={!capabilities.canDeploy}><Rocket size={15} />部署</button>}
+            </span>
+          </div>
+        )) : <div className="ops-empty">暂无构建记录</div>)}
+        {historyTab === 'deployments' && (deployments.length ? deployments.map((deployment) => (
+          <div className="release-history-row" key={deployment.id}>
+            <span className={`run-state ${releaseStateClass(deployment.status)}`}><i /></span>
+            <span><strong>{deployment.action === 'rollback' ? '回滚' : '部署'} · {shortValue(deployment.buildId || deployment.sourceDeploymentId)}</strong><small>{deployment.components.join('、')}</small></span>
+            <span><strong>{deployment.requestedBy || '--'}</strong><small>{formatDateTime(deployment.createdAt)}</small></span>
+            <span className={`release-status status-${releaseStateClass(deployment.status)}`}>{RELEASE_STATUS_LABELS[deployment.status] || deployment.status}</span>
+            <span className="release-row-actions">
+              {roleAtLeast(session.user?.role, 'super_admin') && deployment.status === 'succeeded' && <button type="button" onClick={() => selectRollback(deployment)} disabled={!capabilities.canRollback}><RotateCcw size={15} />回滚到此版本</button>}
+            </span>
+          </div>
+        )) : <div className="ops-empty">暂无部署记录</div>)}
+      </section>
+
       {roleAtLeast(session.user?.role, 'super_admin') && (
         <section className="ops-panel protected-operation">
           <header><div><span>受保护操作</span><h3>重新构建生产镜像</h3></div><LockKeyhole size={20} /></header>
-          <p>提交后由现有 ACR 工作流完成构建；发布写操作默认关闭，只有服务器显式启用后才能执行。</p>
+          {!capabilities.canBuild && <div className="release-disabled-reason"><CircleAlert size={16} /><span>{capabilities.reasons?.build?.join('；') || '构建操作不可用'}</span></div>}
           <div className="release-targets">
             {(data?.components || []).map((component) => <label key={component.id}><input type="checkbox" checked={targets.includes(component.id)} onChange={() => toggleTarget(component.id)} /><span>{component.id}</span></label>)}
           </div>
           <div className="reauth-fields">
             <label>管理员密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>
             {session.user?.totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}
-            <button className="primary-button" type="button" disabled={!capabilities.canBuild || !targets.length || !credentials.password || submitting} onClick={triggerBuild}>{submitting ? <LoaderCircle className="spin" size={17} /> : <Rocket size={17} />}触发构建</button>
+            <button className="primary-button" type="button" disabled={!capabilities.canBuild || !targets.length || !credentials.password || (session.user?.totpEnabled && credentials.totp.length !== 6) || submitting} onClick={triggerBuild}>{submitting ? <LoaderCircle className="spin" size={17} /> : <Rocket size={17} />}触发构建</button>
           </div>
         </section>
       )}
-      {roleAtLeast(session.user?.role, 'super_admin') && (
+
+      {roleAtLeast(session.user?.role, 'super_admin') && selectedSource && (
         <section className="ops-panel protected-operation deployment-operation">
-          <header><div><span>原子部署</span><h3>部署或回滚不可变镜像</h3></div><ShieldCheck size={20} /></header>
-          <p>仅向内网部署执行器发送经过验证的镜像引用；未配置执行器时保持禁用，不会让管理容器接触 Docker Socket。</p>
+          <header><div><span>受控执行</span><h3>{operation.action === 'rollback' ? '回滚历史成功版本' : '部署不可变构建产物'}</h3></div><ShieldCheck size={20} /></header>
+          {!operationAllowed && <div className="release-disabled-reason"><CircleAlert size={16} /><span>{capabilities.reasons?.[operation.action === 'rollback' ? 'rollback' : 'deploy']?.join('；') || '当前操作不可用'}</span></div>}
+          <div className="release-operation-source">
+            <span><strong>{operation.action === 'rollback' ? shortValue(selectedSource.buildId || selectedSource.id) : shortValue(selectedSource.revision || selectedSource.id)}</strong><small>{availableArtifacts.length} 个不可变产物</small></span>
+            <button type="button" onClick={() => { setOperation((current) => ({ ...current, buildId: '', sourceDeploymentId: '', components: [] })); setPreflight(null); }} aria-label="关闭发布操作"><XCircle size={18} /></button>
+          </div>
+          <div className="release-targets">
+            {availableArtifacts.map((artifact) => <label key={artifact.component}><input type="checkbox" checked={operation.components.includes(artifact.component)} onChange={() => toggleOperationComponent(artifact.component)} /><span>{artifact.component} · {shortValue(artifact.digest, 18)}</span></label>)}
+          </div>
+          {preflight?.checks?.length > 0 && <div className="release-preflight-list">
+            {preflight.checks.map((check) => <div key={check.id} className={`check-${check.status}`}><span>{check.status === 'passed' ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}</span><span><strong>{check.label}</strong><small>{check.detail}</small></span></div>)}
+          </div>}
           <div className="deployment-fields">
-            <label>操作<select value={deployment.action} onChange={(event) => setDeployment({ ...deployment, action: event.target.value, confirmText: '' })}><option value="deploy">部署</option><option value="rollback">回滚</option></select></label>
-            <label>组件<select value={deployment.component} onChange={(event) => setDeployment({ ...deployment, component: event.target.value, confirmText: '' })}>{(data?.components || []).map((component) => <option key={component.id} value={component.id}>{component.id}</option>)}</select></label>
-            <label className="wide">不可变镜像引用<input value={deployment.image} onChange={(event) => setDeployment({ ...deployment, image: event.target.value })} placeholder="registry/repository:image-tag-sha" /></label>
-            <label>管理员密码<input type="password" autoComplete="current-password" value={deployment.password} onChange={(event) => setDeployment({ ...deployment, password: event.target.value })} /></label>
-            {session.user?.totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={deployment.totp} onChange={(event) => setDeployment({ ...deployment, totp: event.target.value.replace(/\D/g, '') })} /></label>}
-            <label className="wide">确认短语<input value={deployment.confirmText} onChange={(event) => setDeployment({ ...deployment, confirmText: event.target.value })} placeholder={`${deployment.action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${deployment.component}`} /></label>
+            <label>管理员密码<input type="password" autoComplete="current-password" value={operation.password} onChange={(event) => setOperation({ ...operation, password: event.target.value })} /></label>
+            {session.user?.totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={operation.totp} onChange={(event) => setOperation({ ...operation, totp: event.target.value.replace(/\D/g, '') })} /></label>}
+            {operation.components.includes('mongodb') && <label className="release-maintenance-confirm"><input type="checkbox" checked={operation.maintenanceApproved} onChange={(event) => { setPreflight(null); setOperation({ ...operation, maintenanceApproved: event.target.checked, confirmText: '' }); }} /><span>确认 MongoDB 维护窗口</span></label>}
+            <label className="wide">确认短语<input value={operation.confirmText} onChange={(event) => setOperation({ ...operation, confirmText: event.target.value })} placeholder={confirmation} /></label>
+            <button className="secondary-action" type="button" onClick={runPreflight} disabled={!operationAllowed || !operation.components.length || submitting}>{submitting ? <LoaderCircle className="spin" size={17} /> : <ShieldCheck size={17} />}运行预检</button>
             <button className="primary-button" type="button" onClick={triggerDeployment} disabled={
-              !(deployment.action === 'rollback' ? capabilities.canRollback : capabilities.canDeploy)
-              || !deployment.image || !deployment.password || submitting
-              || deployment.confirmText !== `${deployment.action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${deployment.component}`
-            }>{submitting ? <LoaderCircle className="spin" size={17} /> : <Rocket size={17} />}{deployment.action === 'rollback' ? '提交回滚' : '提交部署'}</button>
+              !operationAllowed || !preflight?.ok || !operation.components.length || !operation.password || !totpReady || submitting
+              || operation.confirmText !== confirmation
+            }>{submitting ? <LoaderCircle className="spin" size={17} /> : operation.action === 'rollback' ? <RotateCcw size={17} /> : <Rocket size={17} />}{operation.action === 'rollback' ? '提交回滚' : '提交部署'}</button>
           </div>
         </section>
       )}

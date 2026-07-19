@@ -2,6 +2,7 @@ import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createMongoSessionRegistry } from './mongo-session-registry.js';
 import { createMongoOperationsStore } from './operations-store.js';
+import { createMongoReleaseStore } from './release-store.js';
 
 const config = loadConfig();
 const sessionRegistry = config.mongoUri
@@ -14,16 +15,21 @@ const operationsStore = config.mongoUri
     auditRetentionDays: config.auditRetentionDays,
   })
   : null;
+const releaseStore = config.mongoUri
+  ? await createMongoReleaseStore({ uri: config.mongoUri })
+  : null;
 const app = createApp({
   config,
   sessionRegistry,
   operationsStore,
+  releaseStore,
   readinessCheck: async () => {
-    const [sessionsReady, operationsReady] = await Promise.all([
+    const [sessionsReady, operationsReady, releasesReady] = await Promise.all([
       sessionRegistry ? sessionRegistry.ping() : true,
       operationsStore ? operationsStore.ping() : true,
+      releaseStore ? releaseStore.ping() : true,
     ]);
-    return sessionsReady && operationsReady;
+    return sessionsReady && operationsReady && releasesReady;
   },
 });
 app.locals.operationsCenter.start();
@@ -48,6 +54,7 @@ function shutdown(signal) {
     await sessionRegistry?.close();
     app.locals.operationsCenter.stop();
     await operationsStore?.close();
+    await releaseStore?.close();
   });
 }
 

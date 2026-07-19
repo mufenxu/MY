@@ -16,6 +16,28 @@ function incidentMessage(incident, transition, publicOrigin) {
   return lines.join('\n');
 }
 
+function releaseMessage(event, publicOrigin) {
+  const record = event.build || event.deployment || {};
+  const success = event.status === 'succeeded';
+  const rolledBack = event.status === 'rolled_back';
+  const status = success
+    ? '<font color="info">成功</font>'
+    : rolledBack ? '<font color="warning">已自动回滚</font>' : '<font color="warning">失败</font>';
+  const kind = event.kind === 'build' ? '镜像构建' : event.kind === 'rollback' ? '生产回滚' : '生产部署';
+  const targets = record.targets || record.components || [];
+  const lines = [
+    `### 统一平台${kind} ${status}`,
+    `> **环境**：${record.environment || 'production'}`,
+    `> **组件**：${targets.join('、') || '--'}`,
+    `> **版本**：${String(record.revision || record.buildId || '').slice(0, 12) || '--'}`,
+    `> **操作人**：${record.requestedBy || 'system'}`,
+    `> **时间**：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+  ];
+  if (record.error) lines.push(`> **原因**：${String(record.error).slice(0, 180)}`);
+  if (publicOrigin) lines.push(`[打开发布中心](${new URL('/', publicOrigin).toString()})`);
+  return lines.join('\n');
+}
+
 export function createOperationsNotifier({
   serviceUrl,
   apiKey,
@@ -25,6 +47,39 @@ export function createOperationsNotifier({
   timeoutMs = 8000,
 } = {}) {
   const configured = Boolean(enabled && serviceUrl && apiKey);
+
+  async function sendMarkdown(content, duplicateCheckInterval = 1800) {
+    if (!configured) return { delivered: false, reason: 'not_configured' };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetchImpl(new URL('/notify', serviceUrl), {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-API-KEY': apiKey,
+        },
+        body: JSON.stringify({
+          msg_type: 'markdown',
+          data: { content },
+          enable_duplicate_check: 1,
+          duplicate_check_interval: duplicateCheckInterval,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return { delivered: true };
+    } catch (error) {
+      return {
+        delivered: false,
+        reason: error?.name === 'AbortError' ? 'timeout' : 'request_failed',
+        error: String(error?.message || error).slice(0, 200),
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   return {
     configured,
@@ -42,36 +97,10 @@ export function createOperationsNotifier({
       }
     },
     async sendIncident(incident, transition) {
-      if (!configured) return { delivered: false, reason: 'not_configured' };
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const response = await fetchImpl(new URL('/notify', serviceUrl), {
-          method: 'POST',
-          signal: controller.signal,
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            'X-API-KEY': apiKey,
-          },
-          body: JSON.stringify({
-            msg_type: 'markdown',
-            data: { content: incidentMessage(incident, transition, publicOrigin) },
-            enable_duplicate_check: 1,
-            duplicate_check_interval: 1800,
-          }),
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return { delivered: true };
-      } catch (error) {
-        return {
-          delivered: false,
-          reason: error?.name === 'AbortError' ? 'timeout' : 'request_failed',
-          error: String(error?.message || error).slice(0, 200),
-        };
-      } finally {
-        clearTimeout(timer);
-      }
+      return sendMarkdown(incidentMessage(incident, transition, publicOrigin));
+    },
+    async sendRelease(event) {
+      return sendMarkdown(releaseMessage(event, publicOrigin), 300);
     },
   };
 }

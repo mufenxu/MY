@@ -21,6 +21,7 @@ import { createOperationsCenter } from './operations-center.js';
 import { createOperationsNotifier } from './operations-notifier.js';
 import { createMemoryOperationsStore } from './operations-store.js';
 import { ReleaseOperationError, createReleaseService } from './release-service.js';
+import { createMemoryReleaseStore } from './release-store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.resolve(__dirname, '..', 'dist');
@@ -79,6 +80,7 @@ export function createApp({
   readinessCheck = async () => true,
   backupManager = null,
   operationsStore = null,
+  releaseStore = null,
   operationsManager = null,
   releaseManager = null,
 } = {}) {
@@ -97,13 +99,21 @@ export function createApp({
     statusRetentionDays: config.statusRetentionDays,
     auditRetentionDays: config.auditRetentionDays,
   });
-  const releases = releaseManager || createReleaseService({ config, fetchImpl });
+  const releaseData = releaseStore || createMemoryReleaseStore();
   const notifier = createOperationsNotifier({
     serviceUrl: config.notificationServiceUrl,
     apiKey: config.notificationApiKey,
     publicOrigin: config.publicOrigin,
     enabled: config.incidentNotificationsEnabled,
     fetchImpl,
+  });
+  const releases = releaseManager || createReleaseService({
+    config,
+    fetchImpl,
+    store: releaseData,
+    backupManager: backups,
+    operationsStore: store,
+    notifier,
   });
   const operations = operationsManager || createOperationsCenter({
     services: registry.services,
@@ -178,6 +188,7 @@ export function createApp({
   app.locals.operationsStore = store;
   app.locals.operationsCenter = operations;
   app.locals.releaseService = releases;
+  app.locals.releaseStore = releaseData;
 
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -314,6 +325,34 @@ export function createApp({
       targetId: session?.nonce || '',
     });
     res.json({ authenticated: false });
+  });
+
+  const releaseCallbackLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 240,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: '发布回调请求过多。', code: 'RELEASE_CALLBACK_RATE_LIMITED' },
+  });
+
+  app.post('/api/releases/callback', releaseCallbackLimiter, async (req, res, next) => {
+    if (!config.releaseCallbackToken) {
+      return res.status(503).json({ error: '发布回调尚未配置。', code: 'RELEASE_CALLBACK_NOT_CONFIGURED' });
+    }
+    const authorization = String(req.get('authorization') || '');
+    if (!secureTokenEqual(authorization, `Bearer ${config.releaseCallbackToken}`)) {
+      return res.status(401).json({ error: '发布回调凭据无效。', code: 'RELEASE_CALLBACK_UNAUTHORIZED' });
+    }
+    try {
+      const record = await releases.acceptCallback(req.body);
+      return res.status(202).json({ accepted: true, id: record.id, status: record.status });
+    } catch (error) {
+      if (error instanceof ReleaseOperationError) {
+        return res.status(error.status).json({ error: error.message, code: error.code, details: error.details });
+      }
+      next(error);
+      return undefined;
+    }
   });
 
   app.use('/api', async (req, res, next) => {
@@ -492,17 +531,34 @@ export function createApp({
     }
   });
 
+  app.post('/api/releases/preflight', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      const result = await releases.getPreflight({
+        components: req.body?.components,
+        action: req.body?.action,
+        maintenanceApproved: Boolean(req.body?.maintenanceApproved),
+      });
+      return res.status(result.ok ? 200 : 409).json(result);
+    } catch (error) {
+      if (error instanceof ReleaseOperationError) {
+        return res.status(error.status).json({ error: error.message, code: error.code, details: error.details });
+      }
+      next(error);
+      return undefined;
+    }
+  });
+
   app.post('/api/releases/build', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
     try {
       if (!await verifyReauthentication(req)) {
         await recordAudit(req, { action: 'release.build', outcome: 'failure', targetType: 'release', details: { reason: 'reauthentication_failed' } });
         return res.status(403).json({ error: '二次验证失败。', code: 'REAUTHENTICATION_FAILED' });
       }
-      const result = await releases.dispatchBuild({ targets: req.body?.targets });
-      await recordAudit(req, { action: 'release.build', targetType: 'release', targetId: result.targets.join(','), details: result });
+      const result = await releases.dispatchBuild({ targets: req.body?.targets, requestedBy: req.consoleUser.username });
+      await recordAudit(req, { action: 'release.build', targetType: 'release', targetId: result.id, details: { targets: result.targets } });
       return res.status(202).json(result);
     } catch (error) {
-      if (error instanceof ReleaseOperationError) return res.status(error.status).json({ error: error.message, code: error.code });
+      if (error instanceof ReleaseOperationError) return res.status(error.status).json({ error: error.message, code: error.code, details: error.details });
       next(error);
       return undefined;
     }
@@ -511,8 +567,10 @@ export function createApp({
   app.post('/api/releases/deploy', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
     try {
       const action = String(req.body?.action || '');
-      const component = String(req.body?.component || '');
-      const expectedConfirmation = `${action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${component}`;
+      const components = [...new Set((Array.isArray(req.body?.components) ? req.body.components : [req.body?.component])
+        .map((component) => String(component || '').trim())
+        .filter(Boolean))];
+      const expectedConfirmation = `${action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${components.join(',')}`;
       if (!['deploy', 'rollback'].includes(action) || req.body?.confirmText !== expectedConfirmation) {
         return res.status(400).json({ error: '部署确认短语不正确。', code: 'DEPLOY_CONFIRMATION_REQUIRED' });
       }
@@ -522,19 +580,21 @@ export function createApp({
       }
       const result = await releases.dispatchDeployment({
         action,
-        component,
-        image: req.body?.image,
+        buildId: req.body?.buildId,
+        sourceDeploymentId: req.body?.sourceDeploymentId,
+        components,
+        maintenanceApproved: Boolean(req.body?.maintenanceApproved),
         requestedBy: req.consoleUser.username,
       });
       await recordAudit(req, {
         action: `release.${action}`,
         targetType: 'release',
-        targetId: component,
-        details: { image: String(req.body?.image || '').slice(0, 512) },
+        targetId: result.id,
+        details: { components, buildId: result.buildId, sourceDeploymentId: result.sourceDeploymentId },
       });
       return res.status(202).json(result);
     } catch (error) {
-      if (error instanceof ReleaseOperationError) return res.status(error.status).json({ error: error.message, code: error.code });
+      if (error instanceof ReleaseOperationError) return res.status(error.status).json({ error: error.message, code: error.code, details: error.details });
       next(error);
       return undefined;
     }

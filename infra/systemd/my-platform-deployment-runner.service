@@ -1,0 +1,29 @@
+[Unit]
+Description=MY Platform controlled deployment runner
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=my-platform-deploy
+Group=my-platform-deploy
+SupplementaryGroups=docker
+WorkingDirectory=/opt/my-platform
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/my-platform/deployment-runner.env
+ExecStart=/usr/bin/node /opt/my-platform/scripts/deployment-runner.mjs
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/opt/my-platform /var/lib/my-platform-deployment-runner
+
+[Install]
+WantedBy=multi-user.target

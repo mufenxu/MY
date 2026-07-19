@@ -36,13 +36,22 @@ on:
         required: true
         default: "platform,backup"
       push_sha_tags:
-        description: "Also push immutable tags suffixed with the short commit SHA"
+        description: "Required safety control: publish immutable tags suffixed with the short commit SHA"
         required: true
         type: boolean
         default: true
+      release_id:
+        description: "Release center correlation id (normally supplied by the platform)"
+        required: false
+        default: ""
+      callback_url:
+        description: "Release center callback URL (normally supplied by the platform)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: aliyun-acr-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.targets || 'auto' }}
@@ -62,6 +71,34 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
+
+      - name: Verify this commit passed required CI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          api="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&per_page=20"
+          for attempt in $(seq 1 90); do
+            payload="$(curl --fail --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${api}")"
+            conclusion="$(printf '%s' "${payload}" | jq -r '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")][0].conclusion // ""')"
+            status="$(printf '%s' "${payload}" | jq -r '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")][0].status // ""')"
+            if [ "${status}" = "completed" ]; then
+              if [ "${conclusion}" != "success" ]; then
+                echo "Required CI completed with conclusion: ${conclusion}" >&2
+                exit 1
+              fi
+              echo "Required CI passed for ${GITHUB_SHA}."
+              exit 0
+            fi
+            echo "Waiting for required CI for ${GITHUB_SHA} (${attempt}/90)..."
+            sleep 30
+          done
+          echo "Timed out waiting for required CI for ${GITHUB_SHA}." >&2
+          exit 1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
@@ -195,6 +232,18 @@ jobs:
           echo "Resolved targets: ${resolved}"
           echo "targets=${resolved}" >> "${GITHUB_OUTPUT}"
 
+      - name: Synchronize build start with release center
+        if: steps.resolve.outputs.targets != ''
+        continue-on-error: true
+        env:
+          RELEASE_CALLBACK_URL: ${{ github.event.inputs.callback_url || vars.PLATFORM_RELEASE_CALLBACK_URL }}
+          RELEASE_CALLBACK_TOKEN: ${{ secrets.PLATFORM_RELEASE_CALLBACK_TOKEN }}
+          RELEASE_ID: ${{ github.event.inputs.release_id || format('gha-{0}-{1}', github.run_id, github.run_attempt) }}
+          RELEASE_STATUS: building
+          RELEASE_TARGETS: ${{ steps.resolve.outputs.targets }}
+          RELEASE_REVISION: ${{ github.sha }}
+        run: node scripts/release-workflow-callback.mjs
+
       - name: Check ACR secrets
         if: steps.resolve.outputs.targets != ''
         env:
@@ -222,6 +271,10 @@ jobs:
           PUSH_SHA_TAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.push_sha_tags || 'true' }}
         run: |
           set -euo pipefail
+          if [ "${PUSH_SHA_TAGS}" != "true" ]; then
+            echo "Immutable SHA tags are mandatory for production candidates." >&2
+            exit 1
+          fi
 
           declare -A dockerfiles=(
             [platform]="Dockerfile"
@@ -305,25 +358,114 @@ jobs:
 
           short_sha="${GITHUB_SHA::12}"
           build_timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          : > release-artifacts.tsv
           for target in "${unique_targets[@]}"; do
             image_tag="${tags[$target]}"
             image="${ACR_IMAGE}:${image_tag}"
-            extra_tags=()
-            if [ "${PUSH_SHA_TAGS}" = "true" ]; then
-              extra_tags+=(--tag "${ACR_IMAGE}:${image_tag}-${short_sha}")
-            fi
+            candidate="${ACR_IMAGE}:${image_tag}-${short_sha}"
 
-            echo "::group::Build ${target} -> ${image}"
+            echo "::group::Build candidate ${target} -> ${candidate}"
             docker buildx build \
               --platform linux/amd64 \
               --file "${dockerfiles[$target]}" \
               --build-arg "BUILD_REVISION=${GITHUB_SHA}" \
               --build-arg "BUILD_TIMESTAMP=${build_timestamp}" \
-              --tag "${image}" \
-              "${extra_tags[@]}" \
+              --tag "${candidate}" \
               --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
               --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
               --push \
               "${contexts[$target]}"
+            digest="$(docker buildx imagetools inspect "${candidate}" | awk '$1 == "Digest:" { print $2; exit }')"
+            if ! printf '%s' "${digest}" | grep -Eq '^sha256:[a-f0-9]{64}$'; then
+              echo "Registry did not return a valid immutable digest for ${candidate}." >&2
+              exit 1
+            fi
+            reference="${ACR_IMAGE}@${digest}"
+            printf '%s\t%s\t%s\t%s\t%s\n' "${target}" "${image}" "${digest}" "${reference}" "${candidate}" >> release-artifacts.tsv
             echo "::endgroup::"
           done
+
+      - name: Create exact-candidate smoke environment
+        if: steps.resolve.outputs.targets != ''
+        env:
+          RAW_TARGETS: ${{ steps.resolve.outputs.targets }}
+        run: |
+          set -euo pipefail
+          node scripts/create-ci-env.mjs .env.release-smoke
+          declare -A tags=(
+            [platform]="platform-api-latest"
+            [core]="core-api-latest"
+            [exam]="exam-api-latest"
+            [notification]="notification-service-latest"
+            [backup]="backup-runner-latest"
+            [campus]="campus-service-latest"
+            [iot]="iot-service-latest"
+            [mongodb]="mongodb-7.0"
+          )
+          declare -A env_keys=(
+            [platform]="PLATFORM_API_IMAGE"
+            [core]="CORE_API_IMAGE"
+            [exam]="EXAM_API_IMAGE"
+            [notification]="NOTIFICATION_SERVICE_IMAGE"
+            [backup]="BACKUP_RUNNER_IMAGE"
+            [campus]="CAMPUS_SERVICE_IMAGE"
+            [iot]="IOT_SERVICE_IMAGE"
+            [mongodb]="MONGODB_IMAGE"
+          )
+          short_sha="${GITHUB_SHA::12}"
+          for target in platform core exam notification backup campus iot mongodb; do
+            suffix="${tags[$target]}"
+            if printf ',%s,' "${RAW_TARGETS}" | grep -q ",${target},"; then
+              suffix="${suffix}-${short_sha}"
+            fi
+            sed -i "s|^${env_keys[$target]}=.*|${env_keys[$target]}=${ACR_IMAGE}:${suffix}|" .env.release-smoke
+          done
+
+      - name: Smoke test exact candidate images
+        if: steps.resolve.outputs.targets != ''
+        run: |
+          set -euo pipefail
+          docker compose --env-file .env.release-smoke -f infra/docker/compose.yml pull
+          docker compose --env-file .env.release-smoke -f infra/docker/compose.yml up -d --no-build --wait --wait-timeout 240
+          node --env-file=.env.release-smoke scripts/verify-platform-smoke.mjs
+
+      - name: Stop exact-candidate smoke stack
+        if: always() && steps.resolve.outputs.targets != ''
+        run: docker compose --env-file .env.release-smoke -f infra/docker/compose.yml down -v || true
+
+      - name: Promote verified candidates to deployment tags
+        if: steps.resolve.outputs.targets != ''
+        env:
+          RAW_TARGETS: ${{ steps.resolve.outputs.targets }}
+        run: |
+          set -euo pipefail
+          declare -A tags=(
+            [platform]="platform-api-latest"
+            [core]="core-api-latest"
+            [exam]="exam-api-latest"
+            [notification]="notification-service-latest"
+            [backup]="backup-runner-latest"
+            [campus]="campus-service-latest"
+            [iot]="iot-service-latest"
+            [mongodb]="mongodb-7.0"
+          )
+          short_sha="${GITHUB_SHA::12}"
+          IFS=',' read -ra targets <<< "${RAW_TARGETS}"
+          for target in "${targets[@]}"; do
+            candidate="${ACR_IMAGE}:${tags[$target]}-${short_sha}"
+            deployment_tag="${ACR_IMAGE}:${tags[$target]}"
+            docker buildx imagetools create --tag "${deployment_tag}" "${candidate}"
+          done
+
+      - name: Synchronize final build result with release center
+        if: always()
+        continue-on-error: true
+        env:
+          RELEASE_CALLBACK_URL: ${{ github.event.inputs.callback_url || vars.PLATFORM_RELEASE_CALLBACK_URL }}
+          RELEASE_CALLBACK_TOKEN: ${{ secrets.PLATFORM_RELEASE_CALLBACK_TOKEN }}
+          RELEASE_ID: ${{ github.event.inputs.release_id || format('gha-{0}-{1}', github.run_id, github.run_attempt) }}
+          RELEASE_STATUS: ${{ job.status }}
+          RELEASE_TARGETS: ${{ steps.resolve.outputs.targets }}
+          RELEASE_REVISION: ${{ github.sha }}
+          RELEASE_ARTIFACTS_FILE: release-artifacts.tsv
+        run: node scripts/release-workflow-callback.mjs

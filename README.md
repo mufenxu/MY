@@ -77,3 +77,5 @@ Alibaba Cloud Container Registry is the primary deployment registry:
 ACR registry and image release instructions are documented in [docs/aliyun-acr.md](./docs/aliyun-acr.md). Architecture boundaries are in [docs/architecture.md](./docs/architecture.md), and single-domain deployment steps are in [docs/single-domain-deployment.md](./docs/single-domain-deployment.md).
 
 Pushes to `main` rebuild affected ACR images automatically through the GitHub Actions workflow named `Build and push Aliyun ACR images`. Run that workflow manually only for retries, full releases, or explicit target selection such as `platform,backup`.
+
+The workflow now waits for the exact commit's CI result, smoke-tests immutable SHA candidates, and only then promotes deployment tags. The admin release center persists build artifacts and controlled deployment history; see [`docs/release-center.md`](docs/release-center.md).

@@ -92,7 +92,7 @@ core,campus
 all
 ```
 
-Keep `push_sha_tags` enabled for normal releases. The workflow pushes both the deployment tag and an immutable SHA tag, for example:
+`push_sha_tags` is a mandatory safety control. The workflow first pushes the immutable SHA candidate, starts the complete smoke stack with the exact candidate, and promotes the normal deployment tag only after verification, for example:
 
 ```text
 crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my:platform-api-latest
@@ -103,14 +103,16 @@ The existing `npm run acr:build -- <target>` command is now informational. It pr
 
 ## Deploy Images
 
-After the GitHub Actions workflow succeeds, pull and recreate only the affected services on the server:
+The preferred path is to select the successful build in the release center. It deploys the callback-verified `repository@sha256:...` reference through the restricted host runner, records the deployment in MongoDB, verifies health, and automatically restores the previous runtime Digest on failure.
+
+For a break-glass manual deployment, preserve the current runtime Digest first, point the affected image variable at the exact verified Digest, then pull and recreate only the affected services:
 
 ```bash
 docker compose --env-file .env -f infra/docker/compose.yml pull platform-api backup-runner
-docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build platform-api backup-runner
+docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build --force-recreate --wait platform-api backup-runner
 ```
 
-For MongoDB image updates, take a backup first and perform the restart in a maintenance window.
+Do not use a mutable `latest` reference as the rollback point. For MongoDB image updates, take a restorable backup first, use an active maintenance window, and confirm the data migration rollback plan.
 
 ## Registry Login
 

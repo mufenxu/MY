@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ReleaseOperationError, createReleaseService } from '../src/release-service.js';
+import { createReleaseService, ReleaseOperationError } from '../src/release-service.js';
+import { createMemoryReleaseStore } from '../src/release-store.js';
+
+const imageRepository = 'registry.example.com/team/platform';
+const digest = `sha256:${'a'.repeat(64)}`;
 
 function config(overrides = {}) {
   return {
@@ -8,13 +12,46 @@ function config(overrides = {}) {
     githubToken: '',
     githubWorkflow: 'aliyun-acr.yml',
     githubRef: 'main',
+    publicOrigin: 'https://admin.example.com',
     releaseActionsEnabled: false,
+    releaseEnvironment: 'production',
+    releaseCallbackToken: '',
+    releaseAllowedImageRepository: '',
     deployHookUrl: '',
     deployHookToken: '',
-    releaseImages: { platform: 'registry/platform:sha-123' },
+    releaseImages: { platform: `${imageRepository}:platform-api-latest` },
     releaseRevision: '1234567890abcdef',
     releaseDeployedAt: '2026-07-18T12:00:00Z',
+    backupRpoHours: 26,
     ...overrides,
+  };
+}
+
+function artifact(component = 'platform', value = digest) {
+  return {
+    component,
+    image: `${imageRepository}:${component}-latest`,
+    shaTag: `${imageRepository}:${component}-latest-deadbeef0000`,
+    digest: value,
+    reference: `${imageRepository}@${value}`,
+  };
+}
+
+function enabledConfig(overrides = {}) {
+  return config({
+    githubToken: 'token',
+    releaseActionsEnabled: true,
+    releaseCallbackToken: 'c'.repeat(32),
+    releaseAllowedImageRepository: imageRepository,
+    ...overrides,
+  });
+}
+
+function jsonResponse(data, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => data,
   };
 }
 
@@ -30,45 +67,147 @@ test('release center remains explicitly read-only without credentials', async ()
   );
 });
 
-test('release builds dispatch only allowlisted targets with immutable tags enabled', async () => {
+test('release builds create a persistent release and dispatch allowlisted targets', async () => {
   const requests = [];
+  const store = createMemoryReleaseStore({ idFactory: () => 'release-1' });
   const releases = createReleaseService({
-    config: config({ githubToken: 'token', releaseActionsEnabled: true }),
+    config: enabledConfig(),
+    store,
+    idFactory: () => 'release-1',
     fetchImpl: async (url, options = {}) => {
-      requests.push({ url, options });
-      return options.method === 'POST'
-        ? { ok: true, status: 204 }
-        : { ok: true, status: 200, json: async () => ({ workflow_runs: [] }) };
+      requests.push({ url: String(url), options });
+      return options.method === 'POST' ? jsonResponse(null, 204) : jsonResponse({ workflow_runs: [] });
     },
   });
 
-  await releases.dispatchBuild({ targets: ['platform', 'core'] });
-  const body = JSON.parse(requests[0].options.body);
-  assert.deepEqual(body.inputs, { targets: 'platform,core', push_sha_tags: 'true' });
+  const build = await releases.dispatchBuild({ targets: ['platform', 'core'], requestedBy: 'admin' });
+  assert.equal(build.id, 'release-1');
+  assert.deepEqual(build.targets, ['platform', 'core']);
+  const body = JSON.parse(requests.find((request) => request.options.method === 'POST').options.body);
+  assert.deepEqual(body.inputs, {
+    targets: 'platform,core',
+    push_sha_tags: 'true',
+    release_id: 'release-1',
+    callback_url: 'https://admin.example.com/api/releases/callback',
+  });
+  assert.equal((await store.getBuild('release-1')).requestedBy, 'admin');
   await assert.rejects(
     releases.dispatchBuild({ targets: ['platform;shutdown'] }),
     (error) => error.code === 'INVALID_RELEASE_TARGET',
   );
 });
 
-test('deployment hook rejects unsafe image references before making a request', async () => {
-  let called = false;
+test('workflow callbacks persist complete immutable artifacts and reject other repositories', async () => {
+  const store = createMemoryReleaseStore();
+  const releases = createReleaseService({ config: enabledConfig(), store });
+  const revision = 'b'.repeat(40);
+  const build = await releases.acceptCallback({
+    type: 'build',
+    releaseId: 'gha-123-1',
+    status: 'succeeded',
+    event: 'push',
+    targets: ['platform'],
+    artifacts: [artifact()],
+    revision,
+    runId: '123',
+    actor: 'developer',
+  });
+  assert.equal(build.status, 'succeeded');
+  assert.equal(build.artifacts[0].reference, `${imageRepository}@${digest}`);
+  assert.equal((await releases.getSummary()).builds[0].revision, revision);
+
+  const replay = await releases.acceptCallback({
+    type: 'build',
+    releaseId: 'gha-123-1',
+    status: 'succeeded',
+    event: 'push',
+    targets: ['platform'],
+    artifacts: [artifact()],
+    revision,
+    runId: '123',
+    actor: 'developer',
+  });
+  assert.equal(replay.status, 'succeeded');
+  await assert.rejects(
+    releases.acceptCallback({
+      type: 'build',
+      releaseId: 'gha-123-1',
+      status: 'failed',
+      targets: ['platform'],
+      revision,
+      runId: '123',
+    }),
+    (error) => error.code === 'RELEASE_ALREADY_FINALIZED',
+  );
+
+  await assert.rejects(
+    releases.acceptCallback({
+      type: 'build',
+      releaseId: 'gha-124-1',
+      status: 'succeeded',
+      targets: ['platform'],
+      revision,
+      artifacts: [{ ...artifact(), reference: `evil.example/app@${digest}` }],
+    }),
+    (error) => error.code === 'UNTRUSTED_RELEASE_ARTIFACT',
+  );
+});
+
+test('deployment uses build digests only after runner and platform preflight checks pass', async () => {
+  const store = createMemoryReleaseStore();
+  const requests = [];
   const releases = createReleaseService({
-    config: config({
-      githubToken: 'token',
-      releaseActionsEnabled: true,
+    config: enabledConfig({
       deployHookUrl: 'http://deploy-runner.internal/',
       deployHookToken: 'd'.repeat(32),
     }),
-    fetchImpl: async () => {
-      called = true;
-      return { ok: true, json: async () => ({ accepted: true }) };
+    store,
+    idFactory: () => 'deployment-1',
+    operationsStore: {
+      listIncidents: async () => [],
+      getSettings: async () => ({ maintenanceWindows: [] }),
+      addAudit: async () => ({}),
+    },
+    fetchImpl: async (url, options = {}) => {
+      const resource = String(url);
+      requests.push({ url: resource, options });
+      if (resource.includes('api.github.com')) return jsonResponse({ workflow_runs: [] });
+      if (resource.endsWith('/status')) return jsonResponse({ components: [] });
+      if (resource.endsWith('/preflight')) return jsonResponse({ ok: true, checks: [{ id: 'docker', status: 'passed' }] });
+      if (resource.endsWith('/deployments')) return jsonResponse({ id: 'deployment-1', status: 'queued' }, 202);
+      throw new Error(`Unexpected request: ${resource}`);
     },
   });
-  await assert.rejects(
-    releases.dispatchDeployment({ action: 'rollback', component: 'platform', image: 'image:tag;rm -rf /' }),
-    (error) => error.code === 'INVALID_IMAGE_REFERENCE',
-  );
-  assert.equal(called, false);
+  await releases.acceptCallback({
+    type: 'build',
+    releaseId: 'build-1',
+    status: 'succeeded',
+    targets: ['platform'],
+    artifacts: [artifact()],
+    revision: 'c'.repeat(40),
+  });
+
+  const deployment = await releases.dispatchDeployment({
+    action: 'deploy',
+    buildId: 'build-1',
+    components: ['platform'],
+    requestedBy: 'admin',
+  });
+  assert.equal(deployment.id, 'deployment-1');
+  assert.equal(deployment.artifacts[0].reference, `${imageRepository}@${digest}`);
+  const request = requests.find((item) => item.url.endsWith('/deployments'));
+  assert.equal(JSON.parse(request.options.body).artifacts[0].digest, digest);
 });
 
+test('release preflight blocks deployment while a critical incident is active', async () => {
+  const releases = createReleaseService({
+    config: enabledConfig({ deployHookUrl: 'http://runner/', deployHookToken: 'd'.repeat(32) }),
+    operationsStore: { listIncidents: async () => [{ severity: 'critical' }] },
+    fetchImpl: async (url) => String(url).endsWith('/preflight')
+      ? jsonResponse({ ok: true, checks: [] })
+      : jsonResponse({ components: [] }),
+  });
+  const preflight = await releases.getPreflight({ components: ['platform'] });
+  assert.equal(preflight.ok, false);
+  assert.equal(preflight.checks.find((check) => check.id === 'critical_incidents').status, 'blocked');
+});

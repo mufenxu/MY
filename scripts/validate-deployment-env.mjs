@@ -49,6 +49,9 @@ const policies = new Map([
   ['IOT_SESSION_SECRET', 32],
 ]);
 const optionalPolicies = new Map([
+  ['PLATFORM_GITHUB_TOKEN', 20],
+  ['PLATFORM_RELEASE_CALLBACK_TOKEN', 32],
+  ['PLATFORM_DEPLOY_HOOK_TOKEN', 32],
   ['GH_TOKEN', 20],
   ['GH_WEBHOOK_SECRET', 16],
   ['MQTT_API_KEY', 16],
@@ -77,11 +80,16 @@ if (encryptionKey.length < 32 || placeholderPattern.test(encryptionKey)) {
 }
 
 const owners = new Map();
+const allowedSharedSecretPairs = new Set([
+  ['GH_TOKEN', 'PLATFORM_GITHUB_TOKEN'].sort().join(':'),
+]);
 for (const key of [...policies.keys(), 'CORE_ENCRYPTION_KEY', ...optionalPolicies.keys()]) {
   const value = values.get(key) || '';
   if (!value) continue;
   const previous = owners.get(value);
-  if (previous) errors.push(`${key} must not reuse the value assigned to ${previous}`);
+  if (previous && !allowedSharedSecretPairs.has([key, previous].sort().join(':'))) {
+    errors.push(`${key} must not reuse the value assigned to ${previous}`);
+  }
   else owners.set(value, key);
 }
 

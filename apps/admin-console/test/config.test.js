@@ -78,3 +78,27 @@ test('production backup runner requires a strong shared token when enabled', () 
     /PLATFORM_BACKUP_RUNNER_TOKEN/,
   );
 });
+
+test('production release writes require callback and image allowlist controls', () => {
+  const base = {
+    NODE_ENV: 'production',
+    PLATFORM_ADMIN_USERNAME: 'admin',
+    PLATFORM_ADMIN_PASSWORD_HASH: 'scrypt$salt$hash',
+    PLATFORM_SESSION_SECRET: 'x'.repeat(32),
+    PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: internalPrivateKey,
+    PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: internalPublicKey,
+    PLATFORM_PUBLIC_ORIGIN: 'https://admin.example.com',
+    PLATFORM_MONGODB_URI: 'mongodb://platform.example/platform_app',
+    PLATFORM_METRICS_TOKEN: 'm'.repeat(32),
+    PLATFORM_RELEASE_ACTIONS_ENABLED: 'true',
+    PLATFORM_GITHUB_TOKEN: 'github-token',
+  };
+  assert.throws(() => loadConfig(base), /PLATFORM_RELEASE_CALLBACK_TOKEN/);
+  const configured = loadConfig({
+    ...base,
+    PLATFORM_RELEASE_CALLBACK_TOKEN: 'c'.repeat(32),
+    PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY: 'registry.example.com/team/platform',
+  });
+  assert.equal(configured.releaseActionsEnabled, true);
+  assert.equal(configured.releaseAllowedImageRepository, 'registry.example.com/team/platform');
+});

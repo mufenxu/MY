@@ -77,6 +77,7 @@ npm run dev
 - 登录、事件处置、备份、恢复、发布、会话撤销和设置变更都写入审计日志；
 - 灾备质量页检查 RPO、恢复演练、异地同步状态和每日自动备份计划；
 - 发布中心读取 GitHub Actions 和镜像版本，写操作默认关闭；
+- 发布构建、不可变镜像产物和部署结果持久化到 MongoDB，支持实际运行版本与配置漂移对比；
 - 安全中心支持 `viewer`、`operator`、`super_admin` 三种角色、可选 TOTP 和会话远程下线。
 
 ### 角色权限
@@ -91,4 +92,4 @@ npm run dev
 
 ### 发布安全
 
-`PLATFORM_RELEASE_ACTIONS_ENABLED` 默认是 `false`。重新构建需要 `PLATFORM_GITHUB_TOKEN`；部署和回滚还需要只在内网开放的 `PLATFORM_DEPLOY_HOOK_URL` 与随机 Bearer Token。平台容器不会挂载 Docker Socket，也不会直接执行宿主机命令。部署钩子必须自行完成不可变镜像校验、原子切换、健康检查和失败回滚。
+`PLATFORM_RELEASE_ACTIONS_ENABLED` 默认是 `false`。重新构建需要 `PLATFORM_GITHUB_TOKEN`、专用回调令牌和允许的 ACR 仓库；部署和回滚还需要只在内网开放的 `PLATFORM_DEPLOY_HOOK_URL` 与独立随机 Bearer Token。平台容器不会挂载 Docker Socket，也不会直接执行宿主机命令。仓库提供的宿主机部署执行器负责 Digest 白名单、串行锁、Compose 预检、健康检查和失败自动回滚。完整启用顺序见 [`docs/release-center.md`](../../docs/release-center.md)。

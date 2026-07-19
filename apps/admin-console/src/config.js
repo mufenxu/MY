@@ -164,6 +164,9 @@ export function loadConfig(env = process.env) {
     githubWorkflow: String(env.PLATFORM_GITHUB_WORKFLOW || 'aliyun-acr.yml').trim(),
     githubRef: String(env.PLATFORM_GITHUB_REF || 'main').trim(),
     releaseActionsEnabled: parseBoolean(env.PLATFORM_RELEASE_ACTIONS_ENABLED, false),
+    releaseEnvironment: String(env.PLATFORM_RELEASE_ENVIRONMENT || 'production').trim().slice(0, 32),
+    releaseCallbackToken: env.PLATFORM_RELEASE_CALLBACK_TOKEN || '',
+    releaseAllowedImageRepository: String(env.PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY || '').trim().replace(/[:/@]+$/, ''),
     deployHookUrl: parseHttpUrl(env.PLATFORM_DEPLOY_HOOK_URL),
     deployHookToken: env.PLATFORM_DEPLOY_HOOK_TOKEN || '',
     releaseRevision: String(env.PLATFORM_RELEASE_REVISION || env.GITHUB_SHA || '').trim().slice(0, 64),
@@ -208,6 +211,12 @@ export function loadConfig(env = process.env) {
     }
     if (config.releaseActionsEnabled && (!config.githubToken || !config.githubRepository)) {
       missing.push('PLATFORM_GITHUB_TOKEN');
+    }
+    if (config.releaseActionsEnabled && (config.releaseCallbackToken.length < 32 || isTemplatePlaceholder(config.releaseCallbackToken))) {
+      missing.push('PLATFORM_RELEASE_CALLBACK_TOKEN');
+    }
+    if (config.releaseActionsEnabled && !/^[a-z0-9][a-z0-9._/-]+$/i.test(config.releaseAllowedImageRepository)) {
+      missing.push('PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY');
     }
     if (config.deployHookUrl && (config.deployHookToken.length < 32 || isTemplatePlaceholder(config.deployHookToken))) {
       missing.push('PLATFORM_DEPLOY_HOOK_TOKEN');

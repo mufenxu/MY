@@ -14,8 +14,8 @@ export async function requestJson(url, options = {}) {
     const error = new Error(data.message || data.error || `请求失败（HTTP ${response.status}）`);
     error.status = response.status;
     error.code = data.code;
+    error.details = data.details;
     throw error;
   }
   return data;
 }
-

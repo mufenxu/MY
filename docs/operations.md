@@ -128,9 +128,9 @@ Audit records intentionally contain request IDs, actor, source IP, target, outco
 
 ## Release center
 
-The release center is read-only by default. `PLATFORM_GITHUB_TOKEN` enables private Actions history, while `PLATFORM_RELEASE_ACTIONS_ENABLED=true` permits guarded workflow dispatch. Deployment and rollback remain disabled unless an internal deployment hook and strong token are configured. The platform container never receives the Docker socket.
+The release center is read-only by default. `PLATFORM_GITHUB_TOKEN` enables private Actions history, while a dedicated callback token persists verified build artifacts in MongoDB. `PLATFORM_RELEASE_ACTIONS_ENABLED=true` permits guarded workflow dispatch only after callback and repository allowlist checks pass. Deployment and rollback additionally require the restricted host deployment runner and its separate strong token. The platform container never receives the Docker socket.
 
-Cloud builds stamp the platform image with the source revision and build timestamp. Production should deploy immutable SHA tags, keep the previous image references available, and promote all related services together after smoke checks.
+Cloud builds stamp images with the source revision and build timestamp. The ACR workflow builds and smoke-tests SHA candidates before promoting mutable deployment tags. The controlled deployment path always uses the recorded manifest Digest, keeps the previous runtime Digests available, and promotes related services together after preflight checks. See [release-center.md](release-center.md) for setup, activation, deployment, and rollback procedures.
 
 ## Release and rollback
 
