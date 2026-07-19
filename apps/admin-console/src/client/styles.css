@@ -13,8 +13,11 @@
   --panel-muted: #f4f7fd;
   --ink: #0a2480;
   --text: #243552;
-  --muted: #75839c;
-  --subtle: #98a4b8;
+  --muted: #66758f;
+  --subtle: #7f8ca3;
+  --type-caption: 12px;
+  --type-label: 13px;
+  --type-body: 14px;
   --line: rgba(61, 87, 139, 0.11);
   --line-strong: rgba(61, 87, 139, 0.18);
   --blue: #2877f7;
@@ -45,8 +48,8 @@
   --panel-muted: #232b48;
   --ink: #edf2ff;
   --text: #d5dcf0;
-  --muted: #9ba8c7;
-  --subtle: #7784a4;
+  --muted: #aab5d1;
+  --subtle: #8f9dbd;
   --line: rgba(167, 181, 225, 0.12);
   --line-strong: rgba(167, 181, 225, 0.22);
   --blue-soft: rgba(40, 119, 247, 0.15);
@@ -82,6 +85,8 @@ body {
   margin: 0;
   overflow: hidden;
   color: var(--text);
+  font-size: var(--type-body);
+  line-height: 1.5;
   background: linear-gradient(135deg, #f0f9ff 0%, #f7f5ff 50%, #effcf9 100%);
 }
 
@@ -3501,7 +3506,7 @@ input:focus-visible {
   }
 
   .welcome-copy h1 {
-    max-width: 150px;
+    max-width: min(210px, calc(100vw - 178px));
     font-size: 15px;
   }
 
@@ -5209,6 +5214,334 @@ input:focus-visible {
 
   .maintenance-list > div > span:nth-child(2) {
     display: none;
+  }
+}
+
+/* Readability baseline: keep the established visual system while making dense
+   operational information comfortable to scan on standard desktop displays. */
+.audit-target small,
+.quality-item small,
+.chart-service-legend span,
+.ops-chart-legend span,
+.ops-kpis span,
+.ops-kpis small,
+.ops-panel > header > div > span,
+.ops-table-head,
+.ops-state,
+.ops-severity,
+.integration-state,
+.audit-outcome,
+.incident-list-row small,
+.ops-detail-grid dt,
+.incident-timeline small,
+.release-inventory-head,
+.release-inventory-row small,
+.release-history-row small,
+.release-operation-source small,
+.release-preflight-list small,
+.release-sync,
+.release-status,
+.release-row-actions > a,
+.release-row-actions > button,
+.release-operation-source > button,
+.release-component-row small,
+.release-run-row small,
+.session-row small,
+.maintenance-list small,
+.release-component-row > span:last-child,
+.release-run-row > span:nth-child(3),
+.release-targets span,
+.toggle-field small,
+.maintenance-list > div > span:nth-child(2),
+.diagnostics-grid small,
+.error-banner button,
+.chart-summary span,
+.chart-labels span,
+.portfolio-copy > span,
+.portfolio-value small,
+.portfolio-card > footer,
+.service-table-name small,
+.backup-row small,
+.login-brand small,
+.login-heading p,
+.login-form label,
+.form-error,
+.overview-band small,
+.overview-band > header > button,
+.ops-segmented button,
+.ops-select-label,
+.settings-grid label,
+.reauth-fields label,
+.deployment-fields label,
+.incident-actions label,
+.ops-table-row,
+.audit-target strong,
+.ops-detail-grid dd,
+.incident-timeline strong,
+.incident-actions button,
+.maintenance-form button,
+.session-row button,
+.release-environment,
+.release-inventory-row strong,
+.release-history-row strong,
+.release-operation-source strong,
+.release-preflight-list strong,
+.release-disabled-reason,
+.release-maintenance-confirm,
+.release-component-row strong,
+.release-run-row strong,
+.session-row strong,
+.maintenance-list strong,
+.primary-button.compact,
+.diagnostics-grid strong {
+  font-size: var(--type-caption);
+}
+
+.environment-label,
+.error-banner,
+.performance-state,
+.card-eyebrow,
+.portfolio-count,
+.portfolio-value strong,
+.view-eyebrow,
+.application-tile header > div > span,
+.service-status,
+.application-capabilities span,
+.application-tile dt,
+.check-row strong,
+.operations-kpis small,
+.service-table-head,
+.automation-hero-copy > span,
+.automation-hero-metrics span,
+.automation-kpis article > div > span,
+.automation-kpis small,
+.ct8-run-row > div > span,
+.ct8-status-grid span,
+.ct8-run-status,
+.capability-grid span,
+.observability-panel li small,
+.backup-kpis article > div > span,
+.backup-kpis small,
+.backup-table-head,
+.restore-target span,
+.restore-target small,
+.restore-warning,
+.restore-field,
+.restore-confirm-text,
+.danger-button,
+.backup-job-grid span,
+.backup-job-log,
+.loading-screen div span,
+.primary-button,
+.backup-row > span:nth-child(2),
+.backup-row > span:nth-child(3),
+.notification-popover > button,
+.overview-empty,
+.ops-toolbar select,
+.settings-grid input,
+.settings-grid select,
+.reauth-fields input,
+.deployment-fields input,
+.deployment-fields select,
+.maintenance-form input,
+.maintenance-form select,
+.incident-actions textarea,
+.ops-feedback,
+.ops-loading,
+.ops-empty,
+.incident-list-row strong,
+.incident-detail-panel > p,
+.protected-operation > p,
+.diagnostics-panel > p,
+.quality-item strong {
+  font-size: var(--type-label);
+}
+
+.welcome-copy > span,
+.notification-popover span,
+.performance-heading > div span,
+.chart-empty,
+.monitoring-card p,
+.service-entry-card p,
+.portfolio-empty,
+.view-heading-stats span,
+.section-bar > div > span,
+.section-count,
+.application-tile dd,
+.application-tile footer > a,
+.automation-hero > a,
+.entry-unavailable,
+.availability-panel > span:nth-child(2),
+.availability-panel p,
+.check-row,
+.operations-kpis article > div > span,
+.table-value,
+.table-entry.disabled,
+.distribution-score span,
+.distribution-list span,
+.secondary-action,
+.automation-feedback,
+.ct8-run-row > span:not(.ct8-run-status),
+.ct8-inline-loading,
+.ct8-inline-empty,
+.ct8-external-link,
+.backup-feedback,
+.backup-action-copy span,
+.backup-row > span,
+.backup-row strong,
+.restore-field input,
+.backup-job-grid strong,
+.navigation-transition,
+.brand-mark,
+.login-form input,
+.main-nav button > span,
+.sidebar-footer button > span,
+.view-heading p,
+.overview-band strong,
+.pass-topline > span:first-child,
+.portfolio-copy strong,
+.view-loading,
+.view-empty,
+.application-tile > p,
+.service-table-name strong,
+.automation-hero-copy p,
+.automation-hero-metrics strong,
+.ct8-run-row strong,
+.ct8-status-grid strong,
+.capability-grid strong,
+.observability-panel li strong,
+.restore-target strong,
+.loading-screen strong {
+  font-size: var(--type-body);
+}
+
+.welcome-copy > span,
+.monitoring-card p,
+.service-entry-card p,
+.view-heading p,
+.application-tile > p,
+.incident-detail-panel > p,
+.protected-operation > p,
+.diagnostics-panel > p {
+  line-height: 1.65;
+}
+
+.welcome-copy h1 {
+  font-size: 22px;
+}
+
+.portfolio-card h2 {
+  font-size: 22px;
+}
+
+.monitoring-card h2,
+.service-entry-card h2 {
+  font-size: 20px;
+}
+
+.ops-panel > header h3 {
+  font-size: 18px;
+}
+
+.ops-kpis strong {
+  font-size: 20px;
+}
+
+.ops-kpis span,
+.ops-kpis small,
+.ops-panel > header > div > span,
+.release-inventory-head {
+  font-size: var(--type-label);
+}
+
+.release-inventory-row strong,
+.release-history-row strong,
+.release-operation-source strong,
+.release-preflight-list strong {
+  font-size: var(--type-body);
+}
+
+.release-inventory-row small,
+.release-history-row small,
+.release-operation-source small,
+.release-preflight-list small,
+.release-sync,
+.release-status {
+  font-size: var(--type-label);
+}
+
+.overview-band > div > button {
+  min-height: 58px;
+  padding-block: 8px;
+}
+
+.ops-kpis article {
+  min-height: 112px;
+  padding: 18px;
+}
+
+.ops-table-head {
+  min-height: 46px;
+}
+
+.ops-table-row {
+  min-height: 66px;
+  line-height: 1.45;
+}
+
+.release-inventory-head {
+  min-height: 42px;
+  padding-inline: 12px;
+}
+
+.release-inventory-row {
+  min-height: 76px;
+  padding: 10px 12px;
+}
+
+.release-inventory-row > span:not(.release-sync),
+.release-history-row > span:nth-child(2),
+.release-history-row > span:nth-child(3),
+.release-operation-source > span,
+.release-preflight-list > div > span:last-child {
+  gap: 5px;
+}
+
+.release-history-row {
+  min-height: 70px;
+}
+
+@media (min-width: 781px) {
+  .overview-band {
+    min-height: 218px;
+    padding: 20px 22px;
+  }
+}
+
+@media (min-width: 1181px) {
+  .release-inventory-head,
+  .release-inventory-row {
+    grid-template-columns: minmax(140px, 0.7fr) minmax(260px, 1.35fr) minmax(220px, 1fr) 90px;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 620px) {
+  .welcome-copy h1 {
+    font-size: 17px;
+  }
+
+  .monitoring-card h2,
+  .service-entry-card h2 {
+    font-size: 18px;
+  }
+
+  .service-entry-card p {
+    font-size: var(--type-label);
+  }
+
+  .portfolio-row {
+    min-height: 94px;
   }
 }
 
