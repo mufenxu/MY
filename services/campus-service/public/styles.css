@@ -231,8 +231,10 @@ body.dark-theme .quick-nav a:hover {
   height: 40px;
   padding: 0 18px;
   border-radius: 10px;
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   font-size: 13px;
   font-weight: 700;
   text-decoration: none;
@@ -8431,43 +8433,47 @@ body[data-app-locked="true"] #appGate::after {
 
   body:not([data-app-locked="true"]) .app-header .actions {
     display: grid !important;
-    grid-template-columns: 64px 38px 30px 38px !important;
-    grid-auto-flow: column;
+    grid-template-columns: 64px 31px 38px 30px 38px !important;
     gap: 4px;
     align-items: center;
     justify-content: end;
-    width: auto;
-    min-width: 0;
+  }
+
+  body:not([data-app-locked="true"]) :is(#refreshButton, .actions a.admin-action, #appLogoutButton:not([hidden])) {
+    grid-row: 1 !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    border-radius: 11px !important;
+    font-size: 11px !important;
+    line-height: 1 !important;
   }
 
   body:not([data-app-locked="true"]) #refreshButton {
     grid-column: 1 !important;
-    grid-row: 1 !important;
     width: 64px !important;
     min-width: 64px !important;
-    height: 30px !important;
-    min-height: 30px !important;
     padding: 0 6px !important;
-    border-radius: 11px !important;
-    font-size: 11px !important;
-    line-height: 1 !important;
   }
 
-  body:not([data-app-locked="true"]) .actions a.admin-action {
+  body:not([data-app-locked="true"]) #platformConsoleLink {
     grid-column: 2 !important;
-    grid-row: 1 !important;
+    width: 31px !important;
+    min-width: 31px !important;
+    padding: 0 !important;
+  }
+
+  body:not([data-app-locked="true"]) #adminNavLink {
+    grid-column: 3 !important;
     width: 38px !important;
     min-width: 38px !important;
-    height: 30px !important;
-    min-height: 30px !important;
-    padding: 0 !important;
-    border-radius: 11px !important;
-    font-size: 11px !important;
-    line-height: 1 !important;
+    padding: 0 5px !important;
   }
 
+  #platformConsoleLink svg { width: 15px; height: 15px; }
+  #platformConsoleLink span { display: none; }
+
   body:not([data-app-locked="true"]) #themeToggleButton {
-    grid-column: 3 !important;
+    grid-column: 4 !important;
     grid-row: 1 !important;
     width: 30px !important;
     min-width: 30px !important;
@@ -8476,22 +8482,16 @@ body[data-app-locked="true"] #appGate::after {
   }
 
   body:not([data-app-locked="true"]) #appLogoutButton:not([hidden]) {
-    grid-column: 4 !important;
-    grid-row: 1 !important;
+    grid-column: 5 !important;
     width: 38px !important;
     min-width: 38px !important;
-    height: 30px !important;
-    min-height: 30px !important;
     padding: 0 5px !important;
-    border-radius: 11px !important;
-    font-size: 11px !important;
-    line-height: 1 !important;
   }
 }
 
 @media (max-width: 380px) {
   body:not([data-app-locked="true"]) .app-header .actions {
-    grid-template-columns: 58px 34px 28px 34px !important;
+    grid-template-columns: 58px 29px 34px 28px 34px !important;
     gap: 3px;
   }
 
@@ -8500,7 +8500,12 @@ body[data-app-locked="true"] #appGate::after {
     min-width: 58px !important;
   }
 
-  body:not([data-app-locked="true"]) .actions a.admin-action,
+  body:not([data-app-locked="true"]) #platformConsoleLink {
+    width: 29px !important;
+    min-width: 29px !important;
+  }
+
+  body:not([data-app-locked="true"]) #adminNavLink,
   body:not([data-app-locked="true"]) #appLogoutButton:not([hidden]) {
     width: 34px !important;
     min-width: 34px !important;
