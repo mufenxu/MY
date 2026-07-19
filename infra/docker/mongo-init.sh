@@ -2,10 +2,10 @@
 set -euo pipefail
 
 mongo_admin() {
-  mongosh --quiet --host "${MONGO_HOST:-mongodb}" --port 27017 \
-    --username "$MONGO_INITDB_ROOT_USERNAME" \
-    --password "$MONGO_INITDB_ROOT_PASSWORD" \
-    --authenticationDatabase admin "$@"
+  mongosh --quiet --host="${MONGO_HOST:-mongodb}" --port=27017 \
+    --username="$MONGO_INITDB_ROOT_USERNAME" \
+    --password="$MONGO_INITDB_ROOT_PASSWORD" \
+    --authenticationDatabase=admin "$@"
 }
 
 for attempt in $(seq 1 90); do

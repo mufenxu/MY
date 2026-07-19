@@ -29,6 +29,8 @@ on:
       - infra/docker/mongodb-entrypoint.sh
       - infra/docker/mongo-init.sh
       - infra/docker/ensure-users.js
+      - scripts/buildx-metadata.mjs
+      - .github/workflows/aliyun-acr.yml
   workflow_dispatch:
     inputs:
       targets:
@@ -152,6 +154,11 @@ jobs:
             fi
 
             while IFS= read -r file; do
+              case "${file}" in
+                .github/workflows/aliyun-acr.yml|scripts/buildx-metadata.mjs)
+                  targets=(platform core exam notification backup campus iot mongodb)
+                  ;;
+              esac
               case "${file}" in
                 Dockerfile|apps/admin-console/*|config/platform.services.docker.json|services/platform-api/*)
                   add_target platform
@@ -363,6 +370,7 @@ jobs:
             image_tag="${tags[$target]}"
             image="${ACR_IMAGE}:${image_tag}"
             candidate="${ACR_IMAGE}:${image_tag}-${short_sha}"
+            metadata_file="build-metadata-${target}.json"
 
             echo "::group::Build candidate ${target} -> ${candidate}"
             docker buildx build \
@@ -373,13 +381,11 @@ jobs:
               --tag "${candidate}" \
               --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
               --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+              --metadata-file "${metadata_file}" \
               --push \
               "${contexts[$target]}"
-            digest="$(docker buildx imagetools inspect "${candidate}" | awk '$1 == "Digest:" { print $2; exit }')"
-            if ! printf '%s' "${digest}" | grep -Eq '^sha256:[a-f0-9]{64}$'; then
-              echo "Registry did not return a valid immutable digest for ${candidate}." >&2
-              exit 1
-            fi
+            digest="$(node scripts/buildx-metadata.mjs "${metadata_file}")"
+            rm -f "${metadata_file}"
             reference="${ACR_IMAGE}@${digest}"
             printf '%s\t%s\t%s\t%s\t%s\n' "${target}" "${image}" "${digest}" "${reference}" "${candidate}" >> release-artifacts.tsv
             echo "::endgroup::"
