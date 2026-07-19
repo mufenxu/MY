@@ -363,6 +363,7 @@ jobs:
             image_tag="${tags[$target]}"
             image="${ACR_IMAGE}:${image_tag}"
             candidate="${ACR_IMAGE}:${image_tag}-${short_sha}"
+            metadata_file="build-metadata-${target}.json"
 
             echo "::group::Build candidate ${target} -> ${candidate}"
             docker buildx build \
@@ -373,11 +374,13 @@ jobs:
               --tag "${candidate}" \
               --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
               --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+              --metadata-file "${metadata_file}" \
               --push \
               "${contexts[$target]}"
-            digest="$(docker buildx imagetools inspect "${candidate}" | awk '$1 == "Digest:" { print $2; exit }')"
+            digest="$(jq -r '."containerimage.digest" // empty' "${metadata_file}")"
+            rm -f "${metadata_file}"
             if ! printf '%s' "${digest}" | grep -Eq '^sha256:[a-f0-9]{64}$'; then
-              echo "Registry did not return a valid immutable digest for ${candidate}." >&2
+              echo "Buildx did not return a valid immutable digest for ${candidate}." >&2
               exit 1
             fi
             reference="${ACR_IMAGE}@${digest}"
