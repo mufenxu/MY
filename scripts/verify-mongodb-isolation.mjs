@@ -1,6 +1,5 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { buildMongoshArguments } from './mongodb-cli.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const envFile = process.argv[2] || '.env';
@@ -16,7 +15,11 @@ function runMongo({ username, password, authenticationDatabase, script, label })
   const result = spawnSync('docker', [
     ...composeArgs,
     'exec', '-T', 'mongodb',
-    ...buildMongoshArguments({ username, password, authenticationDatabase, script }),
+    'mongosh', '--quiet', '--host', '127.0.0.1', '--port', '27017',
+    '--username', username,
+    '--password', password,
+    '--authenticationDatabase', authenticationDatabase,
+    '--eval', script,
   ], { cwd: root, encoding: 'utf8' });
   if (result.error) throw result.error;
   if (result.status !== 0) {
