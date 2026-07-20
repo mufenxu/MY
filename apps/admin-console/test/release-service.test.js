@@ -209,6 +209,29 @@ test('release summary does not count missing runtime placeholders as observed co
   assert.equal(summary.components[0].observed, false);
 });
 
+test('release summary exposes GitHub start, update and completion timestamps', async () => {
+  const releases = createReleaseService({
+    config: config({ githubToken: 'token' }),
+    fetchImpl: async () => jsonResponse({
+      workflow_runs: [{
+        id: 123,
+        name: 'Build and push Aliyun ACR images',
+        status: 'in_progress',
+        conclusion: null,
+        head_sha: 'a'.repeat(40),
+        created_at: '2026-07-20T17:11:40Z',
+        run_started_at: '2026-07-20T17:11:42Z',
+        updated_at: '2026-07-20T17:12:00Z',
+      }],
+    }),
+  });
+  const summary = await releases.getSummary();
+  assert.equal(summary.runs[0].startedAt, '2026-07-20T17:11:42Z');
+  assert.equal(summary.runs[0].updatedAt, '2026-07-20T17:12:00Z');
+  assert.equal(summary.runs[0].completedAt, null);
+  assert.ok(Date.parse(summary.refreshedAt));
+});
+
 test('deployment uses build digests only after runner and platform preflight checks pass', async () => {
   const store = createMemoryReleaseStore();
   const requests = [];

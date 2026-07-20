@@ -4759,7 +4759,7 @@ input:focus-visible {
 .release-history-row {
   display: grid;
   min-width: 0;
-  min-height: 56px;
+  min-height: 72px;
   grid-template-columns: 12px minmax(180px, 1.3fr) minmax(130px, 0.7fr) 86px minmax(90px, auto);
   align-items: center;
   gap: 12px;
@@ -4776,6 +4776,16 @@ input:focus-visible {
 .release-status.status-failure { color: var(--red); }
 .release-status.status-warning { color: var(--orange); }
 .run-state.warning i { background: var(--orange); }
+
+.release-run-timing,
+.release-run-timing small {
+  font-variant-numeric: tabular-nums;
+}
+
+.release-run-timing small.live {
+  color: var(--blue);
+  font-weight: 750;
+}
 
 .release-row-actions {
   display: flex;
@@ -5607,7 +5617,7 @@ input:focus-visible {
 }
 
 .release-history-row {
-  min-height: 56px;
+  min-height: 72px;
 }
 
 @media (min-width: 781px) {

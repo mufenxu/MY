@@ -39,7 +39,10 @@ import {
   componentHistory,
   environmentLabel,
   releaseStateClass,
+  releaseDuration,
+  releaseIsActive,
   releaseStatusLabel,
+  releaseTimingVerb,
   runtimeImageReference,
   runtimeStateSummary,
   runtimeVersionLabel,
@@ -101,8 +104,8 @@ function formatDateTime(value) {
   }).format(new Date(value));
 }
 
-function formatRelative(value) {
-  const milliseconds = Date.now() - Date.parse(value || '');
+function formatRelative(value, nowValue = Date.now()) {
+  const milliseconds = Number(nowValue) - Date.parse(value || '');
   if (!Number.isFinite(milliseconds)) return '--';
   const minutes = Math.max(0, Math.round(milliseconds / 60000));
   if (minutes < 1) return '刚刚';
@@ -398,6 +401,7 @@ export function ReleasesView({ session }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [clockNow, setClockNow] = useState(Date.now());
   const [historyTab, setHistoryTab] = useState('builds');
   const [targets, setTargets] = useState(['platform']);
   const [credentials, setCredentials] = useState({ password: '', totp: '' });
@@ -413,13 +417,27 @@ export function ReleasesView({ session }) {
     try { setData(await requestJson('/api/releases')); } catch (requestError) { setError(requestError.message); } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
-  const hasActiveOperations = Boolean(data?.metrics?.activeOperations);
+  const hasActiveOperations = Boolean(data?.metrics?.activeOperations)
+    || (data?.runs || []).some((run) => releaseIsActive(run.conclusion || run.status));
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') load();
     }, hasActiveOperations ? 10000 : 60000);
     return () => window.clearInterval(timer);
   }, [hasActiveOperations, load]);
+  useEffect(() => {
+    if (!hasActiveOperations) return undefined;
+    const tick = () => {
+      if (document.visibilityState === 'visible') setClockNow(Date.now());
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [hasActiveOperations]);
 
   function toggleTarget(target) {
     setTargets((current) => current.includes(target) ? current.filter((value) => value !== target) : [...current, target]);
@@ -617,7 +635,12 @@ export function ReleasesView({ session }) {
           <div className="release-history-row" key={build.id}>
             <span className={`run-state ${releaseStateClass(build.status)}`}><i /></span>
             <span><strong>{shortValue(build.revision || build.id)}</strong><small>{build.targets?.length ? build.targets.join('、') : workflowNameLabel(build.name)}</small></span>
-            <span><strong>{build.requestedBy || build.workflowRun?.actor || '--'}</strong><small>完成 {formatDateTime(build.completedAt || build.createdAt)}</small></span>
+            <span className="release-run-timing">
+              <strong>{build.requestedBy || build.workflowRun?.actor || '--'}</strong>
+              {releaseIsActive(build.status)
+                ? <><small>开始 {formatDateTime(build.startedAt || build.createdAt)}</small><small className="live">{releaseTimingVerb(build.status)} {releaseDuration(build.startedAt || build.createdAt, null, clockNow)} · 同步 {releaseDuration(data?.refreshedAt || build.updatedAt, null, clockNow)}前</small></>
+                : <><small>完成 {formatDateTime(build.completedAt || build.updatedAt || build.createdAt)}</small><small>耗时 {releaseDuration(build.startedAt || build.createdAt, build.completedAt || build.updatedAt)}</small></>}
+            </span>
             <span className={`release-status status-${releaseStateClass(build.status)}`}>{releaseStatusLabel(build.status)}</span>
             <span className="release-row-actions">
               {build.workflowRun?.url && <a href={build.workflowRun.url} target="_blank" rel="noreferrer" aria-label="打开 GitHub 运行记录"><ExternalLink size={15} /></a>}
@@ -629,7 +652,12 @@ export function ReleasesView({ session }) {
           <div className="release-history-row" key={deployment.id}>
             <span className={`run-state ${releaseStateClass(deployment.status)}`}><i /></span>
             <span><strong>{deployment.action === 'rollback' ? '回滚' : '部署'} · {shortValue(deployment.buildId || deployment.sourceDeploymentId)}</strong><small>{deployment.components.join('、')}</small></span>
-            <span><strong>{deployment.requestedBy || '--'}</strong><small>完成 {formatDateTime(deployment.completedAt || deployment.startedAt || deployment.createdAt)}</small></span>
+            <span className="release-run-timing">
+              <strong>{deployment.requestedBy || '--'}</strong>
+              {releaseIsActive(deployment.status)
+                ? <><small>开始 {formatDateTime(deployment.startedAt || deployment.createdAt)}</small><small className="live">{releaseTimingVerb(deployment.status)} {releaseDuration(deployment.startedAt || deployment.createdAt, null, clockNow)} · 同步 {releaseDuration(data?.refreshedAt || deployment.updatedAt, null, clockNow)}前</small></>
+                : <><small>完成 {formatDateTime(deployment.completedAt || deployment.updatedAt || deployment.createdAt)}</small><small>耗时 {releaseDuration(deployment.startedAt || deployment.createdAt, deployment.completedAt || deployment.updatedAt)}</small></>}
+            </span>
             <span className={`release-status status-${releaseStateClass(deployment.status)}`}>{releaseStatusLabel(deployment.status)}</span>
             <span className="release-row-actions">
               {roleAtLeast(session.user?.role, 'super_admin') && deployment.status === 'succeeded' && <button type="button" onClick={() => selectRollback(deployment)} disabled={!capabilities.canRollback}><RotateCcw size={15} />回滚到此版本</button>}

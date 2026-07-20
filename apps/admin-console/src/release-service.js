@@ -54,7 +54,9 @@ function mapWorkflowRun(run) {
     branch: run.head_branch || '',
     revision: shortRevision(run.head_sha),
     createdAt: run.created_at || null,
+    startedAt: run.run_started_at || run.created_at || null,
     updatedAt: run.updated_at || null,
+    completedAt: run.conclusion ? (run.updated_at || null) : null,
     url: run.html_url || null,
     actor: run.actor?.login || null,
   };
@@ -264,13 +266,24 @@ export function createReleaseService({
   }
 
   async function getSummary() {
-    const [{ runs, issue: githubIssue }, { status: runtimeStatus, issue: runtimeIssue }, builds, storedDeployments] = await Promise.all([
+    const [{ runs, issue: githubIssue }, { status: runtimeStatus, issue: runtimeIssue }, storedBuilds, storedDeployments] = await Promise.all([
       loadGitHubRuns(),
       loadRuntimeStatus(),
       store.listBuilds({ limit: 20 }),
       store.listDeployments({ limit: 20 }),
     ]);
     const runnerJobs = new Map((runtimeStatus?.jobs || []).map((job) => [job.id, job]));
+    const githubRuns = new Map(runs.map((run) => [String(run.id), run]));
+    const builds = storedBuilds.map((build) => {
+      const run = githubRuns.get(String(build.workflowRun?.id || ''));
+      if (!run) return build;
+      return {
+        ...build,
+        startedAt: build.startedAt || run.startedAt || build.createdAt,
+        updatedAt: run.updatedAt || build.updatedAt,
+        completedAt: build.completedAt || run.completedAt,
+      };
+    });
     const deployments = await Promise.all(storedDeployments.map(async (deployment) => {
       const runnerJob = runnerJobs.get(deployment.id);
       if (!runnerJob || runnerJob.status === deployment.status || ['succeeded', 'failed', 'rolled_back'].includes(deployment.status)) return deployment;
@@ -318,6 +331,7 @@ export function createReleaseService({
       revision: config.releaseRevision || null,
       deployedAt: config.releaseDeployedAt || null,
       imageBuiltAt: config.releaseDeployedAt || null,
+      refreshedAt: nowIso(),
       components,
       runtime: runtimeStatus,
       builds,

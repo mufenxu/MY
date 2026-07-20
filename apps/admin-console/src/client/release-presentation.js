@@ -71,6 +71,33 @@ export function releaseStateClass(status) {
   return 'unknown';
 }
 
+export function releaseIsActive(status) {
+  return ['queued', 'requested', 'waiting', 'pending', 'building', 'in_progress', 'running']
+    .includes(normalized(status));
+}
+
+export function releaseTimingVerb(status) {
+  return ['queued', 'requested', 'waiting', 'pending'].includes(normalized(status)) ? '已等待' : '已运行';
+}
+
+export function releaseDuration(startAt, endAt = null, nowValue = Date.now()) {
+  const started = Date.parse(startAt || '');
+  const ended = endAt ? Date.parse(endAt) : Number(nowValue);
+  if (!Number.isFinite(started) || !Number.isFinite(ended)) return '--';
+  const totalSeconds = Math.max(0, Math.floor((ended - started) / 1000));
+  const seconds = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const minutes = totalMinutes % 60;
+  const totalHours = Math.floor(totalMinutes / 60);
+  const hours = totalHours % 24;
+  const days = Math.floor(totalHours / 24);
+  const pad = (value) => String(value).padStart(2, '0');
+  if (days > 0) return `${days}天 ${pad(hours)}时 ${pad(minutes)}分`;
+  if (totalHours > 0) return `${pad(totalHours)}时 ${pad(minutes)}分 ${pad(seconds)}秒`;
+  if (totalMinutes > 0) return `${pad(totalMinutes)}分 ${pad(seconds)}秒`;
+  return `${seconds}秒`;
+}
+
 export function workflowNameLabel(name) {
   const value = String(name || '').trim();
   return WORKFLOW_LABELS[value] || value || '历史构建记录';
