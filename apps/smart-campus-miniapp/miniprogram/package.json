@@ -7,9 +7,9 @@
   "author": "",
   "devDependencies": {
     "@babel/parser": "^8.0.4",
-    "miniprogram-api-typings": "^2.8.3-1",
-    "prettier": "^3.2.5",
-    "typescript": "^5.9.3"
+    "miniprogram-api-typings": "^5.2.1",
+    "prettier": "^3.9.5",
+    "typescript": "^7.0.2"
   },
   "scripts": {
     "format:wxss": "npx prettier --write \"pages/**/*.wxss\" \"components/**/*.wxss\" app.wxss",
