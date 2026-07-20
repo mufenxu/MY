@@ -467,13 +467,27 @@ jobs:
         if: steps.resolve.outputs.targets != ''
         run: |
           set -euo pipefail
-          docker compose --env-file .env.release-smoke -f infra/docker/compose.yml pull
-          docker compose --env-file .env.release-smoke -f infra/docker/compose.yml up -d --no-build --wait --wait-timeout 240
+          docker compose --env-file .env.release-smoke -f infra/docker/compose.yml -f infra/docker/compose.ci.yml pull
+          docker compose --env-file .env.release-smoke -f infra/docker/compose.yml -f infra/docker/compose.ci.yml up -d --no-build --wait --wait-timeout 240
           node --env-file=.env.release-smoke scripts/verify-platform-smoke.mjs
+
+      - name: Show exact-candidate logs on failure
+        if: failure() && steps.resolve.outputs.targets != ''
+        run: |
+          compose=(docker compose --env-file .env.release-smoke -f infra/docker/compose.yml -f infra/docker/compose.ci.yml)
+          "${compose[@]}" ps --all
+          "${compose[@]}" logs --no-color
+          for container in $("${compose[@]}" ps --all --quiet); do
+            name="$(docker inspect --format '{{.Name}}' "${container}" | sed 's#^/##')"
+            status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}}' "${container}")"
+            echo "::group::Health history: ${name} (${status})"
+            docker inspect --format '{{if .State.Health}}{{range .State.Health.Log}}{{.End}} exit={{.ExitCode}} {{printf "%s" .Output}}{{println}}{{end}}{{end}}' "${container}"
+            echo "::endgroup::"
+          done
 
       - name: Stop exact-candidate smoke stack
         if: always() && steps.resolve.outputs.targets != ''
-        run: docker compose --env-file .env.release-smoke -f infra/docker/compose.yml down -v || true
+        run: docker compose --env-file .env.release-smoke -f infra/docker/compose.yml -f infra/docker/compose.ci.yml down -v || true
 
       - name: Promote verified candidates to deployment tags
         if: steps.resolve.outputs.targets != ''

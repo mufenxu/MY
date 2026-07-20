@@ -46,10 +46,17 @@ test('Buildx metadata CLI prints only the validated image digest', async () => {
 
 test('ACR workflow consumes Buildx metadata without an immediate registry lookup', async () => {
   const workflow = await readFile(new URL('../.github/workflows/aliyun-acr.yml', import.meta.url), 'utf8');
+  const releaseSmokeComposeLines = workflow
+    .split(/\r?\n/)
+    .filter((line) => line.includes('docker compose --env-file .env.release-smoke'));
   assert.match(workflow, /--metadata-file "\$\{metadata_file\}"/);
   assert.match(workflow, /node scripts\/buildx-metadata\.mjs "\$\{metadata_file\}"/);
   assert.doesNotMatch(workflow, /imagetools inspect "\$\{candidate\}"/);
   assert.match(workflow, /\[runner\]="deployment-runner\.Dockerfile"/);
   assert.match(workflow, /if \[ "\$\{target\}" != "runner" \]; then/);
   assert.match(workflow, /RELEASE_TARGETS: \$\{\{ steps\.resolve\.outputs\.release_targets \}\}/);
+  assert.ok(releaseSmokeComposeLines.length >= 3);
+  assert.ok(releaseSmokeComposeLines.every((line) => (
+    line.includes('-f infra/docker/compose.yml -f infra/docker/compose.ci.yml')
+  )));
 });
