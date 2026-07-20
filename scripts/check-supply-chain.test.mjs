@@ -42,6 +42,25 @@ FROM build AS runtime
     inspectDockerfile(`# syntax=docker/dockerfile:1.7\nFROM node:24@sha256:${digest}\n`, 'mutable-syntax.Dockerfile')[0],
     /syntax frontend is not pinned/,
   );
+  assert.deepEqual(inspectDockerfile(`
+# syntax=docker/dockerfile:1.7.1@sha256:${digest}
+FROM node:24@sha256:${digest} AS deps
+WORKDIR /build/services/example
+FROM node:24@sha256:${digest}
+WORKDIR /app/services/example
+COPY --from=deps /build/services/example/node_modules ./node_modules
+`, 'preserved-layout.Dockerfile'), []);
+  assert.match(
+    inspectDockerfile(`
+# syntax=docker/dockerfile:1.7.1@sha256:${digest}
+FROM node:24@sha256:${digest} AS deps
+WORKDIR /build/services/example
+FROM node:24@sha256:${digest}
+WORKDIR /app/example
+COPY --from=deps /build/services/example/node_modules ./node_modules
+`, 'flattened-layout.Dockerfile').at(-1),
+    /changes the monorepo node_modules path/,
+  );
 });
 
 test('Compose inspection permits local builds and rejects mutable external images', () => {

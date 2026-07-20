@@ -61,6 +61,7 @@ export function inspectDockerfile(source, label = 'Dockerfile') {
   const args = new Map();
   const stages = new Set();
   const digestPattern = /@sha256:[a-f0-9]{64}$/;
+  let currentWorkdir = '/';
   const syntaxLine = source.match(/^\s*#\s*syntax=([^\s]+)\s*$/m);
   if (syntaxLine && !digestPattern.test(syntaxLine[1])) {
     errors.push(`${label} Dockerfile syntax frontend is not pinned to a sha256 digest: ${syntaxLine[1]}`);
@@ -75,16 +76,34 @@ export function inspectDockerfile(source, label = 'Dockerfile') {
     }
 
     const fromMatch = line.match(/^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?$/i);
-    if (!fromMatch) continue;
-    const declaredReference = fromMatch[1];
-    const variableMatch = declaredReference.match(/^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$/);
-    const reference = variableMatch ? args.get(variableMatch[1]) : declaredReference;
-    if (!reference) {
-      errors.push(`${label} FROM ${declaredReference} has no immutable default image reference`);
-    } else if (reference !== 'scratch' && !stages.has(reference) && !digestPattern.test(reference)) {
-      errors.push(`${label} base image is not pinned to a sha256 digest: ${reference}`);
+    if (fromMatch) {
+      const declaredReference = fromMatch[1];
+      const variableMatch = declaredReference.match(/^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$/);
+      const reference = variableMatch ? args.get(variableMatch[1]) : declaredReference;
+      if (!reference) {
+        errors.push(`${label} FROM ${declaredReference} has no immutable default image reference`);
+      } else if (reference !== 'scratch' && !stages.has(reference) && !digestPattern.test(reference)) {
+        errors.push(`${label} base image is not pinned to a sha256 digest: ${reference}`);
+      }
+      if (fromMatch[2]) stages.add(fromMatch[2]);
+      currentWorkdir = '/';
+      continue;
     }
-    if (fromMatch[2]) stages.add(fromMatch[2]);
+
+    const workdirMatch = line.match(/^WORKDIR\s+(\S+)$/i);
+    if (workdirMatch) {
+      currentWorkdir = path.posix.resolve(currentWorkdir, workdirMatch[1]);
+      continue;
+    }
+
+    const copyMatch = line.match(/^COPY\s+(?:--\S+\s+)*(\S+)\s+(\S+)$/i);
+    const buildModules = copyMatch?.[1].match(/^\/build\/(.+)\/node_modules$/);
+    if (!buildModules) continue;
+    const destination = path.posix.resolve(currentWorkdir, copyMatch[2]);
+    const expected = `/app/${buildModules[1]}/node_modules`;
+    if (destination !== expected) {
+      errors.push(`${label} changes the monorepo node_modules path: expected ${expected}, found ${destination}`);
+    }
   }
   return errors;
 }

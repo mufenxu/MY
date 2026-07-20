@@ -195,10 +195,16 @@ jobs:
         run: |
           compose=(docker compose --env-file .env.ci -f infra/docker/compose.yml -f infra/docker/compose.ci.yml)
           "${compose[@]}" ps --all
-          "${compose[@]}" logs --no-color
           for container in $("${compose[@]}" ps --all --quiet); do
             name="$(docker inspect --format '{{.Name}}' "${container}" | sed 's#^/##')"
+            service="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "${container}")"
+            state="$(docker inspect --format '{{.State.Status}}' "${container}")"
             status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}}' "${container}")"
+            if [[ "${state}" != "running" || "${status}" == "unhealthy" ]]; then
+              echo "::group::Recent logs: ${name} (${state}/${status})"
+              "${compose[@]}" logs --no-color --tail=200 "${service}" || true
+              echo "::endgroup::"
+            fi
             echo "::group::Health history: ${name} (${status})"
             docker inspect --format '{{if .State.Health}}{{range .State.Health.Log}}{{.End}} exit={{.ExitCode}} {{printf "%s" .Output}}{{println}}{{end}}{{end}}' "${container}"
             echo "::endgroup::"

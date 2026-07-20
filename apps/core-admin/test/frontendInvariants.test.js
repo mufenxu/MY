@@ -3,9 +3,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import eslintConfig from '../eslint.config.js';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const readSource = (...parts) => fs.readFileSync(path.join(appRoot, ...parts), 'utf8');
+
+test('fundamental Hook rules block CI while React Compiler adoption stays incremental', () => {
+  const applicationConfig = eslintConfig.find(
+    (entry) => entry.rules?.['react-hooks/set-state-in-effect'] === 'warn',
+  );
+
+  assert.equal(applicationConfig.rules['react-hooks/rules-of-hooks'], 'error');
+  assert.equal(applicationConfig.rules['react-hooks/exhaustive-deps'], 'warn');
+  assert.equal(applicationConfig.rules['react-hooks/set-state-in-effect'], 'warn');
+  assert.equal(applicationConfig.rules['react-hooks/static-components'], 'warn');
+  assert.equal(applicationConfig.rules['react-hooks/immutability'], 'warn');
+});
 
 test('backup and restore override the short interactive request timeout', () => {
   const source = readSource('src', 'pages', 'Settings.jsx');
