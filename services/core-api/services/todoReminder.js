@@ -4,11 +4,9 @@
        统计每个用户的未完成任务数量，并生成汇总报告，通过企业微信发送提醒。
 */
 
-const axios = require('axios');
 const TodoList = require('../models/TodoList');
 const NotifyConfig = require('../models/NotifyConfig');
-
-const WECOM_NOTIFY_URL = 'https://tongzhiapi.pxyb.cn/notify';
+const { getNotificationApiKey, sendNotification } = require('./notificationClient');
 
 function normalizeRequestTimeout(value, fallback = 8000) {
     const parsed = Number.parseInt(value, 10);
@@ -19,7 +17,7 @@ function normalizeRequestTimeout(value, fallback = 8000) {
 function isWecomEnabled(cfg) {
     const hasRecipient = [cfg?.qywxToUser, cfg?.qywxToParty, cfg?.qywxToTag]
         .some((value) => String(value || '').trim());
-    return Boolean(cfg && cfg.qywxEnabled && cfg.qywxApiKey && hasRecipient);
+    return Boolean(cfg && cfg.qywxEnabled && getNotificationApiKey(cfg.qywxApiKey) && hasRecipient);
 }
 
 function buildSummaryMessage(groups) {
@@ -148,10 +146,7 @@ async function checkAndNotifyTodos() {
         const payload = buildWecomPayload(cfg, text);
 
         const timeout = normalizeRequestTimeout(cfg.qywxTimeout);
-        const response = await axios.post(WECOM_NOTIFY_URL, payload, {
-            headers: { 'X-API-KEY': cfg.qywxApiKey },
-            timeout,
-        });
+        const response = await sendNotification(payload, { apiKey: cfg.qywxApiKey, timeoutMs: timeout });
 
         const data = response && response.data ? response.data : {};
         const ok =

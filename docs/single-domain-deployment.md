@@ -14,6 +14,7 @@ https://pxyb.cn/api/core/                综合小程序 API
 https://pxyb.cn/api/exam/client/         考试小程序 API
 https://pxyb.cn/api/campus/              校园服务 API
 https://pxyb.cn/api/iot/                 IoT 服务 API
+https://pxyb.cn/api/notify               企业微信通知发送 API
 ```
 
 后台之间切换不会离开主域名，也不需要再次输入密码。
@@ -54,8 +55,8 @@ PLATFORM_SSO_CAMPUS_USERNAME=admin
 需要独立域名时：
 
 1. 修改示例文件中的域名和证书路径，再改名为 `.conf` 后加载。
-2. `core`、`exam`、`notify` 仍经过 22100 网关，必须把新域名分别加入 `.env` 的 `CORE_HOSTS`、`EXAM_HOSTS`、`NOTIFY_HOSTS`，多个域名用英文逗号分隔。
-3. `campus`、`iot` 示例直接代理 22101、22102；这两个端口仍应只监听 `127.0.0.1`。
+2. 所有独立域名都代理到 `127.0.0.1:22100`，分别加入 `CORE_HOSTS`、`EXAM_HOSTS`、`NOTIFY_HOSTS`、`CAMPUS_HOSTS` 或 `MQTT_HOSTS`。
+3. Campus 和 IoT 的 HTTP、静态资源与 WebSocket 都由网关转发；生产 Compose 不发布 `22101/22102`。
 4. 小程序尚未迁移请求域名时，可以继续保留原业务域名，不影响统一管理入口。
 
 ## 更新容器
@@ -64,6 +65,12 @@ PLATFORM_SSO_CAMPUS_USERNAME=admin
 docker compose --env-file .env -f infra/docker/compose.yml pull
 docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build --force-recreate
 docker compose --env-file .env -f infra/docker/compose.yml ps
+```
+
+只有本机排障确实需要直连 Campus/IoT 时，才临时叠加调试文件：
+
+```bash
+docker compose --env-file .env -f infra/docker/compose.yml -f infra/docker/compose.debug.yml up -d campus-service iot-service
 ```
 
 如果同步修改了 Nginx 配置，必须先检查配置，再平滑重载：
@@ -90,4 +97,4 @@ sudo systemctl reload nginx
 
 ## 安全边界
 
-`22100`、`22101`、`22102` 和 MongoDB `27017` 默认只绑定 `127.0.0.1`，公网只开放 Nginx 的 `80/443`。生产环境不得通过防火墙直接开放这些内部端口。
+生产环境只有 `22100` 和 MongoDB `27017` 绑定 `127.0.0.1`；Campus/IoT 没有宿主机端口。公网只开放 Nginx 的 `80/443`，服务间调用使用 Docker DNS 和内部鉴权。

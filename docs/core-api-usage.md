@@ -1,6 +1,6 @@
 # 企业微信通知 API 接入教程
 
-面向业务系统或第三方服务，说明如何调用 `https://tongzhiapi.pxyb.cn` 提供的通知接口发送企业微信消息。
+面向第三方服务，说明如何通过统一网关 `https://pxyb.cn/api/notify` 发送企业微信消息。仓库内部服务使用 Docker DNS 和短时签名，不使用公网域名。
 
 ---
 
@@ -11,7 +11,8 @@
    - 请妥善保管，不要暴露在公开仓库或前端代码中。
 
 2. **确认可访问域名**
-   - API 基础域名：`https://tongzhiapi.pxyb.cn`
+   - 通知接口：`https://pxyb.cn/api/notify`
+   - 健康检查：`https://pxyb.cn/api/notify/healthz`
    - 支持 HTTPS，默认端口 443，无需额外拼接端口。
 
 3. **确保调用出口 IP 合法**
@@ -50,7 +51,7 @@
 - **发送带 Emoji 的文本：**
 
 ```bash
-curl -X POST "https://tongzhiapi.pxyb.cn/notify" \
+curl -X POST "https://pxyb.cn/api/notify" \
   -H "Content-Type: application/json" \
   -H "X-API-KEY: YOUR_API_KEY" \
   -d '{
@@ -67,7 +68,7 @@ curl -X POST "https://tongzhiapi.pxyb.cn/notify" \
 # { "msg_type": "image", "data": { "url": "https://example.com/a.png" } }
 
 # 2. 发送
-curl -X POST "https://tongzhiapi.pxyb.cn/notify" \
+curl -X POST "https://pxyb.cn/api/notify" \
   -H "Content-Type: application/json" \
   -H "X-API-KEY: YOUR_API_KEY" \
   --data-binary "@test.json"
@@ -96,7 +97,7 @@ const axios = require("axios");
 
 async function sendNotify() {
   const response = await axios.post(
-    "https://tongzhiapi.pxyb.cn/notify",
+    "https://pxyb.cn/api/notify",
     {
       msg_type: "news",
       data: {
@@ -123,7 +124,7 @@ async function sendNotify() {
 
 // 发送原生大图 (Image)
 async function sendImage() {
-  const response = await axios.post("https://tongzhiapi.pxyb.cn/notify", {
+  const response = await axios.post("https://pxyb.cn/api/notify", {
     msg_type: "image",
     data: { url: "https://example.com/logo.png" }
   }, { headers: { "X-API-KEY": "YOUR_API_KEY" } });
@@ -136,7 +137,7 @@ async function sendImage() {
 ```python
 import requests
 
-url = "https://tongzhiapi.pxyb.cn/notify"
+url = "https://pxyb.cn/api/notify"
 headers = {"X-API-KEY": "YOUR_API_KEY"}
 
 # 发送图文 (News)
@@ -161,7 +162,7 @@ requests.post(url, json=payload_file, headers=headers)
 ```python
 import requests
 
-url = "https://tongzhiapi.pxyb.cn/notify"
+url = "https://pxyb.cn/api/notify"
 headers = {"X-API-KEY": "YOUR_API_KEY"}
 
 payload_with_image = {
@@ -194,7 +195,7 @@ $body = @{
 } | ConvertTo-Json -Compress
 
 # 2. 发送请求（使用 UTF8 字节流确保 Emoji 不乱码）
-Invoke-RestMethod -Uri "https://tongzhiapi.pxyb.cn/notify" `
+Invoke-RestMethod -Uri "https://pxyb.cn/api/notify" `
   -Method Post `
   -Headers @{ "X-API-KEY" = "YOUR_API_KEY" } `
   -ContentType "application/json; charset=utf-8" `
@@ -220,7 +221,7 @@ $body = @{
     }
 } | ConvertTo-Json -Compress -Depth 10 # 注意：嵌套数组必须加 -Depth 10
 
-Invoke-RestMethod -Uri "https://tongzhiapi.pxyb.cn/notify" `
+Invoke-RestMethod -Uri "https://pxyb.cn/api/notify" `
   -Method Post `
   -Headers @{ "X-API-KEY" = "YOUR_API_KEY" } `
   -ContentType "application/json; charset=utf-8" `
@@ -239,7 +240,7 @@ $body = @{
     }
 } | ConvertTo-Json -Compress
 
-Invoke-RestMethod -Uri "https://tongzhiapi.pxyb.cn/notify" `
+Invoke-RestMethod -Uri "https://pxyb.cn/api/notify" `
   -Method Post `
   -Headers @{ "X-API-KEY" = "YOUR_API_KEY" } `
   -ContentType "application/json; charset=utf-8" `
@@ -259,7 +260,7 @@ $body = @{
     }
 } | ConvertTo-Json -Compress
 
-Invoke-RestMethod -Uri "https://tongzhiapi.pxyb.cn/notify" `
+Invoke-RestMethod -Uri "https://pxyb.cn/api/notify" `
   -Method Post `
   -Headers @{ "X-API-KEY" = "YOUR_API_KEY" } `
   -ContentType "application/json; charset=utf-8" `

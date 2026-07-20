@@ -3,6 +3,13 @@ const crypto = require('node:crypto');
 const PLATFORM_SSO_HEADER = 'x-my-platform-sso';
 const TOKEN_ISSUER = 'my-platform-gateway';
 const PLATFORM_ROLES = new Set(['viewer', 'operator', 'super_admin']);
+const SERVICE_AUTH_HEADERS = Object.freeze({
+  caller: 'x-my-service-caller',
+  nonce: 'x-my-service-nonce',
+  signature: 'x-my-service-signature',
+  timestamp: 'x-my-service-timestamp',
+});
+const SERVICE_CALLER_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
 
 function encodeJson(value) {
   return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
@@ -35,6 +42,119 @@ function validateInternalKeyPair(privateKey, publicKey) {
   } catch {
     return false;
   }
+}
+
+function bodyBuffer(body) {
+  if (Buffer.isBuffer(body)) return body;
+  if (body === undefined || body === null) return Buffer.alloc(0);
+  if (typeof body === 'string') return Buffer.from(body, 'utf8');
+  return Buffer.from(JSON.stringify(body), 'utf8');
+}
+
+function serviceRequestPath(value) {
+  const requestUrl = new URL(String(value || '/'), 'http://service.internal');
+  return `${requestUrl.pathname}${requestUrl.search}`;
+}
+
+function serviceRequestPayload({ caller, timestamp, nonce, method, pathname, body }) {
+  const bodyDigest = crypto.createHash('sha256').update(bodyBuffer(body)).digest('base64url');
+  return [
+    'v1',
+    String(caller),
+    String(timestamp),
+    String(nonce),
+    String(method || 'GET').toUpperCase(),
+    serviceRequestPath(pathname),
+    bodyDigest,
+  ].join('\n');
+}
+
+function issueServiceRequest({
+  caller,
+  secret,
+  method = 'GET',
+  pathname = '/',
+  body = '',
+  now = Date.now(),
+  nonce = crypto.randomBytes(18).toString('base64url'),
+} = {}) {
+  const normalizedCaller = String(caller || '').trim();
+  if (!SERVICE_CALLER_PATTERN.test(normalizedCaller) || !secret) {
+    throw new Error('Cannot issue an internal service request without a valid caller and secret.');
+  }
+  const timestamp = Math.floor(Number(now));
+  if (!Number.isFinite(timestamp)) throw new Error('Internal service request timestamp is invalid.');
+  const normalizedNonce = String(nonce || '');
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(normalizedNonce)) {
+    throw new Error('Internal service request nonce is invalid.');
+  }
+  const payload = serviceRequestPayload({
+    caller: normalizedCaller,
+    timestamp,
+    nonce: normalizedNonce,
+    method,
+    pathname,
+    body,
+  });
+  const signature = crypto.createHmac('sha256', String(secret)).update(payload).digest('base64url');
+  return {
+    [SERVICE_AUTH_HEADERS.caller]: normalizedCaller,
+    [SERVICE_AUTH_HEADERS.timestamp]: String(timestamp),
+    [SERVICE_AUTH_HEADERS.nonce]: normalizedNonce,
+    [SERVICE_AUTH_HEADERS.signature]: signature,
+  };
+}
+
+function headerValue(headers, name) {
+  if (!headers) return '';
+  if (typeof headers.get === 'function') return String(headers.get(name) || '');
+  const value = headers[name] ?? headers[name.toLowerCase()] ?? headers[name.toUpperCase()];
+  return Array.isArray(value) ? String(value[0] || '') : String(value || '');
+}
+
+function safeSignatureEqual(left, right) {
+  const a = Buffer.from(String(left || ''));
+  const b = Buffer.from(String(right || ''));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function verifyServiceRequest({
+  headers,
+  secret,
+  allowedCallers = [],
+  method = 'GET',
+  pathname = '/',
+  body = '',
+  now = Date.now(),
+  maxAgeMs = 30_000,
+  replayGuard = null,
+} = {}) {
+  if (!secret) return null;
+  const caller = headerValue(headers, SERVICE_AUTH_HEADERS.caller).trim();
+  const nonce = headerValue(headers, SERVICE_AUTH_HEADERS.nonce);
+  const signature = headerValue(headers, SERVICE_AUTH_HEADERS.signature);
+  const timestamp = Number.parseInt(headerValue(headers, SERVICE_AUTH_HEADERS.timestamp), 10);
+  const callers = allowedCallers instanceof Set
+    ? allowedCallers
+    : new Set(Array.from(allowedCallers || [], (value) => String(value)));
+  const currentTime = Number(now);
+  const boundedMaxAge = Math.min(Math.max(Number(maxAgeMs) || 30_000, 1_000), 300_000);
+  if (
+    !SERVICE_CALLER_PATTERN.test(caller)
+    || !callers.has(caller)
+    || !/^[A-Za-z0-9_-]{16,128}$/.test(nonce)
+    || !signature
+    || !Number.isFinite(timestamp)
+    || !Number.isFinite(currentTime)
+    || timestamp > currentTime + 5_000
+    || currentTime - timestamp > boundedMaxAge
+  ) return null;
+  const payload = serviceRequestPayload({ caller, timestamp, nonce, method, pathname, body });
+  const expected = crypto.createHmac('sha256', String(secret)).update(payload).digest('base64url');
+  if (!safeSignatureEqual(signature, expected)) return null;
+  const identity = { caller, nonce, timestamp };
+  if (typeof replayGuard === 'function' && replayGuard(identity) !== true) return null;
+  return identity;
 }
 
 function issueInternalIdentity({
@@ -151,10 +271,14 @@ function verifyPlatformSsoRequest(req, {
 module.exports = {
   HEADER_NAME: PLATFORM_SSO_HEADER,
   PLATFORM_SSO_HEADER,
+  SERVICE_AUTH_HEADERS,
   TOKEN_ISSUER,
   issueInternalIdentity,
+  issueServiceRequest,
   requestPathWithQuery,
+  serviceRequestPath,
   validateInternalKeyPair,
   verifyInternalIdentity,
   verifyPlatformSsoRequest,
+  verifyServiceRequest,
 };

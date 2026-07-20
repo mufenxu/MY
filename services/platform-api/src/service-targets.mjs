@@ -7,10 +7,12 @@ export function resolveServiceMode(env = process.env) {
   const targets = {
     core: String(env.CORE_SERVICE_URL || '').trim(),
     exam: String(env.EXAM_SERVICE_URL || '').trim(),
+    campus: String(env.CAMPUS_SERVICE_URL || '').trim(),
+    iot: String(env.MQTT_SERVICE_URL || '').trim(),
     notify: String(env.NOTIFICATION_SERVICE_URL || '').trim(),
   };
   if (external) {
-    const missing = ['core', 'exam'].filter((service) => !targets[service]);
+    const missing = ['core', 'exam', 'campus', 'iot', 'notify'].filter((service) => !targets[service]);
     if (missing.length > 0) {
       throw new Error(`External platform services missing target URLs: ${missing.join(', ')}`);
     }
@@ -45,9 +47,19 @@ export async function checkServiceTarget(
 }
 
 export async function checkExternalServices(targets, options = {}) {
-  const checks = await Promise.all([
-    checkServiceTarget(targets.core, '/health', options),
-    checkServiceTarget(targets.exam, '/ready', options),
-  ]);
+  const {
+    requiredServices = ['core', 'exam'],
+    ...checkOptions
+  } = options;
+  const healthPaths = {
+    core: '/health',
+    exam: '/ready',
+    campus: '/api/ready',
+    iot: '/api/ready',
+    notify: '/healthz',
+  };
+  const checks = await Promise.all(requiredServices.map((service) => (
+    checkServiceTarget(targets[service], healthPaths[service], checkOptions)
+  )));
   return checks.every(Boolean);
 }

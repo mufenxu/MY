@@ -38,6 +38,13 @@ test('QR creation requests are cancelled when login surfaces are replaced', () =
   }
 });
 
+test('integration examples derive the canonical API from the active gateway origin', () => {
+  const source = readSource('src', 'pages', 'ScanManagement.jsx');
+  assert.match(source, /window\.location\.origin/);
+  assert.match(source, /IS_PLATFORM_SSO \? '\/api\/core\/api' : '\/api'/);
+  assert.doesNotMatch(source, /https:\/\/xcx\.pxyb\.cn/);
+});
+
 test('platform console return is rendered only in the managed SSO shell', () => {
   const source = readSource('src', 'components', 'MainLayout.jsx');
 

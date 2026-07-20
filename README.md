@@ -20,9 +20,9 @@ MY/
 |   |-- campus-service/         # campus connector service
 |   `-- iot-service/            # MQTT and device service
 |-- packages/
-|   `-- platform-auth/          # shared platform SSO and internal identity helpers
+|   `-- platform-auth/          # shared platform SSO and signed service-request helpers
 |-- automation/ct8-automation/  # non-resident automation tasks
-|-- config/                     # service registry without secrets
+|-- config/                     # service registry and canonical topology without secrets
 |-- docs/                       # architecture and operations docs
 |-- infra/                      # Docker and reverse proxy config
 `-- scripts/                    # workspace maintenance commands
@@ -55,14 +55,16 @@ Production keeps the public gateway separate from every business runtime and fro
 | `notification-service` | internal only | `3000` |
 | `backup-runner` | internal only | `22103` |
 | `deployment-runner` | internal only | `22104` |
-| `campus-service` | `22101` | `22101` |
-| `iot-service` | `22102` | `22102` |
+| `campus-service` | internal only | `22101` |
+| `iot-service` | internal only | `22102` |
 | `mongodb` | `127.0.0.1:27017` | `27017` |
 
 ```powershell
 npm run compose:pull
 npm run compose:up
 ```
+
+Campus and IoT loopback ports are available only when `infra/docker/compose.debug.yml` is explicitly layered for local diagnostics. Independent public domains remain supported as gateway aliases and never proxy these container ports directly.
 
 Alibaba Cloud Container Registry is the primary deployment registry:
 

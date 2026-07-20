@@ -4,17 +4,15 @@
        根据通知配置的提前天数与收件人配置，发送提醒邮件/企业微信通知。
 
   运行环境：Node.js 16+
-  依赖：nodemailer, dayjs, axios (已在 package.json 中)
+  依赖：nodemailer, dayjs (已在 package.json 中)
 */
 
 const nodemailer = require('nodemailer');
 const dayjs = require('dayjs');
-const axios = require('axios');
+const { getNotificationApiKey, sendNotification } = require('./notificationClient');
 
 const ResourceConfig = require('../models/ResourceConfig');
 const NotifyConfig = require('../models/NotifyConfig');
-
-const WECOM_NOTIFY_URL = 'https://tongzhiapi.pxyb.cn/notify';
 
 function buildTransport(cfg) {
     return nodemailer.createTransport({
@@ -28,7 +26,7 @@ function buildTransport(cfg) {
 function isWecomEnabled(cfg) {
     const hasRecipient = [cfg?.qywxToUser, cfg?.qywxToParty, cfg?.qywxToTag]
         .some((value) => String(value || '').trim());
-    return Boolean(cfg && cfg.qywxEnabled && cfg.qywxApiKey && hasRecipient);
+    return Boolean(cfg && cfg.qywxEnabled && getNotificationApiKey(cfg.qywxApiKey) && hasRecipient);
 }
 
 function isDue(dateStr, advanceDays) {
@@ -212,10 +210,7 @@ function buildWecomPayload(cfg, text, extra = {}) {
 async function dispatchWecom(cfg, text, extra = {}) {
     const payload = buildWecomPayload(cfg, text, extra);
     const timeout = Number(cfg.qywxTimeout || 8000);
-    const response = await axios.post(WECOM_NOTIFY_URL, payload, {
-        headers: { 'X-API-KEY': cfg.qywxApiKey },
-        timeout,
-    });
+    const response = await sendNotification(payload, { apiKey: cfg.qywxApiKey, timeoutMs: timeout });
     return response.data;
 }
 

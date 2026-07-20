@@ -1,3 +1,6 @@
+import crypto from 'node:crypto';
+import { issueServiceRequest } from '@my-platform/platform-auth';
+
 function severityLabel(severity) {
   return { critical: '严重', warning: '警告', info: '提示' }[severity] || '提示';
 }
@@ -53,20 +56,28 @@ export function createOperationsNotifier({
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
+      const body = JSON.stringify({
+        msg_type: 'markdown',
+        data: { content },
+        enable_duplicate_check: 1,
+        duplicate_check_interval: duplicateCheckInterval,
+      });
       const response = await fetchImpl(new URL('/notify', serviceUrl), {
         method: 'POST',
         signal: controller.signal,
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-API-KEY': apiKey,
+          'X-Request-Id': crypto.randomUUID(),
+          ...issueServiceRequest({
+            caller: 'platform-api',
+            secret: apiKey,
+            method: 'POST',
+            pathname: '/notify',
+            body,
+          }),
         },
-        body: JSON.stringify({
-          msg_type: 'markdown',
-          data: { content },
-          enable_duplicate_check: 1,
-          duplicate_check_interval: duplicateCheckInterval,
-        }),
+        body,
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return { delivered: true };

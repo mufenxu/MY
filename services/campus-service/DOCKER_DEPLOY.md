@@ -115,7 +115,7 @@ server {
     ssl_certificate_key /path/to/privkey.pem;
 
     location / {
-        proxy_pass http://127.0.0.1:22101;
+        proxy_pass http://127.0.0.1:22100;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -129,8 +129,8 @@ server {
     }
 }
 ```
-配置完成后，请确保宿主机上的防火墙不要直接对公网暴露 `22101` 端口，只允许反向代理本地转发即可。
-此时可以在 `.env` 中设置 `HGU_TRUST_PROXY=true` 和 `HGU_PUBLIC_ORIGIN=https://hgu.pxyb.cn`。Compose 默认将端口绑定到 `127.0.0.1`；如确需修改，可显式设置 `HGU_BIND_ADDRESS`，不建议设为公网地址。
+独立域名必须加入 `CAMPUS_HOSTS`，由 `platform-api` 再转发到 Campus 容器。生产 Compose 不发布 `22101`；只有叠加 `infra/docker/compose.debug.yml` 时才会绑定回环端口。
+此时可以在 `.env` 中设置 `HGU_TRUST_PROXY=true` 和 `HGU_PUBLIC_ORIGIN=https://hgu.pxyb.cn`。
 
 ### 微信客户端发布检查
 

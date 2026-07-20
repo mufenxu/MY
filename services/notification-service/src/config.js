@@ -31,9 +31,19 @@ const parseInteger = (value, name) => {
   return parsed;
 };
 
+function parseInternalCallers(value) {
+  const callers = String(value || "platform-api,core-api")
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(item));
+  if (callers.length === 0) throw new Error("NOTIFY_INTERNAL_CALLERS must contain at least one caller");
+  return [...new Set(callers)];
+}
+
 const config = {
   port: parseInt(process.env.PORT || "3000", 10),
   apiKey: ensureStrongSecret("NOTIFY_API_KEY"),
+  internalCallers: parseInternalCallers(process.env.NOTIFY_INTERNAL_CALLERS),
   wecom: {
     corpId: ensureEnv("WECOM_CORP_ID"),
     agentId: parseInteger(ensureEnv("WECOM_AGENT_ID"), "WECOM_AGENT_ID"),

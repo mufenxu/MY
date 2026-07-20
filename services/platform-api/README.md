@@ -1,6 +1,6 @@
 # MY Platform API
 
-`platform-api` 在一个 Node.js 进程中组合以下模块：
+`platform-api` 统一编排以下入口，但生产环境不把业务服务合并到同一个进程：
 
 - 综合小程序后端与原 React 管理后台
 - 考试小程序后端与原 Vue 管理后台
@@ -19,6 +19,8 @@
 | `xcx.pxyb.cn` | 综合小程序 API 与原管理后台 |
 | `haxx.pxyb.cn` | 考试 API 与原管理后台 |
 | `tongzhiapi.pxyb.cn` | 企业微信通知 API |
+| `hgu.pxyb.cn` | 校园服务可选独立入口 |
+| `mqttapi.pxyb.cn` | IoT HTTP 与 WebSocket 可选独立入口 |
 
 统一域名路径：
 
@@ -33,7 +35,8 @@
 - `/api/campus/*` -> HGU `/api/*`
 - `/api/iot/*` -> MQTT `/api/*`
 - `/api/iot/ws` -> MQTT WebSocket `/ws`
-- `/api/notify/*` -> 企业微信通知原路径
+- `POST /api/notify` -> 企业微信通知 `/notify`
+- `/api/notify/*` -> 企业微信通知其他原路径
 
 ## 设计约束
 
@@ -41,3 +44,4 @@
 - 不合并业务数据库，只共用 MongoDB 服务器。
 - 任意一个核心模块初始化失败时，容器启动失败，避免提供部分可用但状态不一致的 API。
 - 原后端的 `npm start` 入口继续有效，便于独立调试和回滚。
+- 独立域名只作为网关 Host 别名；服务间调用使用 Docker DNS，不经过公网域名。

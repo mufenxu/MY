@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const { issueServiceRequest } = require('@my-platform/platform-auth');
 process.env.NOTIFY_API_KEY = 'module-test-key';
 process.env.WECOM_CORP_ID = 'module-test-corp';
 process.env.WECOM_AGENT_ID = '10001';
@@ -9,6 +10,7 @@ const { createApp } = require('../src/app');
 
 const config = {
   apiKey: 'test-api-key-value',
+  internalCallers: ['core-api', 'platform-api'],
   tokenCacheMargin: 120,
   wecom: { corpId: 'corp', secret: 'secret', agentId: 10001 },
 };
@@ -20,12 +22,12 @@ async function withServer(client, callback) {
   finally { await new Promise((resolve) => server.close(resolve)); }
 }
 
-function request(port, { path = '/notify', apiKey, body } = {}) {
+function request(port, { path = '/notify', apiKey, body, headers = {} } = {}) {
   return new Promise((resolve, reject) => {
     const data = body == null ? '' : JSON.stringify(body);
     const req = http.request({
       host: '127.0.0.1', port, path, method: data ? 'POST' : 'GET',
-      headers: { ...(apiKey ? { 'X-API-KEY': apiKey } : {}), ...(data ? { 'Content-Type': 'application/json' } : {}) },
+      headers: { ...headers, ...(apiKey ? { 'X-API-KEY': apiKey } : {}), ...(data ? { 'Content-Type': 'application/json' } : {}) },
     }, (res) => {
       let response = '';
       res.on('data', (chunk) => { response += chunk; });
@@ -53,6 +55,22 @@ test('notification endpoint validates and forwards messages', async () => {
     });
     assert.equal(response.status, 200);
     assert.equal(sent.length, 1);
+  });
+});
+
+test('notification endpoint accepts signed internal callers and rejects replay', async () => {
+  const body = { touser: 'alice', msg_type: 'text', data: { content: 'hello' } };
+  const serialized = JSON.stringify(body);
+  const headers = issueServiceRequest({
+    caller: 'core-api',
+    secret: config.apiKey,
+    method: 'POST',
+    pathname: '/notify',
+    body: serialized,
+  });
+  await withServer({ sendMessage: async () => ({ errcode: 0 }) }, async (port) => {
+    assert.equal((await request(port, { body, headers })).status, 200);
+    assert.equal((await request(port, { body, headers })).status, 401);
   });
 });
 

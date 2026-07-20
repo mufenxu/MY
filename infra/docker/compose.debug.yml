@@ -1,0 +1,8 @@
+services:
+  campus-service:
+    ports:
+      - "${CAMPUS_BIND_ADDRESS:-127.0.0.1}:${CAMPUS_PORT:-22101}:22101"
+
+  iot-service:
+    ports:
+      - "${IOT_BIND_ADDRESS:-127.0.0.1}:${IOT_PORT:-22102}:22102"

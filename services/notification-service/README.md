@@ -1,6 +1,6 @@
 # 企业微信通知 API 接入教程（Node.js）
 
-本文指导如何在宝塔面板上部署企业微信通知服务，并通过域名 `https://tongzhiapi.pxyb.cn` 对外提供统一的消息发送接口。
+通知服务由统一 Compose 部署在 Docker 内网，生产入口为 `https://pxyb.cn/api/notify`。可选独立域名只作为 `platform-api` 的 Host 别名，不直接代理容器端口。
 
 ---
 
@@ -21,53 +21,40 @@
    - 应用 ID（`AgentID`）
    - 应用 Secret（`Secret`）
 2. 在“开发管理 -> 企业可信 IP”处添加服务器出口 IP（如 `107.173.38.23`），否则会出现 `60020 not allow to access from your ip`。
-3. 将代码上传至宝塔服务器目录（示例 `/root/tongzhiapi`）。
-4. 服务器需安装 Node.js 18 及以上（宝塔可一键安装）。
+3. 在仓库根目录准备 `.env`，通知服务与其他平台组件使用同一套 Compose 生命周期。
+4. 本地开发需要 Node.js 20 及以上；生产运行使用仓库固定的容器镜像。
 
 ---
 
-## 3. 宝塔面板部署步骤
+## 3. 统一部署步骤
 
-1. **创建 Node 项目**
-   - 面板路径：`网站 -> Node项目 -> 添加Node项目`
-   - `项目目录`：选择 `/root/tongzhiapi`
-   - `项目名称`：任意，例如“企业微信通知api”
-   - `启动选项`：选择或手动输入 `node src/server.js`
-   - `Node 版本`：选择 `v24.11.0`（或任何 ≥18 的版本）
-   - `包管理器`：建议 `npm`，若选择 `pnpm`，后续命令需对应调整
-   - 点击“确定”完成创建
+1. 在仓库根目录配置 `WECOM_CORP_ID`、`WECOM_AGENT_ID`、`WECOM_SECRET` 和至少 32 位的 `NOTIFY_API_KEY`。
+2. 校验环境与拓扑：
 
-2. **安装依赖**
-   - 进入该项目详情页，找到“命令行/依赖管理”
-   - 执行 `npm install`（或 `pnpm install`），等待 `node_modules` 安装完成
+   ```bash
+   npm run env:check
+   npm run check:topology
+   docker compose --env-file .env -f infra/docker/compose.yml config --quiet
+   ```
 
-3. **配置环境变量**
-   - 面板路径：`项目设置 -> 环境变量`
-   - 添加下列键值（示例）：
-     ```
-     WECOM_CORP_ID=wwxxxxxxxxxxxxxxxx
-     WECOM_AGENT_ID=1000002
-     WECOM_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-     NOTIFY_API_KEY=replace_with_a_random_api_key
-     TOKEN_CACHE_MARGIN=120
-     PORT=3000
-     ```
-   - 保存后重启项目，使配置生效
+3. 启动或更新服务：
 
-4. **域名与 HTTPS**
-   - 在宝塔“网站”中为 `tongzhiapi.pxyb.cn` 创建反向代理，指向本项目监听的端口（默认 3000）
-   - 在该站点申请并开启 SSL 证书，确保外部调用使用 `https://tongzhiapi.pxyb.cn`
+   ```bash
+   docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build notification-service platform-api
+   ```
+
+4. 主域名由 `infra/nginx/my-platform.conf.example` 统一代理到 `127.0.0.1:22100`。独立通知域名也代理到网关并加入 `NOTIFY_HOSTS`；禁止发布容器 `3000` 端口。
 
 ---
 
 ## 4. 服务验证
 
-1. 浏览器访问 `https://tongzhiapi.pxyb.cn/healthz`  
+1. 浏览器访问 `https://pxyb.cn/api/notify/healthz`
    - 预期响应：`{"status":"ok"}`
 2. 终端使用 curl 发送测试通知：
 
    ```bash
-   curl -X POST "https://tongzhiapi.pxyb.cn/notify" \
+   curl -X POST "https://pxyb.cn/api/notify" \
      -H "Content-Type: application/json" \
      -H "X-API-KEY: replace_with_a_random_api_key" \
      -d '{
@@ -85,7 +72,8 @@
 ## 5. 接口说明
 
 - **基础信息**
-  - 基础域名：`https://tongzhiapi.pxyb.cn`
+  - 通知接口：`https://pxyb.cn/api/notify`
+  - 健康检查：`https://pxyb.cn/api/notify/healthz`
   - 鉴权头：`X-API-KEY: replace_with_a_random_api_key`
   - 全部接口均返回 JSON
 
@@ -182,7 +170,7 @@
 
 ## 6. 系统集成指引
 
-1. **后端调用**：在业务服务中通过 HTTP 客户端（Axios、requests 等）调用 `POST https://tongzhiapi.pxyb.cn/notify`，携带 `X-API-KEY` 与消息体。  
+1. **第三方调用**：通过 `POST https://pxyb.cn/api/notify` 携带 `X-API-KEY`；仓库内部服务使用 `http://notification-service:3000/notify` 和短时签名。
 2. **失败重试**：若接口返回企业微信错误码，可读取 `detail` 中的 `errcode` 判断原因并决定是否重试。  
 3. **鉴权管理**：建议将 `NOTIFY_API_KEY` 存放在服务端安全配置文件中，并定期更换。  
 4. **审计日志**：业务侧可记录调用参数与返回结果，便于排查发送失败。
@@ -214,7 +202,7 @@
 
 ---
 
-至此，`https://tongzhiapi.pxyb.cn` 已完成部署并可用于企业微信通知推送。若需扩展更多消息类型或集成拍错回调，可在 `src/notification-schema.js` 与 `src/app.js` 中按企业微信官方文档继续拓展。
+至此，通知能力已接入统一网关。若需扩展更多消息类型或回调，可在 `src/notification-schema.js` 与 `src/app.js` 中按企业微信官方文档继续拓展。
 
 
 

@@ -39,6 +39,9 @@ const ScanManagement = () => {
     });
     const canManageSecrets = currentUser.role === 'super_admin';
     const isMobile = useIsMobile();
+    const integrationApiBase = `${window.location.origin}${IS_PLATFORM_SSO ? '/api/core/api' : '/api'}`;
+    const qrCreateUrl = `${integrationApiBase}/auth/qrcode/create`;
+    const tokenExchangeUrl = `${integrationApiBase}/auth/token/exchange`;
 
     const fetchData = async () => {
         setLoading(true);
@@ -451,7 +454,7 @@ const ScanManagement = () => {
 <!-- 2. 接入核心逻辑 -->
 <script>
   async function refreshQR() {
-    const api = "https://xcx.pxyb.cn/api/auth/qrcode/create";
+    const api = "${qrCreateUrl}";
     const appId = "${currentApp?.appId || 'YOUR_APP_ID'}";
     
     // 获取旧 Token 用于废弃旧码，防止刷新页面产生多余有效码
@@ -485,7 +488,7 @@ const ScanManagement = () => {
 <!-- 2. 接入核心逻辑 -->
 <script>
   async function refreshQR() {
-    const api = "https://xcx.pxyb.cn/api/auth/qrcode/create";
+    const api = "${qrCreateUrl}";
     const appId = "${currentApp?.appId || 'YOUR_APP_ID'}";
     
     // 获取旧 Token 用于废弃旧码
@@ -513,8 +516,8 @@ const ScanManagement = () => {
                     <h3>2. 后端兑换 Token (Node.js 示例)</h3>
                     <p>前端扫码成功后会获得 <code>code</code>，请在您的服务端使用 <code>AppSecret</code> 换取用户信息：</p>
                     <div style={{ background: 'var(--bg-color)', color: '#d4d4d4', padding: '15px', borderRadius: '16px', overflowX: 'auto', fontFamily: 'monospace', fontSize: '14px', position: 'relative' }}>
-                        <pre>{`// POST https://xcx.pxyb.cn/api/auth/token/exchange
-const response = await axios.post('https://xcx.pxyb.cn/api/auth/token/exchange', {
+                        <pre>{`// POST ${tokenExchangeUrl}
+const response = await axios.post('${tokenExchangeUrl}', {
     appId: "${currentApp?.appId || 'YOUR_APP_ID'}",
     secret: "${currentSecret || 'YOUR_APP_SECRET'}",
     tempAuthCode: "前端传来的code"
@@ -526,8 +529,8 @@ console.log(response.data);
                             style={{ position: 'absolute', top: 10, right: 10 }}
                             size="small"
                             icon={<CopyOutlined />}
-                            onClick={() => copyToClipboard(`// POST https://xcx.pxyb.cn/api/auth/token/exchange
-const response = await axios.post('https://xcx.pxyb.cn/api/auth/token/exchange', {
+                            onClick={() => copyToClipboard(`// POST ${tokenExchangeUrl}
+const response = await axios.post('${tokenExchangeUrl}', {
     appId: "${currentApp?.appId || 'YOUR_APP_ID'}",
     secret: "${currentSecret || 'YOUR_APP_SECRET'}",
     tempAuthCode: "前端传来的code"

@@ -3,7 +3,8 @@
 ARG NODE_IMAGE=node:24-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d
 
 FROM ${NODE_IMAGE} AS admin-console-build
-WORKDIR /build/admin-console
+WORKDIR /build/apps/admin-console
+COPY packages/platform-auth/ /build/packages/platform-auth/
 COPY apps/admin-console/package*.json ./
 RUN npm ci --no-audit --no-fund
 COPY apps/admin-console/ ./
@@ -36,8 +37,8 @@ COPY --chown=node:node services/platform-api/ ./services/platform-api/
 COPY --from=platform-api-deps --chown=node:node /build/services/platform-api/node_modules ./services/platform-api/node_modules
 COPY --chown=node:node apps/admin-console/src ./apps/admin-console/src
 COPY --chown=node:node apps/admin-console/package.json ./apps/admin-console/package.json
-COPY --from=admin-console-build --chown=node:node /build/admin-console/node_modules ./apps/admin-console/node_modules
-COPY --from=admin-console-build --chown=node:node /build/admin-console/dist ./apps/admin-console/dist
+COPY --from=admin-console-build --chown=node:node /build/apps/admin-console/node_modules ./apps/admin-console/node_modules
+COPY --from=admin-console-build --chown=node:node /build/apps/admin-console/dist ./apps/admin-console/dist
 COPY --chown=node:node config/platform.services.docker.json ./config/platform.services.docker.json
 
 RUN chown -R node:node /app

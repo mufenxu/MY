@@ -136,6 +136,8 @@ services:
         condition: service_started
       iot-service:
         condition: service_started
+      notification-service:
+        condition: service_started
     ports:
       - "${PLATFORM_BIND_ADDRESS:-127.0.0.1}:${PLATFORM_API_PORT:-22100}:22100"
     environment:
@@ -205,6 +207,8 @@ services:
       CORE_HOSTS: ${CORE_HOSTS:-xcx.pxyb.cn}
       EXAM_HOSTS: ${EXAM_HOSTS:-haxx.pxyb.cn}
       NOTIFY_HOSTS: ${NOTIFY_HOSTS:-tongzhiapi.pxyb.cn}
+      CAMPUS_HOSTS: ${CAMPUS_HOSTS:-}
+      MQTT_HOSTS: ${MQTT_HOSTS:-}
       CAMPUS_SERVICE_URL: http://campus-service:22101
       MQTT_SERVICE_URL: http://iot-service:22102
       CORE_SERVICE_URL: http://core-api:3045
@@ -266,7 +270,10 @@ services:
       GH_WEBHOOK_ENABLED: ${GH_WEBHOOK_ENABLED:-true}
       GH_WEBHOOK_SECRET: ${GH_WEBHOOK_SECRET:-}
       MQTT_API_KEY: ${MQTT_API_KEY:-}
-      MQTT_API_BASE_URL: http://iot-service:22102
+      IOT_SERVICE_URL: http://iot-service:22102
+      NOTIFICATION_SERVICE_URL: http://notification-service:3000
+      NOTIFY_API_KEY: ${NOTIFY_API_KEY:?Set NOTIFY_API_KEY}
+      CORE_NOTIFICATION_MAX_ATTEMPTS: ${CORE_NOTIFICATION_MAX_ATTEMPTS:-2}
       CORE_MQTT_API_TIMEOUT_MS: ${CORE_MQTT_API_TIMEOUT_MS:-8000}
       ORDER_SUBMIT_CONCURRENCY: ${ORDER_SUBMIT_CONCURRENCY:-3}
       ORDER_SUBMIT_POLL_INTERVAL_MS: ${ORDER_SUBMIT_POLL_INTERVAL_MS:-5000}
@@ -358,6 +365,7 @@ services:
       WECOM_AGENT_ID: ${WECOM_AGENT_ID:?Set WECOM_AGENT_ID}
       WECOM_SECRET: ${WECOM_SECRET:?Set WECOM_SECRET}
       NOTIFY_API_KEY: ${NOTIFY_API_KEY:?Set NOTIFY_API_KEY}
+      NOTIFY_INTERNAL_CALLERS: ${NOTIFY_INTERNAL_CALLERS:-platform-api,core-api}
       TOKEN_CACHE_MARGIN: ${TOKEN_CACHE_MARGIN:-120}
     read_only: true
     tmpfs:
@@ -434,8 +442,6 @@ services:
     depends_on:
       mongodb-init:
         condition: service_completed_successfully
-    ports:
-      - "${CAMPUS_BIND_ADDRESS:-127.0.0.1}:${CAMPUS_PORT:-22101}:22101"
     environment:
       NODE_ENV: production
       TZ: ${TZ:-Asia/Shanghai}
@@ -481,8 +487,6 @@ services:
     depends_on:
       mongodb-init:
         condition: service_completed_successfully
-    ports:
-      - "${IOT_BIND_ADDRESS:-127.0.0.1}:${IOT_PORT:-22102}:22102"
     environment:
       NODE_ENV: production
       TZ: ${TZ:-Asia/Shanghai}

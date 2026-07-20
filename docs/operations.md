@@ -26,8 +26,8 @@ npm run migrate:sqlite
 ```bash
 docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build --wait
 curl --fail http://127.0.0.1:22100/api/readyz
-curl --fail http://127.0.0.1:22101/api/ready
-curl --fail http://127.0.0.1:22102/api/ready
+curl --fail http://127.0.0.1:22100/api/campus/api/ready
+curl --fail http://127.0.0.1:22100/api/iot/api/ready
 ```
 
 Do not delete the SQLite files until the migrated user counts, settings, devices, API keys, history, campus sessions, and timetable caches have been checked.
@@ -92,7 +92,7 @@ Recommended policy:
 
 - `/api/livez` checks the platform process.
 - `/api/readyz` checks platform sessions plus the core and exam MongoDB runtimes.
-- campus and IoT expose `/api/ready`.
+- campus and IoT expose `/api/ready` only inside Docker; operators reach them through `/api/campus/api/ready` and `/api/iot/api/ready` on the gateway.
 - `/api/metrics` exposes Prometheus metrics and requires `Authorization: Bearer $PLATFORM_METRICS_TOKEN`.
 
 The management portal also runs a server-side health collector. It stores raw samples in `service_status_history`, hourly rollups in `service_status_rollups`, and incident state in `operations_incidents`. Browser refresh can be paused without stopping collection or alerts.

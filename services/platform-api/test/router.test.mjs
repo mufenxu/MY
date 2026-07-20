@@ -71,6 +71,27 @@ test('host routing preserves legacy application URLs', async () => {
   });
 });
 
+test('campus and IoT legacy domains stay behind the platform gateway', async () => {
+  const upstream = http.createServer(echoApp('internal-service'));
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const target = `http://127.0.0.1:${upstream.address().port}`;
+  const router = createPlatformRouter({
+    portalApp: echoApp('portal'),
+    campusTarget: target,
+    mqttTarget: target,
+    campusHosts: 'campus.example.com',
+    mqttHosts: 'iot.example.com',
+  });
+  try {
+    await withServer(router, async (port) => {
+      assert.equal((await request(port, '/api/ready', 'campus.example.com')).body.name, 'internal-service');
+      assert.equal((await request(port, '/api/devices', 'iot.example.com')).body.name, 'internal-service');
+    });
+  } finally {
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+
 test('viewer sessions can inspect managed apps but cannot mutate them', async () => {
   const router = createPlatformRouter({
     portalApp: echoApp('portal'),
@@ -170,6 +191,29 @@ test('canonical single-domain API paths preserve existing service authentication
       url: '/api/user/login',
     });
     assert.deepEqual((await request(port, '/api/notify/healthz')).body, { name: 'notify', url: '/healthz' });
+    assert.deepEqual((await request(port, '/api/notify')).body, { name: 'notify', url: '/notify' });
+  });
+});
+
+test('gateway strips externally supplied platform and service identity headers', async () => {
+  const router = createPlatformRouter({
+    portalApp: echoApp('portal'),
+    notifyApp: (req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        caller: req.headers['x-my-service-caller'] || '',
+        signature: req.headers['x-my-service-signature'] || '',
+        sso: req.headers['x-my-platform-sso'] || '',
+      }));
+    },
+  });
+  await withServer(router, async (port) => {
+    const response = await request(port, '/api/notify', 'admin.example.com', {
+      'X-My-Platform-Sso': 'forged',
+      'X-My-Service-Caller': 'forged-service',
+      'X-My-Service-Signature': 'forged-signature',
+    });
+    assert.deepEqual(response.body, { caller: '', signature: '', sso: '' });
   });
 });
 

@@ -3,6 +3,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const { verifyServiceRequest } = require('@my-platform/platform-auth');
 
 const defaultConfig = require('./config');
 const WeComClient = require('./wecom-client');
@@ -14,6 +15,21 @@ function safeEqual(left, right) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+function createReplayGuard({ ttlMs = 60_000, maxEntries = 4_096 } = {}) {
+  const seen = new Map();
+  return ({ caller, nonce, timestamp }) => {
+    const now = Date.now();
+    for (const [key, expiresAt] of seen) {
+      if (expiresAt <= now) seen.delete(key);
+    }
+    const key = `${caller}:${nonce}`;
+    if (seen.has(key)) return false;
+    seen.set(key, Math.max(now, timestamp) + ttlMs);
+    while (seen.size > maxEntries) seen.delete(seen.keys().next().value);
+    return true;
+  };
+}
+
 function createApp({ config = defaultConfig, wecomClient = null } = {}) {
   const app = express();
   const client = wecomClient || new WeComClient({
@@ -21,12 +37,25 @@ function createApp({ config = defaultConfig, wecomClient = null } = {}) {
     secret: config.wecom.secret,
     margin: config.tokenCacheMargin,
   });
+  const guardAgainstReplay = createReplayGuard();
 
   const checkApiKey = (req, res, next) => {
     const apiKey = req.get('X-API-KEY');
-    if (!apiKey || !safeEqual(apiKey, config.apiKey)) {
-      return res.status(401).json({ errcode: 401, errmsg: '无效的 API KEY' });
+    if (apiKey && safeEqual(apiKey, config.apiKey)) {
+      req.serviceCaller = 'external-api';
+      return next();
     }
+    const identity = verifyServiceRequest({
+      headers: req.headers,
+      secret: config.apiKey,
+      allowedCallers: config.internalCallers || [],
+      method: req.method,
+      pathname: req.originalUrl || req.url,
+      body: req.rawBody || '',
+      replayGuard: guardAgainstReplay,
+    });
+    if (!identity) return res.status(401).json({ errcode: 401, errmsg: '无效的 API KEY' });
+    req.serviceCaller = identity.caller;
     return next();
   };
 
@@ -43,7 +72,12 @@ function createApp({ config = defaultConfig, wecomClient = null } = {}) {
   app.use(morgan(process.env.NODE_ENV === 'production'
     ? ':request-id :remote-addr - :remote-user [:date[clf]] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent"'
     : ':request-id :method :url :status :response-time ms - :res[content-length]'));
-  app.use(express.json({ limit: '64kb' }));
+  app.use(express.json({
+    limit: '64kb',
+    verify(req, _res, buffer) {
+      req.rawBody = Buffer.from(buffer);
+    },
+  }));
 
   app.get('/healthz', (req, res) => res.json({ status: 'ok' }));
 
@@ -80,4 +114,5 @@ function createApp({ config = defaultConfig, wecomClient = null } = {}) {
 const app = createApp();
 module.exports = app;
 module.exports.createApp = createApp;
+module.exports.createReplayGuard = createReplayGuard;
 module.exports.safeEqual = safeEqual;

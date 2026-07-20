@@ -1,6 +1,6 @@
 # 企业微信通知 API 接入教程
 
-面向业务系统或第三方服务，说明如何调用 `https://tongzhiapi.pxyb.cn` 提供的通知接口发送企业微信消息。
+面向第三方服务，说明如何通过统一网关 `https://pxyb.cn/api/notify` 发送企业微信消息。平台内部服务使用 Docker DNS 和签名请求，不使用公网域名。
 
 ---
 
@@ -11,7 +11,8 @@
    - 请妥善保管，不要暴露在公开仓库或前端代码中。
 
 2. **确认可访问域名**
-   - API 基础域名：`https://tongzhiapi.pxyb.cn`
+   - 通知接口：`https://pxyb.cn/api/notify`
+   - 健康检查：`https://pxyb.cn/api/notify/healthz`
    - 支持 HTTPS，默认端口 443，无需额外拼接端口。
 
 3. **确保调用出口 IP 合法**
@@ -48,7 +49,7 @@
 ### 4.1 使用 curl
 
 ```bash
-curl -X POST "https://tongzhiapi.pxyb.cn/notify" \
+curl -X POST "https://pxyb.cn/api/notify" \
   -H "Content-Type: application/json" \
   -H "X-API-KEY: replace_with_a_random_api_key" \
   -d '{
@@ -81,7 +82,7 @@ const axios = require("axios");
 
 async function sendNotify() {
   const response = await axios.post(
-    "https://tongzhiapi.pxyb.cn/notify",
+    "https://pxyb.cn/api/notify",
     {
       msg_type: "markdown",
       data: {
@@ -107,7 +108,7 @@ sendNotify().catch(console.error);
 ```python
 import requests
 
-url = "https://tongzhiapi.pxyb.cn/notify"
+url = "https://pxyb.cn/api/notify"
 headers = {
     "Content-Type": "application/json",
     "X-API-KEY": "replace_with_a_random_api_key",

@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { checkExternalServices, resolveServiceMode } from '../src/service-targets.mjs';
 
-test('external service mode requires core and exam but keeps notification optional', () => {
+test('external service mode requires every configured platform target', () => {
   assert.deepEqual(resolveServiceMode({ PLATFORM_EXTERNAL_SERVICES: 'false' }), {
     external: false,
-    targets: { core: '', exam: '', notify: '' },
+    targets: { core: '', exam: '', campus: '', iot: '', notify: '' },
   });
   assert.throws(
     () => resolveServiceMode({ PLATFORM_EXTERNAL_SERVICES: 'true', CORE_SERVICE_URL: 'http://core' }),
@@ -16,15 +16,33 @@ test('external service mode requires core and exam but keeps notification option
       PLATFORM_EXTERNAL_SERVICES: 'true',
       CORE_SERVICE_URL: 'http://core',
       EXAM_SERVICE_URL: 'http://exam',
+      CAMPUS_SERVICE_URL: 'http://campus',
+      MQTT_SERVICE_URL: 'http://iot',
+      NOTIFICATION_SERVICE_URL: 'http://notify',
     }),
-    { external: true, targets: { core: 'http://core', exam: 'http://exam', notify: '' } },
+    {
+      external: true,
+      targets: {
+        core: 'http://core',
+        exam: 'http://exam',
+        campus: 'http://campus',
+        iot: 'http://iot',
+        notify: 'http://notify',
+      },
+    },
   );
 });
 
-test('external readiness probes only fixed low-cardinality health paths', async () => {
+test('external readiness probes critical services by default', async () => {
   const urls = [];
   const ready = await checkExternalServices(
-    { core: 'http://core:1', exam: 'http://exam:2/', notify: 'http://notify:3' },
+    {
+      core: 'http://core:1',
+      exam: 'http://exam:2/',
+      campus: 'http://campus:3',
+      iot: 'http://iot:4',
+      notify: 'http://notify:5',
+    },
     {
       fetchImpl: async (url) => {
         urls.push(url.toString());
@@ -39,12 +57,19 @@ test('external readiness probes only fixed low-cardinality health paths', async 
   ]);
 });
 
-test('external readiness is not blocked by an optional notification outage', async () => {
+test('external readiness can cover every integrated service', async () => {
   const ready = await checkExternalServices(
-    { core: 'http://core', exam: 'http://exam', notify: 'http://notify' },
     {
+      core: 'http://core',
+      exam: 'http://exam',
+      campus: 'http://campus',
+      iot: 'http://iot',
+      notify: 'http://notify',
+    },
+    {
+      requiredServices: ['core', 'exam', 'campus', 'iot', 'notify'],
       fetchImpl: async (url) => ({ ok: !url.toString().includes('notify') }),
     },
   );
-  assert.equal(ready, true);
+  assert.equal(ready, false);
 });

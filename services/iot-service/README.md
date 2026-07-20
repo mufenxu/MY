@@ -180,14 +180,14 @@ AUTH_SESSION_SECRET=
 生产域名建议同时显式设置公网源，避免面板或反代遗漏协议头导致登录被同源保护拦截：
 
 ```env
-PUBLIC_ORIGIN=https://mqttapi.pxyb.cn
+PUBLIC_ORIGIN=https://pxyb.cn,https://mqttapi.pxyb.cn
 ```
 
 Nginx 示例：
 
 ```nginx
 location / {
-  proxy_pass http://127.0.0.1:22102;
+  proxy_pass http://127.0.0.1:22100;
   proxy_http_version 1.1;
   proxy_set_header Host $host;
   proxy_set_header X-Forwarded-Host $host;
@@ -198,7 +198,7 @@ location / {
 }
 ```
 
-如果未设置这些反代头，浏览器从 `https://你的域名` 发起登录，但后端以为自己是 `http://内网地址:22102`，同源保护会把登录请求判定为跨站请求并返回 `403 FORBIDDEN`。设置 `PUBLIC_ORIGIN` 后，服务会优先按这个公网地址校验浏览器请求来源。
+独立域名必须加入 `MQTT_HOSTS`。网关会保留反代头并转发 HTTP 与 WebSocket；设置 `PUBLIC_ORIGIN` 后，服务按统一域名和可选独立域名校验浏览器来源。
 
 服务会为每个 HTTP 请求返回 `X-Request-Id`，错误响应也会包含 `requestId` 与稳定的 `code` 字段，便于排查问题。默认会输出 JSON 格式访问日志；如需关闭，可设置 `LOG_HTTP_REQUESTS=0`。
 
@@ -282,7 +282,7 @@ API Key 适合给小程序、大屏和后端服务使用，支持以下作用域
 
 ## 部署建议
 
-- 服务器开放 `22102` 端口，或通过 Nginx 反向代理到该服务
+- 生产只开放 Nginx `80/443`，Nginx 代理 `22100` 网关；不要开放 `22102`
 - 生产环境建议启用登录鉴权，并放在 HTTPS 或反向代理后面
 - 必须使用独立的 `iot_app` MongoDB 账号，并将 MongoDB 数据卷纳入统一备份
 - 如果 MQTT Broker 在公网，建议使用带认证或 TLS 的连接地址

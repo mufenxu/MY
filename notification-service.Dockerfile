@@ -3,7 +3,8 @@
 ARG NODE_IMAGE=node:24-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d
 
 FROM ${NODE_IMAGE} AS deps
-WORKDIR /build/notification-service
+WORKDIR /build/services/notification-service
+COPY packages/platform-auth/ /build/packages/platform-auth/
 COPY services/notification-service/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
@@ -11,9 +12,11 @@ FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production \
     PORT=3000
 
+WORKDIR /app
+COPY --chown=node:node packages/platform-auth/ ./packages/platform-auth/
 WORKDIR /app/notification-service
 COPY --chown=node:node services/notification-service/ ./
-COPY --from=deps --chown=node:node /build/notification-service/node_modules ./node_modules
+COPY --from=deps --chown=node:node /build/services/notification-service/node_modules ./node_modules
 
 USER node
 EXPOSE 3000

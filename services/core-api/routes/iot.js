@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const crypto = require('node:crypto');
 const auth = require('../middleware/auth');
 const authorizeAccess = require('../middleware/authorizeAccess');
 const secretService = require('../services/secretService');
 const logger = require('../utils/logger');
+const { resolveInternalServiceUrl } = require('../utils/internalServiceUrl');
 
-const MQTT_API_BASE = 'https://mqttapi.pxyb.cn';
 const DEFAULT_PRIMARY_DEVICE_ID = 'esp8266_living';
 const DEFAULT_SECONDARY_DEVICE_ID = 'esp01s_relay';
 const DEFAULT_RELAY_ID = 'relay1';
@@ -43,18 +44,26 @@ function getSecretValue(...keys) {
 }
 
 function normalizeBaseUrl(url) {
-    return String(url || MQTT_API_BASE).replace(/\/+$/, '');
+    return String(url || '').replace(/\/+$/, '');
 }
 
 function getMqttApiBaseUrl() {
-    return normalizeBaseUrl(getSecretValue('MQTT_API_BASE_URL') || MQTT_API_BASE);
+    const deploymentUrl = process.env.IOT_SERVICE_URL || process.env.MQTT_API_BASE_URL;
+    const developmentOverride = process.env.NODE_ENV === 'production'
+        ? ''
+        : getSecretValue('MQTT_API_BASE_URL');
+    return normalizeBaseUrl(resolveInternalServiceUrl({
+        value: deploymentUrl || developmentOverride,
+        serviceName: 'iot-service',
+        developmentFallback: 'http://127.0.0.1:22102',
+    }));
 }
 
 function getMqttApiKey() {
     return getSecretValue('MQTT_API_KEY', 'MQTT_API_TOKEN', 'MQTTAPI_TOKEN');
 }
 
-function getMqttApiHeaders() {
+function getMqttApiHeaders(req = null) {
     const apiKey = getMqttApiKey();
     if (!apiKey) {
         const error = new Error('Server not configured: MQTT_API_KEY missing');
@@ -65,7 +74,35 @@ function getMqttApiHeaders() {
     return {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
+        'X-Request-Id': req?.id || req?.headers?.['x-request-id'] || crypto.randomUUID(),
+        'X-Service-Caller': 'core-api',
+        ...(req?.headers?.['idempotency-key'] ? { 'Idempotency-Key': req.headers['idempotency-key'] } : {}),
     };
+}
+
+function isTransientIotError(error) {
+    const status = Number(error?.response?.status);
+    return ['ECONNABORTED', 'ECONNRESET', 'ETIMEDOUT'].includes(error?.code)
+        || status === 502
+        || status === 503
+        || status === 504;
+}
+
+async function getIotDevices(req) {
+    let lastError;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+            return await axios.get(`${getMqttApiBaseUrl()}/api/devices`, {
+                headers: getMqttApiHeaders(req),
+                timeout: getMqttRequestTimeoutMs(),
+            });
+        } catch (error) {
+            lastError = error;
+            if (attempt === 2 || !isTransientIotError(error)) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+    }
+    throw lastError;
 }
 
 function getConfiguredDevice(slot) {
@@ -482,10 +519,7 @@ function resolveControlTarget(body) {
 // 获取IoT设备信息 (温湿度+状态)
 router.get('/info', auth.verifyToken, smartControlViewAccess, async (req, res) => {
     try {
-        const response = await axios.get(`${getMqttApiBaseUrl()}/api/devices`, {
-            headers: getMqttApiHeaders(),
-            timeout: getMqttRequestTimeoutMs(),
-        });
+        const response = await getIotDevices(req);
 
         res.json({
             success: true,
@@ -519,7 +553,7 @@ router.post('/control', auth.verifyToken, smartControlManageAccess, async (req, 
             `${getMqttApiBaseUrl()}/api/devices/${encodeURIComponent(target.deviceId)}/relays/${encodeURIComponent(target.relayId)}/control`,
             { status: controlStatus },
             {
-                headers: getMqttApiHeaders(),
+                headers: getMqttApiHeaders(req),
                 timeout: getMqttRequestTimeoutMs(),
             }
         );

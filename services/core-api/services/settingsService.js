@@ -1,5 +1,4 @@
 const nodemailer = require('nodemailer');
-const axios = require('axios');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const RefreshToken = require('../models/RefreshToken');
@@ -9,8 +8,8 @@ const AppError = require('../utils/AppError');
 const { TASKS, startTask, stopTask } = require('./cronScheduler');
 const cron = require('node-cron');
 const { encrypt, decrypt, isEncrypted } = require('../utils/crypto');
+const { getNotificationApiKey, sendNotification } = require('./notificationClient');
 
-const WECOM_NOTIFY_URL = 'https://tongzhiapi.pxyb.cn/notify';
 const SECRET_MASK = '********';
 const NOTIFY_SECRET_FIELDS = ['smtpPass', 'qywxApiKey'];
 
@@ -109,7 +108,7 @@ exports.testNotify = async (config, testChannel) => {
 
     if (testChannel === 'wecom') {
         if (!config.qywxEnabled) throw new AppError('WeCom disabled', 400);
-        if (!config.qywxApiKey) throw new AppError('Missing API Key', 400);
+        if (!getNotificationApiKey(config.qywxApiKey)) throw new AppError('Missing API Key', 400);
         if (![config.qywxToUser, config.qywxToParty, config.qywxToTag].some((value) => String(value || '').trim())) {
             throw new AppError('Missing WeCom recipient', 400);
         }
@@ -129,10 +128,7 @@ exports.testNotify = async (config, testChannel) => {
 业务的动态监控信息，期待为您提供优质服务！`;
         const payload = buildWecomPayload(config, text);
 
-        const response = await axios.post(WECOM_NOTIFY_URL, payload, {
-            headers: { 'X-API-KEY': config.qywxApiKey },
-            timeout: 8000
-        });
+        const response = await sendNotification(payload, { apiKey: config.qywxApiKey, timeoutMs: 8000 });
 
         if (response.data && response.data.errcode === 0) return { success: true };
         throw new AppError(response.data.errmsg || 'WeCom API Error', 500);

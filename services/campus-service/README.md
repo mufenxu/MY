@@ -93,7 +93,7 @@ NRG_COOKIE_FILE=/run/secrets/hgu_nrg_cookie
    ```bash
    docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build campus-service
    ```
-4. 服务默认只监听宿主机 `127.0.0.1:22101`，请通过 HTTPS 反向代理访问。
+4. 生产 Compose 不发布 `22101`；请通过 `https://pxyb.cn/apps/campus/` 或经统一网关转发的独立域名访问。
 
 详细的服务器部署步骤、反向代理配置以及备份说明，请参阅：[Docker Compose 部署指南](./DOCKER_DEPLOY.md)。
 
@@ -112,14 +112,14 @@ HGU_APP_COOKIE_SECURE=true
 HGU_PUBLIC_ORIGIN=https://hgu.pxyb.cn
 ```
 
-建议用 Nginx / Caddy / Traefik 反向代理 HTTPS，再把服务绑定到内网地址：
+容器内部监听 Docker 网络地址，不发布宿主机端口：
 
 ```bash
-HGU_HOST=127.0.0.1
+HGU_HOST=0.0.0.0
 PORT=22101
 ```
 
-如果放在 Docker 容器内，容器内部继续使用 `HGU_HOST=0.0.0.0`，宿主机端口默认只绑定 `127.0.0.1`。只有在所有流量均经过可信反向代理时才设置 `HGU_TRUST_PROXY=true`；HTTPS 重定向也只会在该开关启用后信任代理传入的协议头。公网独立域名还应设置 `HGU_PUBLIC_ORIGIN=https://hgu.pxyb.cn`，这样即使反向代理把上游 `Host` 改成 `127.0.0.1`，微信从 `http://hgu.pxyb.cn` 打开时也会跳到正确 HTTPS 域名。本地 HTTP 调试才可以临时设置 `HGU_APP_COOKIE_SECURE=false` 和 `HGU_ENABLE_HSTS=false`。
+所有流量都经过 `platform-api` 后才设置 `HGU_TRUST_PROXY=true`。独立域名仍可使用 `HGU_PUBLIC_ORIGIN=https://hgu.pxyb.cn` 修正 HTTP 到 HTTPS 跳转，但 Nginx 必须代理到 `22100` 网关。只有叠加 `infra/docker/compose.debug.yml` 的本地调试才会在回环地址发布 `22101`。
 
 备份 `campus_app` 时必须同时安全备份 `HGU_DATA_ENCRYPTION_KEY`，但两者应分开保存。`/api/health` 是存活检查，`/api/ready` 会验证 MongoDB 可用性。
 

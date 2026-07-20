@@ -12,7 +12,6 @@ const ADMIN_CONFIGURABLE_SECRETS = Object.freeze([
     { key: 'EMQX_API_KEY', desc: 'EMQX MQTT 服务 API Key' },
     { key: 'EMQX_SECRET_KEY', desc: 'EMQX MQTT 服务 Secret Key' },
     { key: 'MQTT_API_KEY', desc: 'MQTT Smart Dashboard API Bearer Token' },
-    { key: 'MQTT_API_BASE_URL', desc: 'MQTT Smart Dashboard API 域名' },
     { key: 'MQTT_PRIMARY_DEVICE_ID', desc: '智能控制主设备 ID' },
     { key: 'MQTT_PRIMARY_RELAY_ID', desc: '智能控制主继电器 ID' },
     { key: 'MQTT_SECONDARY_DEVICE_ID', desc: '智能控制第二设备 ID' },

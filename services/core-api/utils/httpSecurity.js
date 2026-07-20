@@ -5,7 +5,7 @@ const contentSecurityPolicyDirectives = {
     "script-src": ["'self'", "https://challenges.cloudflare.com"],
     "script-src-attr": ["'none'"],
     "img-src": ["'self'", "data:", "blob:", "https://*"],
-    "connect-src": ["'self'", "https://xcx.pxyb.cn", "https://challenges.cloudflare.com"],
+    "connect-src": ["'self'", "https://challenges.cloudflare.com"],
     "frame-src": ["'self'", "https://challenges.cloudflare.com"],
     "worker-src": ["'self'", "blob:"],
     "child-src": ["'self'", "https://challenges.cloudflare.com"],

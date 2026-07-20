@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "publicOrigin": "https://pxyb.cn",
+  "services": [
+    {
+      "id": "core",
+      "registryId": "core",
+      "internalUrl": "http://core-api:3045",
+      "publicApiPath": "/api/core",
+      "managedAppPath": "/apps/core/",
+      "healthPath": "/health",
+      "targetEnv": "CORE_SERVICE_URL",
+      "legacyHostEnv": "CORE_HOSTS",
+      "hostPortForbidden": true
+    },
+    {
+      "id": "exam",
+      "registryId": "exam",
+      "internalUrl": "http://exam-api:3110",
+      "publicApiPath": "/api/exam",
+      "managedAppPath": "/apps/exam/",
+      "healthPath": "/version",
+      "targetEnv": "EXAM_SERVICE_URL",
+      "legacyHostEnv": "EXAM_HOSTS",
+      "hostPortForbidden": true
+    },
+    {
+      "id": "campus",
+      "registryId": "campus",
+      "internalUrl": "http://campus-service:22101",
+      "publicApiPath": "/api/campus",
+      "managedAppPath": "/apps/campus/",
+      "healthPath": "/api/ready",
+      "targetEnv": "CAMPUS_SERVICE_URL",
+      "legacyHostEnv": "CAMPUS_HOSTS",
+      "hostPortForbidden": true
+    },
+    {
+      "id": "iot",
+      "registryId": "mqtt",
+      "internalUrl": "http://iot-service:22102",
+      "publicApiPath": "/api/iot",
+      "managedAppPath": "/apps/iot/",
+      "healthPath": "/api/ready",
+      "targetEnv": "MQTT_SERVICE_URL",
+      "legacyHostEnv": "MQTT_HOSTS",
+      "hostPortForbidden": true
+    },
+    {
+      "id": "notify",
+      "registryId": "notify",
+      "internalUrl": "http://notification-service:3000",
+      "publicApiPath": "/api/notify",
+      "managedAppPath": null,
+      "healthPath": "/healthz",
+      "targetEnv": "NOTIFICATION_SERVICE_URL",
+      "legacyHostEnv": "NOTIFY_HOSTS",
+      "hostPortForbidden": true
+    }
+  ],
+  "internalCalls": [
+    { "caller": "core-api", "target": "iot", "auth": "scoped-api-key" },
+    { "caller": "core-api", "target": "notify", "auth": "signed-hmac" },
+    { "caller": "platform-api", "target": "notify", "auth": "signed-hmac" }
+  ]
+}

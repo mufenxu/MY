@@ -3,7 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import express from 'express';
 import httpProxy from 'http-proxy';
-import { PLATFORM_SSO_HEADER, issueInternalIdentity } from './internal-auth.mjs';
+import { PLATFORM_SSO_HEADER, SERVICE_AUTH_HEADERS, issueInternalIdentity } from './internal-auth.mjs';
 
 const PROXY_CONTEXT = Symbol('platformProxyContext');
 const PROXY_TIMEOUT_MIN_MS = 1_000;
@@ -19,6 +19,11 @@ function parseHosts(value) {
 
 function pathWithQuery(pathname, search) {
   return `${pathname || '/'}${search || ''}`;
+}
+
+function stripExternalIdentityHeaders(req) {
+  delete req.headers[PLATFORM_SSO_HEADER];
+  for (const header of Object.values(SERVICE_AUTH_HEADERS)) delete req.headers[header];
 }
 
 function rewriteServicePrefix(req, prefix, { apiByDefault = false, preserve = [] } = {}) {
@@ -332,7 +337,7 @@ export function createPlatformRouter({
 
   async function handler(req, res) {
     // 外部请求永远不能自行传入内部身份票据。
-    delete req.headers[PLATFORM_SSO_HEADER];
+    stripExternalIdentityHeaders(req);
     const requestId = crypto.randomUUID();
     req.headers['x-request-id'] = requestId;
     res.setHeader('X-Request-Id', requestId);
@@ -384,7 +389,11 @@ export function createPlatformRouter({
       return dispatchApp(req, res, examApp, examTarget, 'exam');
     }
     if (requestUrl.pathname === '/api/notify' || requestUrl.pathname.startsWith('/api/notify/')) {
-      rewriteServicePrefix(req, '/api/notify');
+      if (requestUrl.pathname === '/api/notify' || requestUrl.pathname === '/api/notify/') {
+        req.url = pathWithQuery('/notify', requestUrl.search);
+      } else {
+        rewriteServicePrefix(req, '/api/notify');
+      }
       return dispatchApp(req, res, notifyApp, notifyTarget, 'notify');
     }
     if (requestUrl.pathname === '/api/campus' || requestUrl.pathname.startsWith('/api/campus/')) {
@@ -421,7 +430,7 @@ export function createPlatformRouter({
   }
 
   async function handleUpgrade(req, socket, head) {
-    delete req.headers[PLATFORM_SSO_HEADER];
+    stripExternalIdentityHeaders(req);
     req.headers['x-request-id'] = crypto.randomUUID();
     const host = normalizeHost(req.headers.host);
     const requestUrl = new URL(req.url || '/', 'http://platform.internal');
@@ -471,4 +480,5 @@ export {
   normalizeProxyError,
   parseHosts,
   rewriteServicePrefix,
+  stripExternalIdentityHeaders,
 };
