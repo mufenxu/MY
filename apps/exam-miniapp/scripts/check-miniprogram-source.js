@@ -47,13 +47,49 @@ function relative(filePath) {
     return path.relative(root, filePath);
 }
 
+function findUnsupportedRuntimeSyntax(ast) {
+    const stack = [ast];
+
+    while (stack.length > 0) {
+        const node = stack.pop();
+        if (!node || typeof node !== 'object') continue;
+
+        const isOptionalChain = node.type === 'OptionalMemberExpression'
+            || node.type === 'OptionalCallExpression'
+            || ((node.type === 'MemberExpression' || node.type === 'CallExpression') && node.optional === true);
+        if (isOptionalChain) {
+            return { node, description: 'optional chaining' };
+        }
+        if (node.type === 'LogicalExpression' && node.operator === '??') {
+            return { node, description: 'nullish coalescing' };
+        }
+
+        for (const value of Object.values(node)) {
+            if (Array.isArray(value)) {
+                stack.push(...value);
+            } else if (value && typeof value === 'object') {
+                stack.push(value);
+            }
+        }
+    }
+
+    return null;
+}
+
 function parseScript(filePath, text) {
     try {
-        parser.parse(text, {
+        const ast = parser.parse(text, {
             sourceFilename: filePath,
             sourceType: 'module',
             plugins: ['typescript'],
         });
+        const unsupportedSyntax = findUnsupportedRuntimeSyntax(ast);
+        if (unsupportedSyntax) {
+            const location = unsupportedSyntax.node.loc
+                ? `${unsupportedSyntax.node.loc.start.line}:${unsupportedSyntax.node.loc.start.column + 1}`
+                : 'unknown';
+            errors.push(`Unsupported mini program syntax: ${relative(filePath)} (${location}) ${unsupportedSyntax.description}`);
+        }
     } catch (error) {
         const location = error.loc ? `${error.loc.line}:${error.loc.column + 1}` : 'unknown';
         errors.push(`Syntax error: ${relative(filePath)} (${location}) ${error.message}`);

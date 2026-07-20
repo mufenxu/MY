@@ -153,7 +153,8 @@ export const progressApi = {
     clearProgress: async (categoryId: string, mode: string, attemptId = '') => {
         const progressStorageKey = getProgressStorageKey(categoryId, mode);
         const pendingStorageKey = getPendingProgressStorageKey();
-        const storedAttemptId = progressApi.getLocalProgress(categoryId, mode)?.attemptId || '';
+        const localProgress = progressApi.getLocalProgress(categoryId, mode);
+        const storedAttemptId = localProgress ? localProgress.attemptId || '' : '';
         progressApi.clearLocalProgress(categoryId, mode);
         removePendingProgressKey(categoryId, mode, pendingStorageKey);
         const activeUpload = uploadPromises.get(progressStorageKey);
