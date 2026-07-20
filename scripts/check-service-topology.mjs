@@ -30,6 +30,7 @@ export function inspectTopology({
   debugCompose,
   additionalNginx,
   envExample,
+  ciWorkflow,
   runtimeSources,
 }) {
   const errors = [];
@@ -69,6 +70,12 @@ export function inspectTopology({
   if (/proxy_pass\s+http:\/\/127\.0\.0\.1:(?:22101|22102)/.test(additionalNginx)) {
     errors.push('independent domains bypass the platform gateway');
   }
+  if (!ciWorkflow.includes('http://127.0.0.1:22100/api/iot/api/ready')) {
+    errors.push('CI IoT readiness smoke bypasses the platform gateway');
+  }
+  if (/http:\/\/127\.0\.0\.1:22102\//.test(ciWorkflow)) {
+    errors.push('CI depends on the production-forbidden IoT host port');
+  }
   const forbiddenRuntimeDomain = /https:\/\/(?:xcx|haxx|hgu|mqttapi|tongzhiapi)\.pxyb\.cn/i;
   for (const [file, source] of Object.entries(runtimeSources)) {
     if (forbiddenRuntimeDomain.test(source)) errors.push(`${file}: runtime code depends on a legacy public domain`);
@@ -86,6 +93,7 @@ export function loadWorkspaceInputs(workspaceRoot = root) {
     debugCompose: read('infra/docker/compose.debug.yml'),
     additionalNginx: read('infra/nginx/additional-domains.conf.example.disabled'),
     envExample: read('.env.example'),
+    ciWorkflow: read('.github/workflows/ci.yml'),
     runtimeSources: Object.fromEntries([
       'apps/core-admin/src/pages/ScanManagement.jsx',
       'services/core-api/routes/iot.js',

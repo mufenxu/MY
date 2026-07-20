@@ -182,7 +182,7 @@ jobs:
         run: curl --fail --retry 10 --retry-delay 3 http://127.0.0.1:22100/api/readyz
 
       - name: Verify IoT broker subscription readiness
-        run: curl --fail --retry 10 --retry-delay 3 http://127.0.0.1:22102/api/ready
+        run: curl --fail --retry 10 --retry-delay 3 http://127.0.0.1:22100/api/iot/api/ready
 
       - name: Verify platform session and metrics
         run: node --env-file=.env.ci scripts/verify-platform-smoke.mjs
