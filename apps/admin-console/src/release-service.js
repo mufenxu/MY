@@ -101,11 +101,15 @@ function mapRuntimeComponents(componentImages, runtimeStatus) {
   const runtimeComponents = new Map((runtimeStatus?.components || []).map((item) => [item.component, item]));
   return componentImages.map((component) => {
     const runtime = runtimeComponents.get(component.id) || null;
+    const observed = typeof runtime?.observed === 'boolean'
+      ? runtime.observed
+      : Boolean(runtime && runtime.state !== 'missing');
     return {
       ...component,
       serviceId: COMPONENT_SERVICE_IDS[component.id],
       desiredImage: runtime?.configuredImage || component.image,
       runtime,
+      observed,
       inSync: runtime?.inSync ?? null,
     };
   });
@@ -320,7 +324,7 @@ export function createReleaseService({
       runs,
       metrics: {
         configuredComponents: components.filter((item) => item.configured).length,
-        observedComponents: components.filter((item) => item.runtime).length,
+        observedComponents: components.filter((item) => item.observed).length,
         driftCount,
         availableUpdates: availableUpdateComponents.length,
         availableUpdateComponents,

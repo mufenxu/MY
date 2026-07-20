@@ -60,6 +60,19 @@ export function parseDockerTemplateRows(value, fields) {
   });
 }
 
+export function indexDockerObjectsById(items) {
+  const indexed = new Map();
+  for (const item of items || []) {
+    const id = String(item?.Id || '').trim();
+    if (!id) continue;
+    const unprefixed = id.replace(/^sha256:/, '');
+    for (const alias of [id, unprefixed, `sha256:${unprefixed}`, unprefixed.slice(0, 12)]) {
+      if (alias && !indexed.has(alias)) indexed.set(alias, item);
+    }
+  }
+  return indexed;
+}
+
 export function parseEnvSource(source) {
   const values = new Map();
   for (const rawLine of String(source || '').split(/\r?\n/)) {
@@ -306,14 +319,14 @@ export function createDeploymentRunner({
         'inspect', '--format', '{{json .Id}}\t{{json .Image}}\t{{json .State}}', ...containerIds,
       ], 30_000)).stdout, ['Id', 'Image', 'State'])
       : [];
-    const containers = new Map(containerDetails.map((item) => [item.Id, item]));
+    const containers = indexDockerObjectsById(containerDetails);
     const imageIds = [...new Set(containerDetails.map((item) => item.Image).filter(Boolean))];
     const imageDetails = imageIds.length
       ? parseDockerTemplateRows((await runDocker([
         'image', 'inspect', '--format', '{{json .Id}}\t{{json .RepoDigests}}\t{{json .Config.Labels}}', ...imageIds,
       ], 30_000)).stdout, ['Id', 'RepoDigests', 'Labels'])
       : [];
-    const images = new Map(imageDetails.map((item) => [item.Id, item]));
+    const images = indexDockerObjectsById(imageDetails);
     const byService = new Map(rows.map((row) => [row.Service, row]));
     const components = Object.entries(COMPONENTS).map(([component, definition]) => {
       const row = byService.get(definition.service);
@@ -327,6 +340,8 @@ export function createDeploymentRunner({
       return {
         component,
         service: definition.service,
+        observed: Boolean(row),
+        containerId: container?.Id || row?.ID || '',
         configuredImage,
         containerImage: row?.Image || '',
         imageId: container?.Image || '',
@@ -334,7 +349,7 @@ export function createDeploymentRunner({
         reference: trustedRepoDigest,
         revision: String(labels['org.opencontainers.image.revision'] || '').slice(0, 40),
         state: row?.State || (row ? 'unknown' : 'missing'),
-        health: row?.Health || container?.State?.Health?.Status || (container?.State?.Running ? 'running' : 'unknown'),
+        health: row?.Health || container?.State?.Health?.Status || (container?.State?.Running ? 'not_configured' : 'unknown'),
         startedAt: container?.State?.StartedAt || null,
         inSync: DIGEST_PATTERN.test(configuredDigest) ? configuredDigest === digest : null,
       };

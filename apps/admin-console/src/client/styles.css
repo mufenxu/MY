@@ -2043,6 +2043,10 @@ input:focus-visible {
   margin-bottom: 18px;
 }
 
+.backup-view .page-actions {
+  margin-bottom: 12px;
+}
+
 .automation-actions {
   display: inline-flex;
   flex: 0 0 auto;
@@ -2465,17 +2469,17 @@ input:focus-visible {
 .backup-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 18px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .backup-kpis article {
   display: flex;
   min-width: 0;
-  min-height: 104px;
+  min-height: 88px;
   align-items: center;
-  gap: 14px;
-  padding: 18px;
+  gap: 12px;
+  padding: 14px 16px;
   background: var(--panel-solid);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -2516,7 +2520,7 @@ input:focus-visible {
   min-height: 42px;
   align-items: center;
   gap: 9px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
   padding: 10px 13px;
   border-radius: 12px;
   font-size: 12px;
@@ -2537,23 +2541,23 @@ input:focus-visible {
   display: grid;
   grid-template-columns: minmax(240px, 0.72fr) minmax(420px, 1.3fr) minmax(310px, 0.82fr);
   align-items: start;
-  gap: 20px;
+  gap: 14px;
 }
 
 .backup-action-card,
 .backup-list-card,
 .restore-card,
 .backup-job-card {
-  padding: 22px;
+  padding: 16px;
 }
 
 .backup-action-copy {
   display: grid;
   gap: 8px;
-  min-height: 128px;
+  min-height: 104px;
   align-content: center;
-  margin: 12px 0 18px;
-  padding: 18px;
+  margin: 8px 0 12px;
+  padding: 14px;
   background: var(--panel-muted);
   border-radius: 12px;
 }
@@ -2583,7 +2587,7 @@ input:focus-visible {
 }
 
 .backup-table-head {
-  min-height: 38px;
+  min-height: 36px;
   padding: 0 10px;
   color: var(--muted);
   background: var(--panel-muted);
@@ -2593,13 +2597,13 @@ input:focus-visible {
 }
 
 .backup-table-body {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .backup-row {
   width: 100%;
-  min-height: 72px;
-  padding: 10px;
+  min-height: 60px;
+  padding: 8px 10px;
   color: var(--text);
   background: transparent;
   border: 0;
@@ -2716,14 +2720,14 @@ input:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .restore-target {
   display: grid;
   gap: 5px;
-  margin-bottom: 17px;
-  padding: 14px;
+  margin-bottom: 13px;
+  padding: 12px;
   background: var(--red-soft);
   border-radius: 12px;
 }
@@ -2805,7 +2809,7 @@ input:focus-visible {
 }
 
 .backup-job-card {
-  margin-top: 20px;
+  margin-top: 14px;
 }
 
 .backup-job-card.job-failed {
@@ -3954,7 +3958,7 @@ input:focus-visible {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 
 .overview-operations {
@@ -4106,7 +4110,7 @@ input:focus-visible {
 
 .ops-toolbar {
   display: flex;
-  min-height: 44px;
+  min-height: 38px;
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
@@ -4218,16 +4222,16 @@ input:focus-visible {
 .ops-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .ops-kpis article {
   display: flex;
   min-width: 0;
-  min-height: 96px;
+  min-height: 88px;
   align-items: center;
-  gap: 13px;
-  padding: 16px;
+  gap: 11px;
+  padding: 13px 15px;
   color: var(--blue);
   background: var(--panel-solid);
   border: 1px solid var(--line);
@@ -4265,7 +4269,7 @@ input:focus-visible {
 
 .ops-panel {
   min-width: 0;
-  padding: 20px;
+  padding: 16px 18px;
   background: var(--panel-solid);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -4277,7 +4281,7 @@ input:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   color: var(--blue);
 }
 
@@ -4301,12 +4305,14 @@ input:focus-visible {
 .ops-history-chart svg {
   display: block;
   width: 100%;
-  min-height: 220px;
+  height: clamp(156px, 18vh, 190px);
+  min-height: 156px;
 }
 
 .ops-history-chart line {
   stroke: var(--line);
   stroke-dasharray: 4 6;
+  vector-effect: non-scaling-stroke;
 }
 
 .ops-history-chart polyline {
@@ -4314,6 +4320,7 @@ input:focus-visible {
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 
 .ops-chart-legend {
@@ -4325,7 +4332,7 @@ input:focus-visible {
 }
 
 .ops-table-panel {
-  padding-block: 8px;
+  padding-block: 5px;
 }
 
 .ops-table-head,
@@ -4345,7 +4352,7 @@ input:focus-visible {
 }
 
 .ops-table-head {
-  min-height: 42px;
+  min-height: 38px;
   color: var(--muted);
   border-bottom: 1px solid var(--line);
   font-size: 9px;
@@ -4353,7 +4360,7 @@ input:focus-visible {
 }
 
 .ops-table-row {
-  min-height: 58px;
+  min-height: 52px;
   color: var(--muted);
   border-bottom: 1px solid var(--line);
   font-size: 10px;
@@ -4643,7 +4650,7 @@ input:focus-visible {
 }
 
 .release-inventory-head {
-  min-height: 34px;
+  min-height: 38px;
   padding: 0 8px;
   color: var(--muted);
   background: var(--panel-muted);
@@ -4653,7 +4660,7 @@ input:focus-visible {
 }
 
 .release-inventory-row {
-  min-height: 66px;
+  min-height: 84px;
   padding: 8px;
   border-bottom: 1px solid var(--line);
 }
@@ -4717,8 +4724,14 @@ input:focus-visible {
 
 .release-sync.synced { color: var(--green); }
 .release-sync.synced i { background: var(--green); }
+.release-sync.observed { color: var(--blue); }
+.release-sync.observed i { background: var(--blue); }
 .release-sync.drifted { color: var(--red); }
 .release-sync.drifted i { background: var(--red); }
+
+.release-runtime-reference small:last-child {
+  color: var(--ink-soft);
+}
 
 .release-history > header .ops-segmented {
   margin-left: auto;
@@ -4727,7 +4740,7 @@ input:focus-visible {
 .release-history-row {
   display: grid;
   min-width: 0;
-  min-height: 62px;
+  min-height: 56px;
   grid-template-columns: 12px minmax(180px, 1.3fr) minmax(130px, 0.7fr) 86px minmax(90px, auto);
   align-items: center;
   gap: 12px;
@@ -5093,16 +5106,16 @@ input:focus-visible {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .quality-item {
   display: flex;
   min-width: 0;
-  min-height: 66px;
+  min-height: 58px;
   align-items: center;
   gap: 10px;
-  padding: 11px;
+  padding: 9px 11px;
   color: var(--muted);
   background: var(--panel-solid);
   border: 1px solid var(--line);
@@ -5168,8 +5181,8 @@ input:focus-visible {
     grid-template-columns: minmax(90px, 0.7fr) minmax(0, 1.3fr) 64px;
   }
 
-  .release-inventory-head > span:nth-child(3),
-  .release-inventory-row > span:nth-child(3) {
+  .release-inventory-head > span:nth-child(2),
+  .release-inventory-row > span:nth-child(2) {
     display: none;
   }
 
@@ -5509,27 +5522,27 @@ input:focus-visible {
 }
 
 .ops-kpis article {
-  min-height: 112px;
-  padding: 18px;
+  min-height: 88px;
+  padding: 13px 15px;
 }
 
 .ops-table-head {
-  min-height: 46px;
+  min-height: 38px;
 }
 
 .ops-table-row {
-  min-height: 66px;
+  min-height: 52px;
   line-height: 1.45;
 }
 
 .release-inventory-head {
-  min-height: 42px;
-  padding-inline: 12px;
+  min-height: 38px;
+  padding-inline: 10px;
 }
 
 .release-inventory-row {
-  min-height: 76px;
-  padding: 10px 12px;
+  min-height: 66px;
+  padding: 8px 10px;
 }
 
 .release-inventory-row > span:not(.release-sync),
@@ -5540,8 +5553,17 @@ input:focus-visible {
   gap: 5px;
 }
 
+.release-inventory-row > span:not(.release-sync) {
+  gap: 3px;
+}
+
+.release-inventory-row strong,
+.release-inventory-row small {
+  line-height: 1.25;
+}
+
 .release-history-row {
-  min-height: 70px;
+  min-height: 56px;
 }
 
 @media (min-width: 781px) {
@@ -5947,6 +5969,14 @@ input:focus-visible {
 .backup-row.selected,
 .incident-list-row.selected {
   background: linear-gradient(100deg, var(--blue-soft), rgba(234, 242, 255, 0.48));
+}
+
+.backup-row.selected {
+  border-color: rgba(40, 119, 247, 0.62);
+  box-shadow: 0 0 0 1px rgba(40, 119, 247, 0.12), 0 6px 16px rgba(40, 86, 186, 0.09);
+}
+
+.incident-list-row.selected {
   border-color: rgba(40, 119, 247, 0.28);
   box-shadow: 0 7px 18px rgba(40, 86, 186, 0.08), inset 3px 0 0 var(--blue);
 }
@@ -5954,6 +5984,11 @@ input:focus-visible {
 :root[data-theme="dark"] .backup-row.selected,
 :root[data-theme="dark"] .incident-list-row.selected {
   background: linear-gradient(100deg, rgba(40, 119, 247, 0.18), rgba(40, 119, 247, 0.07));
+}
+
+:root[data-theme="dark"] .backup-row.selected {
+  border-color: rgba(108, 165, 255, 0.72);
+  box-shadow: 0 0 0 1px rgba(108, 165, 255, 0.14), 0 7px 18px rgba(2, 7, 22, 0.2);
 }
 
 .ops-segmented {

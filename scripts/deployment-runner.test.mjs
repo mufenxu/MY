@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   createDeploymentRunner,
+  indexDockerObjectsById,
   loadRunnerConfig,
   normalizeComponents,
   parseDockerTemplateRows,
@@ -78,6 +79,15 @@ test('deployment runner parses compact Docker inspect fields without container e
     State: { Running: true, Health: { Status: 'healthy' } },
   }]);
   assert.throws(() => parseDockerTemplateRows('"only-one-field"\n', ['Id', 'Image']), /unexpected field count/);
+});
+
+test('deployment runner resolves short Compose container ids to full inspect objects', () => {
+  const fullId = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+  const imageId = `sha256:${'a'.repeat(64)}`;
+  const containers = indexDockerObjectsById([{ Id: fullId, Image: imageId }]);
+  const images = indexDockerObjectsById([{ Id: imageId, RepoDigests: [] }]);
+  assert.equal(containers.get(fullId.slice(0, 12))?.Image, imageId);
+  assert.equal(images.get(imageId.replace('sha256:', ''))?.Id, imageId);
 });
 
 test('deployment runner exposes only a minimal unauthenticated health endpoint', async () => {

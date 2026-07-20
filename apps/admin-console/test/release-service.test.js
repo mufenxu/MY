@@ -186,8 +186,26 @@ test('release summary reports components that differ from the latest verified bu
   });
   const summary = await releases.getSummary();
   assert.equal(summary.metrics.availableUpdates, 1);
+  assert.equal(summary.metrics.observedComponents, 1);
+  assert.equal(summary.components[0].observed, true);
   assert.deepEqual(summary.metrics.availableUpdateComponents, ['platform']);
   assert.equal(summary.metrics.latestBuildId, 'gha-update-1');
+});
+
+test('release summary does not count missing runtime placeholders as observed containers', async () => {
+  const releases = createReleaseService({
+    config: config({
+      deployHookUrl: 'http://deployment-runner:22104',
+      deployHookToken: 'd'.repeat(32),
+    }),
+    fetchImpl: async () => jsonResponse({
+      components: [{ component: 'platform', state: 'missing', health: 'unknown', inSync: null }],
+      jobs: [],
+    }),
+  });
+  const summary = await releases.getSummary();
+  assert.equal(summary.metrics.observedComponents, 0);
+  assert.equal(summary.components[0].observed, false);
 });
 
 test('deployment uses build digests only after runner and platform preflight checks pass', async () => {

@@ -34,6 +34,17 @@ import {
   XCircle,
 } from 'lucide-react';
 import { requestJson } from './api.js';
+import {
+  componentObservation,
+  environmentLabel,
+  releaseStateClass,
+  releaseStatusLabel,
+  runtimeImageReference,
+  runtimeStateSummary,
+  runtimeVersionLabel,
+  runtimeVersionTitle,
+  workflowNameLabel,
+} from './release-presentation.js';
 import { SelectControl } from './UiControls.jsx';
 
 const STATE_LABELS = {
@@ -82,16 +93,6 @@ const ACTION_LABELS = {
   'gateway.proxy_error': '网关请求异常',
 };
 const CHART_COLORS = ['#2877f7', '#11ad78', '#ff8a00', '#8a45ef', '#d75467', '#13bad6'];
-const RELEASE_STATUS_LABELS = {
-  queued: '已排队',
-  building: '构建中',
-  running: '执行中',
-  succeeded: '成功',
-  failed: '失败',
-  cancelled: '已取消',
-  rolled_back: '已自动回滚',
-};
-
 function formatDateTime(value) {
   if (!value) return '--';
   return new Intl.DateTimeFormat('zh-CN', {
@@ -113,13 +114,6 @@ function formatRelative(value) {
 function shortValue(value, length = 12) {
   const text = String(value || '');
   return text ? text.slice(0, length) : '--';
-}
-
-function releaseStateClass(status) {
-  if (status === 'succeeded') return 'success';
-  if (['failed', 'cancelled'].includes(status)) return 'failure';
-  if (status === 'rolled_back') return 'warning';
-  return status || 'unknown';
 }
 
 function roleAtLeast(role, required) {
@@ -168,7 +162,7 @@ function MonitoringChart({ groups }) {
 
   return (
     <div className="ops-history-chart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="服务响应时间历史趋势">
+      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label="服务响应时间历史趋势">
         {[48, 102, 157, 212].map((position) => <line key={position} x1="40" x2="850" y1={position} y2={position} />)}
         {entries.map(([serviceId, samples], index) => {
           const points = samples
@@ -567,7 +561,7 @@ export function ReleasesView({ session }) {
         <div className="release-capabilities">
           <span className={`integration-state ${capabilities.githubConfigured ? 'ready' : ''}`}><i />{capabilities.githubConfigured ? 'GitHub 已连接' : 'GitHub 未配置'}</span>
           <span className={`integration-state ${capabilities.deployRunnerHealthy ? 'ready' : ''}`}><i />{capabilities.deployRunnerHealthy ? '部署执行器已连接' : capabilities.deployRunnerConfigured ? '部署执行器不可用' : '部署执行器未配置'}</span>
-          <span className="release-environment"><Cloud size={15} />{data?.environment || 'production'}</span>
+          <span className="release-environment"><Cloud size={15} />{environmentLabel(data?.environment)}</span>
           {data?.metrics?.availableUpdates > 0 && <span className="integration-state ready"><i />{data.metrics.availableUpdates} 个更新可用</span>}
         </div>
         <div className="release-capabilities">
@@ -586,14 +580,22 @@ export function ReleasesView({ session }) {
       <section className="ops-panel release-inventory">
         <header><div><span>生产事实源</span><h3>组件版本与运行状态</h3></div><HardDrive size={20} /></header>
         <div className="release-inventory-head"><span>组件</span><span>期望镜像</span><span>实际运行</span><span>状态</span></div>
-        {(data?.components || []).map((component) => (
-          <div className={`release-inventory-row ${component.inSync === false ? 'drift' : ''}`} key={component.id}>
-            <span><strong>{component.id}</strong><small>{component.serviceId}</small></span>
-            <span className="release-reference"><strong>{component.desiredImage || '未配置'}</strong><small>{component.configured ? '环境配置已声明' : '环境配置缺失'}</small></span>
-            <span className="release-reference"><strong>{shortValue(component.runtime?.revision)}</strong><small>{component.runtime?.digest ? shortValue(component.runtime.digest, 22) : component.runtime ? `${component.runtime.state} · ${component.runtime.health}` : '部署执行器未返回状态'}</small></span>
-            <span className={`release-sync ${component.inSync === true ? 'synced' : component.inSync === false ? 'drifted' : ''}`}><i />{component.inSync === true ? '同步' : component.inSync === false ? '漂移' : '未观测'}</span>
-          </div>
-        ))}
+        {(data?.components || []).map((component) => {
+          const observation = componentObservation(component);
+          const actualImage = runtimeImageReference(component.runtime);
+          return (
+            <div className={`release-inventory-row ${component.inSync === false ? 'drift' : ''}`} key={component.id}>
+              <span><strong>{component.id}</strong><small>{component.serviceId}</small></span>
+              <span className="release-reference"><strong title={component.desiredImage || ''}>{component.desiredImage || '未配置'}</strong><small>{component.configured ? '环境配置已声明' : '环境配置缺失'}</small></span>
+              <span className="release-reference release-runtime-reference">
+                <strong title={actualImage}>{actualImage}</strong>
+                <small title={runtimeVersionTitle(component.runtime)}>{runtimeVersionLabel(component.runtime)}</small>
+                <small>{runtimeStateSummary(component.runtime)}</small>
+              </span>
+              <span className={`release-sync ${observation.className}`}><i />{observation.label}</span>
+            </div>
+          );
+        })}
       </section>
 
       <section className="ops-panel release-history">
@@ -607,9 +609,9 @@ export function ReleasesView({ session }) {
         {historyTab === 'builds' && (buildRows.length ? buildRows.map((build) => (
           <div className="release-history-row" key={build.id}>
             <span className={`run-state ${releaseStateClass(build.status)}`}><i /></span>
-            <span><strong>{shortValue(build.revision || build.id)}</strong><small>{build.targets?.length ? build.targets.join('、') : build.name || '历史 Actions 记录'}</small></span>
+            <span><strong>{shortValue(build.revision || build.id)}</strong><small>{build.targets?.length ? build.targets.join('、') : workflowNameLabel(build.name)}</small></span>
             <span><strong>{build.requestedBy || build.workflowRun?.actor || '--'}</strong><small>{formatDateTime(build.createdAt)}</small></span>
-            <span className={`release-status status-${releaseStateClass(build.status)}`}>{RELEASE_STATUS_LABELS[build.status] || (build.status === 'success' ? '成功' : build.status)}</span>
+            <span className={`release-status status-${releaseStateClass(build.status)}`}>{releaseStatusLabel(build.status)}</span>
             <span className="release-row-actions">
               {build.workflowRun?.url && <a href={build.workflowRun.url} target="_blank" rel="noreferrer" aria-label="打开 GitHub 运行记录"><ExternalLink size={15} /></a>}
               {roleAtLeast(session.user?.role, 'super_admin') && build.status === 'succeeded' && build.artifacts?.length > 0 && <button type="button" onClick={() => selectBuild(build)} disabled={!capabilities.canDeploy}><Rocket size={15} />部署</button>}
@@ -621,7 +623,7 @@ export function ReleasesView({ session }) {
             <span className={`run-state ${releaseStateClass(deployment.status)}`}><i /></span>
             <span><strong>{deployment.action === 'rollback' ? '回滚' : '部署'} · {shortValue(deployment.buildId || deployment.sourceDeploymentId)}</strong><small>{deployment.components.join('、')}</small></span>
             <span><strong>{deployment.requestedBy || '--'}</strong><small>{formatDateTime(deployment.createdAt)}</small></span>
-            <span className={`release-status status-${releaseStateClass(deployment.status)}`}>{RELEASE_STATUS_LABELS[deployment.status] || deployment.status}</span>
+            <span className={`release-status status-${releaseStateClass(deployment.status)}`}>{releaseStatusLabel(deployment.status)}</span>
             <span className="release-row-actions">
               {roleAtLeast(session.user?.role, 'super_admin') && deployment.status === 'succeeded' && <button type="button" onClick={() => selectRollback(deployment)} disabled={!capabilities.canRollback}><RotateCcw size={15} />回滚到此版本</button>}
             </span>
