@@ -192,7 +192,17 @@ jobs:
 
       - name: Show container logs on failure
         if: failure()
-        run: docker compose --env-file .env.ci -f infra/docker/compose.yml -f infra/docker/compose.ci.yml logs --no-color
+        run: |
+          compose=(docker compose --env-file .env.ci -f infra/docker/compose.yml -f infra/docker/compose.ci.yml)
+          "${compose[@]}" ps --all
+          "${compose[@]}" logs --no-color
+          for container in $("${compose[@]}" ps --all --quiet); do
+            name="$(docker inspect --format '{{.Name}}' "${container}" | sed 's#^/##')"
+            status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}}' "${container}")"
+            echo "::group::Health history: ${name} (${status})"
+            docker inspect --format '{{if .State.Health}}{{range .State.Health.Log}}{{.End}} exit={{.ExitCode}} {{printf "%s" .Output}}{{println}}{{end}}{{end}}' "${container}"
+            echo "::endgroup::"
+          done
 
       - name: Stop the stack
         if: always()

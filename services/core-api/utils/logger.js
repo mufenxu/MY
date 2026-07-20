@@ -6,6 +6,16 @@ const logFormat = winston.format.printf(({ level, message, timestamp, stack }) =
     return `${timestamp} [${level}]: ${stack || message}`;
 });
 
+const consoleTransport = process.env.NODE_ENV === 'production'
+    ? new winston.transports.Console()
+    : new winston.transports.Console({
+        format: winston.format.combine(
+            winston.format.colorize(),
+            winston.format.simple(),
+            logFormat
+        ),
+    });
+
 const logger = winston.createLogger({
     level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
     format: winston.format.combine(
@@ -14,6 +24,8 @@ const logger = winston.createLogger({
         winston.format.json() // Structured JSON logs for files
     ),
     transports: [
+        // Containers need stdout/stderr logs so orchestration failures remain observable.
+        consoleTransport,
         // Write all logs with importance level of `error` or less to `error.log`
         new winston.transports.File({
             filename: path.join(__dirname, '../logs/error.log'),
@@ -29,18 +41,6 @@ const logger = winston.createLogger({
         }),
     ],
 });
-
-// If we're not in production then log to the `console` with the format:
-// `${info.level}: ${info.message} JSON.stringify({ ...rest }) `
-if (process.env.NODE_ENV !== 'production') {
-    logger.add(new winston.transports.Console({
-        format: winston.format.combine(
-            winston.format.colorize(),
-            winston.format.simple(),
-            logFormat
-        ),
-    }));
-}
 
 // Create a stream object with a 'write' function that will be used by `morgan`
 logger.stream = {

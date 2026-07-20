@@ -42,6 +42,13 @@ test('course order schema enforces the batch ceiling', () => {
     assert.match(result.error.message, /最多提交20门课程/);
 });
 
+test('trade numbers use one unique index definition', () => {
+    const indexes = CourseOrder.schema.indexes().filter(([fields]) => fields.tradeNo === 1);
+
+    assert.equal(indexes.length, 1);
+    assert.equal(indexes[0][1].unique, true);
+});
+
 test('same order idempotency key returns the original queued order', async () => {
     const originalCategoryFind = CourseCategory.findById;
     const originalBatchUpdate = CourseOrderBatch.findOneAndUpdate;

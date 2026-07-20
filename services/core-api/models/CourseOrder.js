@@ -40,8 +40,7 @@ courseOrderSchema.pre('save', function() {
     this.updateTime = Date.now();
 });
 
-// 建立索引优化查询速度
-courseOrderSchema.index({ tradeNo: 1 });
+// 建立索引优化查询速度。tradeNo 的 unique 属性已创建其唯一索引。
 courseOrderSchema.index(
     { submissionKey: 1 },
     {
