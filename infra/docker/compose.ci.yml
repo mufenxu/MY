@@ -1,6 +1,8 @@
 services:
   mqtt-ci:
     image: eclipse-mosquitto:2.0.22@sha256:212f89e1eaeb2c322d6441b64396e3346026674db8fa9c27beac293405c32b3c
+    # Match the non-root UID/GID baked into the pinned Mosquitto image.
+    user: "1883:1883"
     command: ["mosquitto", "-c", "/mosquitto/config/ci.conf"]
     volumes:
       - ./mosquitto-ci.conf:/mosquitto/config/ci.conf:ro

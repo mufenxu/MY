@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { inspectCompose, inspectDockerfile, inspectWorkflow } from './check-supply-chain.mjs';
+
+const root = path.resolve(import.meta.dirname, '..');
 
 test('workflow inspection rejects mutable external action references', () => {
   assert.deepEqual(inspectWorkflow(`
@@ -53,4 +57,19 @@ services:
     inspectCompose('services:\n  broker:\n    image: eclipse-mosquitto:2\n', 'unsafe-compose.yml')[0],
     /not pinned/,
   );
+});
+
+test('CI Mosquitto runs as its immutable non-root user with hardened privileges', () => {
+  const source = fs.readFileSync(path.join(root, 'infra', 'docker', 'compose.ci.yml'), 'utf8');
+  const lines = source.split(/\r?\n/);
+  const serviceStart = lines.indexOf('  mqtt-ci:');
+  const serviceEnd = lines.findIndex(
+    (line, index) => index > serviceStart && /^  [a-zA-Z0-9_-]+:$/.test(line),
+  );
+  const mqttService = lines.slice(serviceStart + 1, serviceEnd === -1 ? undefined : serviceEnd).join('\n');
+
+  assert.notEqual(serviceStart, -1, 'compose.ci.yml must define the mqtt-ci service');
+  assert.match(mqttService, /^    user: ["']1883:1883["']$/m);
+  assert.match(mqttService, /^    read_only: true$/m);
+  assert.match(mqttService, /^    cap_drop:\n      - ALL$/m);
 });
