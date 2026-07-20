@@ -317,6 +317,7 @@ export function createReleaseService({
       ref: config.githubRef || null,
       revision: config.releaseRevision || null,
       deployedAt: config.releaseDeployedAt || null,
+      imageBuiltAt: config.releaseDeployedAt || null,
       components,
       runtime: runtimeStatus,
       builds,

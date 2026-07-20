@@ -186,6 +186,7 @@ test('release summary reports components that differ from the latest verified bu
   });
   const summary = await releases.getSummary();
   assert.equal(summary.metrics.availableUpdates, 1);
+  assert.equal(summary.imageBuiltAt, '2026-07-18T12:00:00Z');
   assert.equal(summary.metrics.observedComponents, 1);
   assert.equal(summary.components[0].observed, true);
   assert.deepEqual(summary.metrics.availableUpdateComponents, ['platform']);

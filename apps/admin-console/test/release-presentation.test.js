@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   componentObservation,
+  componentHistory,
   environmentLabel,
   releaseStateClass,
   releaseStatusLabel,
@@ -45,4 +46,37 @@ test('missing containers remain explicitly unobserved', () => {
     observed: false,
     inSync: null,
   }), { label: '未观测', className: '' });
+});
+
+test('component history matches the observed immutable image to build and deployment times', () => {
+  const digest = `sha256:${'a'.repeat(64)}`;
+  const component = {
+    id: 'platform',
+    runtime: {
+      digest,
+      containerImage: 'registry.example.com/team/app:platform-api-latest',
+    },
+  };
+  const history = componentHistory(component, [
+    {
+      id: 'build-1',
+      status: 'succeeded',
+      completedAt: '2026-07-20T15:41:22Z',
+      targets: ['platform'],
+      artifacts: [{ component: 'platform', digest, image: 'registry.example.com/team/app:platform-api-latest' }],
+    },
+  ], [
+    {
+      id: 'deployment-1',
+      status: 'succeeded',
+      completedAt: '2026-07-20T16:42:30Z',
+      artifacts: [{ component: 'platform', digest, image: 'registry.example.com/team/app:platform-api-latest' }],
+    },
+  ]);
+  assert.deepEqual(history, {
+    buildId: 'build-1',
+    buildAt: '2026-07-20T15:41:22Z',
+    deploymentId: 'deployment-1',
+    deploymentAt: '2026-07-20T16:42:30Z',
+  });
 });

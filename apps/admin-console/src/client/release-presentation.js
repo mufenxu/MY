@@ -136,3 +136,34 @@ export function componentObservation(component) {
   if (component.inSync === false) return { label: '漂移', className: 'drifted' };
   return { label: '已观测', className: 'observed' };
 }
+
+function runtimeMatchesArtifact(runtime, artifact) {
+  if (!runtime || !artifact) return false;
+  if (runtime.digest && artifact.digest) return normalized(runtime.digest) === normalized(artifact.digest);
+  const runtimeImage = String(runtime.containerImage || '').trim();
+  if (!runtimeImage) return false;
+  return [artifact.image, artifact.reference, artifact.shaTag]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .includes(runtimeImage);
+}
+
+export function componentHistory(component, builds = [], deployments = []) {
+  const runtime = component?.runtime || null;
+  const successfulBuilds = builds.filter((build) => build?.status === 'succeeded');
+  const successfulDeployments = deployments.filter((deployment) => deployment?.status === 'succeeded');
+  const build = successfulBuilds.find((item) => (
+    (runtime?.revision && normalized(item.revision) === normalized(runtime.revision)
+      && item.targets?.includes(component.id))
+    || item.artifacts?.some((artifact) => artifact.component === component.id && runtimeMatchesArtifact(runtime, artifact))
+  ));
+  const deployment = successfulDeployments.find((item) => (
+    item.artifacts?.some((artifact) => artifact.component === component.id && runtimeMatchesArtifact(runtime, artifact))
+  ));
+  return {
+    buildId: build?.id || null,
+    buildAt: build?.completedAt || build?.createdAt || null,
+    deploymentId: deployment?.id || null,
+    deploymentAt: deployment?.completedAt || deployment?.startedAt || deployment?.createdAt || null,
+  };
+}
