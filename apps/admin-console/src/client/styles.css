@@ -4670,8 +4670,10 @@ input:focus-visible {
 }
 
 .release-inventory-row > span:not(.release-sync),
-.release-history-row > span:nth-child(2),
-.release-history-row > span:nth-child(3),
+.release-run-source,
+.release-run-actor,
+.release-run-date,
+.release-run-duration,
 .release-operation-source > span,
 .release-preflight-list > div > span:last-child {
   display: flex;
@@ -4756,13 +4758,29 @@ input:focus-visible {
   margin-left: auto;
 }
 
+.release-history-head,
 .release-history-row {
   display: grid;
   min-width: 0;
-  min-height: 72px;
-  grid-template-columns: 12px minmax(180px, 1.3fr) minmax(130px, 0.7fr) 86px minmax(90px, auto);
+  grid-template-columns: 12px minmax(300px, 2fr) minmax(110px, 0.65fr) minmax(200px, 1fr) minmax(160px, 0.85fr) 90px minmax(36px, auto);
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+}
+
+.release-history-head {
+  min-height: 36px;
+  padding: 0 8px;
+  color: var(--muted);
+  background: var(--panel-muted);
+  border-bottom: 1px solid var(--line);
+  border-radius: 8px 8px 0 0;
+  font-size: var(--type-caption);
+  font-weight: 800;
+}
+
+.release-history-row {
+  min-height: 68px;
+  padding: 0 8px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -4777,12 +4795,14 @@ input:focus-visible {
 .release-status.status-warning { color: var(--orange); }
 .run-state.warning i { background: var(--orange); }
 
-.release-run-timing,
-.release-run-timing small {
+.release-run-date,
+.release-run-duration,
+.release-run-date small,
+.release-run-duration small {
   font-variant-numeric: tabular-nums;
 }
 
-.release-run-timing small.live {
+.release-run-duration strong.live {
   color: var(--blue);
   font-weight: 750;
 }
@@ -5176,6 +5196,17 @@ input:focus-visible {
     gap: 10px;
   }
 
+  .release-history-head,
+  .release-history-row {
+    grid-template-columns: 12px minmax(220px, 1.4fr) minmax(110px, 0.55fr) minmax(180px, 0.9fr) 82px minmax(36px, auto);
+    gap: 12px;
+  }
+
+  .release-history-head > span:nth-child(5),
+  .release-run-duration {
+    display: none;
+  }
+
   .audit-table {
     grid-template-columns: 120px minmax(130px, 1fr) 90px minmax(100px, 1fr) 70px;
   }
@@ -5240,11 +5271,18 @@ input:focus-visible {
     grid-row: 1 / 3;
   }
 
-  .release-history-row {
-    grid-template-columns: 12px minmax(0, 1fr) 72px minmax(32px, auto);
+  .release-history-head {
+    display: none;
   }
 
-  .release-history-row > span:nth-child(3) {
+  .release-history-row {
+    grid-template-columns: 12px minmax(0, 1fr) 76px minmax(32px, auto);
+    gap: 10px;
+  }
+
+  .release-run-actor,
+  .release-run-date,
+  .release-run-duration {
     display: none;
   }
 
@@ -5600,8 +5638,10 @@ input:focus-visible {
 }
 
 .release-inventory-row > span:not(.release-sync),
-.release-history-row > span:nth-child(2),
-.release-history-row > span:nth-child(3),
+.release-run-source,
+.release-run-actor,
+.release-run-date,
+.release-run-duration,
 .release-operation-source > span,
 .release-preflight-list > div > span:last-child {
   gap: 5px;

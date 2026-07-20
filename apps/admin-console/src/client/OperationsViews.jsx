@@ -631,15 +631,20 @@ export function ReleasesView({ session }) {
             <button type="button" className={historyTab === 'deployments' ? 'active' : ''} onClick={() => setHistoryTab('deployments')}>部署</button>
           </div>
         </header>
+        {(historyTab === 'builds' ? buildRows.length : deployments.length) > 0 && (
+          <div className="release-history-head" aria-hidden="true">
+            <span /><span>版本 / 任务</span><span>执行人</span><span>执行时间</span><span>耗时 / 同步</span><span>状态</span><span>操作</span>
+          </div>
+        )}
         {historyTab === 'builds' && (buildRows.length ? buildRows.map((build) => (
           <div className="release-history-row" key={build.id}>
             <span className={`run-state ${releaseStateClass(build.status)}`}><i /></span>
-            <span><strong>{shortValue(build.revision || build.id)}</strong><small>{build.targets?.length ? build.targets.join('、') : workflowNameLabel(build.name)}</small></span>
-            <span className="release-run-timing">
-              <strong>{build.requestedBy || build.workflowRun?.actor || '--'}</strong>
-              {releaseIsActive(build.status)
-                ? <><small>开始 {formatDateTime(build.startedAt || build.createdAt)}</small><small className="live">{releaseTimingVerb(build.status)} {releaseDuration(build.startedAt || build.createdAt, null, clockNow)} · 同步 {releaseDuration(data?.refreshedAt || build.updatedAt, null, clockNow)}前</small></>
-                : <><small>完成 {formatDateTime(build.completedAt || build.updatedAt || build.createdAt)}</small><small>耗时 {releaseDuration(build.startedAt || build.createdAt, build.completedAt || build.updatedAt)}</small></>}
+            <span className="release-run-source"><strong>{shortValue(build.revision || build.id)}</strong><small>{build.targets?.length ? build.targets.join('、') : workflowNameLabel(build.name)}</small></span>
+            <span className="release-run-actor"><strong>{build.requestedBy || build.workflowRun?.actor || '--'}</strong><small>构建发起人</small></span>
+            <span className="release-run-date"><strong>{formatDateTime(releaseIsActive(build.status) ? build.startedAt || build.createdAt : build.completedAt || build.updatedAt || build.createdAt)}</strong><small>{releaseIsActive(build.status) ? '开始时间' : '完成时间'}</small></span>
+            <span className="release-run-duration">
+              <strong className={releaseIsActive(build.status) ? 'live' : ''}>{releaseIsActive(build.status) ? `${releaseTimingVerb(build.status)} ${releaseDuration(build.startedAt || build.createdAt, null, clockNow)}` : releaseDuration(build.startedAt || build.createdAt, build.completedAt || build.updatedAt)}</strong>
+              <small>{releaseIsActive(build.status) ? `同步 ${releaseDuration(data?.refreshedAt || build.updatedAt, null, clockNow)}前` : '总耗时'}</small>
             </span>
             <span className={`release-status status-${releaseStateClass(build.status)}`}>{releaseStatusLabel(build.status)}</span>
             <span className="release-row-actions">
@@ -651,12 +656,12 @@ export function ReleasesView({ session }) {
         {historyTab === 'deployments' && (deployments.length ? deployments.map((deployment) => (
           <div className="release-history-row" key={deployment.id}>
             <span className={`run-state ${releaseStateClass(deployment.status)}`}><i /></span>
-            <span><strong>{deployment.action === 'rollback' ? '回滚' : '部署'} · {shortValue(deployment.buildId || deployment.sourceDeploymentId)}</strong><small>{deployment.components.join('、')}</small></span>
-            <span className="release-run-timing">
-              <strong>{deployment.requestedBy || '--'}</strong>
-              {releaseIsActive(deployment.status)
-                ? <><small>开始 {formatDateTime(deployment.startedAt || deployment.createdAt)}</small><small className="live">{releaseTimingVerb(deployment.status)} {releaseDuration(deployment.startedAt || deployment.createdAt, null, clockNow)} · 同步 {releaseDuration(data?.refreshedAt || deployment.updatedAt, null, clockNow)}前</small></>
-                : <><small>完成 {formatDateTime(deployment.completedAt || deployment.updatedAt || deployment.createdAt)}</small><small>耗时 {releaseDuration(deployment.startedAt || deployment.createdAt, deployment.completedAt || deployment.updatedAt)}</small></>}
+            <span className="release-run-source"><strong>{deployment.action === 'rollback' ? '回滚' : '部署'} · {shortValue(deployment.buildId || deployment.sourceDeploymentId)}</strong><small>{deployment.components.join('、')}</small></span>
+            <span className="release-run-actor"><strong>{deployment.requestedBy || '--'}</strong><small>操作发起人</small></span>
+            <span className="release-run-date"><strong>{formatDateTime(releaseIsActive(deployment.status) ? deployment.startedAt || deployment.createdAt : deployment.completedAt || deployment.updatedAt || deployment.createdAt)}</strong><small>{releaseIsActive(deployment.status) ? '开始时间' : '完成时间'}</small></span>
+            <span className="release-run-duration">
+              <strong className={releaseIsActive(deployment.status) ? 'live' : ''}>{releaseIsActive(deployment.status) ? `${releaseTimingVerb(deployment.status)} ${releaseDuration(deployment.startedAt || deployment.createdAt, null, clockNow)}` : releaseDuration(deployment.startedAt || deployment.createdAt, deployment.completedAt || deployment.updatedAt)}</strong>
+              <small>{releaseIsActive(deployment.status) ? `同步 ${releaseDuration(data?.refreshedAt || deployment.updatedAt, null, clockNow)}前` : '总耗时'}</small>
             </span>
             <span className={`release-status status-${releaseStateClass(deployment.status)}`}>{releaseStatusLabel(deployment.status)}</span>
             <span className="release-row-actions">
