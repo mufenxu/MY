@@ -178,6 +178,33 @@ export interface WrongQuestionState {
     masteredAt?: string | null;
     lastWrongAt?: string | null;
     lastCorrectAt?: string | null;
+    reviewStage: number;
+    reviewIntervalDays: number;
+    reviewEase: number;
+    reviewCount: number;
+    lapseCount: number;
+    lastReviewedAt?: string | null;
+    dueAt?: string | null;
+}
+
+export type ReviewRating = 'unknown' | 'fuzzy' | 'known';
+
+export interface ReviewQuestion extends Question {
+    categoryId: string;
+    categoryName: string;
+    state: WrongQuestionState;
+}
+
+export interface ReviewQueue {
+    questions: ReviewQuestion[];
+    dueCount: number;
+}
+
+export interface ReviewSummary {
+    dueCount: number;
+    scheduledCount: number;
+    masteredCount: number;
+    reviewedTodayCount: number;
 }
 
 export interface StudyReport {

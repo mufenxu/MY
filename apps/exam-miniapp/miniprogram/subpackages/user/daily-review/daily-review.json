@@ -1,0 +1,8 @@
+{
+  "navigationStyle": "custom",
+  "disableScroll": true,
+  "usingComponents": {
+    "question-card": "/components/question-card/question-card",
+    "skeleton": "/components/skeleton/skeleton"
+  }
+}

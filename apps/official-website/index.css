@@ -119,30 +119,27 @@ a {
 }
 
 .logo-box {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  background: linear-gradient(135deg, #1F1D1B 0%, #3A3531 100%);
-  color: #FFFFFF;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
-  font-size: 18px;
   position: relative;
-  box-shadow: 0 4px 12px rgba(31, 29, 27, 0.15);
   flex-shrink: 0;
+  border-radius: 8px;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), filter 0.3s ease;
 }
 
-.logo-glow-dot {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 7px;
-  height: 7px;
-  background: var(--color-accent-gold);
-  border-radius: 50%;
-  box-shadow: 0 0 6px var(--color-accent-gold);
+.logo-icon-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.brand-logo:hover .logo-box {
+  transform: scale(1.08) rotate(-3deg);
+  filter: drop-shadow(0 4px 12px rgba(217, 119, 36, 0.3));
 }
 
 .brand-info {
@@ -485,9 +482,54 @@ a {
   display: flex;
   gap: 16px;
   justify-content: center;
+  align-items: center;
   flex-wrap: wrap;
-  margin-bottom: 56px;
+  margin-bottom: 20px;
 }
+
+.hero-highlights-chips {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 48px;
+}
+
+.chip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: var(--radius-full);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.chip-item:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(217, 119, 36, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(217, 119, 36, 0.12);
+  color: var(--color-text-primary);
+}
+
+.chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  position: relative;
+}
+
+.chip-dot.blue { background: #3B82F6; box-shadow: 0 0 8px rgba(59, 130, 246, 0.6); }
+.chip-dot.orange { background: #D97724; box-shadow: 0 0 8px rgba(217, 119, 36, 0.6); }
+.chip-dot.purple { background: #8B5CF6; box-shadow: 0 0 8px rgba(139, 92, 246, 0.6); }
 
 .btn,
 .btn-content,
@@ -519,24 +561,33 @@ a {
   flex-shrink: 0 !important;
   margin: 0 !important;
   position: relative;
-  top: -1px; /* 消除字体 Baseline 导致图标微偏下的像素差 */
+  top: -1px;
 }
 
 .btn-hero-primary {
-  padding: 16px 32px;
+  padding: 16px 36px;
   font-size: 15px;
+  font-weight: 600;
   background: linear-gradient(135deg, #1F1D1B 0%, #3B3632 100%);
   color: #FFFFFF;
-  box-shadow: var(--shadow-luxury);
+  box-shadow: 0 12px 32px -8px rgba(31, 29, 27, 0.3);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.btn-hero-secondary {
-  padding: 16px 32px;
-  font-size: 15px;
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
-  backdrop-filter: blur(10px);
+.btn-hero-primary:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 18px 40px -10px rgba(217, 119, 36, 0.35);
+  color: #FFFFFF;
+}
+
+.arrow-down-icon {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-hero-primary:hover .arrow-down-icon {
+  transform: translateY(4px);
 }
 
 .hero-preview-wrapper {
@@ -929,8 +980,10 @@ a {
   }
 
   .hero-section { padding: 110px 16px 50px; }
-  .hero-cta-group { flex-direction: column; width: 100%; max-width: 320px; margin-left: auto; margin-right: auto; }
-  .btn-hero-primary, .btn-hero-secondary { width: 100%; text-align: center; }
+  .hero-cta-group { flex-direction: column; width: 100%; max-width: 320px; margin-left: auto; margin-right: auto; margin-bottom: 16px; }
+  .hero-highlights-chips { gap: 8px; margin-bottom: 36px; }
+  .chip-item { padding: 5px 12px; font-size: 12px; }
+  .btn-hero-primary { width: 100%; text-align: center; }
 
   .preview-grid { grid-template-columns: 1fr; gap: 12px; }
   .features-grid { grid-template-columns: 1fr; gap: 16px; }
@@ -945,7 +998,7 @@ a {
 @media (max-width: 480px) {
   .navbar-wrapper { padding: 8px 10px; }
   .floating-navbar { height: 48px; padding: 0 6px 0 10px; }
-  .logo-box { width: 30px; height: 30px; font-size: 15px; border-radius: 8px; }
+  .logo-box { width: 28px; height: 28px; border-radius: 6px; }
   .brand-title { font-size: 12px; }
 
   .shimmer-btn {

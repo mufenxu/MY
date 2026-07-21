@@ -18,6 +18,20 @@ async function start() {
     });
   const app = createApp({ config, notificationStore });
   const server = http.createServer(app);
+  let orchestrationRunning = false;
+  const runOrchestration = async () => {
+    if (orchestrationRunning) return;
+    orchestrationRunning = true;
+    try {
+      await app.locals.notificationOrchestrator.runDue(config.orchestrationBatchSize);
+    } catch (error) {
+      console.error('通知编排任务执行失败。', error);
+    } finally {
+      orchestrationRunning = false;
+    }
+  };
+  const orchestrationTimer = setInterval(runOrchestration, config.orchestrationIntervalMs);
+  orchestrationTimer.unref?.();
 
   server.listen(config.port, () => {
     console.log(`WeCom Notify API 已启动，端口：${config.port}`);
@@ -27,6 +41,7 @@ async function start() {
   async function shutdown(signal) {
     if (shuttingDown) return;
     shuttingDown = true;
+    clearInterval(orchestrationTimer);
     console.log(`收到 ${signal}，正在关闭通知服务。`);
     const forceTimer = setTimeout(() => server.closeAllConnections?.(), 10_000);
     forceTimer.unref();

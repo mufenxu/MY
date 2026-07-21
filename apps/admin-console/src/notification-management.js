@@ -115,6 +115,46 @@ export function createNotificationManagementClient({
         body: { actor: String(actor || '').slice(0, 128) },
       });
     },
+    async listTemplates() {
+      if (!configured) return { items: [] };
+      return request('/management/templates');
+    },
+    async saveTemplate(input, actor) {
+      const key = String(input?.key || '').trim();
+      if (!/^[a-z0-9][a-z0-9._-]{1,79}$/i.test(key)) {
+        throw new NotificationManagementError('模板标识格式无效。', { status: 400, code: 'INVALID_TEMPLATE_KEY' });
+      }
+      return request(`/management/templates/${encodeURIComponent(key)}`, {
+        method: 'PUT', body: { ...input, actor: String(actor || '').slice(0, 128) },
+      });
+    },
+    async deleteTemplate(key) {
+      return request(`/management/templates/${encodeURIComponent(String(key || '').trim())}`, { method: 'DELETE' });
+    },
+    async listJobs(filters = {}) {
+      if (!configured) return { items: [], page: 1, pageSize: 20, total: 0 };
+      const query = new URLSearchParams();
+      for (const key of ['status', 'caller']) if (filters[key]) query.set(key, String(filters[key]));
+      query.set('page', String(boundedInteger(filters.page, 1, 1, 100000)));
+      query.set('pageSize', String(boundedInteger(filters.pageSize, 20, 1, 100)));
+      return request(`/management/jobs?${query}`);
+    },
+    async createJob(input, actor) {
+      return request('/management/jobs', { method: 'POST', body: { ...input, actor: String(actor || '').slice(0, 128) } });
+    },
+    async cancelJob(id, actor) {
+      return request(`/management/jobs/${encodeURIComponent(String(id || '').trim())}/cancel`, {
+        method: 'POST', body: { actor: String(actor || '').slice(0, 128) },
+      });
+    },
+    async getPreference(targetId) {
+      return request(`/management/preferences/${encodeURIComponent(String(targetId || '').trim())}`);
+    },
+    async savePreference(targetId, input, actor) {
+      return request(`/management/preferences/${encodeURIComponent(String(targetId || '').trim())}`, {
+        method: 'PUT', body: { ...input, actor: String(actor || '').slice(0, 128) },
+      });
+    },
   };
 }
 

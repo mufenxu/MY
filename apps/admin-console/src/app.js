@@ -800,6 +800,76 @@ export function createApp({
     }
   });
 
+  app.get('/api/notifications/templates', async (_req, res, next) => {
+    try { return res.json(await notificationManagement.listTemplates()); }
+    catch (error) { try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; } }
+  });
+
+  app.put('/api/notifications/templates/:key', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      const result = await notificationManagement.saveTemplate({ ...req.body, key: req.params.key }, req.consoleUser.username);
+      await recordAudit(req, { action: 'notification.template_saved', targetType: 'notification_template', targetId: req.params.key });
+      return res.json(result);
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.delete('/api/notifications/templates/:key', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      await notificationManagement.deleteTemplate(req.params.key);
+      await recordAudit(req, { action: 'notification.template_deleted', targetType: 'notification_template', targetId: req.params.key });
+      return res.status(204).end();
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.get('/api/notifications/jobs', async (req, res, next) => {
+    try {
+      return res.json(await notificationManagement.listJobs({
+        status: req.query.status, caller: req.query.caller, page: req.query.page, pageSize: req.query.pageSize,
+      }));
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.post('/api/notifications/jobs', notificationSendLimiter, requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
+    try {
+      const result = await notificationManagement.createJob(req.body || {}, req.consoleUser.username);
+      await recordAudit(req, { action: 'notification.job_created', targetType: 'notification_job', targetId: result.job?.id || '' });
+      return res.status(result.deduplicated ? 200 : 202).json(result);
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.post('/api/notifications/jobs/:id/cancel', requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
+    try {
+      const result = await notificationManagement.cancelJob(req.params.id, req.consoleUser.username);
+      await recordAudit(req, { action: 'notification.job_cancelled', targetType: 'notification_job', targetId: req.params.id });
+      return res.json(result);
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.get('/api/notifications/preferences/:targetId', requireRole('operator'), async (req, res, next) => {
+    try { return res.json(await notificationManagement.getPreference(req.params.targetId)); }
+    catch (error) { try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; } }
+  });
+
+  app.put('/api/notifications/preferences/:targetId', requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
+    try {
+      const result = await notificationManagement.savePreference(req.params.targetId, req.body || {}, req.consoleUser.username);
+      await recordAudit(req, { action: 'notification.preference_saved', targetType: 'notification_recipient', targetId: req.params.targetId });
+      return res.json(result);
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
   app.get('/api/operations/overview', async (req, res, next) => {
     try {
       if (req.query.refresh === '1') await operations.refresh(true);

@@ -47,9 +47,23 @@ function matchesFilters(row, filters) {
     && (!filters.msgType || row.msgType === filters.msgType);
 }
 
+function paged(items, filters = {}, maximum = 100) {
+  const page = normalizePositiveInteger(filters.page, 1, 100000);
+  const pageSize = normalizePositiveInteger(filters.pageSize, 20, maximum);
+  const offset = (page - 1) * pageSize;
+  return { items: items.slice(offset, offset + pageSize).map(serializeDocument), page, pageSize, total: items.length };
+}
+
+function activeJobStatus(status) {
+  return ['scheduled', 'retrying', 'processing'].includes(status);
+}
+
 function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now = () => new Date() } = {}) {
   const protector = createPayloadProtector(encryptionKey);
   const rows = [];
+  const templates = [];
+  const jobs = [];
+  const preferences = new Map();
 
   function prune() {
     const cutoff = now().getTime() - retentionDays * 86400000;
@@ -103,6 +117,86 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
       if (!row) return null;
       return { delivery: serializeDocument(row), payload: protector.decrypt(row.encryptedPayload) };
     },
+    async listTemplates() {
+      return templates.map(serializeDocument);
+    },
+    async getTemplate(key) {
+      return serializeDocument(templates.find((item) => item.key === key) || null);
+    },
+    async saveTemplate(input) {
+      const timestamp = now();
+      const existing = templates.find((item) => item.key === input.key);
+      if (existing) Object.assign(existing, input, { updatedAt: timestamp });
+      else templates.push({ id: crypto.randomUUID(), ...input, createdAt: timestamp, updatedAt: timestamp });
+      return serializeDocument(templates.find((item) => item.key === input.key));
+    },
+    async deleteTemplate(key) {
+      const index = templates.findIndex((item) => item.key === key);
+      if (index < 0) return false;
+      templates.splice(index, 1);
+      return true;
+    },
+    async createNotificationJob(input) {
+      const timestamp = now();
+      if (input.dedupeKey) {
+        const duplicate = jobs.find((item) => item.dedupeKey === input.dedupeKey
+          && new Date(item.dedupeUntil || 0) > timestamp
+          && (activeJobStatus(item.status) || item.status === 'sent'));
+        if (duplicate) return { job: serializeDocument(duplicate), deduplicated: true };
+      }
+      const row = {
+        id: crypto.randomUUID(),
+        status: 'scheduled',
+        attempts: 0,
+        lastError: '',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        scheduledAt: new Date(input.scheduledAt || timestamp),
+        dedupeUntil: new Date(timestamp.getTime() + Number(input.dedupeWindowMs || 300000)),
+        ...input,
+        encryptedPayload: protector.encrypt(input.payload),
+      };
+      delete row.payload;
+      jobs.unshift(row);
+      return { job: serializeDocument(row), deduplicated: false };
+    },
+    async claimDueNotificationJobs(limit = 20) {
+      const timestamp = now();
+      return jobs
+        .filter((item) => ['scheduled', 'retrying'].includes(item.status) && new Date(item.scheduledAt) <= timestamp)
+        .sort((left, right) => new Date(left.scheduledAt) - new Date(right.scheduledAt))
+        .slice(0, limit)
+        .map((item) => {
+          Object.assign(item, { status: 'processing', attempts: item.attempts + 1, updatedAt: timestamp });
+          return { ...serializeDocument(item), payload: protector.decrypt(item.encryptedPayload) };
+        });
+    },
+    async updateNotificationJob(id, update) {
+      const row = jobs.find((item) => item.id === id);
+      if (!row) return null;
+      Object.assign(row, update, { updatedAt: now() });
+      return serializeDocument(row);
+    },
+    async cancelNotificationJob(id) {
+      const row = jobs.find((item) => item.id === id);
+      if (!row || !['scheduled', 'retrying'].includes(row.status)) return null;
+      Object.assign(row, { status: 'cancelled', updatedAt: now() });
+      return serializeDocument(row);
+    },
+    async listNotificationJobs(filters = {}) {
+      const filtered = jobs.filter((item) => (!filters.status || item.status === filters.status)
+        && (!filters.caller || item.caller === filters.caller));
+      return paged(filtered, filters);
+    },
+    async getRecipientPreference(targetId) {
+      return serializeDocument(preferences.get(targetId) || null);
+    },
+    async saveRecipientPreference(targetId, input) {
+      const timestamp = now();
+      const row = { targetId, enabled: true, quietHours: null, timezoneOffsetMinutes: 480, ...input, updatedAt: timestamp };
+      preferences.set(targetId, row);
+      return serializeDocument(row);
+    },
     async ping() { return true; },
     async close() {},
   };
@@ -120,12 +214,22 @@ async function createMongoNotificationStore({
   await client.connect();
   const db = client.db(databaseName);
   const deliveries = db.collection('notification_deliveries');
+  const templates = db.collection('notification_templates');
+  const jobs = db.collection('notification_jobs');
+  const preferences = db.collection('notification_preferences');
   await Promise.all([
     deliveries.createIndex({ id: 1 }, { unique: true }),
     deliveries.createIndex({ startedAt: -1 }),
     deliveries.createIndex({ status: 1, startedAt: -1 }),
     deliveries.createIndex({ caller: 1, startedAt: -1 }),
     deliveries.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    templates.createIndex({ key: 1 }, { unique: true }),
+    templates.createIndex({ updatedAt: -1 }),
+    jobs.createIndex({ id: 1 }, { unique: true }),
+    jobs.createIndex({ status: 1, scheduledAt: 1 }),
+    jobs.createIndex({ dedupeKey: 1, dedupeUntil: -1 }, { sparse: true }),
+    jobs.createIndex({ createdAt: -1 }),
+    preferences.createIndex({ targetId: 1 }, { unique: true }),
   ]);
 
   return {
@@ -186,6 +290,100 @@ async function createMongoNotificationStore({
       const row = await deliveries.findOne({ id });
       if (!row) return null;
       return { delivery: serializeDocument(row), payload: protector.decrypt(row.encryptedPayload) };
+    },
+    async listTemplates() {
+      return (await templates.find({}, { projection: { _id: 0 } }).sort({ updatedAt: -1 }).toArray()).map(serializeDocument);
+    },
+    async getTemplate(key) {
+      return serializeDocument(await templates.findOne({ key }, { projection: { _id: 0 } }));
+    },
+    async saveTemplate(input) {
+      const timestamp = new Date();
+      return serializeDocument(await templates.findOneAndUpdate(
+        { key: input.key },
+        { $set: { ...input, updatedAt: timestamp }, $setOnInsert: { id: crypto.randomUUID(), createdAt: timestamp } },
+        { upsert: true, returnDocument: 'after', projection: { _id: 0 } },
+      ));
+    },
+    async deleteTemplate(key) {
+      return (await templates.deleteOne({ key })).deletedCount === 1;
+    },
+    async createNotificationJob(input) {
+      const timestamp = new Date();
+      if (input.dedupeKey) {
+        const duplicate = await jobs.findOne({
+          dedupeKey: input.dedupeKey,
+          dedupeUntil: { $gt: timestamp },
+          status: { $in: ['scheduled', 'retrying', 'processing', 'sent'] },
+        }, { projection: { _id: 0, encryptedPayload: 0 } });
+        if (duplicate) return { job: serializeDocument(duplicate), deduplicated: true };
+      }
+      const row = {
+        id: crypto.randomUUID(),
+        status: 'scheduled',
+        attempts: 0,
+        lastError: '',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        scheduledAt: new Date(input.scheduledAt || timestamp),
+        dedupeUntil: new Date(timestamp.getTime() + Number(input.dedupeWindowMs || 300000)),
+        ...input,
+        encryptedPayload: protector.encrypt(input.payload),
+      };
+      delete row.payload;
+      await jobs.insertOne(row);
+      return { job: serializeDocument(row), deduplicated: false };
+    },
+    async claimDueNotificationJobs(limit = 20) {
+      const claimed = [];
+      const timestamp = new Date();
+      for (let index = 0; index < limit; index += 1) {
+        const row = await jobs.findOneAndUpdate(
+          { status: { $in: ['scheduled', 'retrying'] }, scheduledAt: { $lte: timestamp } },
+          { $set: { status: 'processing', updatedAt: timestamp }, $inc: { attempts: 1 } },
+          { sort: { scheduledAt: 1 }, returnDocument: 'after' },
+        );
+        if (!row) break;
+        claimed.push({ ...serializeDocument(row), payload: protector.decrypt(row.encryptedPayload) });
+      }
+      return claimed;
+    },
+    async updateNotificationJob(id, update) {
+      return serializeDocument(await jobs.findOneAndUpdate(
+        { id }, { $set: { ...update, updatedAt: new Date() } },
+        { returnDocument: 'after', projection: { _id: 0, encryptedPayload: 0 } },
+      ));
+    },
+    async cancelNotificationJob(id) {
+      return serializeDocument(await jobs.findOneAndUpdate(
+        { id, status: { $in: ['scheduled', 'retrying'] } },
+        { $set: { status: 'cancelled', updatedAt: new Date() } },
+        { returnDocument: 'after', projection: { _id: 0, encryptedPayload: 0 } },
+      ));
+    },
+    async listNotificationJobs(filters = {}) {
+      const page = normalizePositiveInteger(filters.page, 1, 100000);
+      const pageSize = normalizePositiveInteger(filters.pageSize, 20, 100);
+      const query = {
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.caller ? { caller: filters.caller } : {}),
+      };
+      const [items, total] = await Promise.all([
+        jobs.find(query, { projection: { _id: 0, encryptedPayload: 0 } }).sort({ createdAt: -1 })
+          .skip((page - 1) * pageSize).limit(pageSize).toArray(),
+        jobs.countDocuments(query),
+      ]);
+      return { items: items.map(serializeDocument), page, pageSize, total };
+    },
+    async getRecipientPreference(targetId) {
+      return serializeDocument(await preferences.findOne({ targetId }, { projection: { _id: 0 } }));
+    },
+    async saveRecipientPreference(targetId, input) {
+      return serializeDocument(await preferences.findOneAndUpdate(
+        { targetId },
+        { $set: { targetId, enabled: true, quietHours: null, timezoneOffsetMinutes: 480, ...input, updatedAt: new Date() } },
+        { upsert: true, returnDocument: 'after', projection: { _id: 0 } },
+      ));
     },
     async ping() { return (await db.command({ ping: 1 })).ok === 1; },
     async close() { await client.close(); },

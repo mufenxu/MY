@@ -18,6 +18,12 @@ Page({
             bestScore: 0,
             averageScore: 0,
         },
+        reviewSummary: {
+            dueCount: 0,
+            scheduledCount: 0,
+            masteredCount: 0,
+            reviewedTodayCount: 0,
+        },
         consoleProfile: {
             hasConsoleAccount: false,
             role: '',
@@ -74,6 +80,12 @@ Page({
                     bestScore: 0,
                     averageScore: 0,
                 },
+                reviewSummary: {
+                    dueCount: 0,
+                    scheduledCount: 0,
+                    masteredCount: 0,
+                    reviewedTodayCount: 0,
+                },
                 userInfo: { nickname: '', avatarUrl: '' },
                 consoleProfile: {
                     hasConsoleAccount: false,
@@ -98,6 +110,7 @@ Page({
 
         await Promise.all([
             this.loadUserSummary(),
+            this.loadReviewSummary(),
             this.loadConsoleProfile(),
         ]);
     },
@@ -108,6 +121,15 @@ Page({
             this.setData({ summary });
         } catch (error) {
             console.error('Load user summary failed', error);
+        }
+    },
+
+    async loadReviewSummary() {
+        try {
+            const reviewSummary = await api.getReviewSummary();
+            this.setData({ reviewSummary });
+        } catch (error) {
+            console.error('Load review summary failed', error);
         }
     },
 
@@ -190,6 +212,19 @@ Page({
         wx.navigateTo({
             url: nextUrl,
         });
+    },
+
+    async goToDailyReview() {
+        const nextUrl = buildPageUrl(ROUTES.DAILY_REVIEW);
+        if (!api.isLoggedIn()) {
+            await promptLogin({
+                message: '登录后才能同步复习计划，是否前往登录？',
+                nextUrl,
+            });
+            return;
+        }
+
+        wx.navigateTo({ url: nextUrl });
     },
 
     goToQuestionSearch() {

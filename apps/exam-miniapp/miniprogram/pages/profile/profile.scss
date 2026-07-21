@@ -769,6 +769,30 @@ $shadow-soft: 0 12rpx 40rpx rgba(148, 163, 184, 0.12);
     overflow: visible;
 }
 
+.icon-wrap.review {
+    background: linear-gradient(135deg, #0f766e 0%, #22c55e 100%);
+}
+
+.icon-wrap.review::before {
+    width: 34rpx;
+    height: 34rpx;
+    left: 15rpx;
+    top: 15rpx;
+    border: 3rpx solid rgba(255, 255, 255, 0.96);
+    border-radius: 50%;
+}
+
+.icon-wrap.review::after {
+    width: 13rpx;
+    height: 4rpx;
+    left: 32rpx;
+    top: 32rpx;
+    border-radius: 999rpx;
+    background: #ffffff;
+    transform: rotate(-42deg);
+    transform-origin: left center;
+}
+
 .icon-wrap.wrong::before {
     width: 42rpx;
     height: 50rpx;

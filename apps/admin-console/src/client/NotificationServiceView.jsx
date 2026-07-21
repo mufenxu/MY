@@ -2,17 +2,21 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   BellRing,
+  CalendarClock,
   CheckCircle2,
   CircleAlert,
   Clock3,
   Database,
+  FileText,
   LoaderCircle,
   RefreshCw,
   RotateCcw,
+  Save,
   Send,
   ServerCog,
   ShieldCheck,
   UserRound,
+  X,
   XCircle,
 } from 'lucide-react';
 import { requestJson } from './api.js';
@@ -102,6 +106,11 @@ export default function NotificationServiceView({ session }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [form, setForm] = useState({ msgType: 'text', touser: '', content: '' });
+  const [templates, setTemplates] = useState([]);
+  const [jobs, setJobs] = useState({ items: [], page: 1, pageSize: 20, total: 0 });
+  const [templateForm, setTemplateForm] = useState({ key: '', name: '', description: '', msgType: 'text', content: '', enabled: true });
+  const [jobForm, setJobForm] = useState({ templateKey: '', touser: '', scheduledAt: '', dedupeKey: '', variables: '{}' });
+  const [preferenceForm, setPreferenceForm] = useState({ targetId: '', enabled: true, quietStart: '22:00', quietEnd: '07:00' });
   const [pendingAction, setPendingAction] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const canOperate = roleAtLeast(session.user?.role, 'operator');
@@ -113,12 +122,16 @@ export default function NotificationServiceView({ session }) {
     try {
       const query = new URLSearchParams({ page: String(page), pageSize: '20' });
       for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value);
-      const [overviewResult, deliveryResult] = await Promise.all([
+      const [overviewResult, deliveryResult, templateResult, jobResult] = await Promise.all([
         requestJson('/api/notifications/overview'),
         requestJson(`/api/notifications/deliveries?${query}`),
+        requestJson('/api/notifications/templates'),
+        requestJson('/api/notifications/jobs?page=1&pageSize=20'),
       ]);
       setOverview(overviewResult);
       setDeliveries(deliveryResult);
+      setTemplates(templateResult.items || []);
+      setJobs(jobResult);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -152,12 +165,20 @@ export default function NotificationServiceView({ session }) {
         await requestJson('/api/notifications/test', { method: 'POST', body: JSON.stringify(form) });
         setMessage('测试通知已发送');
         setForm((current) => ({ ...current, content: '' }));
-      } else {
+      } else if (action.type === 'retry') {
         await requestJson(`/api/notifications/deliveries/${encodeURIComponent(action.delivery.id)}/retry`, { method: 'POST' });
         setMessage('失败通知已重新发送');
+      } else if (action.type === 'cancel-job') {
+        await requestJson(`/api/notifications/jobs/${encodeURIComponent(action.job.id)}/cancel`, { method: 'POST' });
+        setMessage('计划任务已取消');
+      } else if (action.type === 'delete-template') {
+        await requestJson(`/api/notifications/templates/${encodeURIComponent(action.template.key)}`, { method: 'DELETE' });
+        setMessage('通知模板已删除');
       }
       setPendingAction(null);
-      setTab('records');
+      if (action.type === 'test' || action.type === 'retry') setTab('records');
+      if (action.type === 'cancel-job') setTab('jobs');
+      if (action.type === 'delete-template') setTab('templates');
       await load({ quiet: true });
     } catch (requestError) {
       setPendingAction(null);
@@ -165,6 +186,62 @@ export default function NotificationServiceView({ session }) {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function saveTemplate() {
+    setSubmitting(true); setError(''); setMessage('');
+    try {
+      await requestJson(`/api/notifications/templates/${encodeURIComponent(templateForm.key.trim())}`, {
+        method: 'PUT', body: JSON.stringify(templateForm),
+      });
+      setMessage('通知模板已保存');
+      setTemplateForm({ key: '', name: '', description: '', msgType: 'text', content: '', enabled: true });
+      await load({ quiet: true });
+    } catch (requestError) { setError(requestError.message); }
+    finally { setSubmitting(false); }
+  }
+
+  async function scheduleJob() {
+    setSubmitting(true); setError(''); setMessage('');
+    try {
+      const variables = JSON.parse(jobForm.variables || '{}');
+      await requestJson('/api/notifications/jobs', {
+        method: 'POST',
+        body: JSON.stringify({
+          templateKey: jobForm.templateKey,
+          target: { touser: jobForm.touser.trim() },
+          variables,
+          ...(jobForm.scheduledAt ? { scheduledAt: new Date(jobForm.scheduledAt).toISOString() } : {}),
+          ...(jobForm.dedupeKey.trim() ? { dedupeKey: jobForm.dedupeKey.trim() } : {}),
+        }),
+      });
+      setMessage('通知任务已创建');
+      setJobForm({ ...jobForm, touser: '', scheduledAt: '', dedupeKey: '', variables: '{}' });
+      await load({ quiet: true });
+    } catch (requestError) { setError(requestError instanceof SyntaxError ? '模板变量必须是有效 JSON。' : requestError.message); }
+    finally { setSubmitting(false); }
+  }
+
+  async function loadPreference() {
+    if (!preferenceForm.targetId.trim()) return;
+    setError('');
+    try {
+      const result = await requestJson(`/api/notifications/preferences/${encodeURIComponent(preferenceForm.targetId.trim())}`);
+      const preference = result.preference || {};
+      setPreferenceForm((current) => ({ ...current, enabled: preference.enabled ?? true, quietStart: preference.quietHours?.start || '22:00', quietEnd: preference.quietHours?.end || '07:00' }));
+      setMessage(preference.targetId ? '已读取接收偏好' : '该用户尚未设置偏好');
+    } catch (requestError) { setError(requestError.message); }
+  }
+
+  async function savePreference() {
+    setSubmitting(true); setError(''); setMessage('');
+    try {
+      await requestJson(`/api/notifications/preferences/${encodeURIComponent(preferenceForm.targetId.trim())}`, {
+        method: 'PUT', body: JSON.stringify({ enabled: preferenceForm.enabled, quietHours: { start: preferenceForm.quietStart, end: preferenceForm.quietEnd }, timezoneOffsetMinutes: 480 }),
+      });
+      setMessage('接收偏好已保存');
+    } catch (requestError) { setError(requestError.message); }
+    finally { setSubmitting(false); }
   }
 
   if (loading && !overview) {
@@ -178,6 +255,9 @@ export default function NotificationServiceView({ session }) {
           {[
             ['overview', '概览'],
             ['records', '发送记录'],
+            ['jobs', '计划任务'],
+            ['templates', '消息模板'],
+            ['preferences', '接收偏好'],
             ['test', '发送测试'],
           ].map(([id, label]) => <button key={id} className={tab === id ? 'active' : ''} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>)}
         </div>
@@ -264,12 +344,55 @@ export default function NotificationServiceView({ session }) {
         </div>
       )}
 
+      {tab === 'jobs' && (
+        <div className="notify-orchestration-layout">
+          <section className="ops-panel notify-test-form">
+            <header><div><span>编排</span><h3>安排通知</h3></div><CalendarClock size={20} /></header>
+            <label><span>消息模板</span><SelectControl ariaLabel="消息模板" value={jobForm.templateKey} onChange={(value) => setJobForm({ ...jobForm, templateKey: value })} options={[{ value: '', label: '选择模板' }, ...templates.filter((item) => item.enabled).map((item) => ({ value: item.key, label: item.name }))]} /></label>
+            <label><span>企业微信用户 ID</span><input value={jobForm.touser} maxLength={64} onChange={(event) => setJobForm({ ...jobForm, touser: event.target.value })} /></label>
+            <label><span>计划时间</span><input type="datetime-local" value={jobForm.scheduledAt} onChange={(event) => setJobForm({ ...jobForm, scheduledAt: event.target.value })} /></label>
+            <label><span>去重键</span><input value={jobForm.dedupeKey} maxLength={160} onChange={(event) => setJobForm({ ...jobForm, dedupeKey: event.target.value })} /></label>
+            <label><span>模板变量 JSON</span><textarea rows={5} value={jobForm.variables} onChange={(event) => setJobForm({ ...jobForm, variables: event.target.value })} /></label>
+            <button className="primary-button" type="button" disabled={!canOperate || !jobForm.templateKey || !jobForm.touser.trim() || submitting} onClick={scheduleJob}><CalendarClock size={17} />创建任务</button>
+          </section>
+          <section className="ops-panel notify-jobs-panel">
+            <header><div><span>任务队列</span><h3>{jobs.total || 0} 个任务</h3></div><Activity size={20} /></header>
+            <div className="notify-template-list">{jobs.items?.length ? jobs.items.map((job) => <div key={job.id} className="notify-template-row"><div><strong>{job.templateKey || typeLabel(job.msgType)}</strong><small>{targetLabel(job)} · {formatDateTime(job.scheduledAt)}</small></div><span className={`notify-state notify-state-${job.status}`}>{job.status}</span><button className="icon-button" type="button" title="取消任务" disabled={!canOperate || !['scheduled', 'retrying'].includes(job.status)} onClick={() => setPendingAction({ type: 'cancel-job', job })}><X size={16} /></button></div>) : <div className="ops-empty">暂无计划任务</div>}</div>
+          </section>
+        </div>
+      )}
+
+      {tab === 'templates' && (
+        <div className="notify-orchestration-layout">
+          <section className="ops-panel notify-test-form">
+            <header><div><span>模板</span><h3>编辑消息模板</h3></div><FileText size={20} /></header>
+            <label><span>模板标识</span><input value={templateForm.key} maxLength={80} disabled={Boolean(templates.some((item) => item.key === templateForm.key))} onChange={(event) => setTemplateForm({ ...templateForm, key: event.target.value })} /></label>
+            <label><span>显示名称</span><input value={templateForm.name} maxLength={100} onChange={(event) => setTemplateForm({ ...templateForm, name: event.target.value })} /></label>
+            <label><span>消息类型</span><SelectControl ariaLabel="模板消息类型" value={templateForm.msgType} onChange={(value) => setTemplateForm({ ...templateForm, msgType: value })} options={TYPE_OPTIONS.filter((item) => ['text', 'markdown'].includes(item.value))} /></label>
+            <label><span>内容</span><textarea rows={8} value={templateForm.content} maxLength={4096} onChange={(event) => setTemplateForm({ ...templateForm, content: event.target.value })} /></label>
+            <label className="notify-inline-check"><input type="checkbox" checked={templateForm.enabled} onChange={(event) => setTemplateForm({ ...templateForm, enabled: event.target.checked })} /><span>启用模板</span></label>
+            <button className="primary-button" type="button" disabled={session.user?.role !== 'super_admin' || !templateForm.key.trim() || !templateForm.name.trim() || !templateForm.content.trim() || submitting} onClick={saveTemplate}><Save size={17} />保存模板</button>
+          </section>
+          <section className="ops-panel notify-jobs-panel">
+            <header><div><span>模板库</span><h3>{templates.length} 个模板</h3></div><FileText size={20} /></header>
+            <div className="notify-template-list">{templates.length ? templates.map((template) => <div key={template.key} className="notify-template-row"><button type="button" onClick={() => setTemplateForm({ ...template })}><strong>{template.name}</strong><small>{template.key} · {typeLabel(template.msgType)}</small></button><span>{template.enabled ? '启用' : '停用'}</span><button className="icon-button" type="button" title="删除模板" disabled={session.user?.role !== 'super_admin'} onClick={() => setPendingAction({ type: 'delete-template', template })}><X size={16} /></button></div>) : <div className="ops-empty">暂无模板</div>}</div>
+          </section>
+        </div>
+      )}
+
+      {tab === 'preferences' && (
+        <section className="ops-panel notify-preference-panel">
+          <header><div><span>用户策略</span><h3>接收偏好与免打扰</h3></div><UserRound size={20} /></header>
+          <div className="notify-preference-form"><label><span>企业微信用户 ID</span><input value={preferenceForm.targetId} maxLength={64} onChange={(event) => setPreferenceForm({ ...preferenceForm, targetId: event.target.value })} /></label><button className="secondary-action" type="button" disabled={!canOperate || !preferenceForm.targetId.trim()} onClick={loadPreference}>读取</button><label className="notify-inline-check"><input type="checkbox" checked={preferenceForm.enabled} onChange={(event) => setPreferenceForm({ ...preferenceForm, enabled: event.target.checked })} /><span>允许接收</span></label><label><span>免打扰开始</span><input type="time" value={preferenceForm.quietStart} onChange={(event) => setPreferenceForm({ ...preferenceForm, quietStart: event.target.value })} /></label><label><span>免打扰结束</span><input type="time" value={preferenceForm.quietEnd} onChange={(event) => setPreferenceForm({ ...preferenceForm, quietEnd: event.target.value })} /></label><button className="primary-button" type="button" disabled={!canOperate || !preferenceForm.targetId.trim() || submitting} onClick={savePreference}><Save size={17} />保存偏好</button></div>
+        </section>
+      )}
+
       <ConfirmDialog
         open={Boolean(pendingAction)}
-        title={pendingAction?.type === 'retry' ? '重试失败通知' : '发送测试通知'}
-        description={pendingAction?.type === 'retry' ? '将使用原始加密载荷重新发送。' : '确认向指定企业微信用户发送此消息。'}
-        detail={pendingAction?.type === 'retry' ? targetLabel(pendingAction.delivery) : `${form.touser.trim()} · ${typeLabel(form.msgType)}`}
-        confirmLabel={pendingAction?.type === 'retry' ? '确认重试' : '确认发送'}
+        title={pendingAction?.type === 'retry' ? '重试失败通知' : pendingAction?.type === 'cancel-job' ? '取消计划任务' : pendingAction?.type === 'delete-template' ? '删除通知模板' : '发送测试通知'}
+        description={pendingAction?.type === 'retry' ? '将使用原始加密载荷重新发送。' : pendingAction?.type === 'cancel-job' ? '取消后该任务不会再自动发送。' : pendingAction?.type === 'delete-template' ? '删除后不能再用此模板创建任务。' : '确认向指定企业微信用户发送此消息。'}
+        detail={pendingAction?.type === 'retry' ? targetLabel(pendingAction.delivery) : pendingAction?.type === 'cancel-job' ? pendingAction.job?.id : pendingAction?.type === 'delete-template' ? pendingAction.template?.name : `${form.touser.trim()} · ${typeLabel(form.msgType)}`}
+        confirmLabel={pendingAction?.type === 'retry' ? '确认重试' : pendingAction?.type === 'cancel-job' ? '确认取消' : pendingAction?.type === 'delete-template' ? '确认删除' : '确认发送'}
         tone="primary"
         busy={submitting}
         onCancel={() => !submitting && setPendingAction(null)}

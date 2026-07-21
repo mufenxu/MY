@@ -19,7 +19,8 @@
         "user-agreement/user-agreement",
         "question-search/question-search",
         "wrong-book/wrong-book",
-        "wrong-practice/wrong-practice"
+        "wrong-practice/wrong-practice",
+        "daily-review/daily-review"
       ]
     }
   ],

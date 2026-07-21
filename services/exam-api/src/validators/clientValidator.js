@@ -177,6 +177,29 @@ const wrongQuestionState = {
     }).min(1),
 };
 
+const reviewQueue = {
+    query: Joi.object({
+        limit: Joi.number().integer().min(1).max(100).default(30),
+        categoryId: objectId.optional(),
+    }),
+};
+
+const reviewSummary = {
+    query: Joi.object({}),
+};
+
+const reviewRating = {
+    params: Joi.object({
+        questionId: objectId.required().messages({
+            'any.required': 'questionId is required',
+        }),
+    }),
+    body: Joi.object({
+        categoryId: objectId.optional(),
+        rating: Joi.string().valid('unknown', 'fuzzy', 'known').required(),
+    }),
+};
+
 const aiQuestionAnalysis = {
     body: Joi.object({
         questionId: objectId.required().messages({
@@ -217,6 +240,9 @@ module.exports = {
     getWrongQuestions,
     wrongQuestionsByCategory,
     wrongQuestionState,
+    reviewQueue,
+    reviewSummary,
+    reviewRating,
     aiQuestionAnalysis,
     previewPaperShare,
     acceptPaperShare,

@@ -12,4 +12,5 @@ export const ROUTES = {
     USER_AGREEMENT: '/subpackages/user/user-agreement/user-agreement',
     WRONG_BOOK: '/subpackages/user/wrong-book/wrong-book',
     WRONG_PRACTICE: '/subpackages/user/wrong-practice/wrong-practice',
+    DAILY_REVIEW: '/subpackages/user/daily-review/daily-review',
 } as const;

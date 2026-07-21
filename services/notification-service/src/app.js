@@ -8,6 +8,7 @@ const { z } = require('zod');
 
 const WeComClient = require('./wecom-client');
 const { notificationSchema, buildWeComPayload } = require('./notification-schema');
+const { createNotificationOrchestrator } = require('./notification-orchestrator');
 const { createMemoryNotificationStore } = require('./notification-store');
 
 function safeEqual(left, right) {
@@ -161,6 +162,8 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
     }
   }
 
+  const orchestrator = createNotificationOrchestrator({ store, deliver });
+
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
   app.use((req, res, next) => {
@@ -198,6 +201,21 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
     try {
       const { result, delivery } = await deliver(req.body, { caller: req.serviceCaller, requestId: req.id });
       return res.json({ errcode: 0, errmsg: 'ok', detail: result, deliveryId: delivery?.id || null });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/enqueue', rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+  }), checkNotifyAccess, async (req, res, next) => {
+    try {
+      const result = await orchestrator.enqueue(req.body, { caller: req.serviceCaller, requestId: req.id });
+      return res.status(result.deduplicated ? 200 : 202).json(result);
     } catch (error) {
       next(error);
       return undefined;
@@ -247,6 +265,98 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
         page: req.query.page,
         pageSize: req.query.pageSize,
       }));
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/management/templates', checkManagementAccess, async (_req, res, next) => {
+    try {
+      return res.json({ items: await orchestrator.listTemplates() });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.put('/management/templates/:key', checkManagementAccess, async (req, res, next) => {
+    try {
+      const actor = z.string().trim().min(1).max(128).parse(req.body?.actor);
+      const template = await orchestrator.saveTemplate({ ...req.body, key: req.params.key });
+      return res.json({ template, actor });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.delete('/management/templates/:key', checkManagementAccess, async (req, res, next) => {
+    try {
+      const deleted = await orchestrator.deleteTemplate(req.params.key);
+      if (!deleted) throw httpError(404, 'TEMPLATE_NOT_FOUND', '通知模板不存在。');
+      return res.status(204).end();
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/management/jobs', checkManagementAccess, async (req, res, next) => {
+    try {
+      const status = String(req.query.status || '');
+      if (status && !['scheduled', 'retrying', 'processing', 'sent', 'failed', 'cancelled', 'suppressed'].includes(status)) {
+        throw httpError(400, 'INVALID_JOB_STATUS', '通知任务状态筛选值无效。');
+      }
+      return res.json(await orchestrator.listJobs({
+        status,
+        caller: String(req.query.caller || '').slice(0, 64),
+        page: req.query.page,
+        pageSize: req.query.pageSize,
+      }));
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/management/jobs', checkManagementAccess, async (req, res, next) => {
+    try {
+      const actor = z.string().trim().min(1).max(128).parse(req.body?.actor);
+      const result = await orchestrator.enqueue(req.body, { caller: req.serviceCaller, actor, requestId: req.id });
+      return res.status(result.deduplicated ? 200 : 202).json(result);
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/management/jobs/:id/cancel', checkManagementAccess, async (req, res, next) => {
+    try {
+      z.string().trim().min(1).max(128).parse(req.body?.actor);
+      const job = await orchestrator.cancelJob(String(req.params.id || ''));
+      if (!job) throw httpError(409, 'JOB_NOT_CANCELLABLE', '通知任务不存在或当前状态不可取消。');
+      return res.json({ job });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/management/preferences/:targetId', checkManagementAccess, async (req, res, next) => {
+    try {
+      return res.json({ preference: await orchestrator.getPreference(req.params.targetId) });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.put('/management/preferences/:targetId', checkManagementAccess, async (req, res, next) => {
+    try {
+      const actor = z.string().trim().min(1).max(128).parse(req.body?.actor);
+      const preference = await orchestrator.savePreference(req.params.targetId, req.body);
+      return res.json({ preference, actor });
     } catch (error) {
       next(error);
       return undefined;
@@ -316,6 +426,7 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
   });
 
   app.locals.notificationStore = store;
+  app.locals.notificationOrchestrator = orchestrator;
   return app;
 }
 

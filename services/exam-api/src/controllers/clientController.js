@@ -72,6 +72,7 @@ const {
 } = require('../services/examAttemptService');
 const { canUseQuestionAiAnalysis } = require('../middleware/aiAccess');
 const { QUESTION_ORDER_SORT } = require('../utils/questionOrder');
+const { buildInitialReviewState, scheduleReview } = require('../services/reviewScheduler');
 
 function sanitizeExamQuestions(questions) {
     return questions.map((question) => ({
@@ -643,7 +644,32 @@ function toQuestionStatePayload(state) {
         masteredAt: state?.masteredAt || null,
         lastWrongAt: state?.lastWrongAt || null,
         lastCorrectAt: state?.lastCorrectAt || null,
+        reviewStage: state?.reviewStage || 0,
+        reviewIntervalDays: state?.reviewIntervalDays || 0,
+        reviewEase: state?.reviewEase || 2.3,
+        reviewCount: state?.reviewCount || 0,
+        lapseCount: state?.lapseCount || 0,
+        lastReviewedAt: state?.lastReviewedAt || null,
+        dueAt: state?.dueAt || null,
     };
+}
+
+function buildDueQuery(at = new Date()) {
+    return {
+        $or: [
+            { dueAt: { $lte: at } },
+            { dueAt: null },
+            { dueAt: { $exists: false } },
+        ],
+    };
+}
+
+async function getAccessibleReviewCategories(userId, categoryId) {
+    const categories = await getAccessibleMyCategories({
+        ownerOpenid: userId,
+        categoryId: categoryId || undefined,
+    });
+    return new Map(categories.map((category) => [String(category._id), category]));
 }
 
 async function attachWrongQuestionStates(groups, userId, includeMastered = false) {
@@ -684,6 +710,9 @@ async function applyAnswerResultToQuestionState({
     const existing = await UserQuestionState.findOne({ userId, questionId });
 
     if (!isAnswerCorrect) {
+        const reviewState = existing
+            ? scheduleReview(existing, 'unknown', at)
+            : buildInitialReviewState(at);
         return UserQuestionState.findOneAndUpdate(
             { userId, questionId },
             {
@@ -693,6 +722,7 @@ async function applyAnswerResultToQuestionState({
                     correctStreak: 0,
                     lastWrongAt: at,
                     masteredAt: null,
+                    ...reviewState,
                 },
                 $inc: { wrongCount: 1 },
                 $setOnInsert: {
@@ -714,6 +744,7 @@ async function applyAnswerResultToQuestionState({
     existing.correctStreak = nextStreak;
     existing.lastCorrectAt = at;
     existing.status = nextStatus;
+    Object.assign(existing, scheduleReview(existing, 'known', at));
     if (nextStatus === 'mastered' && !existing.masteredAt) {
         existing.masteredAt = at;
     }
@@ -1665,7 +1696,7 @@ exports.updateWrongQuestionState = asyncHandler(async (req, res) => {
 
     const setData = { categoryId };
     if (answerResult === 'correct' && !state) {
-        setData.status = 'needsReview';
+        Object.assign(setData, scheduleReview({}, 'known', answeredAt));
         setData.correctStreak = 1;
         setData.lastCorrectAt = answeredAt;
     }
@@ -1674,6 +1705,22 @@ exports.updateWrongQuestionState = asyncHandler(async (req, res) => {
         setData.masteredAt = status === 'mastered' ? new Date() : null;
         if (status === 'needsReview') {
             setData.correctStreak = 0;
+            setData.reviewStage = 0;
+            setData.reviewIntervalDays = 0;
+            setData.dueAt = new Date();
+        } else {
+            const manualSchedule = scheduleReview({
+                reviewStage: 2,
+                reviewIntervalDays: 3,
+                reviewEase: state?.reviewEase,
+                reviewCount: state?.reviewCount,
+                lapseCount: state?.lapseCount,
+                masteredAt: setData.masteredAt,
+            }, 'known', setData.masteredAt);
+            Object.assign(setData, manualSchedule, {
+                status: 'mastered',
+                masteredAt: setData.masteredAt,
+            });
         }
     }
     if (typeof favorite === 'boolean') {
@@ -1707,6 +1754,149 @@ exports.updateWrongQuestionState = asyncHandler(async (req, res) => {
     }
 
     success(res, toQuestionStatePayload(state), '错题状态已更新');
+});
+
+exports.getReviewSummary = asyncHandler(async (req, res) => {
+    const userId = req.user.openid;
+    const categoryMap = await getAccessibleReviewCategories(userId);
+    const categoryIds = [...categoryMap.keys()];
+
+    if (categoryIds.length === 0) {
+        return success(res, {
+            dueCount: 0,
+            scheduledCount: 0,
+            masteredCount: 0,
+            reviewedTodayCount: 0,
+        });
+    }
+
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+    const baseQuery = { userId, categoryId: { $in: categoryIds } };
+    const [dueCount, scheduledCount, masteredCount, reviewedTodayCount] = await Promise.all([
+        UserQuestionState.countDocuments({ ...baseQuery, ...buildDueQuery(now) }),
+        UserQuestionState.countDocuments({ ...baseQuery, dueAt: { $gt: now } }),
+        UserQuestionState.countDocuments({ ...baseQuery, status: 'mastered' }),
+        UserQuestionState.countDocuments({ ...baseQuery, lastReviewedAt: { $gte: startOfToday } }),
+    ]);
+
+    success(res, {
+        dueCount,
+        scheduledCount,
+        masteredCount,
+        reviewedTodayCount,
+    });
+});
+
+exports.getReviewQueue = asyncHandler(async (req, res) => {
+    const userId = req.user.openid;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 30, 1), 100);
+    const categoryMap = await getAccessibleReviewCategories(userId, req.query.categoryId);
+    const categoryIds = [...categoryMap.keys()];
+
+    if (categoryIds.length === 0) {
+        return success(res, { questions: [], dueCount: 0 });
+    }
+
+    const now = new Date();
+    const stateQuery = {
+        userId,
+        categoryId: { $in: categoryIds },
+        ...buildDueQuery(now),
+    };
+    const [states, dueCount] = await Promise.all([
+        UserQuestionState.find(stateQuery)
+            .sort({ dueAt: 1, lastReviewedAt: 1, updateTime: 1 })
+            .limit(Math.min(limit * 3, 300))
+            .lean(),
+        UserQuestionState.countDocuments(stateQuery),
+    ]);
+
+    if (states.length === 0) {
+        return success(res, { questions: [], dueCount: 0 });
+    }
+
+    const questionQueries = states.map((state) => {
+        const category = categoryMap.get(String(state.categoryId));
+        return category
+            ? buildAccessibleQuestionQueryForCategory(state.questionId, category, userId)
+            : null;
+    }).filter(Boolean);
+    const questions = questionQueries.length > 0
+        ? await Question.find({ $or: questionQueries })
+            .select('_id categoryId type content options answer analysis analysisSource')
+            .lean()
+        : [];
+    const enrichedQuestions = await attachStoredAiAnalysesToQuestions(questions);
+    const questionMap = new Map(enrichedQuestions.map((question) => [String(question._id), question]));
+    const stateMap = new Map(states.map((state) => [String(state.questionId), state]));
+    const orderedQuestions = states
+        .map((state) => {
+            const question = questionMap.get(String(state.questionId));
+            const category = categoryMap.get(String(state.categoryId));
+            if (!question || !category) {
+                return null;
+            }
+
+            return {
+                ...question,
+                categoryId: String(state.categoryId),
+                categoryName: category.name || '未命名题库',
+                state: toQuestionStatePayload(stateMap.get(String(state.questionId))),
+            };
+        })
+        .filter(Boolean)
+        .slice(0, limit);
+
+    success(res, {
+        questions: orderedQuestions,
+        dueCount,
+    });
+});
+
+exports.rateReviewQuestion = asyncHandler(async (req, res) => {
+    const userId = req.user.openid;
+    const { questionId } = req.params;
+    const { categoryId: incomingCategoryId, rating } = req.body;
+    const question = await Question.findById(questionId).select('categoryId').lean();
+    const categoryId = incomingCategoryId || question?.categoryId;
+
+    if (!categoryId) {
+        throw new AppError('缺少题库信息，无法记录复习结果', 400);
+    }
+
+    const category = await getAccessibleMyCategoryById(categoryId, userId);
+    if (!category) {
+        throw new NotFoundError('你可访问的题库不存在或未发布');
+    }
+
+    const scopedQuestion = await Question.findOne(buildScopedQueryForMyCategory(category, userId, {
+        _id: questionId,
+        categoryId,
+    })).select('_id').lean();
+    if (!scopedQuestion) {
+        throw new NotFoundError('题目不存在或无权访问');
+    }
+
+    const state = await UserQuestionState.findOne({ userId, questionId });
+    if (!state) {
+        throw new NotFoundError('该题目尚未加入复习计划');
+    }
+
+    const reviewedAt = new Date();
+    Object.assign(state, scheduleReview(state, rating, reviewedAt));
+    state.categoryId = categoryId;
+    if (rating === 'unknown') {
+        state.correctStreak = 0;
+        state.lastWrongAt = reviewedAt;
+    } else if (rating === 'known') {
+        state.correctStreak = (state.correctStreak || 0) + 1;
+        state.lastCorrectAt = reviewedAt;
+    }
+    await state.save();
+
+    success(res, toQuestionStatePayload(state), '复习计划已更新');
 });
 
 exports.userLogin = asyncHandler(async (req, res) => {

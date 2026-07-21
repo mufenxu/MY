@@ -48,6 +48,9 @@ router.delete('/exam/progress', authenticateUser, validate(cv.clearProgress), cl
 router.get('/wrong-questions', authenticateUser, validate(cv.getWrongQuestions), clientController.getWrongQuestions);
 router.get('/wrong-questions/:categoryId', authenticateUser, validate(cv.wrongQuestionsByCategory), clientController.getWrongQuestionsByCategory);
 router.post('/wrong-questions/:questionId/state', authenticateUser, validate(cv.wrongQuestionState), clientController.updateWrongQuestionState);
+router.get('/api/user/review/summary', authenticateUser, validate(cv.reviewSummary), clientController.getReviewSummary);
+router.get('/api/user/review/queue', authenticateUser, validate(cv.reviewQueue), clientController.getReviewQueue);
+router.post('/api/user/review/:questionId', authenticateUser, validate(cv.reviewRating), clientController.rateReviewQuestion);
 router.post('/api/user/profile', authenticateUser, validate(cv.updateProfile), clientController.updateProfile);
 router.get('/api/user/summary', authenticateUser, validate(cv.getUserSummary), clientController.getUserSummary);
 router.get('/api/user/study-report', authenticateUser, validate(cv.getStudyReport), clientController.getStudyReport);

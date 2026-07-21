@@ -9,6 +9,9 @@ import {
     ExamHistoryItem,
     ExamAttempt,
     ExamResult,
+    ReviewQueue,
+    ReviewRating,
+    ReviewSummary,
     StudyReport,
     UserProfile,
     UserSummary,
@@ -122,6 +125,31 @@ export const learningApi = {
         await authApi.ensureAuth();
         return request<WrongQuestionState>({
             url: `/wrong-questions/${questionId}/state`,
+            method: 'POST',
+            data,
+            showError: false,
+        });
+    },
+
+    getReviewSummary: async () => {
+        await authApi.ensureAuth();
+        return request<ReviewSummary>({ url: '/api/user/review/summary' });
+    },
+
+    getReviewQueue: async (options: { limit?: number; categoryId?: string } = {}) => {
+        await authApi.ensureAuth();
+        return request<ReviewQueue>({
+            url: `/api/user/review/queue${buildQuery(options)}`,
+        });
+    },
+
+    rateReviewQuestion: async (
+        questionId: string,
+        data: { categoryId?: string; rating: ReviewRating },
+    ) => {
+        await authApi.ensureAuth();
+        return request<WrongQuestionState>({
+            url: `/api/user/review/${questionId}`,
             method: 'POST',
             data,
             showError: false,

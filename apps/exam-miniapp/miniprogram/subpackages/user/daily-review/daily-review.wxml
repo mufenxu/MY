@@ -1,0 +1,72 @@
+<view class="review-page">
+  <view class="custom-nav" style="padding-top: {{menuButtonTop}}px;">
+    <view class="nav-content" style="height: {{menuButtonHeight}}px;">
+      <view class="back-btn" bindtap="onBack"></view>
+      <text class="nav-title">今日复习</text>
+    </view>
+  </view>
+
+  <scroll-view class="review-scroll" scroll-y enhanced="{{true}}" show-scrollbar="{{false}}" style="padding-top: {{navBarHeight}}px;">
+    <view class="loading-state" wx:if="{{loading}}">
+      <skeleton type="card" rows="{{5}}"></skeleton>
+    </view>
+
+    <block wx:elif="{{questions.length > 0}}">
+      <view class="progress-panel">
+        <view>
+          <text class="progress-kicker">间隔复习</text>
+          <text class="progress-title">已完成 {{completedCount}} 题</text>
+        </view>
+        <view class="remaining-badge">剩余 {{remainingDueCount}}</view>
+      </view>
+      <progress
+        class="progress-line"
+        percent="{{initialDueCount > 0 ? completedCount / initialDueCount * 100 : 0}}"
+        stroke-width="3"
+        activeColor="#0f766e"
+        backgroundColor="#dbe4e7"
+      />
+
+      <view class="question-meta">
+        <text class="category-name">{{questions[0].categoryName}}</text>
+        <text class="review-stage">第 {{questions[0].state.reviewStage + 1}} 轮</text>
+      </view>
+
+      <view class="question-shell">
+        <question-card
+          question="{{questions[0]}}"
+          showAnalysis="{{showAnalysis}}"
+          userAnswer="{{answers[questions[0]._id] || []}}"
+          canUseAiAnalysis="{{canUseAiAnalysis}}"
+          canGenerateAiAnalysis="{{canGenerateAiAnalysis}}"
+          aiAnalysis="{{aiAnalysisByQuestionId[questions[0]._id] || ''}}"
+          aiAnalysisLoading="{{aiAnalysisLoadingByQuestionId[questions[0]._id] || false}}"
+          bind:change="onAnswerChange"
+          bind:ai-analysis="onAiAnalysisRequest"
+        />
+      </view>
+
+      <view class="review-actions">
+        <button class="reveal-btn" wx:if="{{!showAnalysis}}" bindtap="onRevealAnswer">查看答案与解析</button>
+        <block wx:else>
+          <text class="rating-title">回想得怎么样？</text>
+          <view class="rating-grid">
+            <button class="rating-btn unknown" data-rating="unknown" bindtap="onRate" loading="{{rating}}">不认识</button>
+            <button class="rating-btn fuzzy" data-rating="fuzzy" bindtap="onRate" loading="{{rating}}">有点模糊</button>
+            <button class="rating-btn known" data-rating="known" bindtap="onRate" loading="{{rating}}">记得很清楚</button>
+          </view>
+        </block>
+      </view>
+      <view class="footer-spacer"></view>
+    </block>
+
+    <view class="complete-state" wx:else>
+      <view class="complete-mark"></view>
+      <text class="complete-title">今日复习完成</text>
+      <text class="complete-desc">本次完成 {{completedCount}} 题，记忆计划已同步</text>
+      <text class="complete-meta" wx:if="{{remainingDueCount > 0}}">还有 {{remainingDueCount}} 题已到期</text>
+      <button class="retry-btn" wx:if="{{remainingDueCount > 0}}" bindtap="onRetry">继续复习</button>
+      <button class="back-home-btn" bindtap="onBack">返回个人中心</button>
+    </view>
+  </scroll-view>
+</view>
