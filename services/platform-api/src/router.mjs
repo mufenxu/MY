@@ -178,8 +178,50 @@ export function createCoreWebApp({ coreApp, staticPath }) {
   return app;
 }
 
+export function createOfficialWebsiteApp({ staticPath }) {
+  const app = express();
+  app.disable('x-powered-by');
+  app.use((req, res, next) => {
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+      + "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+      + "font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; "
+      + "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+    );
+    next();
+  });
+
+  if (staticPath && fs.existsSync(staticPath)) {
+    const distPath = path.join(staticPath, 'dist');
+    const targetPath = fs.existsSync(distPath) ? distPath : staticPath;
+
+    app.use(express.static(targetPath, {
+      index: false,
+      dotfiles: 'deny',
+      setHeaders(res, filePath) {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else {
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+        }
+      },
+    }));
+
+    app.get('/', (req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      const distIndex = path.join(targetPath, 'index.html');
+      return res.sendFile(distIndex);
+    });
+  }
+
+  return app;
+}
+
 export function createPlatformRouter({
   portalApp,
+  websiteApp,
   coreApp,
   examApp,
   notifyApp,
@@ -424,6 +466,17 @@ export function createPlatformRouter({
     if (requestUrl.pathname === '/iot' || requestUrl.pathname.startsWith('/iot/')) {
       rewriteServicePrefix(req, '/iot', { apiByDefault: true });
       return proxyRequest(req, res, mqttTarget, 'iot');
+    }
+
+    if (requestUrl.pathname === '/' || requestUrl.pathname === '/index.html' || requestUrl.pathname === '/index.css' || requestUrl.pathname === '/main.js') {
+      if (typeof websiteApp === 'function') {
+        return websiteApp(req, res);
+      }
+    }
+
+    if (requestUrl.pathname === '/console' || requestUrl.pathname.startsWith('/console/')) {
+      rewriteServicePrefix(req, '/console');
+      return portalApp(req, res);
     }
 
     return portalApp(req, res);

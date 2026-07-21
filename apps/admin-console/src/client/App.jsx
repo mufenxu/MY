@@ -217,6 +217,67 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
   const [totp, setTotp] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const panelRef = React.useRef(null);
+
+  useEffect(() => {
+    const canvas = document.getElementById('login-bg-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
+
+    const handleResize = () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    };
+    window.addEventListener('resize', handleResize);
+
+    const particles = Array.from({ length: 40 }, () => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * 0.7,
+      vy: (Math.random() - 0.5) * 0.7,
+      radius: Math.random() * 2 + 1,
+    }));
+
+    let animId;
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+      particles.forEach((p) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0 || p.x > width) p.vx *= -1;
+        if (p.y < 0 || p.y > height) p.vy *= -1;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(217, 119, 36, 0.35)';
+        ctx.fill();
+      });
+      animId = requestAnimationFrame(render);
+    };
+    render();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animId);
+    };
+  }, []);
+
+  const handleMouseMove = (e) => {
+    if (!panelRef.current) return;
+    const rect = panelRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+    const rotateX = (y / rect.height) * -12;
+    const rotateY = (x / rect.width) * 12;
+    panelRef.current.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+  };
+
+  const handleMouseLeave = () => {
+    if (!panelRef.current) return;
+    panelRef.current.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
+  };
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -237,19 +298,37 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
 
   return (
     <main className="login-page">
-      <section className="login-panel" aria-labelledby="login-title">
+      <canvas id="login-bg-canvas" className="login-bg-canvas" />
+      <div className="login-ambient-glow orb-1" />
+      <div className="login-ambient-glow orb-2" />
+
+      <a href="/" className="login-back-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>返回品牌官网</span>
+      </a>
+
+      <section
+        ref={panelRef}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        className="login-panel tilt-card shadow-luxury"
+        aria-labelledby="login-title"
+      >
         <div className="login-brand">
-          <span className="brand-mark" aria-hidden="true">统</span>
+          <span className="brand-mark glowing-pulse" aria-hidden="true">M</span>
           <span>
-            <strong>统一服务控制台</strong>
-            <small>统一服务控制台</small>
+            <strong>MY Platform</strong>
+            <small>统一服务控制台 · UNIFIED CONSOLE</small>
           </span>
         </div>
         <div className="login-heading">
           <span className="login-icon"><LockKeyhole size={20} /></span>
           <div>
-            <h1 id="login-title">管理员登录</h1>
-            <p>登录后进入统一服务控制台</p>
+            <h1 id="login-title">管理员身份验证</h1>
+            <p>登录后掌控平台运维、身份与灾备系统</p>
           </div>
         </div>
         <form onSubmit={handleSubmit} className="login-form">
@@ -289,9 +368,9 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
             />
           </label>
           {error && <div className="form-error" role="alert">{error}</div>}
-          <button className="primary-button login-button" disabled={submitting} type="submit">
+          <button className="primary-button login-button glowing-btn" disabled={submitting} type="submit">
             {submitting ? <LoaderCircle className="spin" size={18} /> : <ShieldCheck size={18} />}
-            {submitting ? '正在登录' : '登录'}
+            {submitting ? '正在登录' : '立即登录'}
           </button>
         </form>
       </section>

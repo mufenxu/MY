@@ -3500,22 +3500,76 @@ input:focus-visible {
 }
 
 .login-page {
+  position: relative;
   display: grid;
   place-items: center;
   padding: 24px;
+  background: #FAF8F5;
+  overflow: hidden;
+  min-height: 100vh;
+}
+
+.login-bg-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.login-back-btn {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(232, 226, 217, 0.8);
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1F1D1B;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  text-decoration: none;
+}
+
+.login-back-btn:hover {
+  background: #FFFFFF;
+  transform: translateX(-3px);
+  box-shadow: 0 10px 24px rgba(31, 29, 27, 0.1);
+  color: #D97724;
 }
 
 .login-panel {
-  width: min(410px, 100%);
-  padding: 30px;
-  background: var(--panel);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  border-radius: 22px;
-  box-shadow: var(--shadow);
+  position: relative;
+  z-index: 2;
+  width: min(430px, 100%);
+  padding: 36px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1.5px solid rgba(232, 226, 217, 0.9);
+  border-radius: 28px;
+  box-shadow: 0 30px 60px -15px rgba(31, 29, 27, 0.12), 0 0 30px rgba(217, 119, 36, 0.05);
+  backdrop-filter: blur(20px);
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+:root[data-theme="dark"] .login-page {
+  background: #161413;
 }
 
 :root[data-theme="dark"] .login-panel {
-  border-color: var(--line);
+  background: rgba(28, 25, 23, 0.92);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.5);
 }
 
 .login-brand {
@@ -3635,7 +3689,22 @@ input:focus-visible {
 }
 
 .login-button {
-  margin-top: 4px;
+  margin-top: 8px;
+  height: 48px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #1F1D1B 0%, #3B3632 100%);
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  box-shadow: 0 10px 24px -4px rgba(31, 29, 27, 0.25);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.login-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2D2926 0%, #4D4742 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px -6px rgba(31, 29, 27, 0.35), 0 0 20px rgba(217, 119, 36, 0.2);
 }
 
 .spin {

@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { createCoreWebApp, createPlatformRouter } from './router.mjs';
+import { createCoreWebApp, createOfficialWebsiteApp, createPlatformRouter } from './router.mjs';
 import { resolveRuntimePaths } from './runtime-paths.mjs';
 import { checkExternalServices, resolveServiceMode } from './service-targets.mjs';
 import { createSessionVerifierCache } from './session-cache.mjs';
@@ -76,8 +76,10 @@ const getPlatformSession = async (req) => {
 const coreWebApp = serviceMode.external
   ? null
   : createCoreWebApp({ coreApp: coreRuntime.app, staticPath: paths.coreStatic });
+const websiteApp = createOfficialWebsiteApp({ staticPath: paths.officialWebsiteStatic });
 const router = createPlatformRouter({
   portalApp,
+  websiteApp,
   coreApp: coreWebApp,
   examApp: examRuntime?.app,
   notifyApp,
