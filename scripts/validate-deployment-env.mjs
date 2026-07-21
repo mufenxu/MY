@@ -34,6 +34,7 @@ const policies = new Map([
   ['MONGO_NOTIFICATION_PASSWORD', 24],
   ['MONGO_BACKUP_PASSWORD', 24],
   ['PLATFORM_SESSION_SECRET', 32],
+  ['PLATFORM_AUTH_ENCRYPTION_KEY', 43],
   ['PLATFORM_INTERNAL_AUTH_PRIVATE_KEY', 32],
   ['PLATFORM_METRICS_TOKEN', 32],
   ['PLATFORM_BACKUP_RUNNER_TOKEN', 32],
@@ -74,6 +75,14 @@ for (const [key, minLength] of optionalPolicies) {
   if (value && (value.length < minLength || placeholderPattern.test(value))) {
     errors.push(`${key} is configured but does not meet its minimum strength`);
   }
+}
+
+const authEncryptionKey = values.get('PLATFORM_AUTH_ENCRYPTION_KEY') || '';
+if (authEncryptionKey && (
+  !/^[A-Za-z0-9_-]+$/.test(authEncryptionKey)
+  || Buffer.from(authEncryptionKey, 'base64url').length !== 32
+)) {
+  errors.push('PLATFORM_AUTH_ENCRYPTION_KEY must be a Base64URL-encoded 32-byte key');
 }
 
 const composeProfiles = new Set(String(values.get('COMPOSE_PROFILES') || '').split(',').map((value) => value.trim()).filter(Boolean));

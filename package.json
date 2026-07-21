@@ -16,7 +16,7 @@
     "test:console": "npm --prefix apps/admin-console test",
     "check:console": "npm --prefix apps/admin-console run check",
     "check:website": "node --check apps/official-website/main.js && npm --prefix apps/official-website run build && node scripts/check-official-website-build.mjs",
-    "check:workspace-scripts": "node --check scripts/audit-workspace.mjs && node --check scripts/install-workspace.mjs && node --test scripts/npm-command.test.mjs",
+    "check:workspace-scripts": "node --check scripts/audit-workspace.mjs && node --check scripts/install-workspace.mjs && node --check scripts/create-ci-env.mjs && node --check scripts/validate-deployment-env.mjs && node scripts/check-ci-env-contract.mjs && node --test scripts/npm-command.test.mjs scripts/check-ci-env-contract.test.mjs",
     "check:packages": "node --check packages/platform-auth/index.cjs && node --check packages/platform-auth/esm/index.mjs && node --check packages/platform-browser-runtime/index.js && node --test packages/platform-auth/test/service-request.test.cjs packages/platform-browser-runtime/test/runtime.test.mjs",
     "check:release-runner": "node --check scripts/deployment-runner.mjs && node --check scripts/release-workflow-callback.mjs && node --check scripts/buildx-metadata.mjs && node --check scripts/configure-deployment-sidecar.mjs && node --test scripts/deployment-runner.test.mjs scripts/release-workflow-callback.test.mjs scripts/buildx-metadata.test.mjs scripts/configure-deployment-sidecar.test.mjs",
     "check:mongodb-scripts": "node --check scripts/mongodb-cli.mjs && node --check scripts/verify-mongodb-isolation.mjs && node --test scripts/mongodb-cli.test.mjs",
