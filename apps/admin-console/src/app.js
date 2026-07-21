@@ -67,6 +67,7 @@ function safeDownloadName(filename) {
 }
 
 const ROLE_LEVELS = { viewer: 1, operator: 2, super_admin: 3 };
+const INTERNAL_HEALTH_PATHS = new Set(['/api/health', '/api/livez', '/api/readyz']);
 
 function requireRole(requiredRole) {
   return (req, res, next) => {
@@ -377,7 +378,9 @@ export function createApp({
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
   app.use((req, res, next) => {
-    if (!config.isProduction || req.secure) return next();
+    const internalHealthRequest = (req.method === 'GET' || req.method === 'HEAD')
+      && INTERNAL_HEALTH_PATHS.has(req.path);
+    if (!config.isProduction || req.secure || internalHealthRequest) return next();
     if ((req.method === 'GET' || req.method === 'HEAD') && !req.path.startsWith('/api/')) {
       return res.redirect(308, new URL(req.originalUrl || '/', config.publicOrigin).toString());
     }

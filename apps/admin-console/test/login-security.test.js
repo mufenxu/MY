@@ -57,6 +57,9 @@ test('production login enforces HTTPS, mandatory MFA enrollment, and host-only s
   const app = createApp({ config, authStore });
 
   await withServer(app, async (origin) => {
+    const internalReadiness = await fetch(`${origin}/api/readyz`);
+    assert.equal(internalReadiness.status, 200);
+
     const insecureApi = await fetch(`${origin}/api/auth/status`);
     assert.equal(insecureApi.status, 400);
     assert.equal((await insecureApi.json()).code, 'HTTPS_REQUIRED');

@@ -3,7 +3,9 @@ const publicOrigin = process.env.PLATFORM_PUBLIC_ORIGIN;
 const username = process.env.PLATFORM_ADMIN_USERNAME;
 const password = process.env.CI_PLATFORM_ADMIN_PASSWORD;
 const metricsToken = process.env.PLATFORM_METRICS_TOKEN;
+const proxyHeaders = { 'X-Forwarded-Proto': 'https' };
 const consoleWriteHeaders = {
+  ...proxyHeaders,
   'Content-Type': 'application/json',
   'X-Platform-Request': 'console',
   Origin: publicOrigin,
@@ -20,8 +22,8 @@ async function expectStatus(response, expected, label) {
   return response;
 }
 
-await expectStatus(await fetch(`${origin}/api/readyz`), 200, 'readiness');
-const website = await expectStatus(await fetch(`${origin}/`), 200, 'official website');
+await expectStatus(await fetch(`${origin}/api/readyz`, { headers: proxyHeaders }), 200, 'readiness');
+const website = await expectStatus(await fetch(`${origin}/`, { headers: proxyHeaders }), 200, 'official website');
 if (!String(website.headers.get('content-type') || '').includes('text/html')) {
   throw new Error('Official website did not return HTML.');
 }
@@ -31,7 +33,7 @@ if (!websiteScript || !/^\/?website-assets\//.test(websiteScript)) {
   throw new Error('Official website does not reference its isolated JavaScript bundle.');
 }
 const websiteBundle = await expectStatus(
-  await fetch(new URL(websiteScript, `${origin}/`)),
+  await fetch(new URL(websiteScript, `${origin}/`), { headers: proxyHeaders }),
   200,
   'official website JavaScript bundle',
 );
@@ -48,12 +50,12 @@ const cookie = login.headers.get('set-cookie')?.split(';', 1)[0];
 if (!cookie) throw new Error('Login did not return a session cookie.');
 
 const authenticated = await expectStatus(await fetch(`${origin}/api/auth/status`, {
-  headers: { Cookie: cookie },
+  headers: { ...proxyHeaders, Cookie: cookie },
 }), 200, 'authenticated status');
 if (!(await authenticated.json()).authenticated) throw new Error('MongoDB-backed session was not accepted.');
 
 const releaseSummary = await expectStatus(await fetch(`${origin}/api/releases`, {
-  headers: { Cookie: cookie },
+  headers: { ...proxyHeaders, Cookie: cookie },
 }), 200, 'release center summary');
 const releaseData = await releaseSummary.json();
 if (!releaseData.capabilities?.deployRunnerHealthy) {
@@ -65,17 +67,17 @@ if (releaseData.metrics?.observedComponents !== 8) {
 
 for (const [path, label] of [['/apps/core/', 'core admin'], ['/apps/exam/', 'exam admin']]) {
   const response = await expectStatus(await fetch(`${origin}${path}`, {
-    headers: { Cookie: cookie, Accept: 'text/html' },
+    headers: { ...proxyHeaders, Cookie: cookie, Accept: 'text/html' },
   }), 200, label);
   if (!String(response.headers.get('content-type') || '').includes('text/html')) {
     throw new Error(`${label} did not return its independently deployed SPA.`);
   }
 }
 
-await expectStatus(await fetch(`${origin}/api/notify/healthz`), 200, 'notification proxy');
+await expectStatus(await fetch(`${origin}/api/notify/healthz`, { headers: proxyHeaders }), 200, 'notification proxy');
 
 const metrics = await expectStatus(await fetch(`${origin}/api/metrics`, {
-  headers: { Authorization: `Bearer ${metricsToken}` },
+  headers: { ...proxyHeaders, Authorization: `Bearer ${metricsToken}` },
 }), 200, 'metrics');
 if (!(await metrics.text()).includes('my_platform_http_requests_total')) {
   throw new Error('Prometheus metrics payload is incomplete.');
@@ -86,7 +88,7 @@ await expectStatus(await fetch(`${origin}/api/auth/logout`, {
   headers: { ...consoleWriteHeaders, Cookie: cookie },
 }), 200, 'logout');
 const revoked = await expectStatus(await fetch(`${origin}/api/auth/status`, {
-  headers: { Cookie: cookie },
+  headers: { ...proxyHeaders, Cookie: cookie },
 }), 200, 'revoked status');
 if ((await revoked.json()).authenticated) throw new Error('Revoked MongoDB-backed session remained active.');
 
