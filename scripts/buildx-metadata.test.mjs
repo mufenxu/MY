@@ -69,3 +69,11 @@ test('ACR exact-candidate smoke retries transient registry pull failures', async
   assert.match(workflow, /docker compose pull failed on attempt \$\{attempt\}\/\$\{max_attempts\}; retrying in \$\{delay_seconds\}s/);
   assert.match(workflow, /pull_with_retry\s*\n\s*"\$\{compose\[@\]\}" up -d --no-build --wait --wait-timeout 240/);
 });
+
+test('ACR deployment-tag promotion retries transient registry authorization failures', async () => {
+  const workflow = await readFile(new URL('../.github/workflows/aliyun-acr.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /promote_with_retry\(\) \{/);
+  assert.match(workflow, /until docker buildx imagetools create --tag "\$\{deployment_tag\}" "\$\{candidate\}"; do/);
+  assert.match(workflow, /docker buildx imagetools create failed on attempt \$\{attempt\}\/\$\{max_attempts\}; retrying in \$\{delay_seconds\}s/);
+  assert.match(workflow, /promote_with_retry "\$\{candidate\}" "\$\{deployment_tag\}"/);
+});

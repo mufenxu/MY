@@ -515,6 +515,26 @@ jobs:
           RAW_TARGETS: ${{ steps.resolve.outputs.targets }}
         run: |
           set -euo pipefail
+          promote_with_retry() {
+            local candidate="$1"
+            local deployment_tag="$2"
+            local attempt=1
+            local max_attempts=3
+            local delay_seconds=15
+            local status=0
+            until docker buildx imagetools create --tag "${deployment_tag}" "${candidate}"; do
+              status=$?
+              if [ "${attempt}" -ge "${max_attempts}" ]; then
+                echo "docker buildx imagetools create failed after ${attempt} attempt(s)." >&2
+                return "${status}"
+              fi
+              echo "docker buildx imagetools create failed on attempt ${attempt}/${max_attempts}; retrying in ${delay_seconds}s..." >&2
+              sleep "${delay_seconds}"
+              attempt=$((attempt + 1))
+              delay_seconds=$((delay_seconds * 2))
+            done
+          }
+
           declare -A tags=(
             [platform]="platform-api-latest"
             [core]="core-api-latest"
@@ -531,7 +551,7 @@ jobs:
           for target in "${targets[@]}"; do
             candidate="${ACR_IMAGE}:${tags[$target]}-${short_sha}"
             deployment_tag="${ACR_IMAGE}:${tags[$target]}"
-            docker buildx imagetools create --tag "${deployment_tag}" "${candidate}"
+            promote_with_retry "${candidate}" "${deployment_tag}"
           done
 
       - name: Synchronize final build result with release center
