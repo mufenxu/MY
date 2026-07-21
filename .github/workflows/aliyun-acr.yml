@@ -467,8 +467,28 @@ jobs:
         if: steps.resolve.outputs.targets != ''
         run: |
           set -euo pipefail
-          docker compose --env-file .env.release-smoke -f infra/docker/compose.yml -f infra/docker/compose.ci.yml pull
-          docker compose --env-file .env.release-smoke -f infra/docker/compose.yml -f infra/docker/compose.ci.yml up -d --no-build --wait --wait-timeout 240
+          compose=(docker compose --env-file .env.release-smoke -f infra/docker/compose.yml -f infra/docker/compose.ci.yml)
+
+          pull_with_retry() {
+            local attempt=1
+            local max_attempts=3
+            local delay_seconds=15
+            local status=0
+            until "${compose[@]}" pull; do
+              status=$?
+              if [ "${attempt}" -ge "${max_attempts}" ]; then
+                echo "docker compose pull failed after ${attempt} attempt(s)." >&2
+                return "${status}"
+              fi
+              echo "docker compose pull failed on attempt ${attempt}/${max_attempts}; retrying in ${delay_seconds}s..." >&2
+              sleep "${delay_seconds}"
+              attempt=$((attempt + 1))
+              delay_seconds=$((delay_seconds * 2))
+            done
+          }
+
+          pull_with_retry
+          "${compose[@]}" up -d --no-build --wait --wait-timeout 240
           node --env-file=.env.release-smoke scripts/verify-platform-smoke.mjs
 
       - name: Show exact-candidate logs on failure

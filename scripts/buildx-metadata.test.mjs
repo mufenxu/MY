@@ -60,3 +60,12 @@ test('ACR workflow consumes Buildx metadata without an immediate registry lookup
     line.includes('-f infra/docker/compose.yml -f infra/docker/compose.ci.yml')
   )));
 });
+
+test('ACR exact-candidate smoke retries transient registry pull failures', async () => {
+  const workflow = await readFile(new URL('../.github/workflows/aliyun-acr.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /pull_with_retry\(\) \{/);
+  assert.match(workflow, /local max_attempts=3/);
+  assert.match(workflow, /until "\$\{compose\[@\]\}" pull; do/);
+  assert.match(workflow, /docker compose pull failed on attempt \$\{attempt\}\/\$\{max_attempts\}; retrying in \$\{delay_seconds\}s/);
+  assert.match(workflow, /pull_with_retry\s*\n\s*"\$\{compose\[@\]\}" up -d --no-build --wait --wait-timeout 240/);
+});
