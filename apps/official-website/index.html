@@ -2,21 +2,24 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>MY 统一平台 | 智慧校园 · 智能考务 · 动态数智生态</title>
   <meta name="description" content="MY 统一平台为高校与教育机构提供全方位智慧校园小程序、线上智能考务系统、物联网设备网关及统一服务控制台解决方案。">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./index.css">
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260721_7">
+  <link rel="alternate icon" href="./favicon.svg?v=20260721_7">
+  <link rel="stylesheet" href="./index.css?v=20260721_7">
 </head>
 <body>
   <!-- 动态 Canvas 背景粒子网格 -->
   <canvas id="bg-canvas"></canvas>
 
-  <!-- 大厂极简悬浮浮岛导航栏 (Responsive Floating Dynamic Island Header) -->
+  <!-- 顶部悬浮浮岛导航栏 -->
   <div class="navbar-wrapper">
     <header class="floating-navbar" id="navbar">
+      <!-- 品牌 Logo -->
       <a href="/" class="brand-logo">
         <div class="logo-box">
           <span class="logo-text-icon">M</span>
@@ -24,14 +27,10 @@
         </div>
         <div class="brand-info">
           <span class="brand-title">MY PLATFORM</span>
-          <span class="brand-status">
-            <span class="pulse-dot"></span>
-            SYSTEM OPERATIONAL
-          </span>
         </div>
       </a>
 
-      <!-- 桌面端/平板导航菜单 -->
+      <!-- 桌面端导航菜单 -->
       <nav class="nav-menu" id="nav-menu">
         <div class="menu-indicator" id="menu-indicator"></div>
         <a href="#features" class="menu-item active">产品矩阵</a>
@@ -39,21 +38,22 @@
         <a href="#about" class="menu-item">关于平台</a>
       </nav>
 
+      <!-- 导航右侧按钮与切换 -->
       <div class="nav-actions">
         <div class="status-chip">
           <span class="chip-text">v2.4 Live</span>
         </div>
+
         <a href="/console" class="shimmer-btn">
-          <span class="shimmer-glow"></span>
           <span class="btn-text">进入控制台</span>
-          <svg class="btn-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <svg class="btn-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="5" y1="12" x2="19" y2="12"></line>
             <polyline points="12 5 19 12 12 19"></polyline>
           </svg>
         </a>
 
-        <!-- 移动端汉堡包菜单切换按钮 -->
-        <button class="mobile-toggle" id="mobile-toggle" aria-label="Toggle Menu">
+        <!-- 移动端汉堡包菜单按钮 -->
+        <button class="mobile-toggle" id="mobile-toggle" aria-label="切换菜单">
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
@@ -61,7 +61,7 @@
       </div>
     </header>
 
-    <!-- 移动端抽屉展开菜单 -->
+    <!-- 移动端展开半透明毛玻璃抽屉菜单 -->
     <div class="mobile-drawer" id="mobile-drawer">
       <div class="mobile-drawer-content">
         <a href="#features" class="mobile-nav-link">产品矩阵</a>
@@ -326,6 +326,6 @@
     </div>
   </footer>
 
-  <script src="./main.js"></script>
+  <script src="./main.js?v=20260721_4"></script>
 </body>
 </html>
