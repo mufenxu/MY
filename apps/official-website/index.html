@@ -14,35 +14,45 @@
   <!-- 动态 Canvas 背景粒子网格 -->
   <canvas id="bg-canvas"></canvas>
 
-  <!-- 顶部高定磨砂光辉导航栏 -->
-  <header class="navbar" id="navbar">
-    <div class="nav-container">
+  <!-- 大厂极简悬浮浮岛导航栏 (Floating Dynamic Island Header) -->
+  <div class="navbar-wrapper">
+    <header class="floating-navbar" id="navbar">
       <a href="/" class="brand-logo">
-        <div class="logo-icon glowing-pulse">M</div>
-        <div class="logo-text">
-          <span class="brand-name">MY Platform</span>
-          <span class="brand-sub">NEXT-GEN UNIFIED PLATFORM</span>
+        <div class="logo-box">
+          <span class="logo-text-icon">M</span>
+          <span class="logo-glow-dot"></span>
+        </div>
+        <div class="brand-info">
+          <span class="brand-title">MY PLATFORM</span>
+          <span class="brand-status">
+            <span class="pulse-dot"></span>
+            SYSTEM OPERATIONAL
+          </span>
         </div>
       </a>
 
-      <nav class="nav-links">
-        <a href="#features" class="nav-link">产品矩阵</a>
-        <a href="#matrix" class="nav-link">数智内核</a>
-        <a href="#about" class="nav-link">关于平台</a>
+      <nav class="nav-menu" id="nav-menu">
+        <div class="menu-indicator" id="menu-indicator"></div>
+        <a href="#features" class="menu-item active">产品矩阵</a>
+        <a href="#matrix" class="menu-item">数智内核</a>
+        <a href="#about" class="menu-item">关于平台</a>
       </nav>
 
       <div class="nav-actions">
-        <a href="/console" class="btn btn-primary btn-pill shadow-glow tilt-btn">
+        <div class="status-chip">
+          <span class="chip-text">v2.4 Live</span>
+        </div>
+        <a href="/console" class="shimmer-btn">
+          <span class="shimmer-glow"></span>
           <span class="btn-text">进入统一服务控制台</span>
-          <span class="btn-shine"></span>
-          <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <svg class="btn-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="5" y1="12" x2="19" y2="12"></line>
             <polyline points="12 5 19 12 12 19"></polyline>
           </svg>
         </a>
       </div>
-    </div>
-  </header>
+    </header>
+  </div>
 
   <main>
     <!-- Hero 首屏动态科技视觉区 -->
@@ -263,8 +273,10 @@
     <div class="footer-container">
       <div class="footer-brand">
         <div class="brand-logo">
-          <div class="logo-icon">M</div>
-          <span class="brand-name">MY Platform</span>
+          <div class="logo-box">
+            <span class="logo-text-icon">M</span>
+          </div>
+          <span class="brand-title">MY PLATFORM</span>
         </div>
         <p class="footer-tagline">新一代智慧校园与智能考务统一服务生态系统</p>
       </div>

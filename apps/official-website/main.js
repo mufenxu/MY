@@ -1,12 +1,13 @@
-// MY Platform Official Website - Quantum Motion & 3D Interactive Engine
+// MY Platform Official Website - Dynamic Floating Island & Motion Engine
 
 document.addEventListener('DOMContentLoaded', () => {
   initQuantumCanvas();
   init3DTiltCards();
   initNumberCounters();
-  initNavigation();
+  initFloatingNavbar();
 });
 
+// Interactive Particle Background
 function initQuantumCanvas() {
   const canvas = document.getElementById('bg-canvas');
   if (!canvas) return;
@@ -98,6 +99,7 @@ function initQuantumCanvas() {
   animate();
 }
 
+// 3D Perspective Tilt Cards
 function init3DTiltCards() {
   const cards = document.querySelectorAll('.tilt-card, .tilt-element');
 
@@ -122,6 +124,7 @@ function init3DTiltCards() {
   });
 }
 
+// Number Counter Animation
 function initNumberCounters() {
   const counters = document.querySelectorAll('.counter');
   if (!counters.length) return;
@@ -159,30 +162,55 @@ function initNumberCounters() {
   counters.forEach((counter) => observer.observe(counter));
 }
 
-function initNavigation() {
+// Floating Dynamic Island Menu & Scroll
+function initFloatingNavbar() {
   const navbar = document.getElementById('navbar');
+  const menu = document.getElementById('nav-menu');
+  const indicator = document.getElementById('menu-indicator');
+  const items = document.querySelectorAll('.menu-item');
+
+  function updateIndicator(target) {
+    if (!indicator || !target) return;
+    const rect = target.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    indicator.style.width = `${rect.width}px`;
+    indicator.style.left = `${rect.left - menuRect.left}px`;
+  }
+
+  // Initial pill position
+  setTimeout(() => {
+    const activeItem = document.querySelector('.menu-item.active');
+    if (activeItem) updateIndicator(activeItem);
+  }, 100);
+
+  items.forEach((item) => {
+    item.addEventListener('mouseenter', () => updateIndicator(item));
+    item.addEventListener('click', function (e) {
+      e.preventDefault();
+      items.forEach((i) => i.classList.remove('active'));
+      this.classList.add('active');
+      updateIndicator(this);
+
+      const targetId = this.getAttribute('href');
+      if (targetId && targetId.startsWith('#')) {
+        const targetElem = document.querySelector(targetId);
+        if (targetElem) {
+          targetElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    });
+  });
+
+  menu?.addEventListener('mouseleave', () => {
+    const currentActive = document.querySelector('.menu-item.active');
+    if (currentActive) updateIndicator(currentActive);
+  });
 
   window.addEventListener('scroll', () => {
-    if (window.scrollY > 20) {
+    if (window.scrollY > 30) {
       navbar.classList.add('scrolled');
     } else {
       navbar.classList.remove('scrolled');
     }
-  });
-
-  document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
-    anchor.addEventListener('click', function (e) {
-      e.preventDefault();
-      const targetId = this.getAttribute('href');
-      if (targetId === '#') return;
-
-      const targetElement = document.querySelector(targetId);
-      if (targetElement) {
-        targetElement.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-        });
-      }
-    });
   });
 }
