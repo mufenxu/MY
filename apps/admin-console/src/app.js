@@ -317,6 +317,14 @@ export function createApp({
     });
   }
 
+  async function upgradePasswordHashAfterLogin(username, currentHash, password) {
+    if (!passwordHashNeedsUpgrade(currentHash)) return false;
+    const passwordValue = String(password || '');
+    if (passwordValue.length < 15 || passwordValue.length > 256) return false;
+    const upgraded = await createPasswordHash(passwordValue);
+    return accounts.upgradePasswordHash(username, currentHash, upgraded);
+  }
+
   async function requireBackupDownloadAccess(req, res, next) {
     const current = ROLE_LEVELS[req.consoleUser?.role] || 0;
     if (current < ROLE_LEVELS.super_admin) {
@@ -541,10 +549,7 @@ export function createApp({
         targetId: username,
         details: { requiredByPolicy: true },
       });
-      if (passwordHashNeedsUpgrade(account.passwordHash)) {
-        const upgraded = await createPasswordHash(password);
-        await accounts.upgradePasswordHash(username, account.passwordHash, upgraded);
-      }
+      await upgradePasswordHashAfterLogin(username, account.passwordHash, password);
       return issueAuthenticatedSession(
         req,
         res,
@@ -567,11 +572,7 @@ export function createApp({
     if (!secondFactor.valid) {
       return sendRiskResponse(res, await recordLoginFailure(req, username, 'invalid_second_factor'));
     }
-    if (passwordHashNeedsUpgrade(account.passwordHash)) {
-      const upgraded = await createPasswordHash(password);
-      await accounts.upgradePasswordHash(username, account.passwordHash, upgraded);
-      account.passwordHash = upgraded;
-    }
+    await upgradePasswordHashAfterLogin(username, account.passwordHash, password);
     return issueAuthenticatedSession(req, res, account, secondFactor.method === 'none' ? 'password' : `password_${secondFactor.method}`);
   });
 

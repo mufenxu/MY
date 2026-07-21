@@ -30,6 +30,12 @@ function totp(secret, now = Date.now()) {
   return ((digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).toString().padStart(6, '0');
 }
 
+function legacyPasswordHash(password) {
+  const salt = Buffer.alloc(16, 6);
+  const hash = crypto.scryptSync(password, salt, 64, { N: 2 ** 14, r: 8, p: 1 });
+  return `scrypt$${salt.toString('base64url')}$${hash.toString('base64url')}`;
+}
+
 test('production login enforces HTTPS, mandatory MFA enrollment, and host-only secure cookies', async () => {
   const password = 'security-test-password';
   const passwordHash = await createPasswordHash(password, Buffer.alloc(16, 8));
@@ -122,5 +128,58 @@ test('production login enforces HTTPS, mandatory MFA enrollment, and host-only s
       headers: { Cookie: cookie, 'X-Forwarded-Proto': 'https' },
     });
     assert.equal((await revokedStatus.json()).authenticated, false);
+  });
+});
+
+test('mandatory MFA enrollment does not fail when a legacy short password cannot be rehashed', async () => {
+  const password = 'short-pass';
+  const passwordHash = legacyPasswordHash(password);
+  const encryptionKey = Buffer.alloc(32, 10).toString('base64url');
+  const authStore = createMemoryAuthStore({
+    encryptionKey,
+    bootstrap: { username: 'admin', passwordHash, role: 'super_admin' },
+  });
+  const config = {
+    ...loadConfig({ NODE_ENV: 'development' }),
+    isProduction: true,
+    authDisabled: false,
+    requireMfa: true,
+    trustProxy: 1,
+    publicOrigin: 'https://admin.example.com',
+    adminUsername: 'admin',
+    adminPasswordHash: passwordHash,
+    adminRole: 'super_admin',
+    authEncryptionKey: encryptionKey,
+    sessionSecret: 's'.repeat(32),
+    metricsToken: 'm'.repeat(32),
+    webauthnRpName: 'MY Platform',
+    webauthnRpId: 'admin.example.com',
+  };
+  const app = createApp({ config, authStore });
+
+  await withServer(app, async (origin) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Platform-Request': 'console',
+      'X-Forwarded-Proto': 'https',
+    };
+    const first = await fetch(`${origin}/api/auth/login`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ username: 'admin', password }),
+    });
+    assert.equal(first.status, 428);
+    const enrollment = (await first.json()).details.enrollment;
+
+    const confirmed = await fetch(`${origin}/api/auth/login`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ username: 'admin', password, enrollmentCode: totp(enrollment.secret) }),
+    });
+    assert.equal(confirmed.status, 200);
+    const session = await confirmed.json();
+    assert.equal(session.authenticated, true);
+    assert.equal(session.user.totpEnabled, true);
+    assert.equal((await authStore.findAccount('admin')).passwordHash, passwordHash);
   });
 });
