@@ -26,3 +26,14 @@ test('session connectivity failures render a retry state instead of the login fo
   assert.match(source, /SessionUnavailableScreen/);
   assert.match(source, /onRetry=\{checkSession\}/);
 });
+
+test('client files never rely on an undeclared React namespace', () => {
+  const clientRoot = path.join(appRoot, 'src', 'client');
+  const jsxFiles = fs.readdirSync(clientRoot).filter((name) => name.endsWith('.jsx'));
+
+  for (const filename of jsxFiles) {
+    const source = fs.readFileSync(path.join(clientRoot, filename), 'utf8');
+    if (!/\bReact\./.test(source)) continue;
+    assert.match(source, /^import React(?:\s*,|\s+from)/m, `${filename} uses React.* without importing React`);
+  }
+});

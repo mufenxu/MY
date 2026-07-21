@@ -217,7 +217,7 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
   const [totp, setTotp] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const panelRef = React.useRef(null);
+  const panelRef = useRef(null);
 
   useEffect(() => {
     const canvas = document.getElementById('login-bg-canvas');
