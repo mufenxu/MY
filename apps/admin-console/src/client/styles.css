@@ -363,10 +363,10 @@ body {
 .notify-test-form > label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 8px;
+  margin-bottom: 16px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 750;
 }
 
@@ -374,10 +374,57 @@ body {
 .notify-input-wrap {
   width: 100%;
   color: var(--ink);
-  background: var(--panel-solid);
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.92));
+  border: 1px solid rgba(61, 87, 139, 0.14);
+  border-radius: 11px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 5px 14px rgba(47, 69, 116, 0.04);
   outline: 0;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+:root[data-theme="dark"] .notify-test-form textarea,
+:root[data-theme="dark"] .notify-input-wrap {
+  background: linear-gradient(180deg, rgba(35, 43, 72, 0.9), rgba(29, 35, 60, 0.96));
+  border-color: rgba(167, 181, 225, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 5px 14px rgba(2, 7, 22, 0.16);
+}
+
+.notify-test-form textarea:hover,
+.notify-input-wrap:hover {
+  border-color: rgba(61, 87, 139, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 8px 18px rgba(47, 69, 116, 0.06);
+}
+
+.notify-test-form textarea:focus,
+.notify-input-wrap:focus-within {
+  background: var(--panel-solid);
+  border-color: rgba(40, 119, 247, 0.36);
+  box-shadow:
+    0 0 0 3px rgba(40, 119, 247, 0.08),
+    0 10px 24px rgba(47, 69, 116, 0.08);
+}
+
+:root[data-theme="dark"] .notify-test-form textarea:hover,
+:root[data-theme="dark"] .notify-input-wrap:hover {
+  border-color: rgba(167, 181, 225, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 8px 18px rgba(2, 7, 22, 0.2);
+}
+
+:root[data-theme="dark"] .notify-test-form textarea:focus,
+:root[data-theme="dark"] .notify-input-wrap:focus-within {
+  background: var(--panel-solid);
+  border-color: rgba(86, 151, 255, 0.48);
+  box-shadow:
+    0 0 0 3px rgba(40, 119, 247, 0.16),
+    0 10px 24px rgba(2, 7, 22, 0.28);
 }
 
 .notify-test-form textarea {
@@ -396,15 +443,27 @@ body {
 
 .notify-input-wrap {
   display: flex;
-  height: 40px;
+  height: 42px;
   align-items: center;
-  gap: 8px;
-  padding: 0 11px;
+  gap: 10px;
+  padding: 0 12px 0 8px;
 }
 
 .notify-input-wrap svg {
-  flex: 0 0 auto;
-  color: var(--muted);
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  padding: 6px;
+  color: #2f5fa9;
+  background: linear-gradient(135deg, rgba(40, 119, 247, 0.12), rgba(19, 186, 214, 0.1));
+  border: 1px solid rgba(40, 119, 247, 0.1);
+  border-radius: 9px;
+}
+
+:root[data-theme="dark"] .notify-input-wrap svg {
+  color: #9dbdff;
+  background: linear-gradient(135deg, rgba(40, 119, 247, 0.18), rgba(19, 186, 214, 0.14));
+  border-color: rgba(86, 151, 255, 0.16);
 }
 
 .notify-input-wrap input {
@@ -415,6 +474,17 @@ body {
   background: transparent;
   border: 0;
   outline: 0;
+}
+
+.notify-input-wrap input:focus-visible,
+.notify-test-form textarea:focus-visible {
+  outline: 0;
+}
+
+.notify-input-wrap input::placeholder,
+.notify-test-form textarea::placeholder {
+  color: var(--subtle);
+  opacity: 0.84;
 }
 
 .notify-send-button {
