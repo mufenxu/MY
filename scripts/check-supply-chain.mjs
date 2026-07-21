@@ -38,6 +38,12 @@ function inspectResolvedValues(value, filePath, errors, reportedRegistries) {
 
 export function inspectWorkflow(source, label = 'workflow.yml') {
   const errors = [];
+  for (const match of source.matchAll(/^\s*(?:-\s*)?run:\s+(.+)$/gm)) {
+    const value = match[1].trim();
+    if (!['|', '>', "'", '"'].some((prefix) => value.startsWith(prefix)) && /:\s/.test(value)) {
+      errors.push(`${label} run command uses an unsafe plain YAML scalar containing a colon followed by whitespace`);
+    }
+  }
   for (const match of source.matchAll(/^\s*(?:-\s*)?uses:\s*([^\s#]+)(?:\s+#.*)?$/gm)) {
     const reference = match[1];
     if (reference.startsWith('./')) continue;

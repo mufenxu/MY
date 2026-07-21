@@ -20,6 +20,15 @@ steps:
     inspectWorkflow('steps:\n  - uses: docker://node:24\n', 'unsafe.yml')[0],
     /sha256 digest/,
   );
+  assert.match(
+    inspectWorkflow("steps:\n  - run: curl --header 'X-Test: value' https://example.com\n", 'unsafe.yml')[0],
+    /unsafe plain YAML scalar/,
+  );
+  assert.deepEqual(inspectWorkflow(`
+steps:
+  - run: >-
+      curl --header 'X-Test: value' https://example.com
+`, 'safe.yml'), []);
 });
 
 test('Dockerfile inspection resolves ARG defaults and rejects mutable base tags', () => {

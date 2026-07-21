@@ -180,13 +180,19 @@ jobs:
         run: docker compose --env-file .env.ci -f infra/docker/compose.yml -f infra/docker/compose.ci.yml up -d --wait --wait-timeout 240
 
       - name: Verify platform readiness
-        run: curl --fail --retry 10 --retry-delay 3 --header 'X-Forwarded-Proto: https' http://127.0.0.1:22100/api/readyz
+        run: >-
+          curl --fail --retry 10 --retry-delay 3 --header 'X-Forwarded-Proto: https'
+          http://127.0.0.1:22100/api/readyz
 
       - name: Verify official website
-        run: curl --fail --retry 10 --retry-delay 3 --header 'X-Forwarded-Proto: https' http://127.0.0.1:22100/
+        run: >-
+          curl --fail --retry 10 --retry-delay 3 --header 'X-Forwarded-Proto: https'
+          http://127.0.0.1:22100/
 
       - name: Verify IoT broker subscription readiness
-        run: curl --fail --retry 10 --retry-delay 3 --header 'X-Forwarded-Proto: https' http://127.0.0.1:22100/api/iot/api/ready
+        run: >-
+          curl --fail --retry 10 --retry-delay 3 --header 'X-Forwarded-Proto: https'
+          http://127.0.0.1:22100/api/iot/api/ready
 
       - name: Verify platform session and metrics
         run: node --env-file=.env.ci scripts/verify-platform-smoke.mjs
