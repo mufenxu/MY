@@ -1,10 +1,11 @@
-// MY Platform Official Website - Dynamic Floating Island & Motion Engine
+// MY Platform Official Website - Dynamic Floating Island & Responsive Motion Engine
 
 document.addEventListener('DOMContentLoaded', () => {
   initQuantumCanvas();
   init3DTiltCards();
   initNumberCounters();
   initFloatingNavbar();
+  initMobileDrawer();
 });
 
 // Interactive Particle Background
@@ -105,6 +106,8 @@ function init3DTiltCards() {
 
   cards.forEach((card) => {
     card.addEventListener('mousemove', (e) => {
+      if (window.innerWidth < 768) return; // 移动端禁用视角旋转
+
       const rect = card.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
@@ -170,14 +173,13 @@ function initFloatingNavbar() {
   const items = document.querySelectorAll('.menu-item');
 
   function updateIndicator(target) {
-    if (!indicator || !target) return;
+    if (!indicator || !target || !menu || window.innerWidth < 1024) return;
     const rect = target.getBoundingClientRect();
     const menuRect = menu.getBoundingClientRect();
     indicator.style.width = `${rect.width}px`;
     indicator.style.left = `${rect.left - menuRect.left}px`;
   }
 
-  // Initial pill position
   setTimeout(() => {
     const activeItem = document.querySelector('.menu-item.active');
     if (activeItem) updateIndicator(activeItem);
@@ -212,5 +214,35 @@ function initFloatingNavbar() {
     } else {
       navbar.classList.remove('scrolled');
     }
+  });
+}
+
+// Mobile Drawer Interaction
+function initMobileDrawer() {
+  const toggleBtn = document.getElementById('mobile-toggle');
+  const drawer = document.getElementById('mobile-drawer');
+  const navLinks = document.querySelectorAll('.mobile-nav-link');
+
+  if (!toggleBtn || !drawer) return;
+
+  toggleBtn.addEventListener('click', () => {
+    toggleBtn.classList.toggle('active');
+    drawer.classList.toggle('open');
+  });
+
+  navLinks.forEach((link) => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleBtn.classList.remove('active');
+      drawer.classList.remove('open');
+
+      const targetId = link.getAttribute('href');
+      if (targetId && targetId.startsWith('#')) {
+        const targetElem = document.querySelector(targetId);
+        if (targetElem) {
+          targetElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    });
   });
 }

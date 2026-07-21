@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>MY 统一平台 | 智慧校园 · 智能考务 · 动态数智生态</title>
   <meta name="description" content="MY 统一平台为高校与教育机构提供全方位智慧校园小程序、线上智能考务系统、物联网设备网关及统一服务控制台解决方案。">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,7 +14,7 @@
   <!-- 动态 Canvas 背景粒子网格 -->
   <canvas id="bg-canvas"></canvas>
 
-  <!-- 大厂极简悬浮浮岛导航栏 (Floating Dynamic Island Header) -->
+  <!-- 大厂极简悬浮浮岛导航栏 (Responsive Floating Dynamic Island Header) -->
   <div class="navbar-wrapper">
     <header class="floating-navbar" id="navbar">
       <a href="/" class="brand-logo">
@@ -31,6 +31,7 @@
         </div>
       </a>
 
+      <!-- 桌面端/平板导航菜单 -->
       <nav class="nav-menu" id="nav-menu">
         <div class="menu-indicator" id="menu-indicator"></div>
         <a href="#features" class="menu-item active">产品矩阵</a>
@@ -44,14 +45,38 @@
         </div>
         <a href="/console" class="shimmer-btn">
           <span class="shimmer-glow"></span>
-          <span class="btn-text">进入统一服务控制台</span>
+          <span class="btn-text">进入控制台</span>
           <svg class="btn-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="5" y1="12" x2="19" y2="12"></line>
             <polyline points="12 5 19 12 12 19"></polyline>
           </svg>
         </a>
+
+        <!-- 移动端汉堡包菜单切换按钮 -->
+        <button class="mobile-toggle" id="mobile-toggle" aria-label="Toggle Menu">
+          <span class="hamburger-line"></span>
+          <span class="hamburger-line"></span>
+          <span class="hamburger-line"></span>
+        </button>
       </div>
     </header>
+
+    <!-- 移动端抽屉展开菜单 -->
+    <div class="mobile-drawer" id="mobile-drawer">
+      <div class="mobile-drawer-content">
+        <a href="#features" class="mobile-nav-link">产品矩阵</a>
+        <a href="#matrix" class="mobile-nav-link">数智内核</a>
+        <a href="#about" class="mobile-nav-link">关于平台</a>
+        <div class="mobile-drawer-divider"></div>
+        <a href="/console" class="btn btn-hero-primary mobile-drawer-btn">
+          <span>进入统一服务控制台</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </a>
+      </div>
+    </div>
   </div>
 
   <main>
