@@ -79,8 +79,11 @@ const QuickAction = ({ icon, title, onClick, color }) => (
         onClick={onClick}
         style={{
             cursor: 'pointer',
-            padding: '16px 8px',
-            borderRadius: 20,
+            width: '100%',
+            minWidth: 0,
+            minHeight: 88,
+            padding: '12px 6px',
+            borderRadius: 16,
             background: 'var(--component-bg)',
             border: 'none',
             font: 'inherit',
@@ -91,7 +94,7 @@ const QuickAction = ({ icon, title, onClick, color }) => (
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 12,
+            gap: 8,
             boxShadow: 'var(--card-shadow)'
         }}
         onMouseEnter={(e) => {
@@ -136,11 +139,10 @@ const QuickAction = ({ icon, title, onClick, color }) => (
             color: 'var(--text-primary)', 
             fontWeight: 600, 
             fontSize: 13, 
-            lineHeight: 1.2, 
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            lineHeight: '18px',
+            whiteSpace: 'normal',
             width: '100%',
+            minHeight: 18,
             textShadow: '0 1px 1px rgba(0,0,0,0.1)'
         }}>{title}</Text>
     </button>
@@ -322,10 +324,10 @@ const Dashboard = () => {
                         }}
                         bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}
                     >
-                        <Title level={5} style={{ marginBottom: 20, color: 'var(--text-primary)' }}>快捷入口</Title>
+                        <Title level={5} style={{ margin: '0 0 16px', color: 'var(--text-primary)' }}>快捷入口</Title>
                         <Row gutter={[10, 10]}>
-                            {quickActions.map((action, index) => (
-                                <Col xs={6} sm={6} md={3} lg={12} key={index}>
+                            {quickActions.map((action) => (
+                                <Col xs={8} sm={6} md={4} lg={8} key={action.path}>
                                     <QuickAction
                                         icon={action.icon}
                                         title={action.title}
@@ -335,7 +337,7 @@ const Dashboard = () => {
                                 </Col>
                             ))}
                         </Row>
-                        <div style={{ marginTop: 'auto', paddingTop: 24 }}>
+                        <div style={{ marginTop: 16 }}>
                             <div style={{ padding: 16, background: 'linear-gradient(135deg, #6B9BFF10 0%, #4A7CF710 100%)', borderRadius: 16 }}>
                                 <Text strong style={{ color: '#4A7CF7', display: 'block', marginBottom: 4 }}>高效管理</Text>
                                 <Text type="secondary" style={{ fontSize: 12 }}>点击上方图标可快速跳转至对应功能模块，提升操作效率。</Text>
