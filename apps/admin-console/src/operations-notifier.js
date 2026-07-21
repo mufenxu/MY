@@ -41,6 +41,20 @@ function releaseMessage(event, publicOrigin) {
   return lines.join('\n');
 }
 
+function securityMessage(event, publicOrigin) {
+  const title = event.type === 'new_ip_login' ? '管理员从新 IP 登录' : '管理员登录异常';
+  const lines = [
+    `### 统一管理后台安全告警 <font color="warning">需要关注</font>`,
+    `> **事件**：${title}`,
+    `> **账号**：${String(event.username || 'unknown').slice(0, 64)}`,
+    `> **来源 IP**：${String(event.ip || 'unknown').slice(0, 128)}`,
+    `> **失败次数**：${Number(event.failures) || 0}`,
+    `> **时间**：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+  ];
+  if (publicOrigin) lines.push(`[打开安全中心](${new URL('/', publicOrigin).toString()})`);
+  return lines.join('\n');
+}
+
 export function createOperationsNotifier({
   serviceUrl,
   apiKey,
@@ -112,6 +126,9 @@ export function createOperationsNotifier({
     },
     async sendRelease(event) {
       return sendMarkdown(releaseMessage(event, publicOrigin), 300);
+    },
+    async sendSecurityAlert(event) {
+      return sendMarkdown(securityMessage(event, publicOrigin), 300);
     },
   };
 }

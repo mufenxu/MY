@@ -9,6 +9,7 @@ const indexPath = path.join(distPath, 'index.html');
 assert.ok(fs.existsSync(indexPath), 'official website build must produce dist/index.html');
 
 const index = fs.readFileSync(indexPath, 'utf8');
+const bannedExternalOrigins = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 const scriptSources = [...index.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)]
   .map((match) => match[1])
   .filter((source) => !/^https?:\/\//i.test(source));
@@ -22,6 +23,17 @@ for (const source of scriptSources) {
     fs.existsSync(path.join(distPath, relativePath)),
     `official website build references missing script: ${source}`,
   );
+}
+
+const scannableFiles = fs.readdirSync(distPath, { recursive: true })
+  .map((entry) => path.join(distPath, entry))
+  .filter((filePath) => fs.statSync(filePath).isFile() && /\.(?:css|html|js)$/.test(filePath));
+
+for (const filePath of scannableFiles) {
+  const source = fs.readFileSync(filePath, 'utf8');
+  for (const origin of bannedExternalOrigins) {
+    assert.ok(!source.includes(origin), `${path.relative(root, filePath)} contains blocking external origin ${origin}`);
+  }
 }
 
 console.log('Official website build output is complete.');

@@ -21,10 +21,6 @@ const Resources = () => {
     const [editingRecord, setEditingRecord] = useState(null);
     const [form] = Form.useForm();
 
-    useEffect(() => {
-        fetchConfig();
-    }, []);
-
     const fetchConfig = async () => {
         setLoading(true);
         try {
@@ -45,6 +41,11 @@ const Resources = () => {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        const timerId = window.setTimeout(fetchConfig, 0);
+        return () => window.clearTimeout(timerId);
+    }, []);
 
     const handleSaveAndSync = async (newConfig) => {
         setSaving(true);

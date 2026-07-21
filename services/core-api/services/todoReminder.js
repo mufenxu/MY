@@ -6,19 +6,11 @@
 
 const TodoList = require('../models/TodoList');
 const NotifyConfig = require('../models/NotifyConfig');
-const { getNotificationApiKey, sendNotification } = require('./notificationClient');
-
-function normalizeRequestTimeout(value, fallback = 8000) {
-    const parsed = Number.parseInt(value, 10);
-    if (!Number.isFinite(parsed)) return fallback;
-    return Math.min(Math.max(parsed, 1000), 30000);
-}
-
-function isWecomEnabled(cfg) {
-    const hasRecipient = [cfg?.qywxToUser, cfg?.qywxToParty, cfg?.qywxToTag]
-        .some((value) => String(value || '').trim());
-    return Boolean(cfg && cfg.qywxEnabled && getNotificationApiKey(cfg.qywxApiKey) && hasRecipient);
-}
+const {
+    isWecomEnabled,
+    isWecomResponseOk,
+    sendWecomText,
+} = require('./wecomNotification');
 
 function buildSummaryMessage(groups) {
     const nowTime = new Date().toLocaleString('zh-CN', { hour12: false });
@@ -58,35 +50,6 @@ function buildSummaryMessage(groups) {
     );
     
     return lines.join('\n');
-}
-
-function buildWecomPayload(cfg, text, extra) {
-    const payload = Object.assign(
-        {
-            msg_type: 'text',
-            data: { content: text },
-        },
-        extra || {}
-    );
-
-    const touser = cfg.qywxToUser ? String(cfg.qywxToUser).trim() : '';
-    const toparty = cfg.qywxToParty ? String(cfg.qywxToParty).trim() : '';
-    const totag = cfg.qywxToTag ? String(cfg.qywxToTag).trim() : '';
-
-    if (touser) payload.touser = touser;
-    if (toparty) payload.toparty = toparty;
-    if (totag) payload.totag = totag;
-
-    const agentId = Number(cfg.qywxAgentId);
-    if (!Number.isNaN(agentId) && cfg.qywxAgentId !== undefined && cfg.qywxAgentId !== '') {
-        payload.agent_id = agentId;
-    }
-
-    if (cfg.qywxSafe !== undefined && cfg.qywxSafe !== '') {
-        payload.safe = Number(cfg.qywxSafe) ? 1 : 0;
-    }
-
-    return payload;
 }
 
 async function checkAndNotifyTodos() {
@@ -143,14 +106,8 @@ async function checkAndNotifyTodos() {
         }
 
         const text = buildSummaryMessage(groups);
-        const payload = buildWecomPayload(cfg, text);
-
-        const timeout = normalizeRequestTimeout(cfg.qywxTimeout);
-        const response = await sendNotification(payload, { apiKey: cfg.qywxApiKey, timeoutMs: timeout });
-
-        const data = response && response.data ? response.data : {};
-        const ok =
-            data && data.errcode === 0 && (!data.detail || data.detail.errcode === undefined || data.detail.errcode === 0);
+        const data = await sendWecomText(cfg, text);
+        const ok = isWecomResponseOk(data);
 
         if (ok) {
             console.log('待办事项提醒发送成功');

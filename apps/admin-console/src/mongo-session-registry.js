@@ -6,16 +6,23 @@ export async function createMongoSessionRegistry({
   secret,
   databaseName = process.env.PLATFORM_MONGODB_DATABASE || 'platform_app',
   maxSessions = 1024,
+  idleTimeoutMinutes = 30,
+  touchIntervalMs = 60_000,
 } = {}) {
   if (!uri) throw new Error('PLATFORM_MONGODB_URI is required.');
   const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
   await client.connect();
   const db = client.db(databaseName);
   const sessions = db.collection('sessions');
+  const idleTimeoutMs = Math.max(Number(idleTimeoutMinutes) || 30, 1) * 60_000;
   await Promise.all([
     sessions.createIndex({ nonce: 1 }, { unique: true }),
     sessions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   ]);
+  await sessions.updateMany(
+    { lastSeenAt: { $exists: false } },
+    [{ $set: { lastSeenAt: { $ifNull: ['$createdAt', '$$NOW'] } } }],
+  );
 
   return {
     async issue({ username, role = 'super_admin', ttlHours, ip = '', userAgent = '', now = Date.now() }) {
@@ -38,6 +45,7 @@ export async function createMongoSessionRegistry({
         userAgent: String(userAgent || '').slice(0, 256),
         expiresAt: new Date(session.exp * 1000),
         createdAt: new Date(now),
+        lastSeenAt: new Date(now),
       });
       return token;
     },
@@ -49,8 +57,16 @@ export async function createMongoSessionRegistry({
         nonce: session.nonce,
         subject: session.sub,
         expiresAt: { $gt: new Date(now) },
+        lastSeenAt: { $gt: new Date(now - idleTimeoutMs) },
       });
       if (!active) return null;
+      if (now - active.lastSeenAt.getTime() >= touchIntervalMs) {
+        active.lastSeenAt = new Date(now);
+        await sessions.updateOne(
+          { nonce: session.nonce, lastSeenAt: { $lt: new Date(now - touchIntervalMs) } },
+          { $set: { lastSeenAt: active.lastSeenAt } },
+        );
+      }
       const reauthenticatedUntil = active.reauthenticatedUntil instanceof Date
         && active.reauthenticatedUntil.getTime() > now
         ? Math.floor(active.reauthenticatedUntil.getTime() / 1000)
@@ -58,6 +74,7 @@ export async function createMongoSessionRegistry({
       return {
         ...session,
         role: active.role || session.role || 'super_admin',
+        idleExpiresAt: Math.min(session.exp, Math.floor((active.lastSeenAt.getTime() + idleTimeoutMs) / 1000)),
         reauthenticatedUntil,
       };
     },
@@ -90,6 +107,10 @@ export async function createMongoSessionRegistry({
       return (await sessions.deleteOne({ nonce: String(nonce || '') })).deletedCount === 1;
     },
 
+    async revokeBySubject(subject) {
+      return (await sessions.deleteMany({ subject: String(subject || '') })).deletedCount;
+    },
+
     async list({ subject, limit = 100 } = {}) {
       const query = {
         expiresAt: { $gt: new Date() },
@@ -103,6 +124,11 @@ export async function createMongoSessionRegistry({
           ...row,
           role: row.role || 'super_admin',
           createdAt: row.createdAt?.toISOString?.() || row.createdAt,
+          lastSeenAt: row.lastSeenAt?.toISOString?.() || row.lastSeenAt,
+          idleExpiresAt: new Date(Math.min(
+            row.expiresAt.getTime(),
+            row.lastSeenAt.getTime() + idleTimeoutMs,
+          )).toISOString(),
           expiresAt: row.expiresAt?.toISOString?.() || row.expiresAt,
         })));
     },

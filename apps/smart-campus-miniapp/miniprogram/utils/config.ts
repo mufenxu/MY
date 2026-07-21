@@ -84,10 +84,10 @@ export const DEV_CONFIG_KEYS = {
 }
 
 export const CT8_ENDPOINTS = {
-  trigger: joinUrl(API_PREFIX, '/github/trigger'),
-  status: joinUrl(API_PREFIX, '/github/status'),
-  updateSecret: joinUrl(API_PREFIX, '/github/secret/update'),
-  secretCache: joinUrl(API_PREFIX, '/github/secret/cache'),
+  trigger: joinUrl(API_PREFIX, '/ct8/trigger'),
+  status: joinUrl(API_PREFIX, '/ct8/status'),
+  updateSecret: joinUrl(API_PREFIX, '/ct8/secret/update'),
+  secretCache: joinUrl(API_PREFIX, '/ct8/secret/cache'),
 }
 
 export const NOTIFY_API = {

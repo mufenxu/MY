@@ -20,12 +20,13 @@ npm run dev
 2. 生成密码哈希：
 
    ```powershell
-   npm run password -- "一个至少十位的管理员密码"
+   npm run password -- "一个至少十五位的管理员密码"
    ```
 
 3. 将结果写入 `PLATFORM_ADMIN_PASSWORD_HASH`。
-4. 生成至少 32 字符的随机 `PLATFORM_SESSION_SECRET`。
-5. 构建并启动：
+4. 生成独立的 `PLATFORM_SESSION_SECRET` 和 32 字节 Base64URL `PLATFORM_AUTH_ENCRYPTION_KEY`，并配置 MongoDB、内部签名密钥和 HTTPS `PLATFORM_PUBLIC_ORIGIN`。
+5. 保持 `PLATFORM_REQUIRE_MFA=true`。首次密码登录会要求扫码绑定 TOTP，并只显示一次恢复码。
+6. 构建并启动：
 
    ```powershell
    npm run build
@@ -56,6 +57,10 @@ npm run dev
 - `GET/PUT /api/operations/settings`：非敏感运行设置与维护窗口
 - `POST /api/diagnostics/run`：运行只读系统诊断
 - `GET /api/security/sessions`：有效会话与安全状态
+- `GET/POST/PATCH /api/security/accounts`：独立管理员账号与最小权限角色
+- `POST/DELETE /api/security/totp/*`：TOTP、恢复码与绑定管理
+- `GET/POST/DELETE /api/security/passkeys/*`：Passkey 注册与撤销
+- `POST /api/security/password`：修改当前管理员密码并撤销全部会话
 - `GET /api/releases`：镜像版本与 GitHub Actions 状态
 - `GET /api/backups/quality`：RPO、异地同步与恢复演练状态
 
@@ -78,7 +83,7 @@ npm run dev
 - 灾备质量页检查 RPO、恢复演练、异地同步状态和每日自动备份计划；
 - 发布中心读取 GitHub Actions 和镜像版本，写操作默认关闭；
 - 发布构建、不可变镜像产物和部署结果持久化到 MongoDB，支持实际运行版本与配置漂移对比；
-- 安全中心支持 `viewer`、`operator`、`super_admin` 三种角色、可选 TOTP 和会话远程下线。
+- 安全中心支持 `viewer`、`operator`、`super_admin` 三种独立账号角色、强制 TOTP、一次性恢复码、Passkey 和会话远程下线。
 
 ### 角色权限
 
@@ -88,7 +93,7 @@ npm run dev
 | `operator` | 可处置事件、运行诊断、创建和上传备份 | 可执行日常管理操作 |
 | `super_admin` | 可删除/恢复备份、修改设置、发布和撤销会话 | 完整管理权限 |
 
-恢复、构建、部署和回滚会再次验证管理员密码；配置 `PLATFORM_ADMIN_TOTP_SECRET` 后还需要六位动态验证码。
+生产环境默认强制 MFA。恢复、构建、部署、回滚及安全设置变更会再次验证管理员密码和动态验证码；密码修改后会撤销该账号的全部会话。
 
 ### 发布安全
 

@@ -1,19 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
 import { createApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
-
-async function withServer(app, callback) {
-  const server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const address = server.address();
-  try {
-    await callback(`http://127.0.0.1:${address.port}`);
-  } finally {
-    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-  }
-}
+import { withFetchServer as withServer } from '../test-support/fetch-server.js';
 
 test('readiness reports a failed session registry dependency', async () => {
   const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };

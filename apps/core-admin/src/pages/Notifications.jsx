@@ -39,7 +39,8 @@ const Notifications = () => {
     };
 
     useEffect(() => {
-        fetchNotifications(1, 10);
+        const timerId = window.setTimeout(() => fetchNotifications(1, 10), 0);
+        return () => window.clearTimeout(timerId);
     }, []);
 
     const handleAdd = () => {
@@ -185,7 +186,7 @@ const Notifications = () => {
         },
     ];
 
-    const PageHeader = () => (
+    const pageHeader = (
         <div style={{
             marginBottom: 24,
             display: 'flex',
@@ -202,7 +203,7 @@ const Notifications = () => {
     );
 
     // 移动端卡片视图
-    const MobileView = () => (
+    const mobileView = (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {notifications.map((notification) => {
                 const colors = { info: 'blue', warn: 'orange', error: 'red' };
@@ -283,10 +284,10 @@ const Notifications = () => {
 
     return (
         <div>
-            <PageHeader />
+            {pageHeader}
 
             {isMobile ? (
-                <MobileView />
+                mobileView
             ) : (
                 <Card bordered={false} style={{ borderRadius: 20, border: 'none', boxShadow: 'var(--card-shadow)' }}>
                     <Table

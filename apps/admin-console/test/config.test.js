@@ -6,12 +6,15 @@ import { loadConfig, parseTrustProxy } from '../src/config.js';
 const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
 const internalPrivateKey = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url');
 const internalPublicKey = publicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
+const validPasswordHash = `scrypt$${Buffer.alloc(16, 1).toString('base64url')}$${Buffer.alloc(64, 2).toString('base64url')}`;
+const authEncryptionKey = Buffer.alloc(32, 3).toString('base64url');
 
 test('development defaults to local auth bypass', () => {
   const config = loadConfig({ NODE_ENV: 'development' });
   assert.equal(config.authDisabled, true);
   assert.equal(config.port, 8788);
   assert.equal(config.publicOrigin, 'http://127.0.0.1:22100');
+  assert.equal(config.requireMfa, false);
 });
 
 test('proxy trust is limited to an explicit hop count', () => {
@@ -32,8 +35,9 @@ test('production accepts a password hash and strong session secret', () => {
     NODE_ENV: 'production',
     PLATFORM_AUTH_DISABLED: 'true',
     PLATFORM_ADMIN_USERNAME: 'admin',
-    PLATFORM_ADMIN_PASSWORD_HASH: 'scrypt$salt$hash',
+    PLATFORM_ADMIN_PASSWORD_HASH: validPasswordHash,
     PLATFORM_SESSION_SECRET: 'x'.repeat(32),
+    PLATFORM_AUTH_ENCRYPTION_KEY: authEncryptionKey,
     PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: internalPrivateKey,
     PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: internalPublicKey,
     PLATFORM_PUBLIC_ORIGIN: 'https://admin.example.com',
@@ -41,6 +45,7 @@ test('production accepts a password hash and strong session secret', () => {
     PLATFORM_METRICS_TOKEN: 'm'.repeat(32),
   });
   assert.equal(config.authDisabled, false);
+  assert.equal(config.requireMfa, true);
 });
 
 test('production rejects public template secrets', () => {
@@ -48,8 +53,9 @@ test('production rejects public template secrets', () => {
     () => loadConfig({
       NODE_ENV: 'production',
       PLATFORM_ADMIN_USERNAME: 'admin',
-      PLATFORM_ADMIN_PASSWORD_HASH: 'scrypt$salt$hash',
+      PLATFORM_ADMIN_PASSWORD_HASH: validPasswordHash,
       PLATFORM_SESSION_SECRET: 'x'.repeat(32),
+      PLATFORM_AUTH_ENCRYPTION_KEY: authEncryptionKey,
       PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: internalPrivateKey,
       PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: internalPublicKey,
       PLATFORM_PUBLIC_ORIGIN: 'https://admin.example.com',
@@ -65,8 +71,9 @@ test('production backup runner requires a strong shared token when enabled', () 
     () => loadConfig({
       NODE_ENV: 'production',
       PLATFORM_ADMIN_USERNAME: 'admin',
-      PLATFORM_ADMIN_PASSWORD_HASH: 'scrypt$salt$hash',
+      PLATFORM_ADMIN_PASSWORD_HASH: validPasswordHash,
       PLATFORM_SESSION_SECRET: 'x'.repeat(32),
+      PLATFORM_AUTH_ENCRYPTION_KEY: authEncryptionKey,
       PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: internalPrivateKey,
       PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: internalPublicKey,
       PLATFORM_PUBLIC_ORIGIN: 'https://admin.example.com',
@@ -83,8 +90,9 @@ test('production release writes require callback and image allowlist controls', 
   const base = {
     NODE_ENV: 'production',
     PLATFORM_ADMIN_USERNAME: 'admin',
-    PLATFORM_ADMIN_PASSWORD_HASH: 'scrypt$salt$hash',
+    PLATFORM_ADMIN_PASSWORD_HASH: validPasswordHash,
     PLATFORM_SESSION_SECRET: 'x'.repeat(32),
+    PLATFORM_AUTH_ENCRYPTION_KEY: authEncryptionKey,
     PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: internalPrivateKey,
     PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: internalPublicKey,
     PLATFORM_PUBLIC_ORIGIN: 'https://admin.example.com',

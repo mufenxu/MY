@@ -8,6 +8,8 @@ const runtimeFiles = {
   notifyApp: ['NOTIFY_APP_PATH', 'services/notification-service/src/app.js'],
   portalApp: ['PORTAL_APP_PATH', 'apps/admin-console/src/app.js'],
   portalConfig: ['PORTAL_CONFIG_PATH', 'apps/admin-console/src/config.js'],
+  portalAuthStore: ['PORTAL_AUTH_STORE_PATH', 'apps/admin-console/src/auth-store.js'],
+  portalAuthRiskStore: ['PORTAL_AUTH_RISK_STORE_PATH', 'apps/admin-console/src/auth-risk-store.js'],
   portalMongoSessionRegistry: ['PORTAL_MONGO_SESSION_REGISTRY_PATH', 'apps/admin-console/src/mongo-session-registry.js'],
   portalOperationsStore: ['PORTAL_OPERATIONS_STORE_PATH', 'apps/admin-console/src/operations-store.js'],
   officialWebsiteStatic: ['OFFICIAL_WEBSITE_STATIC_PATH', 'apps/official-website'],

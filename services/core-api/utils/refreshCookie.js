@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { isSafeHttpMethod } = require('@my-platform/platform-auth');
 
 const ACCESS_COOKIE_NAME = 'core_admin_access';
 const REFRESH_COOKIE_NAME = 'core_admin_refresh';
@@ -6,7 +7,6 @@ const CSRF_COOKIE_NAME = 'core_admin_csrf';
 const CSRF_HEADER_NAME = 'x-csrf-token';
 const ACCESS_COOKIE_MAX_AGE_MS = 4 * 60 * 60 * 1000;
 const REFRESH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 function parseCookies(header = '') {
     const cookies = {};
@@ -95,7 +95,7 @@ function timingSafeEqualString(left, right) {
 }
 
 function hasValidCsrfToken(req) {
-    if (SAFE_METHODS.has(String(req.method || 'GET').toUpperCase())) return true;
+    if (isSafeHttpMethod(req.method)) return true;
     const headerToken = req.get?.(CSRF_HEADER_NAME) || req.headers?.[CSRF_HEADER_NAME] || '';
     return timingSafeEqualString(readCsrfCookie(req), headerToken);
 }

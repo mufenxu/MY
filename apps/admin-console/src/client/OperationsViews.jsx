@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { startRegistration } from '@simplewebauthn/browser';
 import {
   Activity,
   AlertTriangle,
@@ -12,6 +13,7 @@ import {
   DatabaseBackup,
   ExternalLink,
   FileClock,
+  Fingerprint,
   Gauge,
   HardDrive,
   History,
@@ -30,6 +32,7 @@ import {
   ShieldCheck,
   TerminalSquare,
   UserRoundCheck,
+  UserPlus,
   Wrench,
   XCircle,
 } from 'lucide-react';
@@ -62,6 +65,16 @@ const ROLE_LABELS = { viewer: '只读管理员', operator: '运维管理员', su
 const ACTION_LABELS = {
   'auth.login': '管理员登录',
   'auth.logout': '退出登录',
+  'security.account_created': '创建管理员',
+  'security.account_updated': '更新管理员',
+  'security.password_changed': '修改登录密码',
+  'security.totp_enrollment_started': '开始绑定动态验证',
+  'security.totp_enabled': '启用动态验证',
+  'security.totp_disabled': '停用动态验证',
+  'security.recovery_codes_regenerated': '重置恢复码',
+  'security.passkey_enrollment_started': '开始注册 Passkey',
+  'security.passkey_registered': '注册 Passkey',
+  'security.passkey_deleted': '删除 Passkey',
   'incident.opened': '产生事件',
   'incident.resolved': '事件恢复',
   'incident.acknowledge': '确认事件',
@@ -721,23 +734,43 @@ export function SecurityAuditView({ session, onLogout }) {
   const [tab, setTab] = useState('audit');
   const [events, setEvents] = useState([]);
   const [sessionData, setSessionData] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const [passkeys, setPasskeys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [credentials, setCredentials] = useState({ password: '', totp: '' });
+  const [enrollment, setEnrollment] = useState(null);
+  const [enrollmentCode, setEnrollmentCode] = useState('');
+  const [recoveryCodes, setRecoveryCodes] = useState([]);
+  const [passkeyName, setPasskeyName] = useState('');
+  const [newAccount, setNewAccount] = useState({ username: '', password: '', role: 'viewer' });
+  const [newPassword, setNewPassword] = useState('');
+  const [accountRoles, setAccountRoles] = useState({});
+  const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [auditResult, sessionsResult] = await Promise.all([requestJson('/api/audit?limit=200'), requestJson('/api/security/sessions')]);
+      const canManageAccounts = roleAtLeast(session.user?.role, 'super_admin');
+      const [auditResult, sessionsResult, passkeyResult, accountResult] = await Promise.all([
+        requestJson('/api/audit?limit=200'),
+        requestJson('/api/security/sessions'),
+        requestJson('/api/security/passkeys'),
+        canManageAccounts ? requestJson('/api/security/accounts') : Promise.resolve({ accounts: [] }),
+      ]);
       setEvents(auditResult.events || []);
       setSessionData(sessionsResult);
+      setPasskeys(passkeyResult.passkeys || []);
+      setAccounts(accountResult.accounts || []);
+      setAccountRoles(Object.fromEntries((accountResult.accounts || []).map((account) => [account.username, account.role])));
     } catch (requestError) {
       setError(requestError.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [session.user?.role]);
   useEffect(() => { load(); }, [load]);
 
   async function revoke(nonce) {
@@ -756,14 +789,139 @@ export function SecurityAuditView({ session, onLogout }) {
     }
   }
 
+  function sensitiveBody(extra = {}) {
+    return JSON.stringify({ ...extra, password: credentials.password, totp: credentials.totp });
+  }
+
+  async function runSensitive(action) {
+    setSubmitting(true);
+    setError('');
+    setMessage('');
+    try {
+      const shouldReload = await action();
+      setCredentials({ password: '', totp: '' });
+      if (shouldReload !== false) await load();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function beginTotpEnrollment() {
+    await runSensitive(async () => {
+      const result = await requestJson('/api/security/totp/enrollment', { method: 'POST', body: sensitiveBody() });
+      setEnrollment(result.enrollment);
+      setRecoveryCodes([]);
+      setMessage('动态验证注册已创建');
+    });
+  }
+
+  async function confirmTotpEnrollment() {
+    setSubmitting(true);
+    setError('');
+    try {
+      const result = await requestJson('/api/security/totp/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ totp: enrollmentCode }),
+      });
+      setEnrollment(null);
+      setEnrollmentCode('');
+      setRecoveryCodes(result.recoveryCodes || []);
+      setMessage('动态验证已启用');
+      await load();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function registerPasskey() {
+    await runSensitive(async () => {
+      const generated = await requestJson('/api/security/passkeys/options', { method: 'POST', body: sensitiveBody() });
+      const response = await startRegistration({ optionsJSON: generated.options });
+      await requestJson('/api/security/passkeys/verify', {
+        method: 'POST',
+        body: JSON.stringify({ challengeId: generated.challengeId, response, name: passkeyName || 'Passkey' }),
+      });
+      setPasskeyName('');
+      setMessage('Passkey 已注册');
+    });
+  }
+
+  async function createAccount() {
+    await runSensitive(async () => {
+      await requestJson('/api/security/accounts', {
+        method: 'POST',
+        body: sensitiveBody({ username: newAccount.username, newPassword: newAccount.password, role: newAccount.role }),
+      });
+      setNewAccount({ username: '', password: '', role: 'viewer' });
+      setMessage('管理员账号已创建');
+    });
+  }
+
+  async function regenerateRecoveryCodes() {
+    await runSensitive(async () => {
+      const result = await requestJson('/api/security/totp/recovery-codes', { method: 'POST', body: sensitiveBody() });
+      setRecoveryCodes(result.recoveryCodes || []);
+      setMessage('恢复码已重置，旧恢复码已全部失效');
+    });
+  }
+
+  async function disableTotp() {
+    await runSensitive(async () => {
+      const result = await requestJson('/api/security/totp', { method: 'DELETE', body: sensitiveBody() });
+      if (result.currentSessionRevoked) {
+        onLogout();
+        return false;
+      }
+      setMessage('动态验证已停用');
+      return true;
+    });
+  }
+
+  async function updateAccount(account, patch) {
+    await runSensitive(async () => {
+      const result = await requestJson(`/api/security/accounts/${encodeURIComponent(account.username)}`, {
+        method: 'PATCH',
+        body: sensitiveBody({ role: accountRoles[account.username] || account.role, ...patch }),
+      });
+      if (result.currentSessionRevoked) {
+        onLogout();
+        return false;
+      }
+      setMessage('管理员账号已更新');
+      return true;
+    });
+  }
+
+  async function changePassword() {
+    await runSensitive(async () => {
+      const result = await requestJson('/api/security/password', {
+        method: 'POST',
+        body: sensitiveBody({ newPassword }),
+      });
+      if (result.currentSessionRevoked) {
+        setNewPassword('');
+        onLogout();
+        return false;
+      }
+      return true;
+    });
+  }
+
+  const totpEnabled = Boolean(sessionData?.security?.totpEnabled);
+  const canManageAccounts = roleAtLeast(session.user?.role, 'super_admin');
+
   const failures = events.filter((event) => event.outcome === 'failure').length;
   return (
     <section className="page-view ops-page" aria-label="安全审计">
-      <div className="ops-toolbar"><div className="ops-segmented"><button type="button" className={tab === 'audit' ? 'active' : ''} onClick={() => setTab('audit')}>审计日志</button><button type="button" className={tab === 'sessions' ? 'active' : ''} onClick={() => setTab('sessions')}>登录会话</button></div><button className="secondary-action" type="button" onClick={load}><RefreshCw size={17} />刷新</button></div>
+      <div className="ops-toolbar"><div className="ops-segmented"><button type="button" className={tab === 'audit' ? 'active' : ''} onClick={() => setTab('audit')}>审计日志</button><button type="button" className={tab === 'sessions' ? 'active' : ''} onClick={() => setTab('sessions')}>登录会话</button><button type="button" className={tab === 'authenticators' ? 'active' : ''} onClick={() => setTab('authenticators')}>认证方式</button>{canManageAccounts && <button type="button" className={tab === 'accounts' ? 'active' : ''} onClick={() => setTab('accounts')}>管理员</button>}</div><button className="secondary-action" type="button" onClick={load}><RefreshCw size={17} />刷新</button></div>
       <Feedback error={error} message={message} />
       <div className="ops-kpis">
         <article><ShieldCheck size={20} /><div><span>当前角色</span><strong>{ROLE_LABELS[session.user?.role] || session.user?.role}</strong><small>最小权限控制</small></div></article>
-        <article><KeyRound size={20} /><div><span>动态验证</span><strong>{session.user?.totpEnabled ? '已启用' : '未启用'}</strong><small>{session.user?.totpEnabled ? '高风险操作受保护' : '建议配置 TOTP'}</small></div></article>
+        <article><KeyRound size={20} /><div><span>动态验证</span><strong>{totpEnabled ? '已启用' : '未启用'}</strong><small>{totpEnabled ? `剩余 ${sessionData?.security?.recoveryCodesRemaining || 0} 个恢复码` : '等待绑定'}</small></div></article>
         <article><UserRoundCheck size={20} /><div><span>有效会话</span><strong>{sessionData?.sessions?.length || 0}</strong><small>支持远程下线</small></div></article>
         <article><XCircle size={20} /><div><span>失败事件</span><strong>{failures}</strong><small>最近 200 条审计</small></div></article>
       </div>
@@ -772,10 +930,46 @@ export function SecurityAuditView({ session, onLogout }) {
           <div className="ops-table-head audit-table"><span>时间</span><span>操作</span><span>操作者</span><span>目标</span><span>来源 IP</span><span>结果</span></div>
           {events.map((event) => <div className="ops-table-row audit-table" key={event.id}><span>{formatDateTime(event.occurredAt)}</span><strong>{ACTION_LABELS[event.action] || event.action}</strong><span>{event.actor}</span><span className="audit-target"><strong>{event.targetId || event.targetType}</strong><small>{event.requestId || event.details?.errorKind || ''}</small></span><span>{event.ip || '--'}</span><span className={`audit-outcome ${event.outcome}`}>{event.outcome === 'success' ? '成功' : '失败'}</span></div>)}
         </section>
-      ) : (
+      ) : tab === 'sessions' ? (
         <section className="ops-panel session-list">
-          {(sessionData?.sessions || []).map((item) => <div className="session-row" key={item.nonce}><span className={item.nonce === sessionData.currentNonce ? 'current' : ''}><UserRoundCheck size={18} /></span><span><strong>{item.subject} · {ROLE_LABELS[item.role] || item.role}</strong><small>{item.ip || '未知 IP'} · {item.userAgent || '未知客户端'}</small></span><span><strong>{item.nonce === sessionData.currentNonce ? '当前会话' : formatRelative(item.createdAt)}</strong><small>到期 {formatDateTime(item.expiresAt)}</small></span>{roleAtLeast(session.user?.role, 'super_admin') && <button type="button" onClick={() => revoke(item.nonce)}><XCircle size={16} />下线</button>}</div>)}
+          {(sessionData?.sessions || []).map((item) => <div className="session-row" key={item.nonce}><span className={item.nonce === sessionData.currentNonce ? 'current' : ''}><UserRoundCheck size={18} /></span><span><strong>{item.subject} · {ROLE_LABELS[item.role] || item.role}</strong><small>{item.ip || '未知 IP'} · {item.userAgent || '未知客户端'}</small></span><span><strong>{item.nonce === sessionData.currentNonce ? '当前会话' : formatRelative(item.createdAt)}</strong><small>空闲到期 {formatDateTime(item.idleExpiresAt || item.expiresAt)}</small></span>{roleAtLeast(session.user?.role, 'super_admin') && <button type="button" onClick={() => revoke(item.nonce)}><XCircle size={16} />下线</button>}</div>)}
         </section>
+      ) : tab === 'authenticators' ? (
+        <div className="security-auth-layout">
+          <section className="ops-panel security-auth-panel">
+            <div className="ops-section-heading"><span><KeyRound size={18} /></span><div><strong>动态验证</strong><small>{totpEnabled ? '已启用' : '未启用'}</small></div></div>
+            {!enrollment && <div className="ops-inline-form"><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>当前动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || !credentials.password || (totpEnabled && credentials.totp.length !== 6)} onClick={beginTotpEnrollment}><KeyRound size={17} />{totpEnabled ? '重新绑定' : '绑定 TOTP'}</button></div>}
+            {enrollment && <div className="totp-enrollment"><img src={enrollment.qrDataUrl} alt="TOTP 二维码" /><code>{enrollment.secret}</code><div className="ops-inline-form"><label>动态验证码<input inputMode="numeric" maxLength={6} value={enrollmentCode} onChange={(event) => setEnrollmentCode(event.target.value.replace(/\D/g, ''))} /></label><button className="primary-button" type="button" disabled={submitting || enrollmentCode.length !== 6} onClick={confirmTotpEnrollment}><Check size={17} />确认绑定</button></div></div>}
+            {recoveryCodes.length > 0 && <div className="recovery-code-grid">{recoveryCodes.map((code) => <code key={code}>{code}</code>)}</div>}
+            {totpEnabled && !enrollment && <div className="security-auth-actions">
+              <button className="secondary-action" type="button" disabled={submitting || !credentials.password || credentials.totp.length !== 6} onClick={regenerateRecoveryCodes}><RefreshCw size={16} />重置恢复码</button>
+              <button className="danger-action" type="button" disabled={submitting || !credentials.password || credentials.totp.length !== 6 || session.mfaRequired} onClick={disableTotp}><XCircle size={16} />停用 TOTP</button>
+            </div>}
+          </section>
+          <section className="ops-panel security-auth-panel">
+            <div className="ops-section-heading"><span><Fingerprint size={18} /></span><div><strong>Passkey</strong><small>{passkeys.length} 个凭据</small></div></div>
+            <div className="ops-inline-form"><label>凭据名称<input value={passkeyName} maxLength={64} onChange={(event) => setPasskeyName(event.target.value)} /></label><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || !credentials.password || (totpEnabled && credentials.totp.length !== 6)} onClick={registerPasskey}><Fingerprint size={17} />注册 Passkey</button></div>
+            <div className="passkey-list">{passkeys.map((item) => <div className="session-row" key={item.id}><span><Fingerprint size={18} /></span><span><strong>{item.name || 'Passkey'}</strong><small>{item.deviceType || '设备凭据'} · {formatDateTime(item.createdAt)}</small></span><button type="button" onClick={() => runSensitive(async () => { await requestJson(`/api/security/passkeys/${encodeURIComponent(item.id)}`, { method: 'DELETE', body: sensitiveBody() }); setMessage('Passkey 已删除'); })}><XCircle size={16} />删除</button></div>)}</div>
+          </section>
+          <section className="ops-panel security-auth-panel">
+            <div className="ops-section-heading"><span><LockKeyhole size={18} /></span><div><strong>登录密码</strong><small>修改后所有会话下线</small></div></div>
+            <div className="ops-inline-form"><label>新密码<input type="password" minLength={15} maxLength={256} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || newPassword.length < 15 || !credentials.password || (totpEnabled && credentials.totp.length !== 6)} onClick={changePassword}><Save size={17} />修改密码</button></div>
+          </section>
+        </div>
+      ) : (
+        <div className="security-auth-layout">
+          <section className="ops-panel security-auth-panel">
+            <div className="ops-section-heading"><span><UserPlus size={18} /></span><div><strong>创建管理员</strong><small>独立账号</small></div></div>
+            <div className="ops-inline-form"><label>账号<input value={newAccount.username} onChange={(event) => setNewAccount({ ...newAccount, username: event.target.value })} /></label><label>新密码<input type="password" minLength={15} maxLength={256} autoComplete="new-password" value={newAccount.password} onChange={(event) => setNewAccount({ ...newAccount, password: event.target.value })} /></label><label>角色<SelectControl ariaLabel="管理员角色" value={newAccount.role} options={Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))} onChange={(role) => setNewAccount({ ...newAccount, role })} /></label><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || !newAccount.username || newAccount.password.length < 15 || !credentials.password || (totpEnabled && credentials.totp.length !== 6)} onClick={createAccount}><UserPlus size={17} />创建账号</button></div>
+          </section>
+          <section className="ops-panel session-list account-list">{accounts.map((account) => <div className="session-row account-row" key={account.username}>
+            <span className={account.active ? 'current' : ''}><UserRoundCheck size={18} /></span>
+            <span><strong>{account.username}</strong><small>{account.active ? '正常' : '已停用'} · TOTP {account.totpEnabled ? '已启用' : '未启用'} · Passkey {account.passkeyCount}</small></span>
+            <SelectControl ariaLabel={`${account.username} 的角色`} value={accountRoles[account.username] || account.role} options={Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))} onChange={(role) => setAccountRoles((current) => ({ ...current, [account.username]: role }))} />
+            <button type="button" disabled={submitting || !credentials.password || (totpEnabled && credentials.totp.length !== 6) || accountRoles[account.username] === account.role} onClick={() => updateAccount(account, {})}><Save size={16} />保存角色</button>
+            <button type="button" disabled={submitting || !credentials.password || (totpEnabled && credentials.totp.length !== 6)} onClick={() => updateAccount(account, { active: !account.active })}>{account.active ? <XCircle size={16} /> : <Check size={16} />}{account.active ? '停用' : '启用'}</button>
+          </div>)}</section>
+        </div>
       )}
     </section>
   );

@@ -3,6 +3,18 @@ import { promisify } from 'node:util';
 
 const scryptAsync = promisify(crypto.scrypt);
 export const SESSION_COOKIE_NAME = 'my_platform_session';
+export const PRODUCTION_SESSION_COOKIE_NAME = '__Host-my_platform_session';
+
+const LEGACY_SCRYPT_COST = 2 ** 14;
+const SCRYPT_COST = 2 ** 17;
+const SCRYPT_BLOCK_SIZE = 8;
+const SCRYPT_PARALLELIZATION = 1;
+const SCRYPT_KEY_LENGTH = 64;
+const SCRYPT_MAX_MEMORY = 192 * 1024 * 1024;
+
+export function sessionCookieName(isProduction = false) {
+  return isProduction ? PRODUCTION_SESSION_COOKIE_NAME : SESSION_COOKIE_NAME;
+}
 
 function encodeJson(value) {
   return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
@@ -67,8 +79,14 @@ export function verifySession(token, secret, now = Date.now()) {
   }
 }
 
-export function createSessionRegistry({ secret, maxSessions = 1024 } = {}) {
+export function createSessionRegistry({
+  secret,
+  maxSessions = 1024,
+  idleTimeoutMinutes = 30,
+  touchIntervalMs = 60_000,
+} = {}) {
   const activeSessions = new Map();
+  const idleTimeoutMs = Math.max(Number(idleTimeoutMinutes) || 30, 1) * 60_000;
 
   function prune(now = Date.now()) {
     const nowSeconds = Math.floor(now / 1000);
@@ -89,6 +107,7 @@ export function createSessionRegistry({ secret, maxSessions = 1024 } = {}) {
       ip: String(ip || '').slice(0, 128),
       userAgent: String(userAgent || '').slice(0, 256),
       createdAt: new Date(now).toISOString(),
+      lastSeenAt: now,
     });
     return token;
   }
@@ -98,9 +117,15 @@ export function createSessionRegistry({ secret, maxSessions = 1024 } = {}) {
     const session = verifySession(token, secret, now);
     const active = session ? activeSessions.get(session.nonce) : null;
     if (!active || active.exp !== session.exp || active.sub !== session.sub) return null;
+    if (active.lastSeenAt + idleTimeoutMs <= now) {
+      activeSessions.delete(session.nonce);
+      return null;
+    }
+    if (now - active.lastSeenAt >= touchIntervalMs) active.lastSeenAt = now;
     return {
       ...session,
       role: active.role || session.role || 'super_admin',
+      idleExpiresAt: Math.min(session.exp, Math.floor((active.lastSeenAt + idleTimeoutMs) / 1000)),
       reauthenticatedUntil: active.reauthenticatedUntil > Math.floor(now / 1000)
         ? active.reauthenticatedUntil
         : 0,
@@ -129,6 +154,14 @@ export function createSessionRegistry({ secret, maxSessions = 1024 } = {}) {
     return activeSessions.delete(String(nonce || ''));
   }
 
+  function revokeBySubject(subject) {
+    let revoked = 0;
+    for (const [nonce, session] of activeSessions) {
+      if (session.sub === subject && activeSessions.delete(nonce)) revoked += 1;
+    }
+    return revoked;
+  }
+
   function list({ subject } = {}) {
     prune();
     return [...activeSessions.values()]
@@ -141,6 +174,8 @@ export function createSessionRegistry({ secret, maxSessions = 1024 } = {}) {
         ip: session.ip,
         userAgent: session.userAgent,
         createdAt: session.createdAt,
+        lastSeenAt: new Date(session.lastSeenAt).toISOString(),
+        idleExpiresAt: new Date(Math.min(session.exp * 1000, session.lastSeenAt + idleTimeoutMs)).toISOString(),
         expiresAt: new Date(session.exp * 1000).toISOString(),
       }));
   }
@@ -151,6 +186,7 @@ export function createSessionRegistry({ secret, maxSessions = 1024 } = {}) {
     markReauthenticated,
     revoke,
     revokeByNonce,
+    revokeBySubject,
     list,
     size: () => activeSessions.size,
   };
@@ -169,10 +205,10 @@ function decodeBase32(value) {
   return Buffer.from(bytes);
 }
 
-export function verifyTotp(token, secret, now = Date.now(), { window = 1, periodSeconds = 30 } = {}) {
+export function matchTotp(token, secret, now = Date.now(), { window = 1, periodSeconds = 30 } = {}) {
   const normalizedToken = String(token || '').replace(/\s/g, '');
   const key = decodeBase32(secret);
-  if (!/^\d{6}$/.test(normalizedToken) || !key?.length) return false;
+  if (!/^\d{6}$/.test(normalizedToken) || !key?.length) return null;
 
   const counter = Math.floor(now / 1000 / periodSeconds);
   for (let offset = -window; offset <= window; offset += 1) {
@@ -181,28 +217,100 @@ export function verifyTotp(token, secret, now = Date.now(), { window = 1, period
     const digest = crypto.createHmac('sha1', key).update(buffer).digest();
     const position = digest[digest.length - 1] & 0x0f;
     const code = ((digest.readUInt32BE(position) & 0x7fffffff) % 1_000_000).toString().padStart(6, '0');
-    if (safeEqual(code, normalizedToken)) return true;
+    if (safeEqual(code, normalizedToken)) return counter + offset;
   }
-  return false;
+  return null;
+}
+
+export function verifyTotp(token, secret, now = Date.now(), options) {
+  return matchTotp(token, secret, now, options) !== null;
+}
+
+function parsePasswordHash(storedHash) {
+  const parts = String(storedHash || '').split('$');
+  let cost;
+  let blockSize;
+  let parallelization;
+  let saltValue;
+  let hashValue;
+
+  if (parts.length === 3 && parts[0] === 'scrypt') {
+    [, saltValue, hashValue] = parts;
+    cost = LEGACY_SCRYPT_COST;
+    blockSize = SCRYPT_BLOCK_SIZE;
+    parallelization = SCRYPT_PARALLELIZATION;
+  } else if (parts.length === 6 && parts[0] === 'scrypt') {
+    cost = Number.parseInt(parts[1], 10);
+    blockSize = Number.parseInt(parts[2], 10);
+    parallelization = Number.parseInt(parts[3], 10);
+    saltValue = parts[4];
+    hashValue = parts[5];
+  } else {
+    return null;
+  }
+
+  if (
+    !Number.isSafeInteger(cost)
+    || cost < LEGACY_SCRYPT_COST
+    || cost > 2 ** 20
+    || (cost & (cost - 1)) !== 0
+    || !Number.isSafeInteger(blockSize)
+    || blockSize < 1
+    || blockSize > 32
+    || !Number.isSafeInteger(parallelization)
+    || parallelization < 1
+    || parallelization > 16
+    || !saltValue
+    || !hashValue
+  ) return null;
+
+  const salt = Buffer.from(saltValue, 'base64url');
+  const hash = Buffer.from(hashValue, 'base64url');
+  if (salt.length < 16 || salt.length > 64 || hash.length !== SCRYPT_KEY_LENGTH) return null;
+  return { cost, blockSize, parallelization, salt, hash, legacy: parts.length === 3 };
+}
+
+export function isPasswordHash(value) {
+  return Boolean(parsePasswordHash(value));
+}
+
+export function passwordHashNeedsUpgrade(value) {
+  const parsed = parsePasswordHash(value);
+  return Boolean(parsed && (parsed.legacy || parsed.cost < SCRYPT_COST));
 }
 
 export async function createPasswordHash(password, salt = crypto.randomBytes(16)) {
-  if (typeof password !== 'string' || password.length < 10) {
-    throw new Error('管理员密码至少需要 10 个字符。');
+  if (typeof password !== 'string' || password.length < 15 || password.length > 256) {
+    throw new Error('管理员密码长度需要在 15 到 256 个字符之间。');
   }
-  const derivedKey = await scryptAsync(password, salt, 64);
-  return `scrypt$${Buffer.from(salt).toString('base64url')}$${derivedKey.toString('base64url')}`;
+  const derivedKey = await scryptAsync(password, salt, SCRYPT_KEY_LENGTH, {
+    N: SCRYPT_COST,
+    r: SCRYPT_BLOCK_SIZE,
+    p: SCRYPT_PARALLELIZATION,
+    maxmem: SCRYPT_MAX_MEMORY,
+  });
+  return [
+    'scrypt',
+    SCRYPT_COST,
+    SCRYPT_BLOCK_SIZE,
+    SCRYPT_PARALLELIZATION,
+    Buffer.from(salt).toString('base64url'),
+    derivedKey.toString('base64url'),
+  ].join('$');
 }
 
 export async function verifyPassword(password, storedHash) {
-  const [algorithm, saltValue, hashValue, extra] = String(storedHash || '').split('$');
-  if (algorithm !== 'scrypt' || !saltValue || !hashValue || extra) return false;
+  const parsed = parsePasswordHash(storedHash);
+  if (!parsed) return false;
 
   try {
-    const salt = Buffer.from(saltValue, 'base64url');
-    const expected = Buffer.from(hashValue, 'base64url');
-    const actual = await scryptAsync(String(password || ''), salt, expected.length);
-    return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+    const actual = await scryptAsync(String(password || ''), parsed.salt, parsed.hash.length, {
+      N: parsed.cost,
+      r: parsed.blockSize,
+      p: parsed.parallelization,
+      maxmem: Math.max(SCRYPT_MAX_MEMORY, 128 * parsed.cost * parsed.blockSize + 1024 * 1024),
+    });
+    return parsed.hash.length === actual.length && crypto.timingSafeEqual(parsed.hash, actual);
   } catch {
     return false;
   }

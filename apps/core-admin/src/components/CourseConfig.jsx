@@ -15,10 +15,6 @@ const CourseConfig = () => {
     const [form] = Form.useForm();
     const [editingCode, setEditingCode] = useState(null);
 
-    useEffect(() => {
-        fetchConfigs();
-    }, []);
-
     const fetchConfigs = async () => {
         setLoading(true);
         try {
@@ -34,6 +30,11 @@ const CourseConfig = () => {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        const timerId = window.setTimeout(fetchConfigs, 0);
+        return () => window.clearTimeout(timerId);
+    }, []);
 
     const handleOpenModal = (record = null) => {
         if (record) {

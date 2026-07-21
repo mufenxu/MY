@@ -1,7 +1,7 @@
 const AuditLog = require('../models/AuditLog');
+const { isSafeHttpMethod } = require('@my-platform/platform-auth');
 const logger = require('../config/logger');
 
-const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const SENSITIVE_KEY_PATTERN = /(password|token|secret|code|authorization)/i;
 
 function sanitizeObject(value = {}) {
@@ -60,7 +60,7 @@ function getActor(req, fallbackActorType) {
 
 function auditMutations({ actorType } = {}) {
     return (req, res, next) => {
-        if (SAFE_METHODS.has(req.method)) {
+        if (isSafeHttpMethod(req.method)) {
             return next();
         }
 

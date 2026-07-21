@@ -1,7 +1,7 @@
 const crypto = require('crypto');
+const { isSafeHttpMethod } = require('@my-platform/platform-auth');
 const { verifyPlatformSso } = require('./platformSso');
 
-const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const PLATFORM_ROLE_SCOPES = Object.freeze({
   viewer: Object.freeze(['devices:read', 'history:read']),
   operator: Object.freeze(['devices:read', 'history:read', 'relays:write']),
@@ -15,9 +15,9 @@ function platformScopesForRole(role) {
 function platformRoleAllowsRequest(role, method = 'GET', requiredScopes = []) {
   const normalizedMethod = String(method || 'GET').toUpperCase();
   if (role === 'super_admin') return true;
-  if (role === 'viewer') return SAFE_METHODS.has(normalizedMethod);
+  if (role === 'viewer') return isSafeHttpMethod(normalizedMethod);
   if (role !== 'operator') return false;
-  if (SAFE_METHODS.has(normalizedMethod)) return true;
+  if (isSafeHttpMethod(normalizedMethod)) return true;
   return requiredScopes.length > 0 && requiredScopes.every((scope) => scope === 'relays:write');
 }
 const { verifyPassword } = require('./password');

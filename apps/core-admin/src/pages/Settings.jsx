@@ -525,8 +525,11 @@ const Settings = () => {
 
     useEffect(() => {
         if (!isSuperAdmin) return;
-        loadConfig();
-        loadAdminInfo();
+        const timerId = window.setTimeout(() => {
+            loadConfig();
+            loadAdminInfo();
+        }, 0);
+        return () => window.clearTimeout(timerId);
     }, [isSuperAdmin, loadConfig, loadAdminInfo]);
 
     const onAdminFinish = async (values) => {

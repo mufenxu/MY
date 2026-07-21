@@ -14,47 +14,55 @@ function initQuantumCanvas() {
   if (!canvas) return;
 
   const ctx = canvas.getContext('2d');
+  const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   let width = (canvas.width = window.innerWidth);
   let height = (canvas.height = window.innerHeight);
+  let animationFrame = 0;
+  let particles = createParticles();
 
-  window.addEventListener('resize', () => {
+  function createParticles() {
+    const densityCount = Math.floor((width * height) / 22000);
+    const particleCount = Math.min(Math.max(densityCount, 18), window.innerWidth < 768 ? 28 : 48);
+    return Array.from({ length: particleCount }, () => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * 0.65,
+      vy: (Math.random() - 0.5) * 0.65,
+      radius: Math.random() * 1.6 + 1.2,
+      color: Math.random() > 0.4 ? 'rgba(217, 119, 36, 0.4)' : 'rgba(139, 92, 246, 0.3)',
+    }));
+  }
+
+  function handleResize() {
     width = canvas.width = window.innerWidth;
     height = canvas.height = window.innerHeight;
-  });
+    particles = createParticles();
+    if (motionQuery.matches) drawFrame(false);
+  }
+
+  window.addEventListener('resize', handleResize, { passive: true });
 
   const mouse = { x: null, y: null, radius: 180 };
 
   window.addEventListener('mousemove', (e) => {
     mouse.x = e.clientX;
     mouse.y = e.clientY;
-  });
+  }, { passive: true });
 
   window.addEventListener('mouseleave', () => {
     mouse.x = null;
     mouse.y = null;
   });
 
-  const particleCount = Math.min(Math.floor((width * height) / 14000), 75);
-  const particles = [];
-
-  for (let i = 0; i < particleCount; i++) {
-    particles.push({
-      x: Math.random() * width,
-      y: Math.random() * height,
-      vx: (Math.random() - 0.5) * 0.8,
-      vy: (Math.random() - 0.5) * 0.8,
-      radius: Math.random() * 2 + 1.5,
-      color: Math.random() > 0.4 ? 'rgba(217, 119, 36, 0.4)' : 'rgba(139, 92, 246, 0.35)',
-    });
-  }
-
-  function animate() {
+  function drawFrame(moveParticles = true) {
     ctx.clearRect(0, 0, width, height);
 
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
+      if (moveParticles) {
+        p.x += p.vx;
+        p.y += p.vy;
+      }
 
       if (p.x < 0 || p.x > width) p.vx *= -1;
       if (p.y < 0 || p.y > height) p.vy *= -1;
@@ -62,9 +70,10 @@ function initQuantumCanvas() {
       if (mouse.x !== null && mouse.y !== null) {
         const dx = mouse.x - p.x;
         const dy = mouse.y - p.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const distSquared = dx * dx + dy * dy;
 
-        if (dist < mouse.radius) {
+        if (distSquared > 0 && distSquared < mouse.radius * mouse.radius) {
+          const dist = Math.sqrt(distSquared);
           const force = (mouse.radius - dist) / mouse.radius;
           p.x -= (dx / dist) * force * 3;
           p.y -= (dy / dist) * force * 3;
@@ -80,9 +89,10 @@ function initQuantumCanvas() {
         const p2 = particles[j];
         const dx = p.x - p2.x;
         const dy = p.y - p2.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const distSquared = dx * dx + dy * dy;
 
-        if (dist < 140) {
+        if (distSquared < 19600) {
+          const dist = Math.sqrt(distSquared);
           const alpha = (1 - dist / 140) * 0.25;
           ctx.beginPath();
           ctx.moveTo(p.x, p.y);
@@ -94,10 +104,26 @@ function initQuantumCanvas() {
       }
     }
 
-    requestAnimationFrame(animate);
   }
 
-  animate();
+  function animate() {
+    drawFrame();
+    animationFrame = requestAnimationFrame(animate);
+  }
+
+  function syncAnimation() {
+    cancelAnimationFrame(animationFrame);
+    animationFrame = 0;
+    if (document.hidden || motionQuery.matches) {
+      drawFrame(false);
+      return;
+    }
+    animate();
+  }
+
+  document.addEventListener('visibilitychange', syncAnimation);
+  motionQuery.addEventListener('change', syncAnimation);
+  syncAnimation();
 }
 
 // 3D Perspective Tilt Cards

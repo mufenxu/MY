@@ -1,9 +1,13 @@
 import http from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {
   boundedProxyTimeout,
+  createOfficialWebsiteApp,
   createPlatformRouter,
   isHashedStaticAsset,
   managedSocketAllowed,
@@ -82,6 +86,34 @@ test('official website owns the root and an isolated asset namespace', async () 
     assert.equal((await request(port, '/website-assets/index-12345678.js')).body.name, 'website');
     assert.equal((await request(port, '/assets/console-12345678.js')).body.name, 'portal');
   });
+});
+
+test('official website briefly caches documents and caches hashed assets immutably', async () => {
+  const staticPath = fs.mkdtempSync(path.join(os.tmpdir(), 'my-official-website-'));
+  const distPath = path.join(staticPath, 'dist');
+  const assetsPath = path.join(distPath, 'website-assets');
+  fs.mkdirSync(assetsPath, { recursive: true });
+  fs.writeFileSync(path.join(distPath, 'index.html'), '<!doctype html><title>MY</title>');
+  fs.writeFileSync(path.join(assetsPath, 'index-AbCd1234.js'), 'console.log("MY");');
+
+  const app = createOfficialWebsiteApp({ staticPath });
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+
+  try {
+    const documentResponse = await fetch(`${origin}/`);
+    assert.equal(documentResponse.status, 200);
+    assert.equal(documentResponse.headers.get('cache-control'), 'public, max-age=60, stale-while-revalidate=300');
+    assert.ok(!documentResponse.headers.get('content-security-policy').includes('fonts.googleapis.com'));
+
+    const assetResponse = await fetch(`${origin}/website-assets/index-AbCd1234.js`);
+    assert.equal(assetResponse.status, 200);
+    assert.equal(assetResponse.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(staticPath, { recursive: true, force: true });
+  }
 });
 
 test('campus and IoT legacy domains stay behind the platform gateway', async () => {
@@ -278,6 +310,7 @@ test('proxy timeout and error classification are bounded and stable', () => {
   assert.equal(normalizeProxyError({ code: 'EPIPE' }), 'aborted');
   assert.equal(normalizeProxyError({ code: 'UNEXPECTED' }), 'other');
   assert.equal(isHashedStaticAsset('C:\\dist\\assets\\index-AbCd1234.js'), true);
+  assert.equal(isHashedStaticAsset('C:\\dist\\website-assets\\index-AbCd1234.js'), true);
   assert.equal(isHashedStaticAsset('C:\\dist\\assets\\index.js'), false);
   assert.equal(isHashedStaticAsset('C:\\dist\\favicon.png'), false);
 });

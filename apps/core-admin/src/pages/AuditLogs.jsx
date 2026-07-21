@@ -37,7 +37,8 @@ const AuditLogs = () => {
     }, []);
 
     useEffect(() => {
-        fetchLogs();
+        const timerId = window.setTimeout(fetchLogs, 0);
+        return () => window.clearTimeout(timerId);
     }, [fetchLogs]);
 
     const handleTableChange = (pagination) => {
@@ -99,7 +100,7 @@ const AuditLogs = () => {
         },
     ];
 
-    const MobileView = () => (
+    const mobileView = (
         <List
             dataSource={logs}
             loading={loading}
@@ -147,7 +148,7 @@ const AuditLogs = () => {
     return (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
             <Card bordered={false} style={{ borderRadius: 20, border: 'none', boxShadow: 'var(--card-shadow)' }} bodyStyle={isMobile ? { padding: '16px 12px' } : undefined}>
-                {isMobile ? <MobileView /> : (
+                {isMobile ? mobileView : (
                     <Table
                         columns={columns}
                         dataSource={logs}

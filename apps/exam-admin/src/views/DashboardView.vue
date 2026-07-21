@@ -23,49 +23,14 @@
                     <span class="logo-mark"><img :src="faviconUrl" alt="好爱学习"></span>
                     <span>好爱学习</span>
                 </div>
-                <el-menu :default-active="activeMenu" @select="handleMenuSelect">
-                    <el-menu-item index="dashboard">
-                        <el-icon><Data-Line /></el-icon>
-                        <span>数据概览</span>
-                    </el-menu-item>
-                    <el-menu-item index="major-categories">
-                        <el-icon>
-                            <Folder />
-                        </el-icon>
-                        <span>{{ manageMenuLabel }}</span>
-                    </el-menu-item>
-                    <el-menu-item v-if="!isConsoleMode" index="demo-manage">
-                        <el-icon>
-                            <Collection />
-                        </el-icon>
-                        <span>示例题库管理</span>
-                    </el-menu-item>
-                    <el-menu-item v-if="!isConsoleMode" index="exam-results">
-                        <el-icon>
-                            <Trophy />
-                        </el-icon>
-                        <span>考试记录</span>
-                    </el-menu-item>
-                    <el-menu-item v-if="!isConsoleMode" index="users">
-                        <el-icon>
-                            <User />
-                        </el-icon>
-                        <span>考生管理</span>
-                    </el-menu-item>
-                    <el-menu-item v-if="!isConsoleMode" index="personal-categories">
-                        <el-icon>
-                            <Files />
-                        </el-icon>
-                        <span>个人题库监管</span>
-                    </el-menu-item>
-                    <el-menu-item index="feedbacks" class="feedback-menu-item">
-                        <el-icon>
-                            <ChatDotRound />
-                        </el-icon>
-                        <span>{{ feedbackMenuLabel }}</span>
-                        <span v-if="feedbackBadgeCount > 0" class="nav-badge">{{ formatBadgeCount(feedbackBadgeCount) }}</span>
-                    </el-menu-item>
-                </el-menu>
+                <DashboardNavMenu
+                    :active-menu="activeMenu"
+                    :console-mode="isConsoleMode"
+                    :manage-menu-label="manageMenuLabel"
+                    :feedback-menu-label="feedbackMenuLabel"
+                    :feedback-badge-count="feedbackBadgeCount"
+                    @select="handleMenuSelect"
+                />
                 <div class="aside-footer mobile-aside-footer">
                     <a
                         v-if="IS_PLATFORM_SSO"
@@ -98,49 +63,14 @@
                     <span class="logo-mark"><img :src="faviconUrl" alt="好爱学习"></span>
                     <span>好爱学习</span>
                 </div>
-                <el-menu :default-active="activeMenu" @select="handleMenuSelect">
-                    <el-menu-item index="dashboard">
-                        <el-icon><Data-Line /></el-icon>
-                        <span>数据概览</span>
-                    </el-menu-item>
-                    <el-menu-item index="major-categories">
-                        <el-icon>
-                            <Folder />
-                        </el-icon>
-                        <span>{{ manageMenuLabel }}</span>
-                    </el-menu-item>
-                    <el-menu-item v-if="!isConsoleMode" index="demo-manage">
-                        <el-icon>
-                            <Collection />
-                        </el-icon>
-                        <span>示例题库管理</span>
-                    </el-menu-item>
-                    <el-menu-item v-if="!isConsoleMode" index="exam-results">
-                        <el-icon>
-                            <Trophy />
-                        </el-icon>
-                        <span>考试记录</span>
-                    </el-menu-item>
-                    <el-menu-item v-if="!isConsoleMode" index="users">
-                        <el-icon>
-                            <User />
-                        </el-icon>
-                        <span>考生管理</span>
-                    </el-menu-item>
-                    <el-menu-item v-if="!isConsoleMode" index="personal-categories">
-                        <el-icon>
-                            <Files />
-                        </el-icon>
-                        <span>个人题库监管</span>
-                    </el-menu-item>
-                    <el-menu-item index="feedbacks" class="feedback-menu-item">
-                        <el-icon>
-                            <ChatDotRound />
-                        </el-icon>
-                        <span>{{ feedbackMenuLabel }}</span>
-                        <span v-if="feedbackBadgeCount > 0" class="nav-badge">{{ formatBadgeCount(feedbackBadgeCount) }}</span>
-                    </el-menu-item>
-                </el-menu>
+                <DashboardNavMenu
+                    :active-menu="activeMenu"
+                    :console-mode="isConsoleMode"
+                    :manage-menu-label="manageMenuLabel"
+                    :feedback-menu-label="feedbackMenuLabel"
+                    :feedback-badge-count="feedbackBadgeCount"
+                    @select="handleMenuSelect"
+                />
 
                 <!-- User Account Menu -->
                 <div class="aside-footer">
@@ -1774,6 +1704,7 @@ import { createCartoonAvatar } from '@/utils/cartoonAvatar';
 import { isUiPreviewMode } from '@/utils/uiPreview';
 import { fetchWithTimeout, IS_PLATFORM_SSO, logoutPlatformSession, resolveAppUrl } from '@/utils/runtime';
 import { createSequentialPoller } from '@/utils/sequentialPoller';
+import DashboardNavMenu from '@/components/DashboardNavMenu.vue';
 
 const MiniLineChart = defineAsyncComponent(() => import('@/components/MiniLineChart.vue'));
 
@@ -2461,7 +2392,6 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             };
             return map[status] || 'info';
         };
-        const formatBadgeCount = (count) => (Number(count) > 99 ? '99+' : String(Number(count) || 0));
         const isFeedbackReplyUnread = (item) => {
             if (!isConsoleMode.value || !item?.repliedAt) {
                 return false;

@@ -5,7 +5,9 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const workspaceRoot = path.resolve(appRoot, '..', '..');
 const readSource = (...parts) => fs.readFileSync(path.join(appRoot, ...parts), 'utf8');
+const readWorkspaceSource = (...parts) => fs.readFileSync(path.join(workspaceRoot, ...parts), 'utf8');
 
 test('globally referenced icons remain in the explicit registration set', () => {
   const source = readSource('src', 'main.js');
@@ -51,10 +53,12 @@ test('platform console return stays scoped to verified managed sessions', () => 
 test('logout preserves the session until server-side revocation succeeds', () => {
   const dashboard = readSource('src', 'views', 'DashboardView.vue');
   const runtime = readSource('src', 'utils', 'runtime.js');
+  const sharedRuntime = readWorkspaceSource('packages', 'platform-browser-runtime', 'index.js');
 
   assert.match(dashboard, /await logoutPlatformSession\(\);[\s\S]*return;/);
   assert.match(dashboard, /await adminApi\.logout\(\);[\s\S]*session\.clear\(\);/);
   assert.match(dashboard, /catch \(error\)[\s\S]*退出失败/);
   assert.doesNotMatch(dashboard, /adminApi\.logout\(\)\.catch\(\(\) => \{\}\)/);
-  assert.match(runtime, /if \(!response\.ok\)[\s\S]*throw new Error/);
+  assert.match(runtime, /createPlatformBrowserRuntime\(\{ appName: 'exam' \}\)/);
+  assert.match(sharedRuntime, /if \(!response\.ok\)[\s\S]*throw new Error/);
 });

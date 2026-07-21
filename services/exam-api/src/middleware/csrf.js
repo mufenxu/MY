@@ -1,8 +1,8 @@
 const crypto = require('crypto');
+const { isSafeHttpMethod } = require('@my-platform/platform-auth');
 const { ForbiddenError } = require('../utils/errors');
 const { CSRF_HEADER, getCsrfCookie, hasAuthCookie } = require('../utils/authCookies');
 
-const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 function timingSafeEqualString(left, right) {
     const leftBuffer = Buffer.from(String(left || ''));
@@ -16,7 +16,7 @@ function timingSafeEqualString(left, right) {
 }
 
 function requireCsrfToken(req, res, next) {
-    if (SAFE_METHODS.has(req.method)) {
+    if (isSafeHttpMethod(req.method)) {
         return next();
     }
 

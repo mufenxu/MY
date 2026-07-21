@@ -3,6 +3,20 @@ const crypto = require('node:crypto');
 const PLATFORM_SSO_HEADER = 'x-my-platform-sso';
 const TOKEN_ISSUER = 'my-platform-gateway';
 const PLATFORM_ROLES = new Set(['viewer', 'operator', 'super_admin']);
+const PLATFORM_ROLE_NAMES = Object.freeze([...PLATFORM_ROLES]);
+const SAFE_HTTP_METHODS = Object.freeze(['GET', 'HEAD', 'OPTIONS']);
+const SAFE_HTTP_METHOD_SET = new Set(SAFE_HTTP_METHODS);
+const SCAN_LOGIN_STATUSES = Object.freeze([
+  'waiting',
+  'pending',
+  'scanned',
+  'confirmed',
+  'consumed',
+  'cancelled',
+  'rejected',
+  'expired',
+]);
+const TERMINAL_SCAN_LOGIN_STATUS_SET = new Set(['consumed', 'cancelled', 'rejected', 'expired']);
 const SERVICE_AUTH_HEADERS = Object.freeze({
   caller: 'x-my-service-caller',
   nonce: 'x-my-service-nonce',
@@ -10,6 +24,33 @@ const SERVICE_AUTH_HEADERS = Object.freeze({
   timestamp: 'x-my-service-timestamp',
 });
 const SERVICE_CALLER_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
+
+function isPlatformRole(role) {
+  return PLATFORM_ROLES.has(String(role || ''));
+}
+
+function isSafeHttpMethod(method = 'GET') {
+  return SAFE_HTTP_METHOD_SET.has(String(method || 'GET').toUpperCase());
+}
+
+function isTerminalScanLoginStatus(status) {
+  return TERMINAL_SCAN_LOGIN_STATUS_SET.has(String(status || ''));
+}
+
+function isScanLoginSessionExpired(session = {}, {
+  now = Date.now(),
+  ttlMs = 0,
+} = {}) {
+  const nowMs = now instanceof Date ? now.getTime() : Number(now);
+  const expiresAtMs = session.expiresAt
+    ? new Date(session.expiresAt).getTime()
+    : Number(session.createdAt ?? session.createdTime) + Number(ttlMs || 0);
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) return true;
+
+  if (session.status !== 'confirmed') return false;
+  const tempAuthCodeExpiresAtMs = new Date(session.tempAuthCodeExpiresAt || 0).getTime();
+  return !Number.isFinite(tempAuthCodeExpiresAtMs) || tempAuthCodeExpiresAtMs <= nowMs;
+}
 
 function encodeJson(value) {
   return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
@@ -270,11 +311,18 @@ function verifyPlatformSsoRequest(req, {
 
 module.exports = {
   HEADER_NAME: PLATFORM_SSO_HEADER,
+  PLATFORM_ROLE_NAMES,
   PLATFORM_SSO_HEADER,
+  SAFE_HTTP_METHODS,
+  SCAN_LOGIN_STATUSES,
   SERVICE_AUTH_HEADERS,
   TOKEN_ISSUER,
   issueInternalIdentity,
   issueServiceRequest,
+  isPlatformRole,
+  isScanLoginSessionExpired,
+  isSafeHttpMethod,
+  isTerminalScanLoginStatus,
   requestPathWithQuery,
   serviceRequestPath,
   validateInternalKeyPair,

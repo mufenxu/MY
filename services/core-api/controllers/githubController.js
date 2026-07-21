@@ -1,202 +1,11 @@
 const githubService = require('../services/githubService');
+const {
+    extractWorkflowSummary,
+    normalizeWorkflowResults,
+    pickFirst
+} = require('../utils/githubResultParser');
 
 const rateLimit = { ip: {}, global: 0 };
-
-const pickFirst = (...values) => {
-    for (const v of values) {
-        if (v !== undefined && v !== null && v !== '') {
-            return v;
-        }
-    }
-    return undefined;
-};
-
-const toNumberOrUndefined = (value) => {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : undefined;
-};
-
-const looksLikeResultItem = (value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    const identityKeys = ['host', 'hostname', 'server', 'ip', 'user', 'username', 'account'];
-    return identityKeys.some(key => value[key] !== undefined);
-};
-
-const hasResultOutcome = (value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    return ['success', 'ok', 'status', 'code'].some(key => value[key] !== undefined);
-};
-
-const normalizeResultItem = (item, forcedSuccess) => {
-    if (item && typeof item === 'object' && !Array.isArray(item)) {
-        return forcedSuccess === undefined ? item : { ...item, success: forcedSuccess };
-    }
-
-    return {
-        host: String(item),
-        success: forcedSuccess === undefined ? false : forcedSuccess
-    };
-};
-
-const normalizeResults = (rawResults) => {
-    if (Array.isArray(rawResults)) return rawResults;
-
-    if (typeof rawResults === 'string') {
-        const text = rawResults.trim();
-        if (!text) return [];
-
-        try {
-            const parsed = JSON.parse(text);
-            return normalizeResults(parsed);
-        } catch (_) {
-            const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-            if (lines.length > 1) {
-                const parsedLines = [];
-                for (const line of lines) {
-                    try {
-                        const parsedLine = JSON.parse(line);
-                        if (parsedLine && typeof parsedLine === 'object') parsedLines.push(parsedLine);
-                    } catch (_) {
-                        return [];
-                    }
-                }
-                return parsedLines;
-            }
-
-            return [];
-        }
-    }
-
-    if (!rawResults || typeof rawResults !== 'object') return [];
-
-    const arrayKeys = [
-        'results',
-        'result',
-        'details',
-        'items',
-        'servers',
-        'server_results',
-        'serverResults',
-        'login_results',
-        'loginResults',
-        'accounts',
-        'hosts',
-        'records'
-    ];
-    for (const key of arrayKeys) {
-        if (rawResults[key] !== undefined && rawResults[key] !== rawResults) {
-            const normalized = normalizeResults(rawResults[key]);
-            if (normalized.length > 0) return normalized;
-        }
-    }
-
-    if (Array.isArray(rawResults.success) || Array.isArray(rawResults.failed)) {
-        return [
-            ...(rawResults.success || []).map(item => normalizeResultItem(item, true)),
-            ...(rawResults.failed || []).map(item => normalizeResultItem(item, false))
-        ];
-    }
-
-    if (looksLikeResultItem(rawResults)) {
-        return [rawResults];
-    }
-
-    // 兼容 map 结构: { hostA: {...}, hostB: {...} }
-    const entries = Object.entries(rawResults);
-    if (entries.length > 0 && entries.every(([, item]) => item && typeof item === 'object')) {
-        return entries.flatMap(([key, item]) => {
-            const normalized = normalizeResults(item);
-            if (normalized.length > 0) {
-                return normalized.map(result => {
-                    if (result && typeof result === 'object' && !Array.isArray(result) && !result.host && !result.hostname && !result.server) {
-                        return { host: key, ...result };
-                    }
-                    return result;
-                });
-            }
-            if (item && typeof item === 'object' && !Array.isArray(item) && hasResultOutcome(item)) {
-                return [{ host: key, ...item }];
-            }
-            return [];
-        });
-    }
-
-    return [];
-};
-
-const extractSummary = (body, results) => {
-    const statsSource = pickFirst(body.stats, body.summary, body.result?.stats, body.data?.stats, {});
-    const success = toNumberOrUndefined(pickFirst(
-        body.success_count,
-        body.successCount,
-        body.success,
-        body.result?.success_count,
-        body.result?.successCount,
-        body.result?.success,
-        body.data?.success_count,
-        body.data?.successCount,
-        body.data?.success,
-        statsSource.success_count,
-        statsSource.successCount,
-        statsSource.success
-    ));
-    const failed = toNumberOrUndefined(pickFirst(
-        body.failed_count,
-        body.failedCount,
-        body.fail_count,
-        body.failCount,
-        body.failed,
-        body.fail,
-        body.result?.failed_count,
-        body.result?.failedCount,
-        body.result?.fail_count,
-        body.result?.failCount,
-        body.result?.failed,
-        body.result?.fail,
-        body.data?.failed_count,
-        body.data?.failedCount,
-        body.data?.fail_count,
-        body.data?.failCount,
-        body.data?.failed,
-        body.data?.fail,
-        statsSource.failed_count,
-        statsSource.failedCount,
-        statsSource.fail_count,
-        statsSource.failCount,
-        statsSource.failed,
-        statsSource.fail
-    ));
-    const total = toNumberOrUndefined(pickFirst(
-        body.total_accounts,
-        body.totalAccounts,
-        body.total,
-        body.count,
-        body.result?.total_accounts,
-        body.result?.totalAccounts,
-        body.result?.total,
-        body.result?.count,
-        body.data?.total_accounts,
-        body.data?.totalAccounts,
-        body.data?.total,
-        body.data?.count,
-        statsSource.total_accounts,
-        statsSource.totalAccounts,
-        statsSource.total,
-        statsSource.count
-    ));
-
-    const inferredTotal = total !== undefined
-        ? total
-        : (success !== undefined && failed !== undefined ? success + failed : results.length);
-
-    return {
-        total: inferredTotal,
-        success,
-        failed,
-        status: pickFirst(body.status, body.conclusion, body.workflow_conclusion, body.workflowConclusion, body.result?.status, body.data?.status, statsSource.status),
-        workflow_conclusion: pickFirst(body.workflow_conclusion, body.workflowConclusion, body.conclusion, body.run?.conclusion, body.workflow_run?.conclusion)
-    };
-};
 
 const parseBodyObject = (value) => {
     if (!value) return {};
@@ -330,8 +139,11 @@ exports.handleCallback = async (req, res, next) => {
             mergedBody.summary?.results,
             mergedBody.summary?.details
         );
-        const results = normalizeResults(rawResults);
-        const summary = extractSummary(mergedBody, results);
+        const results = normalizeWorkflowResults(rawResults);
+        const summary = extractWorkflowSummary(mergedBody, results, {
+            missingValue: undefined,
+            includeNestedStatus: true
+        });
 
         if (!run_id) {
             return res.status(400).json({ error: 'Missing run_id' });

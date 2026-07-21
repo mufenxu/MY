@@ -19,6 +19,12 @@ import { loadDotEnv, parseBooleanEnv } from "./src/lib/env.js";
 import { createHttpToolkit, HttpError } from "./src/lib/http.js";
 import { hashPassword, isValidUsername, normalizeUsername, verifyPassword } from "./src/lib/password.js";
 import { createSensitiveJsonCodec, deriveDataEncryptionKey } from "./src/lib/sensitive-json.js";
+import {
+  casEncryptPassword as encryptCasPassword,
+  extractFormAction,
+  extractInputValue,
+  htmlErrorMessage
+} from "./src/lib/cas-protocol.js";
 import { normalizeAllowedSchoolUrl } from "./src/lib/school-url.js";
 import { verifyPlatformSso } from "./src/lib/platform-sso.js";
 import { platformRoleAllowsRequest } from "./src/lib/platform-role.js";
@@ -1389,63 +1395,11 @@ async function sessionStatus({ refresh = true } = {}) {
   };
 }
 
-function modPow(base, exponent, modulus) {
-  let result = 1n;
-  let x = base % modulus;
-  let e = exponent;
-  while (e > 0n) {
-    if (e & 1n) result = (result * x) % modulus;
-    e >>= 1n;
-    x = (x * x) % modulus;
-  }
-  return result;
-}
-
-function highDigitIndexFromHex(hex) {
-  const normalized = hex.replace(/^0+/, "") || "0";
-  return Math.ceil(normalized.length / 4) - 1;
-}
-
 function casEncryptPassword(password) {
-  const modulus = BigInt(`0x${CAS_RSA_MODULUS}`);
-  const exponent = BigInt(`0x${CAS_RSA_EXPONENT}`);
-  const chunkSize = 2 * highDigitIndexFromHex(CAS_RSA_MODULUS);
-  const bytes = Array.from(String(password), (char) => char.charCodeAt(0));
-  while (bytes.length % chunkSize !== 0) bytes.push(0);
-
-  const blocks = [];
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    let block = 0n;
-    for (let j = 0, k = i; k < i + chunkSize; j += 1) {
-      const digit = BigInt(bytes[k++] + (bytes[k++] << 8));
-      block += digit << BigInt(16 * j);
-    }
-    const encrypted = modPow(block, exponent, modulus);
-    blocks.push(encrypted.toString(16));
-  }
-  return blocks.join(" ");
-}
-
-function extractInputValue(html, name) {
-  const pattern = new RegExp(`<input[^>]+name=["']${name}["'][^>]*value=["']([^"']*)["']`, "i");
-  return html.match(pattern)?.[1] || "";
-}
-
-function extractFormAction(html, serviceUrl = SERVICE_URL) {
-  const match = html.match(/<form[^>]+id=["']fm1["'][^>]+action=["']([^"']+)["']/i);
-  return match?.[1] || `/cas/login?service=${encodeURIComponent(serviceUrl)}`;
-}
-
-function htmlErrorMessage(html) {
-  const candidates = [
-    html.match(/<span[^>]+id=["']msg1["'][^>]*>([\s\S]*?)<\/span>/i)?.[1],
-    html.match(/<span[^>]+id=["']swiSpan1["'][^>]*>([\s\S]*?)<\/span>/i)?.[1],
-    html.match(/class=["'][^"']*form-error[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1]
-  ].filter(Boolean);
-  const cleaned = candidates
-    .map((item) => item.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim())
-    .find(Boolean);
-  return cleaned || "登录失败，请检查账号密码或是否需要验证码。";
+  return encryptCasPassword(password, {
+    modulusHex: CAS_RSA_MODULUS,
+    exponentHex: CAS_RSA_EXPONENT
+  });
 }
 
 function assertAllowedSchoolUrl(value) {

@@ -6,7 +6,6 @@ import {
     BellOutlined,
     FileTextOutlined,
     RiseOutlined,
-    CloudOutlined,
     SettingOutlined,
     AppstoreOutlined,
     ShoppingOutlined,
@@ -159,11 +158,6 @@ const Dashboard = () => {
     const { isMobile } = useResponsive();
 
     useEffect(() => {
-        fetchStats();
-        fetchNews();
-    }, []);
-
-    useEffect(() => {
         const reveal = () => setShowTrendChart(true);
         const idleId = 'requestIdleCallback' in window
             ? window.requestIdleCallback(reveal, { timeout: 1200 })
@@ -205,6 +199,14 @@ const Dashboard = () => {
         }
     };
 
+    useEffect(() => {
+        const timerId = window.setTimeout(() => {
+            fetchStats();
+            fetchNews();
+        }, 0);
+        return () => window.clearTimeout(timerId);
+    }, []);
+
     const formatDate = (dateStr) => {
         const date = new Date(dateStr);
         const now = new Date();
@@ -225,7 +227,6 @@ const Dashboard = () => {
         { icon: <ShoppingOutlined />, title: '网课订单', path: '/course-orders', color: '#5CC9A7' },
         { icon: <FileSearchOutlined />, title: '记录查询', path: '/query', color: '#2563EB' },
         { icon: <ScanOutlined />, title: '扫码管理', path: '/scan-management', color: '#7551FF' },
-        { icon: <CloudOutlined />, title: 'IoT监控', path: '/iot-monitor', color: '#2FA8FF' },
         { icon: <ThunderboltOutlined />, title: '空气能监控', path: '/air-energy', color: '#FFB547' },
         { icon: <BellOutlined />, title: '通知管理', path: '/notifications', color: '#FF5B5B' },
         { icon: <HistoryOutlined />, title: '审计日志', path: '/audit-logs', color: '#A3AED0' },

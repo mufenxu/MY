@@ -9,7 +9,12 @@
 
 const nodemailer = require('nodemailer');
 const dayjs = require('dayjs');
-const { getNotificationApiKey, sendNotification } = require('./notificationClient');
+const {
+    buildWecomPayload,
+    isWecomEnabled,
+    isWecomResponseOk,
+    sendWecomText,
+} = require('./wecomNotification');
 
 const ResourceConfig = require('../models/ResourceConfig');
 const NotifyConfig = require('../models/NotifyConfig');
@@ -21,12 +26,6 @@ function buildTransport(cfg) {
         secure: true,
         auth: { user: cfg.smtpUser, pass: cfg.smtpPass },
     });
-}
-
-function isWecomEnabled(cfg) {
-    const hasRecipient = [cfg?.qywxToUser, cfg?.qywxToParty, cfg?.qywxToTag]
-        .some((value) => String(value || '').trim());
-    return Boolean(cfg && cfg.qywxEnabled && getNotificationApiKey(cfg.qywxApiKey) && hasRecipient);
 }
 
 function isDue(dateStr, advanceDays) {
@@ -184,43 +183,8 @@ function buildWecomText(servers, domains) {
     return lines.join('\n');
 }
 
-function buildWecomPayload(cfg, text, extra = {}) {
-    const payload = {
-        msg_type: 'text',
-        data: { content: text },
-        ...extra,
-    };
-
-    const touser = (cfg.qywxToUser || '').trim();
-    const toparty = (cfg.qywxToParty || '').trim();
-    const totag = (cfg.qywxToTag || '').trim();
-
-    if (touser) payload.touser = touser;
-    if (toparty) payload.toparty = toparty;
-    if (totag) payload.totag = totag;
-
-    const agentId = Number(cfg.qywxAgentId);
-    if (!Number.isNaN(agentId) && cfg.qywxAgentId !== undefined && cfg.qywxAgentId !== '') {
-        payload.agent_id = agentId;
-    }
-
-    return payload;
-}
-
 async function dispatchWecom(cfg, text, extra = {}) {
-    const payload = buildWecomPayload(cfg, text, extra);
-    const timeout = Number(cfg.qywxTimeout || 8000);
-    const response = await sendNotification(payload, { apiKey: cfg.qywxApiKey, timeoutMs: timeout });
-    return response.data;
-}
-
-function isWecomResponseOk(resp) {
-    if (!resp || typeof resp !== 'object') return false;
-    if (resp.errcode !== 0) return false;
-    if (resp.detail && typeof resp.detail === 'object' && resp.detail.errcode !== undefined) {
-        return resp.detail.errcode === 0;
-    }
-    return true;
+    return sendWecomText(cfg, text, extra);
 }
 
 function buildItemsHtml(items, title) {

@@ -20,7 +20,7 @@ const {
     buildScopeAssignment,
 } = require('../utils/libraryScope');
 const { consumeTempAuthCode } = require('../utils/scanLogin');
-const { replaceCategoryQuestions } = require('../utils/questionBatchSave');
+const { saveCategoryQuestions } = require('../utils/questionBatchSave');
 const { getAccessibleMyMajorCategories } = require('../utils/publicCatalog');
 const {
     getAssignedCategories,
@@ -33,8 +33,6 @@ const { buildCookieAuthPayload } = require('../utils/authResponse');
 const {
     toQuestionListSort,
     getNextQuestionSortOrder,
-    resolveAnalysisSourceOnSave,
-    getInvalidatedAiAnalysisQuestionIds,
 } = require('../utils/questionOrder');
 
 function getRequestContext(req) {
@@ -994,56 +992,16 @@ exports.batchUpdateQuestions = asyncHandler(async (req, res) => {
 
     await ensureOwnedCategory(id, ownerOpenid);
 
-    const oldQuestions = await Question.find({
-        categoryId: id,
-        scopeType: PERSONAL_SCOPE,
-        ownerOpenid,
-    })
-        .select('_id type content options answer analysis analysisSource')
-        .lean();
-    const oldQuestionMap = new Map(oldQuestions.map((question) => [String(question._id), question]));
-    const oldQuestionIdSet = new Set(oldQuestionMap.keys());
-
-    const newQuestions = questionsToSave.map((q, index) => {
-        const oldQuestion = q._id && oldQuestionIdSet.has(String(q._id))
-            ? oldQuestionMap.get(String(q._id))
-            : null;
-        const nextQuestion = {
-            ...(oldQuestion ? { _id: q._id } : {}),
-            type: q.type,
-            content: q.content,
-            options: q.options,
-            answer: q.answer,
-            analysis: q.analysis,
-            categoryId: id,
-            sortOrder: index,
-            ...buildScopeAssignment(PERSONAL_SCOPE, ownerOpenid),
-        };
-
-        return {
-            ...nextQuestion,
-            analysisSource: resolveAnalysisSourceOnSave(oldQuestion, nextQuestion),
-        };
-    });
-
-    await replaceCategoryQuestions({
-        questionQuery: {
-            categoryId: id,
-            scopeType: PERSONAL_SCOPE,
-            ownerOpenid,
-        },
+    const scopeAssignment = buildScopeAssignment(PERSONAL_SCOPE, ownerOpenid);
+    const questionQuery = { categoryId: id, ...scopeAssignment };
+    await saveCategoryQuestions({
+        questionsToSave,
+        questionQuery,
         categoryQuery: { _id: id, scopeType: PERSONAL_SCOPE, ownerOpenid },
-        categoryUpdate: { count: newQuestions.length },
-        questions: newQuestions,
+        categoryId: id,
+        scopeAssignment,
         Category,
     });
-
-    const invalidatedAiQuestionIds = getInvalidatedAiAnalysisQuestionIds(oldQuestions, newQuestions);
-    if (invalidatedAiQuestionIds.length > 0) {
-        await AiQuestionAnalysis.deleteMany({
-            questionId: { $in: invalidatedAiQuestionIds },
-        });
-    }
 
     success(res, null, '批量保存成功');
 });

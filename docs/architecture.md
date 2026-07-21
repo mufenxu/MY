@@ -88,3 +88,17 @@ Alibaba Cloud Container Registry is the primary production image source. GitHub 
 - `notification-service` 使用独立的 MongoDB 数据库 `notification_app`，保存加密的发送载荷和通知投递台账。
 - 六个数据库分别使用独立的最小权限账号；初始化任务使用 root，备份执行器使用独立的 `backup`/`restore` 账号。
 - 服务之间只通过 Docker 内网 HTTP API 交互，不经过公网域名，也不跨边界直接读取对方数据库。
+
+## Feature ownership
+
+| Capability | Canonical owner | Compatibility rule |
+| --- | --- | --- |
+| Unified operations, release, backup and CT8 automation UI | `admin-console` | Core `/ct8-monitor` redirects to `/?view=automation` |
+| CT8 API | `core-api` `/api/ct8/*` | `/api/github/*` is deprecated and remains only as a transition alias |
+| Generic MQTT devices, relays, history and live monitoring | `iot-service` | Core `/iot-monitor` redirects to `/apps/iot/`; Core may call the IoT API but must not add another MQTT UI |
+| Tuya-backed air-energy workflows | `core-api` | Remains a Core provider until an explicit data migration moves models, jobs and audit history together |
+| Platform and demo exam libraries | Exam `manage` identity | The `manage` and `console` routes share domain helpers but never share account or authorization policy |
+| Personal exam libraries and shared-paper copies | Exam `console` identity | Read-only share restrictions stay in the console adapter |
+| In-app notification records | Owning business service | Outbound WeCom delivery belongs to `notification-service`; Core uses one shared WeCom payload client |
+
+New features must extend the canonical owner or call its internal API. A compatibility route may redirect or proxy temporarily, but it must not contain a second implementation of the feature.

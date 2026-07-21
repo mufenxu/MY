@@ -20,7 +20,7 @@ const BONK_LINES = [
     '这不是 bug，这是你发现的幽默彩蛋。'
 ];
 
-const AUTH_RANDOM_DEST = ['/dashboard', '/users', '/notifications', '/iot-monitor', '/air-energy'];
+const AUTH_RANDOM_DEST = ['/dashboard', '/users', '/notifications', '/air-energy'];
 
 const NotFound = () => {
     const navigate = useNavigate();

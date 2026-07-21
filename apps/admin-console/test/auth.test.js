@@ -4,8 +4,10 @@ import crypto from 'node:crypto';
 import {
   createPasswordHash,
   createSessionRegistry,
+  isPasswordHash,
   issueSession,
   parseCookies,
+  passwordHashNeedsUpgrade,
   verifyPassword,
   verifySession,
   verifyTotp,
@@ -13,9 +15,20 @@ import {
 
 test('password hashes verify the original password only', async () => {
   const hash = await createPasswordHash('a-strong-password', Buffer.alloc(16, 7));
+  assert.match(hash, /^scrypt\$131072\$8\$1\$/);
+  assert.equal(isPasswordHash(hash), true);
+  assert.equal(passwordHashNeedsUpgrade(hash), false);
   assert.equal(await verifyPassword('a-strong-password', hash), true);
   assert.equal(await verifyPassword('wrong-password', hash), false);
   assert.equal(await verifyPassword('a-strong-password', 'invalid'), false);
+});
+
+test('legacy scrypt hashes remain valid and are marked for upgrade', async () => {
+  const salt = Buffer.alloc(16, 4);
+  const hash = crypto.scryptSync('legacy-admin-password', salt, 64, { N: 2 ** 14, r: 8, p: 1 });
+  const encoded = `scrypt$${salt.toString('base64url')}$${hash.toString('base64url')}`;
+  assert.equal(await verifyPassword('legacy-admin-password', encoded), true);
+  assert.equal(passwordHashNeedsUpgrade(encoded), true);
 });
 
 test('signed sessions expire and reject tampering', () => {
@@ -40,6 +53,16 @@ test('registered sessions can be revoked server-side', () => {
 
   const unregistered = issueSession({ username: 'admin', secret, ttlHours: 1, now });
   assert.equal(sessions.verify(unregistered, now + 1000), null);
+});
+
+test('registered sessions expire after the configured idle timeout', () => {
+  const now = Date.UTC(2026, 6, 15, 12, 0, 0);
+  const sessions = createSessionRegistry({ secret: 'i'.repeat(32), idleTimeoutMinutes: 5 });
+  const token = sessions.issue({ username: 'admin', ttlHours: 1, now });
+  assert.equal(sessions.verify(token, now + 299_000).sub, 'admin');
+
+  const untouched = sessions.issue({ username: 'other-admin', ttlHours: 1, now });
+  assert.equal(sessions.verify(untouched, now + 300_000), null);
 });
 
 test('registered sessions expose safe metadata and support remote revocation', () => {

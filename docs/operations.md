@@ -121,10 +121,14 @@ Audit records intentionally contain request IDs, actor, source IP, target, outco
 ## Management security
 
 - `PLATFORM_ADMIN_ROLE` defaults to `super_admin`; use `viewer` or `operator` for lower-privilege accounts.
-- `PLATFORM_ADMIN_TOTP_SECRET` is optional Base32 TOTP material. Store it with deployment secrets, not in Git.
-- Active sessions are stored in MongoDB and can be revoked from the security page.
+- `PLATFORM_REQUIRE_MFA` defaults to `true` in production. A bootstrap account without TOTP must enroll it during the first successful password login.
+- `PLATFORM_ADMIN_TOTP_SECRET` remains an optional bootstrap/migration input. Runtime TOTP secrets are encrypted with `PLATFORM_AUTH_ENCRYPTION_KEY`; recovery codes are stored only as keyed hashes.
+- Administrator accounts, active sessions, one-time Passkey challenges, and login-risk counters are stored in the isolated `platform_app` database.
+- Login protection combines account/IP keyed identifiers, exponential backoff, generic credential errors, and optional adaptive Cloudflare Turnstile after the configured failure threshold.
+- Passwords require at least 15 characters, use versioned scrypt parameters, and transparently upgrade legacy hashes after a successful login.
+- The security page supports Passkeys, one-time recovery codes, password changes, least-privilege account roles, and remote session revocation.
 - Viewer sessions cannot mutate `/apps/*` routes and cannot open the managed IoT WebSocket.
-- Backup restore and release actions require password reauthentication and TOTP when enabled.
+- Backup restore, release actions, and security-setting changes require password reauthentication and TOTP.
 
 ## Release center
 

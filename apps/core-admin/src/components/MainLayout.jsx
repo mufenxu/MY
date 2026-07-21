@@ -13,7 +13,6 @@ import {
     DashboardOutlined,
     CloudOutlined,
     FireOutlined,
-    GlobalOutlined,
     DatabaseOutlined,
     FullscreenOutlined,
     FullscreenExitOutlined,
@@ -38,8 +37,6 @@ const InlineRouteFallback = () => (
 
 const TAB_CONFIG = {
     '/dashboard': { label: '数据仪表盘', icon: <DashboardOutlined />, closable: false },
-    '/iot-monitor': { label: 'IoT监控', icon: <CloudOutlined /> },
-    '/ct8-monitor': { label: 'CT8节点', icon: <GlobalOutlined /> },
     '/air-energy': { label: '空气能监控', icon: <FireOutlined /> },
     '/users': { label: '用户与权限', icon: <UserOutlined /> },
     '/notifications': { label: '通知管理', icon: <BellOutlined /> },
@@ -57,8 +54,6 @@ const MENU_ITEMS = [
         icon: <CloudOutlined />,
         label: '设备与监控',
         children: [
-            { key: '/iot-monitor', label: 'IoT监控' },
-            { key: '/ct8-monitor', label: 'CT8节点' },
             { key: '/air-energy', label: '空气能监控' },
         ]
     },
@@ -88,7 +83,6 @@ const MENU_ITEMS = [
 
 const TABLE_HEAVY_ROUTES = new Set([
     '/dashboard',
-    '/iot-monitor',
     '/air-energy',
     '/users',
     '/notifications',
@@ -96,7 +90,6 @@ const TABLE_HEAVY_ROUTES = new Set([
     '/scan-management',
     '/resources',
     '/course-orders',
-    '/ct8-monitor',
 ]);
 
 const SidebarContent = ({

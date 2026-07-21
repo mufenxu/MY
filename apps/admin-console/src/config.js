@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
+import { isPasswordHash } from './auth.js';
 
 dotenv.config({ quiet: true });
 
@@ -9,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(__dirname, '..', '..', '..');
 const defaultRegistryPath = path.resolve(__dirname, '..', '..', '..', 'config', 'platform.services.local.json');
 const localInternalKeyPair = crypto.generateKeyPairSync('ed25519');
+const localAuthEncryptionKey = crypto.randomBytes(32).toString('base64url');
 const localInternalPrivateKey = localInternalKeyPair.privateKey
   .export({ format: 'der', type: 'pkcs8' }).toString('base64url');
 const localInternalPublicKey = localInternalKeyPair.publicKey
@@ -96,6 +98,14 @@ function isTemplatePlaceholder(value) {
   return /^(?:replace|change)_with_/i.test(String(value || '').trim());
 }
 
+function validBase64UrlKey(value, bytes = 32) {
+  try {
+    return Buffer.from(String(value || ''), 'base64url').length === bytes && !isTemplatePlaceholder(value);
+  } catch {
+    return false;
+  }
+}
+
 export function loadConfig(env = process.env) {
   const nodeEnv = env.NODE_ENV || 'development';
   const isProduction = nodeEnv === 'production';
@@ -120,11 +130,23 @@ export function loadConfig(env = process.env) {
     adminRole: parseRole(env.PLATFORM_ADMIN_ROLE),
     adminTotpSecret: String(env.PLATFORM_ADMIN_TOTP_SECRET || '').replace(/[\s=-]/g, '').toUpperCase(),
     sessionSecret: env.PLATFORM_SESSION_SECRET || '',
+    authEncryptionKey: env.PLATFORM_AUTH_ENCRYPTION_KEY || (isProduction ? '' : localAuthEncryptionKey),
     internalAuthPrivateKey: env.PLATFORM_INTERNAL_AUTH_PRIVATE_KEY || (isProduction ? '' : localInternalPrivateKey),
     internalAuthPublicKey: env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY || (isProduction ? '' : localInternalPublicKey),
     mongoUri: env.PLATFORM_MONGODB_URI || '',
     metricsToken: env.PLATFORM_METRICS_TOKEN || '',
     sessionTtlHours: parseInteger(env.PLATFORM_SESSION_TTL_HOURS, 12, { min: 1, max: 168 }),
+    sessionIdleMinutes: parseInteger(env.PLATFORM_SESSION_IDLE_MINUTES, 30, { min: 5, max: 240 }),
+    requireMfa: parseBoolean(env.PLATFORM_REQUIRE_MFA, isProduction),
+    loginWindowMinutes: parseInteger(env.PLATFORM_LOGIN_WINDOW_MINUTES, 15, { min: 1, max: 60 }),
+    loginMaxAttempts: parseInteger(env.PLATFORM_LOGIN_MAX_ATTEMPTS, 10, { min: 3, max: 100 }),
+    loginChallengeThreshold: parseInteger(env.PLATFORM_LOGIN_CHALLENGE_THRESHOLD, 3, { min: 2, max: 20 }),
+    loginBackoffBaseMs: parseInteger(env.PLATFORM_LOGIN_BACKOFF_BASE_MS, 1000, { min: 250, max: 10000 }),
+    loginBackoffMaxMs: parseInteger(env.PLATFORM_LOGIN_BACKOFF_MAX_MS, 15 * 60 * 1000, { min: 10_000, max: 60 * 60 * 1000 }),
+    turnstileSiteKey: String(env.PLATFORM_TURNSTILE_SITE_KEY || '').trim(),
+    turnstileSecretKey: String(env.PLATFORM_TURNSTILE_SECRET_KEY || '').trim(),
+    webauthnRpName: String(env.PLATFORM_WEBAUTHN_RP_NAME || 'MY Platform').trim().slice(0, 64),
+    webauthnRpId: String(env.PLATFORM_WEBAUTHN_RP_ID || '').trim().toLowerCase(),
     serviceTimeoutMs: parseInteger(env.PLATFORM_SERVICE_TIMEOUT_MS, 8000, { min: 1000, max: 30000 }),
     monitorIntervalMs: parseInteger(env.PLATFORM_MONITOR_INTERVAL_MS, 30000, { min: 10000, max: 300000 }),
     statusRetentionDays: parseInteger(env.PLATFORM_STATUS_RETENTION_DAYS, 30, { min: 1, max: 365 }),
@@ -186,10 +208,11 @@ export function loadConfig(env = process.env) {
   if (!config.authDisabled) {
     const missing = [];
     if (!config.adminUsername) missing.push('PLATFORM_ADMIN_USERNAME');
-    if (!config.adminPasswordHash.startsWith('scrypt$') || isTemplatePlaceholder(config.adminPasswordHash.split('$')[1])) {
+    if (!isPasswordHash(config.adminPasswordHash) || isTemplatePlaceholder(config.adminPasswordHash.split('$').at(-2))) {
       missing.push('PLATFORM_ADMIN_PASSWORD_HASH');
     }
     if (config.sessionSecret.length < 32 || isTemplatePlaceholder(config.sessionSecret)) missing.push('PLATFORM_SESSION_SECRET');
+    if (!validBase64UrlKey(config.authEncryptionKey)) missing.push('PLATFORM_AUTH_ENCRYPTION_KEY');
     if (!validEd25519Key(config.internalAuthPrivateKey, 'private')) missing.push('PLATFORM_INTERNAL_AUTH_PRIVATE_KEY');
     if (!validEd25519Key(config.internalAuthPublicKey, 'public')) missing.push('PLATFORM_INTERNAL_AUTH_PUBLIC_KEY');
     if (
@@ -209,6 +232,9 @@ export function loadConfig(env = process.env) {
     if (config.adminTotpSecret && !/^[A-Z2-7]{16,128}$/.test(config.adminTotpSecret)) {
       missing.push('PLATFORM_ADMIN_TOTP_SECRET');
     }
+    if (Boolean(config.turnstileSiteKey) !== Boolean(config.turnstileSecretKey)) {
+      missing.push('PLATFORM_TURNSTILE_SITE_KEY_AND_SECRET_KEY');
+    }
     if (config.releaseActionsEnabled && (!config.githubToken || !config.githubRepository)) {
       missing.push('PLATFORM_GITHUB_TOKEN');
     }
@@ -222,6 +248,11 @@ export function loadConfig(env = process.env) {
       missing.push('PLATFORM_DEPLOY_HOOK_TOKEN');
     }
     if (config.isProduction && !config.publicOrigin.startsWith('https://')) missing.push('PLATFORM_PUBLIC_ORIGIN_HTTPS');
+    const publicHostname = config.publicOrigin ? new URL(config.publicOrigin).hostname : '';
+    if (!config.webauthnRpId) config.webauthnRpId = publicHostname;
+    if (config.webauthnRpId && publicHostname !== config.webauthnRpId && !publicHostname.endsWith(`.${config.webauthnRpId}`)) {
+      missing.push('PLATFORM_WEBAUTHN_RP_ID');
+    }
 
     if (missing.length > 0) {
       throw new Error(`管理门户鉴权配置不完整：${missing.join(', ')}`);

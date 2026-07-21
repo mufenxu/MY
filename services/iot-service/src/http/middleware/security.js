@@ -1,3 +1,5 @@
+const { isSafeHttpMethod } = require('@my-platform/platform-auth');
+
 function parseTrustProxy(value) {
   if (value == null || String(value).trim() === '') {
     return false;
@@ -74,7 +76,7 @@ function hasBearerAuth(req) {
 }
 
 function requireSameOriginSessionWrite(req, res, next) {
-  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || hasBearerAuth(req)) {
+  if (isSafeHttpMethod(req.method) || hasBearerAuth(req)) {
     return next();
   }
 

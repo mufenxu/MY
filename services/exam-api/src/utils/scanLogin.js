@@ -1,4 +1,8 @@
 const crypto = require('crypto');
+const {
+    isScanLoginSessionExpired,
+    isTerminalScanLoginStatus,
+} = require('@my-platform/platform-auth');
 const config = require('../config');
 const ScanLoginSession = require('../models/ScanLoginSession');
 const { AppError, NotFoundError } = require('./errors');
@@ -209,10 +213,6 @@ function buildCleanupAt(now = new Date()) {
     return new Date(now.getTime() + CLEANUP_TTL_MS);
 }
 
-function isExpired(session, now = new Date()) {
-    return !session.expiresAt || session.expiresAt.getTime() <= now.getTime();
-}
-
 function isTempAuthCodeExpired(session, now = new Date()) {
     return !session.tempAuthCodeExpiresAt || session.tempAuthCodeExpiresAt.getTime() <= now.getTime();
 }
@@ -230,7 +230,7 @@ async function markExpiredIfNeeded(session, now = new Date()) {
         throw new NotFoundError('二维码不存在或已失效');
     }
 
-    if (isExpired(session, now) && !['expired', 'consumed', 'cancelled'].includes(session.status)) {
+    if (isScanLoginSessionExpired(session, { now }) && !isTerminalScanLoginStatus(session.status)) {
         session.status = 'expired';
         session.cleanupAt = buildCleanupAt(now);
         await session.save();

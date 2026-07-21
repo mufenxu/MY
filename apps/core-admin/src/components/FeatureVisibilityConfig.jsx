@@ -42,10 +42,6 @@ const FeatureVisibilityConfig = () => {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => {
-        loadConfig();
-    }, []);
-
     const loadConfig = async () => {
         setLoading(true);
         try {
@@ -65,6 +61,11 @@ const FeatureVisibilityConfig = () => {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        const timerId = window.setTimeout(loadConfig, 0);
+        return () => window.clearTimeout(timerId);
+    }, []);
 
     const handleUpdate = (key, field, value) => {
         setConfig(prev => {

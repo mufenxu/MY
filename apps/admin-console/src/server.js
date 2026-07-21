@@ -1,12 +1,43 @@
 import { createApp } from './app.js';
+import { createMongoAuthRiskStore } from './auth-risk-store.js';
+import { createMongoAuthStore } from './auth-store.js';
 import { loadConfig } from './config.js';
 import { createMongoSessionRegistry } from './mongo-session-registry.js';
 import { createMongoOperationsStore } from './operations-store.js';
 import { createMongoReleaseStore } from './release-store.js';
 
 const config = loadConfig();
+const authStore = config.mongoUri
+  ? await createMongoAuthStore({
+    uri: config.mongoUri,
+    encryptionKey: config.authEncryptionKey,
+    issuer: config.webauthnRpName,
+    bootstrap: {
+      username: config.adminUsername,
+      passwordHash: config.adminPasswordHash,
+      role: config.adminRole,
+      totpSecret: config.adminTotpSecret,
+    },
+  })
+  : null;
+const authRiskStore = config.mongoUri
+  ? await createMongoAuthRiskStore({
+    uri: config.mongoUri,
+    encryptionKey: config.authEncryptionKey,
+    challengeConfigured: Boolean(config.turnstileSiteKey && config.turnstileSecretKey),
+    windowMinutes: config.loginWindowMinutes,
+    maxAttempts: config.loginMaxAttempts,
+    challengeThreshold: config.loginChallengeThreshold,
+    backoffBaseMs: config.loginBackoffBaseMs,
+    backoffMaxMs: config.loginBackoffMaxMs,
+  })
+  : null;
 const sessionRegistry = config.mongoUri
-  ? await createMongoSessionRegistry({ uri: config.mongoUri, secret: config.sessionSecret })
+  ? await createMongoSessionRegistry({
+    uri: config.mongoUri,
+    secret: config.sessionSecret,
+    idleTimeoutMinutes: config.sessionIdleMinutes,
+  })
   : null;
 const operationsStore = config.mongoUri
   ? await createMongoOperationsStore({
@@ -20,16 +51,20 @@ const releaseStore = config.mongoUri
   : null;
 const app = createApp({
   config,
+  authStore,
+  authRiskStore,
   sessionRegistry,
   operationsStore,
   releaseStore,
   readinessCheck: async () => {
-    const [sessionsReady, operationsReady, releasesReady] = await Promise.all([
+    const [authReady, riskReady, sessionsReady, operationsReady, releasesReady] = await Promise.all([
+      authStore ? authStore.ping() : true,
+      authRiskStore ? authRiskStore.ping() : true,
       sessionRegistry ? sessionRegistry.ping() : true,
       operationsStore ? operationsStore.ping() : true,
       releaseStore ? releaseStore.ping() : true,
     ]);
-    return sessionsReady && operationsReady && releasesReady;
+    return authReady && riskReady && sessionsReady && operationsReady && releasesReady;
   },
 });
 app.locals.operationsCenter.start();
@@ -51,7 +86,7 @@ function shutdown(signal) {
       console.error(error);
       process.exitCode = 1;
     }
-    await sessionRegistry?.close();
+    await Promise.allSettled([authStore?.close(), authRiskStore?.close(), sessionRegistry?.close()]);
     app.locals.operationsCenter.stop();
     await operationsStore?.close();
     await releaseStore?.close();

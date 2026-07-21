@@ -38,7 +38,8 @@ const SecretSettings = () => {
     };
 
     useEffect(() => {
-        fetchSecrets();
+        const timerId = window.setTimeout(fetchSecrets, 0);
+        return () => window.clearTimeout(timerId);
     }, []);
 
     const openEdit = (record) => {

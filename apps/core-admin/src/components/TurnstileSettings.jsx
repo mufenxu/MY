@@ -41,7 +41,8 @@ const TurnstileSettings = () => {
     }, [form]);
 
     useEffect(() => {
-        loadConfig();
+        const timerId = window.setTimeout(loadConfig, 0);
+        return () => window.clearTimeout(timerId);
     }, [loadConfig]);
 
     const saveConfig = async (values, proof = {}) => {

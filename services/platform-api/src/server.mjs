@@ -5,7 +5,7 @@ import { createCoreWebApp, createOfficialWebsiteApp, createPlatformRouter } from
 import { resolveRuntimePaths } from './runtime-paths.mjs';
 import { checkExternalServices, resolveServiceMode } from './service-targets.mjs';
 import { createSessionVerifierCache } from './session-cache.mjs';
-import { SESSION_COOKIE_NAME, parseCookies } from '../../../apps/admin-console/src/auth.js';
+import { SESSION_COOKIE_NAME, parseCookies, sessionCookieName } from '../../../apps/admin-console/src/auth.js';
 
 const require = createRequire(import.meta.url);
 const serviceMode = resolveServiceMode();
@@ -26,13 +26,44 @@ const [{ createApp: createPortalApp }, { loadConfig: loadPortalConfig }] = await
 const { createMongoSessionRegistry } = await import(
   pathToFileURL(paths.portalMongoSessionRegistry).href
 );
+const { createMongoAuthStore } = await import(pathToFileURL(paths.portalAuthStore).href);
+const { createMongoAuthRiskStore } = await import(pathToFileURL(paths.portalAuthRiskStore).href);
 const { createMongoOperationsStore } = await import(
   pathToFileURL(paths.portalOperationsStore).href
 );
 
 const portalConfig = loadPortalConfig();
+const authStore = portalConfig.mongoUri
+  ? await createMongoAuthStore({
+    uri: portalConfig.mongoUri,
+    encryptionKey: portalConfig.authEncryptionKey,
+    issuer: portalConfig.webauthnRpName,
+    bootstrap: {
+      username: portalConfig.adminUsername,
+      passwordHash: portalConfig.adminPasswordHash,
+      role: portalConfig.adminRole,
+      totpSecret: portalConfig.adminTotpSecret,
+    },
+  })
+  : null;
+const authRiskStore = portalConfig.mongoUri
+  ? await createMongoAuthRiskStore({
+    uri: portalConfig.mongoUri,
+    encryptionKey: portalConfig.authEncryptionKey,
+    challengeConfigured: Boolean(portalConfig.turnstileSiteKey && portalConfig.turnstileSecretKey),
+    windowMinutes: portalConfig.loginWindowMinutes,
+    maxAttempts: portalConfig.loginMaxAttempts,
+    challengeThreshold: portalConfig.loginChallengeThreshold,
+    backoffBaseMs: portalConfig.loginBackoffBaseMs,
+    backoffMaxMs: portalConfig.loginBackoffMaxMs,
+  })
+  : null;
 const sessionRegistry = portalConfig.mongoUri
-  ? await createMongoSessionRegistry({ uri: portalConfig.mongoUri, secret: portalConfig.sessionSecret })
+  ? await createMongoSessionRegistry({
+    uri: portalConfig.mongoUri,
+    secret: portalConfig.sessionSecret,
+    idleTimeoutMinutes: portalConfig.sessionIdleMinutes,
+  })
   : null;
 const operationsStore = portalConfig.mongoUri
   ? await createMongoOperationsStore({
@@ -42,17 +73,21 @@ const operationsStore = portalConfig.mongoUri
   })
   : null;
 const readinessCheck = async () => {
-  const [servicesReady, sessionReady, operationsReady] = await Promise.all([
+  const [servicesReady, authReady, riskReady, sessionReady, operationsReady] = await Promise.all([
     serviceMode.external
       ? checkExternalServices(serviceMode.targets)
       : Promise.resolve(Boolean(coreRuntime.isCoreRuntimeReady() && examRuntime.isExamRuntimeReady())),
+    authStore ? authStore.ping() : Promise.resolve(true),
+    authRiskStore ? authRiskStore.ping() : Promise.resolve(true),
     sessionRegistry ? sessionRegistry.ping() : Promise.resolve(true),
     operationsStore ? operationsStore.ping() : Promise.resolve(true),
   ]);
-  return Boolean(servicesReady && sessionReady && operationsReady);
+  return Boolean(servicesReady && authReady && riskReady && sessionReady && operationsReady);
 };
 const portalApp = createPortalApp({
   config: portalConfig,
+  authStore,
+  authRiskStore,
   sessionRegistry,
   operationsStore,
   readinessCheck,
@@ -66,11 +101,13 @@ const sessionVerifierCache = createSessionVerifierCache({
 });
 portalApp.locals.onConsoleSessionRevoked = (token) => sessionVerifierCache.invalidate(token);
 portalApp.locals.onConsoleSessionChanged = (token) => sessionVerifierCache.invalidate(token);
+portalApp.locals.onConsoleSessionsChanged = () => sessionVerifierCache.clear();
 const getPlatformSession = async (req) => {
   if (portalConfig.authDisabled) {
     return { sub: 'local-admin', role: 'super_admin', nonce: 'local-development-session' };
   }
-  const token = parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME];
+  const cookies = parseCookies(req.headers.cookie);
+  const token = cookies[sessionCookieName(portalConfig.isProduction)] || cookies[SESSION_COOKIE_NAME];
   return sessionVerifierCache.verify(token);
 };
 const coreWebApp = serviceMode.external
@@ -150,6 +187,8 @@ async function shutdown(signal, exitCode = 0) {
     coreRuntime?.closeCoreRuntime?.(),
     examRuntime?.closeExamRuntime?.(),
     sessionRegistry?.close(),
+    authStore?.close(),
+    authRiskStore?.close(),
     operationsStore?.close(),
   ]);
   for (const result of results) {

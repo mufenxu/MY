@@ -35,7 +35,7 @@ const {
     removeUserAssignments,
 } = require('../utils/userAssignment');
 const { cleanupAiAnalysesForDeletedUsers } = require('../utils/userDataCleanup');
-const { replaceCategoryQuestions } = require('../utils/questionBatchSave');
+const { saveCategoryQuestions } = require('../utils/questionBatchSave');
 const {
     toSharePayload,
     generateUniqueShareCode,
@@ -52,8 +52,6 @@ const { buildCategoryAnalysis } = require('../utils/categoryAnalysis');
 const {
     toQuestionListSort,
     getNextQuestionSortOrder,
-    resolveAnalysisSourceOnSave,
-    getInvalidatedAiAnalysisQuestionIds,
 } = require('../utils/questionOrder');
 
 function buildFeedbackQuery({ status, keyword } = {}) {
@@ -557,48 +555,16 @@ exports.batchUpdateQuestions = asyncHandler(async (req, res) => {
         throw new NotFoundError('题库不存在');
     }
 
-    const oldQuestions = await Question.find(buildManagedQuery(scopeType, { categoryId: id }))
-        .select('_id type content options answer analysis analysisSource')
-        .lean();
-    const oldQuestionMap = new Map(oldQuestions.map((question) => [String(question._id), question]));
-    const oldQuestionIdSet = new Set(oldQuestionMap.keys());
-
-    const newQuestions = questionsToSave.map((q, index) => {
-        const oldQuestion = q._id && oldQuestionIdSet.has(String(q._id))
-            ? oldQuestionMap.get(String(q._id))
-            : null;
-        const nextQuestion = {
-            ...(oldQuestion ? { _id: q._id } : {}),
-            type: q.type,
-            content: q.content,
-            options: q.options,
-            answer: q.answer,
-            analysis: q.analysis,
-            categoryId: id,
-            sortOrder: index,
-            ...buildScopeAssignment(scopeType),
-        };
-
-        return {
-            ...nextQuestion,
-            analysisSource: resolveAnalysisSourceOnSave(oldQuestion, nextQuestion),
-        };
-    });
-
-    await replaceCategoryQuestions({
+    const scopeAssignment = buildScopeAssignment(scopeType);
+    await saveCategoryQuestions({
+        questionsToSave,
         questionQuery: buildManagedQuery(scopeType, { categoryId: id }),
         categoryQuery: buildManagedQuery(scopeType, { _id: id }),
-        categoryUpdate: { count: newQuestions.length, ...buildScopeAssignment(scopeType) },
-        questions: newQuestions,
+        categoryId: id,
+        categoryUpdate: scopeAssignment,
+        scopeAssignment,
         Category,
     });
-
-    const invalidatedAiQuestionIds = getInvalidatedAiAnalysisQuestionIds(oldQuestions, newQuestions);
-    if (invalidatedAiQuestionIds.length > 0) {
-        await AiQuestionAnalysis.deleteMany({
-            questionId: { $in: invalidatedAiQuestionIds },
-        });
-    }
 
     success(res, null, 'Batch update success');
 });

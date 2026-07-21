@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
 const Question = require('../models/Question');
+const AiQuestionAnalysis = require('../models/AiQuestionAnalysis');
+const {
+    resolveAnalysisSourceOnSave,
+    getInvalidatedAiAnalysisQuestionIds,
+} = require('./questionOrder');
 
 function supportsTransactions() {
     const topologyType = mongoose.connection?.client?.topology?.description?.type;
@@ -84,6 +89,76 @@ async function replaceCategoryQuestions({
     }
 }
 
+function buildQuestionSavePlan({ questionsToSave, oldQuestions, categoryId, scopeAssignment }) {
+    const oldQuestionMap = new Map(oldQuestions.map((question) => [String(question._id), question]));
+    const oldQuestionIdSet = new Set(oldQuestionMap.keys());
+
+    const questions = questionsToSave.map((question, index) => {
+        const oldQuestion = question._id && oldQuestionIdSet.has(String(question._id))
+            ? oldQuestionMap.get(String(question._id))
+            : null;
+        const nextQuestion = {
+            ...(oldQuestion ? { _id: question._id } : {}),
+            type: question.type,
+            content: question.content,
+            options: question.options,
+            answer: question.answer,
+            analysis: question.analysis,
+            categoryId,
+            sortOrder: index,
+            ...scopeAssignment,
+        };
+
+        return {
+            ...nextQuestion,
+            analysisSource: resolveAnalysisSourceOnSave(oldQuestion, nextQuestion),
+        };
+    });
+
+    return {
+        questions,
+        invalidatedAiQuestionIds: getInvalidatedAiAnalysisQuestionIds(oldQuestions, questions),
+    };
+}
+
+async function saveCategoryQuestions({
+    questionsToSave,
+    questionQuery,
+    categoryQuery,
+    categoryId,
+    categoryUpdate = {},
+    scopeAssignment,
+    Category,
+}) {
+    const oldQuestions = await Question.find(questionQuery)
+        .select('_id type content options answer analysis analysisSource')
+        .lean();
+    const plan = buildQuestionSavePlan({
+        questionsToSave,
+        oldQuestions,
+        categoryId,
+        scopeAssignment,
+    });
+
+    await replaceCategoryQuestions({
+        questionQuery,
+        categoryQuery,
+        categoryUpdate: { count: plan.questions.length, ...categoryUpdate },
+        questions: plan.questions,
+        Category,
+    });
+
+    if (plan.invalidatedAiQuestionIds.length > 0) {
+        await AiQuestionAnalysis.deleteMany({
+            questionId: { $in: plan.invalidatedAiQuestionIds },
+        });
+    }
+
+    return plan;
+}
+
 module.exports = {
+    buildQuestionSavePlan,
     replaceCategoryQuestions,
+    saveCategoryQuestions,
 };

@@ -58,7 +58,8 @@ const ScanManagement = () => {
     };
 
     useEffect(() => {
-        fetchData();
+        const timerId = window.setTimeout(fetchData, 0);
+        return () => window.clearTimeout(timerId);
     }, []);
 
     const handleAdd = () => {

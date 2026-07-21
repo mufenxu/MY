@@ -3,7 +3,12 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import express from 'express';
 import httpProxy from 'http-proxy';
-import { PLATFORM_SSO_HEADER, SERVICE_AUTH_HEADERS, issueInternalIdentity } from './internal-auth.mjs';
+import {
+  PLATFORM_SSO_HEADER,
+  SERVICE_AUTH_HEADERS,
+  isSafeHttpMethod,
+  issueInternalIdentity,
+} from './internal-auth.mjs';
 
 const PROXY_CONTEXT = Symbol('platformProxyContext');
 const PROXY_TIMEOUT_MIN_MS = 1_000;
@@ -80,7 +85,7 @@ function boundedProxyTimeout(value) {
 }
 
 function isHashedStaticAsset(filePath) {
-  return /[\\/]assets[\\/][^\\/]+-[A-Za-z0-9_-]{8,}\.[^\\/]+$/.test(String(filePath || ''));
+  return /[\\/](?:assets|website-assets)[\\/][^\\/]+-[A-Za-z0-9_-]{8,}\.[^\\/]+$/.test(String(filePath || ''));
 }
 
 function isDocumentRequest(req, pathname) {
@@ -108,7 +113,7 @@ function requestOrigin(req) {
 }
 
 function managedWriteAllowed(req, platformPublicOrigin) {
-  if (['GET', 'HEAD', 'OPTIONS'].includes(String(req.method || 'GET').toUpperCase())) return true;
+  if (isSafeHttpMethod(req.method)) return true;
   const fetchSite = String(req.headers['sec-fetch-site'] || '').toLowerCase();
   if (fetchSite && fetchSite !== 'same-origin') return false;
   return Boolean(platformPublicOrigin) && requestOrigin(req) === platformPublicOrigin;
@@ -184,9 +189,8 @@ export function createOfficialWebsiteApp({ staticPath }) {
   app.use((req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-      + "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-      + "font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; "
+      "default-src 'self'; script-src 'self'; style-src 'self'; "
+      + "font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; "
       + "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
     );
     next();
@@ -202,7 +206,9 @@ export function createOfficialWebsiteApp({ staticPath }) {
       setHeaders(res, filePath) {
         res.setHeader('X-Content-Type-Options', 'nosniff');
         if (filePath.endsWith('.html')) {
-          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+        } else if (isHashedStaticAsset(filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         } else {
           res.setHeader('Cache-Control', 'public, max-age=86400');
         }
@@ -210,7 +216,7 @@ export function createOfficialWebsiteApp({ staticPath }) {
     }));
 
     app.get('/', (req, res) => {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       const distIndex = path.join(targetPath, 'index.html');
       return res.sendFile(distIndex);
     });
@@ -361,7 +367,7 @@ export function createPlatformRouter({
       rejectCrossSiteWrite(res);
       return false;
     }
-    if (session.role === 'viewer' && !['GET', 'HEAD', 'OPTIONS'].includes(String(req.method || 'GET').toUpperCase())) {
+    if (session.role === 'viewer' && !isSafeHttpMethod(req.method)) {
       rejectReadOnlyWrite(res);
       return false;
     }

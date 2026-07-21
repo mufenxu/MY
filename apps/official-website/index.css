@@ -53,14 +53,16 @@
 }
 
 html {
-  font-family: 'Outfit', 'Noto Sans SC', sans-serif;
+  font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background-color: var(--color-bg-main);
   color: var(--color-text-primary);
+  overflow-x: clip;
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
 }
 
 body {
+  width: 100%;
   overflow-x: hidden;
   position: relative;
   line-height: 1.6;
@@ -152,7 +154,7 @@ a {
 .brand-title {
   font-weight: 800;
   font-size: 14px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
   color: var(--color-text-primary);
   line-height: 1.2;
   white-space: nowrap;
@@ -361,6 +363,7 @@ a {
 /* Hero Section */
 .hero-section {
   position: relative;
+  overflow-x: clip;
   padding: 140px 20px 80px;
   display: flex;
   flex-direction: column;
@@ -452,7 +455,7 @@ a {
   font-size: clamp(28px, 5vw, 60px);
   font-weight: 800;
   line-height: 1.16;
-  letter-spacing: -1px;
+  letter-spacing: 0;
   margin-bottom: 20px;
 }
 
@@ -666,7 +669,7 @@ a {
   font-size: 10px;
   font-weight: 700;
   color: var(--color-text-muted);
-  letter-spacing: 1px;
+  letter-spacing: 0;
   margin-bottom: 10px;
 }
 
@@ -712,14 +715,14 @@ a {
   font-size: 11px;
   font-weight: 800;
   color: var(--color-accent-gold);
-  letter-spacing: 2px;
+  letter-spacing: 0;
   margin-bottom: 8px;
 }
 
 .section-title {
   font-size: clamp(24px, 3.8vw, 36px);
   font-weight: 800;
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
   margin-bottom: 12px;
 }
 
@@ -878,6 +881,28 @@ a {
   color: var(--color-text-muted);
   border-top: 1px solid var(--color-border);
   padding-top: 18px;
+}
+
+.features-section,
+.banner-section,
+.footer {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 720px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ==========================================================================

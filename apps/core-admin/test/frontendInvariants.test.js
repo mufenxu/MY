@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url';
 import eslintConfig from '../eslint.config.js';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const workspaceRoot = path.resolve(appRoot, '..', '..');
 const readSource = (...parts) => fs.readFileSync(path.join(appRoot, ...parts), 'utf8');
+const readWorkspaceSource = (...parts) => fs.readFileSync(path.join(workspaceRoot, ...parts), 'utf8');
 
 test('fundamental Hook rules block CI while React Compiler adoption stays incremental', () => {
   const applicationConfig = eslintConfig.find(
@@ -63,6 +65,26 @@ test('platform console return is rendered only in the managed SSO shell', () => 
 
   assert.match(source, /\{IS_PLATFORM_SSO && \([\s\S]*?返回统一服务控制台/);
   assert.match(source, /window\.location\.assign\('\/'\)/);
+});
+
+test('legacy CT8 admin route redirects to the canonical automation center', () => {
+  const app = readSource('src', 'App.jsx');
+  const layout = readSource('src', 'components', 'MainLayout.jsx');
+
+  assert.match(app, /path="ct8-monitor"[\s\S]*?PlatformViewRedirect view="automation"/);
+  assert.doesNotMatch(app, /pages\/ct8\/Ct8Dashboard/);
+  assert.doesNotMatch(layout, /CT8节点|\/ct8-monitor/);
+});
+
+test('legacy IoT route redirects to the service-owned management app', () => {
+  const app = readSource('src', 'App.jsx');
+  const dashboard = readSource('src', 'pages', 'Dashboard.jsx');
+  const layout = readSource('src', 'components', 'MainLayout.jsx');
+
+  assert.match(app, /path="iot-monitor"[\s\S]*?ExternalAppRedirect href="\/apps\/iot\/"/);
+  assert.doesNotMatch(app, /pages\/IotMonitor/);
+  assert.doesNotMatch(dashboard, /\/iot-monitor/);
+  assert.doesNotMatch(layout, /\/iot-monitor/);
 });
 
 test('header icon tools and tabs remain keyboard and screen-reader accessible', () => {
@@ -141,11 +163,13 @@ test('secret cache and Turnstile mutations perform server-backed reauthenticatio
 test('logout keeps the active UI session when the server cannot revoke cookies', () => {
   const layout = readSource('src', 'components', 'MainLayout.jsx');
   const runtime = readSource('src', 'utils', 'runtime.js');
+  const sharedRuntime = readWorkspaceSource('packages', 'platform-browser-runtime', 'index.js');
 
   assert.match(layout, /await api\.post\('\/auth\/logout'[\s\S]*localStorage\.removeItem\('user'\)/);
   assert.match(layout, /catch \(error\)[\s\S]*退出失败/);
-  assert.match(runtime, /if \(!response\.ok\)[\s\S]*throw new Error/);
-  assert.doesNotMatch(runtime, /logoutPlatformSession[\s\S]*\.catch\(\(\) => \{\}\)/);
+  assert.match(runtime, /appName: 'core'/);
+  assert.match(sharedRuntime, /if \(!response\.ok\)[\s\S]*throw new Error/);
+  assert.doesNotMatch(sharedRuntime, /logoutPlatformSession[\s\S]*\.catch\(\(\) => \{\}\)/);
 });
 
 test('operator settings hide super-admin security and secret surfaces', () => {

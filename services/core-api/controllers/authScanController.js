@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const axios = require('axios');
+const { isScanLoginSessionExpired } = require('@my-platform/platform-auth');
 const User = require('../models/User');
 const AppClient = require('../models/AppClient');
 const AuthScanLog = require('../models/AuthScanLog');
@@ -49,7 +50,7 @@ function resolveWxEnvVersion() {
 function cleanupExpiredQRCodes() {
     const now = Date.now();
     for (const [key, value] of qrCodeStore.entries()) {
-        if (now - value.createdTime > QR_EXPIRE_TIME) {
+        if (isScanLoginSessionExpired(value, { now, ttlMs: QR_EXPIRE_TIME })) {
             if (value.logId) {
                 AuthScanLog.findByIdAndUpdate(value.logId, {
                     actionStatus: 'EXPIRED',
@@ -257,7 +258,7 @@ exports.checkStatus = async (req, res) => {
             return res.json({ status: 'expired' });
         }
 
-        if (Date.now() - qrData.createdTime > QR_EXPIRE_TIME) {
+        if (isScanLoginSessionExpired(qrData, { now: Date.now(), ttlMs: QR_EXPIRE_TIME })) {
             qrCodeStore.delete(qrToken);
             return res.json({ status: 'expired' });
         }

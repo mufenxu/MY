@@ -8,14 +8,12 @@ import { APP_BASE_PATH, IS_PLATFORM_SSO, redirectToPlatformLogin } from './utils
 
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
-const IotMonitor = lazy(() => import('./pages/IotMonitor'));
 const Users = lazy(() => import('./pages/Users'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const AuditLogs = lazy(() => import('./pages/AuditLogs'));
 const ScanManagement = lazy(() => import('./pages/ScanManagement'));
 const AirEnergyMonitor = lazy(() => import('./pages/AirEnergyMonitor'));
-const Ct8Dashboard = lazy(() => import('./pages/ct8/Ct8Dashboard'));
 const Resources = lazy(() => import('./pages/Resources'));
 const CourseOrders = lazy(() => import('./pages/CourseOrders'));
 const PublicQuery = lazy(() => import('./pages/PublicQuery'));
@@ -39,6 +37,20 @@ const RouteFallback = memo(() => (
 const PrivateRoute = ({ children, session }) => {
   if (!session.ready) return <RouteFallback />;
   return session.authenticated ? children : <Navigate to="/login" replace />;
+};
+
+const PlatformViewRedirect = ({ view }) => {
+  useEffect(() => {
+    window.location.replace(`/?view=${encodeURIComponent(view)}`);
+  }, [view]);
+  return <RouteFallback />;
+};
+
+const ExternalAppRedirect = ({ href }) => {
+  useEffect(() => {
+    window.location.replace(href);
+  }, [href]);
+  return <RouteFallback />;
 };
 
 function App() {
@@ -169,13 +181,13 @@ function App() {
               <Route path="/" element={<PrivateRoute session={session}><MainLayout /></PrivateRoute>}>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
-                <Route path="iot-monitor" element={<IotMonitor />} />
+                <Route path="iot-monitor" element={<ExternalAppRedirect href="/apps/iot/" />} />
                 <Route path="air-energy" element={<AirEnergyMonitor />} />
                 <Route path="users" element={<Users />} />
                 <Route path="notifications" element={<Notifications />} />
                 <Route path="audit-logs" element={<AuditLogs />} />
                 <Route path="scan-management" element={<ScanManagement />} />
-                <Route path="ct8-monitor" element={<Ct8Dashboard />} />
+                <Route path="ct8-monitor" element={<PlatformViewRedirect view="automation" />} />
                 <Route path="resources" element={<Resources />} />
                 <Route path="course-orders" element={<CourseOrders />} />
                 <Route path="settings" element={<Settings />} />

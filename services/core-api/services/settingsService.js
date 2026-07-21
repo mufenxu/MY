@@ -8,7 +8,11 @@ const AppError = require('../utils/AppError');
 const { TASKS, startTask, stopTask } = require('./cronScheduler');
 const cron = require('node-cron');
 const { encrypt, decrypt, isEncrypted } = require('../utils/crypto');
-const { getNotificationApiKey, sendNotification } = require('./notificationClient');
+const {
+    isWecomEnabled,
+    isWecomResponseOk,
+    sendWecomText,
+} = require('./wecomNotification');
 
 const SECRET_MASK = '********';
 const NOTIFY_SECRET_FIELDS = ['smtpPass', 'qywxApiKey'];
@@ -63,21 +67,6 @@ function buildTransport(cfg) {
     });
 }
 
-function buildWecomPayload(cfg, text) {
-    const payload = { msg_type: 'text', data: { content: text } };
-    const touser = (cfg.qywxToUser || '').trim();
-    const toparty = (cfg.qywxToParty || '').trim();
-    const totag = (cfg.qywxToTag || '').trim();
-    if (touser) payload.touser = touser;
-    if (toparty) payload.toparty = toparty;
-    if (totag) payload.totag = totag;
-
-    const agentId = Number(cfg.qywxAgentId);
-    if (!Number.isNaN(agentId) && cfg.qywxAgentId) payload.agent_id = agentId;
-
-    return payload;
-}
-
 exports.getNotifyConfig = async () => {
     const doc = await NotifyConfig.findById('default').lean();
     if (!doc) return {};
@@ -107,11 +96,7 @@ exports.testNotify = async (config, testChannel) => {
     config = await hydrateNotifySecrets(config);
 
     if (testChannel === 'wecom') {
-        if (!config.qywxEnabled) throw new AppError('WeCom disabled', 400);
-        if (!getNotificationApiKey(config.qywxApiKey)) throw new AppError('Missing API Key', 400);
-        if (![config.qywxToUser, config.qywxToParty, config.qywxToTag].some((value) => String(value || '').trim())) {
-            throw new AppError('Missing WeCom recipient', 400);
-        }
+        if (!isWecomEnabled(config)) throw new AppError('WeCom disabled or incomplete', 400);
 
         const nowTime = new Date().toLocaleString('zh-CN', { hour12: false });
         const text = `✨ 星轨轻具坊 · 系统通知
@@ -126,12 +111,10 @@ exports.testNotify = async (config, testChannel) => {
 
 💡 星轨提醒：此通道将为您实时推送关键
 业务的动态监控信息，期待为您提供优质服务！`;
-        const payload = buildWecomPayload(config, text);
+        const response = await sendWecomText(config, text, {}, 8000);
 
-        const response = await sendNotification(payload, { apiKey: config.qywxApiKey, timeoutMs: 8000 });
-
-        if (response.data && response.data.errcode === 0) return { success: true };
-        throw new AppError(response.data.errmsg || 'WeCom API Error', 500);
+        if (isWecomResponseOk(response)) return { success: true };
+        throw new AppError(response.errmsg || response.detail?.errmsg || 'WeCom API Error', 500);
     }
 
     if (!config.emailEnabled) throw new AppError('Email disabled', 400);

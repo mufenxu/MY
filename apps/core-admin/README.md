@@ -16,8 +16,8 @@
 - `/login`：后台登录
 - `/query`：网课进度公开查询页
 - `/dashboard`：数据仪表盘
-- `/iot-monitor`：IoT 监控
-- `/ct8-monitor`：CT8 节点监控
+- `/iot-monitor`：兼容旧书签并跳转到独立 IoT 管理端 `/apps/iot/`
+- `/ct8-monitor`：兼容旧书签并跳转到统一控制台的自动化中心
 - `/air-energy`：空气能监控
 - `/users`：用户与权限
 - `/notifications`：通知管理

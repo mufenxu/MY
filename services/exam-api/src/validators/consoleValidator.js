@@ -1,8 +1,14 @@
 const Joi = require('joi');
-
-const objectId = Joi.string().pattern(/^[0-9a-fA-F]{24}$/).messages({
-    'string.pattern.base': '无效的 ID 格式',
-});
+const {
+    batchUpdateQuestionFields,
+    createCategoryFields,
+    createMajorCategoryFields,
+    createPaperShareFields,
+    generateAiAnalysisFields,
+    objectId,
+    updateCategoryFields,
+    updateMajorCategoryFields,
+} = require('./sharedSchemas');
 const shareCode = Joi.string().trim().uppercase().replace(/[\s-]/g, '').pattern(/^[A-Z0-9]{6,16}$/).messages({
     'string.pattern.base': '分享码格式不正确',
 });
@@ -32,53 +38,25 @@ const wechatAuth = {
 };
 
 const createMajorCategory = {
-    body: Joi.object({
-        name: Joi.string().max(200).required().messages({
-            'any.required': '大分类名称不能为空',
-        }),
-        sortOrder: Joi.number().integer().optional(),
-        showOnHome: Joi.boolean().optional(),
-    }),
+    body: Joi.object(createMajorCategoryFields),
 };
 
 const updateMajorCategory = {
     params: Joi.object({
         id: objectId.required(),
     }),
-    body: Joi.object({
-        name: Joi.string().max(200).optional(),
-        sortOrder: Joi.number().integer().optional(),
-        showOnHome: Joi.boolean().optional(),
-    }),
+    body: Joi.object(updateMajorCategoryFields),
 };
 
 const createCategory = {
-    body: Joi.object({
-        name: Joi.string().max(200).required().messages({
-            'any.required': '分类名称不能为空',
-        }),
-        description: Joi.string().allow('').max(300).optional(),
-        count: Joi.number().integer().min(0).optional(),
-        duration: Joi.number().integer().min(0).optional(),
-        passingScore: Joi.number().integer().min(0).max(100).optional(),
-        isPublished: Joi.boolean().optional(),
-        majorCategoryId: Joi.string().allow(null, '').optional(),
-    }),
+    body: Joi.object(createCategoryFields),
 };
 
 const updateCategory = {
     params: Joi.object({
         id: objectId.required(),
     }),
-    body: Joi.object({
-        name: Joi.string().max(200).optional(),
-        description: Joi.string().allow('').max(300).optional(),
-        count: Joi.number().integer().min(0).optional(),
-        duration: Joi.number().integer().min(0).optional(),
-        passingScore: Joi.number().integer().min(0).max(100).optional(),
-        isPublished: Joi.boolean().optional(),
-        majorCategoryId: Joi.string().allow(null, '').optional(),
-    }),
+    body: Joi.object(updateCategoryFields),
 };
 
 const createQuestion = {
@@ -120,44 +98,21 @@ const batchUpdateQuestions = {
     params: Joi.object({
         id: objectId.required(),
     }),
-    body: Joi.object({
-        questions: Joi.array().items(
-            Joi.object({
-                _id: objectId.optional(),
-                type: Joi.string().valid('single', 'multiple', 'judge', 'fill').required(),
-                content: Joi.string().required(),
-                options: Joi.array().items(Joi.object({
-                    label: Joi.string().required(),
-                    value: Joi.string().required(),
-                })).optional(),
-                answer: Joi.array().items(Joi.string()).min(1).required(),
-                analysis: Joi.string().allow('').optional(),
-            }),
-        ).required(),
-    }),
+    body: Joi.object(batchUpdateQuestionFields),
 };
 
 const generateAiAnalyses = {
     params: Joi.object({
         id: objectId.required(),
     }),
-    body: Joi.object({
-        limit: Joi.number().integer().min(1).max(50).default(10),
-        forceRefresh: Joi.boolean().default(false),
-        questionIds: Joi.array().items(objectId).max(50).default([]),
-    }),
+    body: Joi.object(generateAiAnalysisFields),
 };
 
 const createPaperShare = {
     params: Joi.object({
         id: objectId.required(),
     }),
-    body: Joi.object({
-        permission: Joi.string().valid('view', 'edit').default('view'),
-        expiresAt: Joi.date().iso().allow(null).optional(),
-        maxAcceptCount: Joi.number().integer().min(0).max(10000).default(0),
-        note: Joi.string().max(200).allow('').optional(),
-    }),
+    body: Joi.object(createPaperShareFields),
 };
 
 const previewPaperShare = {

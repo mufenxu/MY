@@ -40,7 +40,8 @@ const CourseCategoryConfig = () => {
     }, [query]);
 
     useEffect(() => {
-        fetchData();
+        const timerId = window.setTimeout(fetchData, 0);
+        return () => window.clearTimeout(timerId);
     }, [fetchData]);
 
     const handleTableChange = (pagination) => {

@@ -4,6 +4,7 @@ ARG NODE_IMAGE=node:24-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b12
 
 FROM ${NODE_IMAGE} AS admin-build
 WORKDIR /build/core-admin
+COPY packages/platform-browser-runtime/ /build/packages/platform-browser-runtime/
 COPY apps/core-admin/package*.json ./
 RUN npm ci --no-audit --no-fund
 COPY apps/core-admin/ ./

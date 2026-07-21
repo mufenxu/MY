@@ -37,3 +37,13 @@ test('client files never rely on an undeclared React namespace', () => {
     assert.match(source, /^import React(?:\s*,|\s+from)/m, `${filename} uses React.* without importing React`);
   }
 });
+
+test('CT8 automation has one canonical client and API namespace', () => {
+  const app = readSource('src', 'client', 'App.jsx');
+  const automation = readSource('src', 'client', 'AutomationView.jsx');
+
+  assert.match(app, /import AutomationView from '\.\/AutomationView\.jsx'/);
+  assert.doesNotMatch(app, /function AutomationView/);
+  assert.match(automation, /CT8_API_BASE = '\/apps\/core\/api\/ct8'/);
+  assert.doesNotMatch(automation, /\/github\//);
+});

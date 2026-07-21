@@ -1,11 +1,12 @@
+const { isPlatformRole, isSafeHttpMethod } = require('@my-platform/platform-auth');
+
 const CENTRAL_ROLE_LEVEL = Object.freeze({ viewer: 0, operator: 1, super_admin: 2 });
 const LOCAL_ROLE_LEVEL = Object.freeze({ user: 0, admin: 1, super_admin: 2 });
 const LOCAL_ROLE_BY_LEVEL = Object.freeze(['user', 'admin', 'super_admin']);
-const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 function platformRoleAllowsRequest(role, method = 'GET') {
-    if (!Object.hasOwn(CENTRAL_ROLE_LEVEL, role)) return false;
-    return role !== 'viewer' || SAFE_METHODS.has(String(method || 'GET').toUpperCase());
+    if (!isPlatformRole(role)) return false;
+    return role !== 'viewer' || isSafeHttpMethod(method);
 }
 
 function intersectPlatformAccess(platformRole, localUser = {}) {

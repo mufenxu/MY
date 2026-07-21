@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
 import { Readable } from 'node:stream';
 import { createApp } from '../src/app.js';
 import {
@@ -8,18 +7,10 @@ import {
   createPasswordHash,
   createSessionRegistry,
 } from '../src/auth.js';
+import { createMemoryAuthStore } from '../src/auth-store.js';
 import { loadConfig } from '../src/config.js';
 import { createMemoryOperationsStore } from '../src/operations-store.js';
-
-async function withServer(app, callback) {
-  const server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  try {
-    await callback(`http://127.0.0.1:${server.address().port}`);
-  } finally {
-    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-  }
-}
+import { withFetchServer as withServer } from '../test-support/fetch-server.js';
 
 test('backup downloads require super_admin reauthentication and record denials', async () => {
   const sessionSecret = 's'.repeat(32);
@@ -31,10 +22,17 @@ test('backup downloads require super_admin reauthentication and record denials',
   ]));
   const operationsStore = createMemoryOperationsStore();
   let downloadCalls = 0;
+  const passwordHash = await createPasswordHash(password, Buffer.alloc(16, 9));
+  const authStore = createMemoryAuthStore({
+    encryptionKey: Buffer.alloc(32, 7).toString('base64url'),
+    bootstrap: { username: 'super_admin', passwordHash, role: 'super_admin' },
+  });
+  await authStore.createAccount({ username: 'viewer', passwordHash, role: 'viewer' });
+  await authStore.createAccount({ username: 'operator', passwordHash, role: 'operator' });
   const config = {
     ...loadConfig({ NODE_ENV: 'development' }),
     authDisabled: false,
-    adminPasswordHash: await createPasswordHash(password, Buffer.alloc(16, 9)),
+    adminPasswordHash: passwordHash,
     adminTotpSecret: '',
     sessionSecret,
     metricsToken: 'm'.repeat(32),
@@ -42,6 +40,7 @@ test('backup downloads require super_admin reauthentication and record denials',
   const app = createApp({
     config,
     sessionRegistry: sessions,
+    authStore,
     operationsStore,
     backupManager: {
       async downloadBackup() {

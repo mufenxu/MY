@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { startAuthentication } from '@simplewebauthn/browser';
+import { Turnstile } from '@marsidev/react-turnstile';
 import {
   Activity,
   AppWindow,
@@ -17,6 +19,7 @@ import {
   CloudCog,
   Database,
   Download,
+  Fingerprint,
   GraduationCap,
   LayoutDashboard,
   Layers3,
@@ -38,13 +41,13 @@ import {
   Timer,
   Trash2,
   Upload,
-  Workflow,
   X,
   Zap,
 } from 'lucide-react';
 import { isPlainInternalNavigation } from './navigation.js';
 import { requestJson } from './api.js';
 import { ConfirmDialog } from './UiControls.jsx';
+import AutomationView from './AutomationView.jsx';
 import NotificationServiceView from './NotificationServiceView.jsx';
 import {
   BackupQualityStrip,
@@ -104,8 +107,6 @@ function hasRole(role, required) {
   return (levels[role] || 0) >= (levels[required] || 0);
 }
 
-const CT8_API_BASE = '/apps/core/api';
-
 function formatCheckedAt(value) {
   if (!value) return '尚未检查';
   return new Intl.DateTimeFormat('zh-CN', {
@@ -125,73 +126,6 @@ function formatDateTime(value) {
     minute: '2-digit',
     hour12: false,
   }).format(new Date(value));
-}
-
-function formatCount(value) {
-  return Number.isFinite(Number(value)) ? String(Number(value)) : '--';
-}
-
-function getCt8RunTime(run) {
-  return run?.start_time || run?.started_at || run?.create_time || run?.createdAt || null;
-}
-
-function formatCt8RunId(value) {
-  if (!value) return '--';
-  const text = String(value);
-  return text.length > 10 ? `#${text.slice(-10)}` : `#${text}`;
-}
-
-function getCt8StatusMeta(status, conclusion) {
-  const normalized = String(status || conclusion || 'unknown').toLowerCase();
-  if (normalized === 'running' || normalized === 'queued' || normalized === 'in_progress') {
-    return { label: '运行中', className: 'running' };
-  }
-  if (normalized === 'success' || normalized === 'completed') {
-    return { label: '成功', className: 'success' };
-  }
-  if (normalized === 'partial') {
-    return { label: '部分成功', className: 'partial' };
-  }
-  if (normalized === 'failed' || normalized === 'failure' || normalized === 'cancelled' || normalized === 'timed_out') {
-    return { label: '失败', className: 'failed' };
-  }
-  if (normalized === 'idle') {
-    return { label: '空闲', className: 'idle' };
-  }
-  return { label: '暂无', className: 'unknown' };
-}
-
-function collectCt8Runs(...sources) {
-  const byKey = new Map();
-  for (const source of sources) {
-    if (!Array.isArray(source)) continue;
-    for (const run of source) {
-      if (!run || typeof run !== 'object') continue;
-      const key = String(run.run_id || run.id || `${getCt8RunTime(run) || ''}-${byKey.size}`);
-      if (!byKey.has(key)) byKey.set(key, run);
-    }
-  }
-  return [...byKey.values()].slice(0, 6);
-}
-
-function requestFailure(result, label) {
-  if (result.status === 'rejected') {
-    return `${label}：${result.reason?.message || '请求失败'}`;
-  }
-  const value = result.value || {};
-  if (value.success === false || value.ok === false) {
-    return `${label}：${value.message || value.error || '返回异常'}`;
-  }
-  return '';
-}
-
-function hasCt8Payload(value, type) {
-  if (!value || typeof value !== 'object') return false;
-  if (value.success === false || value.ok === false) return true;
-  if (type === 'stats') return Boolean(value.stats || value.data?.stats);
-  if (type === 'status') return Boolean(value.data?.activeTask || value.data?.latest || Array.isArray(value.data?.runs));
-  if (type === 'runs') return Array.isArray(value.runs) || Array.isArray(value.data?.runs);
-  return false;
 }
 
 function formatBytes(value) {
@@ -215,37 +149,55 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [totp, setTotp] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  const [secondFactorRequired, setSecondFactorRequired] = useState(totpRequired);
+  const [challenge, setChallenge] = useState(null);
+  const [challengeToken, setChallengeToken] = useState('');
+  const [mfaEnrollment, setMfaEnrollment] = useState(null);
+  const [enrollmentCode, setEnrollmentCode] = useState('');
+  const [pendingSession, setPendingSession] = useState(null);
+  const [recoveryCodes, setRecoveryCodes] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const panelRef = useRef(null);
+  const turnstileRef = useRef(null);
 
   useEffect(() => {
     const canvas = document.getElementById('login-bg-canvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     let width = (canvas.width = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
+    let particles = createParticles();
+    let animId = 0;
+
+    function createParticles() {
+      const count = window.innerWidth < 768 ? 22 : 34;
+      return Array.from({ length: count }, () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
+        radius: Math.random() * 1.5 + 0.8,
+      }));
+    }
 
     const handleResize = () => {
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
+      particles = createParticles();
+      if (motionQuery.matches) render(false);
     };
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize, { passive: true });
 
-    const particles = Array.from({ length: 40 }, () => ({
-      x: Math.random() * width,
-      y: Math.random() * height,
-      vx: (Math.random() - 0.5) * 0.7,
-      vy: (Math.random() - 0.5) * 0.7,
-      radius: Math.random() * 2 + 1,
-    }));
-
-    let animId;
-    const render = () => {
+    const render = (moveParticles = true) => {
       ctx.clearRect(0, 0, width, height);
       particles.forEach((p) => {
-        p.x += p.vx;
-        p.y += p.vy;
+        if (moveParticles) {
+          p.x += p.vx;
+          p.y += p.vy;
+        }
         if (p.x < 0 || p.x > width) p.vx *= -1;
         if (p.y < 0 || p.y > height) p.vy *= -1;
 
@@ -254,30 +206,34 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
         ctx.fillStyle = 'rgba(217, 119, 36, 0.35)';
         ctx.fill();
       });
-      animId = requestAnimationFrame(render);
     };
-    render();
+
+    const animate = () => {
+      render();
+      animId = requestAnimationFrame(animate);
+    };
+
+    const syncAnimation = () => {
+      cancelAnimationFrame(animId);
+      animId = 0;
+      if (document.hidden || motionQuery.matches) {
+        render(false);
+        return;
+      }
+      animate();
+    };
+
+    document.addEventListener('visibilitychange', syncAnimation);
+    motionQuery.addEventListener('change', syncAnimation);
+    syncAnimation();
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('visibilitychange', syncAnimation);
+      motionQuery.removeEventListener('change', syncAnimation);
       cancelAnimationFrame(animId);
     };
   }, []);
-
-  const handleMouseMove = (e) => {
-    if (!panelRef.current) return;
-    const rect = panelRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left - rect.width / 2;
-    const y = e.clientY - rect.top - rect.height / 2;
-    const rotateX = (y / rect.height) * -12;
-    const rotateY = (x / rect.width) * 12;
-    panelRef.current.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
-  };
-
-  const handleMouseLeave = () => {
-    if (!panelRef.current) return;
-    panelRef.current.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
-  };
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -286,11 +242,64 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
     try {
       const session = await requestJson('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ username, password, totp }),
+        body: JSON.stringify({ username, password, totp, recoveryCode, challengeToken, enrollmentCode }),
       });
+      if (session.recoveryCodes?.length) {
+        setPendingSession(session);
+        setRecoveryCodes(session.recoveryCodes);
+        setMfaEnrollment(null);
+        return;
+      }
       onAuthenticated(session);
     } catch (loginError) {
+      if (loginError.code === 'MFA_ENROLLMENT_REQUIRED' && loginError.details?.enrollment) {
+        setMfaEnrollment(loginError.details.enrollment);
+        setEnrollmentCode('');
+        setError('');
+        return;
+      }
+      if (loginError.code === 'SECOND_FACTOR_REQUIRED') {
+        setSecondFactorRequired(true);
+        setError('');
+        return;
+      }
+      if (loginError.code === 'BOT_CHALLENGE_REQUIRED' || loginError.details?.challengeRequired) {
+        setChallenge({ siteKey: loginError.details?.turnstileSiteKey, nonce: Date.now() });
+        setChallengeToken('');
+      } else if (challenge?.siteKey) {
+        turnstileRef.current?.reset?.();
+        setChallengeToken('');
+      }
       setError(loginError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handlePasskeyLogin() {
+    if (!username.trim()) {
+      setError('请先输入管理员账号。');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      const generated = await requestJson('/api/auth/passkey/options', {
+        method: 'POST',
+        body: JSON.stringify({ username: username.trim(), challengeToken }),
+      });
+      const response = await startAuthentication({ optionsJSON: generated.options });
+      const session = await requestJson('/api/auth/passkey/verify', {
+        method: 'POST',
+        body: JSON.stringify({ username: username.trim(), challengeId: generated.challengeId, response }),
+      });
+      onAuthenticated(session);
+    } catch (passkeyError) {
+      if (passkeyError.code === 'BOT_CHALLENGE_REQUIRED' || passkeyError.details?.challengeRequired) {
+        setChallenge({ siteKey: passkeyError.details?.turnstileSiteKey, nonce: Date.now() });
+        setChallengeToken('');
+      }
+      setError(passkeyError.name === 'NotAllowedError' ? 'Passkey 验证已取消。' : passkeyError.message);
     } finally {
       setSubmitting(false);
     }
@@ -299,8 +308,6 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
   return (
     <main className="login-page">
       <canvas id="login-bg-canvas" className="login-bg-canvas" />
-      <div className="login-ambient-glow orb-1" />
-      <div className="login-ambient-glow orb-2" />
 
       <a href="/" className="login-back-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -311,16 +318,13 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
       </a>
 
       <section
-        ref={panelRef}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        className="login-panel tilt-card shadow-luxury"
+        className="login-panel"
         aria-labelledby="login-title"
       >
         <div className="login-brand">
           <span className="brand-mark glowing-pulse" aria-hidden="true">M</span>
           <span>
-            <strong>MY Platform</strong>
+            <strong>MY PLATFORM</strong>
             <small>统一服务控制台 · UNIFIED CONSOLE</small>
           </span>
         </div>
@@ -332,17 +336,27 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
           </div>
         </div>
         <form onSubmit={handleSubmit} className="login-form">
+          {recoveryCodes.length > 0 ? (
+            <div className="login-recovery-codes">
+              <div><CheckCircle2 size={20} /><strong>多因素验证已启用</strong></div>
+              <p>请将以下一次性恢复码保存在密码管理器中。离开后不会再次显示。</p>
+              <div>{recoveryCodes.map((code) => <code key={code}>{code}</code>)}</div>
+              <button className="primary-button login-button" type="button" onClick={() => onAuthenticated(pendingSession)}>
+                <ShieldCheck size={18} />我已保存，进入控制台
+              </button>
+            </div>
+          ) : <>
           <label>
             <span>管理员账号</span>
             <input
-              autoComplete="username"
+              autoComplete="username webauthn"
               value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              onChange={(event) => { setUsername(event.target.value); setMfaEnrollment(null); setEnrollmentCode(''); }}
               placeholder="请输入管理员账号"
               required
             />
           </label>
-          {totpRequired && (
+          {secondFactorRequired && !useRecoveryCode && (
             <label>
               <span>动态验证码</span>
               <input
@@ -352,6 +366,18 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
                 onChange={(event) => setTotp(event.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="六位验证码"
                 pattern="\d{6}"
+                required
+              />
+            </label>
+          )}
+          {secondFactorRequired && useRecoveryCode && (
+            <label>
+              <span>恢复码</span>
+              <input
+                autoComplete="one-time-code"
+                value={recoveryCode}
+                onChange={(event) => setRecoveryCode(event.target.value.toUpperCase().slice(0, 32))}
+                placeholder="输入一次性恢复码"
                 required
               />
             </label>
@@ -367,11 +393,50 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
               required
             />
           </label>
+          {mfaEnrollment && (
+            <div className="login-mfa-enrollment">
+              <div><img src={mfaEnrollment.qrDataUrl} alt="动态验证二维码" /><code>{mfaEnrollment.secret}</code></div>
+              <label>
+                <span>新动态验证码</span>
+                <input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={enrollmentCode}
+                  onChange={(event) => setEnrollmentCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="扫描后输入六位验证码"
+                  pattern="\d{6}"
+                  required
+                />
+              </label>
+            </div>
+          )}
           {error && <div className="form-error" role="alert">{error}</div>}
-          <button className="primary-button login-button glowing-btn" disabled={submitting} type="submit">
+          {secondFactorRequired && (
+            <button className="login-mode-link" type="button" onClick={() => setUseRecoveryCode((value) => !value)}>
+              {useRecoveryCode ? '使用动态验证码' : '使用恢复码'}
+            </button>
+          )}
+          {challenge?.siteKey && (
+            <div className="login-challenge">
+              <Turnstile
+                key={challenge.nonce}
+                ref={turnstileRef}
+                siteKey={challenge.siteKey}
+                options={{ action: 'platform_login', theme: 'light' }}
+                onSuccess={setChallengeToken}
+                onExpire={() => setChallengeToken('')}
+                onError={() => setChallengeToken('')}
+              />
+            </div>
+          )}
+          <button className="primary-button login-button glowing-btn" disabled={submitting || (Boolean(challenge?.siteKey) && !challengeToken) || (Boolean(mfaEnrollment) && enrollmentCode.length !== 6)} type="submit">
             {submitting ? <LoaderCircle className="spin" size={18} /> : <ShieldCheck size={18} />}
-            {submitting ? '正在登录' : '立即登录'}
+            {submitting ? '正在验证' : mfaEnrollment ? '完成安全设置' : '立即登录'}
           </button>
+          <button className="secondary-action login-passkey-button" disabled={submitting || !username.trim() || (Boolean(challenge?.siteKey) && !challengeToken)} type="button" onClick={handlePasskeyLogin}>
+            <Fingerprint size={18} />使用 Passkey 登录
+          </button>
+          </>}
         </form>
       </section>
     </main>
@@ -835,254 +900,6 @@ function ServicesView({ services, loading, onLaunch }) {
           </div>
         </aside>
       </div>
-    </section>
-  );
-}
-
-function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) {
-  const automations = services.filter((service) => service.category === 'automation');
-  const automation = automations[0];
-  const meta = STATE_META[automation?.state] || STATE_META.unmonitored;
-  const [ct8Data, setCt8Data] = useState({ stats: null, status: null, runs: [] });
-  const [ct8Loading, setCt8Loading] = useState(true);
-  const [ct8Refreshing, setCt8Refreshing] = useState(false);
-  const [ct8Error, setCt8Error] = useState('');
-  const [ct8Message, setCt8Message] = useState('');
-  const [triggering, setTriggering] = useState(false);
-
-  const loadCt8 = useCallback(async ({ quiet = false } = {}) => {
-    quiet ? setCt8Refreshing(true) : setCt8Loading(true);
-    setCt8Error('');
-
-    try {
-      const [statsResult, statusResult, runsResult] = await Promise.allSettled([
-        requestJson(`${CT8_API_BASE}/ct8/stats`),
-        requestJson(`${CT8_API_BASE}/github/status?limit=6`),
-        requestJson(`${CT8_API_BASE}/ct8/runs?pageSize=6`),
-      ]);
-
-      const failures = [
-        requestFailure(statsResult, '统计'),
-        requestFailure(statusResult, '当前状态'),
-        requestFailure(runsResult, '运行历史'),
-      ].filter(Boolean);
-
-      if (statsResult.status === 'fulfilled' && !hasCt8Payload(statsResult.value, 'stats')) failures.push('统计：未收到 CT8 数据');
-      if (statusResult.status === 'fulfilled' && !hasCt8Payload(statusResult.value, 'status')) failures.push('当前状态：未收到 CT8 数据');
-      if (runsResult.status === 'fulfilled' && !hasCt8Payload(runsResult.value, 'runs')) failures.push('运行历史：未收到 CT8 数据');
-
-      const statsPayload = statsResult.status === 'fulfilled'
-        ? (statsResult.value?.stats || statsResult.value?.data?.stats || null)
-        : null;
-      const statusPayload = statusResult.status === 'fulfilled'
-        ? (statusResult.value?.data || null)
-        : null;
-      const historyRuns = runsResult.status === 'fulfilled'
-        ? (runsResult.value?.runs || runsResult.value?.data?.runs || [])
-        : [];
-      const statusRuns = statusPayload?.runs || [];
-
-      setCt8Data({
-        stats: statsPayload,
-        status: statusPayload,
-        runs: collectCt8Runs(historyRuns, statusRuns),
-      });
-
-      if (failures.length > 0) {
-        setCt8Error(`部分 CT8 数据未能加载：${failures.join('；')}`);
-      }
-    } catch (error) {
-      setCt8Error(error.message || 'CT8 数据加载失败');
-    } finally {
-      setCt8Loading(false);
-      setCt8Refreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!loading && automation) loadCt8();
-  }, [automation, loadCt8, loading]);
-
-  const activeTask = ct8Data.status?.activeTask || null;
-  const latestRun = ct8Data.status?.latest || ct8Data.runs[0] || null;
-  const latestStatus = getCt8StatusMeta(latestRun?.status, latestRun?.workflow_conclusion);
-  const activeStatus = getCt8StatusMeta(activeTask?.status || 'idle', activeTask?.workflow_conclusion);
-  const taskRunning = activeStatus.className === 'running' || latestStatus.className === 'running';
-  const ct8Ready = Boolean(ct8Data.stats || ct8Data.status || ct8Data.runs.length);
-  const serviceState = ct8Ready ? 'healthy' : automation?.state;
-
-  useEffect(() => {
-    if (!taskRunning) return undefined;
-    const interval = window.setInterval(() => loadCt8({ quiet: true }), 15000);
-    return () => window.clearInterval(interval);
-  }, [loadCt8, taskRunning]);
-
-  function handleOpen(event) {
-    if (!automation?.adminUrl || !isPlainInternalNavigation(event, automation.adminUrl)) return;
-    event.preventDefault();
-    onLaunch(automation);
-  }
-
-  async function handleRefresh() {
-    setCt8Message('');
-    await Promise.all([
-      onRefresh?.(),
-      loadCt8({ quiet: true }),
-    ]);
-  }
-
-  async function handleTrigger() {
-    setTriggering(true);
-    setCt8Message('');
-    setCt8Error('');
-    try {
-      await requestJson(`${CT8_API_BASE}/github/trigger`, {
-        method: 'POST',
-        body: JSON.stringify({ inputs: {} }),
-      });
-      setCt8Message('任务已提交到 GitHub Actions，正在等待运行结果回调。');
-      await loadCt8({ quiet: true });
-    } catch (error) {
-      setCt8Error(error.message || '触发 CT8 任务失败');
-    } finally {
-      setTriggering(false);
-    }
-  }
-
-  const stats = ct8Data.stats || {};
-  const totalHosts = stats.totalHosts ?? latestRun?.total_accounts ?? latestRun?.stats?.total;
-  const successHosts = stats.successHosts ?? latestRun?.success_count ?? latestRun?.stats?.success;
-  const failedHosts = stats.failedHosts ?? latestRun?.failed_count ?? latestRun?.stats?.failed;
-  const todayRuns = stats.todayRuns;
-  const latestRunTime = stats.lastRunTime || getCt8RunTime(latestRun);
-  const latestWorkflow = latestRun?.workflow || activeTask?.workflow || 'ssh-login.yml';
-  const triggerDisabled = triggering || taskRunning || ct8Loading;
-
-  return (
-    <section className="page-view automation-view" aria-label="自动化中心">
-      <div className="page-actions automation-actions">
-        <button className="secondary-action" type="button" onClick={handleRefresh} disabled={refreshing || ct8Refreshing}>
-          {refreshing || ct8Refreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
-          {refreshing || ct8Refreshing ? '正在同步' : '刷新状态'}
-        </button>
-        <button className="primary-button" type="button" onClick={handleTrigger} disabled={triggerDisabled}>
-          {triggering || taskRunning ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}
-          {taskRunning ? '任务运行中' : '触发任务'}
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="view-loading large"><LoaderCircle className="spin" size={22} /> 正在加载自动化服务</div>
-      ) : automation ? (
-        <>
-          <article className={`automation-hero automation-state-${meta.className}`}>
-            <div className="automation-hero-main">
-              <div className="automation-hero-icon"><Workflow size={29} /></div>
-              <div className="automation-hero-copy">
-                <span>自动化服务</span>
-                <h3>{automation.name}</h3>
-                <p>{automation.description}</p>
-              </div>
-            </div>
-
-            <div className="automation-hero-tools">
-              <ServiceStatus state={serviceState} />
-              {automation.adminUrl && (
-                <a
-                  href={automation.adminUrl}
-                  target={automation.adminUrl.startsWith('/') ? undefined : '_blank'}
-                  rel={automation.adminUrl.startsWith('/') ? undefined : 'noreferrer'}
-                  onClick={handleOpen}
-                >进入后台 <ArrowUpRight size={16} /></a>
-              )}
-            </div>
-
-            <div className="automation-hero-metrics">
-              <div className="automation-hero-metric">
-                <span className="automation-metric-icon blue" aria-hidden="true"><Timer size={17} /></span>
-                <div className="automation-metric-copy"><span>今日运行</span><strong>{formatCount(todayRuns)}</strong></div>
-              </div>
-              <div className="automation-hero-metric">
-                <span className="automation-metric-icon purple" aria-hidden="true"><Activity size={17} /></span>
-                <div className="automation-metric-copy"><span>最近结果</span><strong>{latestStatus.label}</strong></div>
-              </div>
-              <div className="automation-hero-metric">
-                <span className="automation-metric-icon cyan" aria-hidden="true"><Clock3 size={17} /></span>
-                <div className="automation-metric-copy"><span>最近运行</span><strong>{formatDateTime(latestRunTime)}</strong></div>
-              </div>
-            </div>
-          </article>
-
-          {(ct8Error || ct8Message) && (
-            <div className={`automation-feedback ${ct8Error ? 'error' : 'success'}`} role={ct8Error ? 'alert' : 'status'}>
-              {ct8Error ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}
-              <span>{ct8Error || ct8Message}</span>
-            </div>
-          )}
-
-          <div className="automation-kpis">
-            <article><span className="kpi-icon blue"><Timer size={20} /></span><div><span>今日运行</span><strong>{formatCount(todayRuns)}</strong><small>GitHub Actions 调度</small></div></article>
-            <article><span className="kpi-icon green"><CheckCircle2 size={20} /></span><div><span>成功节点</span><strong>{formatCount(successHosts)}</strong><small>最近一次结果</small></div></article>
-            <article><span className="kpi-icon orange"><CircleAlert size={20} /></span><div><span>失败节点</span><strong>{formatCount(failedHosts)}</strong><small>最近一次结果</small></div></article>
-            <article><span className="kpi-icon purple"><Activity size={20} /></span><div><span>总节点</span><strong>{formatCount(totalHosts)}</strong><small>最近一次覆盖</small></div></article>
-          </div>
-
-          <div className="automation-layout">
-            <section className="view-card ct8-runs-panel">
-              <header><div><span className="view-eyebrow">历史</span><h3>运行历史</h3></div><Timer size={21} /></header>
-              {ct8Loading ? (
-                <div className="ct8-inline-loading"><LoaderCircle className="spin" size={18} /> 正在加载运行记录</div>
-              ) : ct8Data.runs.length > 0 ? (
-                <div className="ct8-runs-list">
-                  {ct8Data.runs.map((run) => {
-                    const runStatus = getCt8StatusMeta(run.status, run.workflow_conclusion);
-                    return (
-                      <div className="ct8-run-row" key={run.run_id || run.id || getCt8RunTime(run)}>
-                        <div>
-                          <strong>{run.workflow || 'ssh-login.yml'}</strong>
-                          <span>{formatCt8RunId(run.run_id || run.id)} · {formatDateTime(getCt8RunTime(run))}</span>
-                        </div>
-                        <span className={`ct8-run-status ${runStatus.className}`}>{runStatus.label}</span>
-                        <span>{formatCount(run.success_count ?? run.stats?.success)}</span>
-                        <span>{formatCount(run.failed_count ?? run.stats?.failed)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="ct8-inline-empty">暂无运行记录</div>
-              )}
-            </section>
-
-            <div className="automation-side-stack">
-              <section className="view-card ct8-status-panel">
-                <header><div><span className="view-eyebrow">任务</span><h3>当前任务</h3></div>{taskRunning ? <LoaderCircle className="spin" size={21} /> : <Play size={21} />}</header>
-                <div className="ct8-status-grid">
-                  <div><span>任务状态</span><strong className={`ct8-run-status ${activeStatus.className}`}>{activeStatus.label}</strong></div>
-                  <div><span>Workflow</span><strong>{latestWorkflow}</strong></div>
-                  <div><span>最近 Run ID</span><strong>{formatCt8RunId(latestRun?.run_id || activeTask?.run_id)}</strong></div>
-                  <div><span>检查时间</span><strong>{formatCheckedAt(automation.checkedAt)}</strong></div>
-                </div>
-                {activeTask?.html_url && (
-                  <a className="ct8-external-link" href={activeTask.html_url} target="_blank" rel="noreferrer">
-                    打开 GitHub 运行记录 <ArrowUpRight size={15} />
-                  </a>
-                )}
-              </section>
-
-              <section className="view-card observability-panel">
-                <header><div><span className="view-eyebrow">观测</span><h3>接入链路</h3></div><Database size={21} /></header>
-                <ol>
-                  <li className="done"><span><CheckCircle2 size={17} /></span><div><strong>服务注册</strong><small>已接入统一服务控制台</small></div></li>
-                  <li className="done"><span><CheckCircle2 size={17} /></span><div><strong>Core API</strong><small>通过平台内部身份访问 CT8 接口</small></div></li>
-                  <li className={ct8Ready ? 'done' : 'pending'}><span>{ct8Ready ? <CheckCircle2 size={17} /> : <Clock3 size={17} />}</span><div><strong>运行观测</strong><small>{ct8Ready ? '统计与历史已接入' : '等待读取运行数据'}</small></div></li>
-                  <li className={automation.state === 'unmonitored' ? 'pending' : 'done'}><span>{automation.state === 'unmonitored' ? <Clock3 size={17} /> : <CheckCircle2 size={17} />}</span><div><strong>健康探针</strong><small>{automation.state === 'unmonitored' ? 'GitHub Actions 无独立健康端点' : meta.label}</small></div></li>
-                </ol>
-              </section>
-            </div>
-          </div>
-        </>
-      ) : <div className="view-empty">暂无自动化服务</div>}
     </section>
   );
 }
@@ -1575,7 +1392,10 @@ function BackupRecoveryView({ session }) {
 }
 
 function Dashboard({ session, onLogout }) {
-  const [activeFilter, setActiveFilter] = useState('all');
+  const [activeFilter, setActiveFilter] = useState(() => {
+    const requestedView = new URLSearchParams(window.location.search).get('view');
+    return FILTERS.some(({ id }) => id === requestedView) ? requestedView : 'all';
+  });
   const [data, setData] = useState(null);
   const [operationsSummary, setOperationsSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1596,6 +1416,13 @@ function Dashboard({ session, onLogout }) {
   const sidebarRef = useRef(null);
   const notificationRef = useRef(null);
   const loadRequestRef = useRef(null);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (activeFilter === 'all') url.searchParams.delete('view');
+    else url.searchParams.set('view', activeFilter);
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [activeFilter]);
 
   const closeMobileNav = useCallback(() => {
     setMobileNavOpen(false);
@@ -1925,6 +1752,7 @@ function Dashboard({ session, onLogout }) {
               refreshing={refreshing}
               onRefresh={() => loadServices(true)}
               onLaunch={launchService}
+              session={session}
             />
           )}
           {activeFilter === 'backup' && <BackupRecoveryView session={session} />}
