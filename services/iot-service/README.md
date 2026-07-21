@@ -19,6 +19,9 @@
 - 支持轻量登录会话，适合公网部署前做基础保护
 - 提供 `/ws` 实时通道，页面收到 MQTT 消息后可立即更新
 - API Key 仅在创建时展示一次，数据库内仅保存哈希值
+- 自动化规则支持温湿度、在线状态和继电器状态的边沿触发、冷却时间与启停控制
+- 场景可组合多个继电器动作并手动执行，规则、场景和运行记录统一持久化到 MongoDB
+- 自动化台账区分“命令已入队”和“设备已确认”；没有设备回执时不会宣称执行成功
 
 ## 项目结构
 
@@ -149,6 +152,8 @@ docker compose --env-file .env -f infra/docker/compose.yml stop iot-service
 - Broker 与 Topic 配置修改
 - 手动重连 MQTT
 - 恢复默认配置
+- 创建、启停和删除自动化规则
+- 创建并运行多动作场景，查看每次触发的真实发布结果
 
 如果你修改了 `api.port`，配置会保存成功，但端口需要在服务重启后生效。
 
@@ -213,6 +218,8 @@ location / {
 ```
 
 ## API 概览
+
+自动化接口位于 `/api/automations/rules`、`/api/automations/scenes` 和 `/api/automations/runs`。读取使用遥测权限，修改规则、场景及运行场景需要继电器控制权限。运行响应中的 `deviceConfirmed` 当前保持 `false`，只有未来接入设备级确认协议后才能改为成功确认。
 
 ### `GET /api/latest`
 

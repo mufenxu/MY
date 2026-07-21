@@ -10,11 +10,13 @@ assert.ok(fs.existsSync(indexPath), 'official website build must produce dist/in
 
 const index = fs.readFileSync(indexPath, 'utf8');
 const bannedExternalOrigins = ['fonts.googleapis.com', 'fonts.gstatic.com'];
+const icpLinkPattern = /<a\b(?=[^>]*\bclass=["'][^"']*\bicp-link\b[^"']*["'])(?=[^>]*\bhref=["']https:\/\/beian\.miit\.gov\.cn\/?["'])[^>]*>\s*宁ICP备2025009338号-4\s*<\/a>/;
 const scriptSources = [...index.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)]
   .map((match) => match[1])
   .filter((source) => !/^https?:\/\//i.test(source));
 
 assert.ok(scriptSources.length > 0, 'official website build must reference a local JavaScript bundle');
+assert.match(index, icpLinkPattern, 'official website footer must link the ICP record to the MIIT filing system');
 
 for (const source of scriptSources) {
   assert.match(source, /^\/?website-assets\//, `official website script must use its isolated asset namespace: ${source}`);

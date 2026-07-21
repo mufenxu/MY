@@ -30,6 +30,8 @@ import { verifyPlatformSso } from "./src/lib/platform-sso.js";
 import { platformRoleAllowsRequest } from "./src/lib/platform-role.js";
 import { createStaticAssetHandler } from "./src/lib/static-assets.js";
 import { createCampusRepository } from "./src/storage/campus-repository.js";
+import { buildCourseOccurrences, renderAcademicCalendar } from "./src/lib/academic-calendar.js";
+import { enqueueCampusNotification } from "./src/lib/notification-client.js";
 import {
   UIAS_ENDPOINTS,
   casServiceFromTicketRedirect,
@@ -135,6 +137,10 @@ const ASSUMED_SESSION_TTL_HOURS = Number(process.env.NRG_SESSION_TTL_HOURS || 12
 const SESSION_REFRESH_SKEW_MS = Number(process.env.HGU_SESSION_REFRESH_SKEW_MS || 5 * 60 * 1000);
 const ACADEMIC_AUTO_REFRESH_MS = Number(process.env.ACADEMIC_AUTO_REFRESH_MS || 10 * 60 * 1000);
 const ACADEMIC_AUTO_REFRESH_START_DELAY_MS = Number(process.env.ACADEMIC_AUTO_REFRESH_START_DELAY_MS || 30 * 1000);
+const CAMPUS_REMINDER_INTERVAL_MS = Number(process.env.CAMPUS_REMINDER_INTERVAL_MS || 5 * 60 * 1000);
+const CAMPUS_REMINDER_START_DELAY_MS = Number(process.env.CAMPUS_REMINDER_START_DELAY_MS || 45 * 1000);
+const CAMPUS_REMINDER_HORIZON_HOURS = Number(process.env.CAMPUS_REMINDER_HORIZON_HOURS || 24);
+const CAMPUS_REMINDER_BATCH_SIZE = Number(process.env.CAMPUS_REMINDER_BATCH_SIZE || 100);
 const NODE_ENV = process.env.NODE_ENV || "development";
 const APP_AUTH_PASSWORD = process.env.HGU_APP_PASSWORD
   || process.env.APP_PASSWORD
@@ -367,9 +373,10 @@ await repository.initialize();
 
 async function migrateSensitiveDataRows() {
   if (!sensitiveJson.encrypted) return;
-  const [sessionRows, cacheRows] = await Promise.all([
+  const [sessionRows, cacheRows, subscriptionRows] = await Promise.all([
     repository.listSchoolSessions(),
-    repository.listAcademicCaches()
+    repository.listAcademicCaches(),
+    repository.listCalendarSubscriptions()
   ]);
   for (const row of sessionRows) {
     const decoded = sensitiveJson.decodeWithMetadata(row.jar_json);
@@ -380,6 +387,16 @@ async function migrateSensitiveDataRows() {
     const decoded = sensitiveJson.decodeWithMetadata(row.cache_json);
     if (String(row.cache_json || "").startsWith("enc:v1:") && decoded.keyIndex === 0) continue;
     await repository.upsertAcademicCache(row.user_id, row.source_key, sensitiveJson.encode(decoded.value), nowIso());
+  }
+  for (const row of subscriptionRows) {
+    const decoded = sensitiveJson.decodeWithMetadata(row.token_json);
+    if (String(row.token_json || "").startsWith("enc:v1:") && decoded.keyIndex === 0) continue;
+    await repository.upsertCalendarSubscription(row.user_id, {
+      tokenHash: row.token_hash,
+      tokenJson: sensitiveJson.encode(decoded.value),
+      enabled: row.enabled,
+      timestamp: nowIso()
+    });
   }
 }
 
@@ -4861,6 +4878,140 @@ async function getAcademicTimetable(source = ACADEMIC_TIMETABLE_SOURCES.current)
   }
 }
 
+function calendarPaths(token) {
+  const encoded = encodeURIComponent(token);
+  return {
+    path: `/api/academic/calendar/${encoded}.ics`,
+    platformPath: `/api/campus/academic/calendar/${encoded}.ics`
+  };
+}
+
+function decodeCalendarToken(row) {
+  if (!row?.enabled || !row.token_json) return "";
+  try {
+    return String(sensitiveJson.decode(row.token_json)?.token || "");
+  } catch {
+    return "";
+  }
+}
+
+function publicReminderPreference(row) {
+  return {
+    enabled: Boolean(row?.enabled),
+    recipientId: String(row?.recipient_id || ""),
+    leadMinutes: Number(row?.lead_minutes || 15),
+    updatedAt: row?.updated_at || null,
+    deliveryConfigured: Boolean(process.env.NOTIFICATION_SERVICE_URL && (process.env.CAMPUS_NOTIFICATION_API_KEY || process.env.NOTIFY_API_KEY))
+  };
+}
+
+async function academicIntegrationSettings(userId) {
+  const [subscription, reminder] = await Promise.all([
+    repository.getCalendarSubscription(userId),
+    repository.getReminderPreference(userId)
+  ]);
+  const token = decodeCalendarToken(subscription);
+  return {
+    calendar: {
+      enabled: Boolean(subscription?.enabled && token),
+      ...(token ? calendarPaths(token) : {}),
+      updatedAt: subscription?.updated_at || null
+    },
+    reminder: publicReminderPreference(reminder)
+  };
+}
+
+async function rotateAcademicCalendarSubscription(userId) {
+  const token = randomBytes(32).toString("base64url");
+  await repository.upsertCalendarSubscription(userId, {
+    tokenHash: sha256Hex(token),
+    tokenJson: sensitiveJson.encode({ token }),
+    enabled: true,
+    timestamp: nowIso()
+  });
+  return academicIntegrationSettings(userId);
+}
+
+async function saveAcademicReminderPreference(userId, body = {}) {
+  const enabled = Boolean(body.enabled);
+  const recipientId = String(body.recipientId || "").trim();
+  const leadMinutes = Number(body.leadMinutes || 15);
+  if (enabled && !/^[^\s|]{1,128}$/u.test(recipientId)) {
+    throw new HttpError(400, "启用提醒时必须填写有效的企业微信成员账号。");
+  }
+  if (![5, 10, 15, 30, 60].includes(leadMinutes)) {
+    throw new HttpError(400, "课前提醒时间只支持 5、10、15、30 或 60 分钟。");
+  }
+  const row = await repository.upsertReminderPreference(userId, {
+    enabled,
+    recipientId,
+    leadMinutes
+  }, nowIso());
+  return publicReminderPreference(row);
+}
+
+async function cachedAcademicTimetableForUser(userId) {
+  const row = await repository.getAcademicCache(userId, ACADEMIC_TIMETABLE_SOURCES.current.key)
+    || await repository.getAcademicCache(userId, ACADEMIC_TIMETABLE_SOURCES.selection.key);
+  if (!row) return null;
+  try {
+    return sensitiveJson.decode(row.cache_json);
+  } catch {
+    return null;
+  }
+}
+
+async function serveAcademicCalendar(res, token) {
+  const subscription = await repository.findCalendarSubscriptionByTokenHash(sha256Hex(token));
+  if (!subscription) {
+    json(res, 404, { ok: false, error: "课程日历订阅不存在或已停用。" });
+    return;
+  }
+  const timetable = await cachedAcademicTimetableForUser(subscription.user_id);
+  if (!timetable) {
+    json(res, 503, { ok: false, error: "课程表尚未同步，请先在校园工作台同步课表。" });
+    return;
+  }
+  const body = renderAcademicCalendar(timetable);
+  res.writeHead(200, {
+    ...securityHeaders(),
+    "x-request-id": userContextStorage.getStore()?.requestId || "",
+    "content-type": "text/calendar; charset=utf-8",
+    "content-disposition": "inline; filename=campus-calendar.ics",
+    "cache-control": "no-store",
+    "content-length": Buffer.byteLength(body)
+  });
+  res.end(body);
+}
+
+function formatCourseReminderTime(date) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
+}
+
+function courseReminderPayload(preference, occurrence, userId, now) {
+  const leadMinutes = Number(preference.lead_minutes || 15);
+  const scheduledAt = new Date(Math.max(now.getTime(), occurrence.startAt.getTime() - leadMinutes * 60_000));
+  const locationLine = occurrence.location ? `\n- 地点：${occurrence.location}` : "";
+  const identity = sha256Hex(`${userId}|${occurrence.id}|${occurrence.startAt.toISOString()}`).slice(0, 48);
+  return {
+    msgType: "markdown",
+    content: `### 课程提醒\n**${occurrence.courseName}** 将在 ${leadMinutes} 分钟后开始\n- 时间：${formatCourseReminderTime(occurrence.startAt)}${locationLine}`,
+    target: { touser: preference.recipient_id },
+    scheduledAt: scheduledAt.toISOString(),
+    dedupeKey: `campus-course-${identity}`,
+    dedupeWindowSeconds: 86400,
+    maxAttempts: 4
+  };
+}
+
 async function readBodyText(req) {
   const declaredLength = Number(req.headers["content-length"]);
   if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BODY_BYTES) {
@@ -5769,6 +5920,11 @@ async function handleApi(req, res, url) {
       json(res, ready ? 200 : 503, { ok: ready, service: "hgu-campus-hub", ready });
       return;
     }
+    const calendarMatch = url.pathname.match(/^\/api\/academic\/calendar\/([A-Za-z0-9_-]{43,128})\.ics$/);
+    if (calendarMatch && req.method === "GET") {
+      await serveAcademicCalendar(res, calendarMatch[1]);
+      return;
+    }
 
     const appSession = APP_AUTH_REQUIRED ? await requireAppAccess(req) : await getAppSession(req);
     const contextUser = await findUserById(appSession.user?.id);
@@ -6021,6 +6177,33 @@ async function handleApi(req, res, url) {
       json(res, 200, { ok: true, data: await withAcademicSessionLock(() => getAcademicTimetable(source)) });
       return;
     }
+    if (url.pathname === "/api/academic/integrations" && req.method === "GET") {
+      json(res, 200, { ok: true, data: await academicIntegrationSettings(currentUserId()) });
+      return;
+    }
+    if (url.pathname === "/api/academic/calendar/rotate" && req.method === "POST") {
+      const data = await rotateAcademicCalendarSubscription(currentUserId());
+      logger.info("audit_academic_calendar_rotated", { actorUserId: currentUserId() });
+      json(res, 201, { ok: true, data });
+      return;
+    }
+    if (url.pathname === "/api/academic/calendar" && req.method === "DELETE") {
+      await repository.disableCalendarSubscription(currentUserId(), nowIso());
+      logger.info("audit_academic_calendar_disabled", { actorUserId: currentUserId() });
+      json(res, 200, { ok: true, data: await academicIntegrationSettings(currentUserId()) });
+      return;
+    }
+    if (url.pathname === "/api/academic/reminder" && req.method === "PUT") {
+      const body = await readBodyJson(req);
+      const data = await saveAcademicReminderPreference(currentUserId(), body);
+      logger.info("audit_academic_reminder_updated", {
+        actorUserId: currentUserId(),
+        enabled: data.enabled,
+        leadMinutes: data.leadMinutes
+      });
+      json(res, 200, { ok: true, data });
+      return;
+    }
     if (url.pathname === "/api/academic/gpa") {
       json(res, 200, { ok: true, data: await withAcademicSessionLock(() => getAcademicGpa()) });
       return;
@@ -6104,6 +6287,9 @@ const serveStatic = createStaticAssetHandler({
 let academicAutoRefreshRunning = false;
 let academicRefreshStartTimer = null;
 let academicRefreshInterval = null;
+let academicReminderRunning = false;
+let academicReminderStartTimer = null;
+let academicReminderInterval = null;
 
 async function hasAcademicRefreshSession() {
   const jar = await readSessionJar();
@@ -6152,6 +6338,64 @@ function startAcademicAutoRefresh() {
     Math.max(0, ACADEMIC_AUTO_REFRESH_START_DELAY_MS)
   );
   academicRefreshInterval = setInterval(() => refreshAcademicTimetableInBackground("interval"), ACADEMIC_AUTO_REFRESH_MS);
+}
+
+async function enqueueUpcomingAcademicReminders(reason) {
+  if (academicReminderRunning) return;
+  academicReminderRunning = true;
+  let queued = 0;
+  let deduplicated = 0;
+  try {
+    const now = new Date();
+    const horizon = new Date(now.getTime() + CAMPUS_REMINDER_HORIZON_HOURS * 60 * 60 * 1000);
+    const preferences = await repository.listEnabledReminderPreferences();
+    for (const preference of preferences) {
+      if (queued + deduplicated >= CAMPUS_REMINDER_BATCH_SIZE) break;
+      const timetable = await cachedAcademicTimetableForUser(preference.user_id);
+      if (!timetable) continue;
+      const occurrences = buildCourseOccurrences(timetable, { now, from: now, to: horizon })
+        .filter((occurrence) => occurrence.startAt > now && occurrence.startAt <= horizon);
+      for (const occurrence of occurrences) {
+        if (queued + deduplicated >= CAMPUS_REMINDER_BATCH_SIZE) break;
+        try {
+          const result = await enqueueCampusNotification(
+            courseReminderPayload(preference, occurrence, preference.user_id, now),
+            { requestId: `campus-reminder-${randomUUID()}` }
+          );
+          if (result.deduplicated) deduplicated += 1;
+          else queued += 1;
+        } catch (error) {
+          logger.warn("academic_reminder_enqueue_failed", {
+            reason,
+            userId: preference.user_id,
+            courseId: occurrence.id,
+            error
+          });
+        }
+      }
+    }
+    if (reason !== "interval" || queued > 0) {
+      logger.info("academic_reminder_scan_completed", { reason, queued, deduplicated, users: preferences.length });
+    }
+  } finally {
+    academicReminderRunning = false;
+  }
+}
+
+function startAcademicReminderScheduler() {
+  const configured = Boolean(
+    process.env.NOTIFICATION_SERVICE_URL
+    && (process.env.CAMPUS_NOTIFICATION_API_KEY || process.env.NOTIFY_API_KEY)
+  );
+  if (!configured || !Number.isFinite(CAMPUS_REMINDER_INTERVAL_MS) || CAMPUS_REMINDER_INTERVAL_MS <= 0) return;
+  academicReminderStartTimer = setTimeout(
+    () => enqueueUpcomingAcademicReminders("startup"),
+    Math.max(0, CAMPUS_REMINDER_START_DELAY_MS)
+  );
+  academicReminderInterval = setInterval(
+    () => enqueueUpcomingAcademicReminders("interval"),
+    CAMPUS_REMINDER_INTERVAL_MS
+  );
 }
 
 const server = createServer((req, res) => {
@@ -6213,6 +6457,7 @@ server.listen(PORT, HOST, () => {
   const address = server.address();
   logger.info("service_started", { host: HOST, port: typeof address === "object" ? address?.port : PORT });
   startAcademicAutoRefresh();
+  startAcademicReminderScheduler();
 });
 
 let shuttingDown = false;
@@ -6222,6 +6467,8 @@ function shutdown(signal) {
   logger.info("service_stopping", { signal });
   if (academicRefreshStartTimer) clearTimeout(academicRefreshStartTimer);
   if (academicRefreshInterval) clearInterval(academicRefreshInterval);
+  if (academicReminderStartTimer) clearTimeout(academicReminderStartTimer);
+  if (academicReminderInterval) clearInterval(academicReminderInterval);
   const forceTimer = setTimeout(() => {
     logger.error("service_shutdown_timeout", { signal });
     server.closeAllConnections?.();

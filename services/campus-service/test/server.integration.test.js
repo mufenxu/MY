@@ -145,6 +145,37 @@ test("server authentication, revocation, validation and static caching work toge
   assert.ok(sessionMs > 29.9 * 24 * 60 * 60 * 1000 && sessionMs <= thirtyDaysMs + 1_000,
     `expected a 30-day session, got ${sessionMs / (24 * 60 * 60 * 1000)} days`);
 
+  const integrationSettings = await fetch(`${origin}/api/academic/integrations`, {
+    headers: { cookie: oldCookie }
+  });
+  assert.equal(integrationSettings.status, 200);
+  assert.equal((await integrationSettings.json()).data.calendar.enabled, false);
+
+  const rotatedCalendar = await fetch(`${origin}/api/academic/calendar/rotate`, {
+    method: "POST",
+    headers: {
+      cookie: oldCookie,
+      "x-csrf-token": loginPayload.data.csrfToken
+    }
+  });
+  assert.equal(rotatedCalendar.status, 201);
+  const calendarSettings = await rotatedCalendar.json();
+  assert.match(calendarSettings.data.calendar.path, /^\/api\/academic\/calendar\/[A-Za-z0-9_-]+\.ics$/);
+  const calendarWithoutCache = await fetch(`${origin}${calendarSettings.data.calendar.path}`);
+  assert.equal(calendarWithoutCache.status, 503);
+
+  const reminderSettings = await fetch(`${origin}/api/academic/reminder`, {
+    method: "PUT",
+    headers: {
+      cookie: oldCookie,
+      "content-type": "application/json",
+      "x-csrf-token": loginPayload.data.csrfToken
+    },
+    body: JSON.stringify({ enabled: true, recipientId: "student-1", leadMinutes: 15 })
+  });
+  assert.equal(reminderSettings.status, 200);
+  assert.equal((await reminderSettings.json()).data.recipientId, "student-1");
+
   const inviteCreate = await fetch(`${origin}/api/invites`, {
     method: "POST",
     headers: {

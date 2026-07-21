@@ -376,7 +376,7 @@ const MainLayout = () => {
     }, []);
 
     const returnToPlatformConsole = useCallback(() => {
-        window.location.assign('/');
+        window.location.assign('/console');
     }, []);
 
     const navigateSoftly = useCallback((path) => {

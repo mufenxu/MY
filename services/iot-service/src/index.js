@@ -1,9 +1,10 @@
 const { createApiServer } = require('./http/apiServer');
+const { AutomationEngine } = require('./services/automationEngine');
 const { MqttService } = require('./services/mqttClient');
 const { SettingsStore } = require('./settings/settingsStore');
 const { getDatabase } = require('./storage/db');
 
-function registerShutdown(server, mqttService, closeRealtime) {
+function registerShutdown(server, mqttService, automationEngine, closeRealtime) {
   let shuttingDown = false;
 
   const shutdown = async (signal) => {
@@ -21,6 +22,7 @@ function registerShutdown(server, mqttService, closeRealtime) {
     try {
       await Promise.allSettled([
         mqttService.stop({ force: false }),
+        automationEngine?.stop(),
         closeRealtime?.()
       ]);
       await serverClosed;
@@ -62,15 +64,17 @@ async function main() {
   const settingsStore = new SettingsStore({ storage: database });
   const initialConfig = await settingsStore.initialize();
   const mqttService = new MqttService(settingsStore, database);
-  const { closeRealtime, server } = createApiServer({ settingsStore, mqttService });
+  const automationEngine = new AutomationEngine({ settingsStore, mqttService, database });
+  const { closeRealtime, server } = createApiServer({ settingsStore, mqttService, automationEngine });
 
   await mqttService.start({ databaseInitialized: true });
+  automationEngine.start();
   await listen(server, initialConfig.api.port);
 
   console.log(`API server listening on port ${initialConfig.api.port}`);
   console.log(`Dashboard: http://localhost:${initialConfig.api.port}`);
 
-  registerShutdown(server, mqttService, closeRealtime);
+  registerShutdown(server, mqttService, automationEngine, closeRealtime);
 }
 
 main().catch((error) => {

@@ -35,7 +35,7 @@
                     <a
                         v-if="IS_PLATFORM_SSO"
                         class="platform-console-link platform-console-link-mobile"
-                        href="/"
+                        href="/console"
                         aria-label="返回统一服务控制台"
                     >
                         <el-icon><Grid /></el-icon>
@@ -75,7 +75,7 @@
                 <!-- User Account Menu -->
                 <div class="aside-footer">
                     <el-tooltip v-if="IS_PLATFORM_SSO" content="返回统一服务控制台" placement="bottom">
-                        <a class="platform-console-link" href="/" aria-label="返回统一服务控制台">
+                        <a class="platform-console-link" href="/console" aria-label="返回统一服务控制台">
                             <el-icon><Grid /></el-icon>
                             <span>统一控制台</span>
                         </a>

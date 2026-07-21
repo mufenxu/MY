@@ -140,7 +140,7 @@ startApplication().catch((error) => {
                 <section style="max-width:560px;text-align:center">
                     <h1 style="font-size:22px;color:#1f2937">无法进入考试管理后台</h1>
                     <p style="color:#64748b;line-height:1.7">${String(error.message || '统一登录初始化失败。').replace(/[<>&"]/g, '')}</p>
-                    <a href="/" style="display:inline-block;margin-top:12px;color:#2563eb">返回管理中心</a>
+                    <a href="/console" style="display:inline-block;margin-top:12px;color:#2563eb">返回管理中心</a>
                 </section>
             </main>`;
     }

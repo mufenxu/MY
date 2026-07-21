@@ -26,7 +26,7 @@ class ErrorBoundary extends React.Component {
     };
 
     handleHome = () => {
-        window.location.href = '/';
+        window.location.href = this.props.homePath || '/';
     };
 
     render() {

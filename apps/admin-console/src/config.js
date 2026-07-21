@@ -151,6 +151,7 @@ export function loadConfig(env = process.env) {
     monitorIntervalMs: parseInteger(env.PLATFORM_MONITOR_INTERVAL_MS, 30000, { min: 10000, max: 300000 }),
     statusRetentionDays: parseInteger(env.PLATFORM_STATUS_RETENTION_DAYS, 30, { min: 1, max: 365 }),
     auditRetentionDays: parseInteger(env.PLATFORM_AUDIT_RETENTION_DAYS, 180, { min: 30, max: 730 }),
+    configurationTwoPersonApproval: parseBoolean(env.PLATFORM_CONFIG_TWO_PERSON_APPROVAL, isProduction),
     incidentFailureThreshold: parseInteger(env.PLATFORM_INCIDENT_FAILURE_THRESHOLD, 2, { min: 1, max: 10 }),
     incidentRecoveryThreshold: parseInteger(env.PLATFORM_INCIDENT_RECOVERY_THRESHOLD, 2, { min: 1, max: 10 }),
     serviceLatencyThresholdMs: parseInteger(env.PLATFORM_SERVICE_LATENCY_THRESHOLD_MS, 2000, { min: 100, max: 30000 }),

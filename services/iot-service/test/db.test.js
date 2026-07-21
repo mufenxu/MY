@@ -104,3 +104,20 @@ test('Mongo API key usage coalesces legacy null counters atomically', async () =
     { $add: [{ $ifNull: ['$request_count', 0] }, 1] }
   );
 });
+
+test('automation definitions and run audit persist in the memory database', async () => {
+  const db = new MemoryDatabase();
+  const rule = { id: 'rule_1', name: 'Rule', enabled: true, updated_at: 2 };
+  const scene = { id: 'scene_1', name: 'Scene', updated_at: 3 };
+  await db.saveAutomationRule(rule);
+  await db.saveAutomationScene(scene);
+  await db.saveAutomationRun({ id: 'run_old', source_id: rule.id, created_at: 4 });
+  await db.saveAutomationRun({ id: 'run_new', source_id: scene.id, created_at: 5 });
+
+  await db.recordAutomationRuleRun(rule.id, 6);
+  assert.equal((await db.getAutomationRule(rule.id)).last_triggered_at, 6);
+  assert.deepEqual((await db.listAutomationScenes())[0], scene);
+  assert.deepEqual((await db.listAutomationRuns(1))[0].id, 'run_new');
+  assert.equal(await db.deleteAutomationRule(rule.id), true);
+  assert.equal(await db.deleteAutomationScene(scene.id), true);
+});

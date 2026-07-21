@@ -141,7 +141,7 @@ function App() {
             setSession({ ready: false, authenticated: false, error: null });
             setSessionRetry((value) => value + 1);
           }}>重试</Button>,
-          <Button key="home" onClick={() => { window.location.href = '/'; }}>返回管理中心</Button>,
+          <Button key="home" onClick={() => { window.location.href = IS_PLATFORM_SSO ? '/console' : '/'; }}>返回管理中心</Button>,
         ].filter(Boolean)}
       />
     );
@@ -172,7 +172,7 @@ function App() {
         }
       }}
     >
-      <ErrorBoundary>
+      <ErrorBoundary homePath={IS_PLATFORM_SSO ? '/console' : '/'}>
         <Suspense fallback={<RouteFallback />}>
           <Router basename={APP_BASE_PATH || undefined}>
             <Routes>

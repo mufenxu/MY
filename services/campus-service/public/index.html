@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="./assets/hgu-emblem.png">
   <link rel="apple-touch-icon" href="./assets/hgu-emblem.png">
   <link rel="stylesheet" href="./styles.css?v=20260719-header-actions-v1">
+  <link rel="stylesheet" href="./academic-integrations.css?v=20260721-calendar-reminders">
 </head>
 <body data-app-locked="true">
   <div class="nebula-glow purple"></div>
@@ -50,7 +51,7 @@
         </a>
       </nav>
       <div class="actions">
-        <a id="platformConsoleLink" class="admin-action ghost" href="/" title="返回统一服务控制台" hidden>
+        <a id="platformConsoleLink" class="admin-action ghost" href="/console" title="返回统一服务控制台" hidden>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           <span>统一控制台</span>
         </a>
@@ -260,6 +261,51 @@
           <strong id="academicCalendarText">--</strong>
           <small>学校系统</small>
         </article>
+      </section>
+
+      <section class="academic-integration-panel" aria-labelledby="academicIntegrationTitle">
+        <div class="academic-integration-head">
+          <div>
+            <span class="integration-kicker">课程同步</span>
+            <h3 id="academicIntegrationTitle">日历订阅与课前提醒</h3>
+          </div>
+          <span id="academicIntegrationStatus" class="integration-status">正在读取设置</span>
+        </div>
+        <div class="academic-integration-grid">
+          <div class="integration-tool">
+            <div class="integration-tool-copy">
+              <strong>系统日历订阅</strong>
+              <span>订阅到手机或电脑日历</span>
+            </div>
+            <input id="academicCalendarUrlInput" class="integration-url" type="text" readonly placeholder="生成后显示订阅地址" aria-label="课程日历订阅地址">
+            <div class="integration-actions">
+              <button id="academicCalendarRotateButton" type="button">生成订阅</button><button id="academicCalendarCopyButton" type="button" class="ghost" disabled>复制地址</button><button id="academicCalendarDisableButton" type="button" class="ghost danger" disabled>停用</button>
+            </div>
+          </div>
+          <form id="academicReminderForm" class="integration-tool reminder-tool">
+            <div class="integration-tool-copy">
+              <strong>企业微信课前提醒</strong>
+              <span>按开课时间排队并自动去重</span>
+            </div>
+            <label class="integration-toggle">
+              <input id="academicReminderEnabledInput" type="checkbox">
+              <span>启用课前提醒</span>
+            </label>
+            <div class="reminder-fields">
+              <label>
+                <span>企业微信成员账号</span>
+                <input id="academicReminderRecipientInput" type="text" maxlength="128" autocomplete="off" placeholder="例如 zhangsan">
+              </label>
+              <label>
+                <span>提前时间</span>
+                <select id="academicReminderLeadSelect">
+                  <option value="5">5 分钟</option><option value="10">10 分钟</option><option value="15" selected>15 分钟</option><option value="30">30 分钟</option><option value="60">60 分钟</option>
+                </select>
+              </label>
+            </div>
+            <button id="academicReminderSaveButton" type="submit" class="ghost">保存提醒设置</button>
+          </form>
+        </div>
       </section>
 
       <section class="panel timetable-panel">
@@ -878,7 +924,8 @@
   <script src="./browser-check.js?v=20260719-wechat-fallback" defer></script>
   <script src="./platform-runtime.js?v=20260715-sso-v1" defer></script>
   <script src="./formatters.js?v=20260721-modules-v1" defer></script>
-  <script src="./app.js?v=20260719-wechat-fallback" defer></script>
+  <script src="./academic-integrations.js?v=20260721-calendar-reminders" defer></script>
+  <script src="./app.js?v=20260721-calendar-reminders" defer></script>
   <script src="./admin.js?v=20260715-admin-workspace-v2" defer></script>
 </body>
 </html>

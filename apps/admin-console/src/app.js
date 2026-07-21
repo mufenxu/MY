@@ -19,6 +19,8 @@ import { createMemoryAuthStore } from './auth-store.js';
 import { createMemoryAuthRiskStore } from './auth-risk-store.js';
 import { BackupOperationError, createBackupManager, createBackupRunnerClient } from './backups.js';
 import { verifyTurnstileToken } from './bot-challenge.js';
+import { ConfigurationError, createConfigurationManager } from './configuration-manager.js';
+import { createMemoryConfigurationStore } from './configuration-store.js';
 import { loadConfig } from './config.js';
 import { createStatusMonitor, loadServiceRegistry } from './service-registry.js';
 import { createMetrics } from './metrics.js';
@@ -29,6 +31,8 @@ import { createMemoryOperationsStore } from './operations-store.js';
 import { createPasskeyService } from './passkeys.js';
 import { ReleaseOperationError, createReleaseService } from './release-service.js';
 import { createMemoryReleaseStore } from './release-store.js';
+import { createRequestDiagnostics } from './request-diagnostics.js';
+import { createTaskCenter } from './task-center.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.resolve(__dirname, '..', 'dist');
@@ -100,6 +104,10 @@ export function createApp({
   notificationManager = null,
   authStore = null,
   authRiskStore = null,
+  configurationStore = null,
+  configurationManager = null,
+  taskManager = null,
+  requestDiagnostics = null,
 } = {}) {
   const registry = loadServiceRegistry(config.registryPath);
   const monitor = createStatusMonitor(registry.services, {
@@ -179,6 +187,24 @@ export function createApp({
     readinessCheck,
     fetchImpl,
   });
+  const configurationData = configurationStore || createMemoryConfigurationStore();
+  const configurations = configurationManager || createConfigurationManager({
+    store: configurationData,
+    operations,
+    enforceTwoPerson: config.configurationTwoPersonApproval,
+  });
+  const tasks = taskManager || createTaskCenter({
+    backups,
+    releases,
+    notificationManagement,
+    operationsStore: store,
+  });
+  const diagnostics = requestDiagnostics || createRequestDiagnostics({
+    services: registry.services,
+    publicOrigin: config.publicOrigin,
+    fetchImpl,
+    timeoutMs: config.serviceTimeoutMs,
+  });
 
   function readSessionToken(req) {
     const cookies = parseCookies(req.headers.cookie);
@@ -199,6 +225,13 @@ export function createApp({
   function sendNotificationManagementError(res, error) {
     if (error instanceof NotificationManagementError) {
       return res.status(error.status).json({ error: error.message, code: error.code, details: error.details });
+    }
+    throw error;
+  }
+
+  function sendConfigurationError(res, error) {
+    if (error instanceof ConfigurationError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
     }
     throw error;
   }
@@ -380,6 +413,10 @@ export function createApp({
   app.locals.releaseService = releases;
   app.locals.releaseStore = releaseData;
   app.locals.notificationManagement = notificationManagement;
+  app.locals.configurationStore = configurationData;
+  app.locals.configurationManager = configurations;
+  app.locals.taskCenter = tasks;
+  app.locals.requestDiagnostics = diagnostics;
   app.locals.authStore = accounts;
   app.locals.authRiskStore = risk;
 
@@ -439,6 +476,50 @@ export function createApp({
       res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not-ready', service: 'admin-console' });
     } catch {
       res.status(503).json({ status: 'not-ready', service: 'admin-console' });
+    }
+  });
+
+  app.get('/api/public/status', async (req, res, next) => {
+    try {
+      const status = await operations.getStatus();
+      const monitored = (status.services || []).filter((service) => service.state !== 'unmonitored');
+      const activeIncidents = await store.listIncidents({ status: 'open,acknowledged', limit: 100 });
+      const generatedAt = new Date().toISOString();
+      const staleAfterMs = Math.max((config.monitorIntervalMs || 30000) * 3, 60000);
+      const services = (status.services || []).map((service) => ({
+        id: service.id,
+        name: service.shortName || service.name,
+        category: service.category,
+        state: service.state,
+        checkedAt: service.checkedAt || null,
+        stale: !service.checkedAt || Date.now() - Date.parse(service.checkedAt) > staleAfterMs,
+      }));
+      const stale = services.some((service) => service.state !== 'unmonitored' && service.stale);
+      const unhealthy = monitored.filter((service) => ['degraded', 'offline'].includes(service.state));
+      const serviceOverall = monitored.length === 0 || stale
+        ? 'unknown'
+        : unhealthy.length === 0 ? 'operational' : unhealthy.length === monitored.length ? 'outage' : 'degraded';
+      const overall = serviceOverall === 'operational' && activeIncidents.length > 0
+        ? 'degraded'
+        : serviceOverall;
+      return res.json({
+        platformName: registry.platformName,
+        overall,
+        generatedAt,
+        stale,
+        services,
+        incidents: activeIncidents.map((incident) => ({
+          id: incident.id,
+          state: incident.status,
+          severity: incident.severity,
+          serviceId: incident.serviceId || null,
+          openedAt: incident.openedAt,
+          updatedAt: incident.lastSeenAt,
+        })),
+      });
+    } catch (error) {
+      next(error);
+      return undefined;
     }
   });
 
@@ -946,14 +1027,81 @@ export function createApp({
     }
   });
 
-  app.put('/api/operations/settings', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+  app.put('/api/operations/settings', requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
     try {
-      const settings = await operations.updateSettings(req.body || {}, req.consoleUser.username);
-      res.json({ settings });
+      const change = await configurations.propose({
+        settings: req.body?.settings || req.body || {},
+        summary: req.body?.summary || 'Operations settings update',
+        actor: req.consoleUser.username,
+      });
+      await recordAudit(req, { action: 'configuration.change_proposed', targetType: 'configuration_change', targetId: change.id, details: { changedKeys: change.changedKeys } });
+      res.status(202).json({ change });
     } catch (error) {
       if (error instanceof RangeError || error instanceof TypeError) {
         return res.status(400).json({ error: '运行设置格式无效。', code: 'INVALID_OPERATIONS_SETTINGS' });
       }
+      try { return sendConfigurationError(res, error); } catch (unexpected) { next(unexpected); }
+      return undefined;
+    }
+  });
+
+  app.get('/api/configuration', async (req, res, next) => {
+    try { return res.json(await configurations.getOverview()); }
+    catch (error) { next(error); return undefined; }
+  });
+
+  app.post('/api/configuration/changes', requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
+    try {
+      const change = await configurations.propose({ settings: req.body?.settings || {}, summary: req.body?.summary, actor: req.consoleUser.username });
+      await recordAudit(req, { action: 'configuration.change_proposed', targetType: 'configuration_change', targetId: change.id, details: { changedKeys: change.changedKeys } });
+      return res.status(201).json({ change });
+    } catch (error) {
+      try { return sendConfigurationError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.post('/api/configuration/changes/:id/approve', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      const result = await configurations.approve(req.params.id, req.consoleUser.username, req.body?.note);
+      await recordAudit(req, { action: 'configuration.change_applied', targetType: 'configuration_change', targetId: req.params.id, details: { version: result.version } });
+      return res.json(result);
+    } catch (error) {
+      try { return sendConfigurationError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.post('/api/configuration/changes/:id/reject', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      const change = await configurations.reject(req.params.id, req.consoleUser.username, req.body?.note);
+      await recordAudit(req, { action: 'configuration.change_rejected', targetType: 'configuration_change', targetId: req.params.id });
+      return res.json({ change });
+    } catch (error) {
+      try { return sendConfigurationError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.post('/api/configuration/versions/:version/rollback', requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
+    try {
+      const change = await configurations.proposeRollback(req.params.version, { actor: req.consoleUser.username, summary: req.body?.summary });
+      await recordAudit(req, { action: 'configuration.rollback_proposed', targetType: 'configuration_change', targetId: change.id, details: { targetVersion: change.targetVersion } });
+      return res.status(201).json({ change });
+    } catch (error) {
+      try { return sendConfigurationError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.get('/api/tasks', async (req, res, next) => {
+    try { return res.json(await tasks.list({ status: req.query.status, source: req.query.source, limit: req.query.limit })); }
+    catch (error) { next(error); return undefined; }
+  });
+
+  app.post('/api/diagnostics/traces', requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
+    try {
+      const result = await diagnostics.run({ serviceId: req.body?.serviceId, parentRequestId: req.requestId });
+      await recordAudit(req, { action: 'diagnostics.trace', outcome: result.summary.attention ? 'failure' : 'success', targetType: 'service', targetId: req.body?.serviceId || 'all', details: result.summary });
+      return res.json(result);
+    } catch (error) {
+      if (error?.status && error?.code) return res.status(error.status).json({ error: error.message, code: error.code });
       next(error);
       return undefined;
     }

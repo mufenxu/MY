@@ -5,6 +5,7 @@ import { loadConfig } from './config.js';
 import { createMongoSessionRegistry } from './mongo-session-registry.js';
 import { createMongoOperationsStore } from './operations-store.js';
 import { createMongoReleaseStore } from './release-store.js';
+import { createMongoConfigurationStore } from './configuration-store.js';
 
 const config = loadConfig();
 const authStore = config.mongoUri
@@ -49,6 +50,9 @@ const operationsStore = config.mongoUri
 const releaseStore = config.mongoUri
   ? await createMongoReleaseStore({ uri: config.mongoUri })
   : null;
+const configurationStore = config.mongoUri
+  ? await createMongoConfigurationStore({ uri: config.mongoUri })
+  : null;
 const app = createApp({
   config,
   authStore,
@@ -56,15 +60,17 @@ const app = createApp({
   sessionRegistry,
   operationsStore,
   releaseStore,
+  configurationStore,
   readinessCheck: async () => {
-    const [authReady, riskReady, sessionsReady, operationsReady, releasesReady] = await Promise.all([
+    const [authReady, riskReady, sessionsReady, operationsReady, releasesReady, configurationReady] = await Promise.all([
       authStore ? authStore.ping() : true,
       authRiskStore ? authRiskStore.ping() : true,
       sessionRegistry ? sessionRegistry.ping() : true,
       operationsStore ? operationsStore.ping() : true,
       releaseStore ? releaseStore.ping() : true,
+      configurationStore ? configurationStore.ping() : true,
     ]);
-    return authReady && riskReady && sessionsReady && operationsReady && releasesReady;
+    return authReady && riskReady && sessionsReady && operationsReady && releasesReady && configurationReady;
   },
 });
 app.locals.operationsCenter.start();
@@ -90,6 +96,7 @@ function shutdown(signal) {
     app.locals.operationsCenter.stop();
     await operationsStore?.close();
     await releaseStore?.close();
+    await configurationStore?.close();
   });
 }
 

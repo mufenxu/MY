@@ -209,3 +209,57 @@ test('notification management routes enforce console mutations and preserve the 
     ['retry', 'local-admin'],
   ]);
 });
+
+test('public status is unauthenticated while operational task data remains protected', async () => {
+  const config = { ...loadConfig({ NODE_ENV: 'development' }), authDisabled: false, metricsToken: 'm'.repeat(32) };
+  const operationsStore = {
+    listIncidents: async () => [{ id: 'incident-1', status: 'open', severity: 'warning', serviceId: 'core', openedAt: '2026-07-21T10:00:00Z', lastSeenAt: '2026-07-21T10:01:00Z' }],
+  };
+  const operationsManager = {
+    getStatus: async () => ({ services: [{ id: 'core', name: 'Core', shortName: 'Core', category: 'service', state: 'healthy', checkedAt: new Date().toISOString(), baseUrl: 'http://secret.internal' }] }),
+    recordAudit: async () => {},
+  };
+  const app = createApp({ config, operationsStore, operationsManager });
+  await withServer(app, async (origin) => {
+    const publicResponse = await fetch(`${origin}/api/public/status`);
+    assert.equal(publicResponse.status, 200);
+    const status = await publicResponse.json();
+    assert.equal(status.overall, 'degraded');
+    assert.equal(status.services[0].name, 'Core');
+    assert.equal('baseUrl' in status.services[0], false);
+    assert.equal((await fetch(`${origin}/api/tasks`)).status, 401);
+  });
+});
+
+test('configuration, task, and trace routes preserve role and console-request boundaries', async () => {
+  const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
+  const calls = [];
+  const configurationManager = {
+    getOverview: async () => ({ currentVersion: 1, settings: {}, changes: [], versions: [] }),
+    propose: async (input) => { calls.push(['propose', input.actor]); return { id: 'change-1', changedKeys: ['alertingEnabled'] }; },
+    approve: async (id, actor) => { calls.push(['approve', actor]); return { change: { id }, version: 2, settings: {} }; },
+    reject: async () => ({}),
+    proposeRollback: async () => ({}),
+  };
+  const taskManager = { list: async () => ({ tasks: [{ id: 'task-1' }], counts: {}, sources: [] }) };
+  const requestDiagnostics = { run: async (input) => { calls.push(['trace', input.parentRequestId]); return { summary: { total: 1, healthy: 1, attention: 0 }, traces: [] }; } };
+  const app = createApp({ config, configurationManager, taskManager, requestDiagnostics });
+  await withServer(app, async (origin) => {
+    assert.equal((await fetch(`${origin}/api/configuration`)).status, 200);
+    assert.equal((await fetch(`${origin}/api/tasks`)).status, 200);
+    assert.equal((await fetch(`${origin}/api/configuration/changes`, { method: 'POST' })).status, 403);
+    const proposed = await fetch(`${origin}/api/configuration/changes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
+      body: JSON.stringify({ settings: { alertingEnabled: false }, summary: 'test' }),
+    });
+    assert.equal(proposed.status, 201);
+    const traced = await fetch(`${origin}/api/diagnostics/traces`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console', 'X-Request-Id': 'trace-parent' },
+      body: JSON.stringify({ serviceId: 'core' }),
+    });
+    assert.equal(traced.status, 200);
+  });
+  assert.deepEqual(calls, [['propose', 'local-admin'], ['trace', 'trace-parent']]);
+});

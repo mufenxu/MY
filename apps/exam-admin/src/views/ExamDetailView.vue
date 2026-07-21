@@ -1459,12 +1459,12 @@ const returnToPlatformConsole = () => {
             type: 'warning',
         }).then(() => {
             isDirty.value = false;
-            window.location.assign('/');
+            window.location.assign('/console');
         }).catch(() => {});
         return;
     }
 
-    window.location.assign('/');
+    window.location.assign('/console');
 };
 
 const handleBeforeUnload = (event) => {

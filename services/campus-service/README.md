@@ -138,6 +138,8 @@ PORT=22101
 - 生活用水码查询、重新获取用水码、当月完整生活用水账单、指定月份生活用水账单查询
 - 公寓住宿信息、入住状态、入住周期、宿友列表
 - 本科教务选课结果课表、周视图、课程清单
+- 私有 ICS 课表订阅，可随时轮换订阅地址或停用
+- 企业微信课程提醒，可设置接收人和提前时间并由服务端定时扫描
 - 新校区空闲教室查询，支持今天/明天/后天、节次和教学楼筛选
 - 教学评估助手：同步待评课程、默认满分预填、主观评价编辑、逐门确认提交
 - 教务课表 live 同步失败时显示最近一次本地缓存
@@ -149,6 +151,8 @@ PORT=22101
 教务系统 `newjwxs.hgu.edu.cn` 外层有 WebVPN / aTrust 校验。项目会先建立 WebVPN/CAS 会话，再实时请求学校的选课结果 JSON 接口 `/student/courseSelect/thisSemesterCurriculum/callback` 生成课表；如果学校校验未放行，会回退到 `data/academic-timetable-cache.json` 最近缓存，并在页面标记“实时同步失败”。
 
 服务器启动后会按 `ACADEMIC_AUTO_REFRESH_MS` 定时刷新教务缓存，默认 10 分钟一次；设置为 `0` 可以关闭后台刷新。即使关闭后台刷新，打开页面或调用 `/api/academic/timetable` 仍会实时同步一次。
+
+课表页可以创建不可猜测的私有 ICS 订阅地址，订阅令牌仅以哈希形式保存在 `campus_app`。`POST /api/academic/calendar/rotate` 会让旧地址立即失效，`DELETE /api/academic/calendar` 可停用订阅。课程提醒偏好同样按系统用户保存在 MongoDB；Compose 会通过内部签名把到期提醒加入通知服务队列。`CAMPUS_REMINDER_INTERVAL_MS` 控制扫描间隔，重复扫描使用稳定幂等键，不会重复创建同一课程提醒。
 
 空闲教室使用教务系统“教学资源 / 自习查询 / 空闲教室查询”的实时接口，仅默认展示新校区。页面可按日期、节次和教学楼查询，适合找自习教室。
 

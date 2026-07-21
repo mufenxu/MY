@@ -394,7 +394,7 @@ class MqttService extends EventEmitter {
   }
 
   // 继电器远程控制发布
-  publishControl(deviceId, relayId, status) {
+  publishControl(deviceId, relayId, status, options = {}) {
     if (!this.client || !this.status.mqttConnected) {
       const error = new Error('MQTT 客户端未连接，无法发送控制指令。');
       error.statusCode = 503;
@@ -406,10 +406,12 @@ class MqttService extends EventEmitter {
     const config = this.settingsStore.getConfig();
     const control = resolveRelayControl(config, deviceId, relayId, status);
 
-    // 记录这是由 Web 控制台触发的
+    const triggeredBy = typeof options === 'string'
+      ? options
+      : String(options.triggeredBy || 'web_ui');
     const key = `${deviceId}:${relayId}`;
     this.lastControlTriggeredBy[key] = {
-      triggeredBy: 'web_ui',
+      triggeredBy,
       expectedStatus: control.value,
       expiresAt: Date.now() + CONTROL_MARKER_TTL_MS
     };

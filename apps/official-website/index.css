@@ -994,11 +994,36 @@ button:focus, button:active, button:focus-visible {
 }
 
 .footer-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   text-align: center;
   font-size: 12px;
   color: var(--color-text-muted);
   border-top: 1px solid var(--color-border);
   padding-top: 18px;
+}
+
+.icp-link {
+  padding: 2px 4px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: color var(--transition-fast), text-decoration-color var(--transition-fast);
+}
+
+.icp-link:hover {
+  color: var(--color-accent-gold);
+  text-decoration-color: currentColor;
+}
+
+.icp-link:focus-visible {
+  outline: 2px solid var(--color-accent-gold) !important;
+  outline-offset: 2px;
 }
 
 .features-section,

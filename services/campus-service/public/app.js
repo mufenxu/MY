@@ -27,6 +27,7 @@ const state = {
   summary: null,
   campus: null,
   timetable: null,
+  academicIntegrations: null,
   academicGpa: null,
   face: null,
   timetableSource: "current",
@@ -132,6 +133,16 @@ const nodes = {
   packageList: document.querySelector("#packageList"),
   timetableRefreshButton: document.querySelector("#timetableRefreshButton"),
   timetableSyncText: document.querySelector("#timetableSyncText"),
+  academicIntegrationStatus: document.querySelector("#academicIntegrationStatus"),
+  academicCalendarUrlInput: document.querySelector("#academicCalendarUrlInput"),
+  academicCalendarRotateButton: document.querySelector("#academicCalendarRotateButton"),
+  academicCalendarCopyButton: document.querySelector("#academicCalendarCopyButton"),
+  academicCalendarDisableButton: document.querySelector("#academicCalendarDisableButton"),
+  academicReminderForm: document.querySelector("#academicReminderForm"),
+  academicReminderEnabledInput: document.querySelector("#academicReminderEnabledInput"),
+  academicReminderRecipientInput: document.querySelector("#academicReminderRecipientInput"),
+  academicReminderLeadSelect: document.querySelector("#academicReminderLeadSelect"),
+  academicReminderSaveButton: document.querySelector("#academicReminderSaveButton"),
   timetableHeadingText: document.querySelector("#timetableHeadingText"),
   timetableSourceSelect: document.querySelector("#timetableSourceSelect"),
   courseCountText: document.querySelector("#courseCountText"),
@@ -266,6 +277,16 @@ const nodes = {
   dialogCloseButton: document.querySelector("#dialogCloseButton")
 };
 
+const academicIntegrations = window.HguAcademicIntegrations.create({
+  nodes,
+  state,
+  api,
+  appBase: p.appBase,
+  copyText,
+  confirmDialog,
+  setNotice
+});
+
 nodes.monthInput.value = state.month;
 nodes.campusModeSelect.value = state.campusMode;
 nodes.campusMonthInput.value = state.campusMonth;
@@ -319,6 +340,13 @@ nodes.identityBarcodeButton.addEventListener("click", () => {
 });
 nodes.waterCodeRefreshButton.addEventListener("click", () => refreshWaterCode());
 nodes.timetableRefreshButton.addEventListener("click", () => refreshTimetable());
+nodes.academicCalendarRotateButton?.addEventListener("click", () => academicIntegrations.rotate());
+nodes.academicCalendarCopyButton?.addEventListener("click", () => academicIntegrations.copy());
+nodes.academicCalendarDisableButton?.addEventListener("click", () => academicIntegrations.disable());
+nodes.academicReminderForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  academicIntegrations.saveReminder();
+});
 nodes.timetableSourceSelect.addEventListener("change", () => {
   state.timetableSource = nodes.timetableSourceSelect.value === "selection" ? "selection" : "current";
   state.timetableWeek = "all";
@@ -441,6 +469,7 @@ async function init() {
     return;
   }
   await loadAuthStatus();
+  await academicIntegrations.load();
   await refresh({ initial: true });
 }
 
@@ -702,6 +731,7 @@ async function loginApp() {
     renderAppGate();
     updateAdminVisibility();
     await loadAuthStatus();
+    await academicIntegrations.load();
     await refresh();
   } catch (error) {
     if (embeddedWechat && (!error?.status || error.status === 504)) {
@@ -1204,6 +1234,7 @@ function clearAllData() {
   state.summary = null;
   state.campus = null;
   state.timetable = null;
+  state.academicIntegrations = null;
   state.academicGpa = null;
   state.evaluations = null;
   state.evaluationAuto = null;
@@ -1221,6 +1252,7 @@ function clearAllData() {
   clearIdentity();
   clearIdentityFace();
   clearTimetable();
+  academicIntegrations.render();
   clearFreeRooms();
   closeEvaluationEditor();
   stopEvaluationAutoPolling();

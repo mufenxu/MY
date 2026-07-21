@@ -98,7 +98,7 @@ function isDocumentRequest(req, pathname) {
 function rejectUnauthenticated(req, res, pathname) {
   if (isDocumentRequest(req, pathname)) {
     const returnTo = encodeURIComponent(pathWithQuery(pathname, new URL(req.url || '/', 'http://platform.internal').search));
-    res.writeHead(302, { Location: `/?returnTo=${returnTo}`, 'Cache-Control': 'no-store' });
+    res.writeHead(302, { Location: `/console?returnTo=${returnTo}`, 'Cache-Control': 'no-store' });
     res.end();
     return;
   }

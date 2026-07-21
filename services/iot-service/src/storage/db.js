@@ -98,7 +98,12 @@ class Database {
       this.db.collection('relay_logs').createIndex({ device_id: 1, created_at: -1 }),
       this.db.collection('api_keys').createIndex({ key_id: 1 }, { unique: true }),
       this.db.collection('api_keys').createIndex({ token_hash: 1 }, { unique: true, sparse: true }),
-      this.db.collection('settings').createIndex({ key: 1 }, { unique: true })
+      this.db.collection('settings').createIndex({ key: 1 }, { unique: true }),
+      this.db.collection('automation_rules').createIndex({ id: 1 }, { unique: true }),
+      this.db.collection('automation_rules').createIndex({ enabled: 1, updated_at: -1 }),
+      this.db.collection('automation_scenes').createIndex({ id: 1 }, { unique: true }),
+      this.db.collection('automation_runs').createIndex({ created_at: -1 }),
+      this.db.collection('automation_runs').createIndex({ source_id: 1, created_at: -1 })
     ]);
   }
 
@@ -295,6 +300,68 @@ class Database {
       { upsert: true }
     );
   }
+
+  async listAutomationRules() {
+    return this.db.collection('automation_rules')
+      .find({}, { projection: { _id: 0 } })
+      .sort({ updated_at: -1 })
+      .toArray();
+  }
+
+  async getAutomationRule(id) {
+    return this.db.collection('automation_rules').findOne({ id }, { projection: { _id: 0 } });
+  }
+
+  async saveAutomationRule(rule) {
+    await this.db.collection('automation_rules').replaceOne({ id: rule.id }, clone(rule), { upsert: true });
+    return clone(rule);
+  }
+
+  async deleteAutomationRule(id) {
+    const result = await this.db.collection('automation_rules').deleteOne({ id });
+    return result.deletedCount > 0;
+  }
+
+  async recordAutomationRuleRun(id, timestamp) {
+    return this.db.collection('automation_rules').updateOne(
+      { id },
+      { $set: { last_triggered_at: timestamp } }
+    );
+  }
+
+  async listAutomationScenes() {
+    return this.db.collection('automation_scenes')
+      .find({}, { projection: { _id: 0 } })
+      .sort({ updated_at: -1 })
+      .toArray();
+  }
+
+  async getAutomationScene(id) {
+    return this.db.collection('automation_scenes').findOne({ id }, { projection: { _id: 0 } });
+  }
+
+  async saveAutomationScene(scene) {
+    await this.db.collection('automation_scenes').replaceOne({ id: scene.id }, clone(scene), { upsert: true });
+    return clone(scene);
+  }
+
+  async deleteAutomationScene(id) {
+    const result = await this.db.collection('automation_scenes').deleteOne({ id });
+    return result.deletedCount > 0;
+  }
+
+  async saveAutomationRun(run) {
+    await this.db.collection('automation_runs').insertOne(clone(run));
+    return clone(run);
+  }
+
+  async listAutomationRuns(limit = 50) {
+    return this.db.collection('automation_runs')
+      .find({}, { projection: { _id: 0 } })
+      .sort({ created_at: -1 })
+      .limit(Math.min(200, Math.max(1, Number(limit) || 50)))
+      .toArray();
+  }
 }
 
 class MemoryDatabase {
@@ -303,6 +370,9 @@ class MemoryDatabase {
     this.sensorData = [];
     this.relayLogs = [];
     this.apiKeys = new Map();
+    this.automationRules = new Map();
+    this.automationScenes = new Map();
+    this.automationRuns = [];
     this.settings = null;
     this.apiKeyCache = new BoundedTtlCache({
       maxEntries: API_KEY_CACHE_MAX_ENTRIES,
@@ -419,6 +489,39 @@ class MemoryDatabase {
 
   async loadSettings() { return clone(this.settings); }
   async saveSettings(value) { this.settings = clone(value); }
+
+  async listAutomationRules() {
+    return Array.from(this.automationRules.values())
+      .sort((left, right) => right.updated_at - left.updated_at)
+      .map(clone);
+  }
+
+  async getAutomationRule(id) { return clone(this.automationRules.get(id) || null); }
+  async saveAutomationRule(rule) { this.automationRules.set(rule.id, clone(rule)); return clone(rule); }
+  async deleteAutomationRule(id) { return this.automationRules.delete(id); }
+  async recordAutomationRuleRun(id, timestamp) {
+    const rule = this.automationRules.get(id);
+    if (rule) rule.last_triggered_at = timestamp;
+  }
+
+  async listAutomationScenes() {
+    return Array.from(this.automationScenes.values())
+      .sort((left, right) => right.updated_at - left.updated_at)
+      .map(clone);
+  }
+
+  async getAutomationScene(id) { return clone(this.automationScenes.get(id) || null); }
+  async saveAutomationScene(scene) { this.automationScenes.set(scene.id, clone(scene)); return clone(scene); }
+  async deleteAutomationScene(id) { return this.automationScenes.delete(id); }
+
+  async saveAutomationRun(run) { this.automationRuns.push(clone(run)); return clone(run); }
+  async listAutomationRuns(limit = 50) {
+    return this.automationRuns
+      .slice()
+      .sort((left, right) => right.created_at - left.created_at)
+      .slice(0, Math.min(200, Math.max(1, Number(limit) || 50)))
+      .map(clone);
+  }
 }
 
 let dbInstance = null;

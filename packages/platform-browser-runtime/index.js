@@ -32,7 +32,7 @@ export function createPlatformBrowserRuntime({ appName, clearLocalSession } = {}
   function redirectToPlatformLogin() {
     const activeWindow = getBrowserWindow();
     const returnTo = `${activeWindow.location.pathname}${activeWindow.location.search}${activeWindow.location.hash}`;
-    activeWindow.location.replace(`/?returnTo=${encodeURIComponent(returnTo)}`);
+    activeWindow.location.replace(`/console?returnTo=${encodeURIComponent(returnTo)}`);
   }
 
   async function fetchWithTimeout(input, init = {}, timeout = 12000) {

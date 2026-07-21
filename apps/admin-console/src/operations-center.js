@@ -653,6 +653,11 @@ export function createOperationsCenter({
     return updated;
   }
 
+  async function previewSettings(patch) {
+    const currentSettings = await getSettings();
+    return normalizeOperationSettings(patch, currentSettings, serviceIds);
+  }
+
   async function monitorLoop() {
     if (stopped) return;
     try {
@@ -691,6 +696,7 @@ export function createOperationsCenter({
     getSettings,
     getStatus,
     observeBackupJob,
+    previewSettings,
     recordProxyMetric,
     recordAudit,
     refresh,

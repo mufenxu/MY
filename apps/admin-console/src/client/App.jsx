@@ -23,6 +23,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   Layers3,
+  ListTodo,
   LoaderCircle,
   LockKeyhole,
   LogOut,
@@ -33,10 +34,11 @@ import {
   Radio,
   RefreshCw,
   Rocket,
+  Route,
   Send,
   Server,
   ShieldCheck,
-  Settings2,
+  GitPullRequest,
   Sun,
   Timer,
   Trash2,
@@ -50,13 +52,18 @@ import { ConfirmDialog } from './UiControls.jsx';
 import AutomationView from './AutomationView.jsx';
 import NotificationServiceView from './NotificationServiceView.jsx';
 import {
+  ConfigurationView,
+  DiagnosticsView,
+  PublicStatusView,
+  TaskCenterView,
+} from './PlatformControlViews.jsx';
+import {
   BackupQualityStrip,
   IncidentsView,
   MonitoringView,
   OverviewOperations,
   ReleasesView,
   SecurityAuditView,
-  SettingsDiagnosticsView,
 } from './OperationsViews.jsx';
 
 const FILTERS = [
@@ -69,8 +76,10 @@ const FILTERS = [
   { id: 'automation', label: '自动化中心', icon: Bot },
   { id: 'backup', label: '数据灾备', icon: Database },
   { id: 'releases', label: '发布中心', icon: Rocket },
+  { id: 'tasks', label: '任务中心', icon: ListTodo },
+  { id: 'configuration', label: '配置中心', icon: GitPullRequest },
+  { id: 'diagnostics', label: '链路诊断', icon: Route },
   { id: 'security', label: '安全审计', icon: ShieldCheck },
-  { id: 'settings', label: '系统设置', icon: Settings2 },
 ];
 
 const CATEGORY_LABELS = {
@@ -1604,8 +1613,10 @@ function Dashboard({ session, onLogout }) {
     automation: { title: '自动化中心', subtitle: '任务能力与观测链路' },
     backup: { title: '数据灾备', subtitle: '备份恢复与灾难演练' },
     releases: { title: '发布中心', subtitle: '版本、构建与部署保护' },
+    tasks: { title: '统一任务中心', subtitle: '跨服务任务状态与处理入口' },
+    configuration: { title: '配置中心', subtitle: '受控变更、审批与版本回滚' },
+    diagnostics: { title: '链路诊断', subtitle: '公网网关与服务直连阶段追踪' },
     security: { title: '安全审计', subtitle: '会话安全与操作记录' },
-    settings: { title: '系统设置', subtitle: '维护窗口与一键诊断' },
   }[activeFilter];
 
   return (
@@ -1757,15 +1768,17 @@ function Dashboard({ session, onLogout }) {
           )}
           {activeFilter === 'backup' && <BackupRecoveryView session={session} />}
           {activeFilter === 'releases' && <ReleasesView session={session} />}
+          {activeFilter === 'tasks' && <TaskCenterView onNavigate={setActiveFilter} />}
+          {activeFilter === 'configuration' && <ConfigurationView session={session} />}
+          {activeFilter === 'diagnostics' && <DiagnosticsView services={services} session={session} />}
           {activeFilter === 'security' && <SecurityAuditView session={session} onLogout={onLogout} />}
-          {activeFilter === 'settings' && <SettingsDiagnosticsView session={session} />}
         </div>
       </main>
     </div>
   );
 }
 
-export default function App() {
+function AuthenticatedApp() {
   const [session, setSession] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [sessionError, setSessionError] = useState(null);
@@ -1802,4 +1815,9 @@ export default function App() {
   if (sessionError) return <SessionUnavailableScreen error={sessionError} onRetry={checkSession} retrying={checkingSession} />;
   if (!session?.authenticated) return <LoginScreen onAuthenticated={finishAuthentication} totpRequired={session?.totpRequired} />;
   return <Dashboard session={session} onLogout={() => setSession({ authenticated: false, authDisabled: false, totpRequired: Boolean(session.user?.totpEnabled), user: null })} />;
+}
+
+export default function App() {
+  if (window.location.pathname === '/status') return <PublicStatusView />;
+  return <AuthenticatedApp />;
 }

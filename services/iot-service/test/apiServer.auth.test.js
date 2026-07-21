@@ -56,6 +56,7 @@ function createSettingsStore() {
 async function startTestServer(options = {}) {
   const {
     dbOverrides = {},
+    automationEngine = null,
     mqttConnected = true,
     mqttSubscribed = true,
     publishControlError = null
@@ -126,7 +127,7 @@ async function startTestServer(options = {}) {
   mqttService.status = { mqttConnected, subscribed: mqttSubscribed };
   mqttService.getDiscoveredTopics = () => [];
 
-  const { closeRealtime, server, wsServer } = createApiServer({ settingsStore, mqttService });
+  const { closeRealtime, server, wsServer } = createApiServer({ settingsStore, mqttService, automationEngine });
   const port = await listenOnAvailablePort(server);
 
   return {
@@ -237,6 +238,42 @@ test('api keys are scoped and cannot access console-only endpoints', async (t) =
     }
   });
   assert.equal(configResponse.status, 403);
+});
+
+test('automation reads require device scope and mutations require relay scope', async (t) => {
+  const calls = [];
+  const automationEngine = new EventEmitter();
+  automationEngine.listRules = async () => [{ id: 'rule_1' }];
+  automationEngine.listScenes = async () => [];
+  automationEngine.listRuns = async () => [];
+  automationEngine.createRule = async (body) => {
+    calls.push(body);
+    return { id: 'rule_created', ...body };
+  };
+  const { baseUrl, server } = await startTestServer({ automationEngine });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const readResponse = await fetch(`${baseUrl}/api/automations/rules`, {
+    headers: { Authorization: 'Bearer sk_read' }
+  });
+  assert.equal(readResponse.status, 200);
+  assert.equal((await readResponse.json())[0].id, 'rule_1');
+
+  const deniedResponse = await fetch(`${baseUrl}/api/automations/rules`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer sk_read', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Denied' })
+  });
+  assert.equal(deniedResponse.status, 403);
+
+  const allowedResponse = await fetch(`${baseUrl}/api/automations/rules`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer sk_relay', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Allowed' })
+  });
+  assert.equal(allowedResponse.status, 201);
+  assert.equal((await allowedResponse.json()).name, 'Allowed');
+  assert.equal(calls.length, 1);
 });
 
 test('relay control requires relays:write scope', async (t) => {

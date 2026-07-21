@@ -44,10 +44,13 @@ test('bearer credentials remain memory-only while cookie auth survives reloads',
 test('platform console return stays scoped to verified managed sessions', () => {
   const dashboard = readSource('src', 'views', 'DashboardView.vue');
   const detail = readSource('src', 'views', 'ExamDetailView.vue');
+  const bootstrap = readSource('src', 'main.js');
 
   assert.match(dashboard, /v-if="IS_PLATFORM_SSO"[\s\S]*?返回统一服务控制台/);
+  assert.match(dashboard, /platform-console-link[\s\S]*?href="\/console"/);
   assert.match(detail, /v-if="IS_PLATFORM_SSO"[\s\S]*?returnToPlatformConsole/);
-  assert.match(detail, /未保存的修改[\s\S]*?window\.location\.assign\('\/'\)/);
+  assert.match(detail, /未保存的修改[\s\S]*?window\.location\.assign\('\/console'\)/);
+  assert.match(bootstrap, /href="\/console"[\s\S]*?返回管理中心/);
 });
 
 test('logout preserves the session until server-side revocation succeeds', () => {

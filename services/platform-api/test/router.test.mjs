@@ -83,6 +83,7 @@ test('official website owns the root and an isolated asset namespace', async () 
 
   await withServer(router, async (port) => {
     assert.equal((await request(port, '/')).body.name, 'website');
+    assert.equal((await request(port, '/console')).body.name, 'portal');
     assert.equal((await request(port, '/website-assets/index-12345678.js')).body.name, 'website');
     assert.equal((await request(port, '/assets/console-12345678.js')).body.name, 'portal');
   });
@@ -201,6 +202,12 @@ test('managed app paths require the platform session and inject an internal iden
     const denied = await request(port, '/apps/core/api/users');
     assert.equal(denied.status, 401);
     assert.equal(denied.body.code, 'PLATFORM_SESSION_REQUIRED');
+
+    const documentRedirect = await request(port, '/apps/core/dashboard?tab=users', 'admin.example.com', {
+      Accept: 'text/html',
+    });
+    assert.equal(documentRedirect.status, 302);
+    assert.equal(documentRedirect.headers.location, '/console?returnTo=%2Fapps%2Fcore%2Fdashboard%3Ftab%3Dusers');
 
     const allowed = await request(port, '/apps/core/api/users?limit=1', 'admin.example.com', {
       Cookie: 'session=valid',

@@ -37,6 +37,16 @@ npm run dev:console
 
 Default URL: `http://127.0.0.1:5180`.
 
+## Integrated productivity features
+
+- Exam miniapp: a server-backed daily review queue with adaptive intervals, mastery tracking, and per-question recall feedback.
+- Campus workspace: private ICS calendar subscriptions and configurable WeCom course reminders.
+- Notification service: reusable templates, scheduled jobs, quiet-hour preferences, retry policy, and delivery audit history.
+- IoT console: persisted automation rules and scenes with cooldowns, edge-trigger evaluation, and truthful command audit states.
+- Management console: a cross-service task center, request-chain diagnostics, public status page, and versioned configuration approval/rollback.
+
+All management state remains in the owning service database. The browser only presents these server-side sources of truth.
+
 ## Quality checks
 
 ```powershell

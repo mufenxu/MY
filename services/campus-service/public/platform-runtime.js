@@ -23,7 +23,7 @@
 
   function redirectToLogin() {
     const returnTo = `${global.location.pathname}${global.location.search}${global.location.hash}`;
-    global.location.replace(`/?returnTo=${encodeURIComponent(returnTo)}`);
+    global.location.replace(`/console?returnTo=${encodeURIComponent(returnTo)}`);
   }
 
   function handleSessionError(status, code) {

@@ -149,6 +149,7 @@ const elements = {
   currentPaneDesc: document.getElementById('current-pane-desc'),
   pagePanes: {
     devices: document.getElementById('page-devices'),
+    automation: document.getElementById('page-automation'),
     history: document.getElementById('page-history'),
     events: document.getElementById('page-events'),
     keys: document.getElementById('page-keys'),
@@ -325,10 +326,18 @@ const deviceConfigView = window.MqttApiDeviceConfig.createDeviceConfigView({
   showToast,
   markUnsaved: () => setBadge(elements.saveState, '未保存', 'badge badge-warning')
 });
+const automationView = window.MqttApiAutomation.createAutomationView({
+  requestJson,
+  getDevices: () => state.localDevices,
+  showToast,
+  confirmDanger: (title, message) => showCustomConfirm(title, message, true),
+  formatTimestamp
+});
 
 // 细分页面头部文案元数据
 const paneMeta = {
   devices: { eyebrow: 'Device Center', title: '设备中心', desc: '实时监控传感器快照与继电器，并在此统一进行多设备映射配置和活跃主题嗅探自动注册。' },
+  automation: { eyebrow: 'Rules & Scenes', title: '自动化', desc: '组合常用设备场景，并根据温湿度、在线状态或继电器状态自动执行控制动作。' },
   history: { eyebrow: 'Data & Analysis', title: '数据分析', desc: '调取并过滤 MongoDB 中长期存储的传感器采样时序数据，支持多端对比折线图及 CSV 数据导出。' },
   keys: { eyebrow: 'Security Center', title: '安全准入', desc: '统一保护系统安全边界。支持在此管理外部应用 API Token 授权密钥，并管理后台管理员登录凭证。' },
   events: { eyebrow: 'Audit Logs', title: '日志审计', desc: '捕获并监视实时业务操作流、系统连接日志和网络底层命令收发轨迹。' },
@@ -363,6 +372,10 @@ function switchTab(tabId) {
   // 切到时序历史页面时，自动刷新一次
   if (tabId === 'history') {
     loadMainHistoryChart();
+  }
+
+  if (tabId === 'automation' && canUsePrivateApi()) {
+    automationView.refresh().catch((error) => showToast('自动化刷新失败', error.message, 'error'));
   }
 
   if (tabId === 'keys' && canUsePrivateApi()) {
@@ -713,6 +726,7 @@ function renderConfig(config, secretState = {}) {
   
   // 接入可视化向导数据流
   state.localDevices = JSON.parse(JSON.stringify(config.devices || []));
+  automationView.syncDevices();
   renderVisualDevicesList();
 
   elements.deviceOnlineThreshold.value = config.api.deviceOnlineThreshold;
@@ -844,6 +858,9 @@ async function refreshStatus(options = {}) {
 
     if (state.currentTab === 'keys' && shouldFetchAux) {
       await refreshApiKeys();
+    }
+    if (state.currentTab === 'automation' && shouldFetchAux) {
+      await automationView.refresh();
     }
   } finally {
     state.refreshInFlight = false;
@@ -977,6 +994,9 @@ function connectRealtime() {
       const payload = JSON.parse(event.data);
       if (payload && payload.data) {
         renderInfo(payload.data);
+      }
+      if (payload?.type === 'automation' && state.currentTab === 'automation') {
+        automationView.refresh().catch((error) => showToast('执行记录刷新失败', error.message, 'error'));
       }
     } catch (error) {
       addEvent('实时消息解析失败');
@@ -1324,7 +1344,7 @@ async function boot() {
 
     if (canUsePrivateApi()) {
       await refreshStatus();
-      await Promise.all([loadConfig(), refreshApiKeys()]);
+      await Promise.all([loadConfig(), refreshApiKeys(), automationView.refresh()]);
       initDeveloperGuideDoc(); // 初始化开发者 API 文档交互
     } else {
       renderCreatedApiKey(null);

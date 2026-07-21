@@ -5,7 +5,8 @@
 当前统一域名为 `https://pxyb.cn`：
 
 ```text
-https://pxyb.cn/                         统一登录与总览
+https://pxyb.cn/                         品牌官网
+https://pxyb.cn/console                  统一登录与总览
 https://pxyb.cn/apps/core/               综合后台
 https://pxyb.cn/apps/exam/               考试后台
 https://pxyb.cn/apps/campus/             校园后台
@@ -84,7 +85,7 @@ sudo systemctl reload nginx
 
 ## 验收顺序
 
-1. 打开主域名，确认只出现一次统一登录。
+1. 打开主域名确认品牌官网正常，再打开 `/console` 确认只出现一次统一登录。
 2. 依次进入综合、考试、校园、IoT 后台，确认没有第二次登录。
 3. 刷新每个后台的二级页面，确认页面和静态资源正常。
 4. 在 IoT 后台确认 WebSocket 状态为在线。

@@ -1,6 +1,6 @@
 # MY 管理中心
 
-这是 `MY` 工作区的统一管理门户。第一阶段只聚合服务状态和现有后台入口，不直接读写各业务数据库。
+这是 `MY` 工作区的统一管理门户。它聚合服务状态和现有后台入口，并在独立的 `platform_app` 数据库中保存运维事件、审计、配置版本与任务索引，不直接读写各业务数据库。
 
 ## 本地开发
 
@@ -54,7 +54,13 @@ npm run dev
 - `GET /api/operations/history`：按服务和时间范围读取真实采样
 - `GET/POST /api/incidents`：事件查询与处置
 - `GET /api/audit`：统一审计日志
-- `GET/PUT /api/operations/settings`：非敏感运行设置与维护窗口
+- `GET /api/public/status`：无需登录的真实健康状态与公开事件摘要
+- `GET /api/tasks`：聚合备份、发布、通知与事件任务
+- `GET /api/configuration`：当前运行配置、待审批变更与不可变版本
+- `POST /api/configuration/changes`：创建配置变更提案
+- `POST /api/configuration/changes/:id/approve|reject`：审批或拒绝提案
+- `POST /api/configuration/versions/:version/rollback`：创建回滚提案，不直接覆盖配置
+- `POST /api/diagnostics/traces`：用同一请求 ID 探测公网网关和服务直连阶段
 - `POST /api/diagnostics/run`：运行只读系统诊断
 - `GET /api/security/sessions`：有效会话与安全状态
 - `GET/POST/PATCH /api/security/accounts`：独立管理员账号与最小权限角色
@@ -83,6 +89,9 @@ npm run dev
 - 灾备质量页检查 RPO、恢复演练、异地同步状态和每日自动备份计划；
 - 发布中心读取 GitHub Actions 和镜像版本，写操作默认关闭；
 - 发布构建、不可变镜像产物和部署结果持久化到 MongoDB，支持实际运行版本与配置漂移对比；
+- 任务中心只聚合各服务持久化任务，不把浏览器缓存当作执行状态；
+- 生产默认启用双人配置审批，回滚也必须形成新提案和新版本；
+- 公开状态页只显示实际健康采样和安全化事件摘要，不提供人工“全绿”覆盖；
 - 安全中心支持 `viewer`、`operator`、`super_admin` 三种独立账号角色、强制 TOTP、一次性恢复码、Passkey 和会话远程下线。
 
 ### 角色权限
@@ -90,8 +99,8 @@ npm run dev
 | Role | 管理中心 | 业务后台 |
 | --- | --- | --- |
 | `viewer` | 只读 | 仅允许 GET/HEAD/OPTIONS，禁止 IoT WebSocket |
-| `operator` | 可处置事件、运行诊断、创建和上传备份 | 可执行日常管理操作 |
-| `super_admin` | 可删除/恢复备份、修改设置、发布和撤销会话 | 完整管理权限 |
+| `operator` | 可处置事件、运行诊断、创建配置提案和上传备份 | 可执行日常管理操作 |
+| `super_admin` | 可审批配置、删除/恢复备份、发布和撤销会话 | 完整管理权限 |
 
 生产环境默认强制 MFA。恢复、构建、部署、回滚及安全设置变更会再次验证管理员密码和动态验证码；密码修改后会撤销该账号的全部会话。
 

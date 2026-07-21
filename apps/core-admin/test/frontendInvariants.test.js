@@ -64,7 +64,16 @@ test('platform console return is rendered only in the managed SSO shell', () => 
   const source = readSource('src', 'components', 'MainLayout.jsx');
 
   assert.match(source, /\{IS_PLATFORM_SSO && \([\s\S]*?返回统一服务控制台/);
-  assert.match(source, /window\.location\.assign\('\/'\)/);
+  assert.match(source, /window\.location\.assign\('\/console'\)/);
+});
+
+test('platform error fallbacks return to the console instead of the brand site', () => {
+  const app = readSource('src', 'App.jsx');
+  const boundary = readSource('src', 'components', 'ErrorBoundary.jsx');
+
+  assert.match(app, /window\.location\.href = IS_PLATFORM_SSO \? '\/console' : '\/'/);
+  assert.match(app, /<ErrorBoundary homePath=\{IS_PLATFORM_SSO \? '\/console' : '\/'\}>/);
+  assert.match(boundary, /window\.location\.href = this\.props\.homePath \|\| '\/'/);
 });
 
 test('legacy CT8 admin route redirects to the canonical automation center', () => {

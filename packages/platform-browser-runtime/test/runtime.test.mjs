@@ -27,3 +27,21 @@ test('standalone apps keep root-relative URLs unchanged', () => {
   assert.equal(runtime.resolveAppUrl('/favicon.png'), '/favicon.png');
   delete global.window;
 });
+
+test('managed apps redirect expired sessions through the console login', () => {
+  let replacement = '';
+  global.window = {
+    location: {
+      pathname: '/apps/core/dashboard',
+      search: '?tab=users',
+      hash: '#recent',
+      replace(value) { replacement = value; },
+    },
+  };
+  const runtime = createPlatformBrowserRuntime({ appName: 'core' });
+
+  runtime.redirectToPlatformLogin();
+
+  assert.equal(replacement, '/console?returnTo=%2Fapps%2Fcore%2Fdashboard%3Ftab%3Dusers%23recent');
+  delete global.window;
+});

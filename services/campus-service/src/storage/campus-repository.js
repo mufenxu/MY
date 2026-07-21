@@ -39,6 +39,9 @@ export class CampusRepository {
       this.db.collection("users").createIndex({ created_at: 1 }),
       this.db.collection("school_sessions").createIndex({ user_id: 1 }, { unique: true }),
       this.db.collection("academic_caches").createIndex({ user_id: 1, source_key: 1 }, { unique: true }),
+      this.db.collection("calendar_subscriptions").createIndex({ user_id: 1 }, { unique: true }),
+      this.db.collection("calendar_subscriptions").createIndex({ token_hash: 1 }, { unique: true }),
+      this.db.collection("reminder_preferences").createIndex({ user_id: 1 }, { unique: true }),
       this.db.collection("invites").createIndex({ id: 1 }, { unique: true }),
       this.db.collection("invites").createIndex({ code_hash: 1 }, { unique: true }),
       this.db.collection("invites").createIndex({ created_at: -1 })
@@ -144,6 +147,8 @@ export class CampusRepository {
       await session.withTransaction(async () => {
         await this.db.collection("school_sessions").deleteMany({ user_id: id }, { session });
         await this.db.collection("academic_caches").deleteMany({ user_id: id }, { session });
+        await this.db.collection("calendar_subscriptions").deleteMany({ user_id: id }, { session });
+        await this.db.collection("reminder_preferences").deleteMany({ user_id: id }, { session });
         await this.db.collection("invites").updateMany(
           { created_by: id },
           { $set: { created_by: null } },
@@ -294,6 +299,72 @@ export class CampusRepository {
       { upsert: true }
     );
   }
+
+  async getCalendarSubscription(userId) {
+    return withoutMongoId(await this.db.collection("calendar_subscriptions").findOne({ user_id: userId }));
+  }
+
+  async findCalendarSubscriptionByTokenHash(tokenHash) {
+    return withoutMongoId(await this.db.collection("calendar_subscriptions").findOne({ token_hash: tokenHash, enabled: true }));
+  }
+
+  async listCalendarSubscriptions() {
+    return this.db.collection("calendar_subscriptions").find({}, { projection: { _id: 0 } }).toArray();
+  }
+
+  async upsertCalendarSubscription(userId, { tokenHash, tokenJson, enabled = true, timestamp }) {
+    await this.db.collection("calendar_subscriptions").updateOne(
+      { user_id: userId },
+      {
+        $set: {
+          user_id: userId,
+          token_hash: tokenHash,
+          token_json: tokenJson,
+          enabled: Boolean(enabled),
+          updated_at: timestamp
+        },
+        $setOnInsert: { created_at: timestamp }
+      },
+      { upsert: true }
+    );
+    return this.getCalendarSubscription(userId);
+  }
+
+  async disableCalendarSubscription(userId, timestamp) {
+    await this.db.collection("calendar_subscriptions").updateOne(
+      { user_id: userId },
+      { $set: { enabled: false, updated_at: timestamp } }
+    );
+    return this.getCalendarSubscription(userId);
+  }
+
+  async getReminderPreference(userId) {
+    return withoutMongoId(await this.db.collection("reminder_preferences").findOne({ user_id: userId }));
+  }
+
+  async listEnabledReminderPreferences() {
+    return this.db.collection("reminder_preferences")
+      .find({ enabled: true, recipient_id: { $type: "string", $ne: "" } }, { projection: { _id: 0 } })
+      .toArray();
+  }
+
+  async upsertReminderPreference(userId, preference, timestamp) {
+    await this.db.collection("reminder_preferences").updateOne(
+      { user_id: userId },
+      {
+        $set: {
+          user_id: userId,
+          enabled: Boolean(preference.enabled),
+          recipient_id: String(preference.recipientId || ""),
+          lead_minutes: Number(preference.leadMinutes),
+          updated_at: timestamp
+        },
+        $setOnInsert: { created_at: timestamp }
+      },
+      { upsert: true }
+    );
+    return this.getReminderPreference(userId);
+  }
 }
 
 export class MemoryCampusRepository {
@@ -302,6 +373,8 @@ export class MemoryCampusRepository {
     this.sessions = new Map();
     this.caches = new Map();
     this.invites = new Map();
+    this.calendarSubscriptions = new Map();
+    this.reminderPreferences = new Map();
   }
 
   async initialize() {}
@@ -345,6 +418,8 @@ export class MemoryCampusRepository {
     this.users.delete(id);
     this.sessions.delete(id);
     for (const key of this.caches.keys()) if (key.startsWith(`${id}:`)) this.caches.delete(key);
+    this.calendarSubscriptions.delete(id);
+    this.reminderPreferences.delete(id);
   }
 
   async listInvites() {
@@ -398,6 +473,28 @@ export class MemoryCampusRepository {
   async getAcademicCache(userId, sourceKey) { return clone(this.caches.get(`${userId}:${sourceKey}`) || null); }
   async listAcademicCaches() { return clone(Array.from(this.caches.values())); }
   async upsertAcademicCache(userId, sourceKey, cacheJson, timestamp) { this.caches.set(`${userId}:${sourceKey}`, { user_id: userId, source_key: sourceKey, cache_json: cacheJson, updated_at: timestamp }); }
+  async getCalendarSubscription(userId) { return clone(this.calendarSubscriptions.get(userId) || null); }
+  async findCalendarSubscriptionByTokenHash(tokenHash) { return clone(Array.from(this.calendarSubscriptions.values()).find((row) => row.token_hash === tokenHash && row.enabled) || null); }
+  async listCalendarSubscriptions() { return clone(Array.from(this.calendarSubscriptions.values())); }
+  async upsertCalendarSubscription(userId, { tokenHash, tokenJson, enabled = true, timestamp }) {
+    const current = this.calendarSubscriptions.get(userId);
+    const row = { user_id: userId, token_hash: tokenHash, token_json: tokenJson, enabled: Boolean(enabled), created_at: current?.created_at || timestamp, updated_at: timestamp };
+    this.calendarSubscriptions.set(userId, row);
+    return clone(row);
+  }
+  async disableCalendarSubscription(userId, timestamp) {
+    const row = this.calendarSubscriptions.get(userId);
+    if (row) Object.assign(row, { enabled: false, updated_at: timestamp });
+    return clone(row || null);
+  }
+  async getReminderPreference(userId) { return clone(this.reminderPreferences.get(userId) || null); }
+  async listEnabledReminderPreferences() { return clone(Array.from(this.reminderPreferences.values()).filter((row) => row.enabled && row.recipient_id)); }
+  async upsertReminderPreference(userId, preference, timestamp) {
+    const current = this.reminderPreferences.get(userId);
+    const row = { user_id: userId, enabled: Boolean(preference.enabled), recipient_id: String(preference.recipientId || ""), lead_minutes: Number(preference.leadMinutes), created_at: current?.created_at || timestamp, updated_at: timestamp };
+    this.reminderPreferences.set(userId, row);
+    return clone(row);
+  }
 }
 
 export function createCampusRepository() {

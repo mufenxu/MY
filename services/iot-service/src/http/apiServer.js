@@ -20,6 +20,7 @@ const {
 const { createInfoPayload } = require('./payloads/infoPayload');
 const { registerApiDocsRoute } = require('./routes/apiDocs');
 const { registerAuthRoutes } = require('./routes/auth');
+const { registerAutomationRoutes } = require('./routes/automations');
 const { registerDeviceRoutes } = require('./routes/devices');
 const { registerKeyRoutes } = require('./routes/keys');
 const { registerSystemRoutes } = require('./routes/system');
@@ -39,7 +40,7 @@ function rejectUpgrade(socket, statusCode, message) {
   socket.destroy();
 }
 
-function createApiServer({ settingsStore, mqttService }) {
+function createApiServer({ settingsStore, mqttService, automationEngine = null }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
@@ -150,8 +151,10 @@ function createApiServer({ settingsStore, mqttService }) {
 
   const onMqttMessage = () => broadcast('message');
   const onMqttStatus = () => broadcast('status');
+  const onAutomationRun = () => broadcast('automation');
   mqttService.on('message', onMqttMessage);
   mqttService.on('status', onMqttStatus);
+  automationEngine?.on('run', onAutomationRun);
 
   app.use(setSecurityHeaders);
 
@@ -185,6 +188,13 @@ function createApiServer({ settingsStore, mqttService }) {
     requireHistoryAccess,
     requireRelayControl
   });
+  if (automationEngine) {
+    registerAutomationRoutes(app, {
+      automationEngine,
+      requireTelemetryAccess,
+      requireRelayControl
+    });
+  }
   registerKeyRoutes(app, { mqttService, requireSession });
   registerSystemRoutes(app, { settingsStore, mqttService, requireSession });
 
@@ -206,6 +216,7 @@ function createApiServer({ settingsStore, mqttService }) {
   async function closeRealtime() {
     mqttService.off('message', onMqttMessage);
     mqttService.off('status', onMqttStatus);
+    automationEngine?.off('run', onAutomationRun);
     for (const client of wsServer.clients) {
       clearSocketState(client);
       client.close(1001, 'Service shutting down');
