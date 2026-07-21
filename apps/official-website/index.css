@@ -50,6 +50,8 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none;
 }
 
 html {
@@ -59,6 +61,7 @@ html {
   overflow-x: clip;
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
 body {
@@ -66,11 +69,50 @@ body {
   overflow-x: hidden;
   position: relative;
   line-height: 1.6;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
-a {
+a,
+button,
+[role="button"],
+input,
+select,
+textarea {
   color: inherit;
   text-decoration: none;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
+  outline: none !important;
+}
+
+a:focus, a:active, a:focus-visible,
+button:focus, button:active, button:focus-visible {
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* 移动端 WebKit 硬件加速圆角防穿透防护 */
+.btn,
+.btn-hero-primary,
+.shimmer-btn,
+.mobile-toggle,
+.mobile-drawer-btn,
+.mobile-nav-link,
+.card-action-link,
+.chip-item,
+.status-chip,
+.badge-tag,
+.brand-logo,
+.menu-item {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  isolation: isolate;
 }
 
 /* Floating Dynamic Island Header */
