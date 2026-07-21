@@ -97,6 +97,13 @@ export function inspectDockerfile(source, label = 'Dockerfile') {
     }
 
     const copyMatch = line.match(/^COPY\s+(?:--\S+\s+)*(\S+)\s+(\S+)$/i);
+    const packageManifest = copyMatch?.[1].match(/^((?:apps|services)\/[^/]+)\/package\*\.json$/);
+    if (packageManifest && currentWorkdir.startsWith('/build/')) {
+      const expected = `/build/${packageManifest[1]}`;
+      if (currentWorkdir !== expected) {
+        errors.push(`${label} changes the monorepo package path: expected ${expected}, found ${currentWorkdir}`);
+      }
+    }
     const buildModules = copyMatch?.[1].match(/^\/build\/(.+)\/node_modules$/);
     if (!buildModules) continue;
     const destination = path.posix.resolve(currentWorkdir, copyMatch[2]);

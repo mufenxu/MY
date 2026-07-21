@@ -61,6 +61,21 @@ COPY --from=deps /build/services/example/node_modules ./node_modules
 `, 'flattened-layout.Dockerfile').at(-1),
     /changes the monorepo node_modules path/,
   );
+  assert.deepEqual(inspectDockerfile(`
+# syntax=docker/dockerfile:1.7.1@sha256:${digest}
+FROM node:24@sha256:${digest}
+WORKDIR /build/apps/example
+COPY apps/example/package*.json ./
+`, 'preserved-package-layout.Dockerfile'), []);
+  assert.match(
+    inspectDockerfile(`
+# syntax=docker/dockerfile:1.7.1@sha256:${digest}
+FROM node:24@sha256:${digest}
+WORKDIR /build/example
+COPY apps/example/package*.json ./
+`, 'flattened-package-layout.Dockerfile').at(-1),
+    /changes the monorepo package path/,
+  );
 });
 
 test('Compose inspection permits local builds and rejects mutable external images', () => {

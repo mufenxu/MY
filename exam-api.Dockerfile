@@ -3,7 +3,7 @@
 ARG NODE_IMAGE=node:24-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d
 
 FROM ${NODE_IMAGE} AS admin-build
-WORKDIR /build/exam-admin
+WORKDIR /build/apps/exam-admin
 COPY packages/platform-browser-runtime/ /build/packages/platform-browser-runtime/
 COPY apps/exam-admin/package*.json ./
 RUN npm ci --no-audit --no-fund
@@ -24,7 +24,7 @@ WORKDIR /app
 COPY --chown=node:node packages/platform-auth/ ./packages/platform-auth/
 COPY --chown=node:node services/exam-api/ ./services/exam-api/
 COPY --from=api-deps --chown=node:node /build/services/exam-api/node_modules ./services/exam-api/node_modules
-COPY --from=admin-build --chown=node:node /build/exam-admin/dist ./services/exam-api/frontend/dist
+COPY --from=admin-build --chown=node:node /build/apps/exam-admin/dist ./services/exam-api/frontend/dist
 
 RUN chown -R node:node /app
 

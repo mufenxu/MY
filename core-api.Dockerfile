@@ -3,7 +3,7 @@
 ARG NODE_IMAGE=node:24-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d
 
 FROM ${NODE_IMAGE} AS admin-build
-WORKDIR /build/core-admin
+WORKDIR /build/apps/core-admin
 COPY packages/platform-browser-runtime/ /build/packages/platform-browser-runtime/
 COPY apps/core-admin/package*.json ./
 RUN npm ci --no-audit --no-fund
@@ -25,7 +25,7 @@ WORKDIR /app
 COPY --chown=node:node packages/platform-auth/ ./packages/platform-auth/
 COPY --chown=node:node services/core-api/ ./services/core-api/
 COPY --from=api-deps --chown=node:node /build/services/core-api/node_modules ./services/core-api/node_modules
-COPY --from=admin-build --chown=node:node /build/core-admin/dist ./apps/core-admin/dist
+COPY --from=admin-build --chown=node:node /build/apps/core-admin/dist ./apps/core-admin/dist
 
 RUN mkdir -p /app/services/core-api/uploads /app/services/core-api/logs \
     && chown -R node:node /app
