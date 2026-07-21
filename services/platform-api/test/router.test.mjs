@@ -71,6 +71,19 @@ test('host routing preserves legacy application URLs', async () => {
   });
 });
 
+test('official website owns the root and an isolated asset namespace', async () => {
+  const router = createPlatformRouter({
+    portalApp: echoApp('portal'),
+    websiteApp: echoApp('website'),
+  });
+
+  await withServer(router, async (port) => {
+    assert.equal((await request(port, '/')).body.name, 'website');
+    assert.equal((await request(port, '/website-assets/index-12345678.js')).body.name, 'website');
+    assert.equal((await request(port, '/assets/console-12345678.js')).body.name, 'portal');
+  });
+});
+
 test('campus and IoT legacy domains stay behind the platform gateway', async () => {
   const upstream = http.createServer(echoApp('internal-service'));
   await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));

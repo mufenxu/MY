@@ -92,3 +92,16 @@ test('CI Mosquitto runs as its immutable non-root user with hardened privileges'
   assert.match(mqttService, /^    read_only: true$/m);
   assert.match(mqttService, /^    cap_drop:\n      - ALL$/m);
 });
+
+test('platform image and ACR workflow include the official website', () => {
+  const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');
+  const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'aliyun-acr.yml'), 'utf8');
+
+  assert.match(dockerfile, /^FROM \$\{NODE_IMAGE\} AS official-website-build$/m);
+  assert.match(
+    dockerfile,
+    /^COPY --from=official-website-build --chown=node:node \/build\/apps\/official-website\/dist \.\/apps\/official-website\/dist$/m,
+  );
+  assert.match(workflow, /^      - apps\/official-website\/\*\*$/m);
+  assert.match(workflow, /apps\/official-website\/\*\|config\/platform\.services\.docker\.json/);
+});

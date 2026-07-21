@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 
 const projects = [
   'apps/admin-console',
+  'apps/official-website',
   'apps/core-admin',
   'apps/exam-admin',
   'apps/exam-miniapp',

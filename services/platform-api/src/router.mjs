@@ -468,7 +468,13 @@ export function createPlatformRouter({
       return proxyRequest(req, res, mqttTarget, 'iot');
     }
 
-    if (requestUrl.pathname === '/' || requestUrl.pathname === '/index.html' || requestUrl.pathname === '/index.css' || requestUrl.pathname === '/main.js') {
+    if (
+      requestUrl.pathname === '/'
+      || requestUrl.pathname === '/index.html'
+      || requestUrl.pathname === '/index.css'
+      || requestUrl.pathname === '/main.js'
+      || requestUrl.pathname.startsWith('/website-assets/')
+    ) {
       if (typeof websiteApp === 'function') {
         return websiteApp(req, res);
       }

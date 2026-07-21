@@ -13,6 +13,7 @@ on:
       - campus-service.Dockerfile
       - iot-service.Dockerfile
       - apps/admin-console/**
+      - apps/official-website/**
       - apps/core-admin/**
       - apps/exam-admin/**
       - config/platform.services.docker.json
@@ -171,7 +172,7 @@ jobs:
                   ;;
               esac
               case "${file}" in
-                Dockerfile|apps/admin-console/*|config/platform.services.docker.json|services/platform-api/*)
+                Dockerfile|apps/admin-console/*|apps/official-website/*|config/platform.services.docker.json|services/platform-api/*)
                   add_target platform
                   ;;
               esac

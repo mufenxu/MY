@@ -21,6 +21,24 @@ async function expectStatus(response, expected, label) {
 }
 
 await expectStatus(await fetch(`${origin}/api/readyz`), 200, 'readiness');
+const website = await expectStatus(await fetch(`${origin}/`), 200, 'official website');
+if (!String(website.headers.get('content-type') || '').includes('text/html')) {
+  throw new Error('Official website did not return HTML.');
+}
+const websiteHtml = await website.text();
+const websiteScript = websiteHtml.match(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/i)?.[1];
+if (!websiteScript || !/^\/?website-assets\//.test(websiteScript)) {
+  throw new Error('Official website does not reference its isolated JavaScript bundle.');
+}
+const websiteBundle = await expectStatus(
+  await fetch(new URL(websiteScript, `${origin}/`)),
+  200,
+  'official website JavaScript bundle',
+);
+if (!String(websiteBundle.headers.get('content-type') || '').includes('javascript')) {
+  throw new Error('Official website JavaScript bundle has an invalid content type.');
+}
+
 const login = await expectStatus(await fetch(`${origin}/api/auth/login`, {
   method: 'POST',
   headers: consoleWriteHeaders,
@@ -72,4 +90,4 @@ const revoked = await expectStatus(await fetch(`${origin}/api/auth/status`, {
 }), 200, 'revoked status');
 if ((await revoked.json()).authenticated) throw new Error('Revoked MongoDB-backed session remained active.');
 
-console.log('Platform readiness, deployment Sidecar, MongoDB session issue/revoke, and metrics verified.');
+console.log('Platform website, readiness, deployment Sidecar, MongoDB session issue/revoke, and metrics verified.');

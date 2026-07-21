@@ -10,6 +10,13 @@ RUN npm ci --no-audit --no-fund
 COPY apps/admin-console/ ./
 RUN npm run build && npm prune --omit=dev --no-audit --no-fund
 
+FROM ${NODE_IMAGE} AS official-website-build
+WORKDIR /build/apps/official-website
+COPY apps/official-website/package*.json ./
+RUN npm ci --no-audit --no-fund
+COPY apps/official-website/ ./
+RUN npm run build
+
 FROM ${NODE_IMAGE} AS platform-api-deps
 WORKDIR /build/services/platform-api
 COPY packages/platform-auth/ /build/packages/platform-auth/
@@ -39,6 +46,7 @@ COPY --chown=node:node apps/admin-console/src ./apps/admin-console/src
 COPY --chown=node:node apps/admin-console/package.json ./apps/admin-console/package.json
 COPY --from=admin-console-build --chown=node:node /build/apps/admin-console/node_modules ./apps/admin-console/node_modules
 COPY --from=admin-console-build --chown=node:node /build/apps/admin-console/dist ./apps/admin-console/dist
+COPY --from=official-website-build --chown=node:node /build/apps/official-website/dist ./apps/official-website/dist
 COPY --chown=node:node config/platform.services.docker.json ./config/platform.services.docker.json
 
 RUN chown -R node:node /app
