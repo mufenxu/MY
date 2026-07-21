@@ -61,6 +61,14 @@ body.dark-theme {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -ms-overflow-style: none;
+  scrollbar-width: none !important;
+}
+
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 body {
@@ -2257,12 +2265,6 @@ body[data-app-locked="true"] #appGate > * {
   gap: var(--page-gap);
 }
 
-.scroll-list,
-.course-list,
-.free-room-list {
-  scrollbar-width: thin;
-}
-
 @media (min-width: 1024px) {
   .shell {
     grid-template-columns: 252px minmax(0, 1fr);
@@ -3568,13 +3570,7 @@ body.dark-theme .panel-head > span.is-synced {
     gap: 24px;
     overflow-y: auto;
     overscroll-behavior: contain;
-    scrollbar-width: none;
     text-align: center;
-  }
-
-  body:not([data-app-locked="true"]) .app-header::-webkit-scrollbar {
-    width: 0;
-    height: 0;
   }
 
   body:not([data-app-locked="true"]) .app-header::after {
@@ -3665,27 +3661,7 @@ body.dark-theme .panel-head > span.is-synced {
     overflow-y: auto;
     overflow-x: hidden;
     overscroll-behavior: contain;
-    scrollbar-gutter: stable;
     padding: 0 10px 40px 0;
-  }
-
-  body:not([data-app-locked="true"]) .main-content::-webkit-scrollbar {
-    width: 10px;
-  }
-
-  body:not([data-app-locked="true"]) .main-content::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  body:not([data-app-locked="true"]) .main-content::-webkit-scrollbar-thumb {
-    border: 3px solid transparent;
-    border-radius: 999px;
-    background-clip: padding-box;
-    background-color: rgba(100, 116, 139, 0.32);
-  }
-
-  body:not([data-app-locked="true"]) .main-content::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(100, 116, 139, 0.46);
   }
 
   body[data-route="overview"]:not([data-app-locked="true"]) .main-content {

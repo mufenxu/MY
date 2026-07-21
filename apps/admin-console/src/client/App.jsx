@@ -30,6 +30,7 @@ import {
   Radio,
   RefreshCw,
   Rocket,
+  Send,
   Server,
   ShieldCheck,
   Settings2,
@@ -44,6 +45,7 @@ import {
 import { isPlainInternalNavigation } from './navigation.js';
 import { requestJson } from './api.js';
 import { ConfirmDialog } from './UiControls.jsx';
+import NotificationServiceView from './NotificationServiceView.jsx';
 import {
   BackupQualityStrip,
   IncidentsView,
@@ -58,6 +60,7 @@ const FILTERS = [
   { id: 'all', label: '运行总览', icon: LayoutDashboard },
   { id: 'miniapp', label: '应用中心', icon: AppWindow },
   { id: 'service', label: '服务运维', icon: Server },
+  { id: 'notification', label: '通知通道', icon: Send },
   { id: 'monitoring', label: '监控分析', icon: ChartNoAxesCombined },
   { id: 'incidents', label: '告警事件', icon: BellRing },
   { id: 'automation', label: '自动化中心', icon: Bot },
@@ -893,27 +896,42 @@ function AutomationView({ services, loading, refreshing, onRefresh, onLaunch }) 
         <div className="view-loading large"><LoaderCircle className="spin" size={22} /> 正在加载自动化服务</div>
       ) : automation ? (
         <>
-          <article className={`automation-hero state-${meta.className}`}>
-            <div className="automation-hero-icon"><Workflow size={29} /></div>
-            <div className="automation-hero-copy">
-              <span>自动化服务</span>
-              <h3>{automation.name}</h3>
-              <p>{automation.description}</p>
+          <article className={`automation-hero automation-state-${meta.className}`}>
+            <div className="automation-hero-main">
+              <div className="automation-hero-icon"><Workflow size={29} /></div>
+              <div className="automation-hero-copy">
+                <span>自动化服务</span>
+                <h3>{automation.name}</h3>
+                <p>{automation.description}</p>
+              </div>
             </div>
-            <ServiceStatus state={serviceState} />
+
+            <div className="automation-hero-tools">
+              <ServiceStatus state={serviceState} />
+              {automation.adminUrl && (
+                <a
+                  href={automation.adminUrl}
+                  target={automation.adminUrl.startsWith('/') ? undefined : '_blank'}
+                  rel={automation.adminUrl.startsWith('/') ? undefined : 'noreferrer'}
+                  onClick={handleOpen}
+                >进入后台 <ArrowUpRight size={16} /></a>
+              )}
+            </div>
+
             <div className="automation-hero-metrics">
-              <div><span>今日运行</span><strong>{formatCount(todayRuns)}</strong></div>
-              <div><span>最近结果</span><strong>{latestStatus.label}</strong></div>
-              <div><span>最近运行</span><strong>{formatDateTime(latestRunTime)}</strong></div>
+              <div className="automation-hero-metric">
+                <span className="automation-metric-icon blue" aria-hidden="true"><Timer size={17} /></span>
+                <div className="automation-metric-copy"><span>今日运行</span><strong>{formatCount(todayRuns)}</strong></div>
+              </div>
+              <div className="automation-hero-metric">
+                <span className="automation-metric-icon purple" aria-hidden="true"><Activity size={17} /></span>
+                <div className="automation-metric-copy"><span>最近结果</span><strong>{latestStatus.label}</strong></div>
+              </div>
+              <div className="automation-hero-metric">
+                <span className="automation-metric-icon cyan" aria-hidden="true"><Clock3 size={17} /></span>
+                <div className="automation-metric-copy"><span>最近运行</span><strong>{formatDateTime(latestRunTime)}</strong></div>
+              </div>
             </div>
-            {automation.adminUrl && (
-              <a
-                href={automation.adminUrl}
-                target={automation.adminUrl.startsWith('/') ? undefined : '_blank'}
-                rel={automation.adminUrl.startsWith('/') ? undefined : 'noreferrer'}
-                onClick={handleOpen}
-              >进入后台 <ArrowUpRight size={16} /></a>
-            )}
           </article>
 
           {(ct8Error || ct8Message) && (
@@ -1674,6 +1692,7 @@ function Dashboard({ session, onLogout }) {
   const viewMeta = {
     miniapp: { title: '应用中心', subtitle: '应用入口与运行状态' },
     service: { title: '服务运维', subtitle: '基础服务健康监测' },
+    notification: { title: '企业微信通知', subtitle: '通道状态与发送台账' },
     monitoring: { title: '监控分析', subtitle: '可用率与真实历史趋势' },
     incidents: { title: '告警事件', subtitle: '发现、确认与处置异常' },
     automation: { title: '自动化中心', subtitle: '任务能力与观测链路' },
@@ -1817,6 +1836,7 @@ function Dashboard({ session, onLogout }) {
           )}
           {activeFilter === 'miniapp' && <ApplicationsView services={services} loading={loading} onLaunch={launchService} />}
           {activeFilter === 'service' && <ServicesView services={services} loading={loading} onLaunch={launchService} />}
+          {activeFilter === 'notification' && <NotificationServiceView session={session} />}
           {activeFilter === 'monitoring' && <MonitoringView services={services} />}
           {activeFilter === 'incidents' && <IncidentsView session={session} />}
           {activeFilter === 'automation' && (

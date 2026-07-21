@@ -56,7 +56,7 @@ docker compose --env-file .env -f infra/docker/compose.yml up -d --force-recreat
 
 如果控制中心显示执行器不可用，先检查 `backup-runner` 健康状态和两端 Token 是否一致。执行器不发布宿主机端口，不能从公网直接调用。
 
-网页点击“立即备份”后，`platform-api` 通过内网鉴权调用 `backup-runner`。执行器运行 `mongodump --oplog`，创建五个数据库的副本集归档并复制核心上传文件。备份清单和校验和保存在 `platform_backups` 卷中。
+网页点击“立即备份”后，`platform-api` 通过内网鉴权调用 `backup-runner`。执行器运行 `mongodump --oplog`，创建六个数据库的副本集归档并复制核心上传文件。备份清单和校验和保存在 `platform_backups` 卷中。
 
 网页进程无法可靠停止所有独立业务容器，因此生产 Compose 默认设置 `PLATFORM_RESTORE_ENABLED=false`，控制台不执行在线恢复。恢复只在维护窗口通过下面的命令行入口执行；命令会先停止当前正在运行的全部业务容器，避免 `mongorestore --drop` 与在线写入并发。恢复数据库后，按命令输出恢复上传目录，再启动业务容器以清掉进程内缓存和长连接状态：
 

@@ -4,6 +4,7 @@ const definitions = [
   ['exam_app', process.env.MONGO_EXAM_USERNAME, process.env.MONGO_EXAM_PASSWORD],
   ['campus_app', process.env.MONGO_CAMPUS_USERNAME, process.env.MONGO_CAMPUS_PASSWORD],
   ['iot_app', process.env.MONGO_IOT_USERNAME, process.env.MONGO_IOT_PASSWORD],
+  ['notification_app', process.env.MONGO_NOTIFICATION_USERNAME, process.env.MONGO_NOTIFICATION_PASSWORD],
 ];
 const managedUsers = db.getSiblingDB('admin').getCollection('my_platform_managed_users');
 

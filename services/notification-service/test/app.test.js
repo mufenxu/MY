@@ -8,17 +8,23 @@ process.env.WECOM_AGENT_ID = '10001';
 process.env.WECOM_SECRET = 'module-test-secret';
 const { createApp } = require('../src/app');
 
+const historyEncryptionKey = Buffer.alloc(32, 7).toString('base64url');
+
 const config = {
   apiKey: 'test-api-key-value',
   internalCallers: ['core-api', 'platform-api'],
+  managementCallers: ['admin-console'],
+  historyEncryptionKey,
+  historyRetentionDays: 30,
   tokenCacheMargin: 120,
   wecom: { corpId: 'corp', secret: 'secret', agentId: 10001 },
 };
 
 async function withServer(client, callback) {
-  const server = createApp({ config, wecomClient: client }).listen(0, '127.0.0.1');
+  const app = createApp({ config, wecomClient: client });
+  const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
-  try { await callback(server.address().port); }
+  try { await callback(server.address().port, app); }
   finally { await new Promise((resolve) => server.close(resolve)); }
 }
 
@@ -36,6 +42,10 @@ function request(port, { path = '/notify', apiKey, body, headers = {} } = {}) {
     req.on('error', reject);
     req.end(data);
   });
+}
+
+function signedHeaders({ caller = 'admin-console', method = 'GET', path, body = '' }) {
+  return issueServiceRequest({ caller, secret: config.apiKey, method, pathname: path, body });
 }
 
 test('health endpoint is public', async () => withServer({}, async (port) => {
@@ -79,3 +89,77 @@ test('notification endpoint returns validation errors safely', async () => withS
   assert.equal(response.status, 400);
   assert.equal(response.body.errcode, 400);
 }));
+
+test('management endpoints require an admin-console service signature', async () => withServer({}, async (port) => {
+  assert.equal((await request(port, { path: '/management/overview', apiKey: config.apiKey })).status, 401);
+  const path = '/management/overview';
+  const response = await request(port, { path, headers: signedHeaders({ path }) });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.wecom.agentId, 10001);
+  assert.equal(response.body.wecom.secret, undefined);
+}));
+
+test('management test send requires one explicit user and records a sanitized delivery', async () => {
+  const sent = [];
+  await withServer({ sendMessage: async (payload) => { sent.push(payload); return { errcode: 0 }; } }, async (port) => {
+    const rejectedBody = { actor: 'operator', msgType: 'text', touser: '@all', content: 'hello' };
+    const rejectedPath = '/management/test';
+    const rejectedSerialized = JSON.stringify(rejectedBody);
+    const rejected = await request(port, {
+      path: rejectedPath,
+      body: rejectedBody,
+      headers: signedHeaders({ method: 'POST', path: rejectedPath, body: rejectedSerialized }),
+    });
+    assert.equal(rejected.status, 400);
+
+    const body = { actor: 'operator', msgType: 'markdown', touser: 'alice', content: '### test' };
+    const serialized = JSON.stringify(body);
+    const response = await request(port, {
+      path: rejectedPath,
+      body,
+      headers: signedHeaders({ method: 'POST', path: rejectedPath, body: serialized }),
+    });
+    assert.equal(response.status, 201);
+    assert.equal(sent[0].touser, 'alice');
+
+    const listPath = '/management/deliveries?page=1&pageSize=20';
+    const list = await request(port, { path: listPath, headers: signedHeaders({ path: listPath }) });
+    assert.equal(list.status, 200);
+    assert.equal(list.body.items.length, 1);
+    assert.equal(list.body.items[0].targetValue, 'alice');
+    assert.equal(list.body.items[0].encryptedPayload, undefined);
+  });
+});
+
+test('failed single-user deliveries can be retried without exposing stored payloads', async () => {
+  let attempts = 0;
+  const error = Object.assign(new Error('temporary WeCom failure'), { status: 502, code: 'WECOM_MESSAGE_ERROR', wecomCode: 45009 });
+  await withServer({
+    sendMessage: async () => {
+      attempts += 1;
+      if (attempts === 1) throw error;
+      return { errcode: 0 };
+    },
+  }, async (port) => {
+    const notifyBody = { touser: 'alice', msg_type: 'text', data: { content: 'retry me' } };
+    assert.equal((await request(port, { apiKey: config.apiKey, body: notifyBody })).status, 502);
+
+    const listPath = '/management/deliveries?status=failed&page=1&pageSize=20';
+    const list = await request(port, { path: listPath, headers: signedHeaders({ path: listPath }) });
+    const failed = list.body.items[0];
+    assert.equal(failed.retryable, true);
+    assert.equal(failed.wecomCode, 45009);
+
+    const retryPath = `/management/deliveries/${failed.id}/retry`;
+    const retryBody = { actor: 'operator' };
+    const retrySerialized = JSON.stringify(retryBody);
+    const retried = await request(port, {
+      path: retryPath,
+      body: retryBody,
+      headers: signedHeaders({ method: 'POST', path: retryPath, body: retrySerialized }),
+    });
+    assert.equal(retried.status, 201);
+    assert.equal(retried.body.delivery.parentDeliveryId, failed.id);
+    assert.equal(attempts, 2);
+  });
+});

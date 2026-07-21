@@ -28,7 +28,7 @@
 
 ## 3. 统一部署步骤
 
-1. 在仓库根目录配置 `WECOM_CORP_ID`、`WECOM_AGENT_ID`、`WECOM_SECRET` 和至少 32 位的 `NOTIFY_API_KEY`。
+1. 在仓库根目录配置 `WECOM_CORP_ID`、`WECOM_AGENT_ID`、`WECOM_SECRET`、至少 32 位的 `NOTIFY_API_KEY`、`NOTIFY_HISTORY_ENCRYPTION_KEY` 和独立的 `MONGO_NOTIFICATION_PASSWORD`。
 2. 校验环境与拓扑：
 
    ```bash
@@ -43,6 +43,8 @@
    docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build notification-service platform-api
    ```
 
+   通知服务的发送台账写入独立的 `notification_app` 数据库，消息载荷在入库前使用 `NOTIFY_HISTORY_ENCRYPTION_KEY` 加密。密钥轮换前必须完成旧台账的保留期清理或迁移规划。
+
 4. 主域名由 `infra/nginx/my-platform.conf.example` 统一代理到 `127.0.0.1:22100`。独立通知域名也代理到网关并加入 `NOTIFY_HOSTS`；禁止发布容器 `3000` 端口。
 
 ---
@@ -51,7 +53,9 @@
 
 1. 浏览器访问 `https://pxyb.cn/api/notify/healthz`
    - 预期响应：`{"status":"ok"}`
-2. 终端使用 curl 发送测试通知：
+2. 浏览器访问 `https://pxyb.cn/api/notify/readyz`
+   - MongoDB 台账可用时预期响应：`{"status":"ready"}`
+3. 终端使用 curl 发送测试通知：
 
    ```bash
    curl -X POST "https://pxyb.cn/api/notify" \
@@ -171,9 +175,10 @@
 ## 6. 系统集成指引
 
 1. **第三方调用**：通过 `POST https://pxyb.cn/api/notify` 携带 `X-API-KEY`；仓库内部服务使用 `http://notification-service:3000/notify` 和短时签名。
-2. **失败重试**：若接口返回企业微信错误码，可读取 `detail` 中的 `errcode` 判断原因并决定是否重试。  
-3. **鉴权管理**：建议将 `NOTIFY_API_KEY` 存放在服务端安全配置文件中，并定期更换。  
-4. **审计日志**：业务侧可记录调用参数与返回结果，便于排查发送失败。
+2. **统一控制台**：在统一服务控制台的“通知通道”页查看状态和发送台账；测试发送仅允许指定单个企业微信用户，失败记录可受控重试。
+3. **失败重试**：若接口返回企业微信错误码，可读取 `detail` 中的 `errcode` 判断原因并决定是否重试。
+4. **鉴权管理**：建议将 `NOTIFY_API_KEY` 存放在服务端安全配置文件中，并定期更换。
+5. **审计日志**：业务侧可记录调用参数与返回结果，控制台会记录测试和重试操作，便于排查发送失败。
 
 ---
 

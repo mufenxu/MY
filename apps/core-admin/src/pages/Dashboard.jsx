@@ -417,6 +417,7 @@ const Dashboard = () => {
                                             <UserAvatar
                                                 seed={user.userId || user._id || user.deviceId}
                                                 label={user.nickName || user.userId}
+                                                avatarUrl={user.avatarUrl}
                                                 style={{ border: '1px solid var(--border-color)' }}
                                                 size={36}
                                             />

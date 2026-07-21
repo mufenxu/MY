@@ -17,6 +17,7 @@ import { BackupOperationError, createBackupManager, createBackupRunnerClient } f
 import { loadConfig } from './config.js';
 import { createStatusMonitor, loadServiceRegistry } from './service-registry.js';
 import { createMetrics } from './metrics.js';
+import { NotificationManagementError, createNotificationManagementClient } from './notification-management.js';
 import { createOperationsCenter } from './operations-center.js';
 import { createOperationsNotifier } from './operations-notifier.js';
 import { createMemoryOperationsStore } from './operations-store.js';
@@ -83,6 +84,7 @@ export function createApp({
   releaseStore = null,
   operationsManager = null,
   releaseManager = null,
+  notificationManager = null,
 } = {}) {
   const registry = loadServiceRegistry(config.registryPath);
   const monitor = createStatusMonitor(registry.services, {
@@ -105,6 +107,11 @@ export function createApp({
     apiKey: config.notificationApiKey,
     publicOrigin: config.publicOrigin,
     enabled: config.incidentNotificationsEnabled,
+    fetchImpl,
+  });
+  const notificationManagement = notificationManager || createNotificationManagementClient({
+    serviceUrl: config.notificationServiceUrl,
+    apiKey: config.notificationApiKey,
     fetchImpl,
   });
   const releases = releaseManager || createReleaseService({
@@ -139,6 +146,13 @@ export function createApp({
   function sendBackupError(res, error) {
     if (error instanceof BackupOperationError) {
       return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    throw error;
+  }
+
+  function sendNotificationManagementError(res, error) {
+    if (error instanceof NotificationManagementError) {
+      return res.status(error.status).json({ error: error.message, code: error.code, details: error.details });
     }
     throw error;
   }
@@ -205,6 +219,7 @@ export function createApp({
   app.locals.operationsCenter = operations;
   app.locals.releaseService = releases;
   app.locals.releaseStore = releaseData;
+  app.locals.notificationManagement = notificationManagement;
 
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -421,6 +436,79 @@ export function createApp({
       res.json({ platformName: registry.platformName, ...status });
     } catch (error) {
       next(error);
+    }
+  });
+
+  app.get('/api/notifications/overview', async (_req, res, next) => {
+    try {
+      return res.json(await notificationManagement.getOverview());
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.get('/api/notifications/deliveries', async (req, res, next) => {
+    try {
+      return res.json(await notificationManagement.listDeliveries({
+        status: req.query.status,
+        caller: req.query.caller,
+        msgType: req.query.msgType,
+        page: req.query.page,
+        pageSize: req.query.pageSize,
+      }));
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  const notificationSendLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 20,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: '通知测试或重试操作过于频繁。', code: 'NOTIFICATION_SEND_RATE_LIMITED' },
+  });
+
+  app.post('/api/notifications/test', notificationSendLimiter, requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
+    try {
+      const result = await notificationManagement.sendTest(req.body || {}, req.consoleUser.username);
+      await recordAudit(req, {
+        action: 'notification.test_send',
+        targetType: 'notification_recipient',
+        targetId: String(req.body?.touser || '').slice(0, 64),
+        details: { msgType: String(req.body?.msgType || '') },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      await recordAudit(req, {
+        action: 'notification.test_send',
+        outcome: 'failure',
+        targetType: 'notification_recipient',
+        targetId: String(req.body?.touser || '').slice(0, 64),
+        details: { code: String(error.code || 'UNKNOWN').slice(0, 80) },
+      });
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.post('/api/notifications/deliveries/:id/retry', notificationSendLimiter, requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
+    try {
+      const result = await notificationManagement.retryDelivery(req.params.id, req.consoleUser.username);
+      await recordAudit(req, {
+        action: 'notification.retry',
+        targetType: 'notification_delivery',
+        targetId: String(req.params.id || '').slice(0, 128),
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      await recordAudit(req, {
+        action: 'notification.retry',
+        outcome: 'failure',
+        targetType: 'notification_delivery',
+        targetId: String(req.params.id || '').slice(0, 128),
+        details: { code: String(error.code || 'UNKNOWN').slice(0, 80) },
+      });
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
     }
   });
 

@@ -105,7 +105,7 @@ try {
       mongoSha256: await sha256(archivePath),
       oplog: true,
       applicationsStopped: stoppedServices,
-      includes: ['platform_app', 'core_app', 'exam_app', 'campus_app', 'iot_app', 'core_uploads']
+      includes: ['platform_app', 'core_app', 'exam_app', 'campus_app', 'iot_app', 'notification_app', 'core_uploads']
     };
     await writeFile(path.join(workDirectory, 'manifest.json'), `${JSON.stringify(metadata, null, 2)}\n`, { mode: 0o600 });
   });

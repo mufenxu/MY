@@ -181,3 +181,42 @@ test('release deployment route verifies the multi-component confirmation phrase'
     assert.equal(deploymentRequest.buildId, 'build-1');
   });
 });
+
+test('notification management routes enforce console mutations and preserve the actor', async () => {
+  const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
+  const calls = [];
+  const notificationManager = {
+    getOverview: async () => ({ configured: true, history: { total: 1 } }),
+    listDeliveries: async (filters) => ({ items: [], page: Number(filters.page) || 1, pageSize: Number(filters.pageSize) || 20, total: 0 }),
+    sendTest: async (input, actor) => {
+      calls.push({ type: 'test', input, actor });
+      return { delivered: true, delivery: { id: 'delivery-test' } };
+    },
+    retryDelivery: async (id, actor) => {
+      calls.push({ type: 'retry', id, actor });
+      return { delivered: true, delivery: { id: 'delivery-retry' } };
+    },
+  };
+  const app = createApp({ config, notificationManager });
+  await withServer(app, async (origin) => {
+    assert.equal((await fetch(`${origin}/api/notifications/overview`)).status, 200);
+    assert.equal((await fetch(`${origin}/api/notifications/deliveries?page=2&pageSize=10`)).status, 200);
+
+    const body = JSON.stringify({ msgType: 'text', touser: 'alice', content: 'hello' });
+    assert.equal((await fetch(`${origin}/api/notifications/test`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+    })).status, 403);
+    assert.equal((await fetch(`${origin}/api/notifications/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
+      body,
+    })).status, 201);
+    assert.equal((await fetch(`${origin}/api/notifications/deliveries/delivery_123456/retry`, {
+      method: 'POST', headers: { 'X-Platform-Request': 'console' },
+    })).status, 201);
+  });
+  assert.deepEqual(calls.map(({ type, actor }) => [type, actor]), [
+    ['test', 'local-admin'],
+    ['retry', 'local-admin'],
+  ]);
+});

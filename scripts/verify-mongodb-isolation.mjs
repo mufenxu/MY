@@ -30,6 +30,7 @@ const definitions = [
   ['exam_app', required('MONGO_EXAM_USERNAME'), required('MONGO_EXAM_PASSWORD')],
   ['campus_app', required('MONGO_CAMPUS_USERNAME'), required('MONGO_CAMPUS_PASSWORD')],
   ['iot_app', required('MONGO_IOT_USERNAME'), required('MONGO_IOT_PASSWORD')],
+  ['notification_app', required('MONGO_NOTIFICATION_USERNAME'), required('MONGO_NOTIFICATION_PASSWORD')],
 ];
 const backupUsername = process.env.MONGO_BACKUP_USERNAME || 'platform_backup';
 

@@ -62,6 +62,8 @@ services:
       MONGO_CAMPUS_PASSWORD: ${MONGO_CAMPUS_PASSWORD:?Set MONGO_CAMPUS_PASSWORD}
       MONGO_IOT_USERNAME: ${MONGO_IOT_USERNAME:-iot_app}
       MONGO_IOT_PASSWORD: ${MONGO_IOT_PASSWORD:?Set MONGO_IOT_PASSWORD}
+      MONGO_NOTIFICATION_USERNAME: ${MONGO_NOTIFICATION_USERNAME:-notification_app}
+      MONGO_NOTIFICATION_PASSWORD: ${MONGO_NOTIFICATION_PASSWORD:?Set MONGO_NOTIFICATION_PASSWORD}
       MONGO_BACKUP_USERNAME: ${MONGO_BACKUP_USERNAME:-platform_backup}
       MONGO_BACKUP_PASSWORD: ${MONGO_BACKUP_PASSWORD:?Set MONGO_BACKUP_PASSWORD}
     logging: *default-logging
@@ -137,7 +139,7 @@ services:
       iot-service:
         condition: service_started
       notification-service:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "${PLATFORM_BIND_ADDRESS:-127.0.0.1}:${PLATFORM_API_PORT:-22100}:22100"
     environment:
@@ -357,6 +359,9 @@ services:
       dockerfile: notification-service.Dockerfile
     restart: unless-stopped
     init: true
+    depends_on:
+      mongodb-init:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       TZ: ${TZ:-Asia/Shanghai}
@@ -366,6 +371,11 @@ services:
       WECOM_SECRET: ${WECOM_SECRET:?Set WECOM_SECRET}
       NOTIFY_API_KEY: ${NOTIFY_API_KEY:?Set NOTIFY_API_KEY}
       NOTIFY_INTERNAL_CALLERS: ${NOTIFY_INTERNAL_CALLERS:-platform-api,core-api}
+      NOTIFY_MANAGEMENT_CALLERS: ${NOTIFY_MANAGEMENT_CALLERS:-admin-console}
+      NOTIFICATION_MONGODB_URI: mongodb://${MONGO_NOTIFICATION_USERNAME:-notification_app}:${MONGO_NOTIFICATION_PASSWORD}@mongodb:27017/notification_app?authSource=notification_app&replicaSet=rs0
+      NOTIFICATION_MONGODB_DATABASE: notification_app
+      NOTIFY_HISTORY_ENCRYPTION_KEY: ${NOTIFY_HISTORY_ENCRYPTION_KEY:?Set NOTIFY_HISTORY_ENCRYPTION_KEY}
+      NOTIFY_HISTORY_RETENTION_DAYS: ${NOTIFY_HISTORY_RETENTION_DAYS:-30}
       TOKEN_CACHE_MARGIN: ${TOKEN_CACHE_MARGIN:-120}
     read_only: true
     tmpfs:

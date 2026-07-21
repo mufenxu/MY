@@ -85,5 +85,6 @@ Alibaba Cloud Container Registry is the primary production image source. GitHub 
 - `exam-api` 使用 MongoDB 数据库 `exam_app`。
 - `campus-service` 使用 MongoDB 数据库 `campus_app`。
 - `iot-service` 使用 MongoDB 数据库 `iot_app`。
-- 五个数据库分别使用独立的最小权限账号；初始化任务使用 root，备份执行器使用独立的 `backup`/`restore` 账号。
+- `notification-service` 使用独立的 MongoDB 数据库 `notification_app`，保存加密的发送载荷和通知投递台账。
+- 六个数据库分别使用独立的最小权限账号；初始化任务使用 root，备份执行器使用独立的 `backup`/`restore` 账号。
 - 服务之间只通过 Docker 内网 HTTP API 交互，不经过公网域名，也不跨边界直接读取对方数据库。

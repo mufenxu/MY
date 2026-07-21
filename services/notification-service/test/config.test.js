@@ -16,6 +16,8 @@ function loadProductionConfig(apiKey) {
       WECOM_CORP_ID: 'test-corp',
       WECOM_AGENT_ID: '10001',
       WECOM_SECRET: 'test-wecom-secret',
+      NOTIFICATION_MONGODB_URI: 'mongodb://notification.example/notification_app',
+      NOTIFY_HISTORY_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString('base64url'),
     },
   });
 }
@@ -24,6 +26,25 @@ test('production rejects weak notification API keys', () => {
   const result = loadProductionConfig('short-key');
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /NOTIFY_API_KEY/);
+});
+
+test('production requires notification history persistence and encryption', () => {
+  const result = spawnSync(process.execPath, ['-e', "require('./src/config')"], {
+    cwd: serviceRoot,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      NOTIFY_API_KEY: 'a'.repeat(32),
+      WECOM_CORP_ID: 'test-corp',
+      WECOM_AGENT_ID: '10001',
+      WECOM_SECRET: 'test-wecom-secret',
+      NOTIFICATION_MONGODB_URI: '',
+      NOTIFY_HISTORY_ENCRYPTION_KEY: 'invalid',
+    },
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /NOTIFY_HISTORY_ENCRYPTION_KEY|NOTIFICATION_MONGODB_URI/);
 });
 
 test('production accepts a strong notification API key', () => {

@@ -132,6 +132,7 @@ const SidebarContent = ({
                             <UserAvatar
                                 seed={avatarSeed}
                                 label={displayName}
+                                avatarUrl={currentUser.avatarUrl}
                                 shape="square"
                                 size={42}
                                 style={{
@@ -210,6 +211,7 @@ const SidebarContent = ({
                 <UserAvatar
                     seed={avatarSeed}
                     label={displayName}
+                    avatarUrl={currentUser.avatarUrl}
                     shape="square"
                     size={40}
                     style={{
@@ -622,6 +624,7 @@ const MainLayout = () => {
                                 <UserAvatar
                                     seed={currentUser.userId || currentUser._id || currentUser.nickName || 'admin'}
                                     label={currentUser.nickName || currentUser.userId || 'admin'}
+                                    avatarUrl={currentUser.avatarUrl}
                                     className="soybean-header-avatar"
                                     style={{
                                         cursor: 'pointer',

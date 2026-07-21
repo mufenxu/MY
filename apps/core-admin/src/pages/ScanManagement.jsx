@@ -587,6 +587,7 @@ const response = await axios.post('${tokenExchangeUrl}', {
                                     <UserAvatar
                                         seed={item.userId?._id || item.userId?.userId}
                                         label={item.userId?.nickName || item.userId?.username}
+                                        avatarUrl={item.userId?.avatarUrl}
                                         style={{ marginRight: 8, border: '1px solid var(--border-color)' }}
                                         size="small"
                                     />
@@ -634,6 +635,7 @@ const response = await axios.post('${tokenExchangeUrl}', {
                                         <UserAvatar
                                             seed={user?._id || user?.userId}
                                             label={user?.nickName || user?.username}
+                                            avatarUrl={user?.avatarUrl}
                                             style={{ border: '1px solid var(--border-color)' }}
                                             size="small"
                                         />

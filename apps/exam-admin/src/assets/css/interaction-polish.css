@@ -19,6 +19,17 @@
     --ix-shadow-md: 0 18px 46px rgba(18, 28, 38, 0.11);
 }
 
+* {
+    -ms-overflow-style: none;
+    scrollbar-width: none !important;
+}
+
+*::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
 .el-loading-mask {
     background: rgba(248, 250, 252, 0.72) !important;
     backdrop-filter: blur(8px);
@@ -170,20 +181,11 @@
 }
 
 .el-scrollbar__bar.is-horizontal {
-    height: 7px !important;
+    display: none !important;
 }
 
 .el-scrollbar__bar.is-vertical {
-    width: 7px !important;
-}
-
-.el-scrollbar__thumb {
-    border-radius: 999px !important;
-    background: rgba(122, 135, 151, 0.34) !important;
-}
-
-.el-scrollbar__thumb:hover {
-    background: rgba(78, 92, 109, 0.46) !important;
+    display: none !important;
 }
 
 .el-popper,

@@ -12,7 +12,7 @@ const destination = path.join(backupRoot, stamp);
 const workDirectory = path.join(backupRoot, `${stamp}.in-progress`);
 const archiveName = 'mongodb.archive.gz';
 const archivePath = path.join(workDirectory, archiveName);
-const applicationDatabases = ['platform_app', 'core_app', 'exam_app', 'campus_app', 'iot_app'];
+const applicationDatabases = ['platform_app', 'core_app', 'exam_app', 'campus_app', 'iot_app', 'notification_app'];
 
 function required(name) {
   const value = String(process.env[name] || '').trim();

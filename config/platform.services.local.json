@@ -57,7 +57,7 @@
       "category": "service",
       "description": "面向内部业务系统的企业微信消息网关",
       "baseUrl": "https://pxyb.cn/api/notify",
-      "healthPath": "/healthz",
+      "healthPath": "/readyz",
       "adminUrl": null,
       "repositoryPath": "services/notification-service",
       "capabilities": ["企业微信", "通知 API"]

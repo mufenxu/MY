@@ -77,6 +77,7 @@ const Users = () => {
                     <UserAvatar
                         seed={record.userId || record._id}
                         label={text || record.userId}
+                        avatarUrl={record.avatarUrl}
                         style={{ verticalAlign: 'middle', border: '1px solid var(--border-color)' }}
                         size="large"
                     />
@@ -171,6 +172,7 @@ const Users = () => {
                     <UserAvatar
                         seed={user.userId || user._id}
                         label={user.nickName || user.userId}
+                        avatarUrl={user.avatarUrl}
                         size={48}
                         style={{ border: '1px solid var(--border-color)' }}
                     />

@@ -52,7 +52,7 @@
       "internalUrl": "http://notification-service:3000",
       "publicApiPath": "/api/notify",
       "managedAppPath": null,
-      "healthPath": "/healthz",
+      "healthPath": "/readyz",
       "targetEnv": "NOTIFICATION_SERVICE_URL",
       "legacyHostEnv": "NOTIFY_HOSTS",
       "hostPortForbidden": true
