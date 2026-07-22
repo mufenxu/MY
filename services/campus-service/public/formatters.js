@@ -1,5 +1,6 @@
 "use strict";
 
+(function attachHguFormatters(global) {
 function formatValue(value) {
   if (value === undefined || value === null || value === "") return "--";
   return String(value);
@@ -138,7 +139,7 @@ function empty(text) {
   return `<div class="empty">${escapeHtml(text)}</div>`;
 }
 
-globalThis.HguFormatters = Object.freeze({
+global.HguFormatters = Object.freeze({
   balanceRemark,
   compactDormitory,
   currentMonth,
@@ -157,3 +158,4 @@ globalThis.HguFormatters = Object.freeze({
   numberText,
   unitFor
 });
+})(globalThis);
