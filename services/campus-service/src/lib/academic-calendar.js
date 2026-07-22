@@ -5,6 +5,27 @@ const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
 const DEFAULT_WINDOW_PAST_DAYS = 90;
 const DEFAULT_WINDOW_FUTURE_DAYS = 180;
 
+function mondayOnOrAfter(year, monthIndex, day) {
+  const date = new Date(Date.UTC(year, monthIndex, day));
+  const dayOfWeek = date.getUTCDay();
+  const offset = (8 - dayOfWeek) % 7;
+  return localEpochDay({ year, month: monthIndex + 1, day }) + offset;
+}
+
+function inferredTermStartEpochDay(termInfo) {
+  const startYear = Number(termInfo?.startYear);
+  const endYear = Number(termInfo?.endYear);
+  const semester = String(termInfo?.semester || "");
+  const season = String(termInfo?.season || "");
+  if (semester === "1" || season === "秋") {
+    return Number.isFinite(startYear) ? mondayOnOrAfter(startYear, 8, 1) : null;
+  }
+  if (semester === "2" || season === "春") {
+    return Number.isFinite(endYear) ? mondayOnOrAfter(endYear, 1, 20) : null;
+  }
+  return null;
+}
+
 function parseTime(value) {
   const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || "").trim());
   if (!match) return null;
@@ -37,10 +58,15 @@ function dateFromLocalEpochDay(epochDay, time) {
   return new Date((epochDay * DAY_MS) + (time.hours * 60 + time.minutes) * 60_000 - SHANGHAI_OFFSET_MS);
 }
 
-function currentAcademicWeek(timetable) {
+function currentAcademicWeek(timetable, { now = new Date() } = {}) {
   const text = `${timetable?.currentCalendarText || ""} ${timetable?.termText || ""}`;
   const match = /第\s*(\d+)\s*周/.exec(text);
-  return match ? Number(match[1]) : 0;
+  if (match) return Number(match[1]);
+
+  const termStart = inferredTermStartEpochDay(timetable?.termInfo);
+  if (!Number.isFinite(termStart)) return 0;
+  const currentEpochDay = localEpochDay(shanghaiDateParts(now));
+  return Math.max(1, Math.floor((currentEpochDay - termStart) / 7) + 1);
 }
 
 function courseTimeRange(course, sectionTimes = []) {
@@ -70,7 +96,7 @@ export function buildCourseOccurrences(timetable, {
   from = new Date(now.getTime() - DEFAULT_WINDOW_PAST_DAYS * DAY_MS),
   to = new Date(now.getTime() + DEFAULT_WINDOW_FUTURE_DAYS * DAY_MS)
 } = {}) {
-  const currentWeek = currentAcademicWeek(timetable);
+  const currentWeek = currentAcademicWeek(timetable, { now });
   if (!currentWeek) return [];
 
   const currentEpochDay = localEpochDay(shanghaiDateParts(now));
