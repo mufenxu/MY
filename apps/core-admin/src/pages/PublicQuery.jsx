@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Input, Button, Card, Progress, Empty, message, Tag, Typography, Spin } from 'antd';
+import { Input, Button, Card, Progress, Empty, Tag, Typography, Spin } from 'antd';
 import {
   CheckCircleOutlined,
   ClockCircleFilled,
@@ -14,6 +14,7 @@ import {
   SyncOutlined,
   UserOutlined,
 } from '@ant-design/icons';
+import { message } from '../utils/feedback';
 import api from '../utils/api';
 import './PublicQuery.css';
 

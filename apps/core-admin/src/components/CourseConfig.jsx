@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Modal, Form, Input, Switch, message, Space, Tag, List, Typography } from 'antd';
+import { Card, Table, Button, Modal, Form, Input, Switch, Space, Tag, List, Typography } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ApiOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
+import { message } from '../utils/feedback';
 
 const { Text } = Typography;
 

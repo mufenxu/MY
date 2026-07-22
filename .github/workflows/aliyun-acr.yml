@@ -17,7 +17,9 @@ on:
       - apps/core-admin/**
       - apps/exam-admin/**
       - config/platform.services.docker.json
+      - config/image-build-targets.json
       - packages/platform-auth/**
+      - packages/platform-browser-runtime/**
       - services/platform-api/**
       - services/core-api/**
       - services/exam-api/**
@@ -35,6 +37,7 @@ on:
       - infra/docker/mongo-init.sh
       - infra/docker/ensure-users.js
       - scripts/buildx-metadata.mjs
+      - scripts/resolve-image-targets.mjs
       - .github/workflows/aliyun-acr.yml
   workflow_dispatch:
     inputs:
@@ -123,148 +126,21 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
-
-          add_target() {
-            local candidate="$1"
-            for selected in "${targets[@]:-}"; do
-              if [ "${selected}" = "${candidate}" ]; then
-                return
-              fi
-            done
-            targets+=("${candidate}")
-          }
-
-          targets=()
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             raw_targets="${RAW_TARGETS_INPUT:-platform,backup}"
-            IFS=',' read -ra requested <<< "${raw_targets}"
-            for item in "${requested[@]}"; do
-              target="$(printf '%s' "${item}" | tr '[:upper:]' '[:lower:]' | xargs)"
-              [ -z "${target}" ] && continue
-              if [ "${target}" = "all" ]; then
-                targets=(platform core exam notification backup runner campus iot mongodb)
-                break
-              fi
-              case "${target}" in
-                platform-api) target="platform" ;;
-                core-api) target="core" ;;
-                exam-api) target="exam" ;;
-                notification-service) target="notification" ;;
-                backup-runner) target="backup" ;;
-                deployment-runner) target="runner" ;;
-                campus-service) target="campus" ;;
-                iot-service) target="iot" ;;
-                mongo) target="mongodb" ;;
-              esac
-              add_target "${target}"
-            done
+            node scripts/resolve-image-targets.mjs \
+              --manual "${raw_targets}" \
+              --github-output "${GITHUB_OUTPUT}"
           else
             if [ -n "${PUSH_BEFORE}" ] && [ "${PUSH_BEFORE}" != "0000000000000000000000000000000000000000" ]; then
               git diff --name-only "${PUSH_BEFORE}" "${GITHUB_SHA}" > changed-files.txt
             else
               git show --name-only --format= "${GITHUB_SHA}" > changed-files.txt
             fi
-
-            while IFS= read -r file; do
-              case "${file}" in
-                .github/workflows/aliyun-acr.yml|scripts/buildx-metadata.mjs)
-                  targets=(platform core exam notification backup runner campus iot mongodb)
-                  ;;
-              esac
-              case "${file}" in
-                Dockerfile|apps/admin-console/*|apps/official-website/*|config/platform.services.docker.json|services/platform-api/*)
-                  add_target platform
-                  ;;
-              esac
-              case "${file}" in
-                backup-runner.Dockerfile|scripts/backup-runner.mjs|scripts/backup-mongodb-container.mjs|scripts/restore-mongodb-container.mjs)
-                  add_target backup
-                  ;;
-                apps/admin-console/package.json|apps/admin-console/src/backups.js)
-                  add_target backup
-                  ;;
-              esac
-              case "${file}" in
-                deployment-runner.Dockerfile|scripts/deployment-runner.mjs|scripts/configure-deployment-sidecar.mjs)
-                  add_target runner
-                  ;;
-                infra/docker/compose.yml)
-                  add_target platform
-                  add_target runner
-                  ;;
-              esac
-              case "${file}" in
-                core-api.Dockerfile|apps/core-admin/*|services/core-api/*)
-                  add_target core
-                  ;;
-              esac
-              case "${file}" in
-                exam-api.Dockerfile|apps/exam-admin/*|services/exam-api/*)
-                  add_target exam
-                  ;;
-              esac
-              case "${file}" in
-                notification-service.Dockerfile|services/notification-service/*)
-                  add_target notification
-                  ;;
-              esac
-              case "${file}" in
-                campus-service.Dockerfile|services/campus-service/*)
-                  add_target campus
-                  ;;
-              esac
-              case "${file}" in
-                iot-service.Dockerfile|services/iot-service/*)
-                  add_target iot
-                  ;;
-              esac
-              case "${file}" in
-                infra/docker/mongodb.Dockerfile|infra/docker/mongodb-entrypoint.sh|infra/docker/mongo-init.sh|infra/docker/ensure-users.js)
-                  add_target mongodb
-                  ;;
-              esac
-              case "${file}" in
-                packages/platform-auth/*)
-                  add_target platform
-                  add_target core
-                  add_target exam
-                  add_target campus
-                  add_target iot
-                  ;;
-              esac
-            done < changed-files.txt
+            node scripts/resolve-image-targets.mjs \
+              --files changed-files.txt \
+              --github-output "${GITHUB_OUTPUT}"
           fi
-
-          valid_targets=(platform core exam notification backup runner campus iot mongodb)
-          for target in "${targets[@]}"; do
-            valid=false
-            for known in "${valid_targets[@]}"; do
-              if [ "${known}" = "${target}" ]; then
-                valid=true
-                break
-              fi
-            done
-            if [ "${valid}" = false ]; then
-              echo "Unknown target: ${target}" >&2
-              exit 1
-            fi
-          done
-
-          if [ "${#targets[@]}" -eq 0 ]; then
-            echo "No image targets resolved; nothing to build."
-            echo "targets=" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
-
-          resolved="$(IFS=,; echo "${targets[*]}")"
-          release_targets=()
-          for target in "${targets[@]}"; do
-            [ "${target}" = "runner" ] || release_targets+=("${target}")
-          done
-          release_resolved="$(IFS=,; echo "${release_targets[*]}")"
-          echo "Resolved targets: ${resolved}"
-          echo "targets=${resolved}" >> "${GITHUB_OUTPUT}"
-          echo "release_targets=${release_resolved}" >> "${GITHUB_OUTPUT}"
 
       - name: Synchronize build start with release center
         if: steps.resolve.outputs.release_targets != ''

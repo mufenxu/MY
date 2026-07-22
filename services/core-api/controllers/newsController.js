@@ -1,5 +1,7 @@
 const axios = require('axios');
 const AppConfig = require('../models/AppConfig');
+const logger = require('../utils/logger');
+const { getExternalHttpOptions, isExternalHttpTimeout } = require('../utils/externalHttp');
 
 exports.getDailyNews = async (req, res) => {
     try {
@@ -25,11 +27,23 @@ exports.getDailyNews = async (req, res) => {
             });
         }
 
-        const response = await axios.get('https://60s.viki.moe/v2/60s');
+        const response = await axios.get(
+            'https://60s.viki.moe/v2/60s',
+            getExternalHttpOptions(),
+        );
         // The API returns structure like: { code: 200, message: "...", data: { news: [...], tip: "...", date: "..." } }
         res.json(response.data);
     } catch (error) {
-        console.error('Error fetching daily news:', error);
-        res.status(500).json({ error: 'Failed to fetch daily news' });
+        const timedOut = isExternalHttpTimeout(error);
+        logger.warn('Daily news upstream request failed', {
+            code: error.code,
+            status: error.response?.status,
+        });
+        res.status(timedOut ? 504 : 502).json({
+            success: false,
+            code: timedOut ? 'NEWS_UPSTREAM_TIMEOUT' : 'NEWS_UPSTREAM_UNAVAILABLE',
+            error: timedOut ? '每日资讯服务响应超时' : '每日资讯服务暂时不可用',
+            requestId: req.id,
+        });
     }
 };

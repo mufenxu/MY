@@ -107,11 +107,29 @@ test('header icon tools and tabs remain keyboard and screen-reader accessible', 
   const styles = readSource('src', 'index.css');
 
   assert.match(layout, /role="tablist"/);
-  assert.match(layout, /role="tab"[\s\S]*?tabIndex=\{0\}[\s\S]*?aria-selected/);
-  assert.match(layout, /aria-label=\{`关闭\$\{config\.label\}页签`\}/);
+  assert.match(layout, /role="tab"[\s\S]*?tabIndex=\{isActive \? 0 : -1\}[\s\S]*?aria-selected/);
+  assert.match(layout, /aria-controls="core-admin-route-panel"/);
+  assert.match(layout, /id="core-admin-route-panel"[\s\S]*?role="tabpanel"/);
+  for (const key of ['ArrowRight', 'ArrowLeft', 'Home', 'End', 'Delete']) {
+    assert.match(layout, new RegExp(`event\\.key === '${key}'`));
+  }
   assert.match(layout, /aria-label="打开导航菜单"/);
   assert.match(layout, /aria-label="刷新当前页"/);
+  assert.match(layout, /aria-label="打开通知管理"[\s\S]*?handleTabClick\('\/notifications'\)/);
+  assert.match(layout, /<button className="soybean-header-avatar-trigger"[\s\S]*?aria-label="打开用户菜单"/);
   assert.match(styles, /\.soybean-tab-item:focus-visible/);
+  assert.match(styles, /\.soybean-header-avatar-trigger:focus-visible/);
+  assert.match(styles, /\.soybean-tab-item\s*\{[\s\S]*?height:\s*38px/);
+});
+
+test('Ant Design feedback is bound to the application context', () => {
+  const app = readSource('src', 'App.jsx');
+  const feedback = readSource('src', 'utils', 'feedback.js');
+
+  assert.match(app, /import \{ App as AntApp/);
+  assert.match(app, /bindFeedbackApis\(AntApp\.useApp\(\)\)/);
+  assert.match(app, /<AntApp component=\{false\}>[\s\S]*?<FeedbackBinder \/>/);
+  assert.match(feedback, /export function bindFeedbackApis/);
 });
 
 test('platform SSO distinguishes authentication, mapping and availability failures', () => {

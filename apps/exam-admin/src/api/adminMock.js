@@ -269,6 +269,51 @@ const personalQuestions = [
     { _id: 'pq-004', type: 'fill', content: '成人胸外按压频率建议为每分钟 ____ 次。', answer: ['100-120'], analysis: '常用建议频率为 100-120 次/分。' },
 ];
 
+const questionQuality = [
+    {
+        _id: 'q-001',
+        categoryId: 'exam-public-2026',
+        type: 'single',
+        content: '管理后台中用于快速判断试卷质量趋势的指标是？',
+        revision: 3,
+        updateTime: isoDaysAgo(2),
+        issues: [{ code: 'missing_analysis', severity: 'warning', message: '题目缺少解析' }],
+    },
+    {
+        _id: 'q-002',
+        categoryId: 'exam-writing-long-title',
+        type: 'multiple',
+        content: '一份成熟的题库后台通常需要关注哪些体验？',
+        revision: 2,
+        updateTime: isoDaysAgo(8),
+        issues: [
+            { code: 'duplicate_content', severity: 'warning', message: '存在重复题干' },
+            { code: 'empty_option', severity: 'error', message: '选项内容为空' },
+        ],
+    },
+    {
+        _id: 'q-003',
+        categoryId: 'exam-medical-basic',
+        type: 'single',
+        content: '护理核心制度中需要复核的高频考点示例。',
+        revision: 5,
+        updateTime: isoDaysAgo(420),
+        issues: [{ code: 'stale_question', severity: 'warning', message: '题目长期未更新' }],
+    },
+];
+
+const questionQualityIssueCodes = [
+    'missing_analysis',
+    'missing_answer',
+    'insufficient_options',
+    'duplicate_option_label',
+    'empty_option',
+    'answer_not_in_options',
+    'single_answer_count',
+    'duplicate_content',
+    'stale_question',
+];
+
 const paperShares = [
     {
         _id: 'share-001',
@@ -349,7 +394,7 @@ function filterFeedbacks(params = {}) {
     ));
 }
 
-export function createMockAdminApi() {
+export function createMockAdminApi({ getIsConsoleMode } = {}) {
     return {
         getDashboardData: () => ok({
             counts: {
@@ -367,6 +412,29 @@ export function createMockAdminApi() {
         }),
         listMajorCategories: () => ok(majorCategories),
         listCategories: () => ok(categories),
+        getQuestionQuality: (params = {}) => {
+            const filtered = params.issue
+                ? questionQuality.filter((item) => item.issues.some((issue) => issue.code === params.issue))
+                : questionQuality;
+            const issueCounts = Object.fromEntries(questionQualityIssueCodes.map((code) => [code, 0]));
+            questionQuality.forEach((item) => item.issues.forEach((issue) => {
+                issueCounts[issue.code] += 1;
+            }));
+            return ok({
+                ...paginate(filtered, params),
+                summary: {
+                    scanned: 128,
+                    documents: 128,
+                    problematic: questionQuality.length,
+                    healthy: 128 - questionQuality.length,
+                    issues: issueCounts,
+                    truncated: false,
+                    scanLimit: 2000,
+                    staleDays: 365,
+                },
+                scopeType: getIsConsoleMode?.() ? 'personal' : (params.scopeType || 'admin'),
+            });
+        },
         saveMajorCategory: () => ok(null, '预览模式不会保存科目'),
         deleteMajorCategory: () => ok(null, '预览模式不会删除科目'),
         saveCategory: () => ok(null, '预览模式不会保存试卷'),

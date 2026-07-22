@@ -11,12 +11,14 @@ import * as cheerio from "cheerio";
 import QRCode from "qrcode";
 import bwipjs from "bwip-js";
 import { runWithAuthRecovery } from "./src/lib/auth-recovery.js";
+import { mapWithConcurrency } from "./src/lib/bounded-concurrency.js";
 import { createLogger } from "./src/lib/logger.js";
 import { KeyedSerialQueue } from "./src/lib/keyed-serial-queue.js";
 import { FixedWindowAttemptLimiter } from "./src/lib/rate-limiter.js";
 import { shouldLogClientError, shouldLogRequestCompleted } from "./src/lib/request-logging.js";
 import { loadDotEnv, parseBooleanEnv } from "./src/lib/env.js";
 import { createHttpToolkit, HttpError } from "./src/lib/http.js";
+import { normalizePagination } from "./src/lib/pagination.js";
 import { hashPassword, isValidUsername, normalizeUsername, verifyPassword } from "./src/lib/password.js";
 import { createSensitiveJsonCodec, deriveDataEncryptionKey } from "./src/lib/sensitive-json.js";
 import {
@@ -28,7 +30,13 @@ import {
 import { normalizeAllowedSchoolUrl } from "./src/lib/school-url.js";
 import { verifyPlatformSso } from "./src/lib/platform-sso.js";
 import { platformRoleAllowsRequest } from "./src/lib/platform-role.js";
+import { invalidateRequestMemo, requestMemo, setRequestMemo } from "./src/lib/request-memo.js";
 import { createStaticAssetHandler } from "./src/lib/static-assets.js";
+import {
+  discardUpstreamResponse,
+  releaseUpstreamResponse,
+  trackUpstreamResponse
+} from "./src/lib/upstream-response.js";
 import { createCampusRepository } from "./src/storage/campus-repository.js";
 import { buildCourseOccurrences, renderAcademicCalendar } from "./src/lib/academic-calendar.js";
 import { enqueueCampusNotification } from "./src/lib/notification-client.js";
@@ -101,6 +109,11 @@ const ACADEMIC_EVALUATION_WAIT_MS = 46 * 1000;
 const ACADEMIC_EVALUATION_MAX_DRAFTS = Number(process.env.HGU_ACADEMIC_EVALUATION_MAX_DRAFTS || 1_000);
 const ACADEMIC_EVALUATION_MAX_DRAFTS_PER_USER = Number(process.env.HGU_ACADEMIC_EVALUATION_MAX_DRAFTS_PER_USER || 10);
 const ACADEMIC_EVALUATION_AUTO_SUBJECTIVE_TEXT = String(process.env.HGU_ACADEMIC_EVALUATION_AUTO_SUBJECTIVE_TEXT || "好").trim() || "好";
+const ACADEMIC_EVALUATION_AUTO_MAX_ACTIVE_JOBS = 20;
+const ACADEMIC_EVALUATION_AUTO_MAX_RETAINED_JOBS = 1_000;
+const ACADEMIC_EVALUATION_AUTO_MAX_COURSES = 100;
+const ACADEMIC_EVALUATION_AUTO_MAX_RUNTIME_MS = 90 * 60 * 1000;
+const ACADEMIC_EVALUATION_AUTO_JOB_TTL_MS = 24 * 60 * 60 * 1000;
 const JWXS_LOGIN_URL = `${JWXS_ORIGIN}/login`;
 const WEBVPN_CAS_LOGIN_URL = `${WEBVPN_ORIGIN}/passport/v1/public/casLogin?sfDomain=cas96624`;
 const UIAS_LOGIN_URL = `${YKT_ORIGIN}/uias-h5/login`;
@@ -139,8 +152,16 @@ const ACADEMIC_AUTO_REFRESH_MS = Number(process.env.ACADEMIC_AUTO_REFRESH_MS || 
 const ACADEMIC_AUTO_REFRESH_START_DELAY_MS = Number(process.env.ACADEMIC_AUTO_REFRESH_START_DELAY_MS || 30 * 1000);
 const CAMPUS_REMINDER_INTERVAL_MS = Number(process.env.CAMPUS_REMINDER_INTERVAL_MS || 5 * 60 * 1000);
 const CAMPUS_REMINDER_START_DELAY_MS = Number(process.env.CAMPUS_REMINDER_START_DELAY_MS || 45 * 1000);
-const CAMPUS_REMINDER_HORIZON_HOURS = Number(process.env.CAMPUS_REMINDER_HORIZON_HOURS || 24);
-const CAMPUS_REMINDER_BATCH_SIZE = Number(process.env.CAMPUS_REMINDER_BATCH_SIZE || 100);
+const CAMPUS_REMINDER_HORIZON_HOURS = Math.min(168, Math.max(1, Number(process.env.CAMPUS_REMINDER_HORIZON_HOURS || 24) || 24));
+const CAMPUS_REMINDER_BATCH_SIZE = Math.min(1_000, Math.max(1, Math.trunc(Number(process.env.CAMPUS_REMINDER_BATCH_SIZE || 100) || 100)));
+const BACKGROUND_USER_SCAN_LIMIT = 1_000;
+const ACADEMIC_REFRESH_CONCURRENCY = 3;
+const ACADEMIC_REFRESH_MAX_RUNTIME_MS = 10 * 60 * 1000;
+const ACADEMIC_REMINDER_CACHE_CONCURRENCY = 5;
+const ACADEMIC_REMINDER_ENQUEUE_CONCURRENCY = 5;
+const ACADEMIC_REMINDER_MAX_RUNTIME_MS = 3 * 60 * 1000;
+const UIAS_PORTAL_APPS_TTL_MS = 2 * 60 * 1000;
+const UIAS_PORTAL_APPS_MAX_ITEMS = 100;
 const NODE_ENV = process.env.NODE_ENV || "development";
 const APP_AUTH_PASSWORD = process.env.HGU_APP_PASSWORD
   || process.env.APP_PASSWORD
@@ -203,6 +224,8 @@ const UWC_3DES_IV = process.env.HGU_UWC_3DES_IV || "00000000";
 const { sm2, sm3 } = smCrypto;
 const academicEvaluationDrafts = new Map();
 const academicEvaluationAutoJobs = new Map();
+const academicEvaluationAutoTasks = new Set();
+const backgroundTasks = new Set();
 const academicSessionQueue = new KeyedSerialQueue();
 const campusSessionQueue = new KeyedSerialQueue();
 const logger = createLogger({ service: "hgu-campus-hub", environment: NODE_ENV });
@@ -507,6 +530,7 @@ async function insertSystemUser({ normalized, passwordHash, role = "user" }) {
     }
     throw error;
   }
+  invalidateRequestMemo(userContextStorage.getStore(), "user:");
   return publicUser(await findUserById(id));
 }
 
@@ -520,17 +544,41 @@ const DUMMY_PASSWORD_HASH = await hashUserPassword(randomBytes(24).toString("bas
 
 async function findUserById(id) {
   if (!id) return null;
-  return repository.findUserById(String(id));
+  const normalizedId = String(id);
+  const context = userContextStorage.getStore();
+  return requestMemo(
+    context,
+    `user:id:${normalizedId}`,
+    () => repository.findUserById(normalizedId),
+    { clone: structuredClone }
+  );
 }
 
 async function findUserByUsername(username) {
   const normalized = normalizeUsername(username);
   if (!normalized) return null;
-  return repository.findUserByUsername(normalized);
+  const context = userContextStorage.getStore();
+  return requestMemo(context, `user:username:${normalized}`, async () => {
+    const user = await repository.findUserByUsername(normalized);
+    if (user?.id) setRequestMemo(context, `user:id:${user.id}`, structuredClone(user));
+    return user;
+  }, { clone: structuredClone });
 }
 
-async function listSystemUsers() {
-  return (await repository.listUsersWithSessions()).map(publicUserWithStatus);
+async function listSystemUsers(pagination) {
+  const [rows, total] = await Promise.all([
+    repository.listUsersWithSessions({ offset: pagination.offset, limit: pagination.pageSize }),
+    repository.countUsers()
+  ]);
+  return {
+    items: rows.map(publicUserWithStatus),
+    pagination: {
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pagination.pageSize))
+    }
+  };
 }
 
 async function authenticateSystemUser(username, password) {
@@ -538,6 +586,7 @@ async function authenticateSystemUser(username, password) {
   const passwordValid = await verifyUserPassword(password, user?.password_hash || DUMMY_PASSWORD_HASH);
   if (!user || user.disabled || !passwordValid) return null;
   await repository.updateUserLogin(user.id, nowIso());
+  invalidateRequestMemo(userContextStorage.getStore(), "user:");
   return findUserById(user.id);
 }
 
@@ -546,11 +595,13 @@ async function setSystemUserDisabled({ id, disabled, actorId }) {
   if (!user) throw new HttpError(404, "系统用户不存在。");
   if (user.id === actorId && disabled) throw new HttpError(400, "不能停用当前登录的管理员账号。");
   await repository.setUserDisabled(user.id, disabled, nowIso());
+  invalidateRequestMemo(userContextStorage.getStore(), "user:");
   return publicUser(await findUserById(user.id));
 }
 
 async function revokeSystemUserSessions(id) {
   await repository.bumpSessionVersion(id, nowIso());
+  invalidateRequestMemo(userContextStorage.getStore(), "user:");
 }
 
 async function resetSystemUserPassword({ id, password }) {
@@ -558,6 +609,7 @@ async function resetSystemUserPassword({ id, password }) {
   if (!user) throw new HttpError(404, "系统用户不存在。");
   const passwordHash = await hashUserPassword(password);
   await repository.setUserPassword(user.id, passwordHash, nowIso());
+  invalidateRequestMemo(userContextStorage.getStore(), "user:");
   return publicUser(await findUserById(user.id));
 }
 
@@ -574,12 +626,33 @@ async function deleteSystemUser({ id, actorId }) {
   const user = await findUserById(id);
   if (!user) throw new HttpError(404, "系统用户不存在。");
   if (user.id === actorId) throw new HttpError(400, "不能删除当前登录的管理员账号。");
+  const evaluationJob = activeAcademicEvaluationAutoJob(user.id);
+  if (evaluationJob) {
+    evaluationJob.cancelRequested = true;
+    evaluationJob.status = "canceling";
+    touchAcademicEvaluationAutoJob(evaluationJob);
+  }
+  for (const [draftId, draft] of academicEvaluationDrafts.entries()) {
+    if (draft.userId === user.id) academicEvaluationDrafts.delete(draftId);
+  }
   await repository.deleteUser(user.id);
+  invalidateRequestMemo(userContextStorage.getStore(), "user:");
   return publicUser(user);
 }
 
 function normalizeInviteCode(code) {
   return String(code || "").trim().replace(/[\s-]+/g, "").toUpperCase();
+}
+
+function decodeBoundedPathSegment(value, label, maxLength = 128) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(String(value || ""));
+  } catch {
+    throw new HttpError(400, `${label}格式不正确。`);
+  }
+  if (!decoded || decoded.length > maxLength) throw new HttpError(400, `${label}格式不正确。`);
+  return decoded;
 }
 
 function inviteCodePreview(code) {
@@ -700,6 +773,7 @@ async function registerWithInvite({ inviteCode, username, password }) {
     }
   });
   if (!user) throw new HttpError(400, "邀请码无效或已失效。");
+  invalidateRequestMemo(userContextStorage.getStore(), "user:");
   return user;
 }
 
@@ -1206,13 +1280,15 @@ async function saveSessionJarForUser(userId, incoming) {
       sensitiveJson.encode(merged),
       merged.updatedAt
     );
-    if (saved) return merged;
+    if (saved) {
+      setRequestMemo(userContextStorage.getStore(), `school-session:${userId}`, structuredClone(merged));
+      return merged;
+    }
   }
   throw new HttpError(409, "校园会话正在被其他请求更新，请重试。", null, "SESSION_WRITE_CONFLICT");
 }
 
-async function readSessionJar() {
-  const userId = currentUserId();
+async function loadSessionJarForUser(userId) {
   const row = await repository.getSchoolSession(userId);
   if (!row) return emptyJar();
   try {
@@ -1230,13 +1306,25 @@ async function readSessionJar() {
   }
 }
 
+async function readSessionJar() {
+  const userId = currentUserId();
+  return requestMemo(
+    userContextStorage.getStore(),
+    `school-session:${userId}`,
+    () => loadSessionJarForUser(userId),
+    { clone: structuredClone }
+  );
+}
+
 async function saveSessionJar(jar) {
   const merged = await saveSessionJarForUser(currentUserId(), jar);
   Object.assign(jar, merged);
 }
 
 async function clearSessionJar() {
-  await repository.deleteSchoolSession(currentUserId());
+  const userId = currentUserId();
+  await repository.deleteSchoolSession(userId);
+  setRequestMemo(userContextStorage.getStore(), `school-session:${userId}`, emptyJar());
 }
 
 function academicSessionSummary(jar) {
@@ -1439,32 +1527,36 @@ function assertUpstreamResponseSize(response) {
 }
 
 async function readUpstreamText(response) {
-  assertUpstreamResponseSize(response);
-  if (!response.body) return "";
-  const reader = response.body.getReader();
-  const chunks = [];
-  let total = 0;
-  let timedOut = false;
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    reader.cancel().catch(() => {});
-  }, REQUEST_TIMEOUT_MS);
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_UPSTREAM_RESPONSE_BYTES) {
-        await reader.cancel().catch(() => {});
-        throw new HttpError(502, "学校系统返回的数据超过安全上限。", null, "UPSTREAM_RESPONSE_TOO_LARGE");
+    assertUpstreamResponseSize(response);
+    if (!response.body) return "";
+    const reader = response.body.getReader();
+    const chunks = [];
+    let total = 0;
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      reader.cancel().catch(() => {});
+    }, REQUEST_TIMEOUT_MS);
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > MAX_UPSTREAM_RESPONSE_BYTES) {
+          await reader.cancel().catch(() => {});
+          throw new HttpError(502, "学校系统返回的数据超过安全上限。", null, "UPSTREAM_RESPONSE_TOO_LARGE");
+        }
+        chunks.push(Buffer.from(value));
       }
-      chunks.push(Buffer.from(value));
+    } finally {
+      clearTimeout(timeout);
     }
+    if (timedOut) throw new HttpError(504, "学校系统响应超时。", null, "UPSTREAM_RESPONSE_TIMEOUT");
+    return Buffer.concat(chunks, total).toString("utf8");
   } finally {
-    clearTimeout(timeout);
+    releaseUpstreamResponse(response);
   }
-  if (timedOut) throw new HttpError(504, "学校系统响应超时。", null, "UPSTREAM_RESPONSE_TIMEOUT");
-  return Buffer.concat(chunks, total).toString("utf8");
 }
 
 async function fetchWithJar(url, {
@@ -1500,10 +1592,14 @@ async function fetchWithJar(url, {
     });
     assertUpstreamResponseSize(response);
     updateJarFromResponse(jar, response, safeUrl);
-    return response;
+    return trackUpstreamResponse(response, () => {
+      activeUpstreamRequests -= 1;
+    });
+  } catch (error) {
+    activeUpstreamRequests -= 1;
+    throw error;
   } finally {
     clearTimeout(timer);
-    activeUpstreamRequests -= 1;
   }
 }
 
@@ -1515,6 +1611,7 @@ async function followRedirectsWithJar(startUrl, jar, options = {}) {
     if (response.status < 300 || response.status >= 400) return { response, url: currentUrl };
     const location = response.headers.get("location");
     if (!location) return { response, url: currentUrl };
+    await discardUpstreamResponse(response);
     currentUrl = assertAllowedSchoolUrl(new URL(location, currentUrl).href);
     options = { method: "GET", headers: options.headers || {} };
   }
@@ -1530,6 +1627,7 @@ async function loginCasService({ jar, username, password, rememberMe = true, ser
 
   if (loginPage.status >= 300 && loginPage.status < 400) {
     const location = loginPage.headers.get("location");
+    await discardUpstreamResponse(loginPage);
     if (!location) throw new HttpError(401, "CAS 未返回服务跳转地址，登录失败。");
     return followRedirectsWithJar(new URL(location, loginUrl).href, jar, {
       method: "GET",
@@ -1579,6 +1677,7 @@ async function loginCasService({ jar, username, password, rememberMe = true, ser
   }
 
   const location = post.headers.get("location");
+  await discardUpstreamResponse(post);
   if (!location) {
     throw new HttpError(401, "CAS 未返回服务跳转地址，登录失败。");
   }
@@ -1598,6 +1697,7 @@ async function getCasTicketRedirect({ jar, username, password, rememberMe = true
 
   if (loginPage.status >= 300 && loginPage.status < 400) {
     const location = loginPage.headers.get("location");
+    await discardUpstreamResponse(loginPage);
     if (!location) throw new HttpError(401, "CAS 未返回服务跳转地址，登录失败。");
     return assertAllowedSchoolUrl(new URL(location, loginUrl).href);
   }
@@ -1642,6 +1742,7 @@ async function getCasTicketRedirect({ jar, username, password, rememberMe = true
     throw new HttpError(401, htmlErrorMessage(failureHtml));
   }
   const location = post.headers.get("location");
+  await discardUpstreamResponse(post);
   if (!location) throw new HttpError(401, "CAS 未返回服务跳转地址，登录失败。");
   return assertAllowedSchoolUrl(new URL(location, action).href);
 }
@@ -1769,6 +1870,7 @@ async function loginUiasByCas(jar, credentials) {
   });
 
   jar.meta.campus ||= {};
+  delete jar.meta.campus.portalApps;
   jar.meta.campus.uias = {
     capturedAt: new Date().toISOString()
   };
@@ -1794,23 +1896,46 @@ function sanitizeUiasPortalApp(app = {}) {
   };
 }
 
-async function getUiasPortalApps(jar) {
-  const results = await Promise.allSettled([
-    uiasRequest(jar, "MyApplication"),
-    uiasRequest(jar, "MyRecommendApplication")
-  ]);
-  const apps = results.flatMap((result) => (
-    result.status === "fulfilled" ? uiasPortalList(result.value) : []
-  )).map(sanitizeUiasPortalApp);
+function cachedUiasPortalApps(jar) {
+  const cached = jar.meta?.campus?.portalApps;
+  const capturedAt = Date.parse(cached?.capturedAt || "");
+  if (!Number.isFinite(capturedAt) || Date.now() - capturedAt > UIAS_PORTAL_APPS_TTL_MS) return null;
+  if (!Array.isArray(cached.list)) return null;
+  return cached.list.slice(0, UIAS_PORTAL_APPS_MAX_ITEMS);
+}
 
-  if (apps.length) {
-    jar.meta.campus ||= {};
-    jar.meta.campus.portalApps = {
-      capturedAt: new Date().toISOString(),
-      list: apps
-    };
+async function getUiasPortalApps(jar, { force = false } = {}) {
+  if (!force) {
+    const cached = cachedUiasPortalApps(jar);
+    if (cached) return structuredClone(cached);
   }
-  return apps;
+
+  const cacheKey = `uias-portal-apps:${currentUserId()}:${jar.meta?.campus?.uias?.capturedAt || "unknown"}`;
+  return requestMemo(userContextStorage.getStore(), cacheKey, async () => {
+    const results = await Promise.allSettled([
+      uiasRequest(jar, "MyApplication"),
+      uiasRequest(jar, "MyRecommendApplication")
+    ]);
+    const unique = new Map();
+    for (const app of results.flatMap((result) => (
+      result.status === "fulfilled" ? uiasPortalList(result.value) : []
+    )).map(sanitizeUiasPortalApp)) {
+      const key = [app.applicationId, app.clientId, app.appId, app.envIp, app.applicationName, app.sdk]
+        .map((value) => String(value || ""))
+        .join("|");
+      if (!unique.has(key)) unique.set(key, app);
+      if (unique.size >= UIAS_PORTAL_APPS_MAX_ITEMS) break;
+    }
+    const apps = [...unique.values()];
+    if (apps.length) {
+      jar.meta.campus ||= {};
+      jar.meta.campus.portalApps = {
+        capturedAt: new Date().toISOString(),
+        list: apps
+      };
+    }
+    return apps;
+  }, { clone: structuredClone });
 }
 
 function portalAppSearchText(app) {
@@ -1842,8 +1967,8 @@ function portalAppScore(app, target) {
   return score;
 }
 
-async function findUiasPortalApp(jar, target) {
-  const apps = await getUiasPortalApps(jar).catch(() => []);
+async function findUiasPortalApp(jar, target, knownApps = null) {
+  const apps = knownApps || await getUiasPortalApps(jar).catch(() => []);
   return apps
     .map((app) => ({ app, score: portalAppScore(app, target) }))
     .filter((entry) => entry.score > 0)
@@ -1858,10 +1983,10 @@ function addUiasTokenCandidate(candidates, label, params) {
   candidates.push({ key, label, params: clean });
 }
 
-async function getUiasAppToken(jar, targetInput, isCas = 1) {
+async function getUiasAppToken(jar, targetInput, isCas = 1, { portalApps = null } = {}) {
   const target = typeof targetInput === "string" ? { appUrl: targetInput } : { ...targetInput };
   const candidates = [];
-  const portalApp = await findUiasPortalApp(jar, target);
+  const portalApp = await findUiasPortalApp(jar, target, portalApps);
   const clientId = portalApp?.clientId || portalApp?.appId;
   if (clientId) {
     addUiasTokenCandidate(candidates, "portal-client", { clientId });
@@ -2269,6 +2394,7 @@ async function loginAppdmByCas(jar) {
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
+      await discardUpstreamResponse(response);
       if (!location) break;
       currentUrl = assertAllowedSchoolUrl(new URL(location, currentUrl).href);
       finalUrl = currentUrl;
@@ -2377,10 +2503,11 @@ async function activateCampusSessions(jar, credentials) {
   let stage = "uias-cas-login";
   try {
     await loginUiasByCas(jar, credentials);
+    const portalApps = await getUiasPortalApps(jar);
     stage = "uias-easytong-token";
-    const easytongAppToken = await getUiasAppToken(jar, EASYTONG_UIAS_APP, 1);
+    const easytongAppToken = await getUiasAppToken(jar, EASYTONG_UIAS_APP, 1, { portalApps });
     stage = "uias-uwc-token";
-    const uwcAppToken = await getUiasAppToken(jar, UWC_UIAS_APP, 1);
+    const uwcAppToken = await getUiasAppToken(jar, UWC_UIAS_APP, 1, { portalApps });
     stage = "easytong-login";
     await loginEasytongByUiasToken(jar, easytongAppToken);
     stage = "uwc-login";
@@ -2417,26 +2544,26 @@ function campusDealCount(payload) {
   }, 0);
 }
 
-async function requestCampusCardBill(jar, billPayload) {
+async function requestCampusCardBill(jar, billPayload, options = {}) {
   try {
     return await easytongAuthedRequest(jar, "/easytong_app/GetDealRec", (session) => ({
       ...billPayload,
       AccNum: session.accNum || billPayload.AccNum
-    }));
+    }), options);
   } catch (firstError) {
     try {
       return await easytongAuthedRequest(jar, "/easytong_app/GetDealRec", (session) => ({
         ...billPayload,
         AccNum: session.accNum || billPayload.AccNum,
         EPID: session.epId || 0
-      }));
+      }), options);
     } catch (secondError) {
       throw new HttpError(secondError.status || firstError.status || 502, secondError.message || firstError.message || "暂无一卡通账单");
     }
   }
 }
 
-async function getCampusCardBill(jar, billQuery) {
+async function getCampusCardBill(jar, billQuery, options = {}) {
   const session = campusAuth(jar, "easytong");
   const pageSize = 100;
   const basePayload = {
@@ -2455,7 +2582,7 @@ async function getCampusCardBill(jar, billQuery) {
     const payload = await requestCampusCardBill(jar, {
       ...basePayload,
       BeginRecNum: begin
-    });
+    }, options);
     const list = Array.isArray(payload.list) ? payload.list : [];
     const dealCount = campusDealCount(payload);
     combined ||= { ...payload, list: [] };
@@ -2494,21 +2621,21 @@ async function getCampusCard(queryInput = {}) {
     AccNum: session.accNum,
     EPID: session.epId || 0
   }));
-  const cards = await easytongAuthedRequest(jar, "/easytong_app/GetAccCardInfoForDev", (session) => ({
-    AccNum: session.accNum,
-    CardStatus: 2
-  })).catch(() => null);
-
-  let bill;
-  try {
-    bill = await getCampusCardBill(jar, billQuery);
-  } catch (error) {
-    bill = {
-      code: 1,
-      list: [],
-      msg: error.message || "暂无一卡通账单"
-    };
-  }
+  // The wallet request performs the single auth-recovery step. The remaining
+  // independent reads can then share that known-good token without racing two refreshes.
+  const [cardsResult, billResult] = await Promise.allSettled([
+    easytongAuthedRequest(jar, "/easytong_app/GetAccCardInfoForDev", (session) => ({
+      AccNum: session.accNum,
+      CardStatus: 2
+    }), { retryOnAuth: false }),
+    getCampusCardBill(jar, billQuery, { retryOnAuth: false })
+  ]);
+  const cards = cardsResult.status === "fulfilled" ? cardsResult.value : null;
+  const bill = billResult.status === "fulfilled" ? billResult.value : {
+    code: 1,
+    list: [],
+    msg: billResult.reason?.message || "暂无一卡通账单"
+  };
 
   await saveSessionJar(jar);
   const session = campusAuth(jar, "easytong");
@@ -3641,7 +3768,40 @@ function activeAcademicEvaluationAutoStatus(status) {
   return ["queued", "running", "canceling"].includes(status);
 }
 
+function purgeAcademicEvaluationAutoJobs(now = Date.now()) {
+  for (const [userId, job] of academicEvaluationAutoJobs.entries()) {
+    if (activeAcademicEvaluationAutoStatus(job.status)) continue;
+    const updatedAt = Date.parse(job.updatedAt || job.finishedAt || job.requestedAt || "");
+    if (!Number.isFinite(updatedAt) || now - updatedAt > ACADEMIC_EVALUATION_AUTO_JOB_TTL_MS) {
+      academicEvaluationAutoJobs.delete(userId);
+    }
+  }
+
+  if (academicEvaluationAutoJobs.size <= ACADEMIC_EVALUATION_AUTO_MAX_RETAINED_JOBS) return;
+  const terminal = [...academicEvaluationAutoJobs.entries()]
+    .filter(([, job]) => !activeAcademicEvaluationAutoStatus(job.status))
+    .sort(([, a], [, b]) => Date.parse(a.updatedAt || "") - Date.parse(b.updatedAt || ""));
+  while (academicEvaluationAutoJobs.size > ACADEMIC_EVALUATION_AUTO_MAX_RETAINED_JOBS && terminal.length) {
+    academicEvaluationAutoJobs.delete(terminal.shift()[0]);
+  }
+}
+
+function academicEvaluationAutoCapacitySnapshot() {
+  purgeAcademicEvaluationAutoJobs();
+  const jobs = [...academicEvaluationAutoJobs.values()];
+  return {
+    active: jobs.filter((job) => activeAcademicEvaluationAutoStatus(job.status)).length,
+    retained: jobs.length,
+    maxActive: ACADEMIC_EVALUATION_AUTO_MAX_ACTIVE_JOBS,
+    maxRetained: ACADEMIC_EVALUATION_AUTO_MAX_RETAINED_JOBS,
+    terminalTtlMs: ACADEMIC_EVALUATION_AUTO_JOB_TTL_MS,
+    maxCoursesPerJob: ACADEMIC_EVALUATION_AUTO_MAX_COURSES,
+    maxRuntimeMs: ACADEMIC_EVALUATION_AUTO_MAX_RUNTIME_MS
+  };
+}
+
 function activeAcademicEvaluationAutoJob(userId) {
+  purgeAcademicEvaluationAutoJobs();
   const job = academicEvaluationAutoJobs.get(userId);
   return job && activeAcademicEvaluationAutoStatus(job.status) ? job : null;
 }
@@ -3694,6 +3854,9 @@ function academicEvaluationAutoJobSnapshot(job) {
     waitRemainingSeconds: job.waitRemainingSeconds,
     nextActionAt: job.nextActionAt || null,
     finalPendingCount: job.finalPendingCount,
+    discoveredPendingCount: job.discoveredPendingCount ?? job.total,
+    truncatedCount: job.truncatedCount || 0,
+    deadlineAt: job.deadlineAt || null,
     error: job.error || null,
     entries: job.entries.map((entry) => ({
       id: entry.id,
@@ -3717,6 +3880,7 @@ function touchAcademicEvaluationAutoJob(job) {
 }
 
 function academicEvaluationAutoStatus() {
+  purgeAcademicEvaluationAutoJobs();
   return academicEvaluationAutoJobSnapshot(academicEvaluationAutoJobs.get(currentUserId()));
 }
 
@@ -3743,6 +3907,11 @@ async function waitForAcademicEvaluationAutoJob(job, availableAt) {
   job.nextActionAt = new Date(targetMs).toISOString();
   while (Date.now() < targetMs) {
     if (job.cancelRequested) return false;
+    if (Date.now() >= job.deadlineMs) {
+      job.status = "failed";
+      job.error = "自动完成评估任务超过最大运行时长，已停止。";
+      return false;
+    }
     job.waitRemainingSeconds = Math.max(0, Math.ceil((targetMs - Date.now()) / 1000));
     touchAcademicEvaluationAutoJob(job);
     await sleep(Math.min(1000, Math.max(0, targetMs - Date.now())));
@@ -3758,6 +3927,7 @@ function isDuplicateAcademicEvaluationError(error) {
 }
 
 async function finalizeAcademicEvaluationAutoJob(job) {
+  if (shuttingDown) return;
   try {
     const latest = await withAcademicSessionLock(() => getAcademicEvaluations());
     job.finalPendingCount = latest.pendingCount;
@@ -3767,12 +3937,24 @@ async function finalizeAcademicEvaluationAutoJob(job) {
 }
 
 async function runAcademicEvaluationAutoJob(job) {
+  if (job.cancelRequested || shuttingDown) {
+    job.status = "canceled";
+    job.startedAt = nowIso();
+    job.finishedAt = job.startedAt;
+    touchAcademicEvaluationAutoJob(job);
+    return;
+  }
   job.status = "running";
   job.startedAt = nowIso();
+  job.deadlineMs = Date.now() + ACADEMIC_EVALUATION_AUTO_MAX_RUNTIME_MS;
+  job.deadlineAt = new Date(job.deadlineMs).toISOString();
   touchAcademicEvaluationAutoJob(job);
 
   const list = await withAcademicSessionLock(() => getAcademicEvaluations());
-  const pending = (Array.isArray(list.records) ? list.records : []).filter((record) => !record.completed);
+  const discoveredPending = (Array.isArray(list.records) ? list.records : []).filter((record) => !record.completed);
+  const pending = discoveredPending.slice(0, ACADEMIC_EVALUATION_AUTO_MAX_COURSES);
+  job.discoveredPendingCount = discoveredPending.length;
+  job.truncatedCount = Math.max(0, discoveredPending.length - pending.length);
   job.total = pending.length;
   job.entries = pending.map(academicEvaluationAutoEntry);
   touchAcademicEvaluationAutoJob(job);
@@ -3791,6 +3973,13 @@ async function runAcademicEvaluationAutoJob(job) {
     if (job.cancelRequested) {
       entry.status = "canceled";
       entry.message = "任务已停止。";
+      break;
+    }
+    if (Date.now() >= job.deadlineMs) {
+      job.status = "failed";
+      job.error = "自动完成评估任务超过最大运行时长，已停止。";
+      entry.status = "failed";
+      entry.message = job.error;
       break;
     }
 
@@ -3815,8 +4004,8 @@ async function runAcademicEvaluationAutoJob(job) {
 
       const shouldContinue = await waitForAcademicEvaluationAutoJob(job, draft.availableAt);
       if (!shouldContinue) {
-        entry.status = "canceled";
-        entry.message = "任务已停止。";
+        entry.status = job.cancelRequested ? "canceled" : "failed";
+        entry.message = job.cancelRequested ? "任务已停止。" : (job.error || "任务未能继续执行。");
         break;
       }
 
@@ -3878,22 +4067,30 @@ async function runAcademicEvaluationAutoJob(job) {
 }
 
 function scheduleAcademicEvaluationAutoJob(job, user) {
-  setImmediate(() => {
-    const task = userContextStorage.run({ requestId: `evaluation-auto-${job.id}`, user }, () => runAcademicEvaluationAutoJob(job));
-    Promise.resolve(task).catch((error) => {
-      job.status = job.cancelRequested ? "canceled" : "failed";
-      job.error = error.message || "自动完成评估失败。";
-      job.finishedAt = nowIso();
-      touchAcademicEvaluationAutoJob(job);
-      logger.warn("academic_evaluation_auto_failed", { userId: job.userId, jobId: job.id, error });
-    });
+  const task = new Promise((resolveTask) => {
+    setImmediate(() => resolveTask(
+      userContextStorage.run({ requestId: `evaluation-auto-${job.id}`, user }, () => runAcademicEvaluationAutoJob(job))
+    ));
   });
+  academicEvaluationAutoTasks.add(task);
+  task.catch((error) => {
+    job.status = job.cancelRequested ? "canceled" : "failed";
+    job.error = error.message || "自动完成评估失败。";
+    job.finishedAt = nowIso();
+    touchAcademicEvaluationAutoJob(job);
+    logger.warn("academic_evaluation_auto_failed", { userId: job.userId, jobId: job.id, error });
+  }).finally(() => academicEvaluationAutoTasks.delete(task));
 }
 
 function startAcademicEvaluationAutoJob(input = {}) {
   const user = currentUser();
   const existing = activeAcademicEvaluationAutoJob(user.id);
-  if (existing) throw new HttpError(409, "自动完成评估任务正在运行，请等待完成或先停止。");
+  if (existing) return { ...academicEvaluationAutoJobSnapshot(existing), reused: true };
+  const capacity = academicEvaluationAutoCapacitySnapshot();
+  const replacesRetainedJob = academicEvaluationAutoJobs.has(user.id);
+  if (capacity.active >= capacity.maxActive || (capacity.retained >= capacity.maxRetained && !replacesRetainedJob)) {
+    throw new HttpError(503, "自动完成评估任务已达到容量上限，请稍后重试。", null, "EVALUATION_JOB_CAPACITY_EXCEEDED");
+  }
 
   const now = nowIso();
   const job = {
@@ -3911,6 +4108,10 @@ function startAcademicEvaluationAutoJob(input = {}) {
     currentIndex: 0,
     current: null,
     finalPendingCount: null,
+    discoveredPendingCount: 0,
+    truncatedCount: 0,
+    deadlineAt: null,
+    deadlineMs: 0,
     waitRemainingSeconds: 0,
     nextActionAt: null,
     entries: [],
@@ -5965,9 +6166,20 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    if (url.pathname === "/api/operations/status" && req.method === "GET") {
+      requireAdminUser();
+      json(res, 200, { ok: true, data: backgroundOperationsSnapshot() });
+      return;
+    }
+
     if (url.pathname === "/api/users" && req.method === "GET") {
       requireAdminUser();
-      json(res, 200, { ok: true, data: await listSystemUsers() });
+      const pagination = normalizePagination({
+        page: url.searchParams.get("page"),
+        pageSize: url.searchParams.get("pageSize")
+      });
+      const users = await listSystemUsers(pagination);
+      json(res, 200, { ok: true, data: users.items, pagination: users.pagination });
       return;
     }
     if (url.pathname === "/api/users" && req.method === "POST") {
@@ -6005,14 +6217,14 @@ async function handleApi(req, res, url) {
       requireAdminUser();
       const body = await readBodyJson(req);
       if (body.revoked !== true) throw new HttpError(400, "无效的邀请码操作。");
-      const invite = await revokeInvite({ id: decodeURIComponent(inviteActionMatch[1]) });
+      const invite = await revokeInvite({ id: decodeBoundedPathSegment(inviteActionMatch[1], "邀请码编号") });
       logger.info("audit_invite_revoked", { actorUserId: currentUserId(), inviteId: invite.id });
       json(res, 200, { ok: true, data: invite });
       return;
     }
     if (inviteActionMatch && req.method === "DELETE") {
       requireAdminUser();
-      const invite = await deleteInvite({ id: decodeURIComponent(inviteActionMatch[1]) });
+      const invite = await deleteInvite({ id: decodeBoundedPathSegment(inviteActionMatch[1], "邀请码编号") });
       logger.info("audit_invite_deleted", { actorUserId: currentUserId(), inviteId: invite.id });
       json(res, 200, { ok: true, data: invite });
       return;
@@ -6020,7 +6232,7 @@ async function handleApi(req, res, url) {
     const userActionMatch = url.pathname.match(/^\/api\/users\/([^/]+)(?:\/(password))?$/);
     if (userActionMatch) {
       requireAdminUser();
-      const targetUserId = decodeURIComponent(userActionMatch[1]);
+      const targetUserId = decodeBoundedPathSegment(userActionMatch[1], "用户编号");
       const subAction = userActionMatch[2] || "";
       if (subAction === "password" && req.method === "POST") {
         const body = await readBodyJson(req);
@@ -6224,7 +6436,10 @@ async function handleApi(req, res, url) {
     if (url.pathname === "/api/academic/evaluations/auto/start" && req.method === "POST") {
       const body = await readBodyJson(req);
       const result = startAcademicEvaluationAutoJob(body);
-      logger.info("audit_academic_evaluation_auto_started", { actorUserId: currentUserId(), jobId: result.id });
+      logger.info(result.reused ? "audit_academic_evaluation_auto_reused" : "audit_academic_evaluation_auto_started", {
+        actorUserId: currentUserId(),
+        jobId: result.id
+      });
       json(res, 202, { ok: true, data: result });
       return;
     }
@@ -6236,7 +6451,7 @@ async function handleApi(req, res, url) {
     }
     const evaluationMatch = url.pathname.match(/^\/api\/academic\/evaluations\/([^/]+)(?:\/(submit))?$/);
     if (evaluationMatch && req.method === "GET" && !evaluationMatch[2]) {
-      const lessonId = decodeURIComponent(evaluationMatch[1]);
+      const lessonId = decodeBoundedPathSegment(evaluationMatch[1], "教学评估课程编号", 100);
       json(res, 200, { ok: true, data: await withAcademicSessionLock(() => getAcademicEvaluationDraft(lessonId)) });
       return;
     }
@@ -6290,6 +6505,98 @@ let academicRefreshInterval = null;
 let academicReminderRunning = false;
 let academicReminderStartTimer = null;
 let academicReminderInterval = null;
+const academicRefreshOperation = {
+  running: false,
+  skippedRuns: 0,
+  lastReason: null,
+  lastStartedAt: null,
+  lastFinishedAt: null,
+  lastDurationMs: null,
+  scanned: 0,
+  completed: 0,
+  failed: 0,
+  skipped: 0,
+  truncated: 0,
+  timedOut: false,
+  lastError: null
+};
+const academicReminderOperation = {
+  running: false,
+  skippedRuns: 0,
+  lastReason: null,
+  lastStartedAt: null,
+  lastFinishedAt: null,
+  lastDurationMs: null,
+  scanned: 0,
+  completed: 0,
+  failed: 0,
+  skipped: 0,
+  truncated: 0,
+  queued: 0,
+  deduplicated: 0,
+  timedOut: false,
+  lastError: null
+};
+
+function beginBackgroundOperation(state, reason) {
+  state.running = true;
+  state.lastReason = reason;
+  state.lastStartedAt = nowIso();
+  state.lastFinishedAt = null;
+  state.lastDurationMs = null;
+  state.scanned = 0;
+  state.completed = 0;
+  state.failed = 0;
+  state.skipped = 0;
+  state.truncated = 0;
+  state.queued = 0;
+  state.deduplicated = 0;
+  state.timedOut = false;
+  state.lastError = null;
+  return performance.now();
+}
+
+function finishBackgroundOperation(state, startedAt, error = null) {
+  state.running = false;
+  state.lastFinishedAt = nowIso();
+  state.lastDurationMs = Math.round((performance.now() - startedAt) * 10) / 10;
+  state.lastError = error?.message || null;
+}
+
+function trackBackgroundTask(taskFactory) {
+  const task = Promise.resolve().then(taskFactory);
+  backgroundTasks.add(task);
+  task.then(
+    () => backgroundTasks.delete(task),
+    () => backgroundTasks.delete(task)
+  );
+  return task;
+}
+
+function backgroundOperationsSnapshot() {
+  return {
+    upstream: {
+      active: activeUpstreamRequests,
+      max: MAX_CONCURRENT_UPSTREAM_REQUESTS
+    },
+    academicRefresh: {
+      ...academicRefreshOperation,
+      concurrency: ACADEMIC_REFRESH_CONCURRENCY,
+      maxRuntimeMs: ACADEMIC_REFRESH_MAX_RUNTIME_MS,
+      userScanLimit: BACKGROUND_USER_SCAN_LIMIT
+    },
+    academicReminders: {
+      ...academicReminderOperation,
+      cacheConcurrency: ACADEMIC_REMINDER_CACHE_CONCURRENCY,
+      enqueueConcurrency: ACADEMIC_REMINDER_ENQUEUE_CONCURRENCY,
+      maxRuntimeMs: ACADEMIC_REMINDER_MAX_RUNTIME_MS,
+      userScanLimit: BACKGROUND_USER_SCAN_LIMIT,
+      batchSize: CAMPUS_REMINDER_BATCH_SIZE
+    },
+    academicEvaluations: academicEvaluationAutoCapacitySnapshot(),
+    trackedTasks: backgroundTasks.size + academicEvaluationAutoTasks.size
+  };
+}
 
 async function hasAcademicRefreshSession() {
   const jar = await readSessionJar();
@@ -6300,14 +6607,25 @@ async function hasAcademicRefreshSession() {
 }
 
 async function refreshAcademicTimetableInBackground(reason) {
-  if (academicAutoRefreshRunning) return;
+  if (shuttingDown) return;
+  if (academicAutoRefreshRunning) {
+    academicRefreshOperation.skippedRuns += 1;
+    return;
+  }
   academicAutoRefreshRunning = true;
+  const startedAt = beginBackgroundOperation(academicRefreshOperation, reason);
+  let operationError = null;
   try {
-    const users = await repository.listActiveUsers();
-    for (const user of users) {
-      await userContextStorage.run({ requestId: `job-${randomUUID()}`, user }, async () => {
-        if (!(await hasAcademicRefreshSession())) return;
+    const rows = await repository.listActiveUsers({ limit: BACKGROUND_USER_SCAN_LIMIT + 1 });
+    const users = rows.slice(0, BACKGROUND_USER_SCAN_LIMIT);
+    const deadline = Date.now() + ACADEMIC_REFRESH_MAX_RUNTIME_MS;
+    academicRefreshOperation.scanned = users.length;
+    academicRefreshOperation.truncated = Math.max(0, rows.length - users.length);
+    const outcomes = await mapWithConcurrency(users, ACADEMIC_REFRESH_CONCURRENCY, (user) => (
+      userContextStorage.run({ requestId: `job-${randomUUID()}`, user }, async () => {
         try {
+          if (shuttingDown || Date.now() >= deadline) return "timed_out";
+          if (!(await hasAcademicRefreshSession())) return;
           const timetable = await withAcademicSessionLock(
             () => getAcademicTimetable(ACADEMIC_TIMETABLE_SOURCES.current)
           );
@@ -6321,49 +6639,89 @@ async function refreshAcademicTimetableInBackground(reason) {
           } else if (reason !== "interval") {
             logger.info("academic_refresh_completed", { reason, userId: user.id, sessions });
           }
+          return "completed";
         } catch (error) {
           logger.warn("academic_refresh_failed", { reason, userId: user.id, error });
+          return "failed";
         }
-      });
-    }
+      })
+    ));
+    academicRefreshOperation.completed = outcomes.filter((outcome) => outcome === "completed").length;
+    academicRefreshOperation.failed = outcomes.filter((outcome) => outcome === "failed").length;
+    academicRefreshOperation.skipped = outcomes.filter((outcome) => !outcome || outcome === "timed_out").length;
+    academicRefreshOperation.timedOut = outcomes.includes("timed_out");
+  } catch (error) {
+    operationError = error;
+    logger.warn("academic_refresh_scan_failed", { reason, error });
   } finally {
     academicAutoRefreshRunning = false;
+    finishBackgroundOperation(academicRefreshOperation, startedAt, operationError);
   }
 }
 
 function startAcademicAutoRefresh() {
   if (!Number.isFinite(ACADEMIC_AUTO_REFRESH_MS) || ACADEMIC_AUTO_REFRESH_MS <= 0) return;
   academicRefreshStartTimer = setTimeout(
-    () => refreshAcademicTimetableInBackground("startup"),
+    () => trackBackgroundTask(() => refreshAcademicTimetableInBackground("startup")),
     Math.max(0, ACADEMIC_AUTO_REFRESH_START_DELAY_MS)
   );
-  academicRefreshInterval = setInterval(() => refreshAcademicTimetableInBackground("interval"), ACADEMIC_AUTO_REFRESH_MS);
+  academicRefreshInterval = setInterval(
+    () => trackBackgroundTask(() => refreshAcademicTimetableInBackground("interval")),
+    ACADEMIC_AUTO_REFRESH_MS
+  );
 }
 
 async function enqueueUpcomingAcademicReminders(reason) {
-  if (academicReminderRunning) return;
+  if (shuttingDown) return;
+  if (academicReminderRunning) {
+    academicReminderOperation.skippedRuns += 1;
+    return;
+  }
   academicReminderRunning = true;
   let queued = 0;
   let deduplicated = 0;
+  const startedAt = beginBackgroundOperation(academicReminderOperation, reason);
+  let operationError = null;
   try {
     const now = new Date();
     const horizon = new Date(now.getTime() + CAMPUS_REMINDER_HORIZON_HOURS * 60 * 60 * 1000);
-    const preferences = await repository.listEnabledReminderPreferences();
-    for (const preference of preferences) {
-      if (queued + deduplicated >= CAMPUS_REMINDER_BATCH_SIZE) break;
-      const timetable = await cachedAcademicTimetableForUser(preference.user_id);
-      if (!timetable) continue;
-      const occurrences = buildCourseOccurrences(timetable, { now, from: now, to: horizon })
-        .filter((occurrence) => occurrence.startAt > now && occurrence.startAt <= horizon);
+    const rows = await repository.listEnabledReminderPreferences({ limit: BACKGROUND_USER_SCAN_LIMIT + 1 });
+    const preferences = rows.slice(0, BACKGROUND_USER_SCAN_LIMIT);
+    const deadline = Date.now() + ACADEMIC_REMINDER_MAX_RUNTIME_MS;
+    academicReminderOperation.scanned = preferences.length;
+    academicReminderOperation.truncated = Math.max(0, rows.length - preferences.length);
+    const prepared = await mapWithConcurrency(preferences, ACADEMIC_REMINDER_CACHE_CONCURRENCY, async (preference) => {
+      if (shuttingDown || Date.now() >= deadline) return { preference, occurrences: [], timedOut: true };
+      try {
+        const timetable = await cachedAcademicTimetableForUser(preference.user_id);
+        if (!timetable) return { preference, occurrences: [] };
+        const occurrences = buildCourseOccurrences(timetable, { now, from: now, to: horizon })
+          .filter((occurrence) => occurrence.startAt > now && occurrence.startAt <= horizon);
+        return { preference, occurrences };
+      } catch (error) {
+        logger.warn("academic_reminder_cache_read_failed", { reason, userId: preference.user_id, error });
+        return { preference, occurrences: [], error };
+      }
+    });
+    const candidates = [];
+    for (const { preference, occurrences } of prepared) {
       for (const occurrence of occurrences) {
-        if (queued + deduplicated >= CAMPUS_REMINDER_BATCH_SIZE) break;
+        if (candidates.length >= CAMPUS_REMINDER_BATCH_SIZE) break;
+        candidates.push({ preference, occurrence });
+      }
+      if (candidates.length >= CAMPUS_REMINDER_BATCH_SIZE) break;
+    }
+    const outcomes = await mapWithConcurrency(
+      candidates,
+      ACADEMIC_REMINDER_ENQUEUE_CONCURRENCY,
+      async ({ preference, occurrence }) => {
+        if (shuttingDown || Date.now() >= deadline) return "timed_out";
         try {
           const result = await enqueueCampusNotification(
             courseReminderPayload(preference, occurrence, preference.user_id, now),
             { requestId: `campus-reminder-${randomUUID()}` }
           );
-          if (result.deduplicated) deduplicated += 1;
-          else queued += 1;
+          return result.deduplicated ? "deduplicated" : "queued";
         } catch (error) {
           logger.warn("academic_reminder_enqueue_failed", {
             reason,
@@ -6371,14 +6729,29 @@ async function enqueueUpcomingAcademicReminders(reason) {
             courseId: occurrence.id,
             error
           });
+          return "failed";
         }
       }
-    }
+    );
+    queued = outcomes.filter((outcome) => outcome === "queued").length;
+    deduplicated = outcomes.filter((outcome) => outcome === "deduplicated").length;
+    academicReminderOperation.queued = queued;
+    academicReminderOperation.deduplicated = deduplicated;
+    academicReminderOperation.completed = queued + deduplicated;
+    academicReminderOperation.failed = outcomes.filter((outcome) => outcome === "failed").length
+      + prepared.filter((entry) => entry.error).length;
+    academicReminderOperation.skipped = prepared.filter((entry) => !entry.occurrences.length).length
+      + outcomes.filter((outcome) => outcome === "timed_out").length;
+    academicReminderOperation.timedOut = prepared.some((entry) => entry.timedOut) || outcomes.includes("timed_out");
     if (reason !== "interval" || queued > 0) {
       logger.info("academic_reminder_scan_completed", { reason, queued, deduplicated, users: preferences.length });
     }
+  } catch (error) {
+    operationError = error;
+    logger.warn("academic_reminder_scan_failed", { reason, error });
   } finally {
     academicReminderRunning = false;
+    finishBackgroundOperation(academicReminderOperation, startedAt, operationError);
   }
 }
 
@@ -6389,11 +6762,11 @@ function startAcademicReminderScheduler() {
   );
   if (!configured || !Number.isFinite(CAMPUS_REMINDER_INTERVAL_MS) || CAMPUS_REMINDER_INTERVAL_MS <= 0) return;
   academicReminderStartTimer = setTimeout(
-    () => enqueueUpcomingAcademicReminders("startup"),
+    () => trackBackgroundTask(() => enqueueUpcomingAcademicReminders("startup")),
     Math.max(0, CAMPUS_REMINDER_START_DELAY_MS)
   );
   academicReminderInterval = setInterval(
-    () => enqueueUpcomingAcademicReminders("interval"),
+    () => trackBackgroundTask(() => enqueueUpcomingAcademicReminders("interval")),
     CAMPUS_REMINDER_INTERVAL_MS
   );
 }
@@ -6461,6 +6834,20 @@ server.listen(PORT, HOST, () => {
 });
 
 let shuttingDown = false;
+async function drainServiceTasks(timeoutMs = 8_000) {
+  const tasks = [...backgroundTasks, ...academicEvaluationAutoTasks];
+  if (!tasks.length) return true;
+  let timer;
+  const completed = await Promise.race([
+    Promise.allSettled(tasks).then(() => true),
+    new Promise((resolveDrain) => {
+      timer = setTimeout(() => resolveDrain(false), timeoutMs);
+    })
+  ]);
+  if (timer) clearTimeout(timer);
+  return completed;
+}
+
 function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -6469,6 +6856,12 @@ function shutdown(signal) {
   if (academicRefreshInterval) clearInterval(academicRefreshInterval);
   if (academicReminderStartTimer) clearTimeout(academicReminderStartTimer);
   if (academicReminderInterval) clearInterval(academicReminderInterval);
+  for (const job of academicEvaluationAutoJobs.values()) {
+    if (!activeAcademicEvaluationAutoStatus(job.status)) continue;
+    job.cancelRequested = true;
+    job.status = "canceling";
+    touchAcademicEvaluationAutoJob(job);
+  }
   const forceTimer = setTimeout(() => {
     logger.error("service_shutdown_timeout", { signal });
     server.closeAllConnections?.();
@@ -6476,8 +6869,16 @@ function shutdown(signal) {
   forceTimer.unref();
   server.close(async () => {
     clearTimeout(forceTimer);
+    const drained = await drainServiceTasks();
+    if (!drained) {
+      logger.warn("service_task_drain_timeout", {
+        signal,
+        backgroundTasks: backgroundTasks.size,
+        evaluationTasks: academicEvaluationAutoTasks.size
+      });
+    }
     await repository.close();
-    logger.info("service_stopped", { signal });
+    logger.info("service_stopped", { signal, drained });
   });
 }
 

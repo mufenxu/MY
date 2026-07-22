@@ -62,6 +62,11 @@ const QuestionSchema = new mongoose.Schema(
             default: 0,
             index: true,
         },
+        revision: {
+            type: Number,
+            default: 1,
+            min: 1,
+        },
     },
     {
         timestamps: { createdAt: 'createTime', updatedAt: 'updateTime' },
@@ -79,5 +84,6 @@ QuestionSchema.index({ categoryId: 1, sortOrder: 1, createTime: 1 });
 QuestionSchema.index({ categoryId: 1, updateTime: -1 });
 QuestionSchema.index({ scopeType: 1, ownerOpenid: 1, categoryId: 1, sortOrder: 1, createTime: 1 });
 QuestionSchema.index({ scopeType: 1, ownerOpenid: 1, categoryId: 1, updateTime: -1 });
+QuestionSchema.index({ scopeType: 1, ownerOpenid: 1, categoryId: 1, _id: 1 });
 
 module.exports = mongoose.model('Question', QuestionSchema);

@@ -44,6 +44,24 @@
     }).format(new Date(timestamp));
   }
 
+  function formatInsightRange(range) {
+    return {
+      '1h': '最近 1 小时',
+      '24h': '最近 24 小时',
+      '7d': '最近 7 天'
+    }[range] || '最近 24 小时';
+  }
+
+  function formatMetricSummary(metric, unit) {
+    if (!metric || metric.count === 0 || metric.average == null) return '--';
+    return `${Number(metric.average).toFixed(1)} ${unit}`;
+  }
+
+  function formatMetricRange(metric, unit) {
+    if (!metric || metric.count === 0 || metric.min == null || metric.max == null) return '暂无有效采样';
+    return `${Number(metric.min).toFixed(1)} - ${Number(metric.max).toFixed(1)} ${unit}`;
+  }
+
   function toNumber(value) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
@@ -110,6 +128,7 @@
     const {
       modalChartBox,
       mainChartBox,
+      insightSummary,
       tableBody,
       deviceSelector,
       rangeSelector,
@@ -122,6 +141,73 @@
       setupCustomSelect = noop,
       showToast = noop
     } = options;
+    let activeLoadId = 0;
+    let activeLoadController = null;
+
+    function clearInsight() {
+      if (!insightSummary) return;
+      insightSummary.classList.add('hidden');
+      insightSummary.innerHTML = '';
+    }
+
+    function renderInsightLoading() {
+      if (!insightSummary) return;
+      insightSummary.classList.remove('hidden');
+      insightSummary.innerHTML = '<p class="history-insight-loading">正在生成设备健康摘要与异常诊断...</p>';
+    }
+
+    function renderInsightError(error) {
+      if (!insightSummary) return;
+      insightSummary.classList.remove('hidden');
+      insightSummary.innerHTML = `<p class="history-insight-error">趋势数据已加载，但设备洞察暂不可用：${escapeHtml(error.message)}</p>`;
+    }
+
+    function renderInsight(insight) {
+      if (!insightSummary || !insight) return;
+
+      const state = insight.device?.state || 'offline';
+      const stateMeta = {
+        healthy: { label: '运行健康', badge: 'badge-success' },
+        degraded: { label: '发现异常', badge: 'badge-warning' },
+        offline: { label: '设备离线', badge: 'badge-danger' }
+      }[state] || { label: '状态未知', badge: 'badge-muted' };
+      const anomalies = Array.isArray(insight.anomalies) ? insight.anomalies.slice(0, 3) : [];
+      const anomalyRows = anomalies.length
+        ? anomalies.map((item) => {
+          const metricLabel = item.metric === 'temp' ? '温度' : '湿度';
+          const unit = item.metric === 'temp' ? '°C' : '%';
+          const reason = item.reason === 'outside_physical_range' ? '超出物理范围' : '偏离近期基线';
+          return `
+            <li>
+              <span><strong>${metricLabel} ${Number(item.value).toFixed(1)} ${unit}</strong><small>${reason}</small></span>
+              <time datetime="${new Date(item.created_at).toISOString()}">${formatPointTime(item.created_at)}</time>
+            </li>
+          `;
+        }).join('')
+        : '<li class="history-anomaly-empty">当前范围内未发现明显异常</li>';
+
+      insightSummary.classList.remove('hidden');
+      insightSummary.innerHTML = `
+        <div class="history-insight-heading">
+          <div>
+            <p class="eyebrow">Device insight</p>
+            <h3>${escapeHtml(insight.device?.name || insight.device?.id || '设备')}数据洞察</h3>
+            <p>${formatInsightRange(insight.range)}，生成于 ${formatPointTime(insight.generatedAt)}</p>
+          </div>
+          <span class="badge ${stateMeta.badge}">${stateMeta.label}</span>
+        </div>
+        <dl class="history-insight-metrics">
+          <div><dt>有效采样</dt><dd>${Number(insight.summary?.samples || 0).toLocaleString('zh-CN')}</dd><small>${Number(insight.series?.length || 0)} 个聚合时段</small></div>
+          <div><dt>平均温度</dt><dd>${formatMetricSummary(insight.summary?.temperature, '°C')}</dd><small>${formatMetricRange(insight.summary?.temperature, '°C')}</small></div>
+          <div><dt>平均湿度</dt><dd>${formatMetricSummary(insight.summary?.humidity, '%')}</dd><small>${formatMetricRange(insight.summary?.humidity, '%')}</small></div>
+          <div><dt>异常采样</dt><dd>${Number(insight.summary?.anomalyCount || 0)}</dd><small>基于中位数与物理阈值</small></div>
+        </dl>
+        <div class="history-anomaly-list">
+          <h4>异常诊断</h4>
+          <ul>${anomalyRows}</ul>
+        </div>
+      `;
+    }
 
     function renderModalChart(data) {
       renderSvgToContainer(data, modalChartBox, getTheme());
@@ -179,29 +265,71 @@
 
       const deviceId = deviceSelector.value;
       if (!deviceId) {
+        activeLoadId += 1;
+        activeLoadController?.abort();
+        activeLoadController = null;
+        clearInsight();
+        setLastHistoryData([]);
+        renderTable([]);
         mainChartBox.innerHTML = '<p class="muted" style="text-align:center; padding-top: 140px;">请先在右上角下拉框中选择要分析的物理设备。</p>';
         return;
       }
 
       const range = rangeSelector ? rangeSelector.value : '';
+      const loadId = ++activeLoadId;
+      activeLoadController?.abort();
+      activeLoadController = new AbortController();
       mainChartBox.innerHTML = '<p class="muted" style="text-align:center; padding-top: 140px;">正在提取 MongoDB 历史传感器采样...</p>';
+      if (range) renderInsightLoading();
+      else clearInsight();
 
       try {
-        const url = `/api/devices/${deviceId}/history${range ? `?range=${range}` : ''}`;
-        const data = await requestJson(url, {
-          timeoutMs: requestTimeoutMs
-        });
+        const rangeQuery = range ? `?range=${encodeURIComponent(range)}` : '';
+        const [historyResult, insightResult] = await Promise.allSettled([
+          requestJson(`/api/devices/${encodeURIComponent(deviceId)}/history${rangeQuery}`, {
+            timeoutMs: requestTimeoutMs,
+            signal: activeLoadController.signal
+          }),
+          range
+            ? requestJson(`/api/devices/${encodeURIComponent(deviceId)}/insights${rangeQuery}`, {
+              timeoutMs: requestTimeoutMs,
+              signal: activeLoadController.signal
+            })
+            : Promise.resolve(null)
+        ]);
+
+        if (loadId !== activeLoadId) return;
+
+        if (insightResult.status === 'fulfilled' && insightResult.value) {
+          renderInsight(insightResult.value);
+        } else if (insightResult.status === 'rejected' && insightResult.reason?.code !== 'REQUEST_ABORTED') {
+          renderInsightError(insightResult.reason);
+        }
+
+        if (historyResult.status === 'rejected') {
+          throw historyResult.reason;
+        }
+
+        const data = Array.isArray(historyResult.value) ? historyResult.value : [];
+        setLastHistoryData(data);
+        renderTable(data);
 
         if (!data || data.length < 2) {
           mainChartBox.innerHTML = '<p class="muted" style="text-align:center; padding-top: 140px;">当前时间区间内在 MongoDB 中暂无充足的传感器采样记录。</p>';
           return;
         }
 
-        setLastHistoryData(data);
-        renderMainChart(data);
-        renderTable(data);
+        const insightSeries = insightResult.status === 'fulfilled' && Array.isArray(insightResult.value.series)
+          ? insightResult.value.series
+          : [];
+        renderMainChart(range && insightSeries.length >= 2 ? insightSeries : data);
       } catch (error) {
+        if (loadId !== activeLoadId || error?.code === 'REQUEST_ABORTED') return;
         mainChartBox.innerHTML = `<p class="muted" style="text-align:center; padding-top: 140px; color:var(--danger);">提取历史记录失败: ${escapeHtml(error.message)}</p>`;
+      } finally {
+        if (loadId === activeLoadId) {
+          activeLoadController = null;
+        }
       }
     }
 

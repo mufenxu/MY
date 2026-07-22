@@ -1,14 +1,23 @@
 const CourseCategory = require('../models/CourseCategory');
 const PlatformConfig = require('../models/PlatformConfig');
+const { parsePagination } = require('../utils/pagination');
+
+const MAX_REFERENCE_ROWS = 200;
 
 // ======================= 小程序端使用 =======================
 // 获取正常状态的平台网课用于选单
 exports.getActiveCategories = async (req, res) => {
     try {
-        const categories = await CourseCategory.find({ status: 1 }).sort({ sort: 1, createdAt: -1 });
-        
-        // 拉取统计信息
-        const platformStats = await PlatformConfig.find({}, 'platformCode queryCount orderCount').lean();
+        const [categories, platformStats] = await Promise.all([
+            CourseCategory.find({ status: 1 })
+                .sort({ sort: 1, createdAt: -1 })
+                .limit(MAX_REFERENCE_ROWS)
+                .lean(),
+            PlatformConfig.find({}, 'platformCode queryCount orderCount')
+                .sort({ platformCode: 1 })
+                .limit(MAX_REFERENCE_ROWS)
+                .lean(),
+        ]);
         
         res.json({ 
             success: true, 
@@ -27,21 +36,26 @@ exports.getActiveCategories = async (req, res) => {
 // 分页获取分类列表
 exports.getAdminCategories = async (req, res) => {
     try {
-        const { page = 1, limit = 15 } = req.query;
+        const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 15 });
         const query = {};
-        const total = await CourseCategory.countDocuments(query);
-        const list = await CourseCategory.find(query)
-            .sort({ sort: 1, createdAt: -1 })
-            .skip((page - 1) * limit)
-            .limit(parseInt(limit));
-
-        // 连带拉取所有底层对接平台的名字供前端映射显示
-        const platforms = await PlatformConfig.find({});
+        const [total, list, platforms] = await Promise.all([
+            CourseCategory.countDocuments(query),
+            CourseCategory.find(query)
+                .sort({ sort: 1, createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            // Only return display metadata. Credentials and endpoint URLs stay server-side.
+            PlatformConfig.find({}, 'platformCode name status')
+                .sort({ platformCode: 1 })
+                .limit(MAX_REFERENCE_ROWS)
+                .lean(),
+        ]);
         
         res.json({ 
             success: true, 
             code: 200, 
-            data: { list, total, _platforms: platforms } 
+            data: { list, total, page, limit, _platforms: platforms }
         });
     } catch (error) {
         res.json({ success: false, code: 500, message: '获取分类失败', error: error.message });

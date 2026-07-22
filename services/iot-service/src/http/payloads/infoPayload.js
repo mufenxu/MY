@@ -25,6 +25,7 @@ function createInfoPayload(settingsStore, mqttService) {
     messagesReceived: status.messagesReceived,
     topicStats: status.topicStats,
     serviceStartedAt: status.serviceStartedAt,
+    retention: status.retention,
     deviceOnline: anyDeviceOnline
   };
 }

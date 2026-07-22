@@ -24,6 +24,10 @@
             <el-icon><Files /></el-icon>
             <span>个人题库监管</span>
         </el-menu-item>
+        <el-menu-item index="question-quality">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>题库质量</span>
+        </el-menu-item>
         <el-menu-item index="feedbacks" class="feedback-menu-item">
             <el-icon><ChatDotRound /></el-icon>
             <span>{{ feedbackMenuLabel }}</span>

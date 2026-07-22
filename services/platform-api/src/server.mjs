@@ -2,6 +2,11 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { createCoreWebApp, createOfficialWebsiteApp, createPlatformRouter } from './router.mjs';
+import {
+  closePortalStores,
+  createPersistentPortalStores,
+  pingPortalStores,
+} from './portal-store-lifecycle.mjs';
 import { resolveRuntimePaths } from './runtime-paths.mjs';
 import { checkExternalServices, resolveServiceMode } from './service-targets.mjs';
 import { createSessionVerifierCache } from './session-cache.mjs';
@@ -31,58 +36,39 @@ const { createMongoAuthRiskStore } = await import(pathToFileURL(paths.portalAuth
 const { createMongoOperationsStore } = await import(
   pathToFileURL(paths.portalOperationsStore).href
 );
+const { createMongoReleaseStore } = await import(pathToFileURL(paths.portalReleaseStore).href);
+const { createMongoConfigurationStore } = await import(
+  pathToFileURL(paths.portalConfigurationStore).href
+);
 
 const portalConfig = loadPortalConfig();
-const authStore = portalConfig.mongoUri
-  ? await createMongoAuthStore({
-    uri: portalConfig.mongoUri,
-    encryptionKey: portalConfig.authEncryptionKey,
-    issuer: portalConfig.webauthnRpName,
-    bootstrap: {
-      username: portalConfig.adminUsername,
-      passwordHash: portalConfig.adminPasswordHash,
-      role: portalConfig.adminRole,
-      totpSecret: portalConfig.adminTotpSecret,
-    },
-  })
-  : null;
-const authRiskStore = portalConfig.mongoUri
-  ? await createMongoAuthRiskStore({
-    uri: portalConfig.mongoUri,
-    encryptionKey: portalConfig.authEncryptionKey,
-    challengeConfigured: Boolean(portalConfig.turnstileSiteKey && portalConfig.turnstileSecretKey),
-    windowMinutes: portalConfig.loginWindowMinutes,
-    maxAttempts: portalConfig.loginMaxAttempts,
-    challengeThreshold: portalConfig.loginChallengeThreshold,
-    backoffBaseMs: portalConfig.loginBackoffBaseMs,
-    backoffMaxMs: portalConfig.loginBackoffMaxMs,
-  })
-  : null;
-const sessionRegistry = portalConfig.mongoUri
-  ? await createMongoSessionRegistry({
-    uri: portalConfig.mongoUri,
-    secret: portalConfig.sessionSecret,
-    idleTimeoutMinutes: portalConfig.sessionIdleMinutes,
-  })
-  : null;
-const operationsStore = portalConfig.mongoUri
-  ? await createMongoOperationsStore({
-    uri: portalConfig.mongoUri,
-    statusRetentionDays: portalConfig.statusRetentionDays,
-    auditRetentionDays: portalConfig.auditRetentionDays,
-  })
-  : null;
+const portalStores = await createPersistentPortalStores({
+  config: portalConfig,
+  factories: {
+    createMongoAuthStore,
+    createMongoAuthRiskStore,
+    createMongoSessionRegistry,
+    createMongoOperationsStore,
+    createMongoReleaseStore,
+    createMongoConfigurationStore,
+  },
+});
+const {
+  authStore,
+  authRiskStore,
+  sessionRegistry,
+  operationsStore,
+  releaseStore,
+  configurationStore,
+} = portalStores;
 const readinessCheck = async () => {
-  const [servicesReady, authReady, riskReady, sessionReady, operationsReady] = await Promise.all([
+  const [servicesReady, storesReady] = await Promise.all([
     serviceMode.external
       ? checkExternalServices(serviceMode.targets)
       : Promise.resolve(Boolean(coreRuntime.isCoreRuntimeReady() && examRuntime.isExamRuntimeReady())),
-    authStore ? authStore.ping() : Promise.resolve(true),
-    authRiskStore ? authRiskStore.ping() : Promise.resolve(true),
-    sessionRegistry ? sessionRegistry.ping() : Promise.resolve(true),
-    operationsStore ? operationsStore.ping() : Promise.resolve(true),
+    pingPortalStores(portalStores),
   ]);
-  return Boolean(servicesReady && authReady && riskReady && sessionReady && operationsReady);
+  return Boolean(servicesReady && storesReady);
 };
 const portalApp = createPortalApp({
   config: portalConfig,
@@ -90,6 +76,8 @@ const portalApp = createPortalApp({
   authRiskStore,
   sessionRegistry,
   operationsStore,
+  releaseStore,
+  configurationStore,
   readinessCheck,
 });
 portalApp.locals.operationsCenter.start();
@@ -162,6 +150,7 @@ const server = http.createServer((req, res) => {
     }
   });
 });
+server.requestTimeout = portalConfig.backupTransferTimeoutMs;
 server.on('upgrade', (req, socket, head) => {
   router.handleUpgrade(req, socket, head).catch((error) => {
     console.error('Unhandled platform upgrade:', error);
@@ -186,10 +175,9 @@ async function shutdown(signal, exitCode = 0) {
   const results = await Promise.allSettled([
     coreRuntime?.closeCoreRuntime?.(),
     examRuntime?.closeExamRuntime?.(),
-    sessionRegistry?.close(),
-    authStore?.close(),
-    authRiskStore?.close(),
-    operationsStore?.close(),
+    closePortalStores(portalStores).then((errors) => {
+      if (errors.length) throw new AggregateError(errors, 'Failed to close one or more portal stores.');
+    }),
   ]);
   for (const result of results) {
     if (result.status === 'rejected') console.error(result.reason);

@@ -103,3 +103,50 @@ test('automation definitions reject unknown devices and relays', async () => {
     actions: [{ deviceId: 'missing', relayId: 'fan', status: 'ON' }]
   }), (error) => error.statusCode === 400 && error.code === 'UNKNOWN_DEVICE');
 });
+
+test('rule definitions are cached until a mutation invalidates them', async () => {
+  const fixture = createFixture();
+  let reads = 0;
+  const originalListRules = fixture.database.listAutomationRules.bind(fixture.database);
+  fixture.database.listAutomationRules = async () => {
+    reads += 1;
+    return originalListRules();
+  };
+  const engine = new AutomationEngine(fixture);
+
+  await engine.evaluate({ devices: {} });
+  await engine.evaluate({ devices: {} });
+  assert.equal(reads, 1);
+
+  await engine.createRule({
+    name: 'Cached rule',
+    condition: { deviceId: 'room', metric: 'temperature', operator: 'gt', value: 28 },
+    actions: [{ deviceId: 'room', relayId: 'fan', status: 'ON' }]
+  });
+  await engine.evaluate({ devices: {} });
+  assert.equal(reads, 2);
+});
+
+test('message bursts keep only the latest pending snapshot', async () => {
+  const fixture = createFixture();
+  const engine = new AutomationEngine(fixture);
+  const evaluated = [];
+  let releaseFirst;
+  const firstEvaluation = new Promise((resolve) => { releaseFirst = resolve; });
+  engine.evaluate = async (latest) => {
+    evaluated.push(latest.sequence);
+    if (latest.sequence === 1) await firstEvaluation;
+  };
+
+  await engine.start();
+  fixture.mqttService.emit('message', { latest: { sequence: 1 } });
+  await new Promise((resolve) => setImmediate(resolve));
+  fixture.mqttService.emit('message', { latest: { sequence: 2 } });
+  fixture.mqttService.emit('message', { latest: { sequence: 3 } });
+  releaseFirst();
+  await engine.stop();
+
+  assert.deepEqual(evaluated, [1, 3]);
+  assert.equal(engine.getStatus().messagesCoalesced, 2);
+  assert.equal(engine.getStatus().pendingSnapshot, false);
+});

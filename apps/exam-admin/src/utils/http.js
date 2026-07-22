@@ -107,6 +107,10 @@ http.request = async function request(rawConfig) {
     const method = String(config.method || 'get').toUpperCase();
     const timeout = config.timeout || http.defaults.timeout || 0;
     const controller = new AbortController();
+    const externalSignal = config.signal;
+    const abortFromExternalSignal = () => controller.abort(externalSignal?.reason);
+    if (externalSignal?.aborted) abortFromExternalSignal();
+    else externalSignal?.addEventListener('abort', abortFromExternalSignal, { once: true });
     const timer = timeout > 0 ? setTimeout(() => controller.abort(), timeout) : null;
     const headers = new Headers(config.headers || {});
     const fetchOptions = {
@@ -153,6 +157,7 @@ http.request = async function request(rawConfig) {
         return applyResponseError(error);
     } finally {
         if (timer) clearTimeout(timer);
+        externalSignal?.removeEventListener('abort', abortFromExternalSignal);
     }
 };
 

@@ -270,7 +270,12 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
     }
   }
 
-  const orchestrator = createNotificationOrchestrator({ store, deliver });
+  const orchestrator = createNotificationOrchestrator({
+    store,
+    deliver,
+    concurrency: config.orchestrationConcurrency,
+    leaseMs: config.orchestrationLeaseMs,
+  });
 
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
@@ -385,7 +390,10 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
 
   app.get('/management/overview', checkManagementAccess, async (_req, res, next) => {
     try {
-      const history = await store.getOverview();
+      const [history, queue] = await Promise.all([
+        store.getOverview(),
+        orchestrator.getQueueOverview(),
+      ]);
       return res.json({
         configured: true,
         storageHealthy: true,
@@ -396,6 +404,7 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
           secretConfigured: Boolean(config.wecom.secret),
         },
         history,
+        queue,
       });
     } catch (error) {
       console.error('notification history overview failed', error);

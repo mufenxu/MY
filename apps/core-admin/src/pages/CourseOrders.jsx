@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Card, Table, Tag, Space, Button, Input, Select, message, Modal, Tooltip, Typography, Form, Divider, Switch, List, Row, Col } from 'antd';
+import { Card, Table, Tag, Space, Button, Input, Select, Modal, Tooltip, Typography, Form, Divider, Switch, List, Row, Col } from 'antd';
 import { SyncOutlined, DeleteOutlined, FileTextOutlined, PlusOutlined, EditOutlined, EyeOutlined, EyeInvisibleOutlined, SearchOutlined, WarningOutlined, ExclamationCircleFilled } from '@ant-design/icons';
 import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
+import { message } from '../utils/feedback';
 
 const { Option } = Select;
 const ORDER_REFRESH_TIMEOUT_MS = 120000;

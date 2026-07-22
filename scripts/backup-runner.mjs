@@ -37,10 +37,20 @@ const manager = createBackupManager({
     }),
     backupUploadMaxBytes: parseInteger(process.env.PLATFORM_BACKUP_UPLOAD_MAX_BYTES, 5 * 1024 * 1024 * 1024, {
       min: 1024 * 1024,
-      max: 50 * 1024 * 1024 * 1024,
+      max: 5 * 1024 * 1024 * 1024,
     }),
   },
 });
+const transferTimeoutMs = parseInteger(
+  process.env.PLATFORM_BACKUP_TRANSFER_TIMEOUT_MS,
+  10 * 60 * 1000,
+  { min: 60 * 1000, max: 10 * 60 * 1000 },
+);
+const uploadMaxBytes = parseInteger(
+  process.env.PLATFORM_BACKUP_UPLOAD_MAX_BYTES,
+  5 * 1024 * 1024 * 1024,
+  { min: 1024 * 1024, max: 5 * 1024 * 1024 * 1024 },
+);
 
 function secureTokenEqual(actual, expected) {
   const left = Buffer.from(String(actual || ''));
@@ -142,6 +152,10 @@ async function route(req, res) {
   }
 
   if (req.method === 'POST' && url.pathname === '/backups/upload') {
+    const contentLength = Number.parseInt(req.headers['content-length'] || '', 10);
+    if (Number.isFinite(contentLength) && contentLength > uploadMaxBytes) {
+      throw new BackupOperationError(413, 'BACKUP_UPLOAD_TOO_LARGE', 'The backup archive exceeds the configured upload limit.');
+    }
     const result = await manager.uploadBackup({
       filename: url.searchParams.get('filename') || '',
       stream: req,
@@ -192,6 +206,7 @@ const server = http.createServer((req, res) => {
     writeJson(res, 500, { error: '备份执行器内部错误。', code: 'BACKUP_RUNNER_INTERNAL_ERROR' });
   });
 });
+server.requestTimeout = transferTimeoutMs;
 
 server.listen(port, host, () => {
   console.log(`MY backup runner listening on http://${host}:${port}`);

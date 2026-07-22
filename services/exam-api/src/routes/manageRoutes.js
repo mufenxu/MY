@@ -5,6 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const manageController = require('../controllers/manageController');
+const questionInsightsController = require('../controllers/questionInsightsController');
 const { auditMutations } = require('../middleware/auditLog');
 const authenticateAdmin = require('../middleware/auth');
 const requireCsrfToken = require('../middleware/csrf');
@@ -18,6 +19,22 @@ router.use(apiLimiter);
 router.use(auditMutations({ actorType: 'admin' }));
 
 router.get('/questions', validate(mv.paginationQuery), manageController.getAllQuestions);
+router.get('/question-quality', validate(mv.questionQuality), questionInsightsController.getManagedQuality);
+router.get(
+    '/questions/:id/versions',
+    validate(mv.questionVersionList),
+    questionInsightsController.listManagedVersions,
+);
+router.get(
+    '/questions/:id/versions/:revision',
+    validate(mv.questionVersionParam),
+    questionInsightsController.getManagedVersion,
+);
+router.post(
+    '/questions/:id/versions/:revision/restore',
+    validate(mv.questionVersionParam),
+    questionInsightsController.restoreManagedVersion,
+);
 router.get('/questions/:id/ai-analysis', validate(mv.idParam), manageController.getQuestionAiAnalysis);
 router.patch(
     '/questions/:id/ai-analysis/adopt',

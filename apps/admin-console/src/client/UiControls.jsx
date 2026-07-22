@@ -190,6 +190,63 @@ export function SelectControl({
   );
 }
 
+export function SegmentedTabs({
+  items,
+  value,
+  onChange,
+  ariaLabel,
+  className = 'ops-segmented',
+  idPrefix = 'segmented-tab',
+  panelId,
+}) {
+  const tabRefs = useRef(new Map());
+
+  function handleKeyDown(event, index) {
+    const enabledItems = items.filter((item) => !item.disabled);
+    if (!enabledItems.length) return;
+    const currentEnabledIndex = enabledItems.findIndex((item) => item.id === items[index].id);
+    let nextEnabledIndex = null;
+    if (event.key === 'ArrowRight') nextEnabledIndex = (currentEnabledIndex + 1) % enabledItems.length;
+    else if (event.key === 'ArrowLeft') nextEnabledIndex = (currentEnabledIndex - 1 + enabledItems.length) % enabledItems.length;
+    else if (event.key === 'Home') nextEnabledIndex = 0;
+    else if (event.key === 'End') nextEnabledIndex = enabledItems.length - 1;
+    if (nextEnabledIndex === null) return;
+    event.preventDefault();
+    const nextItem = enabledItems[nextEnabledIndex];
+    onChange(nextItem.id);
+    window.requestAnimationFrame(() => tabRefs.current.get(nextItem.id)?.focus());
+  }
+
+  return (
+    <div className={className} role="tablist" aria-label={ariaLabel}>
+      {items.map((item, index) => {
+        const active = item.id === value;
+        return (
+          <button
+            ref={(node) => {
+              if (node) tabRefs.current.set(item.id, node);
+              else tabRefs.current.delete(item.id);
+            }}
+            id={`${idPrefix}-${item.id}`}
+            key={item.id}
+            className={active ? 'active' : ''}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-controls={panelId}
+            tabIndex={active ? 0 : -1}
+            disabled={item.disabled}
+            onClick={() => onChange(item.id)}
+            onKeyDown={(event) => handleKeyDown(event, index)}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ConfirmDialog({
   open,
   title,

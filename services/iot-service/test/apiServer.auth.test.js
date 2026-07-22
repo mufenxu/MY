@@ -103,6 +103,14 @@ async function startTestServer(options = {}) {
         };
       }
 
+      if (token === 'sk_history') {
+        return {
+          keyId: 'key_history',
+          name: 'history key',
+          scopes: ['history:read']
+        };
+      }
+
       return null;
     },
     recordApiKeyUsage: async (keyId) => {
@@ -257,6 +265,41 @@ test('api keys are scoped and cannot access console-only endpoints', async (t) =
     }
   });
   assert.equal(configResponse.status, 403);
+});
+
+test('device insights require history scope and return bounded aggregate diagnostics', async (t) => {
+  const historyCalls = [];
+  const now = Date.now();
+  const { baseUrl, server } = await startTestServer({
+    dbOverrides: {
+      getSensorHistory: async (...args) => {
+        historyCalls.push(args);
+        return [
+          { created_at: now - 120000, temp: 21, hum: 42 },
+          { created_at: now - 60000, temp: 23, hum: 46 }
+        ];
+      }
+    }
+  });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const deniedResponse = await fetch(`${baseUrl}/api/devices/device_1/insights?range=1h`, {
+    headers: { Authorization: 'Bearer sk_read' }
+  });
+  assert.equal(deniedResponse.status, 403);
+
+  const response = await fetch(`${baseUrl}/api/devices/device_1/insights?range=1h`, {
+    headers: { Authorization: 'Bearer sk_history' }
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.range, '1h');
+  assert.equal(body.device.id, 'device_1');
+  assert.equal(body.summary.samples, 2);
+  assert.equal(body.summary.temperature.average, 22);
+  assert.ok(body.series.length <= 2);
+  assert.deepEqual(historyCalls, [['device_1', 500, '1h']]);
 });
 
 test('valid platform SSO takes precedence over a stale restricted bearer key', async (t) => {

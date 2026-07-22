@@ -4,6 +4,7 @@ const CourseCategory = require('../models/CourseCategory');
 const mxPlatform = require('../utils/mxPlatform');
 const logger = require('../utils/logger');
 const { encrypt, decrypt } = require('../utils/crypto');
+const { parsePagination } = require('../utils/pagination');
 
 // 转义正则表达式特殊字符，防止 ReDoS 攻击
 function escapeRegex(string) {
@@ -24,22 +25,21 @@ function generateTradeNo() {
  */
 exports.getAllOrdersForAdmin = async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 15;
+        const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 15, maxLimit: 100 });
         const { tradeNo, status, account, school } = req.query;
 
         // 构建查询条件（使用 escapeRegex 防止 ReDoS）
         let query = {};
-        if (tradeNo) query.tradeNo = new RegExp(escapeRegex(tradeNo), 'i');
+        if (tradeNo) query.tradeNo = new RegExp(`^${escapeRegex(String(tradeNo).slice(0, 80))}`, 'i');
         if (status) query.status = status;
-        if (account) query.account = new RegExp(escapeRegex(account), 'i');
-        if (school) query.school = new RegExp(escapeRegex(school), 'i');
+        if (account) query.account = new RegExp(`^${escapeRegex(String(account).slice(0, 80))}`, 'i');
+        if (school) query.school = new RegExp(`^${escapeRegex(String(school).slice(0, 80))}`, 'i');
 
         // 并行执行查询 + 计数
         const [rawOrders, total] = await Promise.all([
             CourseOrder.find(query)
                 .sort({ createTime: -1 })
-                .skip((page - 1) * limit)
+                .skip(skip)
                 .limit(limit)
                 .populate('userId', 'nickName avatarUrl')
                 .lean(),
@@ -66,8 +66,11 @@ exports.adminRefreshProgress = async (req, res) => {
     try {
         const { orderIds } = req.body;
         
-        if (!orderIds || orderIds.length === 0) {
+        if (!Array.isArray(orderIds) || orderIds.length === 0) {
             return res.json({ code: 400, message: "请选择需要刷新的订单" });
+        }
+        if (orderIds.length > 100) {
+            return res.status(400).json({ code: 400, message: '单次最多刷新 100 条订单' });
         }
 
         // 并发刷新：使用 Promise.allSettled 并行处理，限制并发数

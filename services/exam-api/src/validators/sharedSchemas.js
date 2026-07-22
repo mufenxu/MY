@@ -42,6 +42,7 @@ const updateCategoryFields = {
 
 const batchQuestion = Joi.object({
     _id: objectId.optional(),
+    revision: Joi.number().integer().min(1).optional(),
     type: Joi.string().valid('single', 'multiple', 'judge', 'fill').required(),
     content: Joi.string().required(),
     options: Joi.array().items(Joi.object({
@@ -52,8 +53,14 @@ const batchQuestion = Joi.object({
     analysis: Joi.string().allow('').optional(),
 });
 
+const batchQuestionBaseline = Joi.object({
+    _id: objectId.required(),
+    revision: Joi.number().integer().min(1).required(),
+});
+
 const batchUpdateQuestionFields = {
-    questions: Joi.array().items(batchQuestion).required(),
+    questions: Joi.array().items(batchQuestion).max(10000).required(),
+    baseQuestions: Joi.array().items(batchQuestionBaseline).max(10000).required(),
 };
 
 const generateAiAnalysisFields = {

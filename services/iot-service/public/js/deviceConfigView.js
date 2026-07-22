@@ -308,13 +308,20 @@
         nameInput.value = '';
       }
       if (modal) {
+        modal.__returnFocusElement = document.activeElement;
         modal.classList.remove('hidden');
+        window.setTimeout(() => (idInput || modal.querySelector('.modal-content'))?.focus(), 0);
       }
     }
 
     function closeAddModal() {
       if (modal) {
+        const returnFocus = modal.__returnFocusElement;
         modal.classList.add('hidden');
+        delete modal.__returnFocusElement;
+        if (returnFocus && returnFocus.isConnected) {
+          returnFocus.focus();
+        }
       }
     }
 

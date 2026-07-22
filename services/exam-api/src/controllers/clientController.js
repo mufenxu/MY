@@ -17,6 +17,7 @@ const Feedback = require('../models/Feedback');
 const config = require('../config');
 const { isCorrect, asyncHandler } = require('../utils/exam');
 const {
+    collectMatchingPage,
     normalizePinyinKeyword,
     isPinyinInitialKeyword,
     containsPinyinInitials,
@@ -478,49 +479,58 @@ async function searchQuestionList({
         };
 
         if (usePinyinInitial) {
-            const PINYIN_CANDIDATE_LIMIT = 2000;
-            const initialsCache = new Map();
-            const candidates = await Question.find(questionBaseQuery)
-                .sort({ updateTime: -1, _id: -1 })
-                .limit(PINYIN_CANDIDATE_LIMIT)
-                .populate(populateOpts)
-                .lean();
-
-            const matched = candidates
-                .map((item) => ({
-                    item,
-                    matchFields: getMatchFields(
-                        item,
-                        textRegex,
-                        normalizedPinyinKeyword,
-                        usePinyinInitial,
-                        initialsCache,
-                        actualSearchScope,
-                    ),
-                    pinyinHighlightRanges: getPinyinHighlightRanges(
-                        item,
-                        normalizedPinyinKeyword,
-                        usePinyinInitial,
-                        initialsCache,
-                        actualSearchScope,
-                    ),
-                }))
-                .filter((entry) => entry.matchFields.length > 0);
-
-            const total = matched.length;
             const startIndex = (actualPage - 1) * actualLimit;
-            const endIndex = startIndex + actualLimit;
+            const cursor = Question.find(questionBaseQuery)
+                .select('_id content analysis options')
+                .sort({ updateTime: -1, _id: -1 })
+                .lean()
+                .cursor();
+            const { pageItems, total } = await collectMatchingPage(cursor, {
+                startIndex,
+                limit: actualLimit,
+                getMatch: (item) => getMatchFields(
+                    item,
+                    textRegex,
+                    normalizedPinyinKeyword,
+                    usePinyinInitial,
+                    null,
+                    actualSearchScope,
+                ),
+            });
+            const pageIds = pageItems.map(({ item }) => item._id);
+            const populatedItems = pageIds.length > 0
+                ? await Question.find({
+                    $and: [questionBaseQuery, { _id: { $in: pageIds } }],
+                })
+                    .populate(populateOpts)
+                    .lean()
+                : [];
+            const populatedById = new Map(populatedItems.map((item) => [String(item._id), item]));
+            const list = pageItems
+                .map(({ item, match }) => {
+                    const populated = populatedById.get(String(item._id));
+                    if (!populated) return null;
+                    const initialsCache = new Map();
+                    return toSearchItem(
+                        populated,
+                        match,
+                        getPinyinHighlightRanges(
+                            populated,
+                            normalizedPinyinKeyword,
+                            usePinyinInitial,
+                            initialsCache,
+                            actualSearchScope,
+                        ),
+                    );
+                })
+                .filter(Boolean);
 
             return {
-                list: matched.slice(startIndex, endIndex).map((entry) => toSearchItem(
-                    entry.item,
-                    entry.matchFields,
-                    entry.pinyinHighlightRanges,
-                )),
+                list,
                 total,
                 page: actualPage,
                 limit: actualLimit,
-                hasMore: endIndex < total,
+                hasMore: startIndex + pageItems.length < total,
             };
         }
 

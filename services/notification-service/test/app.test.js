@@ -168,6 +168,8 @@ test('management endpoints require an admin-console service signature', async ()
   assert.equal(response.status, 200);
   assert.equal(response.body.wecom.agentId, 10001);
   assert.equal(response.body.wecom.secret, undefined);
+  assert.equal(response.body.queue.lagMs, 0);
+  assert.equal(response.body.queue.deadLetter, 0);
 }));
 
 test('management test send requires one explicit user and records a sanitized delivery', async () => {

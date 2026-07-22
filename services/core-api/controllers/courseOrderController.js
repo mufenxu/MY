@@ -8,6 +8,7 @@ const logger = require('../utils/logger');
 const { encrypt, decrypt } = require('../utils/crypto');
 const { escapeRegex } = require('../utils/helpers');
 const courseOrderSubmissionWorker = require('../services/courseOrderSubmissionWorker');
+const { parsePagination } = require('../utils/pagination');
 
 // 全局记录正在进行的查课账号（同分类同账号防止并发多次向第三方发起请求）
 const activeQueries = new Set();
@@ -339,15 +340,14 @@ exports.getOrderBatchStatus = async (req, res) => {
 exports.getMyOrders = async (req, res) => {
     try {
         const userId = req.user._id;
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const keyword = req.query.keyword ? req.query.keyword.trim() : '';
+        const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 10, maxLimit: 50 });
+        const keyword = req.query.keyword ? req.query.keyword.trim().slice(0, 80) : '';
         const searchField = req.query.searchField ? req.query.searchField.trim() : '';
 
         const match = { userId, isHidden: { $ne: true }, account: { $ne: '' } };
         if (keyword) {
             const safeKeyword = escapeRegex(keyword);
-            const regex = new RegExp(safeKeyword, 'i');
+            const regex = new RegExp(`^${safeKeyword}`, 'i');
 
             // 支持精确字段搜索：当 searchField 指定时，只搜索对应字段
             const allowedSearchFields = ['account', 'platformName', 'courseName', 'tradeNo'];
@@ -357,7 +357,7 @@ exports.getMyOrders = async (req, res) => {
                 // 通用搜索模式：搜索多个字段
                 const matchedCategories = await CourseCategory.find({
                     $or: [{ name: regex }, { title: regex }, { noun: regex }]
-                }).lean();
+                }).select('noun').limit(100).lean();
                 const matchedNouns = matchedCategories.map(c => c.noun);
 
                 match.$or = [
@@ -378,7 +378,7 @@ exports.getMyOrders = async (req, res) => {
                 .select('tradeNo platformCode platformId platformName school account courseId courseName duration status statusText progress remarks price isMiaoshua isManual createTime updateTime remoteOrderId remoteOid')
                 .lean()
                 .sort({ createTime: -1 })
-                .skip((page - 1) * limit)
+                .skip(skip)
                 .limit(limit),
             CourseOrder.countDocuments(match)
         ]);

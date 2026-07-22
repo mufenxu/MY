@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Row, Col, Switch, Typography, Spin, Tag, Space, Button, message, Statistic, Slider, Radio, Divider, Tooltip } from 'antd';
+import { Card, Row, Col, Switch, Typography, Spin, Tag, Space, Button, Statistic, Slider, Radio, Divider, Tooltip } from 'antd';
 import {
     ThunderboltOutlined,
     ReloadOutlined,
@@ -15,6 +15,7 @@ import {
     ToolOutlined,
     DashboardFilled
 } from '@ant-design/icons';
+import { message } from '../utils/feedback';
 import api from '../utils/api';
 
 const { Title, Text } = Typography;

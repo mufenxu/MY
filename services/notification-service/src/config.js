@@ -74,6 +74,8 @@ const config = {
   historyRetentionDays: parseBoundedInteger(process.env.NOTIFY_HISTORY_RETENTION_DAYS, 'NOTIFY_HISTORY_RETENTION_DAYS', 30, 1, 365),
   orchestrationIntervalMs: parseBoundedInteger(process.env.NOTIFY_ORCHESTRATION_INTERVAL_MS, 'NOTIFY_ORCHESTRATION_INTERVAL_MS', 15000, 1000, 300000),
   orchestrationBatchSize: parseBoundedInteger(process.env.NOTIFY_ORCHESTRATION_BATCH_SIZE, 'NOTIFY_ORCHESTRATION_BATCH_SIZE', 20, 1, 100),
+  orchestrationConcurrency: parseBoundedInteger(process.env.NOTIFY_ORCHESTRATION_CONCURRENCY, 'NOTIFY_ORCHESTRATION_CONCURRENCY', 4, 3, 5),
+  orchestrationLeaseMs: parseBoundedInteger(process.env.NOTIFY_ORCHESTRATION_LEASE_MS, 'NOTIFY_ORCHESTRATION_LEASE_MS', 120000, 30000, 900000),
   wecom: {
     corpId: ensureEnv("WECOM_CORP_ID"),
     agentId: parseInteger(ensureEnv("WECOM_AGENT_ID"), "WECOM_AGENT_ID"),

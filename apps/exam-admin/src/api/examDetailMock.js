@@ -96,6 +96,52 @@ let mockQuestions = [
     },
 ];
 
+mockQuestions = mockQuestions.map((question) => ({
+    ...question,
+    revision: 2,
+}));
+
+const createMockSnapshot = (question, overrides = {}) => ({
+    type: question.type,
+    content: question.content,
+    options: clone(question.options || []),
+    answer: clone(question.answer || []),
+    analysis: question.analysis || '',
+    analysisSource: question.analysisSource || 'manual',
+    categoryId: mockExamInfo._id,
+    sortOrder: 0,
+    ...overrides,
+});
+
+const createMockVersions = (question) => ([
+    {
+        questionId: question._id,
+        revision: Number(question.revision) || 2,
+        scopeType: 'admin',
+        snapshot: createMockSnapshot(question),
+        action: 'update',
+        sourceRevision: null,
+        changedFields: ['analysis'],
+        actorType: 'admin',
+        actorId: 'ui-preview-admin',
+        actorName: 'UI 预览管理员',
+        createTime: new Date().toISOString(),
+    },
+    {
+        questionId: question._id,
+        revision: 1,
+        scopeType: 'admin',
+        snapshot: createMockSnapshot(question, { analysis: '' }),
+        action: 'baseline',
+        sourceRevision: null,
+        changedFields: [],
+        actorType: 'system',
+        actorId: '',
+        actorName: '系统基线',
+        createTime: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    },
+]);
+
 export function createMockExamDetailApi() {
     return {
         loadExamInfo: () => ok(mockExamInfo),
@@ -103,6 +149,40 @@ export function createMockExamDetailApi() {
             list: mockQuestions,
             total: mockQuestions.length,
         }),
+        listQuestionVersions: (questionId, { page = 1, limit = 20 } = {}) => {
+            const question = mockQuestions.find((item) => item._id === questionId) || mockQuestions[0];
+            const versions = createMockVersions(question);
+            return ok({
+                list: versions,
+                total: versions.length,
+                page,
+                limit,
+                currentRevision: Number(question.revision) || 1,
+                historyStarted: true,
+            });
+        },
+        getQuestionVersion: (questionId, revision) => {
+            const question = mockQuestions.find((item) => item._id === questionId) || mockQuestions[0];
+            const version = createMockVersions(question)
+                .find((item) => Number(item.revision) === Number(revision));
+            return ok(version || createMockVersions(question)[0]);
+        },
+        restoreQuestionVersion: (questionId, revision) => {
+            const questionIndex = mockQuestions.findIndex((item) => item._id === questionId);
+            const index = questionIndex >= 0 ? questionIndex : 0;
+            const question = mockQuestions[index];
+            const version = createMockVersions(question)
+                .find((item) => Number(item.revision) === Number(revision));
+            if (version) {
+                mockQuestions[index] = {
+                    ...question,
+                    ...clone(version.snapshot),
+                    _id: question._id,
+                    revision: (Number(question.revision) || 1) + 1,
+                };
+            }
+            return ok(mockQuestions[index], `预览模式已回滚到版本 ${revision}`);
+        },
         getAiAnalysis: (questionId) => {
             const question = mockQuestions.find((item) => item._id === questionId) || mockQuestions[0];
             return ok({
@@ -123,9 +203,13 @@ export function createMockExamDetailApi() {
             mockExamInfo = { ...mockExamInfo, ...payload };
             return ok(mockExamInfo, '预览模式已更新试卷信息');
         },
-        saveQuestions: (questions) => {
+        saveQuestions: (questions, baseQuestions) => {
+            void baseQuestions;
             mockQuestions = (questions || []).map((question, index) => ({
                 _id: question._id || `q-preview-${index + 1}`,
+                revision: question._id
+                    ? (Number(mockQuestions.find((item) => item._id === question._id)?.revision) || 1) + 1
+                    : 1,
                 type: question.type,
                 content: question.content,
                 options: question.options || [],

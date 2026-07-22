@@ -96,3 +96,79 @@ test('API clients keep tokens hashed and support rotation, audit and revocation'
   assert.equal(await store.verifyApiToken(rotated.token), null);
   assert.equal((await store.listApiClients())[0].status, 'revoked');
 });
+
+test('notification job deduplication is atomic and scoped by caller, client and target', async () => {
+  const store = createMemoryNotificationStore({ encryptionKey });
+  const base = {
+    caller: 'platform-api',
+    apiClientId: 'client-a',
+    targetType: 'user',
+    targetValue: 'alice',
+    dedupeKey: 'daily-reminder',
+    dedupeWindowMs: 300000,
+    maxAttempts: 4,
+    payload: { touser: 'alice', msg_type: 'text', data: { content: 'hello' } },
+  };
+
+  const concurrent = await Promise.all(Array.from({ length: 20 }, () => store.createNotificationJob(base)));
+  assert.equal(concurrent.filter((result) => !result.deduplicated).length, 1);
+  assert.equal(new Set(concurrent.map((result) => result.job.id)).size, 1);
+
+  const otherCaller = await store.createNotificationJob({ ...base, caller: 'exam-api' });
+  const otherClient = await store.createNotificationJob({ ...base, apiClientId: 'client-b' });
+  const otherTarget = await store.createNotificationJob({
+    ...base,
+    targetValue: 'bob',
+    payload: { touser: 'bob', msg_type: 'text', data: { content: 'hello' } },
+  });
+  assert.equal(otherCaller.deduplicated, false);
+  assert.equal(otherClient.deduplicated, false);
+  assert.equal(otherTarget.deduplicated, false);
+  assert.equal((await store.listNotificationJobs()).total, 4);
+});
+
+test('expired notification job leases are recovered and reject stale worker completion', async () => {
+  let current = new Date('2026-07-22T00:00:00.000Z');
+  const store = createMemoryNotificationStore({ encryptionKey, now: () => new Date(current) });
+  const created = await store.createNotificationJob({
+    caller: 'core-api',
+    targetType: 'user',
+    targetValue: 'alice',
+    maxAttempts: 2,
+    payload: { touser: 'alice', msg_type: 'text', data: { content: 'lease' } },
+  });
+
+  const first = (await store.claimDueNotificationJobs(1, { workerId: 'worker-a', leaseMs: 1000 }))[0];
+  assert.equal(first.attempts, 1);
+  assert.equal((await store.claimDueNotificationJobs(1, { workerId: 'worker-b', leaseMs: 1000 })).length, 0);
+
+  current = new Date('2026-07-22T00:00:01.001Z');
+  const recovered = (await store.claimDueNotificationJobs(1, { workerId: 'worker-b', leaseMs: 1000 }))[0];
+  assert.equal(recovered.id, created.job.id);
+  assert.equal(recovered.attempts, 2);
+  assert.notEqual(recovered.leaseId, first.leaseId);
+  assert.equal(await store.updateNotificationJob(first.id, { status: 'sent' }, { leaseId: first.leaseId }), null);
+  assert.equal((await store.updateNotificationJob(recovered.id, { status: 'sent' }, { leaseId: recovered.leaseId })).status, 'sent');
+});
+
+test('exhausted expired leases become dead-letter terminal jobs and expire by TTL', async () => {
+  let current = new Date('2026-07-22T00:00:00.000Z');
+  const store = createMemoryNotificationStore({ encryptionKey, retentionDays: 1, now: () => new Date(current) });
+  await store.createNotificationJob({
+    caller: 'core-api',
+    targetType: 'user',
+    targetValue: 'alice',
+    maxAttempts: 1,
+    payload: { touser: 'alice', msg_type: 'text', data: { content: 'lease' } },
+  });
+  await store.claimDueNotificationJobs(1, { workerId: 'worker-a', leaseMs: 1000 });
+
+  current = new Date('2026-07-22T00:00:01.001Z');
+  assert.equal((await store.claimDueNotificationJobs(1, { workerId: 'worker-b', leaseMs: 1000 })).length, 0);
+  const queue = await store.getNotificationQueueOverview();
+  assert.equal(queue.deadLetter, 1);
+  assert.equal((await store.listNotificationJobs({ status: 'failed' })).total, 1);
+
+  current = new Date('2026-07-23T00:00:01.002Z');
+  assert.equal((await store.listNotificationJobs()).total, 0);
+});

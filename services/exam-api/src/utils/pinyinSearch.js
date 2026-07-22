@@ -129,7 +129,27 @@ function getPinyinInitialMatchRanges(text, keyword, cache) {
     return ranges;
 }
 
+async function collectMatchingPage(items, { startIndex = 0, limit = 20, getMatch }) {
+    const pageItems = [];
+    let total = 0;
+
+    for await (const item of items) {
+        const match = await getMatch(item);
+        if (!match || (Array.isArray(match) && match.length === 0)) {
+            continue;
+        }
+
+        if (total >= startIndex && pageItems.length < limit) {
+            pageItems.push({ item, match });
+        }
+        total += 1;
+    }
+
+    return { pageItems, total };
+}
+
 module.exports = {
+    collectMatchingPage,
     normalizePinyinKeyword,
     isPinyinInitialKeyword,
     containsPinyinInitials,

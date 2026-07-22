@@ -12,6 +12,7 @@ const Admin = require('./models/Admin');
 const MajorCategory = require('./models/MajorCategory');
 const Category = require('./models/Category');
 const Question = require('./models/Question');
+const QuestionVersion = require('./models/QuestionVersion');
 const ExamProgress = require('./models/ExamProgress');
 const ExamResult = require('./models/ExamResult');
 const { DEMO_SCOPE, buildScopeAssignment } = require('./utils/libraryScope');
@@ -173,7 +174,7 @@ async function initializeExamRuntime() {
     }
 }
 
-async function initializeCriticalIndexes(models = [Admin, ExamProgress, ExamResult]) {
+async function initializeCriticalIndexes(models = [Admin, ExamProgress, ExamResult, QuestionVersion]) {
     await Promise.all(models.map((Model) => Model.init()));
 }
 

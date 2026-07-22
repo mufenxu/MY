@@ -110,3 +110,13 @@ test('production release writes require callback and image allowlist controls', 
   assert.equal(configured.releaseActionsEnabled, true);
   assert.equal(configured.releaseAllowedImageRepository, 'registry.example.com/team/platform');
 });
+
+test('backup transfer limits cannot exceed the deployed Nginx contract', () => {
+  const config = loadConfig({
+    NODE_ENV: 'development',
+    PLATFORM_BACKUP_TRANSFER_TIMEOUT_MS: String(6 * 60 * 60 * 1000),
+    PLATFORM_BACKUP_UPLOAD_MAX_BYTES: String(50 * 1024 * 1024 * 1024),
+  });
+  assert.equal(config.backupTransferTimeoutMs, 10 * 60 * 1000);
+  assert.equal(config.backupUploadMaxBytes, 5 * 1024 * 1024 * 1024);
+});

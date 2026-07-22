@@ -326,7 +326,7 @@
                                     <div class="option-input-wrapper">
                                         <el-input v-model="opt.value" type="textarea"
                                             :readonly="!canEdit"
-                                            :autosize="{ minRows: 1, maxRows: 4 }" placeholder="选项内容"
+                                            :rows="2" placeholder="选项内容"
                                             resize="none" @input="markQuestionChanged"></el-input>
                                     </div>
                                     <el-button v-if="canEdit && questions[selectedIndex].type !== 'judge'"
@@ -357,6 +357,15 @@
                                 <span>解析</span>
                                 <div class="prop-section-actions">
                                     <span class="prop-section-tip">可选</span>
+                                    <el-button
+                                        v-if="isPersistedQuestion(questions[selectedIndex])"
+                                        size="small"
+                                        plain
+                                        @click="openQuestionVersionDialog(questions[selectedIndex], selectedIndex)"
+                                    >
+                                        <el-icon><Document /></el-icon>
+                                        版本记录
+                                    </el-button>
                                     <el-button
                                         v-if="canEdit && isPersistedQuestion(questions[selectedIndex])"
                                         size="small"
@@ -560,7 +569,7 @@
                                     <el-input
                                         v-model="opt.value"
                                         type="textarea"
-                                        :autosize="{ minRows: 1, maxRows: 4 }"
+                                        :rows="2"
                                         :readonly="!canEdit"
                                         placeholder="选项内容"
                                         resize="none"
@@ -606,6 +615,15 @@
                                 <span>解析</span>
                                 <div class="mobile-section-actions">
                                     <small>可选</small>
+                                    <el-button
+                                        v-if="isPersistedQuestion(questions[selectedIndex])"
+                                        size="small"
+                                        plain
+                                        @click="openQuestionVersionDialog(questions[selectedIndex], selectedIndex)"
+                                    >
+                                        <el-icon><Document /></el-icon>
+                                        版本记录
+                                    </el-button>
                                     <el-button
                                         v-if="canEdit && isPersistedQuestion(questions[selectedIndex])"
                                         size="small"
@@ -1169,6 +1187,16 @@
                 </div>
             </div>
         </el-dialog>
+
+        <QuestionVersionDialog
+            v-model:visible="questionVersionDialogVisible"
+            :api="examApi"
+            :can-edit="canEdit"
+            :dirty="isDirty"
+            :question="questionVersionTarget"
+            :question-number="questionVersionNumber"
+            @restored="handleQuestionVersionRestored"
+        />
     </div>
 </template>
 
@@ -1181,6 +1209,7 @@ import { createExamDetailApi } from '@/api/examDetail';
 import { createMockExamDetailApi } from '@/api/examDetailMock';
 import { isUiPreviewMode } from '@/utils/uiPreview';
 import { IS_PLATFORM_SSO } from '@/utils/runtime';
+import QuestionVersionDialog from '@/components/QuestionVersionDialog.vue';
 import { useAiAnalysis } from '@/features/exam-editor/useAiAnalysis';
 import { useBatchImport } from '@/features/exam-editor/useBatchImport';
 import { useExamDetailData } from '@/features/exam-editor/useExamDetailData';
@@ -1224,6 +1253,9 @@ const questions = ref([]);
 const selectedIndex = ref(-1);
 const mobilePropVisible = ref(false);
 const mobileAddVisible = ref(false);
+const questionVersionDialogVisible = ref(false);
+const questionVersionTarget = ref(null);
+const questionVersionNumber = ref(0);
 
 const isResponsiveEditor = () => typeof window !== 'undefined' && window.innerWidth <= RESPONSIVE_EDITOR_BREAKPOINT;
 
@@ -1353,6 +1385,35 @@ const getDashboardReturnRoute = () => {
         query.majorCategoryId = returnMajorCategoryId;
     }
 
+    if (returnMenu === 'question-quality') {
+        const readQueryValue = (value) => String(Array.isArray(value) ? (value[0] || '') : (value || ''));
+        const allowedScopes = new Set(['admin', 'demo', 'personal']);
+        const allowedIssues = new Set([
+            'missing_analysis',
+            'missing_answer',
+            'insufficient_options',
+            'duplicate_option_label',
+            'empty_option',
+            'answer_not_in_options',
+            'single_answer_count',
+            'duplicate_content',
+            'stale_question',
+        ]);
+        const parseBoundedInteger = (value, min, max) => {
+            const number = Number.parseInt(readQueryValue(value), 10);
+            return Number.isInteger(number) && number >= min && number <= max ? number : null;
+        };
+        const qualityScopeType = readQueryValue(route.query.returnQualityScopeType);
+        const qualityIssue = readQueryValue(route.query.returnQualityIssue);
+        const qualityPage = parseBoundedInteger(route.query.returnQualityPage, 1, 1000);
+        const qualityLimit = parseBoundedInteger(route.query.returnQualityLimit, 1, 100);
+
+        if (allowedScopes.has(qualityScopeType)) query.qualityScopeType = qualityScopeType;
+        if (allowedIssues.has(qualityIssue)) query.qualityIssue = qualityIssue;
+        if (qualityPage) query.qualityPage = qualityPage;
+        if (qualityLimit) query.qualityLimit = qualityLimit;
+    }
+
     return { path: '/', query };
 };
 
@@ -1383,6 +1444,42 @@ const jumpToQuestion = (index) => {
     if (isResponsiveEditor()) {
         mobilePropVisible.value = true;
     }
+};
+
+const focusQuestionById = (questionId, { notifyMissing = false } = {}) => {
+    const index = questions.value.findIndex((question) => String(question._id) === String(questionId || ''));
+    if (index < 0) {
+        if (notifyMissing) ElMessage.warning('目标题目不存在或已移出当前题库');
+        return -1;
+    }
+
+    jumpToQuestion(index);
+    return index;
+};
+
+const openQuestionVersionDialog = (question, index) => {
+    if (!isPersistedQuestion(question)) return;
+    if (isDirty.value) {
+        ElMessage.warning('当前有未保存修改，请先保存后再查看版本记录');
+        return;
+    }
+
+    questionVersionTarget.value = question;
+    questionVersionNumber.value = Number(index) + 1;
+    questionVersionDialogVisible.value = true;
+};
+
+const handleQuestionVersionRestored = async ({ questionId } = {}) => {
+    await loadQuestions();
+    const index = focusQuestionById(questionId);
+    if (index < 0) {
+        questionVersionDialogVisible.value = false;
+        ElMessage.info('题目已回滚，但已不在当前题库中');
+        return;
+    }
+
+    questionVersionTarget.value = questions.value[index];
+    questionVersionNumber.value = index + 1;
 };
 
 const jumpToFirstInvalidQuestion = () => {
@@ -1486,6 +1583,11 @@ onMounted(async () => {
     }
 
     await Promise.all([loadExamInfo(), loadQuestions()]);
+
+    const targetQuestionId = String(route.query.questionId || '');
+    if (targetQuestionId) {
+        focusQuestionById(targetQuestionId, { notifyMissing: true });
+    }
 });
 
 onBeforeUnmount(() => {

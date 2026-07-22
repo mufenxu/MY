@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { Turnstile } from '@marsidev/react-turnstile';
 import {
@@ -56,23 +56,38 @@ import {
 } from './navigation.js';
 import { requestJson } from './api.js';
 import { PLATFORM_BRAND_ICON } from './brand.js';
-import { ConfirmDialog } from './UiControls.jsx';
-import AutomationView from './AutomationView.jsx';
-import NotificationServiceView from './NotificationServiceView.jsx';
-import {
-  ConfigurationView,
-  DiagnosticsView,
-  PublicStatusView,
-  TaskCenterView,
-} from './PlatformControlViews.jsx';
-import {
-  BackupQualityStrip,
-  IncidentsView,
-  MonitoringView,
-  OverviewOperations,
-  ReleasesView,
-  SecurityAuditView,
-} from './OperationsViews.jsx';
+import { ConfirmDialog, SegmentedTabs } from './UiControls.jsx';
+
+const loadAutomationView = () => import('./AutomationView.jsx');
+const loadNotificationView = () => import('./NotificationServiceView.jsx');
+const loadPlatformViews = () => import('./PlatformControlViews.jsx');
+const loadOperationsViews = () => import('./OperationsViews.jsx');
+const lazyNamed = (loader, exportName) => lazy(() => loader().then((module) => ({ default: module[exportName] })));
+
+const AutomationView = lazy(loadAutomationView);
+const NotificationServiceView = lazy(loadNotificationView);
+const ConfigurationView = lazyNamed(loadPlatformViews, 'ConfigurationView');
+const DiagnosticsView = lazyNamed(loadPlatformViews, 'DiagnosticsView');
+const PublicStatusView = lazyNamed(loadPlatformViews, 'PublicStatusView');
+const TaskCenterView = lazyNamed(loadPlatformViews, 'TaskCenterView');
+const BackupQualityStrip = lazyNamed(loadOperationsViews, 'BackupQualityStrip');
+const IncidentsView = lazyNamed(loadOperationsViews, 'IncidentsView');
+const MonitoringView = lazyNamed(loadOperationsViews, 'MonitoringView');
+const OverviewOperations = lazyNamed(loadOperationsViews, 'OverviewOperations');
+const ReleasesView = lazyNamed(loadOperationsViews, 'ReleasesView');
+const SecurityAuditView = lazyNamed(loadOperationsViews, 'SecurityAuditView');
+
+const VIEW_MODULE_LOADERS = {
+  notification: loadNotificationView,
+  automation: loadAutomationView,
+  monitoring: loadOperationsViews,
+  incidents: loadOperationsViews,
+  releases: loadOperationsViews,
+  security: loadOperationsViews,
+  tasks: loadPlatformViews,
+  configuration: loadPlatformViews,
+  diagnostics: loadPlatformViews,
+};
 
 const NAVIGATION_ICONS = {
   overview: LayoutDashboard,
@@ -111,6 +126,38 @@ const STATE_PRIORITY = {
   unmonitored: 2,
   healthy: 3,
 };
+
+function ViewLoadingFallback() {
+  return (
+    <div className="view-loading large" role="status" aria-live="polite">
+      <LoaderCircle className="spin" size={22} />
+      <span>正在加载功能模块</span>
+    </div>
+  );
+}
+
+class ViewModuleBoundary extends Component {
+  state = { error: null };
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, details) {
+    console.error('Console view failed to load', error, details);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="error-banner view-module-error" role="alert">
+        <CircleAlert size={18} />
+        <span>功能模块加载失败，请检查网络后重新加载。</span>
+        <button type="button" onClick={() => window.location.reload()}>重新加载页面</button>
+      </div>
+    );
+  }
+}
 
 function hasRole(role, required) {
   const levels = { viewer: 1, operator: 2, super_admin: 3 };
@@ -1560,11 +1607,44 @@ function Dashboard({ session, onLogout }) {
   const notificationRef = useRef(null);
   const loadRequestRef = useRef(null);
 
-  useEffect(() => {
+  const navigateToView = useCallback((viewId, { replace = false } = {}) => {
+    const nextView = resolveConsoleView(viewId);
     const url = new URL(window.location.href);
-    if (activeFilter === 'all') url.searchParams.delete('view');
-    else url.searchParams.set('view', activeFilter);
-    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    if (nextView === 'all') url.searchParams.delete('view');
+    else url.searchParams.set('view', nextView);
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    setActiveFilter(nextView);
+    if (nextUrl === currentUrl) return;
+    window.history[replace ? 'replaceState' : 'pushState']({ view: nextView }, '', nextUrl);
+  }, []);
+
+  useEffect(() => {
+    const requestedView = new URLSearchParams(window.location.search).get('view');
+    navigateToView(resolveConsoleView(requestedView), { replace: true });
+    const handlePopState = () => {
+      const nextView = new URLSearchParams(window.location.search).get('view');
+      setActiveFilter(resolveConsoleView(nextView));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [navigateToView]);
+
+  useEffect(() => {
+    const activeLoader = VIEW_MODULE_LOADERS[activeFilter];
+    activeLoader?.();
+    const relatedViews = getNavigationGroup(activeFilter).views.map((view) => view.id);
+    const preloadTargets = activeFilter === 'all'
+      ? ['monitoring', 'incidents', 'tasks']
+      : relatedViews.filter((viewId) => viewId !== activeFilter);
+    const preload = () => preloadTargets.forEach((viewId) => VIEW_MODULE_LOADERS[viewId]?.());
+    const idleId = window.requestIdleCallback
+      ? window.requestIdleCallback(preload, { timeout: 1800 })
+      : window.setTimeout(preload, 600);
+    return () => {
+      if (window.cancelIdleCallback && typeof idleId === 'number') window.cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
+    };
   }, [activeFilter]);
 
   const closeMobileNav = useCallback(() => {
@@ -1773,7 +1853,7 @@ function Dashboard({ session, onLogout }) {
               key={group.id}
               className={active ? 'active' : ''}
               onClick={() => {
-                setActiveFilter(group.defaultView);
+                navigateToView(group.defaultView);
                 closeMobileNav();
               }}
               title={group.label}
@@ -1853,7 +1933,7 @@ function Dashboard({ session, onLogout }) {
                 <div className="notification-popover" role="status">
                   <strong>{operationsSummary?.incidents?.length > 0 ? `${operationsSummary.incidents.length} 项事件需要处理` : '系统运行平稳'}</strong>
                   {(operationsSummary?.incidents || []).slice(0, 3).map((incident) => <span key={incident.id}>{incident.title}</span>)}
-                  <button type="button" onClick={() => { setNotificationOpen(false); setActiveFilter('incidents'); }}>进入事件中心</button>
+                  <button type="button" onClick={() => { setNotificationOpen(false); navigateToView('incidents'); }}>进入事件中心</button>
                 </div>
               )}
             </div>
@@ -1863,20 +1943,15 @@ function Dashboard({ session, onLogout }) {
         <div className="workspace-content">
           {activeNavigationGroup.views.length > 1 && (
             <div className="workspace-section-nav">
-              <div className="workspace-tabs" role="tablist" aria-label={`${activeNavigationGroup.label}功能`}>
-                {activeNavigationGroup.views.map((view) => (
-                  <button
-                    key={view.id}
-                    className={activeFilter === view.id ? 'active' : ''}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeFilter === view.id}
-                    onClick={() => setActiveFilter(view.id)}
-                  >
-                    {view.label}
-                  </button>
-                ))}
-              </div>
+              <SegmentedTabs
+                className="workspace-tabs"
+                ariaLabel={`${activeNavigationGroup.label}功能`}
+                idPrefix="console-workspace-tab"
+                panelId="console-workspace-panel"
+                items={activeNavigationGroup.views.map((view) => ({ id: view.id, label: view.label }))}
+                value={activeFilter}
+                onChange={navigateToView}
+              />
               {activeNavigationGroup.externalAction && (
                 <a href={activeNavigationGroup.externalAction.href} target="_blank" rel="noreferrer">
                   <ExternalLink size={15} />
@@ -1885,6 +1960,13 @@ function Dashboard({ session, onLogout }) {
               )}
             </div>
           )}
+          <div
+            id="console-workspace-panel"
+            role="tabpanel"
+            aria-labelledby={activeNavigationGroup.views.length > 1 ? `console-workspace-tab-${activeFilter}` : undefined}
+            aria-label={activeNavigationGroup.views.length === 1 ? activeNavigationGroup.label : undefined}
+            aria-busy={loading || refreshing}
+          >
           {error && (
             <div className="error-banner" role="alert">
               <CircleAlert size={18} />
@@ -1893,6 +1975,8 @@ function Dashboard({ session, onLogout }) {
             </div>
           )}
 
+          <ViewModuleBoundary key={activeFilter}>
+          <Suspense fallback={<ViewLoadingFallback />}>
           {activeFilter === 'all' && (
             <OverviewView
               services={services}
@@ -1907,15 +1991,15 @@ function Dashboard({ session, onLogout }) {
               launchService={launchService}
               refreshedAt={data?.refreshedAt}
               operationsSummary={operationsSummary}
-              onOpenServices={() => setActiveFilter('miniapp')}
-              onOpenIncidents={() => setActiveFilter('incidents')}
-              onOpenAudit={() => setActiveFilter('security')}
+              onOpenServices={() => navigateToView('miniapp')}
+              onOpenIncidents={() => navigateToView('incidents')}
+              onOpenAudit={() => navigateToView('security')}
             />
           )}
           {activeFilter === 'miniapp' && <ApplicationsView services={services} loading={loading} onLaunch={launchService} />}
           {activeFilter === 'service' && <ServicesView services={services} loading={loading} onLaunch={launchService} />}
           {activeFilter === 'notification' && <NotificationServiceView session={session} />}
-          {activeFilter === 'monitoring' && <MonitoringView services={services} />}
+          {activeFilter === 'monitoring' && <MonitoringView services={services} onNavigate={navigateToView} />}
           {activeFilter === 'incidents' && <IncidentsView session={session} />}
           {activeFilter === 'automation' && (
             <AutomationView
@@ -1929,10 +2013,13 @@ function Dashboard({ session, onLogout }) {
           )}
           {activeFilter === 'backup' && <BackupRecoveryView session={session} />}
           {activeFilter === 'releases' && <ReleasesView session={session} />}
-          {activeFilter === 'tasks' && <TaskCenterView onNavigate={setActiveFilter} />}
+          {activeFilter === 'tasks' && <TaskCenterView onNavigate={navigateToView} />}
           {activeFilter === 'configuration' && <ConfigurationView session={session} />}
           {activeFilter === 'diagnostics' && <DiagnosticsView services={services} session={session} />}
           {activeFilter === 'security' && <SecurityAuditView session={session} onLogout={onLogout} />}
+          </Suspense>
+          </ViewModuleBoundary>
+          </div>
         </div>
       </main>
     </div>
@@ -1979,6 +2066,8 @@ function AuthenticatedApp() {
 }
 
 export default function App() {
-  if (window.location.pathname === '/status') return <PublicStatusView />;
+  if (window.location.pathname === '/status') {
+    return <ViewModuleBoundary><Suspense fallback={<ViewLoadingFallback />}><PublicStatusView /></Suspense></ViewModuleBoundary>;
+  }
   return <AuthenticatedApp />;
 }

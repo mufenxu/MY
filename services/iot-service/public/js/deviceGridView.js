@@ -331,7 +331,12 @@
         historyChartBox.innerHTML = '<p class="muted" style="text-align:center; padding-top:100px;">正在提取 MongoDB 传感器采样...</p>';
       }
       if (historyModal) {
+        historyModal.__returnFocusElement = button;
         historyModal.classList.remove('hidden');
+        window.setTimeout(() => {
+          const closeButton = historyModal.querySelector('.modal-close');
+          (closeButton || historyModal.querySelector('.modal-content'))?.focus();
+        }, 0);
       }
 
       try {

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const consoleController = require('../controllers/consoleController');
+const questionInsightsController = require('../controllers/questionInsightsController');
 const { auditMutations } = require('../middleware/auditLog');
 const authenticateConsole = require('../middleware/consoleAuth');
 const requireCsrfToken = require('../middleware/csrf');
@@ -46,6 +47,22 @@ router.post('/paper-shares/accept', validate(cv.acceptPaperShare), consoleContro
 router.patch('/paper-shares/:id/revoke', validate(cv.idParam), consoleController.revokePaperShare);
 
 router.get('/questions', validate(cv.paginationQuery), consoleController.getAllQuestions);
+router.get('/question-quality', validate(cv.questionQuality), questionInsightsController.getConsoleQuality);
+router.get(
+    '/questions/:id/versions',
+    validate(cv.questionVersionList),
+    questionInsightsController.listConsoleVersions,
+);
+router.get(
+    '/questions/:id/versions/:revision',
+    validate(cv.questionVersionParam),
+    questionInsightsController.getConsoleVersion,
+);
+router.post(
+    '/questions/:id/versions/:revision/restore',
+    validate(cv.questionVersionParam),
+    questionInsightsController.restoreConsoleVersion,
+);
 router.get('/questions/:id/ai-analysis', validate(cv.idParam), consoleController.getQuestionAiAnalysis);
 router.patch(
     '/questions/:id/ai-analysis/adopt',

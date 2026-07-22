@@ -116,6 +116,13 @@ body {
   gap: 14px;
 }
 
+.notify-view-panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .notify-toolbar {
   display: flex;
   min-height: 40px;
@@ -7018,6 +7025,35 @@ input:focus-visible {
   .audit-table > span:nth-child(4),
   .audit-table > span:nth-child(5) {
     display: none;
+  }
+
+  .slo-table {
+    grid-template-columns: minmax(0, 1fr) auto minmax(72px, auto);
+  }
+
+  .slo-table > span:nth-child(3),
+  .slo-table > span:nth-child(4),
+  .slo-table > span:nth-child(6) {
+    display: none;
+  }
+
+  .slo-table > span:nth-child(5) {
+    display: inline-flex;
+  }
+
+  .operational-search-table {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .operational-search-table > span:nth-child(3),
+  .operational-search-table > span:nth-child(4),
+  .operational-search-table > span:nth-child(5) {
+    display: none;
+  }
+
+  .operational-search-table > span:nth-child(6) {
+    display: inline-flex;
+    justify-content: flex-end;
   }
 
   .incident-list-row {

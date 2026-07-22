@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Modal, Spin, QRCode, Button, Typography, message } from 'antd';
+import { Modal, Spin, QRCode, Button, Typography } from 'antd';
 import { CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import { createSequentialPoller } from '../utils/sequentialPoller';
+import { message } from '../utils/feedback';
 
 const { Text } = Typography;
 

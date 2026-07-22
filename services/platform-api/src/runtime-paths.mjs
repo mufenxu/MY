@@ -12,6 +12,8 @@ const runtimeFiles = {
   portalAuthRiskStore: ['PORTAL_AUTH_RISK_STORE_PATH', 'apps/admin-console/src/auth-risk-store.js'],
   portalMongoSessionRegistry: ['PORTAL_MONGO_SESSION_REGISTRY_PATH', 'apps/admin-console/src/mongo-session-registry.js'],
   portalOperationsStore: ['PORTAL_OPERATIONS_STORE_PATH', 'apps/admin-console/src/operations-store.js'],
+  portalReleaseStore: ['PORTAL_RELEASE_STORE_PATH', 'apps/admin-console/src/release-store.js'],
+  portalConfigurationStore: ['PORTAL_CONFIGURATION_STORE_PATH', 'apps/admin-console/src/configuration-store.js'],
   officialWebsiteStatic: ['OFFICIAL_WEBSITE_STATIC_PATH', 'apps/official-website'],
 };
 const localServiceRuntimeNames = new Set(['coreServer', 'coreStatic', 'examServer', 'notifyApp']);

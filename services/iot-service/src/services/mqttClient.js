@@ -27,6 +27,11 @@ class MqttService extends EventEmitter {
     this.onlineCheckTimer = null; // 离线超时扫描定时器
     this.retentionCleanupTimer = null;
     this.retentionCleanupInFlight = false;
+    this.retentionStatus = {
+      lastRunAt: null,
+      lastDeletedCount: 0,
+      lastError: null
+    };
     
     this.db = database;
 
@@ -472,9 +477,16 @@ class MqttService extends EventEmitter {
   }
 
   getStatus() {
+    const retentionDays = getRetentionDays(this.settingsStore.getConfig());
     return deepClone({
       ...this.status,
-      serviceStartedAt: this.startedAt
+      serviceStartedAt: this.startedAt,
+      retention: {
+        configuredDays: retentionDays,
+        cleanupEnabled: retentionDays > 0,
+        cleanupInFlight: this.retentionCleanupInFlight,
+        ...this.retentionStatus
+      }
     });
   }
 
@@ -547,11 +559,16 @@ class MqttService extends EventEmitter {
     this.retentionCleanupInFlight = true;
     try {
       const deletedCount = await this.db.cleanOldData(retentionDays);
+      this.retentionStatus.lastRunAt = Date.now();
+      this.retentionStatus.lastDeletedCount = deletedCount;
+      this.retentionStatus.lastError = null;
       if (deletedCount > 0) {
         console.log(`Data retention cleanup removed ${deletedCount} old rows.`);
       }
       return deletedCount;
     } catch (error) {
+      this.retentionStatus.lastRunAt = Date.now();
+      this.retentionStatus.lastError = error.message;
       console.error('Data retention cleanup failed:', error.message);
       return 0;
     } finally {

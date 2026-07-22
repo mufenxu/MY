@@ -1,6 +1,6 @@
-import React, { Suspense, useState, useEffect, useCallback, useMemo, useTransition } from 'react';
+import React, { Suspense, useState, useEffect, useCallback, useMemo, useRef, useTransition } from 'react';
 import api from '../utils/api';
-import { Layout, Menu, Button, Drawer, Dropdown, Breadcrumb, Tooltip, Spin, message } from 'antd';
+import { Layout, Menu, Button, Drawer, Dropdown, Breadcrumb, Tooltip, Spin } from 'antd';
 import {
     UserOutlined,
     SettingOutlined,
@@ -24,6 +24,7 @@ import {
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import UserAvatar from './UserAvatar';
 import { IS_PLATFORM_SSO, logoutPlatformSession } from '../utils/runtime';
+import { message } from '../utils/feedback';
 
 const { Sider, Content } = Layout;
 
@@ -256,6 +257,7 @@ const MainLayout = () => {
     const [manualOpenKeys, setManualOpenKeys] = useState([]);
     const [viewportWidth, setViewportWidth] = useState(() => (typeof window === 'undefined' ? 375 : window.innerWidth));
     const [isPending, startTransition] = useTransition();
+    const tabRefs = useRef(new Map());
     
     // 浠庢湰鍦板瓨鍌ㄨ鍙栧綋鍓嶇櫥褰曠敤鎴蜂俊鎭?
     const [currentUser] = useState(() => {
@@ -385,14 +387,37 @@ const MainLayout = () => {
         navigateSoftly(path);
     };
 
-    const handleTabClose = (e, path) => {
-        e.stopPropagation();
+    const handleTabClose = (event, path) => {
+        event.stopPropagation();
         if (path === '/dashboard') return;
         const newTabs = visibleTabs.filter(t => t !== path);
+        const closedIndex = visibleTabs.indexOf(path);
+        const focusPath = newTabs[Math.min(closedIndex, newTabs.length - 1)] || '/dashboard';
         setOpenTabs(newTabs);
         if (currentPath === path) {
-            navigateSoftly(newTabs[newTabs.length - 1] || '/dashboard');
+            navigateSoftly(focusPath);
         }
+        window.requestAnimationFrame(() => tabRefs.current.get(focusPath)?.focus());
+    };
+
+    const handleTabKeyDown = (event, path, index) => {
+        const lastIndex = visibleTabs.length - 1;
+        let targetIndex = null;
+        if (event.key === 'ArrowRight') targetIndex = index === lastIndex ? 0 : index + 1;
+        else if (event.key === 'ArrowLeft') targetIndex = index === 0 ? lastIndex : index - 1;
+        else if (event.key === 'Home') targetIndex = 0;
+        else if (event.key === 'End') targetIndex = lastIndex;
+        else if (event.key === 'Delete' && TAB_CONFIG[path]?.closable !== false) {
+            event.preventDefault();
+            handleTabClose(event, path);
+            return;
+        }
+
+        if (targetIndex === null) return;
+        event.preventDefault();
+        const nextPath = visibleTabs[targetIndex];
+        handleTabClick(nextPath);
+        window.requestAnimationFrame(() => tabRefs.current.get(nextPath)?.focus());
     };
     const routeOpenKeys = useMemo(() => {
         const keysToOpen = [];
@@ -597,28 +622,27 @@ const MainLayout = () => {
                                 </Tooltip>
                             )}
                             {!isMobile && (
-                                <Tooltip title="通知">
+                                <Tooltip title="打开通知管理">
                                     <Button
                                         type="text"
                                         icon={<BellOutlined />}
                                         className="soybean-header-icon-btn"
-                                        aria-label="通知"
+                                        aria-label="打开通知管理"
+                                        onClick={() => handleTabClick('/notifications')}
                                     />
                                 </Tooltip>
                             )}
-                            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-                                <UserAvatar
-                                    seed={currentUser.userId || currentUser._id || currentUser.nickName || 'admin'}
-                                    label={currentUser.nickName || currentUser.userId || 'admin'}
-                                    avatarUrl={currentUser.avatarUrl}
-                                    className="soybean-header-avatar"
-                                    style={{
-                                        cursor: 'pointer',
-                                        marginLeft: 8,
-                                        border: '1px solid var(--border-color)',
-                                    }}
-                                    size={isMobile ? 30 : 34}
-                                />
+                            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
+                                <button className="soybean-header-avatar-trigger" type="button" aria-label="打开用户菜单">
+                                    <UserAvatar
+                                        seed={currentUser.userId || currentUser._id || currentUser.nickName || 'admin'}
+                                        label={currentUser.nickName || currentUser.userId || 'admin'}
+                                        avatarUrl={currentUser.avatarUrl}
+                                        className="soybean-header-avatar"
+                                        style={{ border: '1px solid var(--border-color)' }}
+                                        size={isMobile ? 30 : 34}
+                                    />
+                                </button>
                             </Dropdown>
                         </div>
                     </div>
@@ -646,19 +670,22 @@ const MainLayout = () => {
 
                             return (
                                 <React.Fragment key={path}>
-                                    <div
+                                    <button
+                                        ref={(node) => {
+                                            if (node) tabRefs.current.set(path, node);
+                                            else tabRefs.current.delete(path);
+                                        }}
+                                        type="button"
+                                        id={`core-admin-tab-${path.slice(1)}`}
                                         className={`soybean-tab-item ${isActive ? 'soybean-tab-active' : ''}`}
                                         onClick={() => handleTabClick(path)}
-                                        onKeyDown={(event) => {
-                                            if (event.key === 'Enter' || event.key === ' ') {
-                                                event.preventDefault();
-                                                handleTabClick(path);
-                                            }
-                                        }}
+                                        onKeyDown={(event) => handleTabKeyDown(event, path, index)}
                                         role="tab"
-                                        tabIndex={0}
+                                        tabIndex={isActive ? 0 : -1}
                                         aria-selected={isActive}
+                                        aria-controls="core-admin-route-panel"
                                         aria-current={isActive ? 'page' : undefined}
+                                        aria-label={isClosable ? `${config.label}，按 Delete 关闭页签` : config.label}
                                     >
                                         <span className="soybean-tab-icon">{config.icon}</span>
                                         <span className="soybean-tab-label">{config.label}</span>
@@ -666,20 +693,12 @@ const MainLayout = () => {
                                             <span
                                                 className="soybean-tab-close"
                                                 onClick={(e) => handleTabClose(e, path)}
-                                                onKeyDown={(event) => {
-                                                    if (event.key === 'Enter' || event.key === ' ') {
-                                                        event.preventDefault();
-                                                        handleTabClose(event, path);
-                                                    }
-                                                }}
-                                                role="button"
-                                                tabIndex={0}
-                                                aria-label={`关闭${config.label}页签`}
+                                                aria-hidden="true"
                                             >
                                                 <CloseOutlined />
                                             </span>
                                         )}
-                                    </div>
+                                    </button>
                                     {showDivider && (
                                         <div style={{ width: 1, height: 16, backgroundColor: '#e5e7eb', flexShrink: 0 }}></div>
                                     )}
@@ -715,7 +734,10 @@ const MainLayout = () => {
                         : (isTablet ? '8px 12px 16px' : '12px 16px 16px'),
                 }}>
                     <div
+                        id="core-admin-route-panel"
                         className={`route-content-shell ${isPending ? 'route-content-shell-pending' : ''}`}
+                        role="tabpanel"
+                        aria-labelledby={`core-admin-tab-${currentPath.slice(1)}`}
                         aria-busy={isPending}
                     >
                         {isPending && (

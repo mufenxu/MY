@@ -314,7 +314,7 @@
                         </div>
 
                         <!-- 科目列表视图 -->
-                        <div v-if="!isExamView" class="category-cards-grid" v-loading="loading">
+                        <div v-if="!isExamView" class="category-cards-grid" v-loading="viewLoading.majorCategories || viewLoading.categories">
                             <div class="category-card" v-for="cat in visibleMajorCategories" :key="cat._id"
                                 :class="{ 'is-hidden': cat.showOnHome === false, 'is-assigned': cat.readOnly }"
                                 @click="switchToExamView(cat)">
@@ -381,7 +381,7 @@
                         </div>
 
                         <!-- 试卷列表视图 (嵌套在科目管理面板中) -->
-                        <div v-else class="exam-cards-grid" v-loading="loading">
+                        <div v-else class="exam-cards-grid" v-loading="viewLoading.categories">
                             <div class="exam-card" v-for="exam in visibleFilteredCategories" :key="exam._id">
                                 <div class="exam-card-header">
                                     <el-tag size="small" type="info">{{ selectedMajorCategory?.name }}</el-tag>
@@ -487,7 +487,7 @@
 
                         <el-card shadow="never" class="table-card data-table-card exam-results-card">
                             <el-table ref="examResultsTable" key="exam-results-table" class="exam-results-table full-width-table"
-                                :data="examResults.list" v-loading="loading" empty-text="暂无考试记录"
+                                :data="examResults.list" v-loading="viewLoading.examResults" empty-text="暂无考试记录"
                                 @selection-change="handleExamResultSelection">
                                 <el-table-column type="selection" width="64"></el-table-column>
                                 <el-table-column prop="createTime" label="提交时间" min-width="190">
@@ -592,7 +592,7 @@
                         </div>
 
                         <el-card shadow="never" class="table-card data-table-card">
-                            <el-table ref="usersTable" key="users-table" class="users-table full-width-table" :data="users.list" v-loading="loading" empty-text="暂无考生"
+                            <el-table ref="usersTable" key="users-table" class="users-table full-width-table" :data="users.list" v-loading="viewLoading.users" empty-text="暂无考生"
                                 @selection-change="handleUserSelection">
                                 <el-table-column type="selection" width="55"></el-table-column>
                                 <el-table-column prop="nickname" label="考生" min-width="150">
@@ -701,7 +701,7 @@
 
                         <el-card shadow="never" class="table-card data-table-card personal-category-card">
                             <el-table key="personal-category-table" class="personal-category-table full-width-table" :data="personalCategories.list"
-                                v-loading="loading" empty-text="暂无个人题库">
+                                v-loading="viewLoading.personalCategories" empty-text="暂无个人题库">
                                 <el-table-column prop="name" label="题库" min-width="220" show-overflow-tooltip>
                                     <template #default="{ row }">
                                         <div class="personal-category-name">
@@ -761,6 +761,17 @@
                         </el-card>
                     </div>
 
+                    <QuestionQualityView
+                        v-if="activeMenu === 'question-quality'"
+                        :api="adminApi"
+                        :console-mode="isConsoleMode"
+                        :initial-scope-type="qualityRouteState.scopeType"
+                        :initial-issue="qualityRouteState.issue"
+                        :initial-page="qualityRouteState.page"
+                        :initial-limit="qualityRouteState.limit"
+                        @open-question="openQuestionQualityTarget"
+                    />
+
                     <!-- Feedback View -->
                     <div v-if="activeMenu === 'feedbacks'" class="feedback-view">
                         <div class="content-toolbar admin-list-toolbar-shell">
@@ -797,7 +808,7 @@
                         </div>
 
                         <el-card shadow="never" class="table-card data-table-card feedback-card">
-                            <el-table key="feedback-table" class="feedback-table full-width-table" :data="feedbacks.list" v-loading="loading"
+                            <el-table key="feedback-table" class="feedback-table full-width-table" :data="feedbacks.list" v-loading="viewLoading.feedbacks"
                                 empty-text="暂无反馈" @row-click="openFeedbackDetail">
                                 <el-table-column prop="title" label="反馈内容" min-width="280">
                                     <template #default="{ row }">
@@ -1707,6 +1718,7 @@ import { createSequentialPoller } from '@/utils/sequentialPoller';
 import DashboardNavMenu from '@/components/DashboardNavMenu.vue';
 
 const MiniLineChart = defineAsyncComponent(() => import('@/components/MiniLineChart.vue'));
+const QuestionQualityView = defineAsyncComponent(() => import('@/components/QuestionQualityView.vue'));
 
 const route = useRoute();
 const router = useRouter();
@@ -1720,6 +1732,16 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         
         const activeMenu = ref('dashboard');
         const loading = ref(false);
+        const viewLoading = reactive({
+            dashboard: false,
+            dashboardRecent: false,
+            majorCategories: false,
+            categories: false,
+            examResults: false,
+            users: false,
+            personalCategories: false,
+            feedbacks: false,
+        });
         const categories = ref([]);
         const majorCategories = ref([]);
         const categorySearchKeyword = ref('');
@@ -1754,8 +1776,8 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         let roleText;
         const allowedMenus = computed(() => (
             isConsoleMode.value
-                ? ['dashboard', 'major-categories', 'feedbacks']
-                : ['dashboard', 'major-categories', 'exam-results', 'users', 'personal-categories', 'feedbacks']
+                ? ['dashboard', 'major-categories', 'question-quality', 'feedbacks']
+                : ['dashboard', 'major-categories', 'exam-results', 'users', 'personal-categories', 'question-quality', 'feedbacks']
         ));
         const uiPreviewMode = isUiPreviewMode();
         const adminApi = uiPreviewMode
@@ -1774,6 +1796,36 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             }
             return value || '';
         };
+
+        const qualityIssueCodes = new Set([
+            'missing_analysis',
+            'missing_answer',
+            'insufficient_options',
+            'duplicate_option_label',
+            'empty_option',
+            'answer_not_in_options',
+            'single_answer_count',
+            'duplicate_content',
+            'stale_question',
+        ]);
+        const parseQualityInteger = (value, min, max, fallback) => {
+            const number = Number.parseInt(String(firstQueryValue(value)), 10);
+            return Number.isInteger(number) && number >= min && number <= max ? number : fallback;
+        };
+        const normalizeQualityScope = (value) => {
+            if (isConsoleMode.value) return 'personal';
+            return firstQueryValue(value) === 'demo' ? 'demo' : 'admin';
+        };
+        const normalizeQualityIssue = (value) => {
+            const issue = String(firstQueryValue(value));
+            return qualityIssueCodes.has(issue) ? issue : '';
+        };
+        const qualityRouteState = computed(() => ({
+            scopeType: normalizeQualityScope(route.query.qualityScopeType),
+            issue: normalizeQualityIssue(route.query.qualityIssue),
+            page: parseQualityInteger(route.query.qualityPage, 1, 1000, 1),
+            limit: parseQualityInteger(route.query.qualityLimit, 1, 100, 20),
+        }));
 
         const syncDashboardRouteState = (extraQuery = {}) => {
             const query = {
@@ -1872,10 +1924,26 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                 : (dashboardStats.counts.examResults || 0))));
         consolePracticeCount = computed(() => (dashboardStats.error ? '--' : (dashboardStats.counts.practiceRecords || 0)));
         let qrcodeModulePromise = null;
-        let examResultsRequestSeq = 0;
-        let usersRequestSeq = 0;
-        let personalCategoriesRequestSeq = 0;
-        let feedbackRequestSeq = 0;
+        const viewRequestControllers = new Map();
+
+        const beginViewRequest = (key) => {
+            viewRequestControllers.get(key)?.abort();
+            const controller = new AbortController();
+            viewRequestControllers.set(key, controller);
+            viewLoading[key] = true;
+            return controller;
+        };
+
+        const finishViewRequest = (key, controller) => {
+            if (viewRequestControllers.get(key) !== controller) return;
+            viewRequestControllers.delete(key);
+            viewLoading[key] = false;
+        };
+
+        const quietRequestConfig = (controller) => ({
+            signal: controller.signal,
+            showGlobalError: false,
+        });
 
         const buildFallbackDates = () => Array.from({ length: 7 }, (_, index) => {
             const date = new Date();
@@ -2136,12 +2204,15 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         });
 
         const loadDashboardRecent = async () => {
+            const controller = beginViewRequest('dashboardRecent');
             dashboardRecent.loading = true;
             try {
+                const config = quietRequestConfig(controller);
                 if (isConsoleMode.value) {
                     const feedbackResult = await Promise.allSettled([
-                        adminApi.listFeedbacks({ page: 1, limit: 6 }),
+                        adminApi.listFeedbacks({ page: 1, limit: 6 }, config),
                     ]);
+                    if (controller.signal.aborted) return;
                     dashboardRecent.exams = [];
                     dashboardRecent.users = [];
                     dashboardRecent.feedbacks = getApiList(feedbackResult[0]);
@@ -2149,16 +2220,20 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                 }
 
                 const [examResult, userResult, feedbackResult] = await Promise.allSettled([
-                    adminApi.listExamResults({ page: 1, pageSize: 6 }),
-                    adminApi.listUsers({ page: 1, pageSize: 6 }),
-                    adminApi.listFeedbacks({ page: 1, limit: 6 }),
+                    adminApi.listExamResults({ page: 1, pageSize: 6 }, config),
+                    adminApi.listUsers({ page: 1, pageSize: 6 }, config),
+                    adminApi.listFeedbacks({ page: 1, limit: 6 }, config),
                 ]);
+                if (controller.signal.aborted) return;
 
                 dashboardRecent.exams = getApiList(examResult);
                 dashboardRecent.users = getApiList(userResult);
                 dashboardRecent.feedbacks = getApiList(feedbackResult);
             } finally {
-                dashboardRecent.loading = false;
+                if (viewRequestControllers.get('dashboardRecent') === controller) {
+                    dashboardRecent.loading = false;
+                }
+                finishViewRequest('dashboardRecent', controller);
             }
         };
 
@@ -2513,6 +2588,8 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
 
         onBeforeUnmount(() => {
             stopBindRequests();
+            viewRequestControllers.forEach((controller) => controller.abort());
+            viewRequestControllers.clear();
             if (userSearchTimer) {
                 clearTimeout(userSearchTimer);
                 userSearchTimer = null;
@@ -2527,10 +2604,11 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
 
         // --- Methods: Data Loading ---
         const loadDashboardData = async () => {
+            const controller = beginViewRequest('dashboard');
             try {
-                loading.value = true;
                 dashboardStats.error = false;
-                const res = await adminApi.getDashboardData();
+                const res = await adminApi.getDashboardData(quietRequestConfig(controller));
+                if (controller.signal.aborted) return;
                 if (res.data.code === 0) {
                     Object.assign(dashboardStats.counts, {
                         majorCategories: 0,
@@ -2546,31 +2624,43 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                 }
                 await loadDashboardRecent();
             } catch (err) {
+                if (controller.signal.aborted) return;
                 dashboardStats.error = true;
                 ElMessage.error('加载数据失败');
             } finally {
-                loading.value = false;
+                finishViewRequest('dashboard', controller);
             }
         };
 
         const loadMajorCategories = async () => {
+            const controller = beginViewRequest('majorCategories');
             try {
-                const res = await adminApi.listMajorCategories({ includeAll: true });
+                const res = await adminApi.listMajorCategories(
+                    { includeAll: true },
+                    quietRequestConfig(controller),
+                );
+                if (controller.signal.aborted) return;
                 majorCategories.value = res.data.data;
-                if (categories.value.length === 0) {
-                    await loadCategories();
-                }
+                await loadCategories();
             } catch (err) {
+                if (controller.signal.aborted) return;
                 ElMessage.error(`加载${majorLabel.value}失败`);
+            } finally {
+                finishViewRequest('majorCategories', controller);
             }
         };
 
         const loadCategories = async () => {
+            const controller = beginViewRequest('categories');
             try {
-                const res = await adminApi.listCategories();
+                const res = await adminApi.listCategories(quietRequestConfig(controller));
+                if (controller.signal.aborted) return;
                 categories.value = res.data.data;
             } catch (err) {
+                if (controller.signal.aborted) return;
                 ElMessage.error(`加载${categoryLabel.value}失败`);
+            } finally {
+                finishViewRequest('categories', controller);
             }
         };
 
@@ -2578,9 +2668,10 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             if (activeMenu.value === 'dashboard') loadDashboardData();
             if (activeMenu.value === 'major-categories' || activeMenu.value === 'demo-manage') {
                 loadMajorCategories();
-                if (isExamView.value) loadCategories();
             }
             if (activeMenu.value === 'categories') loadCategories();
+            if (activeMenu.value === 'exam-results') loadExamResults(1);
+            if (activeMenu.value === 'users') loadUsers(1);
             if (activeMenu.value === 'personal-categories') loadPersonalCategories(personalCategories.page || 1);
             if (activeMenu.value === 'feedbacks') loadFeedbacks();
         };
@@ -2616,8 +2707,6 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             if (index === 'major-categories' || index === 'demo-manage') {
                 isExamView.value = false;
                 selectedMajorCategory.value = null;
-                majorCategories.value = [];
-                categories.value = [];
                 loadMajorCategories();
             }
             if (index === 'exam-results') {
@@ -3063,6 +3152,41 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         };
 
         // --- Methods: Navigation ---
+        const openQuestionQualityTarget = ({
+            categoryId,
+            questionId,
+            scopeType: targetScope,
+            issue,
+            page,
+            limit,
+        } = {}) => {
+            if (!categoryId || !questionId) {
+                ElMessage.warning('题目定位信息不完整');
+                return;
+            }
+
+            const qualityScopeType = normalizeQualityScope(targetScope);
+            const qualityIssue = normalizeQualityIssue(issue);
+            const query = {
+                id: categoryId,
+                questionId,
+                returnMenu: 'question-quality',
+                returnQualityScopeType: qualityScopeType,
+                returnQualityPage: parseQualityInteger(page, 1, 1000, 1),
+                returnQualityLimit: parseQualityInteger(limit, 1, 100, 20),
+            };
+
+            if (qualityIssue) query.returnQualityIssue = qualityIssue;
+
+            if (isConsoleMode.value) {
+                query.scopeType = 'personal';
+            } else if (qualityScopeType === 'demo') {
+                query.scopeType = 'demo';
+            }
+
+            router.push({ path: '/exam-detail', query });
+        };
+
         const goToExamDetail = (examId) => {
             const query = {
                 id: examId,
@@ -3172,26 +3296,24 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             if (isConsoleMode.value) {
                 return;
             }
-            const requestSeq = ++examResultsRequestSeq;
+            const controller = beginViewRequest('examResults');
             try {
-                loading.value = true;
                 const res = await adminApi.listExamResults({
                     page,
                     pageSize: 20,
                     categoryId: examResultsFilter.categoryId || undefined,
                     userId: examResultsFilter.userId || undefined
-                });
-                if (requestSeq !== examResultsRequestSeq) return;
+                }, quietRequestConfig(controller));
+                if (controller.signal.aborted) return;
                 if (res.data.code === 0) {
                     examResults.list = res.data.data.list;
                     examResults.total = res.data.data.total;
                 }
             } catch (err) {
+                if (controller.signal.aborted) return;
                 ElMessage.error('加载考试记录失败');
             } finally {
-                if (requestSeq === examResultsRequestSeq) {
-                    loading.value = false;
-                }
+                finishViewRequest('examResults', controller);
             }
         };
 
@@ -3222,16 +3344,15 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         });
 
         const loadFeedbacks = async (page = 1) => {
-            const requestSeq = ++feedbackRequestSeq;
+            const controller = beginViewRequest('feedbacks');
             try {
-                loading.value = true;
                 const res = await adminApi.listFeedbacks({
                     page,
                     limit: feedbacks.limit,
                     status: feedbackFilter.status || undefined,
                     keyword: isConsoleMode.value ? undefined : (feedbackFilter.keyword || undefined),
-                });
-                if (requestSeq !== feedbackRequestSeq) return;
+                }, quietRequestConfig(controller));
+                if (controller.signal.aborted) return;
                 if (res.data.code === 0) {
                     feedbacks.list = res.data.data.list || [];
                     feedbacks.total = res.data.data.total || 0;
@@ -3240,11 +3361,10 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                     await loadFeedbackSummary();
                 }
             } catch (err) {
+                if (controller.signal.aborted) return;
                 ElMessage.error('加载反馈失败');
             } finally {
-                if (requestSeq === feedbackRequestSeq) {
-                    loading.value = false;
-                }
+                finishViewRequest('feedbacks', controller);
             }
         };
 
@@ -3405,11 +3525,13 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             if (isConsoleMode.value) {
                 return;
             }
-            const requestSeq = ++personalCategoriesRequestSeq;
+            const controller = beginViewRequest('personalCategories');
             try {
-                loading.value = true;
-                const res = await adminApi.listPersonalCategories(buildPersonalCategoryParams(page));
-                if (requestSeq !== personalCategoriesRequestSeq) return;
+                const res = await adminApi.listPersonalCategories(
+                    buildPersonalCategoryParams(page),
+                    quietRequestConfig(controller),
+                );
+                if (controller.signal.aborted) return;
                 if (res.data.code === 0) {
                     const data = res.data.data || {};
                     personalCategories.list = data.list || [];
@@ -3418,11 +3540,10 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                     personalCategories.limit = data.limit || personalCategories.limit;
                 }
             } catch (err) {
+                if (controller.signal.aborted) return;
                 ElMessage.error(err.response?.data?.message || '加载个人题库失败');
             } finally {
-                if (requestSeq === personalCategoriesRequestSeq) {
-                    loading.value = false;
-                }
+                finishViewRequest('personalCategories', controller);
             }
         };
 
@@ -3614,15 +3735,14 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             if (isConsoleMode.value) {
                 return;
             }
-            const requestSeq = ++usersRequestSeq;
+            const controller = beginViewRequest('users');
             try {
-                loading.value = true;
                 const res = await adminApi.listUsers({
                     page,
                     pageSize: 20,
                     keyword: userSearchKeyword.value || undefined
-                });
-                if (requestSeq !== usersRequestSeq) return;
+                }, quietRequestConfig(controller));
+                if (controller.signal.aborted) return;
                 if (res.data.code === 0) {
                     users.list = (res.data.data.list || []).map((item) => ({
                         ...item,
@@ -3631,11 +3751,10 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                     users.total = res.data.data.total;
                 }
             } catch (err) {
+                if (controller.signal.aborted) return;
                 ElMessage.error('加载考生列表失败');
             } finally {
-                if (requestSeq === usersRequestSeq) {
-                    loading.value = false;
-                }
+                finishViewRequest('users', controller);
             }
         };
 

@@ -4,6 +4,7 @@ import {
     countInvalidQuestions,
     countQuestionTypes,
     createEditableQuestionFromApi,
+    createQuestionRevisionBaseline,
     createQuestionSavePayload,
     getCompletedQuestionCount,
     getCompletionPercent,
@@ -50,6 +51,7 @@ export function useExamDetailData({
     let dirtyTrackingReady = false;
     let suppressDirtyTracking = false;
     let invalidCountRafId = 0;
+    let baseQuestions = [];
 
     const examInfo = reactive({
         _id: '',
@@ -137,6 +139,7 @@ export function useExamDetailData({
 
             suppressDirtyTracking = true;
             questions.value = (res.data.data.list || []).map(createEditableQuestionFromApi);
+            baseQuestions = createQuestionRevisionBaseline(questions.value);
             resetRenderedQuestionWindow?.();
             resetSelectionAfterLoad();
             recalculateInvalidQuestionCount();
@@ -204,14 +207,18 @@ export function useExamDetailData({
         try {
             const payload = questions.value.map(createQuestionSavePayload);
 
-            await examApi.saveQuestions(payload);
+            await examApi.saveQuestions(payload, baseQuestions);
 
             ElMessage.success('保存成功');
             isDirty.value = false;
             await Promise.all([loadExamInfo(), loadQuestions()]);
         } catch (err) {
             console.error('Save exam error:', err);
-            ElMessage.error('保存失败');
+            const isRevisionConflict = err.response?.status === 409
+                || err.response?.data?.code === 'QUESTION_REVISION_CONFLICT';
+            ElMessage.error(isRevisionConflict
+                ? '题目已被其他管理员更新，请重新加载后再编辑'
+                : '保存失败');
         } finally {
             saving.value = false;
         }
@@ -220,6 +227,7 @@ export function useExamDetailData({
     const cleanupExamDetailData = () => {
         cancelFrame(invalidCountRafId);
         invalidCountRafId = 0;
+        baseQuestions = [];
     };
 
     return {

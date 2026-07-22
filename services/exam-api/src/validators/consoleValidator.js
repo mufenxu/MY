@@ -12,12 +12,23 @@ const {
 const shareCode = Joi.string().trim().uppercase().replace(/[\s-]/g, '').pattern(/^[A-Z0-9]{6,16}$/).messages({
     'string.pattern.base': '分享码格式不正确',
 });
+const qualityIssue = Joi.string().valid(
+    'missing_analysis',
+    'missing_answer',
+    'insufficient_options',
+    'duplicate_option_label',
+    'empty_option',
+    'answer_not_in_options',
+    'single_answer_count',
+    'duplicate_content',
+    'stale_question',
+).allow('').optional();
 
 const paginationQuery = {
     query: Joi.object({
         page: Joi.number().integer().min(1).default(1),
-        limit: Joi.number().integer().min(1).max(1000).default(20),
-        pageSize: Joi.number().integer().min(1).max(1000).optional(),
+        limit: Joi.number().integer().min(1).max(100).default(20),
+        pageSize: Joi.number().integer().min(1).max(100).optional(),
         categoryId: objectId.optional(),
         majorCategoryId: objectId.optional(),
     }),
@@ -94,6 +105,34 @@ const updateQuestion = {
     }),
 };
 
+const questionVersionList = {
+    params: Joi.object({
+        id: objectId.required(),
+    }),
+    query: Joi.object({
+        page: Joi.number().integer().min(1).max(10000).default(1),
+        limit: Joi.number().integer().min(1).max(50).default(20),
+    }),
+};
+
+const questionVersionParam = {
+    params: Joi.object({
+        id: objectId.required(),
+        revision: Joi.number().integer().min(1).required(),
+    }),
+};
+
+const questionQuality = {
+    query: Joi.object({
+        categoryId: objectId.optional(),
+        page: Joi.number().integer().min(1).max(1000).default(1),
+        limit: Joi.number().integer().min(1).max(100).default(20),
+        issue: qualityIssue,
+        staleDays: Joi.number().integer().min(30).max(3650).default(365),
+        scanLimit: Joi.number().integer().min(100).max(10000).default(2000),
+    }),
+};
+
 const batchUpdateQuestions = {
     params: Joi.object({
         id: objectId.required(),
@@ -158,6 +197,9 @@ module.exports = {
     updateCategory,
     createQuestion,
     updateQuestion,
+    questionVersionList,
+    questionVersionParam,
+    questionQuality,
     batchUpdateQuestions,
     generateAiAnalyses,
     createPaperShare,

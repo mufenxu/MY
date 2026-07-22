@@ -12,6 +12,10 @@ const {
 const { AuthManager } = require('../src/security/auth');
 const { hashPassword, isPasswordHash, verifyPassword } = require('../src/security/password');
 
+test('telemetry retention defaults to a finite 30 day window', () => {
+  assert.equal(defaultConfig.dashboard.dataRetentionDays, 30);
+});
+
 test('buildPublicConfigPayload redacts secret values but reports presence', () => {
   const config = normalizeConfig(defaultConfig, defaultConfig);
   const payload = buildPublicConfigPayload(config);

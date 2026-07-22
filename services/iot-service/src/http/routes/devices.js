@@ -1,5 +1,6 @@
 const { createInfoPayload } = require('../payloads/infoPayload');
 const crypto = require('crypto');
+const { createTelemetryInsight, normalizeRange } = require('../../services/telemetryInsights');
 
 const MAX_HISTORY_LIMIT = 500;
 
@@ -36,6 +37,29 @@ function registerDeviceRoutes(app, {
       const range = req.query.range ? String(req.query.range).trim() : null;
       const rows = await mqttService.db.getSensorHistory(deviceId, limit, range);
       res.json(rows);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/devices/:deviceId/insights', requireHistoryAccess, async (req, res, next) => {
+    try {
+      const { deviceId } = req.params;
+      const range = normalizeRange(req.query.range);
+      const device = mqttService.getLatestData().devices?.[deviceId];
+      if (!device) {
+        const error = new Error('Device not found.');
+        error.statusCode = 404;
+        error.code = 'DEVICE_NOT_FOUND';
+        error.expose = true;
+        throw error;
+      }
+      const rows = await mqttService.db.getSensorHistory(deviceId, MAX_HISTORY_LIMIT, range);
+      const config = settingsStore.getConfig();
+      res.json(createTelemetryInsight(device, rows, {
+        range,
+        onlineThresholdMs: config.api.deviceOnlineThreshold
+      }));
     } catch (error) {
       next(error);
     }
@@ -93,6 +117,7 @@ function registerDeviceRoutes(app, {
       messagesReceived: status.messagesReceived,
       topicStats: status.topicStats,
       serviceStartedAt: status.serviceStartedAt,
+      retention: status.retention,
       deviceOnline: anyDeviceOnline
     });
   });

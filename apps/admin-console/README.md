@@ -52,6 +52,9 @@ npm run dev
 - `GET /api/services/status?refresh=1`：跳过 15 秒缓存并立即检查
 - `GET /api/operations/overview`：状态、历史趋势、未解决事件与最近活动
 - `GET /api/operations/history`：按服务和时间范围读取真实采样
+- `GET /api/operations/search`：跨服务、事件、任务、发布和配置变更检索；单数据源失败时返回可用的部分结果
+- `GET /api/operations/slo`：按 1、7 或 30 天窗口统计 99.9% SLO、错误预算和延迟分位数
+- `GET /api/operations/change-calendar`：按最多 90 天窗口分页读取发布、配置、维护和事件时间线
 - `GET/POST /api/incidents`：事件查询与处置
 - `GET /api/audit`：统一审计日志
 - `GET /api/public/status`：无需登录的真实健康状态与公开事件摘要
@@ -92,6 +95,8 @@ npm run dev
 - 任务中心只聚合各服务持久化任务和配置审批，不把浏览器缓存当作执行状态；
 - 生产默认启用双人配置审批，回滚也必须形成新提案和新版本；
 - 公开状态页只显示实际健康采样和安全化事件摘要，不提供人工“全绿”覆盖；
+- 运营检索与变更日历只返回白名单字段，不返回配置值、凭据、内部 URL 或制品细节；
+- SLO 计算排除维护窗口和未纳管样本，数据源不可用时明确返回不可用状态，不以空数据伪装健康；
 - 安全中心支持 `viewer`、`operator`、`super_admin` 三种独立账号角色、强制 TOTP、一次性恢复码、Passkey 和会话远程下线。
 
 ### 角色权限

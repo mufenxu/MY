@@ -23,12 +23,14 @@ const courseOrderSubmissionWorker = require('./services/courseOrderSubmissionWor
 const User = require('./models/User');
 const CourseOrder = require('./models/CourseOrder');
 const CourseOrderBatch = require('./models/CourseOrderBatch');
+const { boundedTimeout, closeHttpServer, withDeadline } = require('./services/httpShutdown');
 
 const app = express();
 const PORT = process.env.CORE_PORT || process.env.PORT || 3045;
 let server = null;
 let initializationPromise = null;
 let initialized = false;
+let shutdownPromise = null;
 
 function parseTrustProxy(value, fallback = 1) {
     if (value === undefined || value === null || value === '') return fallback;
@@ -232,13 +234,25 @@ function isCoreRuntimeReady() {
 }
 
 async function gracefulShutdown(signal) {
-    logger.info(`Received ${signal}. Starting graceful shutdown...`);
-    if (server) {
-        await new Promise((resolve) => server.close(resolve));
-        server = null;
-        logger.info('HTTP server closed.');
-    }
-    await closeCoreRuntime();
+    if (shutdownPromise) return shutdownPromise;
+    const timeoutMs = boundedTimeout(process.env.CORE_SHUTDOWN_TIMEOUT_MS);
+    shutdownPromise = (async () => {
+        logger.info(`Received ${signal}. Starting graceful shutdown...`);
+        if (server) {
+            const closingServer = server;
+            server = null;
+            await closeHttpServer(closingServer, {
+                timeoutMs,
+                onForce: () => logger.warn('HTTP shutdown deadline reached; forcing connections closed.'),
+            });
+            logger.info('HTTP server closed.');
+        }
+        await withDeadline(closeCoreRuntime(), {
+            timeoutMs,
+            message: 'Core runtime shutdown exceeded its deadline',
+        });
+    })();
+    return shutdownPromise;
 }
 
 async function startStandalone() {

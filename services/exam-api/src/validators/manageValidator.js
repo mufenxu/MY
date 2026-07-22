@@ -13,7 +13,19 @@ const {
     updateMajorCategoryFields,
 } = require('./sharedSchemas');
 const scopeType = Joi.string().valid('admin', 'demo', 'personal', 'all').optional();
+const managedScopeType = Joi.string().valid('admin', 'demo').optional();
 const withScope = (fields) => ({ ...fields, scopeType });
+const qualityIssue = Joi.string().valid(
+    'missing_analysis',
+    'missing_answer',
+    'insufficient_options',
+    'duplicate_option_label',
+    'empty_option',
+    'answer_not_in_options',
+    'single_answer_count',
+    'duplicate_content',
+    'stale_question',
+).allow('').optional();
 
 const idParam = {
     params: Joi.object({
@@ -33,8 +45,8 @@ const openidParam = {
 const paginationQuery = {
     query: Joi.object({
         page: Joi.number().integer().min(1).default(1),
-        limit: Joi.number().integer().min(1).max(1000).default(20),
-        pageSize: Joi.number().integer().min(1).max(1000).optional(),
+        limit: Joi.number().integer().min(1).max(100).default(20),
+        pageSize: Joi.number().integer().min(1).max(100).optional(),
         categoryId: objectId.optional(),
         userId: Joi.string().optional(),
         keyword: Joi.string().optional(),
@@ -85,6 +97,39 @@ const updateQuestion = {
         analysis: Joi.string().allow('').optional(),
         categoryId: Joi.string().optional(),
         scopeType,
+    }),
+};
+
+const questionVersionList = {
+    params: Joi.object({
+        id: objectId.required(),
+    }),
+    query: Joi.object({
+        page: Joi.number().integer().min(1).max(10000).default(1),
+        limit: Joi.number().integer().min(1).max(50).default(20),
+        scopeType: managedScopeType,
+    }),
+};
+
+const questionVersionParam = {
+    params: Joi.object({
+        id: objectId.required(),
+        revision: Joi.number().integer().min(1).required(),
+    }),
+    query: Joi.object({
+        scopeType: managedScopeType,
+    }),
+};
+
+const questionQuality = {
+    query: Joi.object({
+        categoryId: objectId.optional(),
+        page: Joi.number().integer().min(1).max(1000).default(1),
+        limit: Joi.number().integer().min(1).max(100).default(20),
+        issue: qualityIssue,
+        staleDays: Joi.number().integer().min(30).max(3650).default(365),
+        scanLimit: Joi.number().integer().min(100).max(10000).default(2000),
+        scopeType: managedScopeType,
     }),
 };
 
@@ -214,6 +259,9 @@ module.exports = {
     paginationQuery,
     createQuestion,
     updateQuestion,
+    questionVersionList,
+    questionVersionParam,
+    questionQuality,
     batchUpdateQuestions,
     generateAiAnalyses,
     deleteExamResults,

@@ -12,6 +12,10 @@ function registerAutomationRoutes(app, {
     try { res.json(await automationEngine.listRules()); } catch (error) { next(error); }
   });
 
+  app.get('/api/automations/status', requireTelemetryAccess, (req, res) => {
+    res.json(automationEngine.getStatus());
+  });
+
   app.post('/api/automations/rules', requireRelayControl, async (req, res, next) => {
     try { res.status(201).json(await automationEngine.createRule(req.body || {})); } catch (error) { next(error); }
   });

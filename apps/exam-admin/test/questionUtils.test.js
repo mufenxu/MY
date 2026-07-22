@@ -5,6 +5,7 @@ import {
   applyAnswerSelectionChange,
   applyQuestionTypeChange,
   createEditableQuestionFromApi,
+  createQuestionRevisionBaseline,
   createQuestionSavePayload,
   countInvalidQuestions,
   countQuestionTypes,
@@ -150,6 +151,7 @@ test('question option helpers enforce editor labels and limits', () => {
 test('question save payload trims values and preserves persisted ids only', () => {
   assert.deepEqual(createQuestionSavePayload({
     _id: 'question-1',
+    revision: 3,
     type: 'single',
     content: '  题干  ',
     options: [
@@ -159,6 +161,7 @@ test('question save payload trims values and preserves persisted ids only', () =
     analysis: '  解析  ',
   }), {
     _id: 'question-1',
+    revision: 3,
     type: 'single',
     content: '题干',
     options: [
@@ -187,6 +190,7 @@ test('question save payload trims values and preserves persisted ids only', () =
 test('API questions are normalized for the editor form model', () => {
   assert.deepEqual(createEditableQuestionFromApi({
     _id: 'q1',
+    revision: 4,
     type: 'multiple',
     content: '多选题',
     options: [
@@ -198,6 +202,7 @@ test('API questions are normalized for the editor form model', () => {
     analysis: '',
   }), {
     _id: 'q1',
+    revision: 4,
     type: 'multiple',
     content: '多选题',
     options: [
@@ -214,4 +219,20 @@ test('API questions are normalized for the editor form model', () => {
     type: 'fill',
     answer: ['填空答案'],
   }).fillAnswer, '填空答案');
+
+  assert.equal(Object.hasOwn(createEditableQuestionFromApi({
+    _id: 'temp_1',
+    type: 'single',
+  }), 'revision'), false);
+});
+
+test('revision baseline includes the complete persisted set and excludes new questions', () => {
+  assert.deepEqual(createQuestionRevisionBaseline([
+    { _id: 'q1', revision: 4 },
+    { _id: 'temp_1' },
+    { _id: 'q2' },
+  ]), [
+    { _id: 'q1', revision: 4 },
+    { _id: 'q2', revision: 1 },
+  ]);
 });

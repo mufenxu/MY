@@ -45,6 +45,8 @@
 
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
+      toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+      toast.setAttribute('aria-atomic', 'true');
       toast.innerHTML = `
         <div class="toast-content">
           <strong>${escapeHtml(title)}</strong>
@@ -91,6 +93,8 @@
           return;
         }
 
+        const returnFocus = document.activeElement;
+
         titleEl.textContent = title;
         messageEl.textContent = message;
 
@@ -111,6 +115,7 @@
 
         cancelBtn.style.display = type === 'alert' ? 'none' : 'block';
         modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
 
         setTimeout(() => {
           if (showInput && inputEl) {
@@ -122,9 +127,13 @@
 
         function cleanup(value) {
           modal.classList.add('hidden');
+          modal.setAttribute('aria-hidden', 'true');
           confirmBtn.removeEventListener('click', onConfirm);
           cancelBtn.removeEventListener('click', onCancel);
           document.removeEventListener('keydown', onKeyDown);
+          if (returnFocus && returnFocus.isConnected) {
+            returnFocus.focus();
+          }
           resolve(value);
         }
 
@@ -145,6 +154,22 @@
           if (event.key === 'Enter') {
             event.preventDefault();
             onConfirm();
+          }
+
+          if (event.key === 'Tab') {
+            const focusables = Array.from(modal.querySelectorAll(
+              'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]'
+            )).filter((element) => element.offsetParent !== null);
+            if (focusables.length === 0) return;
+            const first = focusables[0];
+            const last = focusables[focusables.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first.focus();
+            }
           }
         }
 

@@ -24,15 +24,16 @@ export function createAdminApi({ getIsConsoleMode, getIsDemoManage, apiBase = ''
         scopeParams,
         scopePayload,
 
-        getDashboardData: () => http.get(
+        getDashboardData: (config = {}) => http.get(
             isConsoleMode()
                 ? `${apiBase}/api/console/overview`
                 : `${apiBase}/api/admin/stats`,
+            config,
         ),
 
-        listMajorCategories: ({ includeAll = false } = {}) => {
+        listMajorCategories: ({ includeAll = false } = {}, config = {}) => {
             const params = isConsoleMode() ? {} : scopeParams(includeAll ? { all: true } : {});
-            return http.get(managementUrl('/major-categories'), { params });
+            return http.get(managementUrl('/major-categories'), { ...config, params });
         },
 
         saveMajorCategory: (id, payload) =>
@@ -43,8 +44,14 @@ export function createAdminApi({ getIsConsoleMode, getIsDemoManage, apiBase = ''
         deleteMajorCategory: (id) =>
             http.delete(managementUrl(`/major-categories/${resourceId(id)}`), { params: scopeParams() }),
 
-        listCategories: () =>
-            http.get(managementUrl('/categories'), { params: scopeParams() }),
+        listCategories: (config = {}) =>
+            http.get(managementUrl('/categories'), { ...config, params: scopeParams() }),
+
+        getQuestionQuality: (params = {}, config = {}) =>
+            http.get(managementUrl('/question-quality'), {
+                ...config,
+                params: isConsoleMode() ? params : scopeParams(params),
+            }),
 
         saveCategory: (id, payload) =>
             id
@@ -72,14 +79,14 @@ export function createAdminApi({ getIsConsoleMode, getIsDemoManage, apiBase = ''
         revokePaperShare: (shareId) =>
             http.patch(managementUrl(`/paper-shares/${resourceId(shareId)}/revoke`)),
 
-        listExamResults: (params) =>
-            http.get(managementUrl('/exam-results'), { params }),
+        listExamResults: (params, config = {}) =>
+            http.get(managementUrl('/exam-results'), { ...config, params }),
 
         deleteExamResults: (ids) =>
             http.delete(managementUrl('/exam-results'), { data: { ids } }),
 
-        listUsers: (params) =>
-            http.get(managementUrl('/users'), { params }),
+        listUsers: (params, config = {}) =>
+            http.get(managementUrl('/users'), { ...config, params }),
 
         getUserDetails: (openid) =>
             http.get(managementUrl(`/users/${resourceId(openid)}`)),
@@ -96,8 +103,8 @@ export function createAdminApi({ getIsConsoleMode, getIsDemoManage, apiBase = ''
         saveUserAssignments: (openid, payload) =>
             http.put(managementUrl(`/users/${resourceId(openid)}/assignments`), payload),
 
-        listPersonalCategories: (params) =>
-            http.get(managementUrl('/personal-categories'), { params }),
+        listPersonalCategories: (params, config = {}) =>
+            http.get(managementUrl('/personal-categories'), { ...config, params }),
 
         getPersonalCategory: (id) =>
             http.get(managementUrl(`/personal-categories/${resourceId(id)}`)),
@@ -108,8 +115,8 @@ export function createAdminApi({ getIsConsoleMode, getIsDemoManage, apiBase = ''
         getFeedbackSummary: () =>
             http.get(managementUrl('/feedbacks/summary')),
 
-        listFeedbacks: (params) =>
-            http.get(managementUrl('/feedbacks'), { params }),
+        listFeedbacks: (params, config = {}) =>
+            http.get(managementUrl('/feedbacks'), { ...config, params }),
 
         createFeedback: (payload) =>
             http.post(managementUrl('/feedbacks'), payload),

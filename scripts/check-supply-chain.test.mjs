@@ -120,6 +120,7 @@ test('CI Mosquitto runs as its immutable non-root user with hardened privileges'
 test('platform image and ACR workflow include the official website', () => {
   const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');
   const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'aliyun-acr.yml'), 'utf8');
+  const imageGraph = JSON.parse(fs.readFileSync(path.join(root, 'config', 'image-build-targets.json'), 'utf8'));
 
   assert.match(dockerfile, /^FROM \$\{NODE_IMAGE\} AS official-website-build$/m);
   assert.match(
@@ -127,5 +128,7 @@ test('platform image and ACR workflow include the official website', () => {
     /^COPY --from=official-website-build --chown=node:node \/build\/apps\/official-website\/dist \.\/apps\/official-website\/dist$/m,
   );
   assert.match(workflow, /^      - apps\/official-website\/\*\*$/m);
-  assert.match(workflow, /apps\/official-website\/\*\|config\/platform\.services\.docker\.json/);
+  assert.ok(imageGraph.rules.some((rule) => (
+    rule.paths.includes('apps/official-website/**') && rule.targets.includes('platform')
+  )));
 });

@@ -76,3 +76,45 @@ test('orchestrator applies recipient preferences and retry backoff', async () =>
   current = new Date('2026-07-21T23:01:00.000Z');
   assert.equal((await orchestrator.runDue())[0].status, 'sent');
 });
+
+test('orchestrator limits delivery concurrency and coalesces reentrant runs', async () => {
+  const store = createMemoryNotificationStore({ encryptionKey });
+  const claimSizes = [];
+  const claimDueNotificationJobs = store.claimDueNotificationJobs.bind(store);
+  store.claimDueNotificationJobs = async (limit, options) => {
+    claimSizes.push(limit);
+    return claimDueNotificationJobs(limit, options);
+  };
+  let active = 0;
+  let maximumActive = 0;
+  let deliveries = 0;
+  const orchestrator = createNotificationOrchestrator({
+    store,
+    concurrency: 3,
+    deliver: async () => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      deliveries += 1;
+      active -= 1;
+      return { delivery: { id: `delivery-${deliveries}` } };
+    },
+  });
+  for (let index = 0; index < 7; index += 1) {
+    await orchestrator.enqueue({
+      msgType: 'text',
+      content: `message-${index}`,
+      target: { touser: `user-${index}` },
+    }, { caller: 'core-api' });
+  }
+
+  const firstRun = orchestrator.runDue(20);
+  const reentrantRun = orchestrator.runDue(20);
+  assert.strictEqual(reentrantRun, firstRun);
+  const results = await firstRun;
+  assert.equal(results.length, 7);
+  assert.equal(results.every((result) => result.status === 'sent'), true);
+  assert.equal(deliveries, 7);
+  assert.equal(maximumActive, 3);
+  assert.equal(claimSizes.every((size) => size <= 3), true);
+});

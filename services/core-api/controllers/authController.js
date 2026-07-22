@@ -6,6 +6,7 @@ const logger = require('../utils/logger');
 const asyncHandler = require('../middleware/asyncHandler');
 const logAudit = require('../utils/auditLogger');
 const { isWebAdminRequest, setWebAdminCookies } = require('../utils/refreshCookie');
+const { getExternalHttpOptions, isExternalHttpTimeout } = require('../utils/externalHttp');
 
 // @desc    WeChat Login
 // @route   POST /api/auth/wechat-login
@@ -55,7 +56,8 @@ exports.login = asyncHandler(async (req, res) => {
                         secret: secretKey,
                         response: captchaToken,
                         remoteip: req.ip
-                    })
+                    }),
+                    getExternalHttpOptions({ maxRedirects: 0 }),
                 );
 
                 if (!verifyResponse.data.success) {
@@ -63,8 +65,12 @@ exports.login = asyncHandler(async (req, res) => {
                 }
             } catch (verifyErr) {
                 logger.error('Turnstile verification error:', verifyErr);
-                // 如果验证接口崩了，可以选择放行或拦截。这里选择记录错误并拦截以保安全。
-                return res.status(500).json({ success: false, error: '验证服务异常' });
+                const timedOut = isExternalHttpTimeout(verifyErr);
+                return res.status(timedOut ? 504 : 502).json({
+                    success: false,
+                    code: timedOut ? 'CAPTCHA_UPSTREAM_TIMEOUT' : 'CAPTCHA_UPSTREAM_UNAVAILABLE',
+                    error: timedOut ? '验证服务响应超时' : '验证服务暂时不可用',
+                });
             }
         }
     }

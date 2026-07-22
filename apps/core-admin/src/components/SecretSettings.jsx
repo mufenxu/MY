@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Space, Modal, Form, Input, message, Tag, Typography, List, Card } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Tag, Typography, List, Card } from 'antd';
 import { EditOutlined, DeleteOutlined, KeyOutlined, ReloadOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
 import ReauthenticationModal from './ReauthenticationModal';
 import { establishSensitiveSession } from '../utils/reauth';
+import { message } from '../utils/feedback';
 
 const { Text } = Typography;
 

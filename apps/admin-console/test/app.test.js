@@ -28,6 +28,39 @@ test('metrics require the configured bearer token', async () => {
   });
 });
 
+test('external blackbox ingest uses its dedicated token and accepts structured samples', async () => {
+  const token = 'b'.repeat(32);
+  const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32), blackboxIngestToken: token };
+  const app = createApp({ config });
+  const payload = JSON.stringify({
+    probeId: 'outside-a',
+    samples: [{
+      targetId: 'platform-edge',
+      state: 'healthy',
+      httpStatus: 200,
+      recordedAt: new Date().toISOString(),
+      expectedIntervalMs: 30000,
+    }],
+  });
+  await withServer(app, async (origin) => {
+    assert.equal((await fetch(`${origin}/api/internal/blackbox/samples`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+    })).status, 401);
+    const accepted = await fetch(`${origin}/api/internal/blackbox/samples`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: payload,
+    });
+    assert.equal(accepted.status, 202);
+    assert.equal((await accepted.json()).accepted, 1);
+    const status = await fetch(`${origin}/api/operations/blackbox`);
+    assert.equal(status.status, 200);
+    assert.equal((await status.json()).overall, 'healthy');
+  });
+});
+
 test('backup mutations require the console request header', async () => {
   const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
   let backupStarted = false;

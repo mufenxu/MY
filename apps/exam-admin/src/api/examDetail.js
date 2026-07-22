@@ -3,6 +3,7 @@
  * 从 exam-detail-api.js IIFE 迁移。
  */
 import http from '@/utils/http';
+import { collectPagedItems } from './pagedCollection.js';
 
 export function createExamDetailApi({ getExamId, getScopeType, getIsConsoleMode, apiBase = '' }) {
     const isConsoleMode = () => Boolean(getIsConsoleMode?.());
@@ -25,8 +26,44 @@ export function createExamDetailApi({ getExamId, getScopeType, getIsConsoleMode,
     return {
         loadExamInfo: () =>
             http.get(categoryUrl(), isConsoleMode() ? undefined : { params: scopeParams() }),
-        listQuestions: () =>
-            http.get(questionsUrl(), { params: scopeParams({ categoryId: getExamId(), pageSize: 1000, limit: 1000 }) }),
+        listQuestions: async (config = {}) => {
+            const result = await collectPagedItems(({ page, pageSize }) => (
+                http.get(questionsUrl(), {
+                    ...config,
+                    params: scopeParams({ categoryId: getExamId(), page, pageSize }),
+                })
+            ));
+            return {
+                ...result.response,
+                data: {
+                    ...result.response.data,
+                    data: {
+                        ...result.response.data.data,
+                        list: result.items,
+                        total: result.total,
+                    },
+                },
+            };
+        },
+        listQuestionVersions: (questionId, params = {}, config = {}) =>
+            http.get(`${questionUrl(questionId)}/versions`, {
+                ...config,
+                params: scopeParams({ ...(config.params || {}), ...params }),
+            }),
+        getQuestionVersion: (questionId, revision, config = {}) =>
+            http.get(`${questionUrl(questionId)}/versions/${encodeURIComponent(String(revision))}`, {
+                ...config,
+                params: scopeParams(config.params || {}),
+            }),
+        restoreQuestionVersion: (questionId, revision, config = {}) =>
+            http.post(
+                `${questionUrl(questionId)}/versions/${encodeURIComponent(String(revision))}/restore`,
+                {},
+                {
+                    ...config,
+                    params: scopeParams(config.params || {}),
+                },
+            ),
         getAiAnalysis: (questionId) =>
             http.get(`${questionUrl(questionId)}/ai-analysis`, { params: scopeParams() }),
         generateAiAnalyses: (payload) =>
@@ -43,7 +80,7 @@ export function createExamDetailApi({ getExamId, getScopeType, getIsConsoleMode,
             }),
         updateExamInfo: (payload) =>
             http.put(categoryUrl(), scopePayload(payload)),
-        saveQuestions: (questions) =>
-            http.put(batchSaveUrl(), scopePayload({ questions })),
+        saveQuestions: (questions, baseQuestions) =>
+            http.put(batchSaveUrl(), scopePayload({ questions, baseQuestions })),
     };
 }

@@ -62,4 +62,7 @@ const Ct8RunSchema = new mongoose.Schema({
     timestamps: { createdAt: 'create_time', updatedAt: 'update_time' }
 });
 
+Ct8RunSchema.index({ create_time: -1 });
+Ct8RunSchema.index({ start_time: -1 });
+
 module.exports = mongoose.model('Ct8Run', Ct8RunSchema);

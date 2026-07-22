@@ -50,6 +50,8 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
     MiniLineChart: typeof import('./components/MiniLineChart.vue')['default']
+    QuestionQualityView: typeof import('./components/QuestionQualityView.vue')['default']
+    QuestionVersionDialog: typeof import('./components/QuestionVersionDialog.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }

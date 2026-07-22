@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { z } = require('zod');
 
 const templateKey = z.string().trim().min(2).max(80).regex(/^[a-z0-9][a-z0-9._-]*$/i);
@@ -73,7 +74,18 @@ function nextAllowedTime(now, preference) {
   return new Date(now.getTime() + deltaMinutes * 60000);
 }
 
-function createNotificationOrchestrator({ store, deliver, now = () => new Date() }) {
+function createNotificationOrchestrator({
+  store,
+  deliver,
+  now = () => new Date(),
+  concurrency = 4,
+  leaseMs = 120000,
+  workerId = `notification-${process.pid}-${crypto.randomUUID().slice(0, 8)}`,
+} = {}) {
+  const workerConcurrency = Math.min(Math.max(Number(concurrency) || 4, 1), 10);
+  const normalizedLeaseMs = Math.min(Math.max(Number(leaseMs) || 120000, 1000), 900000);
+  let activeRun = null;
+
   async function enqueue(rawInput, { caller, actor = '', requestId = '', apiClient = null } = {}) {
     const input = enqueueNotificationSchema.parse(rawInput);
     const template = input.templateKey ? await store.getTemplate(input.templateKey) : null;
@@ -120,10 +132,23 @@ function createNotificationOrchestrator({ store, deliver, now = () => new Date()
     });
   }
 
-  async function runDue(limit = 20) {
-    const jobs = await store.claimDueNotificationJobs(Math.min(Math.max(Number(limit) || 20, 1), 100));
-    const results = [];
-    for (const job of jobs) {
+  async function processJob(job) {
+    let heartbeatStopped = false;
+    let heartbeatPromise = Promise.resolve();
+    const heartbeatIntervalMs = Math.max(1000, Math.floor(normalizedLeaseMs / 3));
+    const heartbeatTimer = setInterval(() => {
+      if (heartbeatStopped) return;
+      heartbeatPromise = heartbeatPromise.then(() => store.renewNotificationJobLease(job.id, {
+        leaseId: job.leaseId,
+        workerId,
+        leaseMs: normalizedLeaseMs,
+      })).catch((error) => {
+        console.error(`notification job ${job.id} lease renewal failed`, error);
+      });
+    }, heartbeatIntervalMs);
+    heartbeatTimer.unref?.();
+
+    try {
       try {
         const outcome = await deliver(job.payload, {
           caller: job.caller || 'notification-orchestrator',
@@ -135,31 +160,60 @@ function createNotificationOrchestrator({ store, deliver, now = () => new Date()
             keyId: job.apiKeyId,
           } : null,
         });
-        const updated = await store.updateNotificationJob(job.id, {
+        return await store.updateNotificationJob(job.id, {
           status: 'sent',
           sentAt: now(),
           deliveryId: outcome.delivery?.id || null,
           lastError: '',
-        });
-        results.push(updated);
+        }, { leaseId: job.leaseId });
       } catch (error) {
         const exhausted = Number(job.attempts) >= Number(job.maxAttempts || 4);
         const delaySeconds = Math.min(3600, 30 * (2 ** Math.max(0, Number(job.attempts) - 1)));
-        const updated = await store.updateNotificationJob(job.id, {
+        return await store.updateNotificationJob(job.id, {
           status: exhausted ? 'failed' : 'retrying',
           scheduledAt: exhausted ? job.scheduledAt : new Date(now().getTime() + delaySeconds * 1000),
           failedAt: exhausted ? now() : null,
           lastError: String(error.message || error).slice(0, 300),
-        });
-        results.push(updated);
+        }, { leaseId: job.leaseId });
       }
+    } finally {
+      heartbeatStopped = true;
+      clearInterval(heartbeatTimer);
+      await heartbeatPromise;
+    }
+  }
+
+  async function executeDue(limit) {
+    const maximum = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const results = [];
+    while (results.length < maximum) {
+      const jobs = await store.claimDueNotificationJobs(
+        Math.min(workerConcurrency, maximum - results.length),
+        { workerId, leaseMs: normalizedLeaseMs },
+      );
+      if (!jobs.length) break;
+      results.push(...await Promise.all(jobs.map(processJob)));
     }
     return results;
+  }
+
+  function runDue(limit = 20) {
+    if (activeRun) return activeRun;
+    activeRun = (async () => {
+      try {
+        return await executeDue(limit);
+      } finally {
+        activeRun = null;
+      }
+    })();
+    return activeRun;
   }
 
   return {
     enqueue,
     runDue,
+    whenIdle: () => activeRun || Promise.resolve(),
+    getQueueOverview: () => store.getNotificationQueueOverview(),
     listJobs: (filters) => store.listNotificationJobs(filters),
     cancelJob: (id) => store.cancelNotificationJob(id),
     listTemplates: () => store.listTemplates(),

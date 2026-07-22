@@ -42,8 +42,50 @@ test('CT8 automation has one canonical client and API namespace', () => {
   const app = readSource('src', 'client', 'App.jsx');
   const automation = readSource('src', 'client', 'AutomationView.jsx');
 
-  assert.match(app, /import AutomationView from '\.\/AutomationView\.jsx'/);
+  assert.match(app, /const loadAutomationView = \(\) => import\('\.\/AutomationView\.jsx'\)/);
+  assert.match(app, /const AutomationView = lazy\(loadAutomationView\)/);
+  assert.match(app, /<Suspense fallback=\{<ViewLoadingFallback \/>\}>/);
+  assert.match(app, /class ViewModuleBoundary extends Component/);
+  assert.match(app, /componentDidCatch\(error, details\)/);
+  assert.match(app, /<ViewModuleBoundary key=\{activeFilter\}>/);
   assert.doesNotMatch(app, /function AutomationView/);
   assert.match(automation, /CT8_API_BASE = '\/apps\/core\/api\/ct8'/);
   assert.doesNotMatch(automation, /\/github\//);
+});
+
+test('large operational views stay out of the entry bundle and preload while idle', () => {
+  const app = readSource('src', 'client', 'App.jsx');
+
+  assert.match(app, /const loadNotificationView = \(\) => import\('\.\/NotificationServiceView\.jsx'\)/);
+  assert.match(app, /const loadPlatformViews = \(\) => import\('\.\/PlatformControlViews\.jsx'\)/);
+  assert.match(app, /const loadOperationsViews = \(\) => import\('\.\/OperationsViews\.jsx'\)/);
+  assert.match(app, /window\.requestIdleCallback/);
+  assert.match(app, /VIEW_MODULE_LOADERS/);
+});
+
+test('console navigation and segmented tabs preserve browser and keyboard semantics', () => {
+  const app = readSource('src', 'client', 'App.jsx');
+  const controls = readSource('src', 'client', 'UiControls.jsx');
+  const styles = readSource('src', 'client', 'styles.css');
+
+  assert.match(app, /window\.history\[replace \? 'replaceState' : 'pushState'\]/);
+  assert.match(app, /window\.addEventListener\('popstate'/);
+  assert.match(app, /<SegmentedTabs/);
+  assert.match(controls, /role="tablist"/);
+  assert.match(controls, /role="tab"/);
+  assert.match(controls, /tabIndex=\{active \? 0 : -1\}/);
+  for (const key of ['ArrowRight', 'ArrowLeft', 'Home', 'End']) {
+    assert.match(controls, new RegExp(`event\\.key === '${key}'`));
+  }
+  assert.match(styles, /ops-topography-background\.png/);
+  assert.doesNotMatch(styles, /ops-topography-background\.webp/);
+});
+
+test('notification nested tabs keep the existing panel spacing and accessible labels', () => {
+  const source = readSource('src', 'client', 'NotificationServiceView.jsx');
+  const styles = readSource('src', 'client', 'styles.css');
+
+  assert.match(source, /const panelLabelledBy = \['records', 'test'\]\.includes\(tab\)/);
+  assert.match(source, /className="notify-view-panel"[^>]+aria-labelledby=\{panelLabelledBy\}/);
+  assert.match(styles, /\.notify-view-panel\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*gap:\s*14px;/s);
 });

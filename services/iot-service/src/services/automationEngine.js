@@ -146,33 +146,106 @@ class AutomationEngine extends EventEmitter {
     this.db = database;
     this.now = now;
     this.ruleMatches = new Map();
-    this.evaluationQueue = Promise.resolve();
+    this.rulesCache = null;
+    this.pendingLatest = null;
+    this.evaluationInFlight = null;
     this.started = false;
+    this.status = {
+      messagesReceived: 0,
+      messagesCoalesced: 0,
+      evaluationsCompleted: 0,
+      lastStartedAt: null,
+      lastCompletedAt: null,
+      lastDurationMs: null,
+      lastError: null
+    };
     this.onMqttMessage = ({ latest } = {}) => {
-      this.evaluationQueue = this.evaluationQueue
-        .then(() => this.evaluate(latest || this.mqttService.getLatestData()))
-        .catch((error) => console.error('Automation evaluation failed:', error.message));
+      this.enqueueEvaluation(latest || this.mqttService.getLatestData());
     };
   }
 
-  start() {
+  async start() {
     if (this.started) return;
     this.started = true;
+    await this.loadRules();
     this.mqttService.on('message', this.onMqttMessage);
   }
 
-  stop() {
-    if (!this.started) return;
+  async stop() {
+    if (!this.started && !this.evaluationInFlight) return;
     this.started = false;
     this.mqttService.off('message', this.onMqttMessage);
+    await this.evaluationInFlight;
   }
 
-  async listRules() { return this.db.listAutomationRules(); }
+  async loadRules({ force = false } = {}) {
+    if (!force && this.rulesCache) return this.rulesCache;
+    this.rulesCache = await this.db.listAutomationRules();
+    return this.rulesCache;
+  }
+
+  invalidateRules() {
+    this.rulesCache = null;
+  }
+
+  getStatus() {
+    return {
+      ...this.status,
+      started: this.started,
+      evaluationInFlight: Boolean(this.evaluationInFlight),
+      pendingSnapshot: Boolean(this.pendingLatest),
+      cachedRuleCount: this.rulesCache?.length || 0
+    };
+  }
+
+  enqueueEvaluation(latest) {
+    if (!this.started) return;
+    this.status.messagesReceived += 1;
+    if (this.evaluationInFlight || this.pendingLatest) {
+      this.status.messagesCoalesced += 1;
+    }
+    this.pendingLatest = latest;
+    if (this.evaluationInFlight) return;
+
+    this.evaluationInFlight = this.drainEvaluations()
+      .catch((error) => {
+        this.status.lastError = error.message;
+        console.error('Automation evaluation failed:', error.message);
+      })
+      .finally(() => {
+        this.evaluationInFlight = null;
+      });
+  }
+
+  async drainEvaluations() {
+    while (this.pendingLatest) {
+      const latest = this.pendingLatest;
+      this.pendingLatest = null;
+      const startedAt = this.now();
+      this.status.lastStartedAt = startedAt;
+      try {
+        await this.evaluate(latest);
+        this.status.evaluationsCompleted += 1;
+        this.status.lastError = null;
+      } catch (error) {
+        this.status.lastError = error.message;
+        throw error;
+      } finally {
+        const completedAt = this.now();
+        this.status.lastCompletedAt = completedAt;
+        this.status.lastDurationMs = Math.max(0, completedAt - startedAt);
+      }
+    }
+  }
+
+  async listRules() { return this.loadRules(); }
   async listScenes() { return this.db.listAutomationScenes(); }
   async listRuns(limit) { return this.db.listAutomationRuns(limit); }
 
   async createRule(input) {
-    return this.db.saveAutomationRule(normalizeRule(this.settingsStore, input));
+    const saved = await this.db.saveAutomationRule(normalizeRule(this.settingsStore, input));
+    this.invalidateRules();
+    return saved;
   }
 
   async updateRule(id, input) {
@@ -185,12 +258,14 @@ class AutomationEngine extends EventEmitter {
       actions: input.actions ?? existing.actions,
       cooldownSeconds: input.cooldownSeconds ?? existing.cooldown_seconds
     }, existing));
+    this.invalidateRules();
     if (!saved.enabled) this.ruleMatches.delete(id);
     return saved;
   }
 
   async deleteRule(id) {
     if (!await this.db.deleteAutomationRule(id)) throw notFound('Automation rule not found.');
+    this.invalidateRules();
     this.ruleMatches.delete(id);
   }
 
@@ -218,7 +293,7 @@ class AutomationEngine extends EventEmitter {
   }
 
   async evaluate(latest) {
-    const rules = await this.db.listAutomationRules();
+    const rules = await this.loadRules();
     const now = this.now();
     for (const rule of rules) {
       if (!rule.enabled) continue;

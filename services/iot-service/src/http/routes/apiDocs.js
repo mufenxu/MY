@@ -122,6 +122,22 @@ fetch("${apiBaseUrl}/devices/esp8266_living/history?range=24h", {
   console.log(data);
 });
 \`\`\`
+
+---
+
+### 4. Get Device Insights
+Retrieve a bounded, downsampled telemetry series, health summary, and anomaly list for a device.
+
+- **Method**: \`GET\`
+- **Path**: \`${apiPath}/devices/:deviceId/insights\`
+- **Authentication**: Required (\`history:read\` scope)
+- **Query Parameters**: \`range\` supports \`1h\`, \`24h\`, and \`7d\`.
+
+#### cURL Example:
+\`\`\`bash
+curl -X GET "${apiBaseUrl}/devices/esp8266_living/insights?range=24h" \\
+  -H "Authorization: Bearer sk_mqttapi_your_token_here"
+\`\`\`
 `;
 }
 

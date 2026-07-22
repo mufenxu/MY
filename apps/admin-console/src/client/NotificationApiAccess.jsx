@@ -19,7 +19,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { requestJson } from './api.js';
-import { ConfirmDialog, SelectControl } from './UiControls.jsx';
+import { ConfirmDialog, SegmentedTabs, SelectControl } from './UiControls.jsx';
 
 const SCOPE_DETAILS = {
   'notifications:send': ['立即发送', '允许调用同步发送接口。'],
@@ -274,13 +274,21 @@ export default function NotificationApiAccess({ session, onError, onMessage }) {
         <article><Gauge size={21} /><div><span>P95 耗时</span><strong>{overview.p95DurationMs == null ? '--' : overview.p95DurationMs}</strong><small>{overview.p95DurationMs == null ? '暂无数据' : '毫秒'}</small></div></article>
       </div>
 
-      <div className="notify-api-subnav" role="tablist" aria-label="API 接入视图">
-        {[
-          ['clients', KeyRound, '应用与密钥'],
-          ['docs', BookOpen, '调用说明'],
-          ['logs', ScrollText, '调用日志'],
-        ].map(([id, Icon, label]) => <button key={id} className={mode === id ? 'active' : ''} type="button" role="tab" aria-selected={mode === id} onClick={() => setMode(id)}><Icon size={16} />{label}</button>)}
-      </div>
+      <SegmentedTabs
+        className="notify-api-subnav"
+        ariaLabel="API 接入视图"
+        idPrefix="notify-api-tab"
+        panelId="notify-api-panel"
+        items={[
+          { id: 'clients', label: <><KeyRound size={16} />应用与密钥</> },
+          { id: 'docs', label: <><BookOpen size={16} />调用说明</> },
+          { id: 'logs', label: <><ScrollText size={16} />调用日志</> },
+        ]}
+        value={mode}
+        onChange={setMode}
+      />
+
+      <div id="notify-api-panel" role="tabpanel" aria-labelledby={`notify-api-tab-${mode}`}>
 
       {mode === 'clients' && (
         <div className="notify-api-client-layout">
@@ -360,6 +368,7 @@ export default function NotificationApiAccess({ session, onError, onMessage }) {
           <footer className="notify-pagination"><span>第 {access.requests.page || requestPage} / {totalRequestPages} 页</span><div><button type="button" disabled={requestPage <= 1} onClick={() => setRequestPage((page) => Math.max(1, page - 1))}>上一页</button><button type="button" disabled={requestPage >= totalRequestPages} onClick={() => setRequestPage((page) => Math.min(totalRequestPages, page + 1))}>下一页</button></div></footer>
         </section>
       )}
+      </div>
 
       <SecretDialog secret={secret} onClose={() => setSecret(null)} onCopy={(token) => copyText(token, 'API 密钥')} />
       <ConfirmDialog

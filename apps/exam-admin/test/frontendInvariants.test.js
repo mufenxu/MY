@@ -50,7 +50,8 @@ test('platform console return stays scoped to verified managed sessions', () => 
   assert.match(dashboard, /platform-console-link[\s\S]*?href="\/console"/);
   assert.match(detail, /v-if="IS_PLATFORM_SSO"[\s\S]*?returnToPlatformConsole/);
   assert.match(detail, /未保存的修改[\s\S]*?window\.location\.assign\('\/console'\)/);
-  assert.match(bootstrap, /href="\/console"[\s\S]*?返回管理中心/);
+  assert.match(bootstrap, /link\.href = IS_PLATFORM_SSO \? '\/console'/);
+  assert.match(bootstrap, /link\.textContent = IS_PLATFORM_SSO \? '返回管理中心'/);
 });
 
 test('logout preserves the session until server-side revocation succeeds', () => {
@@ -64,4 +65,36 @@ test('logout preserves the session until server-side revocation succeeds', () =>
   assert.doesNotMatch(dashboard, /adminApi\.logout\(\)\.catch\(\(\) => \{\}\)/);
   assert.match(runtime, /createPlatformBrowserRuntime\(\{ appName: 'exam' \}\)/);
   assert.match(sharedRuntime, /if \(!response\.ok\)[\s\S]*throw new Error/);
+});
+
+test('startup blocks on SSO only and preloads the standalone dashboard without blocking login', () => {
+    const index = readSource('index.html');
+    const bootstrap = readSource('src', 'main.js');
+
+    assert.match(index, /<div id="app"><\/div>/);
+    assert.doesNotMatch(index, /exam-bootstrap-shell|exam-bootstrap-panel/);
+    assert.match(bootstrap, /if \(IS_PLATFORM_SSO\) \{[\s\S]*await Promise\.all\(\[[\s\S]*bootstrapPlatformSession\(\)[\s\S]*preloadDashboardView\(\)/);
+    assert.match(bootstrap, /app\.mount\('#app'\);[\s\S]*if \(!IS_PLATFORM_SSO\)[\s\S]*scheduleDashboardPreload\(\)/);
+    assert.match(bootstrap, /preloadDashboardView\(\)\.catch\(\(\) => \{\}\)/);
+    assert.match(bootstrap, /requestIdleCallback[\s\S]*setTimeout/);
+    assert.doesNotMatch(bootstrap, /innerHTML\s*=/);
+});
+
+test('HTTP timeout handling composes and removes caller abort signals', () => {
+  const source = readSource('src', 'utils', 'http.js');
+
+  assert.match(source, /const externalSignal = config\.signal/);
+  assert.match(source, /externalSignal\?\.addEventListener\('abort', abortFromExternalSignal/);
+  assert.match(source, /externalSignal\?\.removeEventListener\('abort', abortFromExternalSignal\)/);
+});
+
+test('dashboard views cancel stale requests and retain their last successful data', () => {
+  const source = readSource('src', 'views', 'DashboardView.vue');
+
+  assert.match(source, /const viewLoading = reactive\(/);
+  assert.match(source, /const beginViewRequest = \(key\) => \{[\s\S]*?\.abort\(\)[\s\S]*?new AbortController\(\)/);
+  assert.match(source, /v-loading="viewLoading\.examResults"/);
+  assert.match(source, /v-loading="viewLoading\.users"/);
+  assert.match(source, /v-loading="viewLoading\.feedbacks"/);
+  assert.doesNotMatch(source, /categories\.value\s*=\s*\[\]/);
 });

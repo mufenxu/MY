@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createBackupManager, createBackupRunnerClient } from '../src/backups.js';
+import { BackupOperationError, createBackupManager, createBackupRunnerClient } from '../src/backups.js';
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -177,6 +177,37 @@ test('backup archives can be downloaded, deleted, and uploaded again', async (t)
 
   const afterUpload = await manager.getStatus();
   assert.deepEqual(afterUpload.backups.map((backup) => backup.name), [backupName]);
+});
+
+test('backup uploads enforce the compressed stream limit without trusting content-length', async (t) => {
+  const backupRoot = await mkdtemp(join(tmpdir(), 'my-platform-backups-'));
+  const workspaceRoot = await mkdtemp(join(tmpdir(), 'my-platform-workspace-'));
+  t.after(() => rm(backupRoot, { recursive: true, force: true }));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  const backupName = '2026-07-18T12-06-48-304Z';
+  await createBackupFixture(backupRoot, backupName);
+  const source = createBackupManager({
+    config: { backupRoot, workspaceRoot, backupOperationsEnabled: true, restoreOperationsEnabled: true },
+  });
+  const download = await source.downloadBackup({ backupName });
+  const archive = await collectStream(download.stream);
+  await source.deleteBackup({ backupName });
+
+  const limited = createBackupManager({
+    config: {
+      backupRoot,
+      workspaceRoot,
+      backupOperationsEnabled: true,
+      restoreOperationsEnabled: true,
+      backupUploadMaxBytes: archive.length - 1,
+    },
+  });
+  await assert.rejects(
+    limited.uploadBackup({ filename: `${backupName}.tar.gz`, stream: Readable.from(archive) }),
+    (error) => error instanceof BackupOperationError
+      && error.status === 413
+      && error.code === 'BACKUP_UPLOAD_TOO_LARGE',
+  );
 });
 
 test('backup command starts a tracked job', async (t) => {

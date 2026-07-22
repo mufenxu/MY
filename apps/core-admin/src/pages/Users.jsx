@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Space, Card, Tag, Typography, Tooltip, Tabs } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, Space, Card, Tag, Typography, Tooltip, Tabs } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, TeamOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { useUsers } from '../hooks/useUsers';
 import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
 import FeatureVisibilityConfig from '../components/FeatureVisibilityConfig';
 import UserAvatar from '../components/UserAvatar';
+import { message } from '../utils/feedback';
 
 const { Title, Text } = Typography;
 const { Option } = Select;

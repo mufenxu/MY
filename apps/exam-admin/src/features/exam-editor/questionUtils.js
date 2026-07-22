@@ -374,7 +374,10 @@ export const removeQuestionOption = (question, optionIndex) => {
 };
 
 export const createQuestionSavePayload = (question) => ({
-    ...(isPersistedQuestion(question) ? { _id: question._id } : {}),
+    ...(isPersistedQuestion(question) ? {
+        _id: question._id,
+        revision: Number(question.revision) || 1,
+    } : {}),
     type: question.type,
     content: String(question.content || '').trim(),
     options: question.type === 'fill'
@@ -391,6 +394,7 @@ export const createQuestionSavePayload = (question) => ({
 
 export const createEditableQuestionFromApi = (question = {}) => ({
     _id: question._id,
+    ...(isPersistedQuestion(question) ? { revision: Number(question.revision) || 1 } : {}),
     type: question.type,
     content: question.content,
     options: (question.options || []).map((opt) => ({
@@ -402,6 +406,13 @@ export const createEditableQuestionFromApi = (question = {}) => ({
     analysisSource: question.analysisSource || 'manual',
     fillAnswer: question.type === 'fill' ? (question.answer?.[0] || '') : '',
 });
+
+export const createQuestionRevisionBaseline = (questions = []) => questions
+    .filter(isPersistedQuestion)
+    .map((question) => ({
+        _id: question._id,
+        revision: Number(question.revision) || 1,
+    }));
 
 export const validateQuestion = (question) => {
     if (!String(question.content || '').trim()) {

@@ -13,8 +13,72 @@ function serializeDocument(value) {
   if (Array.isArray(value)) return value.map(serializeDocument);
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !['_id', 'encryptedPayload', 'tokenHash', 'expiresAt'].includes(key))
+    .filter(([key]) => ![
+      '_id',
+      'dedupeReservationId',
+      'dedupeScopeKey',
+      'encryptedPayload',
+      'expiresAt',
+      'leaseId',
+      'pendingStatus',
+      'tokenHash',
+    ].includes(key))
     .map(([key, nested]) => [key, serializeDocument(nested)]));
+}
+
+const TERMINAL_JOB_STATUSES = new Set(['sent', 'failed', 'cancelled', 'suppressed']);
+
+function createDedupeScopeKey(input) {
+  if (!input.dedupeKey) return '';
+  const targetValue = String(input.targetValue || '').split('|').map((item) => item.trim()).filter(Boolean).sort().join('|');
+  return crypto.createHash('sha256').update(JSON.stringify([
+    String(input.caller || ''),
+    String(input.apiClientId || ''),
+    String(input.targetType || ''),
+    targetValue,
+    String(input.dedupeKey),
+  ])).digest('hex');
+}
+
+function applyMemoryJobUpdate(row, update, timestamp, retentionDays) {
+  Object.assign(row, update, { updatedAt: timestamp });
+  if (update.status && update.status !== 'processing') {
+    delete row.leaseId;
+    delete row.lockedUntil;
+    delete row.workerId;
+  }
+  if (TERMINAL_JOB_STATUSES.has(update.status)) {
+    row.terminalAt = update.terminalAt ? new Date(update.terminalAt) : timestamp;
+    row.expiresAt = update.expiresAt
+      ? new Date(update.expiresAt)
+      : new Date(row.terminalAt.getTime() + retentionDays * 86400000);
+  } else if (update.status) {
+    delete row.terminalAt;
+    delete row.expiresAt;
+  }
+}
+
+function mongoJobMutation(update, timestamp, retentionDays) {
+  const set = { ...update, updatedAt: timestamp };
+  const unset = {};
+  if (set.status && set.status !== 'processing') {
+    unset.leaseId = '';
+    unset.lockedUntil = '';
+    unset.workerId = '';
+  }
+  if (TERMINAL_JOB_STATUSES.has(set.status)) {
+    set.terminalAt = set.terminalAt ? new Date(set.terminalAt) : timestamp;
+    set.expiresAt = set.expiresAt
+      ? new Date(set.expiresAt)
+      : new Date(set.terminalAt.getTime() + retentionDays * 86400000);
+  } else if (set.status) {
+    unset.terminalAt = '';
+    unset.expiresAt = '';
+  }
+  return {
+    $set: set,
+    ...(Object.keys(unset).length ? { $unset: unset } : {}),
+  };
 }
 
 function serializeApiKey(value) {
@@ -121,10 +185,26 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
   const apiClients = [];
   const apiKeys = [];
   const apiRequests = [];
+  const dedupeReservations = new Map();
 
   function prune() {
     const cutoff = now().getTime() - retentionDays * 86400000;
     while (rows.at(-1) && new Date(rows.at(-1).startedAt).getTime() < cutoff) rows.pop();
+    const timestamp = now();
+    for (let index = jobs.length - 1; index >= 0; index -= 1) {
+      if (jobs[index].expiresAt && new Date(jobs[index].expiresAt) <= timestamp) jobs.splice(index, 1);
+    }
+    for (const [scopeKey, reservation] of dedupeReservations) {
+      if (new Date(reservation.expiresAt) <= timestamp || !jobs.some((job) => job.id === reservation.jobId)) {
+        dedupeReservations.delete(scopeKey);
+      }
+    }
+  }
+
+  function releaseDedupeReservation(row) {
+    if (!row?.dedupeScopeKey) return;
+    const reservation = dedupeReservations.get(row.dedupeScopeKey);
+    if (reservation?.jobId === row.id) dedupeReservations.delete(row.dedupeScopeKey);
   }
 
   return {
@@ -195,55 +275,118 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
     },
     async createNotificationJob(input) {
       const timestamp = now();
-      if (input.dedupeKey) {
-        const duplicate = jobs.find((item) => item.dedupeKey === input.dedupeKey
-          && new Date(item.dedupeUntil || 0) > timestamp
-          && (activeJobStatus(item.status) || item.status === 'sent'));
+      prune();
+      const dedupeScopeKey = createDedupeScopeKey(input);
+      if (dedupeScopeKey) {
+        const reservation = dedupeReservations.get(dedupeScopeKey);
+        const duplicate = reservation && new Date(reservation.expiresAt) > timestamp
+          ? jobs.find((item) => item.id === reservation.jobId && (activeJobStatus(item.status) || item.status === 'sent'))
+          : null;
         if (duplicate) return { job: serializeDocument(duplicate), deduplicated: true };
+        if (reservation) dedupeReservations.delete(dedupeScopeKey);
       }
+      const status = input.status || 'scheduled';
+      const dedupeUntil = new Date(timestamp.getTime() + Number(input.dedupeWindowMs || 300000));
       const row = {
         id: crypto.randomUUID(),
-        status: 'scheduled',
+        ...input,
+        status,
         attempts: 0,
         lastError: '',
         createdAt: timestamp,
         updatedAt: timestamp,
         scheduledAt: new Date(input.scheduledAt || timestamp),
-        dedupeUntil: new Date(timestamp.getTime() + Number(input.dedupeWindowMs || 300000)),
-        ...input,
+        dedupeUntil,
+        dedupeScopeKey,
         encryptedPayload: protector.encrypt(input.payload),
       };
       delete row.payload;
+      if (TERMINAL_JOB_STATUSES.has(status)) applyMemoryJobUpdate(row, { status }, timestamp, retentionDays);
       jobs.unshift(row);
+      if (dedupeScopeKey && (activeJobStatus(status) || status === 'sent')) {
+        dedupeReservations.set(dedupeScopeKey, { jobId: row.id, expiresAt: dedupeUntil });
+      }
       return { job: serializeDocument(row), deduplicated: false };
     },
-    async claimDueNotificationJobs(limit = 20) {
+    async claimDueNotificationJobs(limit = 20, { workerId = 'memory-worker', leaseMs = 120000 } = {}) {
       const timestamp = now();
+      prune();
+      for (const item of jobs) {
+        const leaseExpired = item.status === 'processing' && (!item.lockedUntil || new Date(item.lockedUntil) <= timestamp);
+        if (leaseExpired && Number(item.attempts || 0) >= Number(item.maxAttempts || 4)) {
+          applyMemoryJobUpdate(item, {
+            status: 'failed',
+            failedAt: timestamp,
+            lastError: item.lastError || 'Notification worker lease expired after the final attempt.',
+          }, timestamp, retentionDays);
+          releaseDedupeReservation(item);
+        }
+      }
       return jobs
-        .filter((item) => ['scheduled', 'retrying'].includes(item.status) && new Date(item.scheduledAt) <= timestamp)
-        .sort((left, right) => new Date(left.scheduledAt) - new Date(right.scheduledAt))
+        .filter((item) => {
+          if (['scheduled', 'retrying'].includes(item.status)) return new Date(item.scheduledAt) <= timestamp;
+          return item.status === 'processing'
+            && (!item.lockedUntil || new Date(item.lockedUntil) <= timestamp)
+            && Number(item.attempts || 0) < Number(item.maxAttempts || 4);
+        })
+        .sort((left, right) => new Date(left.scheduledAt || left.createdAt) - new Date(right.scheduledAt || right.createdAt))
         .slice(0, limit)
         .map((item) => {
-          Object.assign(item, { status: 'processing', attempts: item.attempts + 1, updatedAt: timestamp });
-          return { ...serializeDocument(item), payload: protector.decrypt(item.encryptedPayload) };
+          Object.assign(item, {
+            status: 'processing',
+            attempts: Number(item.attempts || 0) + 1,
+            leaseId: crypto.randomUUID(),
+            lockedUntil: new Date(timestamp.getTime() + Number(leaseMs || 120000)),
+            workerId,
+            updatedAt: timestamp,
+          });
+          return { ...serializeDocument(item), leaseId: item.leaseId, payload: protector.decrypt(item.encryptedPayload) };
         });
     },
-    async updateNotificationJob(id, update) {
+    async renewNotificationJobLease(id, { leaseId, workerId, leaseMs = 120000 } = {}) {
+      const row = jobs.find((item) => item.id === id);
+      if (!row || row.status !== 'processing' || row.leaseId !== leaseId || row.workerId !== workerId) return false;
+      row.lockedUntil = new Date(now().getTime() + Number(leaseMs || 120000));
+      row.updatedAt = now();
+      return true;
+    },
+    async updateNotificationJob(id, update, { leaseId = '' } = {}) {
       const row = jobs.find((item) => item.id === id);
       if (!row) return null;
-      Object.assign(row, update, { updatedAt: now() });
+      if (leaseId && (row.status !== 'processing' || row.leaseId !== leaseId)) return null;
+      applyMemoryJobUpdate(row, update, now(), retentionDays);
+      if (['failed', 'cancelled', 'suppressed'].includes(row.status)) releaseDedupeReservation(row);
       return serializeDocument(row);
     },
     async cancelNotificationJob(id) {
       const row = jobs.find((item) => item.id === id);
       if (!row || !['scheduled', 'retrying'].includes(row.status)) return null;
-      Object.assign(row, { status: 'cancelled', updatedAt: now() });
+      applyMemoryJobUpdate(row, { status: 'cancelled' }, now(), retentionDays);
+      releaseDedupeReservation(row);
       return serializeDocument(row);
     },
     async listNotificationJobs(filters = {}) {
+      prune();
       const filtered = jobs.filter((item) => (!filters.status || item.status === filters.status)
         && (!filters.caller || item.caller === filters.caller));
       return paged(filtered, filters);
+    },
+    async getNotificationQueueOverview() {
+      prune();
+      const timestamp = now();
+      const due = jobs.filter((item) => ['scheduled', 'retrying'].includes(item.status) && new Date(item.scheduledAt) <= timestamp);
+      const oldestDueAt = due.reduce((oldest, item) => (!oldest || new Date(item.scheduledAt) < oldest ? new Date(item.scheduledAt) : oldest), null);
+      return {
+        scheduled: jobs.filter((item) => item.status === 'scheduled').length,
+        retrying: jobs.filter((item) => item.status === 'retrying').length,
+        processing: jobs.filter((item) => item.status === 'processing').length,
+        reserving: 0,
+        deadLetter: jobs.filter((item) => item.status === 'failed').length,
+        due: due.length,
+        expiredLeases: jobs.filter((item) => item.status === 'processing' && (!item.lockedUntil || new Date(item.lockedUntil) <= timestamp)).length,
+        oldestDueAt: serializeDocument(oldestDueAt),
+        lagMs: oldestDueAt ? Math.max(0, timestamp.getTime() - oldestDueAt.getTime()) : 0,
+      };
     },
     async getRecipientPreference(targetId) {
       return serializeDocument(preferences.get(targetId) || null);
@@ -404,6 +547,7 @@ async function createMongoNotificationStore({
   const apiClients = db.collection('notification_api_clients');
   const apiKeys = db.collection('notification_api_keys');
   const apiRequests = db.collection('notification_api_requests');
+  const dedupeReservations = db.collection('notification_job_dedupes');
   await Promise.all([
     deliveries.createIndex({ id: 1 }, { unique: true }),
     deliveries.createIndex({ startedAt: -1 }),
@@ -413,9 +557,12 @@ async function createMongoNotificationStore({
     templates.createIndex({ key: 1 }, { unique: true }),
     templates.createIndex({ updatedAt: -1 }),
     jobs.createIndex({ id: 1 }, { unique: true }),
-    jobs.createIndex({ status: 1, scheduledAt: 1 }),
+    jobs.createIndex({ status: 1, scheduledAt: 1, lockedUntil: 1 }),
     jobs.createIndex({ dedupeKey: 1, dedupeUntil: -1 }, { sparse: true }),
     jobs.createIndex({ createdAt: -1 }),
+    jobs.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    dedupeReservations.createIndex({ scopeKey: 1 }, { unique: true }),
+    dedupeReservations.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     preferences.createIndex({ targetId: 1 }, { unique: true }),
     apiClients.createIndex({ id: 1 }, { unique: true }),
     apiClients.createIndex({ status: 1, createdAt: -1 }),
@@ -426,6 +573,143 @@ async function createMongoNotificationStore({
     apiRequests.createIndex({ clientId: 1, startedAt: -1 }),
     apiRequests.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   ]);
+
+  const migrationTimestamp = new Date();
+  await jobs.updateMany(
+    { status: { $in: [...TERMINAL_JOB_STATUSES] }, expiresAt: { $exists: false } },
+    [
+      { $set: { terminalAt: { $ifNull: ['$terminalAt', { $ifNull: ['$updatedAt', { $ifNull: ['$createdAt', '$$NOW'] }] }] } } },
+      { $set: { expiresAt: { $add: ['$terminalAt', retentionDays * 86400000] } } },
+    ],
+  );
+
+  // Preserve in-window idempotency for jobs created before scoped dedupe reservations existed.
+  const legacyDedupeJobs = jobs.find({
+    dedupeKey: { $type: 'string', $ne: '' },
+    dedupeUntil: { $gt: migrationTimestamp },
+    status: { $in: ['scheduled', 'retrying', 'processing', 'sent'] },
+  }, {
+    projection: {
+      id: 1,
+      caller: 1,
+      apiClientId: 1,
+      targetType: 1,
+      targetValue: 1,
+      dedupeKey: 1,
+      dedupeUntil: 1,
+    },
+  }).sort({ createdAt: 1 });
+  for await (const legacyJob of legacyDedupeJobs) {
+    const scopeKey = createDedupeScopeKey(legacyJob);
+    await jobs.updateOne({ id: legacyJob.id }, { $set: { dedupeScopeKey: scopeKey } });
+    try {
+      await dedupeReservations.updateOne(
+        { scopeKey },
+        {
+          $setOnInsert: {
+            scopeKey,
+            jobId: legacyJob.id,
+            reservationId: crypto.randomUUID(),
+            createdAt: migrationTimestamp,
+            updatedAt: migrationTimestamp,
+            expiresAt: new Date(legacyJob.dedupeUntil),
+          },
+        },
+        { upsert: true },
+      );
+    } catch (error) {
+      if (Number(error?.code) !== 11000) throw error;
+    }
+  }
+
+  let pendingApiKeyUsage = new Map();
+  let pendingApiKeyUsageCount = 0;
+  let apiKeyUsageFlushPromise = null;
+  let storeClosing = false;
+
+  async function flushApiKeyUsage() {
+    if (apiKeyUsageFlushPromise) {
+      await apiKeyUsageFlushPromise;
+      if (pendingApiKeyUsage.size) return flushApiKeyUsage();
+      return undefined;
+    }
+    if (!pendingApiKeyUsage.size) return undefined;
+    const batch = pendingApiKeyUsage;
+    pendingApiKeyUsage = new Map();
+    pendingApiKeyUsageCount = 0;
+    apiKeyUsageFlushPromise = apiKeys.bulkWrite([...batch.entries()].map(([id, usage]) => ({
+      updateOne: {
+        filter: { id },
+        update: { $max: { lastUsedAt: usage.lastUsedAt }, $inc: { requestCount: usage.count } },
+      },
+    })), { ordered: false }).catch((error) => {
+      for (const [id, usage] of batch) {
+        const current = pendingApiKeyUsage.get(id) || { count: 0, lastUsedAt: usage.lastUsedAt };
+        current.count += usage.count;
+        if (usage.lastUsedAt > current.lastUsedAt) current.lastUsedAt = usage.lastUsedAt;
+        pendingApiKeyUsage.set(id, current);
+        pendingApiKeyUsageCount += usage.count;
+      }
+      throw error;
+    }).finally(() => {
+      apiKeyUsageFlushPromise = null;
+    });
+    await apiKeyUsageFlushPromise;
+    if (pendingApiKeyUsage.size) return flushApiKeyUsage();
+    return undefined;
+  }
+
+  function recordApiKeyUsage(id, timestamp) {
+    const current = pendingApiKeyUsage.get(id) || { count: 0, lastUsedAt: timestamp };
+    current.count += 1;
+    if (timestamp > current.lastUsedAt) current.lastUsedAt = timestamp;
+    pendingApiKeyUsage.set(id, current);
+    pendingApiKeyUsageCount += 1;
+    if (pendingApiKeyUsageCount >= 100 && !storeClosing) {
+      void flushApiKeyUsage().catch((error) => console.error('notification API key usage flush failed', error));
+    }
+  }
+
+  const apiKeyUsageTimer = setInterval(() => {
+    if (!storeClosing) void flushApiKeyUsage().catch((error) => console.error('notification API key usage flush failed', error));
+  }, 5000);
+  apiKeyUsageTimer.unref?.();
+
+  function isDuplicateKeyError(error) {
+    return Number(error?.code) === 11000;
+  }
+
+  async function acquireDedupeReservation({ scopeKey, jobId, expiresAt, timestamp }) {
+    const reservationId = crypto.randomUUID();
+    try {
+      const reservation = await dedupeReservations.findOneAndUpdate(
+        {
+          scopeKey,
+          $or: [{ expiresAt: { $lte: timestamp } }, { expiresAt: { $exists: false } }],
+        },
+        {
+          $set: { jobId, reservationId, expiresAt, updatedAt: timestamp },
+          $setOnInsert: { createdAt: timestamp },
+        },
+        { upsert: true, returnDocument: 'after' },
+      );
+      if (reservation?.reservationId === reservationId) return { owned: true, reservationId };
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) throw error;
+    }
+    return { owned: false, reservation: await dedupeReservations.findOne({ scopeKey }) };
+  }
+
+  async function finalizeCreatingJob(row, timestamp = new Date()) {
+    const status = row.pendingStatus || 'scheduled';
+    const mutation = mongoJobMutation({ status }, timestamp, retentionDays);
+    mutation.$unset = { ...(mutation.$unset || {}), pendingStatus: '' };
+    return jobs.findOneAndUpdate(
+      { id: row.id, status: 'creating' },
+      mutation,
+      { returnDocument: 'after' },
+    );
+  }
 
   return {
     async createDelivery(input) {
@@ -505,56 +789,168 @@ async function createMongoNotificationStore({
     },
     async createNotificationJob(input) {
       const timestamp = new Date();
-      if (input.dedupeKey) {
-        const duplicate = await jobs.findOne({
-          dedupeKey: input.dedupeKey,
-          dedupeUntil: { $gt: timestamp },
-          status: { $in: ['scheduled', 'retrying', 'processing', 'sent'] },
-        }, { projection: { _id: 0, encryptedPayload: 0 } });
-        if (duplicate) return { job: serializeDocument(duplicate), deduplicated: true };
-      }
+      const status = input.status || 'scheduled';
+      const dedupeScopeKey = createDedupeScopeKey(input);
+      const dedupeUntil = new Date(timestamp.getTime() + Number(input.dedupeWindowMs || 300000));
       const row = {
         id: crypto.randomUUID(),
-        status: 'scheduled',
+        ...input,
+        status: dedupeScopeKey && status !== 'suppressed' ? 'creating' : status,
+        ...(dedupeScopeKey && status !== 'suppressed' ? { pendingStatus: status } : {}),
         attempts: 0,
         lastError: '',
         createdAt: timestamp,
         updatedAt: timestamp,
         scheduledAt: new Date(input.scheduledAt || timestamp),
-        dedupeUntil: new Date(timestamp.getTime() + Number(input.dedupeWindowMs || 300000)),
-        ...input,
+        dedupeUntil,
+        dedupeScopeKey,
         encryptedPayload: protector.encrypt(input.payload),
       };
       delete row.payload;
+      if (TERMINAL_JOB_STATUSES.has(status)) {
+        row.terminalAt = timestamp;
+        row.expiresAt = new Date(timestamp.getTime() + retentionDays * 86400000);
+      } else if (row.status === 'creating') {
+        row.expiresAt = new Date(timestamp.getTime() + 300000);
+      }
       await jobs.insertOne(row);
-      return { job: serializeDocument(row), deduplicated: false };
+      if (!dedupeScopeKey || status === 'suppressed') {
+        return { job: serializeDocument(row), deduplicated: false };
+      }
+
+      try {
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const acquired = await acquireDedupeReservation({
+            scopeKey: dedupeScopeKey,
+            jobId: row.id,
+            expiresAt: dedupeUntil,
+            timestamp: new Date(),
+          });
+          if (acquired.owned) {
+            await jobs.updateOne({ id: row.id }, { $set: { dedupeReservationId: acquired.reservationId } });
+            const finalized = await finalizeCreatingJob({ ...row, dedupeReservationId: acquired.reservationId })
+              || await jobs.findOne({ id: row.id });
+            return { job: serializeDocument(finalized), deduplicated: false };
+          }
+
+          const reservation = acquired.reservation;
+          if (!reservation) continue;
+          let duplicate = await jobs.findOne({ id: reservation.jobId });
+          if (duplicate?.status === 'creating') {
+            duplicate = await finalizeCreatingJob(duplicate) || await jobs.findOne({ id: reservation.jobId });
+          }
+          if (duplicate && (activeJobStatus(duplicate.status) || duplicate.status === 'sent')) {
+            await jobs.deleteOne({ id: row.id, status: 'creating' });
+            return { job: serializeDocument(duplicate), deduplicated: true };
+          }
+
+          const reservationId = crypto.randomUUID();
+          const reclaimed = await dedupeReservations.findOneAndUpdate(
+            { scopeKey: dedupeScopeKey, reservationId: reservation.reservationId },
+            { $set: {
+              jobId: row.id,
+              reservationId,
+              expiresAt: dedupeUntil,
+              updatedAt: new Date(),
+            } },
+            { returnDocument: 'after' },
+          );
+          if (reclaimed?.reservationId === reservationId) {
+            await jobs.updateOne({ id: row.id }, { $set: { dedupeReservationId: reservationId } });
+            const finalized = await finalizeCreatingJob({ ...row, dedupeReservationId: reservationId })
+              || await jobs.findOne({ id: row.id });
+            return { job: serializeDocument(finalized), deduplicated: false };
+          }
+        }
+        throw Object.assign(new Error('Notification deduplication reservation is busy.'), {
+          code: 'DEDUPE_RESERVATION_BUSY',
+          status: 503,
+        });
+      } catch (error) {
+        await jobs.deleteOne({ id: row.id, status: 'creating' });
+        throw error;
+      }
     },
-    async claimDueNotificationJobs(limit = 20) {
+    async claimDueNotificationJobs(limit = 20, { workerId = 'notification-worker', leaseMs = 120000 } = {}) {
       const claimed = [];
       const timestamp = new Date();
+      const terminalAt = timestamp;
+      await jobs.updateMany({
+        status: 'processing',
+        $and: [
+          { $or: [{ lockedUntil: { $lte: timestamp } }, { lockedUntil: { $exists: false } }] },
+          { $expr: { $gte: [{ $ifNull: ['$attempts', 0] }, { $ifNull: ['$maxAttempts', 4] }] } },
+        ],
+      }, {
+        $set: {
+          status: 'failed',
+          failedAt: timestamp,
+          terminalAt,
+          expiresAt: new Date(terminalAt.getTime() + retentionDays * 86400000),
+          lastError: 'Notification worker lease expired after the final attempt.',
+          updatedAt: timestamp,
+        },
+        $unset: { leaseId: '', lockedUntil: '', workerId: '' },
+      });
       for (let index = 0; index < limit; index += 1) {
+        const leaseId = crypto.randomUUID();
         const row = await jobs.findOneAndUpdate(
-          { status: { $in: ['scheduled', 'retrying'] }, scheduledAt: { $lte: timestamp } },
-          { $set: { status: 'processing', updatedAt: timestamp }, $inc: { attempts: 1 } },
+          {
+            $or: [
+              { status: { $in: ['scheduled', 'retrying'] }, scheduledAt: { $lte: timestamp } },
+              {
+                status: 'processing',
+                $and: [
+                  { $or: [{ lockedUntil: { $lte: timestamp } }, { lockedUntil: { $exists: false } }] },
+                  { $expr: { $lt: [{ $ifNull: ['$attempts', 0] }, { $ifNull: ['$maxAttempts', 4] }] } },
+                ],
+              },
+            ],
+          },
+          {
+            $set: {
+              status: 'processing',
+              leaseId,
+              lockedUntil: new Date(timestamp.getTime() + Number(leaseMs || 120000)),
+              workerId,
+              updatedAt: timestamp,
+            },
+            $inc: { attempts: 1 },
+          },
           { sort: { scheduledAt: 1 }, returnDocument: 'after' },
         );
         if (!row) break;
-        claimed.push({ ...serializeDocument(row), payload: protector.decrypt(row.encryptedPayload) });
+        claimed.push({ ...serializeDocument(row), leaseId: row.leaseId, payload: protector.decrypt(row.encryptedPayload) });
       }
       return claimed;
     },
-    async updateNotificationJob(id, update) {
-      return serializeDocument(await jobs.findOneAndUpdate(
-        { id }, { $set: { ...update, updatedAt: new Date() } },
+    async renewNotificationJobLease(id, { leaseId, workerId, leaseMs = 120000 } = {}) {
+      return (await jobs.updateOne(
+        { id, status: 'processing', leaseId, workerId },
+        { $set: { lockedUntil: new Date(Date.now() + Number(leaseMs || 120000)), updatedAt: new Date() } },
+      )).modifiedCount === 1;
+    },
+    async updateNotificationJob(id, update, { leaseId = '' } = {}) {
+      const updated = await jobs.findOneAndUpdate(
+        { id, ...(leaseId ? { status: 'processing', leaseId } : {}) },
+        mongoJobMutation(update, new Date(), retentionDays),
         { returnDocument: 'after', projection: { _id: 0, encryptedPayload: 0 } },
-      ));
+      );
+      if (updated && ['failed', 'cancelled', 'suppressed'].includes(updated.status) && updated.dedupeScopeKey) {
+        await dedupeReservations.deleteOne({ scopeKey: updated.dedupeScopeKey, jobId: updated.id });
+      }
+      return serializeDocument(updated);
     },
     async cancelNotificationJob(id) {
-      return serializeDocument(await jobs.findOneAndUpdate(
+      const updated = await jobs.findOneAndUpdate(
         { id, status: { $in: ['scheduled', 'retrying'] } },
-        { $set: { status: 'cancelled', updatedAt: new Date() } },
+        mongoJobMutation({ status: 'cancelled' }, new Date(), retentionDays),
         { returnDocument: 'after', projection: { _id: 0, encryptedPayload: 0 } },
-      ));
+      );
+      if (updated?.dedupeScopeKey) {
+        await dedupeReservations.deleteOne({ scopeKey: updated.dedupeScopeKey, jobId: updated.id });
+      }
+      return serializeDocument(updated);
     },
     async listNotificationJobs(filters = {}) {
       const page = normalizePositiveInteger(filters.page, 1, 100000);
@@ -569,6 +965,31 @@ async function createMongoNotificationStore({
         jobs.countDocuments(query),
       ]);
       return { items: items.map(serializeDocument), page, pageSize, total };
+    },
+    async getNotificationQueueOverview() {
+      const timestamp = new Date();
+      const dueQuery = { status: { $in: ['scheduled', 'retrying'] }, scheduledAt: { $lte: timestamp } };
+      const [scheduled, retrying, processing, reserving, deadLetter, due, expiredLeases, oldestDue] = await Promise.all([
+        jobs.countDocuments({ status: 'scheduled' }),
+        jobs.countDocuments({ status: 'retrying' }),
+        jobs.countDocuments({ status: 'processing' }),
+        jobs.countDocuments({ status: 'creating' }),
+        jobs.countDocuments({ status: 'failed' }),
+        jobs.countDocuments(dueQuery),
+        jobs.countDocuments({ status: 'processing', $or: [{ lockedUntil: { $lte: timestamp } }, { lockedUntil: { $exists: false } }] }),
+        jobs.findOne(dueQuery, { projection: { scheduledAt: 1 }, sort: { scheduledAt: 1 } }),
+      ]);
+      return {
+        scheduled,
+        retrying,
+        processing,
+        reserving,
+        deadLetter,
+        due,
+        expiredLeases,
+        oldestDueAt: serializeDocument(oldestDue?.scheduledAt || null),
+        lagMs: oldestDue?.scheduledAt ? Math.max(0, timestamp.getTime() - new Date(oldestDue.scheduledAt).getTime()) : 0,
+      };
     },
     async getRecipientPreference(targetId) {
       return serializeDocument(await preferences.findOne({ targetId }, { projection: { _id: 0 } }));
@@ -698,7 +1119,7 @@ async function createMongoNotificationStore({
       if (!keyRow || keyRow.revokedAt || (keyRow.expiresAt && new Date(keyRow.expiresAt) <= timestamp)) return null;
       const clientRow = await apiClients.findOne({ id: keyRow.clientId }, { projection: { _id: 0 } });
       if (!clientRow || clientRow.status !== 'active' || (clientRow.expiresAt && new Date(clientRow.expiresAt) <= timestamp)) return null;
-      await apiKeys.updateOne({ id: keyRow.id }, { $set: { lastUsedAt: timestamp }, $inc: { requestCount: 1 } });
+      recordApiKeyUsage(keyRow.id, timestamp);
       return {
         managed: true,
         clientId: clientRow.id,
@@ -751,12 +1172,21 @@ async function createMongoNotificationStore({
       ));
     },
     async ping() { return (await db.command({ ping: 1 })).ok === 1; },
-    async close() { await client.close(); },
+    async close() {
+      storeClosing = true;
+      clearInterval(apiKeyUsageTimer);
+      try {
+        await flushApiKeyUsage();
+      } finally {
+        await client.close();
+      }
+    },
   };
 }
 
 module.exports = {
   createMemoryNotificationStore,
   createMongoNotificationStore,
+  createDedupeScopeKey,
   percentile95,
 };

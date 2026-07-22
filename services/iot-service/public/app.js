@@ -159,6 +159,7 @@ const elements = {
   // 细分面板特有组件
   historyDeviceSelector: document.getElementById('history-device-selector'),
   historyMainChartBox: document.getElementById('history-main-chart-box'),
+  historyInsightSummary: document.getElementById('history-insight-summary'),
   historyTableBody: document.getElementById('history-table-body'),
   clearEventsBtn: document.getElementById('clear-events-btn'),
   eventFeedMain: document.getElementById('event-feed-main'),
@@ -226,6 +227,7 @@ const formEnhancements = window.MqttApiFormEnhancements.createFormEnhancements()
 const historyView = window.MqttApiHistoryView.createHistoryView({
   modalChartBox: elements.historyChartBox,
   mainChartBox: elements.historyMainChartBox,
+  insightSummary: elements.historyInsightSummary,
   tableBody: elements.historyTableBody,
   deviceSelector: elements.historyDeviceSelector,
   rangeSelector: elements.historyRangeSelector,
@@ -1408,16 +1410,22 @@ elements.themeToggle.addEventListener('change', (e) => {
 
 
 
-// 模态框关闭事件
-elements.modalClose.addEventListener('click', () => {
+function closeHistoryModal() {
+  const returnFocus = elements.historyModal.__returnFocusElement;
   elements.historyModal.classList.add('hidden');
   state.lastHistoryData = null;
-});
+  delete elements.historyModal.__returnFocusElement;
+  if (returnFocus && returnFocus.isConnected) {
+    returnFocus.focus();
+  }
+}
+
+// 模态框关闭事件
+elements.modalClose.addEventListener('click', closeHistoryModal);
 
 elements.historyModal.addEventListener('click', (e) => {
   if (e.target === elements.historyModal) {
-    elements.historyModal.classList.add('hidden');
-    state.lastHistoryData = null;
+    closeHistoryModal();
   }
 });
 
@@ -1425,12 +1433,11 @@ elements.historyModal.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!elements.historyModal.classList.contains('hidden')) {
-      elements.historyModal.classList.add('hidden');
-      state.lastHistoryData = null;
+      closeHistoryModal();
     }
     const deviceModal = elements.addDeviceModal;
     if (deviceModal && !deviceModal.classList.contains('hidden')) {
-      deviceModal.classList.add('hidden');
+      deviceConfigView.closeAddModal();
     }
   }
 
@@ -1439,7 +1446,7 @@ document.addEventListener('keydown', (e) => {
       modal => modal && !modal.classList.contains('hidden')
     );
     if (activeModal) {
-      const focusables = activeModal.querySelectorAll('button, [tabindex="0"], input, select, textarea');
+      const focusables = activeModal.querySelectorAll('button:not([disabled]), [tabindex="0"], input:not([disabled]), select:not([disabled]), textarea:not([disabled])');
       if (focusables.length > 0) {
         const first = focusables[0];
         const last = focusables[focusables.length - 1];

@@ -1,10 +1,11 @@
 import React, { Suspense, lazy, memo, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Button, ConfigProvider, Result, Spin, theme, message } from 'antd';
+import { App as AntApp, Button, ConfigProvider, Result, Spin, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import ErrorBoundary from './components/ErrorBoundary';
 import api from './utils/api';
 import { APP_BASE_PATH, IS_PLATFORM_SSO, redirectToPlatformLogin } from './utils/runtime';
+import { bindFeedbackApis, message } from './utils/feedback';
 
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -17,6 +18,11 @@ const CourseOrders = lazy(() => import('./pages/CourseOrders'));
 const PublicQuery = lazy(() => import('./pages/PublicQuery'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const MainLayout = lazy(() => import('./components/MainLayout'));
+
+function FeedbackBinder() {
+  bindFeedbackApis(AntApp.useApp());
+  return null;
+}
 
 const RouteFallback = memo(() => (
   <div
@@ -170,29 +176,32 @@ function App() {
         }
       }}
     >
-      <ErrorBoundary homePath={IS_PLATFORM_SSO ? '/console' : '/'}>
-        <Suspense fallback={<RouteFallback />}>
-          <Router basename={APP_BASE_PATH || undefined}>
-            <Routes>
-              <Route path="/login" element={IS_PLATFORM_SSO || session.authenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
-              <Route path="/query" element={<PublicQuery />} />
-              <Route path="/" element={<PrivateRoute session={session}><MainLayout /></PrivateRoute>}>
-                <Route index element={<Navigate to="/dashboard" replace />} />
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="iot-monitor" element={<ExternalAppRedirect href="/apps/iot/" />} />
-                <Route path="air-energy" element={<AirEnergyMonitor />} />
-                <Route path="users" element={<Users />} />
-                <Route path="notifications" element={<Notifications />} />
-                <Route path="audit-logs" element={<AuditLogs />} />
-                <Route path="ct8-monitor" element={<PlatformViewRedirect view="automation" />} />
-                <Route path="course-orders" element={<CourseOrders />} />
-                <Route path="settings" element={<Settings />} />
-              </Route>
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Router>
-        </Suspense>
-      </ErrorBoundary>
+      <AntApp component={false}>
+        <FeedbackBinder />
+        <ErrorBoundary homePath={IS_PLATFORM_SSO ? '/console' : '/'}>
+          <Suspense fallback={<RouteFallback />}>
+            <Router basename={APP_BASE_PATH || undefined}>
+              <Routes>
+                <Route path="/login" element={IS_PLATFORM_SSO || session.authenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+                <Route path="/query" element={<PublicQuery />} />
+                <Route path="/" element={<PrivateRoute session={session}><MainLayout /></PrivateRoute>}>
+                  <Route index element={<Navigate to="/dashboard" replace />} />
+                  <Route path="dashboard" element={<Dashboard />} />
+                  <Route path="iot-monitor" element={<ExternalAppRedirect href="/apps/iot/" />} />
+                  <Route path="air-energy" element={<AirEnergyMonitor />} />
+                  <Route path="users" element={<Users />} />
+                  <Route path="notifications" element={<Notifications />} />
+                  <Route path="audit-logs" element={<AuditLogs />} />
+                  <Route path="ct8-monitor" element={<PlatformViewRedirect view="automation" />} />
+                  <Route path="course-orders" element={<CourseOrders />} />
+                  <Route path="settings" element={<Settings />} />
+                </Route>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Router>
+          </Suspense>
+        </ErrorBoundary>
+      </AntApp>
     </ConfigProvider>
   );
 }

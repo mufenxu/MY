@@ -68,7 +68,7 @@ async function main() {
   const { closeRealtime, server } = createApiServer({ settingsStore, mqttService, automationEngine });
 
   await mqttService.start({ databaseInitialized: true });
-  automationEngine.start();
+  await automationEngine.start();
   await listen(server, initialConfig.api.port);
 
   console.log(`API server listening on port ${initialConfig.api.port}`);

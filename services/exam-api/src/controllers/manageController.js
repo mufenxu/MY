@@ -43,6 +43,10 @@ const {
 } = require('../services/paperShareService');
 const { generateQuestionAnalysis } = require('../services/aiAnalysisService');
 const {
+    recordQuestionVersion,
+    updateQuestionWithVersion,
+} = require('../services/questionVersionService');
+const {
     buildActorKey,
     beforeSingleGeneration,
     afterSingleGeneration,
@@ -53,6 +57,7 @@ const {
     toQuestionListSort,
     getNextQuestionSortOrder,
 } = require('../utils/questionOrder');
+const { parsePagination } = require('../utils/pagination');
 
 function buildFeedbackQuery({ status, keyword } = {}) {
     const query = {};
@@ -95,6 +100,15 @@ function buildManagedQuery(scopeType, extra = {}) {
     }
 
     return buildAdminScopeQuery(extra);
+}
+
+function getQuestionVersionActor(req) {
+    return {
+        actorType: 'admin',
+        actorId: req.user.id,
+        actorName: req.user.username,
+        requestId: req.id,
+    };
 }
 
 function normalizeExamResultScope(scopeType) {
@@ -315,10 +329,9 @@ function auditPersonalCategoryRead(req, category, action) {
 }
 
 exports.getAllQuestions = asyncHandler(async (req, res) => {
-    const { categoryId, page = 1, limit = 20, pageSize } = req.query;
+    const { categoryId } = req.query;
     const scopeType = getManagedScopeType(req);
-    const actualLimit = parseInt(pageSize, 10) || parseInt(limit, 10);
-    const actualPage = parseInt(page, 10);
+    const { limit: actualLimit, skip } = parsePagination(req.query);
     const query = buildManagedQuery(scopeType, categoryId ? { categoryId } : {});
 
     const [list, total] = await Promise.all([
@@ -326,7 +339,7 @@ exports.getAllQuestions = asyncHandler(async (req, res) => {
             .select('-__v')
             .populate('categoryId', 'name')
             .sort(toQuestionListSort(Boolean(categoryId)))
-            .skip((actualPage - 1) * actualLimit)
+            .skip(skip)
             .limit(actualLimit)
             .lean(),
         Question.countDocuments(query),
@@ -376,11 +389,11 @@ exports.adoptQuestionAiAnalysis = asyncHandler(async (req, res) => {
         throw new NotFoundError('AI解析不存在');
     }
 
-    const updated = await Question.findOneAndUpdate(
-        buildManagedQuery(scopeType, { _id: id }),
-        { analysis: record.analysis, analysisSource: 'ai' },
-        { new: true, runValidators: true },
-    ).lean();
+    const updated = await updateQuestionWithVersion({
+        query: buildManagedQuery(scopeType, { _id: id }),
+        update: { analysis: record.analysis, analysisSource: 'ai' },
+        actor: getQuestionVersionActor(req),
+    });
 
     if (!updated) {
         throw new NotFoundError('题目不存在');
@@ -485,6 +498,11 @@ exports.createQuestion = asyncHandler(async (req, res) => {
             categoryId: req.body.categoryId,
         })),
     });
+    await recordQuestionVersion({
+        question,
+        action: 'create',
+        actor: getQuestionVersionActor(req),
+    });
     await Category.findByIdAndUpdate(question.categoryId, { $inc: { count: 1 } });
     success(res, question);
 });
@@ -508,9 +526,9 @@ exports.updateQuestion = asyncHandler(async (req, res) => {
     const nextSortOrder = String(original.categoryId) !== nextCategoryId
         ? await getNextQuestionSortOrder(buildManagedQuery(scopeType, { categoryId: nextCategoryId }))
         : original.sortOrder;
-    const updated = await Question.findOneAndUpdate(
-        buildManagedQuery(scopeType, { _id: id }),
-        {
+    const updated = await updateQuestionWithVersion({
+        query: buildManagedQuery(scopeType, { _id: id }),
+        update: {
             ...req.body,
             ...buildScopeAssignment(scopeType),
             sortOrder: nextSortOrder,
@@ -519,8 +537,12 @@ exports.updateQuestion = asyncHandler(async (req, res) => {
                 ? { analysisSource: 'manual' }
                 : {}),
         },
-        { new: true, runValidators: true },
-    );
+        actor: getQuestionVersionActor(req),
+    });
+
+    if (!updated) {
+        throw new NotFoundError('题目不存在');
+    }
 
     if (String(original.categoryId) !== nextCategoryId) {
         await Promise.all([
@@ -547,7 +569,7 @@ exports.deleteQuestion = asyncHandler(async (req, res) => {
 
 exports.batchUpdateQuestions = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { questions: questionsToSave } = req.body;
+    const { questions: questionsToSave, baseQuestions } = req.body;
     const scopeType = getManagedScopeType(req);
 
     const category = await Category.findOne(buildManagedQuery(scopeType, { _id: id }));
@@ -558,11 +580,13 @@ exports.batchUpdateQuestions = asyncHandler(async (req, res) => {
     const scopeAssignment = buildScopeAssignment(scopeType);
     await saveCategoryQuestions({
         questionsToSave,
+        baseQuestions,
         questionQuery: buildManagedQuery(scopeType, { categoryId: id }),
         categoryQuery: buildManagedQuery(scopeType, { _id: id }),
         categoryId: id,
         categoryUpdate: scopeAssignment,
         scopeAssignment,
+        actor: getQuestionVersionActor(req),
         Category,
     });
 
@@ -570,10 +594,9 @@ exports.batchUpdateQuestions = asyncHandler(async (req, res) => {
 });
 
 exports.getExamResults = asyncHandler(async (req, res) => {
-    const { categoryId, userId, page = 1, limit = 20 } = req.query;
+    const { categoryId, userId } = req.query;
     const scopeType = normalizeExamResultScope(req.query.scopeType);
-    const actualLimit = parseInt(limit, 10);
-    const actualPage = parseInt(page, 10);
+    const { limit: actualLimit, skip } = parsePagination(req.query);
     const query = buildExamResultQuery(scopeType);
 
     if (categoryId) query.categoryId = categoryId;
@@ -584,7 +607,7 @@ exports.getExamResults = asyncHandler(async (req, res) => {
             .select('_id userId categoryId categorySnapshot score correctCount totalCount createTime scopeType ownerOpenid')
             .populate('categoryId', 'name')
             .sort({ createTime: -1 })
-            .skip((actualPage - 1) * actualLimit)
+            .skip(skip)
             .limit(actualLimit)
             .lean(),
         ExamResult.countDocuments(query),
@@ -638,15 +661,12 @@ exports.deleteExamResults = asyncHandler(async (req, res) => {
 
 exports.getPersonalCategories = asyncHandler(async (req, res) => {
     const {
-        page = 1,
-        limit = 20,
         keyword,
         ownerStudyId,
         publishStatus,
         source,
     } = req.query;
-    const actualPage = parseInt(page, 10);
-    const actualLimit = parseInt(limit, 10);
+    const { page: actualPage, limit: actualLimit, skip } = parsePagination(req.query);
     const query = await buildPersonalCategoryQuery({
         keyword,
         ownerStudyId,
@@ -659,7 +679,7 @@ exports.getPersonalCategories = asyncHandler(async (req, res) => {
             .select('-__v')
             .populate('majorCategoryId', '_id name sortOrder')
             .sort({ updateTime: -1, _id: -1 })
-            .skip((actualPage - 1) * actualLimit)
+            .skip(skip)
             .limit(actualLimit)
             .lean(),
         Category.countDocuments(query),
@@ -702,9 +722,7 @@ exports.getPersonalCategoryById = asyncHandler(async (req, res) => {
 });
 
 exports.getPersonalCategoryQuestions = asyncHandler(async (req, res) => {
-    const { page = 1, limit = 50 } = req.query;
-    const actualPage = parseInt(page, 10);
-    const actualLimit = parseInt(limit, 10);
+    const { page: actualPage, limit: actualLimit, skip } = parsePagination(req.query, { defaultLimit: 50 });
     const category = await getPersonalCategoryOrFail(req.params.id);
     const query = {
         categoryId: category._id,
@@ -716,7 +734,7 @@ exports.getPersonalCategoryQuestions = asyncHandler(async (req, res) => {
         Question.find(query)
             .select('-__v')
             .sort(toQuestionListSort(true))
-            .skip((actualPage - 1) * actualLimit)
+            .skip(skip)
             .limit(actualLimit)
             .lean(),
         Question.countDocuments(query),
@@ -735,9 +753,8 @@ exports.getPersonalCategoryQuestions = asyncHandler(async (req, res) => {
 });
 
 exports.getUsers = asyncHandler(async (req, res) => {
-    const { keyword, page = 1, limit = 20 } = req.query;
-    const actualLimit = parseInt(limit, 10);
-    const actualPage = parseInt(page, 10);
+    const { keyword } = req.query;
+    const { limit: actualLimit, skip } = parsePagination(req.query);
     const query = {};
 
     if (keyword) {
@@ -752,7 +769,7 @@ exports.getUsers = asyncHandler(async (req, res) => {
         User.find(query)
             .select('openid nickname avatarUrl createTime lastActiveTime')
             .sort({ lastActiveTime: -1 })
-            .skip((actualPage - 1) * actualLimit)
+            .skip(skip)
             .limit(actualLimit)
             .lean(),
         User.countDocuments(query),
@@ -797,9 +814,8 @@ exports.getUsers = asyncHandler(async (req, res) => {
 });
 
 exports.getFeedbacks = asyncHandler(async (req, res) => {
-    const { page = 1, limit = 20, status, keyword } = req.query;
-    const actualPage = parseInt(page, 10);
-    const actualLimit = parseInt(limit, 10);
+    const { status, keyword } = req.query;
+    const { page: actualPage, limit: actualLimit, skip } = parsePagination(req.query);
     const query = buildFeedbackQuery({ status, keyword });
 
     if (keyword) {
@@ -827,7 +843,7 @@ exports.getFeedbacks = asyncHandler(async (req, res) => {
         Feedback.find(query)
             .select('-__v')
             .sort({ updateTime: -1, _id: -1 })
-            .skip((actualPage - 1) * actualLimit)
+            .skip(skip)
             .limit(actualLimit)
             .lean(),
         Feedback.countDocuments(query),

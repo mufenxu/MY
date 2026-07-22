@@ -4,14 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MQTT 智能后台管理系统</title>
-    <link rel="stylesheet" href="./styles.css?v=15" />
+    <link rel="stylesheet" href="./styles.css?v=16" />
     <link rel="stylesheet" href="./automation.css?v=1" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3' fill='%236366f1' stroke='none'%3E%3C/circle%3E%3Cline x1='12' y1='9' x2='12' y2='4'%3E%3C/line%3E%3Ccircle cx='12' cy='3' r='1.5' fill='none' stroke='%236366f1' stroke-width='1.5'%3E%3C/circle%3E%3Cline x1='9.5' y1='13.5' x2='5' y2='16'%3E%3C/line%3E%3Ccircle cx='4' cy='16.5' r='1.5' fill='none' stroke='%236366f1' stroke-width='1.5'%3E%3C/circle%3E%3Cline x1='14.5' y1='13.5' x2='19' y2='16'%3E%3C/line%3E%3Ccircle cx='20' cy='16.5' r='1.5' fill='none' stroke='%236366f1' stroke-width='1.5'%3E%3C/circle%3E%3Cpath d='M5 8a9 9 0 0 1 14 0' stroke-dasharray='2,2'%3E%3C/path%3E%3Cpath d='M19 16a9 9 0 0 1-7 4' stroke-dasharray='2,2'%3E%3C/path%3E%3Cpath d='M5 16a9 9 0 0 1-1-6' stroke-dasharray='2,2'%3E%3C/path%3E%3C/svg%3E" />
     <script src="./js/themeBootstrap.js?v=1"></script>
   </head>
   <body>
     <!-- 动态消息 Toast 提示容器 -->
-    <div id="toast-container" class="toast-container"></div>
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
 
     <!-- 移动端顶部导航栏 -->
     <header class="mobile-header">
@@ -154,12 +154,12 @@
     </div>
 
     <!-- 历史趋势图模态弹窗 (保留用于概览卡片内的快捷点击弹层) -->
-    <div id="history-modal" class="modal-overlay hidden">
-      <section class="modal-content">
-        <button id="modal-close" class="modal-close" type="button">&times;</button>
+    <div id="history-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-device-name" aria-describedby="history-modal-description">
+      <section class="modal-content" tabindex="-1">
+        <button id="modal-close" class="modal-close" type="button" aria-label="关闭历史趋势对话框">&times;</button>
         <p class="eyebrow" id="modal-device-id">设备历史记录</p>
         <h2 id="modal-device-name">历史变化趋势</h2>
-        <p class="muted">展示该设备最近 100 次的温湿度传感器采样记录。</p>
+        <p id="history-modal-description" class="muted">展示该设备最近 100 次的温湿度传感器采样记录。</p>
         <div class="history-chart-container" id="history-chart-box">
           <!-- 动态生成的 SVG 折线图将插入在此处 -->
         </div>
@@ -481,6 +481,7 @@
 
             <!-- 子面板 1: 趋势图表 -->
             <div id="history-subtab-charts" class="subtab-content">
+              <section id="history-insight-summary" class="history-insight-summary hidden" aria-live="polite" aria-label="设备数据洞察"></section>
               <section class="panel" style="width: 100%;">
                 <div class="history-chart-container" id="history-main-chart-box" style="height: 380px;">
                   <p class="muted" style="text-align:center; padding-top: 140px;">请先在右上角下拉框中选择要分析的物理设备。</p>
@@ -1179,12 +1180,12 @@ fetch("http://localhost:22102/api/devices/esp8266_living/history?range=24h", {
     </main>
 
     <!-- 新增设备模态弹窗 -->
-    <div id="add-device-modal" class="modal-overlay hidden">
-      <section class="modal-content" style="max-width: 420px;">
-        <button id="add-device-close" class="modal-close" type="button">&times;</button>
+    <div id="add-device-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="add-device-title" aria-describedby="add-device-description">
+      <section class="modal-content" style="max-width: 420px;" tabindex="-1">
+        <button id="add-device-close" class="modal-close" type="button" aria-label="关闭新增设备对话框">&times;</button>
         <p class="eyebrow">新增物理设备</p>
-        <h2>添加新设备</h2>
-        <p class="muted">填入基本参数，随后您可继续配置该设备的传感器与继电器主题。</p>
+        <h2 id="add-device-title">添加新设备</h2>
+        <p id="add-device-description" class="muted">填入基本参数，随后您可继续配置该设备的传感器与继电器主题。</p>
         <form id="add-device-form" style="display: flex; flex-direction: column; gap: 16px; margin-top: 20px;">
           <label style="display:flex; flex-direction:column; gap:6px;">
             <span style="font-size:0.8rem; color:var(--text-muted); font-weight:600;">设备 ID (数字/字母/下划线)</span>
@@ -1200,8 +1201,8 @@ fetch("http://localhost:22102/api/devices/esp8266_living/history?range=24h", {
     </div>
 
     <!-- 统一美化的自定义对话框模态弹窗 -->
-    <div id="custom-dialog-modal" class="modal-overlay hidden">
-      <section class="modal-content" style="max-width: 380px; padding: 28px 24px; text-align: center; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+    <div id="custom-dialog-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-message">
+      <section class="modal-content" style="max-width: 380px; padding: 28px 24px; text-align: center; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 20px 40px rgba(0,0,0,0.4);" tabindex="-1">
         <div id="dialog-icon-area" style="display: flex; justify-content: center; margin-bottom: 16px; min-height: 48px;">
           <!-- 动态塞入高颜值 SVG -->
         </div>
@@ -1222,16 +1223,16 @@ fetch("http://localhost:22102/api/devices/esp8266_living/history?range=24h", {
     </div>
 
     <script src="./js/apiClient.js?v=1"></script>
-    <script src="./js/uiFeedback.js?v=1"></script>
+    <script src="./js/uiFeedback.js?v=2"></script>
     <script src="./js/apiKeysView.js?v=1"></script>
     <script src="./js/systemActions.js?v=1"></script>
     <script src="./js/developerGuide.js?v=1"></script>
     <script src="./js/layoutController.js?v=1"></script>
     <script src="./js/formEnhancements.js?v=1"></script>
-    <script src="./js/historyView.js?v=1"></script>
-    <script src="./js/deviceGridView.js?v=1"></script>
-    <script src="./js/deviceConfigView.js?v=1"></script>
+    <script src="./js/historyView.js?v=2"></script>
+    <script src="./js/deviceGridView.js?v=2"></script>
+    <script src="./js/deviceConfigView.js?v=2"></script>
     <script src="./js/automationView.js?v=1"></script>
-    <script src="./app.js?v=25"></script>
+    <script src="./app.js?v=26"></script>
   </body>
 </html>

@@ -135,6 +135,7 @@ export function loadConfig(env = process.env) {
     internalAuthPublicKey: env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY || (isProduction ? '' : localInternalPublicKey),
     mongoUri: env.PLATFORM_MONGODB_URI || '',
     metricsToken: env.PLATFORM_METRICS_TOKEN || '',
+    blackboxIngestToken: env.PLATFORM_BLACKBOX_INGEST_TOKEN || '',
     sessionTtlHours: parseInteger(env.PLATFORM_SESSION_TTL_HOURS, 12, { min: 1, max: 168 }),
     sessionIdleMinutes: parseInteger(env.PLATFORM_SESSION_IDLE_MINUTES, 30, { min: 5, max: 240 }),
     requireMfa: parseBoolean(env.PLATFORM_REQUIRE_MFA, isProduction),
@@ -170,12 +171,14 @@ export function loadConfig(env = process.env) {
     restoreCommand: env.PLATFORM_RESTORE_COMMAND || '',
     restoreConfirmText: env.PLATFORM_RESTORE_CONFIRM_TEXT || 'RESTORE ALL DATA',
     backupCommandTimeoutMs: parseInteger(env.PLATFORM_BACKUP_COMMAND_TIMEOUT_MS, 30 * 60 * 1000, { min: 60 * 1000, max: 6 * 60 * 60 * 1000 }),
-    backupTransferTimeoutMs: parseInteger(env.PLATFORM_BACKUP_TRANSFER_TIMEOUT_MS, 10 * 60 * 1000, { min: 60 * 1000, max: 6 * 60 * 60 * 1000 }),
-    backupUploadMaxBytes: parseInteger(env.PLATFORM_BACKUP_UPLOAD_MAX_BYTES, 5 * 1024 * 1024 * 1024, { min: 1024 * 1024, max: 50 * 1024 * 1024 * 1024 }),
+    backupTransferTimeoutMs: parseInteger(env.PLATFORM_BACKUP_TRANSFER_TIMEOUT_MS, 10 * 60 * 1000, { min: 60 * 1000, max: 10 * 60 * 1000 }),
+    backupUploadMaxBytes: parseInteger(env.PLATFORM_BACKUP_UPLOAD_MAX_BYTES, 5 * 1024 * 1024 * 1024, { min: 1024 * 1024, max: 5 * 1024 * 1024 * 1024 }),
     backupRunnerUrl: parseHttpUrl(env.PLATFORM_BACKUP_RUNNER_URL),
     backupRunnerToken: env.PLATFORM_BACKUP_RUNNER_TOKEN || '',
     backupRunnerTimeoutMs: parseInteger(env.PLATFORM_BACKUP_RUNNER_TIMEOUT_MS, 8000, { min: 1000, max: 60000 }),
     backupRpoHours: parseInteger(env.PLATFORM_BACKUP_RPO_HOURS, 26, { min: 1, max: 720 }),
+    restoreDrillMaxAgeDays: parseInteger(env.PLATFORM_RESTORE_DRILL_MAX_AGE_DAYS, 90, { min: 1, max: 365 }),
+    restoreRtoMinutes: parseInteger(env.PLATFORM_RESTORE_RTO_MINUTES, 30, { min: 1, max: 24 * 60 }),
     backupScheduleEnabled: parseBoolean(env.PLATFORM_BACKUP_SCHEDULE_ENABLED, false),
     backupScheduleTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(env.PLATFORM_BACKUP_SCHEDULE_TIME || '02:30'))
       ? String(env.PLATFORM_BACKUP_SCHEDULE_TIME || '02:30')
@@ -224,6 +227,9 @@ export function loadConfig(env = process.env) {
     if (!config.publicOrigin) missing.push('PLATFORM_PUBLIC_ORIGIN');
     if (!config.mongoUri) missing.push('PLATFORM_MONGODB_URI');
     if (config.metricsToken.length < 32 || isTemplatePlaceholder(config.metricsToken)) missing.push('PLATFORM_METRICS_TOKEN');
+    if (config.blackboxIngestToken && (config.blackboxIngestToken.length < 32 || isTemplatePlaceholder(config.blackboxIngestToken))) {
+      missing.push('PLATFORM_BLACKBOX_INGEST_TOKEN');
+    }
     if (config.backupRunnerUrl && (config.backupRunnerToken.length < 32 || isTemplatePlaceholder(config.backupRunnerToken))) {
       missing.push('PLATFORM_BACKUP_RUNNER_TOKEN');
     }

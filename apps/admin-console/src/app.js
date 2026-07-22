@@ -19,6 +19,7 @@ import { createMemoryAuthStore } from './auth-store.js';
 import { createMemoryAuthRiskStore } from './auth-risk-store.js';
 import { BackupOperationError, createBackupManager, createBackupRunnerClient } from './backups.js';
 import { verifyTurnstileToken } from './bot-challenge.js';
+import { createChangeCalendar } from './change-calendar.js';
 import { ConfigurationError, createConfigurationManager } from './configuration-manager.js';
 import { createMemoryConfigurationStore } from './configuration-store.js';
 import { loadConfig } from './config.js';
@@ -28,10 +29,13 @@ import { NotificationManagementError, createNotificationManagementClient } from 
 import { createOperationsCenter } from './operations-center.js';
 import { createOperationsNotifier } from './operations-notifier.js';
 import { createMemoryOperationsStore } from './operations-store.js';
+import { OperationalIntelligenceError } from './operational-query.js';
+import { createOperationalSearch } from './operational-search.js';
 import { createPasskeyService } from './passkeys.js';
 import { ReleaseOperationError, createReleaseService } from './release-service.js';
 import { createMemoryReleaseStore } from './release-store.js';
 import { createRequestDiagnostics } from './request-diagnostics.js';
+import { createSloService } from './slo-service.js';
 import { createTaskCenter } from './task-center.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -108,6 +112,9 @@ export function createApp({
   configurationManager = null,
   taskManager = null,
   requestDiagnostics = null,
+  operationalSearchManager = null,
+  sloManager = null,
+  changeCalendarManager = null,
 } = {}) {
   const registry = loadServiceRegistry(config.registryPath);
   const monitor = createStatusMonitor(registry.services, {
@@ -200,12 +207,33 @@ export function createApp({
     operationsStore: store,
     configurationManager: configurations,
   });
+  const operationalSearch = operationalSearchManager || createOperationalSearch({
+    services: registry.services,
+    operationsStore: store,
+    taskCenter: tasks,
+    releaseStore: releaseData,
+    configurationStore: configurationData,
+  });
+  const slos = sloManager || createSloService({
+    services: registry.services,
+    operationsStore: store,
+  });
+  const changeCalendar = changeCalendarManager || createChangeCalendar({
+    services: registry.services,
+    releaseStore: releaseData,
+    configurationStore: configurationData,
+    operationsStore: store,
+    operationsManager: operations,
+  });
   const diagnostics = requestDiagnostics || createRequestDiagnostics({
     services: registry.services,
     publicOrigin: config.publicOrigin,
     fetchImpl,
     timeoutMs: config.serviceTimeoutMs,
   });
+  const readBlackboxStatus = (options) => typeof operations.getBlackboxStatus === 'function'
+    ? operations.getBlackboxStatus(options)
+    : Promise.resolve({ observed: false, overall: 'unconfigured', latest: [], samples: [] });
 
   function readSessionToken(req) {
     const cookies = parseCookies(req.headers.cookie);
@@ -417,6 +445,9 @@ export function createApp({
   app.locals.configurationStore = configurationData;
   app.locals.configurationManager = configurations;
   app.locals.taskCenter = tasks;
+  app.locals.operationalSearch = operationalSearch;
+  app.locals.sloService = slos;
+  app.locals.changeCalendar = changeCalendar;
   app.locals.requestDiagnostics = diagnostics;
   app.locals.authStore = accounts;
   app.locals.authRiskStore = risk;
@@ -457,6 +488,41 @@ export function createApp({
     },
   }));
   app.use(compression());
+  const blackboxIngestLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 120,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: 'External probe ingest rate exceeded.', code: 'BLACKBOX_RATE_LIMITED' },
+  });
+  app.post(
+    '/api/internal/blackbox/samples',
+    blackboxIngestLimiter,
+    express.json({ limit: '256kb' }),
+    async (req, res, next) => {
+      res.setHeader('Cache-Control', 'no-store');
+      if (!config.blackboxIngestToken) {
+        return res.status(503).json({ error: 'External probe ingest is not configured.', code: 'BLACKBOX_NOT_CONFIGURED' });
+      }
+      if (typeof operations.ingestBlackboxSamples !== 'function') {
+        return res.status(503).json({ error: 'External probe storage is unavailable.', code: 'BLACKBOX_STORE_UNAVAILABLE' });
+      }
+      const authorization = String(req.get('authorization') || '');
+      if (!secureTokenEqual(authorization, `Bearer ${config.blackboxIngestToken}`)) {
+        return res.status(401).json({ error: 'External probe credential is invalid.', code: 'BLACKBOX_UNAUTHORIZED' });
+      }
+      try {
+        const result = await operations.ingestBlackboxSamples(req.body?.samples, { probeId: req.body?.probeId });
+        return res.status(202).json(result);
+      } catch (error) {
+        if (error instanceof RangeError) {
+          return res.status(400).json({ error: error.message, code: 'INVALID_BLACKBOX_SAMPLES' });
+        }
+        next(error);
+        return undefined;
+      }
+    },
+  );
   app.use(express.json({ limit: '32kb' }));
   app.use('/api', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -482,9 +548,12 @@ export function createApp({
 
   app.get('/api/public/status', async (req, res, next) => {
     try {
-      const status = await operations.getStatus();
+      const [status, activeIncidents, blackbox] = await Promise.all([
+        operations.getStatus(),
+        store.listIncidents({ status: 'open,acknowledged', limit: 100 }),
+        readBlackboxStatus({ hours: 1, limit: 240 }),
+      ]);
       const monitored = (status.services || []).filter((service) => service.state !== 'unmonitored');
-      const activeIncidents = await store.listIncidents({ status: 'open,acknowledged', limit: 100 });
       const generatedAt = new Date().toISOString();
       const staleAfterMs = Math.max((config.monitorIntervalMs || 30000) * 3, 60000);
       const services = (status.services || []).map((service) => ({
@@ -500,15 +569,29 @@ export function createApp({
       const serviceOverall = monitored.length === 0 || stale
         ? 'unknown'
         : unhealthy.length === 0 ? 'operational' : unhealthy.length === monitored.length ? 'outage' : 'degraded';
-      const overall = serviceOverall === 'operational' && activeIncidents.length > 0
+      let overall = serviceOverall === 'operational' && activeIncidents.length > 0
         ? 'degraded'
         : serviceOverall;
+      if (blackbox.observed && blackbox.overall === 'unknown' && overall !== 'outage') overall = 'unknown';
+      if (blackbox.observed && blackbox.overall === 'outage') overall = 'outage';
+      if (blackbox.observed && blackbox.overall === 'degraded' && overall === 'operational') overall = 'degraded';
       return res.json({
         platformName: registry.platformName,
         overall,
         generatedAt,
-        stale,
+        stale: stale || (blackbox.observed && blackbox.overall === 'unknown'),
         services,
+        blackbox: {
+          observed: blackbox.observed,
+          overall: blackbox.overall,
+          latest: blackbox.latest.map((sample) => ({
+            probeId: sample.probeId,
+            targetId: sample.targetId,
+            state: sample.state,
+            recordedAt: sample.recordedAt,
+            stale: sample.stale,
+          })),
+        },
         incidents: activeIncidents.map((incident) => ({
           id: incident.id,
           state: incident.status,
@@ -1060,6 +1143,68 @@ export function createApp({
     }
   });
 
+  app.get('/api/operations/search', requireRole('viewer'), async (req, res, next) => {
+    try {
+      return res.json(await operationalSearch.search({
+        q: req.query.q,
+        type: req.query.type,
+        limit: req.query.limit,
+      }));
+    } catch (error) {
+      if (error instanceof OperationalIntelligenceError) {
+        return res.status(error.status).json({ error: error.message, code: error.code });
+      }
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/api/operations/slo', requireRole('viewer'), async (req, res, next) => {
+    try {
+      return res.json(await slos.getReport({
+        window: req.query.window,
+        serviceId: req.query.serviceId,
+      }));
+    } catch (error) {
+      if (error instanceof OperationalIntelligenceError) {
+        return res.status(error.status).json({ error: error.message, code: error.code });
+      }
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/api/operations/change-calendar', requireRole('viewer'), async (req, res, next) => {
+    try {
+      return res.json(await changeCalendar.list({
+        from: req.query.from,
+        to: req.query.to,
+        type: req.query.type,
+        serviceId: req.query.serviceId,
+        page: req.query.page,
+        pageSize: req.query.pageSize,
+      }));
+    } catch (error) {
+      if (error instanceof OperationalIntelligenceError) {
+        return res.status(error.status).json({ error: error.message, code: error.code });
+      }
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/api/operations/blackbox', async (req, res, next) => {
+    try {
+      return res.json(await readBlackboxStatus({
+        hours: req.query.hours,
+        limit: req.query.limit,
+      }));
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
   app.get('/api/incidents', async (req, res, next) => {
     try {
       const incidents = await store.listIncidents({ status: req.query.status, limit: req.query.limit });
@@ -1596,6 +1741,10 @@ export function createApp({
   app.post('/api/backups/upload', requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
     try {
       const filename = String(req.query.filename || req.get('X-Backup-Filename') || '');
+      const contentLength = Number.parseInt(req.get('content-length') || '', 10);
+      if (Number.isFinite(contentLength) && contentLength > config.backupUploadMaxBytes) {
+        throw new BackupOperationError(413, 'BACKUP_UPLOAD_TOO_LARGE', 'The backup archive exceeds the configured upload limit.');
+      }
       const result = await backups.uploadBackup({
         filename,
         stream: req,

@@ -178,9 +178,17 @@
 2. **统一控制台**：在统一服务控制台的“通知通道”页管理模板、定时任务、目标偏好和发送台账；测试发送仅允许指定单个企业微信用户。
 3. **通知编排**：业务服务使用内部签名调用 `POST /enqueue` 创建即时或定时任务，支持幂等键、模板变量、最大重试次数和退避间隔。
 4. **目标偏好**：免打扰时段和停用状态由服务端执行；被抑制的任务会记录明确原因，不会伪装成已发送。
-5. **失败重试**：编排器按 `NOTIFY_ORCHESTRATION_INTERVAL_MS` 扫描到期任务；管理端也可对可重试失败受控重试。
+5. **失败重试**：编排器按 `NOTIFY_ORCHESTRATION_INTERVAL_MS` 扫描到期任务；默认以 4 路受控并发发送。任务领取后持有可续租租约，进程崩溃或租约过期时会由其他实例自动接管；尝试次数耗尽后进入 `failed` 明确终态，并计入队列 dead-letter 指标。
 6. **鉴权管理**：建议将 `NOTIFY_API_KEY` 存放在服务端安全配置文件中，并定期更换；内部调用方必须列入 `NOTIFY_INTERNAL_CALLERS`。
 7. **审计日志**：任务状态、发送结果和重试来源都写入独立 `notification_app` 数据库，敏感载荷使用 AES-256-GCM 加密。
+
+编排可靠性参数：
+
+- `NOTIFY_ORCHESTRATION_BATCH_SIZE`：每轮最多领取的任务数，默认 `20`。
+- `NOTIFY_ORCHESTRATION_CONCURRENCY`：单实例发送并发数，只允许 `3-5`，默认 `4`。
+- `NOTIFY_ORCHESTRATION_LEASE_MS`：任务租约时长，范围 `30000-900000` 毫秒，默认 `120000`；执行期间会自动续租。
+- 任务幂等域由调用方、托管 API 客户端、目标类型、目标值和 `dedupeKey` 共同组成；不同调用方或不同接收目标不会相互抑制。
+- 管理概览的 `queue.lagMs`、`queue.expiredLeases` 和 `queue.deadLetter` 可用于队列积压、worker 异常和终态失败告警。
 
 ---
 

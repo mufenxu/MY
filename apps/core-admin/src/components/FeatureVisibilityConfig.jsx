@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Switch, Button, message, List, Typography, Space, Divider, Select } from 'antd';
+import { Card, Switch, Button, List, Typography, Space, Divider, Select } from 'antd';
 import { SaveOutlined, AppstoreOutlined, UserOutlined, SafetyCertificateOutlined, TeamOutlined } from '@ant-design/icons';
 import api from '../utils/api';
+import { message } from '../utils/feedback';
 
 const { Text } = Typography;
 const { Option } = Select;

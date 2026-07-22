@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Counter = require('../models/Counter');
 const RefreshToken = require('../models/RefreshToken');
 const AppError = require('../utils/AppError');
+const { getExternalHttpOptions, isExternalHttpTimeout } = require('../utils/externalHttp');
 
 // Environment variables
 const WX_APP_ID = process.env.WX_APP_ID;
@@ -169,9 +170,26 @@ exports.wechatLogin = async (code, userInfo) => {
     }
 
     // 1. Get OpenID from WeChat
-    const url = `https://api.weixin.qq.com/sns/jscode2session?appid=${WX_APP_ID}&secret=${WX_APP_SECRET}&js_code=${code}&grant_type=authorization_code`;
-
-    const response = await axios.get(url);
+    let response;
+    try {
+        response = await axios.get('https://api.weixin.qq.com/sns/jscode2session', {
+            ...getExternalHttpOptions({ maxRedirects: 0 }),
+            params: {
+                appid: WX_APP_ID,
+                secret: WX_APP_SECRET,
+                js_code: code,
+                grant_type: 'authorization_code',
+            },
+        });
+    } catch (error) {
+        const timedOut = isExternalHttpTimeout(error);
+        const upstreamError = new AppError(
+            timedOut ? '微信登录服务响应超时' : '微信登录服务暂时不可用',
+            timedOut ? 504 : 502,
+        );
+        upstreamError.code = timedOut ? 'WECHAT_UPSTREAM_TIMEOUT' : 'WECHAT_UPSTREAM_UNAVAILABLE';
+        throw upstreamError;
+    }
     const { openid, session_key, errcode, errmsg } = response.data;
 
     if (errcode) {

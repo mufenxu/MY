@@ -18,45 +18,66 @@ async function start() {
     });
   const app = createApp({ config, notificationStore });
   const server = http.createServer(app);
-  let orchestrationRunning = false;
-  const runOrchestration = async () => {
-    if (orchestrationRunning) return;
-    orchestrationRunning = true;
-    try {
-      await app.locals.notificationOrchestrator.runDue(config.orchestrationBatchSize);
-    } catch (error) {
-      console.error('通知编排任务执行失败。', error);
-    } finally {
-      orchestrationRunning = false;
-    }
+  let shuttingDown = false;
+  let orchestrationPromise = null;
+  const runOrchestration = () => {
+    if (shuttingDown) return Promise.resolve();
+    if (orchestrationPromise) return orchestrationPromise;
+    orchestrationPromise = app.locals.notificationOrchestrator.runDue(config.orchestrationBatchSize)
+      .catch((error) => {
+        console.error('通知编排任务执行失败。', error);
+      })
+      .finally(() => {
+        orchestrationPromise = null;
+      });
+    return orchestrationPromise;
   };
-  const orchestrationTimer = setInterval(runOrchestration, config.orchestrationIntervalMs);
+  const orchestrationTimer = setInterval(() => { void runOrchestration(); }, config.orchestrationIntervalMs);
   orchestrationTimer.unref?.();
 
   server.listen(config.port, () => {
     console.log(`WeCom Notify API 已启动，端口：${config.port}`);
   });
 
-  let shuttingDown = false;
+  let shutdownPromise = null;
   async function shutdown(signal) {
-    if (shuttingDown) return;
+    if (shutdownPromise) return shutdownPromise;
     shuttingDown = true;
     clearInterval(orchestrationTimer);
     console.log(`收到 ${signal}，正在关闭通知服务。`);
-    const forceTimer = setTimeout(() => server.closeAllConnections?.(), 10_000);
-    forceTimer.unref();
-    server.close(async (error) => {
-      clearTimeout(forceTimer);
-      if (error) {
-        console.error(error);
-        process.exitCode = 1;
+    shutdownPromise = (async () => {
+      const serverClosed = new Promise((resolve) => {
+        const forceTimer = setTimeout(() => server.closeAllConnections?.(), 10_000);
+        forceTimer.unref?.();
+        server.close((error) => {
+          clearTimeout(forceTimer);
+          if (error) {
+            console.error(error);
+            process.exitCode = 1;
+          }
+          resolve();
+        });
+      });
+      try {
+        await Promise.all([
+          serverClosed,
+          orchestrationPromise || app.locals.notificationOrchestrator.whenIdle(),
+        ]);
+      } finally {
+        await notificationStore.close();
       }
-      await notificationStore.close();
-    });
+    })();
+    return shutdownPromise;
   }
 
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  const handleSignal = (signal) => {
+    void shutdown(signal).catch((error) => {
+      console.error('通知服务关闭失败。', error);
+      process.exitCode = 1;
+    });
+  };
+  process.on('SIGINT', () => handleSignal('SIGINT'));
+  process.on('SIGTERM', () => handleSignal('SIGTERM'));
 }
 
 start().catch((error) => {

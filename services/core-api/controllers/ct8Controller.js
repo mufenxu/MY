@@ -1,21 +1,22 @@
 const Ct8Run = require('../models/Ct8Run');
+const { parsePagination } = require('../utils/pagination');
 
 /**
  * 获取 CT8 任务执行历史
  */
 exports.getRunHistory = async (req, res) => {
     try {
-        const { page = 1, pageSize = 10 } = req.query;
-        const skip = (parseInt(page) - 1) * parseInt(pageSize);
-        const limit = parseInt(pageSize);
+        const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 10, maxLimit: 100 });
 
-        const total = await Ct8Run.countDocuments();
-        const runsData = await Ct8Run.find()
-            .select('-details')
-            .sort({ create_time: -1 })
-            .skip(skip)
-            .limit(limit)
-            .lean();
+        const [total, runsData] = await Promise.all([
+            Ct8Run.countDocuments(),
+            Ct8Run.find()
+                .select('-details')
+                .sort({ create_time: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+        ]);
 
         const runs = runsData.map(run => ({
             ...run,
@@ -27,6 +28,8 @@ exports.getRunHistory = async (req, res) => {
         res.json({
             success: true,
             total,
+            page,
+            pageSize: limit,
             runs
         });
     } catch (error) {
@@ -63,7 +66,10 @@ exports.getCt8Stats = async (req, res) => {
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         // 最近一次的运行结果（看是否成功）
-        const latestRun = await Ct8Run.findOne().sort({ start_time: -1 });
+        const latestRun = await Ct8Run.findOne()
+            .select('stats status start_time')
+            .sort({ start_time: -1 })
+            .lean();
 
         // 今日运行次数
         const todayRuns = await Ct8Run.countDocuments({ start_time: { $gte: todayStart } });
@@ -71,7 +77,7 @@ exports.getCt8Stats = async (req, res) => {
         res.json({
             success: true,
             stats: {
-                totalHosts: latestRun ? latestRun.details.length : 0,
+                totalHosts: latestRun ? latestRun.stats.total : 0,
                 successHosts: latestRun ? latestRun.stats.success : 0,
                 failedHosts: latestRun ? latestRun.stats.failed : 0,
                 todayRuns,

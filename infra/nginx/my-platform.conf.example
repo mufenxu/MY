@@ -20,8 +20,25 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
-    # 业务层允许 20 MiB 备份文件，这里为 multipart 元数据预留余量。
+    # 普通 API 请求保持较小的全局请求体上限；备份传输在下方单独放宽。
     client_max_body_size 32m;
+
+    # Raw gzip backup transfers use the same 5 GiB and 10 minute defaults as
+    # PLATFORM_BACKUP_UPLOAD_MAX_BYTES and PLATFORM_BACKUP_TRANSFER_TIMEOUT_MS.
+    location ^~ /api/backups/ {
+        client_max_body_size 5g;
+        client_body_timeout 600s;
+        proxy_pass http://my_platform_gateway;
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
 
     location / {
         proxy_pass http://my_platform_gateway;

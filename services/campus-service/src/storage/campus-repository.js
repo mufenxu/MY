@@ -10,6 +10,16 @@ function withoutMongoId(row) {
   return value;
 }
 
+function boundedWindow({ offset = 0, limit = 1_000 } = {}) {
+  const rawOffset = Number(offset);
+  const rawLimit = Number(limit);
+  const normalizedOffset = Number.isFinite(rawOffset) ? Math.max(0, Math.trunc(rawOffset)) : 0;
+  const normalizedLimit = Number.isFinite(rawLimit)
+    ? Math.min(10_000, Math.max(1, Math.trunc(rawLimit)))
+    : 1_000;
+  return { offset: normalizedOffset, limit: normalizedLimit };
+}
+
 export class CampusRepository {
   constructor({
     uri = process.env.CAMPUS_MONGODB_URI || process.env.MONGODB_URI,
@@ -82,17 +92,23 @@ export class CampusRepository {
     return withoutMongoId(await this.db.collection("users").findOne({}, { sort: { created_at: 1 } }));
   }
 
-  async listActiveUsers() {
+  async listActiveUsers(options = {}) {
+    const { offset, limit } = boundedWindow(options);
     const rows = await this.db.collection("users")
       .find({ disabled: { $ne: 1 } }, { projection: { _id: 0 } })
       .sort({ created_at: 1 })
+      .skip(offset)
+      .limit(limit)
       .toArray();
     return rows;
   }
 
-  async listUsersWithSessions() {
+  async listUsersWithSessions(options = {}) {
+    const { offset, limit } = boundedWindow(options);
     const rows = await this.db.collection("users").aggregate([
       { $sort: { created_at: 1 } },
+      { $skip: offset },
+      { $limit: limit },
       {
         $lookup: {
           from: "school_sessions",
@@ -342,9 +358,13 @@ export class CampusRepository {
     return withoutMongoId(await this.db.collection("reminder_preferences").findOne({ user_id: userId }));
   }
 
-  async listEnabledReminderPreferences() {
+  async listEnabledReminderPreferences(options = {}) {
+    const { offset, limit } = boundedWindow(options);
     return this.db.collection("reminder_preferences")
       .find({ enabled: true, recipient_id: { $type: "string", $ne: "" } }, { projection: { _id: 0 } })
+      .sort({ user_id: 1 })
+      .skip(offset)
+      .limit(limit)
       .toArray();
   }
 
@@ -395,10 +415,20 @@ export class MemoryCampusRepository {
   async findUserById(id) { return clone(this.users.get(String(id)) || null); }
   async findUserByUsername(username) { return clone(Array.from(this.users.values()).find((row) => row.username === username) || null); }
   async findFirstUser() { return clone(Array.from(this.users.values()).sort((a, b) => a.created_at.localeCompare(b.created_at))[0] || null); }
-  async listActiveUsers() { return clone(Array.from(this.users.values()).filter((row) => !row.disabled).sort((a, b) => a.created_at.localeCompare(b.created_at))); }
+  async listActiveUsers(options = {}) {
+    const { offset, limit } = boundedWindow(options);
+    return clone(Array.from(this.users.values())
+      .filter((row) => !row.disabled)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .slice(offset, offset + limit));
+  }
 
-  async listUsersWithSessions() {
-    return clone(Array.from(this.users.values()).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((user) => {
+  async listUsersWithSessions(options = {}) {
+    const { offset, limit } = boundedWindow(options);
+    return clone(Array.from(this.users.values())
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .slice(offset, offset + limit)
+      .map((user) => {
       const session = this.sessions.get(user.id);
       return {
         ...user,
@@ -488,7 +518,13 @@ export class MemoryCampusRepository {
     return clone(row || null);
   }
   async getReminderPreference(userId) { return clone(this.reminderPreferences.get(userId) || null); }
-  async listEnabledReminderPreferences() { return clone(Array.from(this.reminderPreferences.values()).filter((row) => row.enabled && row.recipient_id)); }
+  async listEnabledReminderPreferences(options = {}) {
+    const { offset, limit } = boundedWindow(options);
+    return clone(Array.from(this.reminderPreferences.values())
+      .filter((row) => row.enabled && row.recipient_id)
+      .sort((a, b) => a.user_id.localeCompare(b.user_id))
+      .slice(offset, offset + limit));
+  }
   async upsertReminderPreference(userId, preference, timestamp) {
     const current = this.reminderPreferences.get(userId);
     const row = { user_id: userId, enabled: Boolean(preference.enabled), recipient_id: String(preference.recipientId || ""), lead_minutes: Number(preference.leadMinutes), created_at: current?.created_at || timestamp, updated_at: timestamp };

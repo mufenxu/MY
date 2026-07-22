@@ -32,7 +32,13 @@ function validateCredentials(username, password) {
 try {
   await repository.initialize();
   if (command === "list") {
-    const users = await repository.listUsersWithSessions();
+    const users = [];
+    const pageSize = 1_000;
+    for (let offset = 0; ; offset += pageSize) {
+      const page = await repository.listUsersWithSessions({ offset, limit: pageSize });
+      users.push(...page);
+      if (page.length < pageSize) break;
+    }
     if (users.length === 0) console.log("No users found.");
     else console.table(users.map((user) => ({
       username: user.username,

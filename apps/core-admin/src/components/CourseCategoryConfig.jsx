@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Switch, message, Typography, Popconfirm, Tag, InputNumber, Row, Col, Card, List } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, Switch, Typography, Popconfirm, Tag, InputNumber, Row, Col, Card, List } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, FileSyncOutlined, AppstoreOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
+import { message } from '../utils/feedback';
 
 const { Title, Text } = Typography;
 const { Option } = Select;

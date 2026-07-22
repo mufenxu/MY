@@ -79,7 +79,7 @@ const defaultConfig = {
   },
   dashboard: {
     refreshInterval: intFromEnv('DASHBOARD_REFRESH_INTERVAL', 5000),
-    dataRetentionDays: intFromEnv('DATA_RETENTION_DAYS', 0)
+    dataRetentionDays: intFromEnv('DATA_RETENTION_DAYS', 30)
   }
 };
 

@@ -28,17 +28,31 @@ const {
     updateAssignedMajorCategoryPreference,
 } = require('../utils/userAssignment');
 const { buildCategoryAnalysis } = require('../utils/categoryAnalysis');
+const {
+    recordQuestionVersion,
+    updateQuestionWithVersion,
+} = require('../services/questionVersionService');
 const { setConsoleAuthCookie } = require('../utils/authCookies');
 const { buildCookieAuthPayload } = require('../utils/authResponse');
 const {
     toQuestionListSort,
     getNextQuestionSortOrder,
 } = require('../utils/questionOrder');
+const { parsePagination } = require('../utils/pagination');
 
 function getRequestContext(req) {
     return {
         ip: req.ip,
         userAgent: req.get('user-agent') || '',
+    };
+}
+
+function getQuestionVersionActor(req) {
+    return {
+        actorType: 'console',
+        actorId: req.user.openid,
+        actorName: req.user.consoleRole,
+        requestId: req.id,
     };
 }
 
@@ -327,8 +341,7 @@ exports.getOverview = asyncHandler(async (req, res) => {
 
 exports.getFeedbacks = asyncHandler(async (req, res) => {
     const ownerOpenid = req.user.openid;
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
+    const { page, limit, skip } = parsePagination(req.query);
     const query = { ownerOpenid };
 
     if (req.query.status) {
@@ -339,7 +352,7 @@ exports.getFeedbacks = asyncHandler(async (req, res) => {
         Feedback.find(query)
             .select('-__v')
             .sort({ updateTime: -1, _id: -1 })
-            .skip((page - 1) * limit)
+            .skip(skip)
             .limit(limit)
             .lean(),
         Feedback.countDocuments(query),
@@ -728,9 +741,8 @@ exports.revokePaperShare = asyncHandler(async (req, res) => {
 });
 
 exports.getAllQuestions = asyncHandler(async (req, res) => {
-    const { categoryId, page = 1, limit = 20, pageSize } = req.query;
-    const actualLimit = parseInt(pageSize, 10) || parseInt(limit, 10);
-    const actualPage = parseInt(page, 10);
+    const { categoryId } = req.query;
+    const { limit: actualLimit, skip } = parsePagination(req.query);
     const ownerOpenid = req.user.openid;
     let query = {
         scopeType: PERSONAL_SCOPE,
@@ -751,7 +763,7 @@ exports.getAllQuestions = asyncHandler(async (req, res) => {
             .select('-__v')
             .populate('categoryId', 'name')
             .sort(toQuestionListSort(Boolean(categoryId)))
-            .skip((actualPage - 1) * actualLimit)
+            .skip(skip)
             .limit(actualLimit)
             .lean(),
         Question.countDocuments(query),
@@ -793,15 +805,15 @@ exports.adoptQuestionAiAnalysis = asyncHandler(async (req, res) => {
         throw new NotFoundError('AI解析不存在');
     }
 
-    const updated = await Question.findOneAndUpdate(
-        {
+    const updated = await updateQuestionWithVersion({
+        query: {
             _id: id,
             scopeType: PERSONAL_SCOPE,
             ownerOpenid,
         },
-        { analysis: record.analysis, analysisSource: 'ai' },
-        { new: true, runValidators: true },
-    ).lean();
+        update: { analysis: record.analysis, analysisSource: 'ai' },
+        actor: getQuestionVersionActor(req),
+    });
 
     if (!updated) {
         throw new NotFoundError('题目不存在');
@@ -907,6 +919,12 @@ exports.createQuestion = asyncHandler(async (req, res) => {
         }),
     });
 
+    await recordQuestionVersion({
+        question,
+        action: 'create',
+        actor: getQuestionVersionActor(req),
+    });
+
     await Category.findByIdAndUpdate(question.categoryId, { $inc: { count: 1 } });
     success(res, question);
 });
@@ -931,13 +949,13 @@ exports.updateQuestion = asyncHandler(async (req, res) => {
         })
         : question.sortOrder;
 
-    const updated = await Question.findOneAndUpdate(
-        {
+    const updated = await updateQuestionWithVersion({
+        query: {
             _id: id,
             scopeType: PERSONAL_SCOPE,
             ownerOpenid,
         },
-        {
+        update: {
             ...req.body,
             ...buildScopeAssignment(PERSONAL_SCOPE, ownerOpenid),
             sortOrder: nextSortOrder,
@@ -946,8 +964,8 @@ exports.updateQuestion = asyncHandler(async (req, res) => {
                 ? { analysisSource: 'manual' }
                 : {}),
         },
-        { new: true, runValidators: true },
-    );
+        actor: getQuestionVersionActor(req),
+    });
 
     if (!updated) {
         throw new NotFoundError('题目不存在');
@@ -988,7 +1006,7 @@ exports.deleteQuestion = asyncHandler(async (req, res) => {
 exports.batchUpdateQuestions = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const ownerOpenid = req.user.openid;
-    const { questions: questionsToSave } = req.body;
+    const { questions: questionsToSave, baseQuestions } = req.body;
 
     await ensureOwnedCategory(id, ownerOpenid);
 
@@ -996,10 +1014,12 @@ exports.batchUpdateQuestions = asyncHandler(async (req, res) => {
     const questionQuery = { categoryId: id, ...scopeAssignment };
     await saveCategoryQuestions({
         questionsToSave,
+        baseQuestions,
         questionQuery,
         categoryQuery: { _id: id, scopeType: PERSONAL_SCOPE, ownerOpenid },
         categoryId: id,
         scopeAssignment,
+        actor: getQuestionVersionActor(req),
         Category,
     });
 

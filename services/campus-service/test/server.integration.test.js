@@ -151,6 +151,35 @@ test("server authentication, revocation, validation and static caching work toge
   assert.equal(integrationSettings.status, 200);
   assert.equal((await integrationSettings.json()).data.calendar.enabled, false);
 
+  const operationsStatus = await fetch(`${origin}/api/operations/status`, {
+    headers: { cookie: oldCookie }
+  });
+  assert.equal(operationsStatus.status, 200);
+  const operationsPayload = await operationsStatus.json();
+  assert.equal(operationsPayload.data.academicRefresh.concurrency, 3);
+  assert.equal(operationsPayload.data.academicRefresh.maxRuntimeMs, 600_000);
+  assert.equal(operationsPayload.data.academicReminders.enqueueConcurrency, 5);
+  assert.equal(operationsPayload.data.academicReminders.maxRuntimeMs, 180_000);
+  assert.equal(operationsPayload.data.academicEvaluations.maxActive, 20);
+
+  const usersPage = await fetch(`${origin}/api/users?page=1&pageSize=1`, {
+    headers: { cookie: oldCookie }
+  });
+  assert.equal(usersPage.status, 200);
+  const usersPayload = await usersPage.json();
+  assert.equal(usersPayload.data.length, 1);
+  assert.equal(usersPayload.pagination.pageSize, 1);
+  assert.equal(usersPayload.pagination.total, 1);
+
+  const malformedUserId = await fetch(`${origin}/api/users/%E0%A4%A`, {
+    method: "DELETE",
+    headers: {
+      cookie: oldCookie,
+      "x-csrf-token": loginPayload.data.csrfToken
+    }
+  });
+  assert.equal(malformedUserId.status, 400);
+
   const rotatedCalendar = await fetch(`${origin}/api/academic/calendar/rotate`, {
     method: "POST",
     headers: {

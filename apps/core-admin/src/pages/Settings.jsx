@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Input, Button, Switch, Card, message, Divider, Space, Row, Col, Select, Typography, Tabs, Modal, Tag, Upload } from 'antd';
+import { Form, Input, Button, Switch, Card, Divider, Space, Row, Col, Select, Typography, Tabs, Modal, Tag, Upload } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import { message } from '../utils/feedback';
 import {
     MailOutlined,
     SaveOutlined,

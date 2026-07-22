@@ -26,3 +26,18 @@ test('operations store keeps status history, incidents, audit, and settings isol
   assert.equal(settings.alertingEnabled, false);
 });
 
+test('operations store retains external blackbox samples separately from service history', async () => {
+  let current = new Date('2026-07-22T00:00:00.000Z');
+  const store = createMemoryOperationsStore({ now: () => current });
+  await store.recordBlackboxSamples([
+    { probeId: 'outside-a', targetId: 'platform', state: 'healthy', recordedAt: current.toISOString(), expectedIntervalMs: 30000 },
+  ]);
+  current = new Date(current.getTime() + 30000);
+  await store.recordBlackboxSamples([
+    { probeId: 'outside-a', targetId: 'platform', state: 'offline', recordedAt: current.toISOString(), expectedIntervalMs: 30000 },
+  ]);
+
+  assert.equal((await store.getStatusHistory({ limit: 10 })).length, 0);
+  assert.equal((await store.getBlackboxHistory({ probeId: 'outside-a' })).length, 2);
+  assert.equal((await store.getLatestBlackboxSamples())[0].state, 'offline');
+});

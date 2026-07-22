@@ -1,0 +1,30 @@
+services:
+  blackbox-probe:
+    build:
+      context: ../..
+      dockerfile: infra/blackbox/Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      PLATFORM_BLACKBOX_PROBE_ID: ${PLATFORM_BLACKBOX_PROBE_ID:?Set a stable external probe id}
+      PLATFORM_BLACKBOX_TARGETS: ${PLATFORM_BLACKBOX_TARGETS:?Set JSON probe targets}
+      PLATFORM_BLACKBOX_INGEST_URL: ${PLATFORM_BLACKBOX_INGEST_URL:?Set the public ingest URL}
+      PLATFORM_BLACKBOX_INGEST_TOKEN: ${PLATFORM_BLACKBOX_INGEST_TOKEN:?Set the dedicated ingest token}
+      PLATFORM_BLACKBOX_INTERVAL_MS: ${PLATFORM_BLACKBOX_INTERVAL_MS:-30000}
+      PLATFORM_BLACKBOX_TIMEOUT_MS: ${PLATFORM_BLACKBOX_TIMEOUT_MS:-8000}
+      PLATFORM_BLACKBOX_SPOOL_MAX_SAMPLES: ${PLATFORM_BLACKBOX_SPOOL_MAX_SAMPLES:-10000}
+    read_only: true
+    volumes:
+      - blackbox_state:/state
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.25
+
+volumes:
+  blackbox_state:

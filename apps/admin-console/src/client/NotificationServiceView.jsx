@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { requestJson } from './api.js';
 import NotificationApiAccess from './NotificationApiAccess.jsx';
-import { ConfirmDialog, SelectControl } from './UiControls.jsx';
+import { ConfirmDialog, SegmentedTabs, SelectControl } from './UiControls.jsx';
 
 const STATUS_OPTIONS = [
   { value: '', label: '全部状态' },
@@ -249,26 +249,39 @@ export default function NotificationServiceView({ session }) {
     return <section className="page-view notify-page"><div className="ops-loading"><LoaderCircle className="spin" size={20} />正在读取通知服务</div></section>;
   }
 
+  const primaryTab = ['records', 'test'].includes(tab)
+    ? 'records'
+    : ['jobs', 'templates'].includes(tab) ? 'jobs' : tab;
+  const panelLabelledBy = ['records', 'test'].includes(tab)
+    ? `notify-primary-tab-records notify-send-tab-${tab}`
+    : ['jobs', 'templates'].includes(tab)
+      ? `notify-primary-tab-jobs notify-orchestration-tab-${tab}`
+      : `notify-primary-tab-${primaryTab}`;
+
   return (
     <section className="page-view notify-page" aria-label="企业微信通知通道">
       <div className="notify-toolbar">
-        <div className="ops-segmented" role="tablist" aria-label="通知服务视图">
-          {[
-            ['overview', '概览'],
-            ['records', '发送'],
-            ['jobs', '编排'],
-            ['preferences', '接收偏好'],
-            ['api', 'API 接入'],
-          ].map(([id, label]) => {
-            const active = id === 'records' ? ['records', 'test'].includes(tab) : id === 'jobs' ? ['jobs', 'templates'].includes(tab) : tab === id;
-            return <button key={id} className={active ? 'active' : ''} type="button" role="tab" aria-selected={active} onClick={() => setTab(id)}>{label}</button>;
-          })}
-        </div>
+        <SegmentedTabs
+          ariaLabel="通知服务视图"
+          idPrefix="notify-primary-tab"
+          panelId="notify-view-panel"
+          items={[
+            { id: 'overview', label: '概览' },
+            { id: 'records', label: '发送' },
+            { id: 'jobs', label: '编排' },
+            { id: 'preferences', label: '接收偏好' },
+            { id: 'api', label: 'API 接入' },
+          ]}
+          value={primaryTab}
+          onChange={setTab}
+        />
         {tab !== 'api' && <button className="icon-button notify-refresh" type="button" title="刷新通知数据" aria-label="刷新通知数据" disabled={refreshing} onClick={() => load({ quiet: true })}><RefreshCw className={refreshing ? 'spin' : ''} size={18} /></button>}
       </div>
-      {['records', 'test'].includes(tab) && <div className="notify-context-tabs" role="tablist" aria-label="发送视图"><button className={tab === 'records' ? 'active' : ''} type="button" role="tab" aria-selected={tab === 'records'} onClick={() => setTab('records')}>发送记录</button><button className={tab === 'test' ? 'active' : ''} type="button" role="tab" aria-selected={tab === 'test'} onClick={() => setTab('test')}>发送测试</button></div>}
-      {['jobs', 'templates'].includes(tab) && <div className="notify-context-tabs" role="tablist" aria-label="编排视图"><button className={tab === 'jobs' ? 'active' : ''} type="button" role="tab" aria-selected={tab === 'jobs'} onClick={() => setTab('jobs')}>计划任务</button><button className={tab === 'templates' ? 'active' : ''} type="button" role="tab" aria-selected={tab === 'templates'} onClick={() => setTab('templates')}>消息模板</button></div>}
+      {['records', 'test'].includes(tab) && <SegmentedTabs className="notify-context-tabs" ariaLabel="发送视图" idPrefix="notify-send-tab" panelId="notify-view-panel" items={[{ id: 'records', label: '发送记录' }, { id: 'test', label: '发送测试' }]} value={tab} onChange={setTab} />}
+      {['jobs', 'templates'].includes(tab) && <SegmentedTabs className="notify-context-tabs" ariaLabel="编排视图" idPrefix="notify-orchestration-tab" panelId="notify-view-panel" items={[{ id: 'jobs', label: '计划任务' }, { id: 'templates', label: '消息模板' }]} value={tab} onChange={setTab} />}
       <Feedback error={error} message={message} />
+
+      <div className="notify-view-panel" id="notify-view-panel" role="tabpanel" aria-labelledby={panelLabelledBy}>
 
       {tab === 'overview' && (
         <>
@@ -394,6 +407,7 @@ export default function NotificationServiceView({ session }) {
 
       {tab === 'api' && <NotificationApiAccess session={session} onError={setError} onMessage={setMessage} />}
 
+      </div>
       <ConfirmDialog
         open={Boolean(pendingAction)}
         title={pendingAction?.type === 'retry' ? '重试失败通知' : pendingAction?.type === 'cancel-job' ? '取消计划任务' : pendingAction?.type === 'delete-template' ? '删除通知模板' : '发送测试通知'}

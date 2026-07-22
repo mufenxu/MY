@@ -679,6 +679,7 @@ export function createBackupManager({
         fallbackName: filename,
         backupNameAllowed: isVisibleBackupDirectory,
         maxExtractedBytes: config.backupUploadMaxBytes || DEFAULT_UPLOAD_MAX_BYTES,
+        maxSourceBytes: config.backupUploadMaxBytes || DEFAULT_UPLOAD_MAX_BYTES,
       });
       const targetDirectory = resolveBackupPath(extracted.backupName);
       if (await exists(targetDirectory)) {
@@ -695,6 +696,11 @@ export function createBackupManager({
       await rename(workDirectory, targetDirectory);
       completed = true;
       return { backup: await readManifest(targetDirectory) };
+    } catch (error) {
+      if (error?.code === 'BACKUP_UPLOAD_TOO_LARGE') {
+        throw new BackupOperationError(413, 'BACKUP_UPLOAD_TOO_LARGE', 'The backup archive exceeds the configured upload limit.');
+      }
+      throw error;
     } finally {
       if (!completed) await rm(workDirectory, { recursive: true, force: true });
     }

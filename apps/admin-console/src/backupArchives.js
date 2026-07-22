@@ -1,5 +1,6 @@
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, readdir, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { once } from 'node:events';
 import { Readable } from 'node:stream';
@@ -8,6 +9,28 @@ import { createGunzip, createGzip } from 'node:zlib';
 const TAR_BLOCK_SIZE = 512;
 const ZERO_BLOCK = Buffer.alloc(TAR_BLOCK_SIZE);
 const DEFAULT_MAX_EXTRACTED_BYTES = 5 * 1024 * 1024 * 1024;
+
+async function spoolSourceWithLimit(source, filename, maxBytes) {
+  let receivedBytes = 0;
+  const output = createWriteStream(filename, { mode: 0o600 });
+  let completed = false;
+  try {
+    for await (const chunk of source) {
+      receivedBytes += chunk.length;
+      if (receivedBytes > maxBytes) {
+        const error = new Error('Backup upload exceeds the compressed size limit.');
+        error.code = 'BACKUP_UPLOAD_TOO_LARGE';
+        throw error;
+      }
+      await writeChunk(output, chunk);
+    }
+    output.end();
+    await once(output, 'finish');
+    completed = true;
+  } finally {
+    if (!completed) output.destroy();
+  }
+}
 
 function writeString(buffer, offset, length, value) {
   Buffer.from(String(value), 'utf8').copy(buffer, offset, 0, length);
@@ -147,9 +170,12 @@ export async function extractBackupArchive({
   fallbackName,
   backupNameAllowed,
   maxExtractedBytes = DEFAULT_MAX_EXTRACTED_BYTES,
+  maxSourceBytes = maxExtractedBytes,
 }) {
   await mkdir(targetDirectory, { recursive: true, mode: 0o700 });
-  const stream = source.pipe(createGunzip());
+  const sourceArchive = path.join(targetDirectory, `.incoming-upload-${randomUUID()}.tar.gz`);
+  await spoolSourceWithLimit(source, sourceArchive, maxSourceBytes);
+  const stream = createReadStream(sourceArchive).pipe(createGunzip());
   const iterator = stream[Symbol.asyncIterator]();
   let buffer = Buffer.alloc(0);
   let extractedBytes = 0;
@@ -162,7 +188,9 @@ export async function extractBackupArchive({
     if (next.done) return false;
     extractedBytes += next.value.length;
     if (extractedBytes > maxExtractedBytes) {
-      throw new Error('Backup archive is too large.');
+      const error = new Error('Backup archive exceeds the extracted size limit.');
+      error.code = 'BACKUP_UPLOAD_TOO_LARGE';
+      throw error;
     }
     buffer = buffer.length === 0 ? next.value : Buffer.concat([buffer, next.value]);
     return true;
@@ -249,5 +277,6 @@ export async function extractBackupArchive({
   }
 
   if (!sawEntry) throw new Error('Backup archive is empty.');
+  await rm(sourceArchive, { force: true });
   return { backupName: archiveRoot };
 }

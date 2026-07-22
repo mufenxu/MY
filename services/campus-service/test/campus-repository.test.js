@@ -48,3 +48,29 @@ test('calendar subscriptions and reminder preferences stay scoped to their user'
   await repository.disableCalendarSubscription('user-1', timestamp);
   assert.equal(await repository.findCalendarSubscriptionByTokenHash('hash-1'), null);
 });
+
+test('repository list methods honor bounded windows', async () => {
+  const repository = new MemoryCampusRepository();
+  for (let index = 1; index <= 5; index += 1) {
+    const id = `user-${index}`;
+    await repository.insertUser({
+      id,
+      username: id,
+      disabled: 0,
+      created_at: `2026-07-21T00:00:0${index}.000Z`
+    });
+    await repository.upsertReminderPreference(id, {
+      enabled: true,
+      recipientId: `recipient-${index}`,
+      leadMinutes: 15
+    }, `2026-07-21T00:00:0${index}.000Z`);
+  }
+
+  assert.deepEqual((await repository.listActiveUsers({ offset: 1, limit: 2 })).map((row) => row.id), ['user-2', 'user-3']);
+  assert.deepEqual((await repository.listUsersWithSessions({ offset: 3, limit: 2 })).map((row) => row.id), ['user-4', 'user-5']);
+  assert.deepEqual(
+    (await repository.listEnabledReminderPreferences({ offset: 2, limit: 2 })).map((row) => row.user_id),
+    ['user-3', 'user-4']
+  );
+  assert.equal((await repository.listActiveUsers({ offset: Infinity, limit: Infinity })).length, 5);
+});

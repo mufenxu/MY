@@ -21,9 +21,18 @@ test('shared batch and AI schemas keep defaults and ObjectId validation', () => 
     const validId = '0123456789abcdef01234567';
     const batch = {
         questions: [{ type: 'single', content: 'Question', answer: ['A'] }],
+        baseQuestions: [],
     };
     assert.equal(consoleValidator.batchUpdateQuestions.body.validate(batch).error, undefined);
     assert.equal(manageValidator.batchUpdateQuestions.body.validate({ ...batch, scopeType: 'demo' }).error, undefined);
+    assert.match(
+        consoleValidator.batchUpdateQuestions.body.validate({ questions: batch.questions }).error.message,
+        /baseQuestions/,
+    );
+    assert.equal(consoleValidator.batchUpdateQuestions.body.validate({
+        questions: [{ _id: validId, revision: 3, type: 'single', content: 'Question', answer: ['A'] }],
+        baseQuestions: [{ _id: validId, revision: 3 }],
+    }).error, undefined);
 
     const aiResult = consoleValidator.generateAiAnalyses.body.validate({ questionIds: [validId] });
     assert.equal(aiResult.error, undefined);
