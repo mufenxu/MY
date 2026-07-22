@@ -2,8 +2,6 @@ const crypto = require('crypto');
 const axios = require('axios');
 const { isScanLoginSessionExpired } = require('@my-platform/platform-auth');
 const User = require('../models/User');
-const AppClient = require('../models/AppClient');
-const AuthScanLog = require('../models/AuthScanLog');
 const logger = require('../utils/logger');
 const authService = require('../services/authService');
 const { getAccessToken, invalidateCache: invalidateWxTokenCache } = require('../utils/wxToken');
@@ -18,14 +16,10 @@ const QR_EXPIRE_TIME = 300 * 1000; // 5 minutes
 const CHECK_INTERVAL = 60 * 1000; // Cleanup interval
 const VALID_WX_ENV_VERSIONS = new Set(['release', 'trial', 'develop']);
 const MAX_QR_STORE_SIZE = 1000; // 内存存储上限，防止 DoS
-const MAX_MANAGEMENT_PAGE = 10000;
-const MAX_MANAGEMENT_PAGE_SIZE = 100;
-
-function boundedPositiveInt(value, fallback, maximum) {
-    const parsed = Number.parseInt(value, 10);
-    if (!Number.isSafeInteger(parsed) || parsed < 1) return fallback;
-    return Math.min(parsed, maximum);
-}
+const SCAN_LOGIN_APPS = new Map([
+    ['admin-dashboard', '星轨轻具坊后台'],
+    ['admin-action-auth', '系统安全操作授权'],
+]);
 
 function tokenFingerprint(value) {
     return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 12);
@@ -51,12 +45,6 @@ function cleanupExpiredQRCodes() {
     const now = Date.now();
     for (const [key, value] of qrCodeStore.entries()) {
         if (isScanLoginSessionExpired(value, { now, ttlMs: QR_EXPIRE_TIME })) {
-            if (value.logId) {
-                AuthScanLog.findByIdAndUpdate(value.logId, {
-                    actionStatus: 'EXPIRED',
-                    updateTime: Date.now()
-                }).catch(err => logger.error('Error updating expired log:', err));
-            }
             qrCodeStore.delete(key);
         }
     }
@@ -76,6 +64,9 @@ exports.createQRCode = async (req, res) => {
         if (!appId) {
             return res.status(400).json({ message: 'Missing appId' });
         }
+        if (!SCAN_LOGIN_APPS.has(appId)) {
+            return res.status(404).json({ message: 'Scan login app not found' });
+        }
 
         // Invalidate old token if provided (e.g., on page refresh)
         if (oldToken && qrCodeStore.has(oldToken)) {
@@ -92,20 +83,6 @@ exports.createQRCode = async (req, res) => {
         }
 
         const qrToken = crypto.randomBytes(16).toString('hex');
-
-        // Check App Status
-        if (appId && appId !== 'admin-dashboard' && appId !== 'admin-action-auth') {
-            try {
-                const app = await AppClient.findOne({ appId: appId });
-                if (app && app.status === 'disabled') {
-                    logger.warn(`Blocked QR creation for disabled app: ${appId}`);
-                    return res.status(403).json({ message: '此应用已被禁用' });
-                }
-            } catch (dbErr) {
-                logger.error('AppClient Check Failed:', dbErr);
-                throw dbErr;
-            }
-        }
 
         qrCodeStore.set(qrToken, {
             status: 'waiting',
@@ -126,7 +103,6 @@ exports.createQRCode = async (req, res) => {
         res.status(500).json({ message: 'Internal Server Error' });
     }
 };
-
 /**
  * 1.1 Create Wxacode (小程序码) for WeChat scan login
  * Generates a mini program QR code using wxacode.getUnlimited API.
@@ -137,6 +113,9 @@ exports.createWxacode = async (req, res) => {
         const { appId, oldToken } = req.body;
         if (!appId) {
             return res.status(400).json({ message: 'Missing appId' });
+        }
+        if (!SCAN_LOGIN_APPS.has(appId)) {
+            return res.status(404).json({ message: 'Scan login app not found' });
         }
 
         // Invalidate old token if provided
@@ -155,20 +134,6 @@ exports.createWxacode = async (req, res) => {
 
         // 使用 16 字节 = 32 字符 hex，适配微信 scene 参数上限
         const qrToken = crypto.randomBytes(16).toString('hex');
-
-        // Check App Status
-        if (appId && appId !== 'admin-dashboard' && appId !== 'admin-action-auth') {
-            try {
-                const app = await AppClient.findOne({ appId });
-                if (app && app.status === 'disabled') {
-                    logger.warn(`Blocked QR creation for disabled app: ${appId}`);
-                    return res.status(403).json({ message: '此应用已被禁用' });
-                }
-            } catch (dbErr) {
-                logger.error('AppClient Check Failed:', dbErr);
-                throw dbErr;
-            }
-        }
 
         qrCodeStore.set(qrToken, {
             status: 'waiting',
@@ -299,41 +264,9 @@ exports.scanQRCode = async (req, res) => {
             return res.json({ success: false, message: '二维码已被扫描或确认' });
         }
 
-        // Fetch App Name
-        let appName = '未知应用';
-        if (qrData.appId === 'admin-dashboard') {
-            appName = '星轨轻具坊后台';
-        } else if (qrData.appId === 'admin-action-auth') {
-            appName = '系统安全操作授权';
-        } else if (qrData.appId) {
-            try {
-                const app = await AppClient.findOne({ appId: qrData.appId });
-                if (app && app.appName) {
-                    appName = app.appName;
-                } else {
-                    appName = qrData.appId; // Fallback to ID if name not found
-                }
-            } catch (err) {
-                logger.error('Fetch App Error:', err);
-                appName = qrData.appId;
-            }
-        }
-
-        // Create an audit log for the scan action
-        const newLog = new AuthScanLog({
-            appId: qrData.appId,
-            appName: appName,
-            userId: userId,
-            actionStatus: 'SCANNED',
-            ip: req.ip || (req.connection && req.connection.remoteAddress) || 'unknown',
-            device: req.headers['user-agent'] || 'MiniProgram'
-        });
-        const savedLog = await newLog.save();
-
-        // Update status and save log ID
+        const appName = SCAN_LOGIN_APPS.get(qrData.appId);
         qrData.status = 'scanned';
         qrData.userId = userId;
-        qrData.logId = savedLog._id;
         qrCodeStore.set(qrToken, qrData);
 
         // Return app info to MP so it knows what it's logging into
@@ -371,14 +304,6 @@ exports.confirmLogin = async (req, res) => {
         qrData.tempAuthCode = tempAuthCode;
         qrCodeStore.set(qrToken, qrData);
 
-        // Update Audit Log
-        if (qrData.logId) {
-            await AuthScanLog.findByIdAndUpdate(qrData.logId, {
-                actionStatus: 'CONFIRMED',
-                updateTime: Date.now()
-            });
-        }
-
         res.json({ success: true });
     } catch (error) {
         logger.error('Confirm Error:', error);
@@ -407,14 +332,6 @@ exports.rejectLogin = async (req, res) => {
         qrData.status = 'rejected';
         qrCodeStore.set(qrToken, qrData);
 
-        // Update Audit Log
-        if (qrData.logId) {
-            await AuthScanLog.findByIdAndUpdate(qrData.logId, {
-                actionStatus: 'REJECTED',
-                updateTime: Date.now()
-            });
-        }
-
         res.json({ success: true });
     } catch (error) {
         logger.error('Reject Error:', error);
@@ -423,78 +340,7 @@ exports.rejectLogin = async (req, res) => {
 };
 
 /**
- * 5. Exchange Token (Client calls this with tempAuthCode)
- */
-// ... (existing code)
-
-exports.exchangeToken = async (req, res) => {
-    try {
-        const { tempAuthCode, appId, secret } = req.body;
-
-        if (!tempAuthCode) return res.status(400).json({ message: 'Missing tempAuthCode' });
-        // Optional: We can enforce appId/secret presence here or later. 
-        // For best security, we SHOULD require them.
-        if (!appId || !secret) {
-            return res.status(401).json({ message: 'Missing appId or secret' });
-        }
-
-        let foundToken = null;
-        let foundData = null;
-
-        for (const [key, value] of qrCodeStore.entries()) {
-            if (value.tempAuthCode === tempAuthCode) {
-                foundToken = key;
-                foundData = value;
-                break;
-            }
-        }
-
-        if (!foundData) {
-            return res.status(400).json({ message: 'Invalid or expired code' });
-        }
-
-        // Verify AppID matches the one in QR code
-        if (foundData.appId && foundData.appId !== appId) {
-            return res.status(400).json({ message: 'AppID mismatch' });
-        }
-
-        // Verify App Secret (使用时序安全比对防止时序攻击)
-        const appClient = await AppClient.findOne({ appId }).select('+secret');
-        if (!appClient || !appClient.secret || !secret) {
-            return res.status(401).json({ message: 'Invalid App Secret' });
-        }
-        const secretBuffer = Buffer.from(String(appClient.secret));
-        const inputBuffer = Buffer.from(String(secret));
-        if (secretBuffer.length !== inputBuffer.length || !crypto.timingSafeEqual(secretBuffer, inputBuffer)) {
-            return res.status(401).json({ message: 'Invalid App Secret' });
-        }
-
-        // Fetch user from DB to get role and details
-        const user = await User.findById(foundData.userId);
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-
-        // Generate real JWT + Refresh Token
-        const token = authService.generateToken(user);
-        const refreshToken = await authService.generateRefreshToken(user._id, user.tokenVersion);
-
-        // Cleanup used QR
-        qrCodeStore.delete(foundToken);
-
-        res.json({
-            accessToken: token,
-            refreshToken: refreshToken,
-            user: user
-        });
-    } catch (error) {
-        logger.error('Token Exchange Error:', error);
-        res.status(500).json({ message: 'Internal Server Error' });
-    }
-};
-
-/**
- * 5.1 Admin Token Exchange (Proxy)
+ * 5. Admin Token Exchange (Proxy)
  * Allows admin frontend to exchange token without exposing secret
  */
 exports.exchangeTokenAdmin = async (req, res) => {
@@ -553,71 +399,6 @@ exports.exchangeTokenAdmin = async (req, res) => {
 
     } catch (error) {
         logger.error('Admin Exchange Error:', error);
-        res.status(500).json({ message: 'Internal Server Error' });
-    }
-};
-
-/**
- * 6. List Active QR Codes (Admin only)
- */
-exports.listQRCodes = async (req, res) => {
-    try {
-        const page = boundedPositiveInt(req.query.page, 1, MAX_MANAGEMENT_PAGE);
-        const pageSize = boundedPositiveInt(req.query.pageSize || req.query.limit, 20, MAX_MANAGEMENT_PAGE_SIZE);
-        const list = [];
-        for (const [qrToken, data] of qrCodeStore.entries()) {
-            list.push({
-                qrToken: qrToken.substring(0, 8) + '...', // Mask token for security
-                status: data.status,
-                appId: data.appId,
-                createdTime: data.createdTime,
-                userId: data.userId,
-                // Do not return tempAuthCode
-            });
-        }
-        // Sort by createdTime desc
-        list.sort((a, b) => b.createdTime - a.createdTime);
-        const total = list.length;
-        const start = (page - 1) * pageSize;
-        res.json({ success: true, list: list.slice(start, start + pageSize), total, page, pageSize });
-    } catch (error) {
-        logger.error('List QR Error:', error);
-        res.status(500).json({ message: 'Internal Server Error' });
-    }
-};
-
-/**
- * 7. Get Audit Logs for a specific App or all (Admin only)
- */
-exports.getAuditLogs = async (req, res) => {
-    try {
-        const { appId } = req.query;
-        const page = boundedPositiveInt(req.query.page, 1, MAX_MANAGEMENT_PAGE);
-        const limit = boundedPositiveInt(req.query.limit || req.query.pageSize, 20, MAX_MANAGEMENT_PAGE_SIZE);
-
-        const filter = {};
-        if (appId) filter.appId = appId;
-
-        const skip = (page - 1) * limit;
-        const [logs, total] = await Promise.all([
-            AuthScanLog.find(filter)
-                .sort({ createTime: -1 })
-                .skip(skip)
-                .limit(limit)
-                .populate('userId', 'userId nickName avatarUrl')
-                .lean(),
-            AuthScanLog.countDocuments(filter)
-        ]);
-
-        res.json({
-            success: true,
-            data: logs,
-            total,
-            page,
-            limit
-        });
-    } catch (error) {
-        logger.error('Get Audit Logs Error:', error);
         res.status(500).json({ message: 'Internal Server Error' });
     }
 };

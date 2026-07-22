@@ -8,7 +8,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
-  BellRing,
   Bot,
   Boxes,
   CheckCircle2,
@@ -22,6 +21,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  ExternalLink,
   Fingerprint,
   GraduationCap,
   KeyRound,
@@ -37,13 +37,9 @@ import {
   Play,
   Radio,
   RefreshCw,
-  Rocket,
-  Route,
-  Send,
   Server,
   ShieldCheck,
   ShieldAlert,
-  GitPullRequest,
   Sun,
   Timer,
   Trash2,
@@ -52,7 +48,12 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { isPlainInternalNavigation } from './navigation.js';
+import {
+  getNavigationGroup,
+  isPlainInternalNavigation,
+  NAV_GROUPS,
+  resolveConsoleView,
+} from './navigation.js';
 import { requestJson } from './api.js';
 import { PLATFORM_BRAND_ICON } from './brand.js';
 import { ConfirmDialog } from './UiControls.jsx';
@@ -73,21 +74,14 @@ import {
   SecurityAuditView,
 } from './OperationsViews.jsx';
 
-const FILTERS = [
-  { id: 'all', label: '运行总览', icon: LayoutDashboard },
-  { id: 'miniapp', label: '应用中心', icon: AppWindow },
-  { id: 'service', label: '服务运维', icon: Server },
-  { id: 'notification', label: '通知通道', icon: Send },
-  { id: 'monitoring', label: '监控分析', icon: ChartNoAxesCombined },
-  { id: 'incidents', label: '告警事件', icon: BellRing },
-  { id: 'automation', label: '自动化中心', icon: Bot },
-  { id: 'backup', label: '数据灾备', icon: Database },
-  { id: 'releases', label: '发布中心', icon: Rocket },
-  { id: 'tasks', label: '任务中心', icon: ListTodo },
-  { id: 'configuration', label: '配置中心', icon: GitPullRequest },
-  { id: 'diagnostics', label: '链路诊断', icon: Route },
-  { id: 'security', label: '安全审计', icon: ShieldCheck },
-];
+const NAVIGATION_ICONS = {
+  overview: LayoutDashboard,
+  services: Boxes,
+  observability: ChartNoAxesCombined,
+  execution: ListTodo,
+  capabilities: Zap,
+  security: ShieldCheck,
+};
 
 const CATEGORY_LABELS = {
   miniapp: '应用',
@@ -836,10 +830,10 @@ function OverviewView({
   environmentLabel,
   monitoringEnabled,
   setMonitoringEnabled,
-  primaryService,
   launchService,
   refreshedAt,
   operationsSummary,
+  onOpenServices,
   onOpenIncidents,
   onOpenAudit,
 }) {
@@ -869,61 +863,32 @@ function OverviewView({
         </div>
 
         <div className="performance-heading">
-          <div>
+          <div className="performance-score">
             <span>服务可用率</span>
             <strong>{loading ? '--' : `${healthyRate.toFixed(1)}%`}</strong>
           </div>
-          <span className="performance-state">
-            <i /> {attentionCount > 0 ? `${attentionCount} 项待处理` : '运行平稳'}
-          </span>
+          <div className="performance-heading-actions">
+            <span className="performance-state">
+              <i /> {attentionCount > 0 ? `${attentionCount} 项待处理` : '运行平稳'}
+            </span>
+            <div className="monitoring-control">
+              <CloudCog size={18} />
+              <span><small>30 秒刷新</small><strong>{monitoringEnabled ? '已开启' : '已暂停'}</strong></span>
+              <button
+                className={`toggle-switch compact ${monitoringEnabled ? 'active' : ''}`}
+                type="button"
+                role="switch"
+                aria-checked={monitoringEnabled}
+                aria-label="自动刷新服务状态"
+                title={monitoringEnabled ? '暂停页面自动刷新' : '开启页面自动刷新'}
+                onClick={() => setMonitoringEnabled((enabled) => !enabled)}
+              >
+                <span />
+              </button>
+            </div>
+          </div>
         </div>
         <OperationsChart services={services} history={operationsSummary?.history} />
-      </article>
-
-      <article className="dashboard-card monitoring-card">
-        <div>
-          <span className="card-eyebrow">实时监测</span>
-          <h2>{monitoringEnabled ? '页面自动刷新已开启' : '页面自动刷新已暂停'}</h2>
-          <p>{monitoringEnabled ? '每 30 秒同步服务端监测结果' : '服务端持续监测不受影响'}</p>
-        </div>
-        <span className="monitoring-icon"><CloudCog size={24} /></span>
-        <button
-          className={`toggle-switch ${monitoringEnabled ? 'active' : ''}`}
-          type="button"
-          role="switch"
-          aria-checked={monitoringEnabled}
-          aria-label="自动监测"
-          onClick={() => setMonitoringEnabled((enabled) => !enabled)}
-        >
-          <span />
-        </button>
-      </article>
-
-      <article className="dashboard-card service-entry-card">
-        <div className="service-entry-copy">
-          <span className="entry-icon"><CloudCog size={19} /></span>
-          <div>
-            <h2>统一服务中心</h2>
-            <p>统一访问核心平台、考试、校园与消息服务</p>
-          </div>
-          <button
-            className="entry-action"
-            type="button"
-            disabled={!primaryService}
-            onClick={() => launchService(primaryService)}
-            aria-label="进入统一服务中心"
-            title="进入统一服务中心"
-          >
-            <ArrowRight size={21} />
-          </button>
-        </div>
-        <div className="service-visual" aria-hidden="true">
-          <span className="visual-card visual-card-one"><Server size={25} /></span>
-          <span className="visual-card visual-card-two"><Boxes size={27} /></span>
-          <span className="visual-card visual-card-three"><Zap size={24} /></span>
-          <i className="visual-link link-one" />
-          <i className="visual-link link-two" />
-        </div>
       </article>
 
       <article className="dashboard-card portfolio-card">
@@ -932,7 +897,12 @@ function OverviewView({
             <span className="card-eyebrow">服务</span>
             <h2>服务组合</h2>
           </div>
-          <span className="portfolio-count">{sortedServices.length}</span>
+          <div className="portfolio-header-actions">
+            <span className="portfolio-count">{sortedServices.length}</span>
+            <button className="icon-action" type="button" onClick={onOpenServices} aria-label="查看服务目录" title="查看服务目录">
+              <ArrowRight size={17} />
+            </button>
+          </div>
         </header>
         <div className="portfolio-list">
           {sortedServices.length > 0 ? sortedServices.map((service) => (
@@ -1567,7 +1537,7 @@ function BackupRecoveryView({ session }) {
 function Dashboard({ session, onLogout }) {
   const [activeFilter, setActiveFilter] = useState(() => {
     const requestedView = new URLSearchParams(window.location.search).get('view');
-    return FILTERS.some(({ id }) => id === requestedView) ? requestedView : 'all';
+    return resolveConsoleView(requestedView);
   });
   const [data, setData] = useState(null);
   const [operationsSummary, setOperationsSummary] = useState(null);
@@ -1766,8 +1736,7 @@ function Dashboard({ session, onLogout }) {
     });
   }, [launchingService]);
 
-  const primaryService = services.find((service) => service.id === 'core' && service.adminUrl)
-    || services.find((service) => service.adminUrl);
+  const activeNavigationGroup = getNavigationGroup(activeFilter);
   const viewMeta = {
     miniapp: { title: '应用中心', subtitle: '应用入口与运行状态' },
     service: { title: '服务运维', subtitle: '基础服务健康监测' },
@@ -1780,7 +1749,7 @@ function Dashboard({ session, onLogout }) {
     tasks: { title: '统一任务中心', subtitle: '跨服务任务状态与处理入口' },
     configuration: { title: '配置中心', subtitle: '受控变更、审批与版本回滚' },
     diagnostics: { title: '链路诊断', subtitle: '公网网关与服务直连阶段追踪' },
-    security: { title: '安全审计', subtitle: '会话安全与操作记录' },
+    security: { title: '安全中心', subtitle: '会话安全与操作记录' },
   }[activeFilter];
 
   return (
@@ -1796,23 +1765,27 @@ function Dashboard({ session, onLogout }) {
 
       <aside ref={sidebarRef} id="management-sidebar" className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
         <nav className="main-nav" aria-label="管理模块">
-          {FILTERS.map(({ id, label, icon: Icon }) => (
+          {NAV_GROUPS.map((group) => {
+            const Icon = NAVIGATION_ICONS[group.id];
+            const active = activeNavigationGroup.id === group.id;
+            return (
             <button
-              key={id}
-              className={activeFilter === id ? 'active' : ''}
+              key={group.id}
+              className={active ? 'active' : ''}
               onClick={() => {
-                setActiveFilter(id);
+                setActiveFilter(group.defaultView);
                 closeMobileNav();
               }}
-              title={label}
-              aria-label={label}
-              aria-pressed={activeFilter === id}
+              title={group.label}
+              aria-label={group.label}
+              aria-pressed={active}
               type="button"
             >
               <Icon size={19} />
-              <span>{label}</span>
+              <span>{group.label}</span>
             </button>
-          ))}
+            );
+          })}
           <button type="button" onClick={() => loadServices(true)} disabled={refreshing} title="刷新服务状态">
             <RefreshCw className={refreshing ? 'spin' : ''} size={19} />
             <span>刷新状态</span>
@@ -1848,7 +1821,7 @@ function Dashboard({ session, onLogout }) {
             <div className="welcome-copy">
               {activeFilter === 'all' ? (
                 <h1>{greeting}，<strong>{username}</strong></h1>
-              ) : <h1><strong>{viewMeta.title}</strong></h1>}
+              ) : <h1><strong>{activeNavigationGroup.label}</strong></h1>}
               <span>{activeFilter === 'all' ? '统一服务控制台' : viewMeta.subtitle}</span>
             </div>
           </div>
@@ -1888,6 +1861,30 @@ function Dashboard({ session, onLogout }) {
         </header>
 
         <div className="workspace-content">
+          {activeNavigationGroup.views.length > 1 && (
+            <div className="workspace-section-nav">
+              <div className="workspace-tabs" role="tablist" aria-label={`${activeNavigationGroup.label}功能`}>
+                {activeNavigationGroup.views.map((view) => (
+                  <button
+                    key={view.id}
+                    className={activeFilter === view.id ? 'active' : ''}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeFilter === view.id}
+                    onClick={() => setActiveFilter(view.id)}
+                  >
+                    {view.label}
+                  </button>
+                ))}
+              </div>
+              {activeNavigationGroup.externalAction && (
+                <a href={activeNavigationGroup.externalAction.href} target="_blank" rel="noreferrer">
+                  <ExternalLink size={15} />
+                  <span>{activeNavigationGroup.externalAction.label}</span>
+                </a>
+              )}
+            </div>
+          )}
           {error && (
             <div className="error-banner" role="alert">
               <CircleAlert size={18} />
@@ -1907,10 +1904,10 @@ function Dashboard({ session, onLogout }) {
               environmentLabel={environmentLabel}
               monitoringEnabled={monitoringEnabled}
               setMonitoringEnabled={setMonitoringEnabled}
-              primaryService={primaryService}
               launchService={launchService}
               refreshedAt={data?.refreshedAt}
               operationsSummary={operationsSummary}
+              onOpenServices={() => setActiveFilter('miniapp')}
               onOpenIncidents={() => setActiveFilter('incidents')}
               onOpenAudit={() => setActiveFilter('security')}
             />

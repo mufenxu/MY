@@ -21,7 +21,6 @@ router.use('/audit-logs', require('./auditLogs'));
 router.use('/news', require('./newsRoutes'));
 
 router.use('/mp', require('./mpRoutes'));
-router.use('/apps', require('./appRoutes'));
 router.use('/cron', require('./cronRoutes'));
 router.use('/ct8', require('./ct8Routes'));
 router.use('/stats', require('./statsRoutes'));

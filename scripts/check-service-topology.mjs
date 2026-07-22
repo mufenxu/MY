@@ -95,7 +95,6 @@ export function loadWorkspaceInputs(workspaceRoot = root) {
     envExample: read('.env.example'),
     ciWorkflow: read('.github/workflows/ci.yml'),
     runtimeSources: Object.fromEntries([
-      'apps/core-admin/src/pages/ScanManagement.jsx',
       'services/core-api/routes/iot.js',
       'services/core-api/services/dueReminder.js',
       'services/core-api/services/settingsService.js',

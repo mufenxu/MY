@@ -12,9 +12,7 @@ const Users = lazy(() => import('./pages/Users'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const AuditLogs = lazy(() => import('./pages/AuditLogs'));
-const ScanManagement = lazy(() => import('./pages/ScanManagement'));
 const AirEnergyMonitor = lazy(() => import('./pages/AirEnergyMonitor'));
-const Resources = lazy(() => import('./pages/Resources'));
 const CourseOrders = lazy(() => import('./pages/CourseOrders'));
 const PublicQuery = lazy(() => import('./pages/PublicQuery'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -186,9 +184,7 @@ function App() {
                 <Route path="users" element={<Users />} />
                 <Route path="notifications" element={<Notifications />} />
                 <Route path="audit-logs" element={<AuditLogs />} />
-                <Route path="scan-management" element={<ScanManagement />} />
                 <Route path="ct8-monitor" element={<PlatformViewRedirect view="automation" />} />
-                <Route path="resources" element={<Resources />} />
                 <Route path="course-orders" element={<CourseOrders />} />
                 <Route path="settings" element={<Settings />} />
               </Route>

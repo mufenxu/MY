@@ -1,10 +1,10 @@
 function normalizeTaskStatus(status) {
   const value = String(status || '').toLowerCase();
   if (['queued', 'pending', 'scheduled'].includes(value)) return 'pending';
-  if (['running', 'building', 'deploying', 'rolling_back', 'in_progress', 'processing'].includes(value)) return 'running';
-  if (['succeeded', 'success', 'completed', 'delivered', 'resolved'].includes(value)) return 'succeeded';
-  if (['failed', 'failure', 'timed_out'].includes(value)) return 'failed';
-  if (['cancelled', 'canceled'].includes(value)) return 'cancelled';
+  if (['running', 'building', 'deploying', 'rolling_back', 'in_progress', 'processing', 'applying'].includes(value)) return 'running';
+  if (['succeeded', 'success', 'completed', 'delivered', 'resolved', 'applied'].includes(value)) return 'succeeded';
+  if (['failed', 'failure', 'timed_out', 'conflicted'].includes(value)) return 'failed';
+  if (['cancelled', 'canceled', 'rejected'].includes(value)) return 'cancelled';
   if (['open', 'acknowledged'].includes(value)) return 'action_required';
   return 'pending';
 }
@@ -73,21 +73,41 @@ function mapIncident(incident) {
   };
 }
 
-export function createTaskCenter({ backups, releases, notificationManagement, operationsStore } = {}) {
+function mapConfiguration(change) {
+  return {
+    id: `configuration:${change.id}`,
+    source: 'configuration',
+    sourceId: change.id,
+    title: change.kind === 'rollback' ? 'Configuration rollback proposal' : 'Configuration change proposal',
+    status: change.status === 'pending' ? 'action_required' : normalizeTaskStatus(change.status),
+    rawStatus: change.status,
+    requestedBy: change.createdBy || 'system',
+    updatedAt: taskTime(change),
+    detail: change.summary || (change.changedKeys || []).join(', '),
+    view: 'configuration',
+  };
+}
+
+export function createTaskCenter({ backups, releases, notificationManagement, operationsStore, configurationManager } = {}) {
   async function list({ status, source, limit = 100 } = {}) {
+    const configurationRequest = typeof configurationManager?.getOverview === 'function'
+      ? configurationManager.getOverview()
+      : Promise.reject(new Error('Configuration task source is unavailable.'));
     const settled = await Promise.allSettled([
       backups.getStatus(),
       releases.getSummary(),
       notificationManagement.listJobs({ page: 1, pageSize: 100 }),
       operationsStore.listIncidents({ limit: 100 }),
+      configurationRequest,
     ]);
-    const [backupResult, releaseResult, notificationResult, incidentResult] = settled;
+    const [backupResult, releaseResult, notificationResult, incidentResult, configurationResult] = settled;
     const tasks = [
       ...(backupResult.status === 'fulfilled' ? (backupResult.value.jobs || []).map(mapBackup) : []),
       ...(releaseResult.status === 'fulfilled' ? (releaseResult.value.builds || []).map((item) => mapRelease(item, 'release_build')) : []),
       ...(releaseResult.status === 'fulfilled' ? (releaseResult.value.deployments || []).map((item) => mapRelease(item, 'release_deployment')) : []),
       ...(notificationResult.status === 'fulfilled' ? (notificationResult.value.jobs || notificationResult.value.items || []).map(mapNotification) : []),
       ...(incidentResult.status === 'fulfilled' ? incidentResult.value.map(mapIncident) : []),
+      ...(configurationResult.status === 'fulfilled' ? (configurationResult.value.changes || []).map(mapConfiguration) : []),
     ]
       .filter((task) => !status || task.status === status)
       .filter((task) => !source || task.source === source)
@@ -99,7 +119,7 @@ export function createTaskCenter({ backups, releases, notificationManagement, op
       counts,
       generatedAt: new Date().toISOString(),
       sources: settled.map((result, index) => ({
-        id: ['backup', 'release', 'notification', 'incident'][index],
+        id: ['backup', 'release', 'notification', 'incident', 'configuration'][index],
         available: result.status === 'fulfilled',
       })),
     };

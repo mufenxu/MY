@@ -13,7 +13,6 @@ import {
     DashboardOutlined,
     CloudOutlined,
     FireOutlined,
-    DatabaseOutlined,
     FullscreenOutlined,
     FullscreenExitOutlined,
     CloseOutlined,
@@ -41,8 +40,6 @@ const TAB_CONFIG = {
     '/users': { label: '用户与权限', icon: <UserOutlined /> },
     '/notifications': { label: '通知管理', icon: <BellOutlined /> },
     '/audit-logs': { label: '审计日志', icon: <FileTextOutlined /> },
-    '/scan-management': { label: '扫码管理', icon: <AppstoreOutlined /> },
-    '/resources': { label: '全局配置', icon: <DatabaseOutlined /> },
     '/course-orders': { label: '网课订单处理', icon: <FileTextOutlined /> },
     '/settings': { label: '系统设置', icon: <SettingOutlined /> },
 };
@@ -62,7 +59,6 @@ const MENU_ITEMS = [
         icon: <AppstoreOutlined />,
         label: '业务与运营',
         children: [
-            { key: '/scan-management', label: '扫码管理' },
             { key: '/course-orders', label: '网课订单处理' },
             { key: '/query', label: '记录查询入口' },
             { key: '/notifications', label: '通知管理' },
@@ -74,7 +70,6 @@ const MENU_ITEMS = [
         label: '系统与架构',
         children: [
             { key: '/users', label: '用户与权限' },
-            { key: '/resources', label: '全局配置' },
             { key: '/audit-logs', label: '审计日志' },
             { key: '/settings', label: '系统设置' },
         ]
@@ -87,8 +82,6 @@ const TABLE_HEAVY_ROUTES = new Set([
     '/users',
     '/notifications',
     '/audit-logs',
-    '/scan-management',
-    '/resources',
     '/course-orders',
 ]);
 

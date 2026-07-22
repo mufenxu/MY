@@ -1083,13 +1083,18 @@ export function OverviewOperations({ summary, onOpenIncidents, onOpenAudit }) {
   const audit = summary?.audit || [];
   return (
     <section className="overview-operations" aria-label="事件与最近活动">
-      <div className="overview-band">
-        <header><div><BellRing size={18} /><span><strong>未解决事件</strong><small>{incidents.length ? `${incidents.length} 项需要关注` : '当前运行平稳'}</small></span></div><button type="button" onClick={onOpenIncidents}>查看全部 <ChevronRight size={15} /></button></header>
-        <div>{incidents.length ? incidents.slice(0, 3).map((incident) => <button type="button" key={incident.id} onClick={onOpenIncidents}><SeverityPill value={incident.severity} /><span><strong>{incident.title}</strong><small>{formatRelative(incident.lastSeenAt)}</small></span></button>) : <div className="overview-empty"><CheckCircle2 size={18} />没有待处理事件</div>}</div>
-      </div>
-      <div className="overview-band">
-        <header><div><FileClock size={18} /><span><strong>最近活动</strong><small>关键操作均已审计</small></span></div><button type="button" onClick={onOpenAudit}>审计日志 <ChevronRight size={15} /></button></header>
-        <div>{audit.length ? audit.slice(0, 3).map((event) => <button type="button" key={event.id} onClick={onOpenAudit}><span className={`activity-icon ${event.outcome}`}><TerminalSquare size={16} /></span><span><strong>{ACTION_LABELS[event.action] || event.action}</strong><small>{event.actor} · {formatRelative(event.occurredAt)}</small></span></button>) : <div className="overview-empty"><History size={18} />暂无最近活动</div>}</div>
+      <header className="overview-operations-heading">
+        <div><Activity size={18} /><span><strong>运维动态</strong><small>事件处置与关键操作</small></span></div>
+      </header>
+      <div className="overview-operations-grid">
+        <div className="overview-band">
+          <header><div><BellRing size={18} /><span><strong>未解决事件</strong><small>{incidents.length ? `${incidents.length} 项需要关注` : '当前运行平稳'}</small></span></div><button type="button" onClick={onOpenIncidents}>查看全部 <ChevronRight size={15} /></button></header>
+          <div>{incidents.length ? incidents.slice(0, 3).map((incident) => <button type="button" key={incident.id} onClick={onOpenIncidents}><SeverityPill value={incident.severity} /><span><strong>{incident.title}</strong><small>{formatRelative(incident.lastSeenAt)}</small></span></button>) : <div className="overview-empty"><CheckCircle2 size={18} />没有待处理事件</div>}</div>
+        </div>
+        <div className="overview-band">
+          <header><div><FileClock size={18} /><span><strong>最近活动</strong><small>关键操作均已审计</small></span></div><button type="button" onClick={onOpenAudit}>审计日志 <ChevronRight size={15} /></button></header>
+          <div>{audit.length ? audit.slice(0, 3).map((event) => <button type="button" key={event.id} onClick={onOpenAudit}><span className={`activity-icon ${event.outcome}`}><TerminalSquare size={16} /></span><span><strong>{ACTION_LABELS[event.action] || event.action}</strong><small>{event.actor} · {formatRelative(event.occurredAt)}</small></span></button>) : <div className="overview-empty"><History size={18} />暂无最近活动</div>}</div>
+        </div>
       </div>
     </section>
   );

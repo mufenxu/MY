@@ -1,9 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const authorize = require('../middleware/authorize');
 const validate = require('../middleware/validate');
-const { globalResourceSchema, userResourceSchema } = require('../schemas/resourceSchemas');
+const { userResourceSchema } = require('../schemas/resourceSchemas');
 
 const ResourceConfig = require('../models/ResourceConfig');
 const { prepareResourceList, maskResourceSecrets } = require('../utils/resourceSecrets');
@@ -43,36 +42,6 @@ function stripClientOnlyFields(value) {
 function sanitizeResourceList(list) {
     return Array.isArray(list) ? stripClientOnlyFields(list) : [];
 }
-
-// Get Global App Resources
-router.get('/global', async (req, res) => {
-    try {
-        const doc = await ResourceConfig.findById('default');
-        const defaultGlobalConfig = { apiServers: [], images: [], cdns: [], constants: [] };
-        res.json({ success: true, result: doc && doc.globalConfig ? doc.globalConfig : defaultGlobalConfig });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-// Update Global App Resources (Admin only)
-router.post('/global', auth, authorize('admin', 'super_admin'), validate(globalResourceSchema), async (req, res) => {
-    try {
-        const globalConfig = req.body;
-        
-        const result = await ResourceConfig.findByIdAndUpdate(
-            'default',
-            { 
-                $set: { globalConfig, updatedAt: Date.now() },
-                $setOnInsert: { ownerId: 'default', servers: [], domains: [] }
-            },
-            { upsert: true, new: true }
-        );
-        res.json({ success: true, result: result.globalConfig });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
 
 // Get Resources
 router.get('/', auth, async (req, res) => {
@@ -136,13 +105,6 @@ router.post('/', auth, validate(userResourceSchema), async (req, res) => {
             { $set: doc },
             { upsert: true, new: true }
         );
-
-        // Also update 'default' if needed? MP code does this.
-        // "sync default document (doesn't affect usage)"
-        // Let's replicate this behavior for now if it's intended for some global view.
-        // But maybe 'default' should be a separate thing.
-        // I'll skip updating 'default' for now unless requested, as it seems like a legacy or specific requirement.
-        // Actually, let's just stick to user's own config.
 
         const stored = typeof result.toObject === 'function' ? result.toObject() : result;
         res.json({ success: true, result: maskResourceSecrets(stored) });

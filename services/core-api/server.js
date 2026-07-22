@@ -18,6 +18,7 @@ const tuyaAutomationService = require('./services/tuyaAutomationService');
 const secretService = require('./services/secretService');
 const settingsService = require('./services/settingsService');
 const { migrateSensitiveData } = require('./services/sensitiveDataMigration');
+const { cleanupRetiredFeatureData } = require('./services/retiredFeatureCleanup');
 const courseOrderSubmissionWorker = require('./services/courseOrderSubmissionWorker');
 const User = require('./models/User');
 const CourseOrder = require('./models/CourseOrder');
@@ -88,7 +89,7 @@ app.use(cors({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'X-App-Id', 'X-Request-Id', 'X-Core-Admin-Client', 'X-CSRF-Token', 'Idempotency-Key', 'If-Match'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'X-Request-Id', 'X-Core-Admin-Client', 'X-CSRF-Token', 'Idempotency-Key', 'If-Match'],
     exposedHeaders: ['X-CSRF-Token', 'ETag', 'X-Todo-Revision']
 }));
 app.use(express.json({
@@ -187,8 +188,14 @@ async function initializeCoreRuntime() {
             CourseOrderBatch.init()
         ]);
         logger.info('Critical Core indexes ready');
+        const retiredData = await cleanupRetiredFeatureData(mongoose.connection.db);
+        if (retiredData.appClientsDropped
+            || retiredData.authScanLogsDropped
+            || retiredData.defaultResourceConfigsDeleted) {
+            logger.info('Removed retired scan management and global configuration data', retiredData);
+        }
         const migratedSecrets = await migrateSensitiveData();
-        if (migratedSecrets.appClientSecrets || migratedSecrets.platformSecrets) {
+        if (migratedSecrets.platformSecrets) {
             logger.info('Encrypted legacy Core secrets at rest', migratedSecrets);
         }
         await secretService.initCache();

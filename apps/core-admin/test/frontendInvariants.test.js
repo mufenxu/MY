@@ -53,11 +53,17 @@ test('QR creation requests are cancelled when login surfaces are replaced', () =
   }
 });
 
-test('integration examples derive the canonical API from the active gateway origin', () => {
-  const source = readSource('src', 'pages', 'ScanManagement.jsx');
-  assert.match(source, /window\.location\.origin/);
-  assert.match(source, /IS_PLATFORM_SSO \? '\/api\/core\/api' : '\/api'/);
-  assert.doesNotMatch(source, /https:\/\/xcx\.pxyb\.cn/);
+test('retired scan management and global configuration surfaces stay removed', () => {
+  const app = readSource('src', 'App.jsx');
+  const layout = readSource('src', 'components', 'MainLayout.jsx');
+  const dashboard = readSource('src', 'pages', 'Dashboard.jsx');
+
+  for (const source of [app, layout, dashboard]) {
+    assert.doesNotMatch(source, /scan-management|扫码管理|全局配置/);
+  }
+  assert.doesNotMatch(app, /pages\/ScanManagement|pages\/Resources|path="resources"/);
+  assert.equal(fs.existsSync(path.join(appRoot, 'src', 'pages', 'ScanManagement.jsx')), false);
+  assert.equal(fs.existsSync(path.join(appRoot, 'src', 'pages', 'Resources.jsx')), false);
 });
 
 test('platform console return is rendered only in the managed SSO shell', () => {
@@ -140,18 +146,6 @@ test('order reliability states are explicit and submitting orders cannot be refr
   assert.match(orders, /'Unknown': \{ color: 'default', label: '结果未知' \}/);
   assert.match(orders, /disabled: record\.status === 'Submitting'/);
   assert.match(orders, /<Option value="Pending" disabled>/);
-});
-
-test('app secret reveal and reset complete the required reauthentication flow', () => {
-  const scan = readSource('src', 'pages', 'ScanManagement.jsx');
-
-  assert.match(scan, /fetch\('\/api\/auth\/reauth'/);
-  assert.match(scan, /X-Platform-Request': 'console'/);
-  assert.match(scan, /secret\/reveal/);
-  assert.match(scan, /currentPassword: values\.password/);
-  assert.doesNotMatch(scan, /setCurrentSecret\(res\.data\.secret\)[\s\S]{0,120}api\.get\(`\/apps\/\$\{record\._id\}\/secret`\)/);
-  assert.match(scan, /setCurrentSecret\(''\)/);
-  assert.match(scan, /destroyOnHidden/);
 });
 
 test('secret cache and Turnstile mutations perform server-backed reauthentication', () => {

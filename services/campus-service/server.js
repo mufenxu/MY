@@ -4999,11 +4999,11 @@ function formatCourseReminderTime(date) {
 function courseReminderPayload(preference, occurrence, userId, now) {
   const leadMinutes = Number(preference.lead_minutes || 15);
   const scheduledAt = new Date(Math.max(now.getTime(), occurrence.startAt.getTime() - leadMinutes * 60_000));
-  const locationLine = occurrence.location ? `\n- 地点：${occurrence.location}` : "";
+  const locationLine = occurrence.location ? `\n地点：${occurrence.location}` : "";
   const identity = sha256Hex(`${userId}|${occurrence.id}|${occurrence.startAt.toISOString()}`).slice(0, 48);
   return {
-    msgType: "markdown",
-    content: `### 课程提醒\n**${occurrence.courseName}** 将在 ${leadMinutes} 分钟后开始\n- 时间：${formatCourseReminderTime(occurrence.startAt)}${locationLine}`,
+    msgType: "text",
+    content: `【课程提醒】\n${occurrence.courseName} 将在 ${leadMinutes} 分钟后开始\n时间：${formatCourseReminderTime(occurrence.startAt)}${locationLine}`,
     target: { touser: preference.recipient_id },
     scheduledAt: scheduledAt.toISOString(),
     dedupeKey: `campus-course-${identity}`,

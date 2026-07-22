@@ -220,6 +220,50 @@ test('managed app paths require the platform session and inject an internal iden
   });
 });
 
+test('managed IoT paths discard browser bearer headers while public APIs preserve them', async () => {
+  const upstream = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      authorization: req.headers.authorization || '',
+      sso: req.headers['x-my-platform-sso'] || '',
+      url: req.url,
+    }));
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const router = createPlatformRouter({
+    portalApp: echoApp('portal'),
+    mqttTarget: `http://127.0.0.1:${upstream.address().port}`,
+    getPlatformSession: (req) => req.headers.cookie === 'session=valid'
+      ? { sub: 'admin', role: 'super_admin', nonce: 'session-nonce' }
+      : null,
+    internalAuthPrivateKey: TEST_PRIVATE_KEY,
+    platformPublicOrigin: 'https://admin.example.com',
+  });
+
+  try {
+    await withServer(router, async (port) => {
+      const managed = await request(port, '/apps/iot/api/info', 'admin.example.com', {
+        Authorization: 'Bearer stale-browser-key',
+        Cookie: 'session=valid',
+      });
+      assert.equal(managed.status, 200);
+      assert.equal(managed.body.authorization, '');
+      assert.match(managed.body.sso, /^[^.]+\.[^.]+$/);
+      assert.equal(managed.body.url, '/api/info');
+
+      const publicApi = await request(port, '/api/iot/api/devices', 'admin.example.com', {
+        Authorization: 'Bearer external-api-key',
+      });
+      assert.equal(publicApi.status, 200);
+      assert.equal(publicApi.body.authorization, 'Bearer external-api-key');
+      assert.equal(publicApi.body.sso, '');
+      assert.equal(publicApi.body.url, '/api/devices');
+    });
+  } finally {
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+
 test('canonical single-domain API paths preserve existing service authentication', async () => {
   const router = createPlatformRouter({
     portalApp: echoApp('portal'),

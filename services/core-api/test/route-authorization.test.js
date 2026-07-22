@@ -4,10 +4,10 @@ const assert = require('node:assert/strict');
 process.env.CORE_JWT_SECRET = process.env.CORE_JWT_SECRET || 'route-security-test-secret';
 
 const authScanRouter = require('../routes/authScanRoutes');
+const resourceRouter = require('../routes/resources');
 const statsRouter = require('../routes/statsRoutes');
 const githubRouter = require('../routes/github');
 const settingsRouter = require('../routes/settings');
-const AuthScanLog = require('../models/AuthScanLog');
 const authScanController = require('../controllers/authScanController');
 
 function routeMiddleware(router, path, index) {
@@ -28,16 +28,26 @@ function invoke(middleware, user) {
     });
 }
 
-test('auth scan list and log management routes require an admin role', async () => {
-    for (const path of ['/qrcode/list', '/logs']) {
-        const authorize = routeMiddleware(authScanRouter, path, 1);
-        const denied = await invoke(authorize, { role: 'user' });
-        assert.equal(denied.res.statusCode, 403);
-        assert.equal(denied.nextCalled, false);
+test('retired scan integration and global resource routes are absent', async () => {
+    const scanPaths = authScanRouter.stack.map((item) => item.route?.path).filter(Boolean);
+    const resourcePaths = resourceRouter.stack.map((item) => item.route?.path).filter(Boolean);
 
-        const accepted = await invoke(authorize, { role: 'admin' });
-        assert.equal(accepted.nextCalled, true);
+    for (const path of ['/qrcode/list', '/logs', '/token/exchange']) {
+        assert.equal(scanPaths.includes(path), false);
     }
+    assert.equal(resourcePaths.includes('/global'), false);
+
+    let statusCode = 200;
+    let responseBody;
+    await authScanController.createQRCode(
+        { body: { appId: 'retired-external-app' } },
+        {
+            status(code) { statusCode = code; return this; },
+            json(body) { responseBody = body; return body; }
+        }
+    );
+    assert.equal(statusCode, 404);
+    assert.equal(responseBody.message, 'Scan login app not found');
 });
 
 test('dashboard statistics require an admin role', async () => {
@@ -110,40 +120,4 @@ test('Turnstile app config requires super_admin reauthentication while other app
         () => { superNext = true; }
     );
     assert.equal(superNext, true);
-});
-
-test('auth scan management pagination is capped at 100 records', async () => {
-    let listResponse;
-    await authScanController.listQRCodes(
-        { query: { page: '999999999999', pageSize: '100000' } },
-        { json: (body) => { listResponse = body; }, status() { return this; } }
-    );
-    assert.equal(listResponse.page, 10000);
-    assert.equal(listResponse.pageSize, 100);
-
-    const originalFind = AuthScanLog.find;
-    const originalCount = AuthScanLog.countDocuments;
-    let appliedLimit;
-    AuthScanLog.find = () => ({
-        sort() { return this; },
-        skip() { return this; },
-        limit(value) { appliedLimit = value; return this; },
-        populate() { return this; },
-        async lean() { return []; }
-    });
-    AuthScanLog.countDocuments = async () => 0;
-
-    try {
-        let logResponse;
-        await authScanController.getAuditLogs(
-            { query: { page: '0', limit: '999999' } },
-            { json: (body) => { logResponse = body; }, status() { return this; } }
-        );
-        assert.equal(appliedLimit, 100);
-        assert.equal(logResponse.page, 1);
-        assert.equal(logResponse.limit, 100);
-    } finally {
-        AuthScanLog.find = originalFind;
-        AuthScanLog.countDocuments = originalCount;
-    }
 });

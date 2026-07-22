@@ -6,12 +6,6 @@ const resourceConfigSchema = new mongoose.Schema({
     ownerId: String,
     servers: Array,
     domains: Array,
-    globalConfig: {
-        apiServers: { type: Array, default: [] }, // { name, url, isActive }
-        images: { type: Array, default: [] }, // { key, url, description }
-        cdns: { type: Array, default: [] }, // { name, url, isActive }
-        constants: { type: Array, default: [] } // { key, value, description }
-    },
     updatedAt: Number
 }, { versionKey: false });
 

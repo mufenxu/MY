@@ -7,8 +7,8 @@ test("campus notification enqueue signs the exact request body", async () => {
   const secret = "test-notification-secret-with-enough-entropy";
   let captured = null;
   const payload = {
-    msgType: "markdown",
-    content: "### 课程提醒",
+    msgType: "text",
+    content: "【课程提醒】",
     target: { touser: "student-1" }
   };
   const result = await enqueueCampusNotification(payload, {

@@ -198,6 +198,7 @@ export function createApp({
     releases,
     notificationManagement,
     operationsStore: store,
+    configurationManager: configurations,
   });
   const diagnostics = requestDiagnostics || createRequestDiagnostics({
     services: registry.services,

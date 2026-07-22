@@ -1,7 +1,9 @@
 const assert = require('assert');
+const crypto = require('crypto');
 const { EventEmitter, once } = require('events');
 const test = require('node:test');
 const { WebSocket } = require('ws');
+const { issueInternalIdentity } = require('@my-platform/platform-auth');
 
 process.env.LOG_HTTP_REQUESTS = '0';
 
@@ -9,11 +11,28 @@ const { createApiServer } = require('../src/http/apiServer');
 const { hashPassword } = require('../src/security/password');
 
 const TEST_PASSWORD_HASH = hashPassword('secret-password');
+const { privateKey: platformPrivateKey, publicKey: platformPublicKey } = crypto.generateKeyPairSync('ed25519');
+const TEST_PLATFORM_PRIVATE_KEY = platformPrivateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url');
+const TEST_PLATFORM_PUBLIC_KEY = platformPublicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
 
 let nextPort = 18080;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function createPlatformSso(pathname, role = 'viewer', method = 'GET') {
+  return issueInternalIdentity({
+    audience: 'iot',
+    method,
+    pathname,
+    privateKey: TEST_PLATFORM_PRIVATE_KEY,
+    session: {
+      nonce: 'platform-test-session',
+      role,
+      sub: 'platform-admin'
+    }
+  });
 }
 
 function createSettingsStore() {
@@ -238,6 +257,28 @@ test('api keys are scoped and cannot access console-only endpoints', async (t) =
     }
   });
   assert.equal(configResponse.status, 403);
+});
+
+test('valid platform SSO takes precedence over a stale restricted bearer key', async (t) => {
+  const previousPublicKey = process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY;
+  process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY = TEST_PLATFORM_PUBLIC_KEY;
+  const { apiKeyUsages, baseUrl, server } = await startTestServer();
+  t.after(() => {
+    if (previousPublicKey === undefined) delete process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY;
+    else process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY = previousPublicKey;
+    return new Promise((resolve) => server.close(resolve));
+  });
+
+  const response = await fetch(`${baseUrl}/api/devices`, {
+    headers: {
+      Authorization: 'Bearer sk_relay',
+      'X-My-Platform-Sso': createPlatformSso('/api/devices')
+    }
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(Object.keys(await response.json()), ['device_1']);
+  assert.deepEqual(apiKeyUsages, []);
 });
 
 test('automation reads require device scope and mutations require relay scope', async (t) => {

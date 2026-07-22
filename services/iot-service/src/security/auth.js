@@ -294,6 +294,20 @@ class AuthManager {
     const insufficientScopeMessage = options.insufficientScopeMessage || '当前凭证没有访问该接口的权限。';
 
     return async (req, res, next) => {
+      const authState = this.getRequestAuth(req);
+      if (authState.platformSso) {
+        req.auth = authState;
+        if (!platformRoleAllowsRequest(authState.platformRole, req.method, requiredScopes)) {
+          return res.status(403).json({
+            error: 'The unified-platform role cannot perform this operation.'
+          });
+        }
+        if (!hasRequiredScopes(authState.scopes, requiredScopes)) {
+          return res.status(403).json({ error: insufficientScopeMessage });
+        }
+        return next();
+      }
+
       const apiKeyAuth = await this.getApiKeyAuth(req);
       if (apiKeyAuth) {
         if (apiKeyAuth.invalid) {
@@ -327,19 +341,7 @@ class AuthManager {
         return next();
       }
 
-      const authState = this.getRequestAuth(req);
       req.auth = authState;
-
-      if (authState.platformSso) {
-        if (!platformRoleAllowsRequest(authState.platformRole, req.method, requiredScopes)) {
-          return res.status(403).json({
-            error: 'The unified-platform role cannot perform this operation.'
-          });
-        }
-        if (!hasRequiredScopes(authState.scopes, requiredScopes)) {
-          return res.status(403).json({ error: insufficientScopeMessage });
-        }
-      }
 
       if (!allowSession) {
         if (!authState.enabled) {

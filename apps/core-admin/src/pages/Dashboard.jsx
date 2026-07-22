@@ -9,7 +9,6 @@ import {
     SettingOutlined,
     AppstoreOutlined,
     ShoppingOutlined,
-    ScanOutlined,
     ThunderboltOutlined,
     AreaChartOutlined,
     HistoryOutlined,
@@ -226,7 +225,6 @@ const Dashboard = () => {
         { icon: <UserOutlined />, title: '用户管理', path: '/users', color: '#4A7CF7' },
         { icon: <ShoppingOutlined />, title: '网课订单', path: '/course-orders', color: '#5CC9A7' },
         { icon: <FileSearchOutlined />, title: '记录查询', path: '/query', color: '#2563EB' },
-        { icon: <ScanOutlined />, title: '扫码管理', path: '/scan-management', color: '#7551FF' },
         { icon: <ThunderboltOutlined />, title: '空气能监控', path: '/air-energy', color: '#FFB547' },
         { icon: <BellOutlined />, title: '通知管理', path: '/notifications', color: '#FF5B5B' },
         { icon: <HistoryOutlined />, title: '审计日志', path: '/audit-logs', color: '#A3AED0' },
@@ -237,7 +235,7 @@ const Dashboard = () => {
         <div style={{ maxWidth: 1600, margin: '0 auto', padding: '0 2px' }}>
             {/* 顶层统计卡片 - 移动端2列，平板2列，电脑4列 */}
             <Row gutter={[isMobile ? 10 : 20, isMobile ? 10 : 20]}>
-                <Col xs={12} sm={12} lg={6}>
+                <Col xs={12} sm={12} lg={8}>
                     <StatCard
                         title="用户总数"
                         value={statsError ? '--' : (stats?.users?.total ?? 0)}
@@ -247,7 +245,7 @@ const Dashboard = () => {
                         loading={loading}
                     />
                 </Col>
-                <Col xs={12} sm={12} lg={6}>
+                <Col xs={12} sm={12} lg={8}>
                     <StatCard
                         title="网课订单"
                         value={statsError ? '--' : (stats?.orders?.total ?? 0)}
@@ -257,17 +255,7 @@ const Dashboard = () => {
                         loading={loading}
                     />
                 </Col>
-                <Col xs={12} sm={12} lg={6}>
-                    <StatCard
-                        title="扫码认证"
-                        value={statsError ? '--' : (stats?.scans?.total ?? 0)}
-                        icon={<ScanOutlined />}
-                        color="#7551FF"
-                        subText={statsError ? '数据暂不可用' : `今日通过 ${stats?.scans?.today ?? 0}`}
-                        loading={loading}
-                    />
-                </Col>
-                <Col xs={12} sm={12} lg={6}>
+                <Col xs={24} sm={24} lg={8}>
                     <StatCard
                         title="系统日志"
                         value={statsError ? '--' : (stats?.auditLogs?.total ?? 0)}

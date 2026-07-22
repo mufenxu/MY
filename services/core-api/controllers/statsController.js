@@ -2,7 +2,6 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const AuditLog = require('../models/AuditLog');
 const CourseOrder = require('../models/CourseOrder');
-const AuthScanLog = require('../models/AuthScanLog');
 const logger = require('../utils/logger');
 
 const DASHBOARD_CACHE_TTL_MS = Math.max(
@@ -50,9 +49,7 @@ exports.getDashboardStats = async (req, res) => {
             recentUsers,
             recentLogs,
             totalOrders,
-            activeOrders,
-            totalScans,
-            todayScans
+            activeOrders
         ] = await Promise.all([
             User.countDocuments(),
             User.countDocuments({ status: 'active' }),
@@ -77,10 +74,7 @@ exports.getDashboardStats = async (req, res) => {
                 .lean(),
 
             CourseOrder.countDocuments(),
-            CourseOrder.countDocuments({ status: { $in: ['Pending', 'Processing'] } }),
-
-            AuthScanLog.countDocuments(),
-            AuthScanLog.countDocuments({ createTime: { $gte: todayStartTs } })
+            CourseOrder.countDocuments({ status: { $in: ['Pending', 'Processing'] } })
         ]);
 
         const oneDayMs = 24 * 60 * 60 * 1000;
@@ -124,10 +118,6 @@ exports.getDashboardStats = async (req, res) => {
                 orders: {
                     total: totalOrders,
                     active: activeOrders
-                },
-                scans: {
-                    total: totalScans,
-                    today: todayScans
                 },
                 trend,
                 recentUsers,

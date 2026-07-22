@@ -37,8 +37,8 @@ const CALLER_OPTIONS = [
 ];
 const TYPE_OPTIONS = [
   { value: '', label: '全部类型' },
-  { value: 'text', label: '文本' },
-  { value: 'markdown', label: 'Markdown' },
+  { value: 'text', label: '文本（兼容微信）' },
+  { value: 'markdown', label: 'Markdown（仅企业微信）' },
   { value: 'textcard', label: '文本卡片' },
   { value: 'news', label: '图文' },
 ];
@@ -63,7 +63,7 @@ function callerLabel(value) {
 }
 
 function typeLabel(value) {
-  return { text: '文本', markdown: 'Markdown', textcard: '文本卡片', news: '图文' }[value] || value || '--';
+  return { text: '文本（兼容微信）', markdown: 'Markdown（仅企业微信）', textcard: '文本卡片', news: '图文' }[value] || value || '--';
 }
 
 function targetLabel(delivery) {
@@ -339,7 +339,7 @@ export default function NotificationServiceView({ session }) {
           </section>
           <section className="ops-panel notify-preview-panel">
             <header><div><span>企业微信</span><h3>消息预览</h3></div><Send size={20} /></header>
-            <div className="notify-message-preview"><span>{form.msgType === 'markdown' ? 'Markdown' : '文本消息'}</span><pre>{preview}</pre><small>发送给 {form.touser.trim() || '未选择用户'}</small></div>
+            <div className="notify-message-preview"><span>{form.msgType === 'markdown' ? 'Markdown（仅企业微信）' : '文本消息（兼容微信）'}</span><pre>{preview}</pre><small>发送给 {form.touser.trim() || '未选择用户'}</small></div>
           </section>
         </div>
       )}

@@ -1,4 +1,3 @@
-const AppClient = require('../models/AppClient');
 const PlatformConfig = require('../models/PlatformConfig');
 const { encrypt, isEncrypted } = require('../utils/crypto');
 
@@ -20,11 +19,8 @@ async function migrateField(Model, field) {
 }
 
 async function migrateSensitiveData() {
-    const [appClientSecrets, platformSecrets] = await Promise.all([
-        migrateField(AppClient, 'secret'),
-        migrateField(PlatformConfig, 'secretKey'),
-    ]);
-    return { appClientSecrets, platformSecrets };
+    const platformSecrets = await migrateField(PlatformConfig, 'secretKey');
+    return { platformSecrets };
 }
 
 module.exports = { migrateField, migrateSensitiveData };

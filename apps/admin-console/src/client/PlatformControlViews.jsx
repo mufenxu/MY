@@ -5,7 +5,6 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock3,
-  ExternalLink,
   FileClock,
   GitPullRequest,
   History,
@@ -64,6 +63,7 @@ const TASK_SOURCE = {
   release_deployment: '发布部署',
   notification: '通知任务',
   incident: '告警事件',
+  configuration: '配置审批',
 };
 
 export function TaskCenterView({ onNavigate }) {
@@ -89,7 +89,7 @@ export function TaskCenterView({ onNavigate }) {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    const hasActive = data?.tasks?.some((task) => ['pending', 'running'].includes(task.status));
+    const hasActive = data?.tasks?.some((task) => ['pending', 'running', 'action_required'].includes(task.status));
     if (!hasActive) return undefined;
     const timer = window.setInterval(() => load(true), 15000);
     return () => window.clearInterval(timer);
@@ -106,7 +106,7 @@ export function TaskCenterView({ onNavigate }) {
   return (
     <section className="platform-control-view task-center-view">
       <div className="control-view-heading">
-        <div><span className="control-eyebrow">跨服务工作流</span><h2>统一任务中心</h2><p>集中查看备份、发布、通知与事件处理进度。</p></div>
+        <div><span className="control-eyebrow">跨服务工作流</span><h2>统一任务中心</h2><p>集中查看备份、发布、通知、事件与配置审批进度。</p></div>
         <button className="secondary-action compact" type="button" disabled={refreshing} onClick={() => load(true)}>
           <RefreshCw className={refreshing ? 'spin' : ''} size={16} />刷新
         </button>
@@ -368,7 +368,6 @@ export function DiagnosticsView({ services, session }) {
     <section className="platform-control-view diagnostics-view">
       <div className="control-view-heading">
         <div><span className="control-eyebrow">可验证路径</span><h2>请求链路诊断</h2><p>用同一诊断请求分别探测公网入口与服务直连，定位故障所在阶段。</p></div>
-        <a className="secondary-action compact" href="/status" target="_blank" rel="noreferrer"><ExternalLink size={16} />公开状态页</a>
       </div>
       <Feedback error={error} />
       <section className="diagnostic-launcher">

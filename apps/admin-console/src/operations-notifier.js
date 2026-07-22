@@ -7,15 +7,16 @@ function severityLabel(severity) {
 
 function incidentMessage(incident, transition, publicOrigin) {
   const resolved = transition === 'resolved';
-  const status = resolved ? '<font color="info">已恢复</font>' : '<font color="warning">需要处理</font>';
+  const status = resolved ? '已恢复' : '需要处理';
   const lines = [
-    `### 统一管理后台告警 ${status}`,
-    `> **事件**：${incident.title}`,
-    `> **级别**：${severityLabel(incident.severity)}`,
-    `> **状态**：${resolved ? '服务已恢复' : incident.description}`,
-    `> **时间**：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+    '【统一管理后台告警】',
+    `事件：${incident.title}`,
+    `级别：${severityLabel(incident.severity)}`,
+    `状态：${resolved ? '服务已恢复' : incident.description}`,
+    `处理：${status}`,
+    `时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
   ];
-  if (publicOrigin) lines.push(`[打开事件中心](${new URL('/', publicOrigin).toString()})`);
+  if (publicOrigin) lines.push(`详情：${new URL('/', publicOrigin).toString()}`);
   return lines.join('\n');
 }
 
@@ -24,34 +25,36 @@ function releaseMessage(event, publicOrigin) {
   const success = event.status === 'succeeded';
   const rolledBack = event.status === 'rolled_back';
   const status = success
-    ? '<font color="info">成功</font>'
-    : rolledBack ? '<font color="warning">已自动回滚</font>' : '<font color="warning">失败</font>';
+    ? '成功'
+    : rolledBack ? '已自动回滚' : '失败';
   const kind = event.kind === 'build' ? '镜像构建' : event.kind === 'rollback' ? '生产回滚' : '生产部署';
   const targets = record.targets || record.components || [];
   const lines = [
-    `### 统一平台${kind} ${status}`,
-    `> **环境**：${record.environment || 'production'}`,
-    `> **组件**：${targets.join('、') || '--'}`,
-    `> **版本**：${String(record.revision || record.buildId || '').slice(0, 12) || '--'}`,
-    `> **操作人**：${record.requestedBy || 'system'}`,
-    `> **时间**：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+    `【统一平台${kind}】`,
+    `状态：${status}`,
+    `环境：${record.environment || 'production'}`,
+    `组件：${targets.join('、') || '--'}`,
+    `版本：${String(record.revision || record.buildId || '').slice(0, 12) || '--'}`,
+    `操作人：${record.requestedBy || 'system'}`,
+    `时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
   ];
-  if (record.error) lines.push(`> **原因**：${String(record.error).slice(0, 180)}`);
-  if (publicOrigin) lines.push(`[打开发布中心](${new URL('/', publicOrigin).toString()})`);
+  if (record.error) lines.push(`原因：${String(record.error).slice(0, 180)}`);
+  if (publicOrigin) lines.push(`详情：${new URL('/', publicOrigin).toString()}`);
   return lines.join('\n');
 }
 
 function securityMessage(event, publicOrigin) {
   const title = event.type === 'new_ip_login' ? '管理员从新 IP 登录' : '管理员登录异常';
   const lines = [
-    `### 统一管理后台安全告警 <font color="warning">需要关注</font>`,
-    `> **事件**：${title}`,
-    `> **账号**：${String(event.username || 'unknown').slice(0, 64)}`,
-    `> **来源 IP**：${String(event.ip || 'unknown').slice(0, 128)}`,
-    `> **失败次数**：${Number(event.failures) || 0}`,
-    `> **时间**：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+    '【统一管理后台安全告警】',
+    `事件：${title}`,
+    `账号：${String(event.username || 'unknown').slice(0, 64)}`,
+    `来源 IP：${String(event.ip || 'unknown').slice(0, 128)}`,
+    `失败次数：${Number(event.failures) || 0}`,
+    '处理：需要关注',
+    `时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
   ];
-  if (publicOrigin) lines.push(`[打开安全中心](${new URL('/', publicOrigin).toString()})`);
+  if (publicOrigin) lines.push(`详情：${new URL('/', publicOrigin).toString()}`);
   return lines.join('\n');
 }
 
@@ -65,13 +68,13 @@ export function createOperationsNotifier({
 } = {}) {
   const configured = Boolean(enabled && serviceUrl && apiKey);
 
-  async function sendMarkdown(content, duplicateCheckInterval = 1800) {
+  async function sendText(content, duplicateCheckInterval = 1800) {
     if (!configured) return { delivered: false, reason: 'not_configured' };
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const body = JSON.stringify({
-        msg_type: 'markdown',
+        msg_type: 'text',
         data: { content },
         enable_duplicate_check: 1,
         duplicate_check_interval: duplicateCheckInterval,
@@ -122,13 +125,13 @@ export function createOperationsNotifier({
       }
     },
     async sendIncident(incident, transition) {
-      return sendMarkdown(incidentMessage(incident, transition, publicOrigin));
+      return sendText(incidentMessage(incident, transition, publicOrigin));
     },
     async sendRelease(event) {
-      return sendMarkdown(releaseMessage(event, publicOrigin), 300);
+      return sendText(releaseMessage(event, publicOrigin), 300);
     },
     async sendSecurityAlert(event) {
-      return sendMarkdown(securityMessage(event, publicOrigin), 300);
+      return sendText(securityMessage(event, publicOrigin), 300);
     },
   };
 }

@@ -22,8 +22,6 @@
 - `/users`：用户与权限
 - `/notifications`：通知管理
 - `/audit-logs`：审计日志
-- `/scan-management`：扫码管理
-- `/resources`：全局配置
 - `/course-orders`：网课订单处理
 - `/settings`：系统设置
 

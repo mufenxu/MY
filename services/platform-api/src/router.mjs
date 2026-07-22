@@ -371,6 +371,9 @@ export function createPlatformRouter({
       rejectReadOnlyWrite(res);
       return false;
     }
+    // The managed IoT console authenticates with the signed platform identity.
+    // Do not let a browser extension or stale API token override that identity.
+    if (service === 'iot') delete req.headers.authorization;
     rewriteServicePrefix(req, prefix);
     const rewrittenUrl = new URL(req.url || '/', 'http://platform.internal');
     req.headers[PLATFORM_SSO_HEADER] = issueInternalIdentity({

@@ -31,45 +31,6 @@ const resourceItemSchema = Joi.object({
     renewPeriod: nullableText(50)
 }).unknown(true);
 
-const apiServerSchema = Joi.alternatives().try(
-    Joi.string().uri(),
-    Joi.object({
-        name: nullableText(100),
-        url: nullableText(500).required(),
-        isActive: Joi.boolean().optional()
-    }).unknown(true)
-);
-
-const imageResourceSchema = Joi.alternatives().try(
-    Joi.string().uri(),
-    Joi.object({
-        key: nullableText(100).required(),
-        url: nullableText(500).required(),
-        description: nullableText(1000)
-    }).unknown(true)
-);
-
-const cdnSchema = Joi.alternatives().try(
-    Joi.string().uri(),
-    Joi.object({
-        name: nullableText(100),
-        url: nullableText(500).required(),
-        isActive: Joi.boolean().optional()
-    }).unknown(true)
-);
-
-exports.globalResourceSchema = Joi.object({
-    apiServers: Joi.array().items(apiServerSchema).required(),
-    images: Joi.array().items(imageResourceSchema).required(),
-    cdns: Joi.array().items(cdnSchema).required(),
-    constants: Joi.array().items(Joi.object({
-        key: Joi.string().required(),
-        value: Joi.any().required(),
-        type: Joi.string().valid('string', 'number', 'boolean', 'json').default('string'),
-        description: nullableText(1000)
-    })).default([])
-});
-
 exports.userResourceSchema = Joi.object({
     servers: Joi.array().items(resourceItemSchema).required(),
     domains: Joi.array().items(resourceItemSchema).required(),

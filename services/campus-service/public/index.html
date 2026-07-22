@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="./assets/hgu-emblem.png">
   <link rel="apple-touch-icon" href="./assets/hgu-emblem.png">
   <link rel="stylesheet" href="./styles.css?v=20260719-header-actions-v1">
-  <link rel="stylesheet" href="./academic-integrations.css?v=20260721-calendar-reminders">
+  <link rel="stylesheet" href="./academic-integrations.css?v=20260722-schedule-layout-v2">
 </head>
 <body data-app-locked="true">
   <div class="nebula-glow purple"></div>
@@ -263,51 +263,6 @@
         </article>
       </section>
 
-      <section class="academic-integration-panel" aria-labelledby="academicIntegrationTitle">
-        <div class="academic-integration-head">
-          <div>
-            <span class="integration-kicker">课程同步</span>
-            <h3 id="academicIntegrationTitle">日历订阅与课前提醒</h3>
-          </div>
-          <span id="academicIntegrationStatus" class="integration-status">正在读取设置</span>
-        </div>
-        <div class="academic-integration-grid">
-          <div class="integration-tool">
-            <div class="integration-tool-copy">
-              <strong>系统日历订阅</strong>
-              <span>订阅到手机或电脑日历</span>
-            </div>
-            <input id="academicCalendarUrlInput" class="integration-url" type="text" readonly placeholder="生成后显示订阅地址" aria-label="课程日历订阅地址">
-            <div class="integration-actions">
-              <button id="academicCalendarRotateButton" type="button">生成订阅</button><button id="academicCalendarCopyButton" type="button" class="ghost" disabled>复制地址</button><button id="academicCalendarDisableButton" type="button" class="ghost danger" disabled>停用</button>
-            </div>
-          </div>
-          <form id="academicReminderForm" class="integration-tool reminder-tool">
-            <div class="integration-tool-copy">
-              <strong>企业微信课前提醒</strong>
-              <span>按开课时间排队并自动去重</span>
-            </div>
-            <label class="integration-toggle">
-              <input id="academicReminderEnabledInput" type="checkbox">
-              <span>启用课前提醒</span>
-            </label>
-            <div class="reminder-fields">
-              <label>
-                <span>企业微信成员账号</span>
-                <input id="academicReminderRecipientInput" type="text" maxlength="128" autocomplete="off" placeholder="例如 zhangsan">
-              </label>
-              <label>
-                <span>提前时间</span>
-                <select id="academicReminderLeadSelect">
-                  <option value="5">5 分钟</option><option value="10">10 分钟</option><option value="15" selected>15 分钟</option><option value="30">30 分钟</option><option value="60">60 分钟</option>
-                </select>
-              </label>
-            </div>
-            <button id="academicReminderSaveButton" type="submit" class="ghost">保存提醒设置</button>
-          </form>
-        </div>
-      </section>
-
       <section class="panel timetable-panel">
         <div class="panel-head timetable-panel-head">
           <div class="timetable-title">
@@ -346,6 +301,33 @@
           <span id="courseListText">--</span>
         </div>
         <div id="courseList" class="course-list"></div>
+      </section>
+
+      <section class="academic-integration-panel" aria-labelledby="academicIntegrationTitle">
+        <div class="academic-integration-head">
+          <div><span class="integration-kicker">课程同步</span><h3 id="academicIntegrationTitle">日历订阅与课前提醒</h3></div>
+          <span id="academicIntegrationStatus" class="integration-status">正在读取设置</span>
+        </div>
+        <div class="academic-integration-grid">
+          <div class="integration-tool">
+            <div class="integration-tool-copy"><strong>系统日历订阅</strong><span>订阅到手机或电脑日历</span></div>
+            <div class="integration-tool-controls">
+              <input id="academicCalendarUrlInput" class="integration-url" type="text" readonly placeholder="生成后显示订阅地址" aria-label="课程日历订阅地址">
+              <div class="integration-actions"><button id="academicCalendarRotateButton" type="button">生成订阅</button><button id="academicCalendarCopyButton" type="button" class="ghost" disabled>复制地址</button><button id="academicCalendarDisableButton" type="button" class="ghost danger" disabled>停用</button></div>
+            </div>
+          </div>
+          <form id="academicReminderForm" class="integration-tool">
+            <div class="integration-tool-copy"><strong>企业微信课前提醒</strong><span>按开课时间排队并自动去重</span></div>
+            <div class="reminder-settings">
+              <label class="integration-toggle"><input id="academicReminderEnabledInput" type="checkbox"><span>启用课前提醒</span></label>
+              <div class="reminder-fields">
+                <label><span>企业微信成员账号</span><input id="academicReminderRecipientInput" type="text" maxlength="128" autocomplete="off" placeholder="例如 zhangsan"></label>
+                <label><span>提前时间</span><select id="academicReminderLeadSelect"><option value="5">5 分钟</option><option value="10">10 分钟</option><option value="15" selected>15 分钟</option><option value="30">30 分钟</option><option value="60">60 分钟</option></select></label>
+              </div>
+              <button id="academicReminderSaveButton" type="submit" class="ghost">保存提醒设置</button>
+            </div>
+          </form>
+        </div>
       </section>
     </section>
 
