@@ -185,11 +185,18 @@ test('notification management routes enforce console mutations and preserve the 
       calls.push({ type: 'retry', id, actor });
       return { delivered: true, delivery: { id: 'delivery-retry' } };
     },
+    getApiAccess: async () => ({ clients: [], requests: { items: [], total: 0 }, supportedScopes: [] }),
+    listApiRequests: async () => ({ items: [], page: 1, pageSize: 20, total: 0 }),
+    createApiClient: async (input, actor) => {
+      calls.push({ type: 'api-create', input, actor });
+      return { client: { id: '57cf6f30-11aa-4f9c-8021-91285ee1df5d', scopes: input.scopes }, token: 'one-time-token' };
+    },
   };
   const app = createApp({ config, notificationManager });
   await withServer(app, async (origin) => {
     assert.equal((await fetch(`${origin}/api/notifications/overview`)).status, 200);
     assert.equal((await fetch(`${origin}/api/notifications/deliveries?page=2&pageSize=10`)).status, 200);
+    assert.equal((await fetch(`${origin}/api/notifications/api-access`)).status, 200);
 
     const body = JSON.stringify({ msgType: 'text', touser: 'alice', content: 'hello' });
     assert.equal((await fetch(`${origin}/api/notifications/test`, {
@@ -203,10 +210,18 @@ test('notification management routes enforce console mutations and preserve the 
     assert.equal((await fetch(`${origin}/api/notifications/deliveries/delivery_123456/retry`, {
       method: 'POST', headers: { 'X-Platform-Request': 'console' },
     })).status, 201);
+    const clientBody = JSON.stringify({ name: 'Campus', scopes: ['notifications:send'], rateLimitPerMinute: 30 });
+    assert.equal((await fetch(`${origin}/api/notifications/api-clients`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: clientBody,
+    })).status, 403);
+    assert.equal((await fetch(`${origin}/api/notifications/api-clients`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' }, body: clientBody,
+    })).status, 201);
   });
   assert.deepEqual(calls.map(({ type, actor }) => [type, actor]), [
     ['test', 'local-admin'],
     ['retry', 'local-admin'],
+    ['api-create', 'local-admin'],
   ]);
 });
 

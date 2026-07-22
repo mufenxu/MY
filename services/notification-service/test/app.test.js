@@ -28,11 +28,11 @@ async function withServer(client, callback) {
   finally { await new Promise((resolve) => server.close(resolve)); }
 }
 
-function request(port, { path = '/notify', apiKey, body, headers = {} } = {}) {
+function request(port, { path = '/notify', apiKey, body, headers = {}, method } = {}) {
   return new Promise((resolve, reject) => {
     const data = body == null ? '' : JSON.stringify(body);
     const req = http.request({
-      host: '127.0.0.1', port, path, method: data ? 'POST' : 'GET',
+      host: '127.0.0.1', port, path, method: method || (data ? 'POST' : 'GET'),
       headers: { ...headers, ...(apiKey ? { 'X-API-KEY': apiKey } : {}), ...(data ? { 'Content-Type': 'application/json' } : {}) },
     }, (res) => {
       let response = '';
@@ -50,6 +50,9 @@ function signedHeaders({ caller = 'admin-console', method = 'GET', path, body = 
 
 test('health endpoint is public', async () => withServer({}, async (port) => {
   assert.equal((await request(port, { path: '/healthz' })).status, 200);
+  const openApi = await request(port, { path: '/openapi.json' });
+  assert.equal(openApi.status, 200);
+  assert.equal(openApi.body.openapi, '3.1.0');
 }));
 
 test('notification endpoint rejects an invalid API key', async () => withServer({}, async (port) => {
@@ -81,6 +84,74 @@ test('notification endpoint accepts signed internal callers and rejects replay',
   await withServer({ sendMessage: async () => ({ errcode: 0 }) }, async (port) => {
     assert.equal((await request(port, { body, headers })).status, 200);
     assert.equal((await request(port, { body, headers })).status, 401);
+  });
+});
+
+test('managed API clients enforce scopes, explicit targets and isolated delivery status', async () => {
+  const sent = [];
+  await withServer({ sendMessage: async (payload) => { sent.push(payload); return { errcode: 0 }; } }, async (port) => {
+    const createPath = '/management/api-clients';
+    const createBody = {
+      name: 'Status integration',
+      description: 'Managed API test',
+      scopes: ['notifications:send', 'notifications:status:read'],
+      rateLimitPerMinute: 20,
+      expiresAt: null,
+      actor: 'admin',
+    };
+    const created = await request(port, {
+      path: createPath,
+      body: createBody,
+      headers: signedHeaders({ method: 'POST', path: createPath, body: JSON.stringify(createBody) }),
+    });
+    assert.equal(created.status, 201);
+    assert.match(created.body.token, /^ntf_live_/);
+
+    const noTarget = await request(port, {
+      apiKey: created.body.token,
+      body: { msg_type: 'text', data: { content: 'missing target' } },
+    });
+    assert.equal(noTarget.status, 400);
+    assert.equal(noTarget.body.code, 'EXPLICIT_TARGET_REQUIRED');
+
+    const broadcast = await request(port, {
+      apiKey: created.body.token,
+      body: { touser: '@all', msg_type: 'text', data: { content: 'broadcast' } },
+    });
+    assert.equal(broadcast.status, 403);
+    assert.equal(broadcast.body.code, 'BROADCAST_SCOPE_REQUIRED');
+
+    const sentResponse = await request(port, {
+      apiKey: created.body.token,
+      body: { touser: 'alice', msg_type: 'text', data: { content: 'hello' } },
+    });
+    assert.equal(sentResponse.status, 200);
+    assert.equal(sent.length, 1);
+
+    const delivery = await request(port, {
+      path: `/deliveries/${sentResponse.body.deliveryId}`,
+      apiKey: created.body.token,
+    });
+    assert.equal(delivery.status, 200);
+    assert.equal(delivery.body.delivery.apiClientId, created.body.client.id);
+
+    const enqueue = await request(port, {
+      path: '/enqueue',
+      apiKey: created.body.token,
+      body: { msgType: 'text', content: 'later', target: { touser: 'alice' } },
+    });
+    assert.equal(enqueue.status, 403);
+    assert.equal(enqueue.body.code, 'API_SCOPE_REQUIRED');
+
+    const accessPath = '/management/api-access';
+    const access = await request(port, { path: accessPath, headers: signedHeaders({ path: accessPath }) });
+    assert.equal(access.status, 200);
+    assert.equal(access.body.clients.length, 1);
+    assert.equal(access.body.clients[0].token, undefined);
+    assert.equal(access.body.requests.total >= 5, true);
+    const missingTargetRequest = access.body.requests.items.find((row) => row.errorCode === 'EXPLICIT_TARGET_REQUIRED');
+    assert.equal(missingTargetRequest.targetType, '');
+    assert.equal(missingTargetRequest.targetValue, '');
   });
 });
 

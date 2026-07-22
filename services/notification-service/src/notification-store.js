@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { MongoClient } = require('mongodb');
 const { createPayloadProtector } = require('./history-crypto');
+const { createApiCredential, hashApiToken } = require('./api-access');
 
 function normalizePositiveInteger(value, fallback, maximum) {
   const parsed = Number.parseInt(value, 10);
@@ -12,8 +13,61 @@ function serializeDocument(value) {
   if (Array.isArray(value)) return value.map(serializeDocument);
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !['_id', 'encryptedPayload', 'expiresAt'].includes(key))
+    .filter(([key]) => !['_id', 'encryptedPayload', 'tokenHash', 'expiresAt'].includes(key))
     .map(([key, nested]) => [key, serializeDocument(nested)]));
+}
+
+function serializeApiKey(value) {
+  if (!value) return null;
+  return {
+    id: value.id,
+    tokenPrefix: value.tokenPrefix,
+    createdAt: serializeDocument(value.createdAt),
+    expiresAt: serializeDocument(value.expiresAt),
+    revokedAt: serializeDocument(value.revokedAt),
+    lastUsedAt: serializeDocument(value.lastUsedAt),
+    requestCount: Number(value.requestCount || 0),
+    createdBy: value.createdBy || '',
+  };
+}
+
+function serializeApiClient(value, keys = []) {
+  if (!value) return null;
+  return {
+    id: value.id,
+    name: value.name,
+    description: value.description || '',
+    status: value.status || 'active',
+    scopes: [...(value.scopes || [])],
+    rateLimitPerMinute: Number(value.rateLimitPerMinute || 60),
+    expiresAt: serializeDocument(value.expiresAt),
+    createdAt: serializeDocument(value.createdAt),
+    updatedAt: serializeDocument(value.updatedAt),
+    revokedAt: serializeDocument(value.revokedAt),
+    createdBy: value.createdBy || '',
+    updatedBy: value.updatedBy || '',
+    keys: keys.map(serializeApiKey).filter(Boolean),
+  };
+}
+
+function apiRequestMatches(row, filters = {}) {
+  return (!filters.clientId || row.clientId === filters.clientId)
+    && (!filters.outcome || row.outcome === filters.outcome)
+    && (!filters.endpoint || row.endpoint === filters.endpoint);
+}
+
+function summarizeApiAccess(clients, keys, requests, since) {
+  const recent = requests.filter((row) => new Date(row.startedAt) >= since);
+  const successful = recent.filter((row) => Number(row.httpStatus) >= 200 && Number(row.httpStatus) < 400).length;
+  const referenceTime = new Date(since.getTime() + 86400000);
+  return {
+    windowHours: 24,
+    activeClients: clients.filter((row) => row.status === 'active' && (!row.expiresAt || new Date(row.expiresAt) > referenceTime)).length,
+    activeKeys: keys.filter((row) => !row.revokedAt && (!row.expiresAt || new Date(row.expiresAt) > referenceTime)).length,
+    totalRequests: recent.length,
+    successRate: recent.length ? Math.round((successful / recent.length) * 1000) / 10 : null,
+    p95DurationMs: percentile95(recent.map((row) => row.durationMs)),
+  };
 }
 
 function percentile95(values) {
@@ -64,6 +118,9 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
   const templates = [];
   const jobs = [];
   const preferences = new Map();
+  const apiClients = [];
+  const apiKeys = [];
+  const apiRequests = [];
 
   function prune() {
     const cutoff = now().getTime() - retentionDays * 86400000;
@@ -197,6 +254,133 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
       preferences.set(targetId, row);
       return serializeDocument(row);
     },
+    async createApiClient(input) {
+      const timestamp = now();
+      const credential = createApiCredential();
+      const client = {
+        id: crypto.randomUUID(),
+        name: input.name,
+        description: input.description || '',
+        status: 'active',
+        scopes: [...input.scopes],
+        rateLimitPerMinute: input.rateLimitPerMinute,
+        expiresAt: input.expiresAt || null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        revokedAt: null,
+        createdBy: input.actor,
+        updatedBy: input.actor,
+      };
+      const key = {
+        id: credential.keyId,
+        clientId: client.id,
+        tokenHash: credential.tokenHash,
+        tokenPrefix: credential.tokenPrefix,
+        createdAt: timestamp,
+        expiresAt: client.expiresAt,
+        revokedAt: null,
+        lastUsedAt: null,
+        requestCount: 0,
+        createdBy: input.actor,
+      };
+      apiClients.unshift(client);
+      apiKeys.unshift(key);
+      return { client: serializeApiClient(client, [key]), token: credential.token };
+    },
+    async listApiClients() {
+      return apiClients.map((client) => serializeApiClient(client, apiKeys.filter((key) => key.clientId === client.id)));
+    },
+    async updateApiClient(id, input) {
+      const client = apiClients.find((row) => row.id === id);
+      if (!client || client.status === 'revoked') return null;
+      const previousExpiresAt = client.expiresAt ? new Date(client.expiresAt).getTime() : null;
+      for (const key of apiKeys.filter((row) => row.clientId === id && !row.revokedAt)) {
+        const keyExpiresAt = key.expiresAt ? new Date(key.expiresAt).getTime() : null;
+        if (keyExpiresAt === previousExpiresAt) key.expiresAt = input.expiresAt || null;
+      }
+      Object.assign(client, {
+        name: input.name,
+        description: input.description || '',
+        scopes: [...input.scopes],
+        rateLimitPerMinute: input.rateLimitPerMinute,
+        expiresAt: input.expiresAt || null,
+        updatedAt: now(),
+        updatedBy: input.actor,
+      });
+      return serializeApiClient(client, apiKeys.filter((key) => key.clientId === client.id));
+    },
+    async rotateApiClientKey(id, { actor, overlapMinutes }) {
+      const client = apiClients.find((row) => row.id === id);
+      if (!client || client.status !== 'active') return null;
+      const timestamp = now();
+      const overlapUntil = new Date(timestamp.getTime() + overlapMinutes * 60000);
+      for (const key of apiKeys.filter((row) => row.clientId === id && !row.revokedAt)) {
+        if (!key.expiresAt || new Date(key.expiresAt) > overlapUntil) key.expiresAt = overlapUntil;
+      }
+      const credential = createApiCredential();
+      const key = {
+        id: credential.keyId,
+        clientId: id,
+        tokenHash: credential.tokenHash,
+        tokenPrefix: credential.tokenPrefix,
+        createdAt: timestamp,
+        expiresAt: client.expiresAt,
+        revokedAt: null,
+        lastUsedAt: null,
+        requestCount: 0,
+        createdBy: actor,
+      };
+      apiKeys.unshift(key);
+      Object.assign(client, { updatedAt: timestamp, updatedBy: actor });
+      return { client: serializeApiClient(client, apiKeys.filter((row) => row.clientId === id)), token: credential.token };
+    },
+    async revokeApiClient(id, { actor }) {
+      const client = apiClients.find((row) => row.id === id);
+      if (!client || client.status === 'revoked') return null;
+      const timestamp = now();
+      Object.assign(client, { status: 'revoked', revokedAt: timestamp, updatedAt: timestamp, updatedBy: actor });
+      for (const key of apiKeys.filter((row) => row.clientId === id && !row.revokedAt)) key.revokedAt = timestamp;
+      return serializeApiClient(client, apiKeys.filter((key) => key.clientId === id));
+    },
+    async verifyApiToken(token) {
+      const timestamp = now();
+      const key = apiKeys.find((row) => row.tokenHash === hashApiToken(token));
+      if (!key || key.revokedAt || (key.expiresAt && new Date(key.expiresAt) <= timestamp)) return null;
+      const client = apiClients.find((row) => row.id === key.clientId);
+      if (!client || client.status !== 'active' || (client.expiresAt && new Date(client.expiresAt) <= timestamp)) return null;
+      key.lastUsedAt = timestamp;
+      key.requestCount = Number(key.requestCount || 0) + 1;
+      return {
+        managed: true,
+        clientId: client.id,
+        clientName: client.name,
+        keyId: key.id,
+        scopes: [...client.scopes],
+        rateLimitPerMinute: client.rateLimitPerMinute,
+      };
+    },
+    async recordApiRequest(input) {
+      const timestamp = input.startedAt ? new Date(input.startedAt) : now();
+      const row = {
+        id: crypto.randomUUID(),
+        ...input,
+        startedAt: timestamp,
+        expiresAt: new Date(timestamp.getTime() + retentionDays * 86400000),
+      };
+      apiRequests.unshift(row);
+      return serializeDocument(row);
+    },
+    async listApiRequests(filters = {}) {
+      const cutoff = now().getTime() - retentionDays * 86400000;
+      while (apiRequests.at(-1) && new Date(apiRequests.at(-1).startedAt).getTime() < cutoff) apiRequests.pop();
+      return paged(apiRequests.filter((row) => apiRequestMatches(row, filters)), filters);
+    },
+    async getApiAccessOverview() {
+      return summarizeApiAccess(apiClients, apiKeys, apiRequests, new Date(now().getTime() - 86400000));
+    },
+    async getApiClientDelivery(id, clientId) {
+      return serializeDocument(rows.find((row) => row.id === id && row.apiClientId === clientId) || null);
+    },
     async ping() { return true; },
     async close() {},
   };
@@ -217,6 +401,9 @@ async function createMongoNotificationStore({
   const templates = db.collection('notification_templates');
   const jobs = db.collection('notification_jobs');
   const preferences = db.collection('notification_preferences');
+  const apiClients = db.collection('notification_api_clients');
+  const apiKeys = db.collection('notification_api_keys');
+  const apiRequests = db.collection('notification_api_requests');
   await Promise.all([
     deliveries.createIndex({ id: 1 }, { unique: true }),
     deliveries.createIndex({ startedAt: -1 }),
@@ -230,6 +417,14 @@ async function createMongoNotificationStore({
     jobs.createIndex({ dedupeKey: 1, dedupeUntil: -1 }, { sparse: true }),
     jobs.createIndex({ createdAt: -1 }),
     preferences.createIndex({ targetId: 1 }, { unique: true }),
+    apiClients.createIndex({ id: 1 }, { unique: true }),
+    apiClients.createIndex({ status: 1, createdAt: -1 }),
+    apiKeys.createIndex({ id: 1 }, { unique: true }),
+    apiKeys.createIndex({ tokenHash: 1 }, { unique: true }),
+    apiKeys.createIndex({ clientId: 1, createdAt: -1 }),
+    apiRequests.createIndex({ startedAt: -1 }),
+    apiRequests.createIndex({ clientId: 1, startedAt: -1 }),
+    apiRequests.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   ]);
 
   return {
@@ -383,6 +578,176 @@ async function createMongoNotificationStore({
         { targetId },
         { $set: { targetId, enabled: true, quietHours: null, timezoneOffsetMinutes: 480, ...input, updatedAt: new Date() } },
         { upsert: true, returnDocument: 'after', projection: { _id: 0 } },
+      ));
+    },
+    async createApiClient(input) {
+      const timestamp = new Date();
+      const credential = createApiCredential();
+      const clientRow = {
+        id: crypto.randomUUID(),
+        name: input.name,
+        description: input.description || '',
+        status: 'active',
+        scopes: [...input.scopes],
+        rateLimitPerMinute: input.rateLimitPerMinute,
+        expiresAt: input.expiresAt || null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        revokedAt: null,
+        createdBy: input.actor,
+        updatedBy: input.actor,
+      };
+      const keyRow = {
+        id: credential.keyId,
+        clientId: clientRow.id,
+        tokenHash: credential.tokenHash,
+        tokenPrefix: credential.tokenPrefix,
+        createdAt: timestamp,
+        expiresAt: clientRow.expiresAt,
+        revokedAt: null,
+        lastUsedAt: null,
+        requestCount: 0,
+        createdBy: input.actor,
+      };
+      await apiClients.insertOne(clientRow);
+      try {
+        await apiKeys.insertOne(keyRow);
+      } catch (error) {
+        await apiClients.deleteOne({ id: clientRow.id });
+        throw error;
+      }
+      return { client: serializeApiClient(clientRow, [keyRow]), token: credential.token };
+    },
+    async listApiClients() {
+      const [clientRows, keyRows] = await Promise.all([
+        apiClients.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray(),
+        apiKeys.find({}, { projection: { _id: 0, tokenHash: 0 } }).sort({ createdAt: -1 }).toArray(),
+      ]);
+      return clientRows.map((clientRow) => serializeApiClient(clientRow, keyRows.filter((key) => key.clientId === clientRow.id)));
+    },
+    async updateApiClient(id, input) {
+      const current = await apiClients.findOne({ id, status: { $ne: 'revoked' } }, { projection: { _id: 0 } });
+      if (!current) return null;
+      const updated = await apiClients.findOneAndUpdate(
+        { id, status: { $ne: 'revoked' } },
+        { $set: {
+          name: input.name,
+          description: input.description || '',
+          scopes: [...input.scopes],
+          rateLimitPerMinute: input.rateLimitPerMinute,
+          expiresAt: input.expiresAt || null,
+          updatedAt: new Date(),
+          updatedBy: input.actor,
+        } },
+        { returnDocument: 'after', projection: { _id: 0 } },
+      );
+      if (!updated) return null;
+      const inheritedExpiryQuery = current.expiresAt
+        ? { expiresAt: current.expiresAt }
+        : { $or: [{ expiresAt: null }, { expiresAt: { $exists: false } }] };
+      await apiKeys.updateMany(
+        { clientId: id, revokedAt: null, ...inheritedExpiryQuery },
+        { $set: { expiresAt: input.expiresAt || null } },
+      );
+      const keyRows = await apiKeys.find({ clientId: id }, { projection: { _id: 0, tokenHash: 0 } }).sort({ createdAt: -1 }).toArray();
+      return serializeApiClient(updated, keyRows);
+    },
+    async rotateApiClientKey(id, { actor, overlapMinutes }) {
+      const clientRow = await apiClients.findOne({ id, status: 'active' }, { projection: { _id: 0 } });
+      if (!clientRow) return null;
+      const timestamp = new Date();
+      const overlapUntil = new Date(timestamp.getTime() + overlapMinutes * 60000);
+      await apiKeys.updateMany({
+        clientId: id,
+        revokedAt: null,
+        $or: [{ expiresAt: null }, { expiresAt: { $exists: false } }, { expiresAt: { $gt: overlapUntil } }],
+      }, { $set: { expiresAt: overlapUntil } });
+      const credential = createApiCredential();
+      const keyRow = {
+        id: credential.keyId,
+        clientId: id,
+        tokenHash: credential.tokenHash,
+        tokenPrefix: credential.tokenPrefix,
+        createdAt: timestamp,
+        expiresAt: clientRow.expiresAt || null,
+        revokedAt: null,
+        lastUsedAt: null,
+        requestCount: 0,
+        createdBy: actor,
+      };
+      await apiKeys.insertOne(keyRow);
+      await apiClients.updateOne({ id }, { $set: { updatedAt: timestamp, updatedBy: actor } });
+      const keyRows = await apiKeys.find({ clientId: id }, { projection: { _id: 0, tokenHash: 0 } }).sort({ createdAt: -1 }).toArray();
+      return { client: serializeApiClient({ ...clientRow, updatedAt: timestamp, updatedBy: actor }, keyRows), token: credential.token };
+    },
+    async revokeApiClient(id, { actor }) {
+      const timestamp = new Date();
+      const updated = await apiClients.findOneAndUpdate(
+        { id, status: { $ne: 'revoked' } },
+        { $set: { status: 'revoked', revokedAt: timestamp, updatedAt: timestamp, updatedBy: actor } },
+        { returnDocument: 'after', projection: { _id: 0 } },
+      );
+      if (!updated) return null;
+      await apiKeys.updateMany({ clientId: id, revokedAt: null }, { $set: { revokedAt: timestamp } });
+      const keyRows = await apiKeys.find({ clientId: id }, { projection: { _id: 0, tokenHash: 0 } }).sort({ createdAt: -1 }).toArray();
+      return serializeApiClient(updated, keyRows);
+    },
+    async verifyApiToken(token) {
+      const timestamp = new Date();
+      const keyRow = await apiKeys.findOne({ tokenHash: hashApiToken(token) }, { projection: { _id: 0 } });
+      if (!keyRow || keyRow.revokedAt || (keyRow.expiresAt && new Date(keyRow.expiresAt) <= timestamp)) return null;
+      const clientRow = await apiClients.findOne({ id: keyRow.clientId }, { projection: { _id: 0 } });
+      if (!clientRow || clientRow.status !== 'active' || (clientRow.expiresAt && new Date(clientRow.expiresAt) <= timestamp)) return null;
+      await apiKeys.updateOne({ id: keyRow.id }, { $set: { lastUsedAt: timestamp }, $inc: { requestCount: 1 } });
+      return {
+        managed: true,
+        clientId: clientRow.id,
+        clientName: clientRow.name,
+        keyId: keyRow.id,
+        scopes: [...clientRow.scopes],
+        rateLimitPerMinute: clientRow.rateLimitPerMinute,
+      };
+    },
+    async recordApiRequest(input) {
+      const timestamp = input.startedAt ? new Date(input.startedAt) : new Date();
+      const row = {
+        id: crypto.randomUUID(),
+        ...input,
+        startedAt: timestamp,
+        expiresAt: new Date(timestamp.getTime() + retentionDays * 86400000),
+      };
+      await apiRequests.insertOne(row);
+      return serializeDocument(row);
+    },
+    async listApiRequests(filters = {}) {
+      const page = normalizePositiveInteger(filters.page, 1, 100000);
+      const pageSize = normalizePositiveInteger(filters.pageSize, 20, 100);
+      const query = {
+        ...(filters.clientId ? { clientId: filters.clientId } : {}),
+        ...(filters.outcome ? { outcome: filters.outcome } : {}),
+        ...(filters.endpoint ? { endpoint: filters.endpoint } : {}),
+      };
+      const [items, total] = await Promise.all([
+        apiRequests.find(query, { projection: { _id: 0, expiresAt: 0 } }).sort({ startedAt: -1 })
+          .skip((page - 1) * pageSize).limit(pageSize).toArray(),
+        apiRequests.countDocuments(query),
+      ]);
+      return { items: items.map(serializeDocument), page, pageSize, total };
+    },
+    async getApiAccessOverview() {
+      const since = new Date(Date.now() - 86400000);
+      const [clientRows, keyRows, requestRows] = await Promise.all([
+        apiClients.find({}, { projection: { _id: 0 } }).toArray(),
+        apiKeys.find({}, { projection: { _id: 0, tokenHash: 0 } }).toArray(),
+        apiRequests.find({ startedAt: { $gte: since } }, { projection: { _id: 0, httpStatus: 1, durationMs: 1, startedAt: 1 } })
+          .sort({ startedAt: -1 }).limit(10000).toArray(),
+      ]);
+      return summarizeApiAccess(clientRows, keyRows, requestRows, since);
+    },
+    async getApiClientDelivery(id, clientId) {
+      return serializeDocument(await deliveries.findOne(
+        { id, apiClientId: clientId },
+        { projection: { _id: 0, encryptedPayload: 0, expiresAt: 0 } },
       ));
     },
     async ping() { return (await db.command({ ping: 1 })).ok === 1; },

@@ -20,6 +20,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { requestJson } from './api.js';
+import NotificationApiAccess from './NotificationApiAccess.jsx';
 import { ConfirmDialog, SelectControl } from './UiControls.jsx';
 
 const STATUS_OPTIONS = [
@@ -254,15 +255,19 @@ export default function NotificationServiceView({ session }) {
         <div className="ops-segmented" role="tablist" aria-label="通知服务视图">
           {[
             ['overview', '概览'],
-            ['records', '发送记录'],
-            ['jobs', '计划任务'],
-            ['templates', '消息模板'],
+            ['records', '发送'],
+            ['jobs', '编排'],
             ['preferences', '接收偏好'],
-            ['test', '发送测试'],
-          ].map(([id, label]) => <button key={id} className={tab === id ? 'active' : ''} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>)}
+            ['api', 'API 接入'],
+          ].map(([id, label]) => {
+            const active = id === 'records' ? ['records', 'test'].includes(tab) : id === 'jobs' ? ['jobs', 'templates'].includes(tab) : tab === id;
+            return <button key={id} className={active ? 'active' : ''} type="button" role="tab" aria-selected={active} onClick={() => setTab(id)}>{label}</button>;
+          })}
         </div>
-        <button className="icon-button notify-refresh" type="button" title="刷新通知数据" aria-label="刷新通知数据" disabled={refreshing} onClick={() => load({ quiet: true })}><RefreshCw className={refreshing ? 'spin' : ''} size={18} /></button>
+        {tab !== 'api' && <button className="icon-button notify-refresh" type="button" title="刷新通知数据" aria-label="刷新通知数据" disabled={refreshing} onClick={() => load({ quiet: true })}><RefreshCw className={refreshing ? 'spin' : ''} size={18} /></button>}
       </div>
+      {['records', 'test'].includes(tab) && <div className="notify-context-tabs" role="tablist" aria-label="发送视图"><button className={tab === 'records' ? 'active' : ''} type="button" role="tab" aria-selected={tab === 'records'} onClick={() => setTab('records')}>发送记录</button><button className={tab === 'test' ? 'active' : ''} type="button" role="tab" aria-selected={tab === 'test'} onClick={() => setTab('test')}>发送测试</button></div>}
+      {['jobs', 'templates'].includes(tab) && <div className="notify-context-tabs" role="tablist" aria-label="编排视图"><button className={tab === 'jobs' ? 'active' : ''} type="button" role="tab" aria-selected={tab === 'jobs'} onClick={() => setTab('jobs')}>计划任务</button><button className={tab === 'templates' ? 'active' : ''} type="button" role="tab" aria-selected={tab === 'templates'} onClick={() => setTab('templates')}>消息模板</button></div>}
       <Feedback error={error} message={message} />
 
       {tab === 'overview' && (
@@ -386,6 +391,8 @@ export default function NotificationServiceView({ session }) {
           <div className="notify-preference-form"><label><span>企业微信用户 ID</span><input value={preferenceForm.targetId} maxLength={64} onChange={(event) => setPreferenceForm({ ...preferenceForm, targetId: event.target.value })} /></label><button className="secondary-action" type="button" disabled={!canOperate || !preferenceForm.targetId.trim()} onClick={loadPreference}>读取</button><label className="notify-inline-check"><input type="checkbox" checked={preferenceForm.enabled} onChange={(event) => setPreferenceForm({ ...preferenceForm, enabled: event.target.checked })} /><span>允许接收</span></label><label><span>免打扰开始</span><input type="time" value={preferenceForm.quietStart} onChange={(event) => setPreferenceForm({ ...preferenceForm, quietStart: event.target.value })} /></label><label><span>免打扰结束</span><input type="time" value={preferenceForm.quietEnd} onChange={(event) => setPreferenceForm({ ...preferenceForm, quietEnd: event.target.value })} /></label><button className="primary-button" type="button" disabled={!canOperate || !preferenceForm.targetId.trim() || submitting} onClick={savePreference}><Save size={17} />保存偏好</button></div>
         </section>
       )}
+
+      {tab === 'api' && <NotificationApiAccess session={session} onError={setError} onMessage={setMessage} />}
 
       <ConfirmDialog
         open={Boolean(pendingAction)}

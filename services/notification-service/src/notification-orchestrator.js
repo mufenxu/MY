@@ -74,7 +74,7 @@ function nextAllowedTime(now, preference) {
 }
 
 function createNotificationOrchestrator({ store, deliver, now = () => new Date() }) {
-  async function enqueue(rawInput, { caller, actor = '', requestId = '' } = {}) {
+  async function enqueue(rawInput, { caller, actor = '', requestId = '', apiClient = null } = {}) {
     const input = enqueueNotificationSchema.parse(rawInput);
     const template = input.templateKey ? await store.getTemplate(input.templateKey) : null;
     if (input.templateKey && (!template || template.enabled === false)) {
@@ -104,6 +104,9 @@ function createNotificationOrchestrator({ store, deliver, now = () => new Date()
       caller,
       actor: String(actor || '').slice(0, 128),
       requestId,
+      apiClientId: apiClient?.clientId || null,
+      apiClientName: apiClient?.clientName || '',
+      apiKeyId: apiClient?.keyId || null,
       templateKey: template?.key || '',
       msgType,
       targetType: input.target.touser ? 'user' : input.target.toparty ? 'party' : 'tag',
@@ -126,6 +129,11 @@ function createNotificationOrchestrator({ store, deliver, now = () => new Date()
           caller: job.caller || 'notification-orchestrator',
           actor: job.actor,
           requestId: job.requestId || `notification-job-${job.id}`,
+          apiClient: job.apiClientId ? {
+            clientId: job.apiClientId,
+            clientName: job.apiClientName,
+            keyId: job.apiKeyId,
+          } : null,
         });
         const updated = await store.updateNotificationJob(job.id, {
           status: 'sent',

@@ -831,6 +831,87 @@ export function createApp({
     }
   });
 
+  app.get('/api/notifications/api-access', requireRole('operator'), async (_req, res, next) => {
+    try {
+      return res.json(await notificationManagement.getApiAccess());
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.get('/api/notifications/api-requests', requireRole('operator'), async (req, res, next) => {
+    try {
+      return res.json(await notificationManagement.listApiRequests({
+        clientId: req.query.clientId,
+        outcome: req.query.outcome,
+        endpoint: req.query.endpoint,
+        page: req.query.page,
+        pageSize: req.query.pageSize,
+      }));
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.post('/api/notifications/api-clients', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      const result = await notificationManagement.createApiClient(req.body || {}, req.consoleUser.username);
+      await recordAudit(req, {
+        action: 'notification.api_client_created',
+        targetType: 'notification_api_client',
+        targetId: result.client?.id || '',
+        details: { scopes: result.client?.scopes || [] },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.put('/api/notifications/api-clients/:id', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      const result = await notificationManagement.updateApiClient(req.params.id, req.body || {}, req.consoleUser.username);
+      await recordAudit(req, {
+        action: 'notification.api_client_updated',
+        targetType: 'notification_api_client',
+        targetId: req.params.id,
+        details: { scopes: result.client?.scopes || [] },
+      });
+      return res.json(result);
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.post('/api/notifications/api-clients/:id/rotate', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      const result = await notificationManagement.rotateApiClient(req.params.id, req.body?.overlapMinutes, req.consoleUser.username);
+      await recordAudit(req, {
+        action: 'notification.api_client_rotated',
+        targetType: 'notification_api_client',
+        targetId: req.params.id,
+        details: { overlapMinutes: Number(req.body?.overlapMinutes ?? 1440) },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.post('/api/notifications/api-clients/:id/revoke', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      const result = await notificationManagement.revokeApiClient(req.params.id, req.consoleUser.username);
+      await recordAudit(req, {
+        action: 'notification.api_client_revoked',
+        targetType: 'notification_api_client',
+        targetId: req.params.id,
+      });
+      return res.json(result);
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
   const notificationSendLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 20,

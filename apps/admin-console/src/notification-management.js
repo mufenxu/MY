@@ -15,6 +15,18 @@ function boundedInteger(value, fallback, minimum, maximum) {
   return Math.min(Math.max(Number.isFinite(parsed) ? parsed : fallback, minimum), maximum);
 }
 
+function validateApiClientId(value) {
+  const id = String(value || '').trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+    throw new NotificationManagementError('API 应用标识无效。', { status: 400, code: 'INVALID_API_CLIENT_ID' });
+  }
+  return id;
+}
+
+function actorName(value) {
+  return String(value || '').trim().slice(0, 128);
+}
+
 function validateTestInput(input = {}) {
   const msgType = String(input.msgType || 'text');
   const touser = String(input.touser || '').trim();
@@ -101,6 +113,56 @@ export function createNotificationManagementClient({
       query.set('page', String(boundedInteger(filters.page, 1, 1, 100000)));
       query.set('pageSize', String(boundedInteger(filters.pageSize, 20, 1, 100)));
       return request(`/management/deliveries?${query}`);
+    },
+    async getApiAccess() {
+      if (!configured) {
+        return {
+          overview: { windowHours: 24, activeClients: 0, activeKeys: 0, totalRequests: 0, successRate: null, p95DurationMs: null },
+          clients: [],
+          requests: { items: [], page: 1, pageSize: 20, total: 0 },
+          supportedScopes: ['notifications:send', 'notifications:enqueue', 'notifications:status:read', 'notifications:broadcast'],
+          apiBasePath: '/api/notify',
+          openApiPath: '/api/notify/openapi.json',
+          legacyKeyConfigured: false,
+          configured: false,
+        };
+      }
+      return request('/management/api-access');
+    },
+    async listApiRequests(filters = {}) {
+      if (!configured) return { items: [], page: 1, pageSize: 20, total: 0 };
+      const query = new URLSearchParams();
+      for (const key of ['clientId', 'outcome', 'endpoint']) if (filters[key]) query.set(key, String(filters[key]));
+      query.set('page', String(boundedInteger(filters.page, 1, 1, 100000)));
+      query.set('pageSize', String(boundedInteger(filters.pageSize, 20, 1, 100)));
+      return request(`/management/api-requests?${query}`);
+    },
+    async createApiClient(input, actor) {
+      return request('/management/api-clients', {
+        method: 'POST',
+        body: { ...input, actor: actorName(actor) },
+      });
+    },
+    async updateApiClient(id, input, actor) {
+      const clientId = validateApiClientId(id);
+      return request(`/management/api-clients/${encodeURIComponent(clientId)}`, {
+        method: 'PUT',
+        body: { ...input, actor: actorName(actor) },
+      });
+    },
+    async rotateApiClient(id, overlapMinutes, actor) {
+      const clientId = validateApiClientId(id);
+      return request(`/management/api-clients/${encodeURIComponent(clientId)}/rotate`, {
+        method: 'POST',
+        body: { overlapMinutes: boundedInteger(overlapMinutes, 1440, 0, 10080), actor: actorName(actor) },
+      });
+    },
+    async revokeApiClient(id, actor) {
+      const clientId = validateApiClientId(id);
+      return request(`/management/api-clients/${encodeURIComponent(clientId)}/revoke`, {
+        method: 'POST',
+        body: { actor: actorName(actor) },
+      });
     },
     async sendTest(input, actor) {
       return request('/management/test', { method: 'POST', body: { ...validateTestInput(input), actor: String(actor || '').slice(0, 128) } });

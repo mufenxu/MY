@@ -10,6 +10,17 @@ const WeComClient = require('./wecom-client');
 const { notificationSchema, buildWeComPayload } = require('./notification-schema');
 const { createNotificationOrchestrator } = require('./notification-orchestrator');
 const { createMemoryNotificationStore } = require('./notification-store');
+const {
+  API_CLIENT_SCOPES,
+  apiClientCreateSchema,
+  apiClientIdSchema,
+  apiClientRevokeSchema,
+  apiClientRotateSchema,
+  apiClientUpdateSchema,
+  buildOpenApiDocument,
+  hasScope,
+  requiresBroadcastScope,
+} = require('./api-access');
 
 function safeEqual(left, right) {
   const a = Buffer.from(String(left || ''));
@@ -81,6 +92,7 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
     retentionDays: config.historyRetentionDays,
   });
   const guardAgainstReplay = createReplayGuard();
+  const apiRateWindows = new Map();
 
   function verifySignedRequest(req, allowedCallers) {
     return verifyServiceRequest({
@@ -94,22 +106,115 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
     });
   }
 
-  const checkNotifyAccess = (req, res, next) => {
-    const apiKey = req.get('X-API-KEY');
-    if (apiKey && safeEqual(apiKey, config.apiKey)) {
-      req.serviceCaller = 'external-api';
+  const checkNotifyAccess = async (req, res, next) => {
+    try {
+      const apiKey = req.get('X-API-KEY');
+      if (apiKey && safeEqual(apiKey, config.apiKey)) {
+        req.serviceCaller = 'external-api';
+        req.apiClient = { managed: false, legacy: true };
+        return next();
+      }
+      if (apiKey) {
+        const managedClient = await store.verifyApiToken(apiKey);
+        if (managedClient) {
+          req.serviceCaller = 'external-api';
+          req.apiClient = managedClient;
+          req.apiRequestStartedAt = Date.now();
+          return next();
+        }
+      }
+      const identity = verifySignedRequest(req, config.internalCallers || []);
+      if (!identity) return res.status(401).json({ errcode: 401, errmsg: '无效的通知服务凭据' });
+      req.serviceCaller = identity.caller;
+      req.apiClient = null;
       return next();
+    } catch (error) {
+      next(error);
+      return undefined;
     }
-    const identity = verifySignedRequest(req, config.internalCallers || []);
-    if (!identity) return res.status(401).json({ errcode: 401, errmsg: '无效的通知服务凭据' });
-    req.serviceCaller = identity.caller;
-    return next();
   };
 
   const checkManagementAccess = (req, res, next) => {
     const identity = verifySignedRequest(req, config.managementCallers || ['admin-console']);
     if (!identity) return res.status(401).json({ error: '管理请求签名无效。', code: 'MANAGEMENT_UNAUTHORIZED' });
     req.serviceCaller = identity.caller;
+    return next();
+  };
+
+  async function recordManagedApiRequest(req, {
+    endpoint,
+    httpStatus,
+    errorCode = '',
+    deliveryId = null,
+    body = null,
+  }) {
+    if (!req.apiClient?.managed) return;
+    const targetSource = body?.target || body;
+    const target = targetSource && (targetSource.touser || targetSource.toparty || targetSource.totag)
+      ? targetMetadata(targetSource)
+      : { targetType: '', targetValue: '' };
+    try {
+      await store.recordApiRequest({
+        clientId: req.apiClient.clientId,
+        clientName: req.apiClient.clientName,
+        keyId: req.apiClient.keyId,
+        endpoint,
+        method: req.method,
+        httpStatus,
+        outcome: httpStatus >= 200 && httpStatus < 400 ? 'success' : 'failure',
+        durationMs: Math.max(0, Date.now() - Number(req.apiRequestStartedAt || Date.now())),
+        requestId: req.id,
+        deliveryId,
+        targetType: target.targetType || '',
+        targetValue: String(target.targetValue || '').slice(0, 256),
+        msgType: String(body?.msg_type || body?.msgType || '').slice(0, 32),
+        errorCode: String(errorCode || '').slice(0, 80),
+      });
+    } catch (error) {
+      console.error(`[${req.id}] notification api request audit failed`, error);
+    }
+  }
+
+  function requireApiScope(scope, endpoint) {
+    return async (req, res, next) => {
+      if (hasScope(req.apiClient, scope)) return next();
+      await recordManagedApiRequest(req, { endpoint, httpStatus: 403, errorCode: 'API_SCOPE_REQUIRED', body: req.body });
+      return res.status(403).json({ errcode: 403, errmsg: '当前 API Key 权限不足', code: 'API_SCOPE_REQUIRED', requestId: req.id });
+    };
+  }
+
+  function enforceManagedTarget(endpoint, targetSelector) {
+    return async (req, res, next) => {
+      if (!req.apiClient?.managed) return next();
+      const target = targetSelector(req.body || {});
+      if (!target.touser && !target.toparty && !target.totag) {
+        await recordManagedApiRequest(req, { endpoint, httpStatus: 400, errorCode: 'EXPLICIT_TARGET_REQUIRED', body: req.body });
+        return res.status(400).json({ errcode: 400, errmsg: '托管 API 客户端必须明确指定接收目标', code: 'EXPLICIT_TARGET_REQUIRED', requestId: req.id });
+      }
+      if (requiresBroadcastScope(target) && !hasScope(req.apiClient, 'notifications:broadcast')) {
+        await recordManagedApiRequest(req, { endpoint, httpStatus: 403, errorCode: 'BROADCAST_SCOPE_REQUIRED', body: req.body });
+        return res.status(403).json({ errcode: 403, errmsg: '部门、标签、多用户或全员发送需要广播权限', code: 'BROADCAST_SCOPE_REQUIRED', requestId: req.id });
+      }
+      return next();
+    };
+  }
+
+  const enforceClientRateLimit = (endpoint) => async (req, res, next) => {
+    if (!req.apiClient?.managed) return next();
+    const timestamp = Date.now();
+    const current = apiRateWindows.get(req.apiClient.clientId);
+    const window = !current || current.resetAt <= timestamp
+      ? { count: 0, resetAt: timestamp + 60_000 }
+      : current;
+    const limit = Math.min(Math.max(Number(req.apiClient.rateLimitPerMinute) || 60, 1), 120);
+    if (window.count >= limit) {
+      res.setHeader('Retry-After', String(Math.max(1, Math.ceil((window.resetAt - timestamp) / 1000))));
+      await recordManagedApiRequest(req, { endpoint, httpStatus: 429, errorCode: 'API_CLIENT_RATE_LIMITED', body: req.body });
+      return res.status(429).json({ errcode: 429, errmsg: '当前 API 客户端调用过于频繁', code: 'API_CLIENT_RATE_LIMITED', requestId: req.id });
+    }
+    window.count += 1;
+    apiRateWindows.set(req.apiClient.clientId, window);
+    while (apiRateWindows.size > 2048) apiRateWindows.delete(apiRateWindows.keys().next().value);
     return next();
   };
 
@@ -132,7 +237,7 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
     }
   }
 
-  async function deliver(body, { caller, actor = '', requestId, parentDeliveryId = null } = {}) {
+  async function deliver(body, { caller, actor = '', requestId, parentDeliveryId = null, apiClient = null } = {}) {
     const parsed = notificationSchema.parse(body);
     const target = targetMetadata(parsed);
     const startedAt = Date.now();
@@ -140,6 +245,9 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
       caller,
       actor: String(actor || '').slice(0, 128),
       requestId,
+      apiClientId: apiClient?.clientId || null,
+      apiClientName: apiClient?.clientName || '',
+      apiKeyId: apiClient?.keyId || null,
       msgType: parsed.msg_type,
       ...target,
       parentDeliveryId,
@@ -191,17 +299,33 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
       res.status(503).json({ status: 'not-ready' });
     }
   });
+  app.get('/openapi.json', (_req, res) => res.json(buildOpenApiDocument()));
 
   app.post('/notify', rateLimit({
     windowMs: 60_000,
     limit: 120,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-  }), checkNotifyAccess, async (req, res, next) => {
+  }), checkNotifyAccess,
+  requireApiScope('notifications:send', '/notify'),
+  enforceClientRateLimit('/notify'),
+  enforceManagedTarget('/notify', (body) => body),
+  async (req, res, next) => {
     try {
-      const { result, delivery } = await deliver(req.body, { caller: req.serviceCaller, requestId: req.id });
+      const { result, delivery } = await deliver(req.body, {
+        caller: req.serviceCaller,
+        requestId: req.id,
+        apiClient: req.apiClient,
+      });
+      await recordManagedApiRequest(req, { endpoint: '/notify', httpStatus: 200, deliveryId: delivery?.id || null, body: req.body });
       return res.json({ errcode: 0, errmsg: 'ok', detail: result, deliveryId: delivery?.id || null });
     } catch (error) {
+      await recordManagedApiRequest(req, {
+        endpoint: '/notify',
+        httpStatus: Number(error.status) || 500,
+        errorCode: error.code || 'DELIVERY_FAILED',
+        body: req.body,
+      });
       next(error);
       return undefined;
     }
@@ -212,11 +336,48 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
     limit: 120,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-  }), checkNotifyAccess, async (req, res, next) => {
+  }), checkNotifyAccess,
+  requireApiScope('notifications:enqueue', '/enqueue'),
+  enforceClientRateLimit('/enqueue'),
+  enforceManagedTarget('/enqueue', (body) => body.target || {}),
+  async (req, res, next) => {
     try {
-      const result = await orchestrator.enqueue(req.body, { caller: req.serviceCaller, requestId: req.id });
-      return res.status(result.deduplicated ? 200 : 202).json(result);
+      const result = await orchestrator.enqueue(req.body, {
+        caller: req.serviceCaller,
+        requestId: req.id,
+        apiClient: req.apiClient,
+      });
+      const status = result.deduplicated ? 200 : 202;
+      await recordManagedApiRequest(req, { endpoint: '/enqueue', httpStatus: status, body: req.body });
+      return res.status(status).json(result);
     } catch (error) {
+      await recordManagedApiRequest(req, {
+        endpoint: '/enqueue',
+        httpStatus: Number(error.status) || 500,
+        errorCode: error.code || 'ENQUEUE_FAILED',
+        body: req.body,
+      });
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/deliveries/:id', checkNotifyAccess,
+  requireApiScope('notifications:status:read', '/deliveries/:id'),
+  enforceClientRateLimit('/deliveries/:id'),
+  async (req, res, next) => {
+    try {
+      if (!req.apiClient?.managed) throw httpError(403, 'MANAGED_API_CLIENT_REQUIRED', '发送结果查询仅向托管 API 客户端开放。');
+      const delivery = await store.getApiClientDelivery(String(req.params.id || ''), req.apiClient.clientId);
+      if (!delivery) throw httpError(404, 'DELIVERY_NOT_FOUND', '发送记录不存在。');
+      await recordManagedApiRequest(req, { endpoint: '/deliveries/:id', httpStatus: 200, deliveryId: delivery.id });
+      return res.json({ delivery });
+    } catch (error) {
+      await recordManagedApiRequest(req, {
+        endpoint: '/deliveries/:id',
+        httpStatus: Number(error.status) || 500,
+        errorCode: error.code || 'DELIVERY_LOOKUP_FAILED',
+      });
       next(error);
       return undefined;
     }
@@ -265,6 +426,94 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
         page: req.query.page,
         pageSize: req.query.pageSize,
       }));
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/management/api-access', checkManagementAccess, async (req, res, next) => {
+    try {
+      const [overview, clients, requests] = await Promise.all([
+        store.getApiAccessOverview(),
+        store.listApiClients(),
+        store.listApiRequests({ page: req.query.page, pageSize: req.query.pageSize || 20 }),
+      ]);
+      return res.json({
+        overview,
+        clients,
+        requests,
+        supportedScopes: API_CLIENT_SCOPES,
+        apiBasePath: '/api/notify',
+        openApiPath: '/api/notify/openapi.json',
+        legacyKeyConfigured: Boolean(config.apiKey),
+      });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/management/api-requests', checkManagementAccess, async (req, res, next) => {
+    try {
+      const outcome = String(req.query.outcome || '');
+      if (outcome && !['success', 'failure'].includes(outcome)) throw httpError(400, 'INVALID_API_OUTCOME', 'API 调用结果筛选值无效。');
+      return res.json(await store.listApiRequests({
+        clientId: String(req.query.clientId || '').slice(0, 64),
+        outcome,
+        endpoint: String(req.query.endpoint || '').slice(0, 80),
+        page: req.query.page,
+        pageSize: req.query.pageSize,
+      }));
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/management/api-clients', checkManagementAccess, async (req, res, next) => {
+    try {
+      const input = apiClientCreateSchema.parse(req.body);
+      return res.status(201).json(await store.createApiClient(input));
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.put('/management/api-clients/:id', checkManagementAccess, async (req, res, next) => {
+    try {
+      const id = apiClientIdSchema.parse(req.params.id);
+      const input = apiClientUpdateSchema.parse(req.body);
+      const clientRow = await store.updateApiClient(id, input);
+      if (!clientRow) throw httpError(404, 'API_CLIENT_NOT_FOUND', 'API 应用不存在或已吊销。');
+      return res.json({ client: clientRow });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/management/api-clients/:id/rotate', checkManagementAccess, async (req, res, next) => {
+    try {
+      const id = apiClientIdSchema.parse(req.params.id);
+      const input = apiClientRotateSchema.parse(req.body);
+      const result = await store.rotateApiClientKey(id, input);
+      if (!result) throw httpError(404, 'API_CLIENT_NOT_FOUND', 'API 应用不存在或已吊销。');
+      return res.status(201).json(result);
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/management/api-clients/:id/revoke', checkManagementAccess, async (req, res, next) => {
+    try {
+      const id = apiClientIdSchema.parse(req.params.id);
+      const input = apiClientRevokeSchema.parse(req.body);
+      const clientRow = await store.revokeApiClient(id, input);
+      if (!clientRow) throw httpError(404, 'API_CLIENT_NOT_FOUND', 'API 应用不存在或已吊销。');
+      return res.json({ client: clientRow });
     } catch (error) {
       next(error);
       return undefined;

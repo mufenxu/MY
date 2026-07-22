@@ -105,12 +105,6 @@ export function TaskCenterView({ onNavigate }) {
 
   return (
     <section className="platform-control-view task-center-view">
-      <div className="control-view-heading">
-        <div><span className="control-eyebrow">跨服务工作流</span><h2>统一任务中心</h2><p>集中查看备份、发布、通知、事件与配置审批进度。</p></div>
-        <button className="secondary-action compact" type="button" disabled={refreshing} onClick={() => load(true)}>
-          <RefreshCw className={refreshing ? 'spin' : ''} size={16} />刷新
-        </button>
-      </div>
       <Feedback error={error} />
       <div className="control-kpis" aria-label="任务统计">
         <article><FileClock size={19} /><span>任务总数<strong>{data?.tasks?.length || 0}</strong></span></article>
@@ -138,6 +132,9 @@ export function TaskCenterView({ onNavigate }) {
           ]}
         />
         <span>{tasks.length} 条结果 · {formatDateTime(data?.generatedAt)}</span>
+        <button className="secondary-action compact" type="button" disabled={refreshing} onClick={() => load(true)}>
+          <RefreshCw className={refreshing ? 'spin' : ''} size={16} />刷新
+        </button>
       </div>
       {loading ? (
         <div className="ops-loading"><LoaderCircle className="spin" size={18} />正在聚合任务...</div>
@@ -259,13 +256,9 @@ export function ConfigurationView({ session }) {
 
   return (
     <section className="platform-control-view configuration-view">
-      <div className="control-view-heading">
-        <div><span className="control-eyebrow">受控变更</span><h2>配置审批与回滚</h2><p>所有运行参数先形成提案，审批后才会应用并生成不可变版本。</p></div>
-        <span className="version-badge"><History size={16} />当前 v{overview?.currentVersion || 1}</span>
-      </div>
       <Feedback message={message} error={error} />
       <form className="configuration-editor" onSubmit={propose}>
-        <div className="section-bar"><div><h3>运行参数</h3><span>{overview?.twoPersonApproval ? '已启用双人审批，提案人不能自行批准' : '开发环境允许同一管理员完成审批'}</span></div></div>
+        <div className="section-bar"><div><h3>运行参数</h3><span>{overview?.twoPersonApproval ? '已启用双人审批，提案人不能自行批准' : '开发环境允许同一管理员完成审批'}</span></div><span className="version-badge"><History size={16} />当前 v{overview?.currentVersion || 1}</span></div>
         <label className="configuration-toggle">
           <span><strong>启用告警</strong><small>关闭后仍保留监控数据，但不创建新告警。</small></span>
           <input type="checkbox" checked={Boolean(draft?.alertingEnabled)} disabled={!canPropose || busy} onChange={(event) => updateField('alertingEnabled', event.target.checked)} />
@@ -366,9 +359,6 @@ export function DiagnosticsView({ services, session }) {
 
   return (
     <section className="platform-control-view diagnostics-view">
-      <div className="control-view-heading">
-        <div><span className="control-eyebrow">可验证路径</span><h2>请求链路诊断</h2><p>用同一诊断请求分别探测公网入口与服务直连，定位故障所在阶段。</p></div>
-      </div>
       <Feedback error={error} />
       <section className="diagnostic-launcher">
         <div><Route size={22} /><span><strong>端到端追踪</strong><small>每次运行会生成独立请求 ID 并记录审计事件。</small></span></div>
