@@ -4,6 +4,7 @@ import { Turnstile } from '@marsidev/react-turnstile';
 import {
   Activity,
   AppWindow,
+  ArrowLeft,
   ArrowRight,
   ArrowUpRight,
   Bell,
@@ -19,8 +20,11 @@ import {
   CloudCog,
   Database,
   Download,
+  Eye,
+  EyeOff,
   Fingerprint,
   GraduationCap,
+  KeyRound,
   LayoutDashboard,
   Layers3,
   ListTodo,
@@ -38,11 +42,13 @@ import {
   Send,
   Server,
   ShieldCheck,
+  ShieldAlert,
   GitPullRequest,
   Sun,
   Timer,
   Trash2,
   Upload,
+  User,
   X,
   Zap,
 } from 'lucide-react';
@@ -157,6 +163,7 @@ function getGreeting() {
 function LoginScreen({ onAuthenticated, totpRequired = false }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [totp, setTotp] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
@@ -182,13 +189,14 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
     let animId = 0;
 
     function createParticles() {
-      const count = window.innerWidth < 768 ? 22 : 34;
+      const count = window.innerWidth < 768 ? 20 : 35;
       return Array.from({ length: count }, () => ({
         x: Math.random() * width,
         y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.5,
-        vy: (Math.random() - 0.5) * 0.5,
-        radius: Math.random() * 1.5 + 0.8,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        radius: Math.random() * 1.8 + 0.9,
+        alpha: Math.random() * 0.45 + 0.25,
       }));
     }
 
@@ -202,19 +210,35 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
 
     const render = (moveParticles = true) => {
       ctx.clearRect(0, 0, width, height);
-      particles.forEach((p) => {
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
         if (moveParticles) {
           p.x += p.vx;
           p.y += p.vy;
+          if (p.x < 0 || p.x > width) p.vx *= -1;
+          if (p.y < 0 || p.y > height) p.vy *= -1;
         }
-        if (p.x < 0 || p.x > width) p.vx *= -1;
-        if (p.y < 0 || p.y > height) p.vy *= -1;
 
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(217, 119, 36, 0.35)';
+        ctx.fillStyle = `rgba(217, 119, 36, ${p.alpha})`;
         ctx.fill();
-      });
+
+        for (let j = i + 1; j < particles.length; j++) {
+          const p2 = particles[j];
+          const dx = p.x - p2.x;
+          const dy = p.y - p2.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 115) {
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = `rgba(217, 119, 36, ${0.14 * (1 - dist / 115)})`;
+            ctx.lineWidth = 0.65;
+            ctx.stroke();
+          }
+        }
+      }
     };
 
     const animate = () => {
@@ -314,22 +338,23 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
     }
   }
 
+  function handleResetStep() {
+    setSecondFactorRequired(false);
+    setTotp('');
+    setRecoveryCode('');
+    setError('');
+  }
+
   return (
     <main className="login-page">
       <canvas id="login-bg-canvas" className="login-bg-canvas" />
 
       <a href="/" className="login-back-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="19" y1="12" x2="5" y2="12"></line>
-          <polyline points="12 19 5 12 12 5"></polyline>
-        </svg>
+        <ArrowLeft size={16} />
         <span>返回品牌官网</span>
       </a>
 
-      <section
-        className="login-panel"
-        aria-labelledby="login-title"
-      >
+      <section className="login-panel" aria-labelledby="login-title">
         <div className="login-brand">
           <span className="brand-mark glowing-pulse" aria-hidden="true">M</span>
           <span>
@@ -337,115 +362,249 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
             <small>统一服务控制台 · UNIFIED CONSOLE</small>
           </span>
         </div>
+
         <div className="login-heading">
-          <span className="login-icon"><LockKeyhole size={20} /></span>
+          <span className="login-icon">
+            {secondFactorRequired ? <KeyRound size={22} /> : <LockKeyhole size={22} />}
+          </span>
           <div>
-            <h1 id="login-title">管理员身份验证</h1>
-            <p>登录后掌控平台运维、身份与灾备系统</p>
+            <h1 id="login-title">
+              {secondFactorRequired ? '安全二次验证' : '管理员身份验证'}
+            </h1>
+            <p>
+              {secondFactorRequired
+                ? '为了确保您的账户安全，请输入 6 位动态验证码'
+                : '登录后掌控平台运维、身份与灾备系统'}
+            </p>
           </div>
         </div>
+
         <form onSubmit={handleSubmit} className="login-form">
           {recoveryCodes.length > 0 ? (
             <div className="login-recovery-codes">
-              <div><CheckCircle2 size={20} /><strong>多因素验证已启用</strong></div>
-              <p>请将以下一次性恢复码保存在密码管理器中。离开后不会再次显示。</p>
-              <div>{recoveryCodes.map((code) => <code key={code}>{code}</code>)}</div>
-              <button className="primary-button login-button" type="button" onClick={() => onAuthenticated(pendingSession)}>
-                <ShieldCheck size={18} />我已保存，进入控制台
+              <div>
+                <CheckCircle2 size={20} />
+                <strong>多因素验证已成功启用</strong>
+              </div>
+              <p>请将以下一次性恢复码妥善保存在安全的地方。关闭此窗口后将不再显示。</p>
+              <div className="codes-grid">
+                {recoveryCodes.map((code) => (
+                  <code key={code}>{code}</code>
+                ))}
+              </div>
+              <button
+                className="primary-button login-button"
+                type="button"
+                onClick={() => onAuthenticated(pendingSession)}
+              >
+                <ShieldCheck size={18} />
+                我已保存，进入控制台
               </button>
             </div>
-          ) : <>
-          <label>
-            <span>管理员账号</span>
-            <input
-              autoComplete="username webauthn"
-              value={username}
-              onChange={(event) => { setUsername(event.target.value); setMfaEnrollment(null); setEnrollmentCode(''); }}
-              placeholder="请输入管理员账号"
-              required
-            />
-          </label>
-          {secondFactorRequired && !useRecoveryCode && (
-            <label>
-              <span>动态验证码</span>
-              <input
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={totp}
-                onChange={(event) => setTotp(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="六位验证码"
-                pattern="\d{6}"
-                required
-              />
-            </label>
+          ) : (
+            <>
+              {/* 二步验证模式：核验通过提示与返回按钮 */}
+              {secondFactorRequired && (
+                <div className="verified-account-badge">
+                  <div className="badge-info">
+                    <User size={15} />
+                    <span>已核验账号: <strong>{username}</strong></span>
+                  </div>
+                  <button
+                    type="button"
+                    className="change-account-btn"
+                    onClick={handleResetStep}
+                    title="重新输入账号和密码"
+                  >
+                    切换账号
+                  </button>
+                </div>
+              )}
+
+              {/* 第一步：仅在未开启 2FA 时显示账号和密码 */}
+              {!secondFactorRequired && (
+                <>
+                  <label className="input-group">
+                    <span>管理员账号</span>
+                    <div className="input-wrapper">
+                      <User size={18} className="input-icon" />
+                      <input
+                        autoComplete="username webauthn"
+                        value={username}
+                        onChange={(event) => {
+                          setUsername(event.target.value);
+                          setMfaEnrollment(null);
+                          setEnrollmentCode('');
+                        }}
+                        placeholder="请输入管理员账号"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                  </label>
+
+                  <label className="input-group">
+                    <span>密码</span>
+                    <div className="input-wrapper">
+                      <LockKeyhole size={18} className="input-icon" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="请输入密码"
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="password-toggle-btn"
+                        onClick={() => setShowPassword(!showPassword)}
+                        tabIndex={-1}
+                        aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </label>
+                </>
+              )}
+
+              {/* 第二步：只在需要 2FA 时显示动态验证码或恢复码 */}
+              {secondFactorRequired && !useRecoveryCode && (
+                <label className="input-group">
+                  <span>动态验证码 (2FA)</span>
+                  <div className="input-wrapper">
+                    <KeyRound size={18} className="input-icon" />
+                    <input
+                      className="totp-input"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={totp}
+                      onChange={(event) => setTotp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="· · · · · ·"
+                      pattern="\d{6}"
+                      maxLength={6}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </label>
+              )}
+
+              {secondFactorRequired && useRecoveryCode && (
+                <label className="input-group">
+                  <span>一次性恢复码</span>
+                  <div className="input-wrapper">
+                    <ShieldAlert size={18} className="input-icon" />
+                    <input
+                      autoComplete="one-time-code"
+                      value={recoveryCode}
+                      onChange={(event) => setRecoveryCode(event.target.value.toUpperCase().slice(0, 32))}
+                      placeholder="输入 32 位恢复码"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </label>
+              )}
+
+              {/* MFA 初始绑定提示 */}
+              {mfaEnrollment && (
+                <div className="login-mfa-enrollment">
+                  <div className="qr-container">
+                    <img src={mfaEnrollment.qrDataUrl} alt="动态验证二维码" />
+                    <p className="qr-tip">使用身份验证器 APP 扫描二维码</p>
+                    <code className="secret-code">{mfaEnrollment.secret}</code>
+                  </div>
+                  <label className="input-group">
+                    <span>输入验证器生成的六位验证码</span>
+                    <div className="input-wrapper">
+                      <KeyRound size={18} className="input-icon" />
+                      <input
+                        className="totp-input"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        value={enrollmentCode}
+                        onChange={(event) => setEnrollmentCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="六位验证码"
+                        pattern="\d{6}"
+                        maxLength={6}
+                        required
+                        autoFocus
+                      />
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              {error && (
+                <div className="form-error" role="alert">
+                  <ShieldAlert size={16} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {secondFactorRequired && (
+                <button
+                  className="login-mode-link"
+                  type="button"
+                  onClick={() => setUseRecoveryCode((value) => !value)}
+                >
+                  {useRecoveryCode ? '← 使用动态验证码登录' : '无法接收验证码？使用恢复码'}
+                </button>
+              )}
+
+              {challenge?.siteKey && (
+                <div className="login-challenge">
+                  <Turnstile
+                    key={challenge.nonce}
+                    ref={turnstileRef}
+                    siteKey={challenge.siteKey}
+                    options={{ action: 'platform_login', theme: 'light' }}
+                    onSuccess={setChallengeToken}
+                    onExpire={() => setChallengeToken('')}
+                    onError={() => setChallengeToken('')}
+                  />
+                </div>
+              )}
+
+              <button
+                className="primary-button login-button glowing-btn"
+                disabled={
+                  submitting ||
+                  (Boolean(challenge?.siteKey) && !challengeToken) ||
+                  (Boolean(mfaEnrollment) && enrollmentCode.length !== 6) ||
+                  (secondFactorRequired && !useRecoveryCode && totp.length !== 6)
+                }
+                type="submit"
+              >
+                {submitting ? (
+                  <LoaderCircle className="spin" size={18} />
+                ) : (
+                  <ShieldCheck size={18} />
+                )}
+                {submitting
+                  ? '正在安全验证...'
+                  : mfaEnrollment
+                  ? '完成安全设置并登录'
+                  : secondFactorRequired
+                  ? '验证并登录'
+                  : '立即登录'}
+              </button>
+
+              {!secondFactorRequired && (
+                <button
+                  className="secondary-action login-passkey-button"
+                  disabled={submitting || !username.trim() || (Boolean(challenge?.siteKey) && !challengeToken)}
+                  type="button"
+                  onClick={handlePasskeyLogin}
+                >
+                  <Fingerprint size={18} />
+                  使用 Passkey 快速登录
+                </button>
+              )}
+            </>
           )}
-          {secondFactorRequired && useRecoveryCode && (
-            <label>
-              <span>恢复码</span>
-              <input
-                autoComplete="one-time-code"
-                value={recoveryCode}
-                onChange={(event) => setRecoveryCode(event.target.value.toUpperCase().slice(0, 32))}
-                placeholder="输入一次性恢复码"
-                required
-              />
-            </label>
-          )}
-          <label>
-            <span>密码</span>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="请输入密码"
-              required
-            />
-          </label>
-          {mfaEnrollment && (
-            <div className="login-mfa-enrollment">
-              <div><img src={mfaEnrollment.qrDataUrl} alt="动态验证二维码" /><code>{mfaEnrollment.secret}</code></div>
-              <label>
-                <span>新动态验证码</span>
-                <input
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  value={enrollmentCode}
-                  onChange={(event) => setEnrollmentCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="扫描后输入六位验证码"
-                  pattern="\d{6}"
-                  required
-                />
-              </label>
-            </div>
-          )}
-          {error && <div className="form-error" role="alert">{error}</div>}
-          {secondFactorRequired && (
-            <button className="login-mode-link" type="button" onClick={() => setUseRecoveryCode((value) => !value)}>
-              {useRecoveryCode ? '使用动态验证码' : '使用恢复码'}
-            </button>
-          )}
-          {challenge?.siteKey && (
-            <div className="login-challenge">
-              <Turnstile
-                key={challenge.nonce}
-                ref={turnstileRef}
-                siteKey={challenge.siteKey}
-                options={{ action: 'platform_login', theme: 'light' }}
-                onSuccess={setChallengeToken}
-                onExpire={() => setChallengeToken('')}
-                onError={() => setChallengeToken('')}
-              />
-            </div>
-          )}
-          <button className="primary-button login-button glowing-btn" disabled={submitting || (Boolean(challenge?.siteKey) && !challengeToken) || (Boolean(mfaEnrollment) && enrollmentCode.length !== 6)} type="submit">
-            {submitting ? <LoaderCircle className="spin" size={18} /> : <ShieldCheck size={18} />}
-            {submitting ? '正在验证' : mfaEnrollment ? '完成安全设置' : '立即登录'}
-          </button>
-          <button className="secondary-action login-passkey-button" disabled={submitting || !username.trim() || (Boolean(challenge?.siteKey) && !challengeToken)} type="button" onClick={handlePasskeyLogin}>
-            <Fingerprint size={18} />使用 Passkey 登录
-          </button>
-          </>}
         </form>
       </section>
     </main>
