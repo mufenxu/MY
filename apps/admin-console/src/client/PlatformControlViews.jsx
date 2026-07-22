@@ -17,6 +17,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { requestJson } from './api.js';
+import { PLATFORM_BRAND_ICON } from './brand.js';
 import { ConfirmDialog, SelectControl } from './UiControls.jsx';
 
 const ROLE_LEVELS = { viewer: 1, operator: 2, super_admin: 3 };
@@ -442,7 +443,7 @@ export function PublicStatusView() {
   const OverallIcon = meta.icon;
   return (
     <main className="public-status-page">
-      <header className="public-status-header"><a href="/" className="public-brand-mark" aria-label="返回管理控制台">MY</a><div><strong>{data?.platformName || 'MY Platform'}</strong><span>服务状态</span></div></header>
+      <header className="public-status-header"><a href="/" className="public-brand-mark" aria-label="返回管理控制台"><img src={PLATFORM_BRAND_ICON} alt="" /></a><div><strong>{data?.platformName || 'MY Platform'}</strong><span>服务状态</span></div></header>
       <section className={`public-overall-status ${meta.className}`}>
         <OverallIcon size={28} />
         <div><h1>{meta.label}</h1><p>{data?.stale ? '部分状态数据已过期，当前结论可能不完整。' : '状态来自平台实时健康检查，不使用人工覆盖。'}</p></div>

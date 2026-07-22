@@ -54,6 +54,7 @@ import {
 } from 'lucide-react';
 import { isPlainInternalNavigation } from './navigation.js';
 import { requestJson } from './api.js';
+import { PLATFORM_BRAND_ICON } from './brand.js';
 import { ConfirmDialog } from './UiControls.jsx';
 import AutomationView from './AutomationView.jsx';
 import NotificationServiceView from './NotificationServiceView.jsx';
@@ -356,7 +357,9 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
 
       <section className="login-panel" aria-labelledby="login-title">
         <div className="login-brand">
-          <span className="brand-mark glowing-pulse" aria-hidden="true">M</span>
+          <span className="brand-mark" aria-hidden="true">
+            <img src={PLATFORM_BRAND_ICON} alt="" />
+          </span>
           <span>
             <strong>MY PLATFORM</strong>
             <small>统一服务控制台 · UNIFIED CONSOLE</small>
@@ -614,7 +617,9 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
 function LoadingScreen() {
   return (
     <main className="loading-screen">
-      <span className="brand-mark">统</span>
+      <span className="brand-mark" aria-hidden="true">
+        <img src={PLATFORM_BRAND_ICON} alt="" />
+      </span>
       <div>
         <strong>统一服务控制台</strong>
         <span><LoaderCircle className="spin" size={15} /> 正在连接服务</span>
