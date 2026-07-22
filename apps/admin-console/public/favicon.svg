@@ -1,47 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
   <defs>
-    <!-- 高对比度阴影 -->
-    <filter id="badge-shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#1F1D1B" flood-opacity="0.15" />
-    </filter>
-
-    <!-- 饱满三色极光渐变 -->
-    <linearGradient id="aurora-gold-vivid" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FFB703" />
-      <stop offset="100%" stop-color="#D97724" />
+    <linearGradient id="gold" x1="0" y1="20" x2="0" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB703" />
+      <stop offset="1" stop-color="#D97724" />
     </linearGradient>
-
-    <linearGradient id="aurora-emerald-vivid" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#34D399" />
-      <stop offset="100%" stop-color="#059669" />
+    <linearGradient id="green" x1="0" y1="20" x2="0" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34D399" />
+      <stop offset="1" stop-color="#059669" />
     </linearGradient>
-
-    <linearGradient id="aurora-purple-vivid" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#C084FC" />
-      <stop offset="100%" stop-color="#6366F1" />
+    <linearGradient id="violet" x1="28" y1="24" x2="100" y2="92" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C084FC" />
+      <stop offset="1" stop-color="#6366F1" />
     </linearGradient>
-
-    <linearGradient id="aurora-orange-vivid" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#F59E0B" />
-      <stop offset="100%" stop-color="#EF4444" />
+    <linearGradient id="orange" x1="54" y1="20" x2="76" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F59E0B" />
+      <stop offset="1" stop-color="#EF4444" />
     </linearGradient>
   </defs>
-
-  <!-- 纯白软圆角 Squircle 垫片 -->
-  <rect x="6" y="6" width="116" height="116" rx="32" fill="#FFFFFF" stroke="rgba(230, 224, 215, 0.95)" stroke-width="3" filter="url(#badge-shadow)" />
-
-  <!-- 标签页专属：极简高辨识度 3D 极光云环 M 标志 -->
-  <g transform="translate(64, 64)">
-    <!-- 左立柱：日落金 -->
-    <rect x="-38" y="-28" width="18" height="56" rx="9" fill="url(#aurora-gold-vivid)" />
-    
-    <!-- 右立柱：翡翠绿 -->
-    <rect x="20" y="-28" width="18" height="56" rx="9" fill="url(#aurora-emerald-vivid)" />
-
-    <!-- 中央极光 V 字云环拱桥 -->
-    <path d="M -26 -16 L 0 20 L 26 -16 L 14 -24 L 0 0 L -14 -24 Z" fill="url(#aurora-purple-vivid)" />
-
-    <!-- 顶部高亮能量光球 -->
-    <circle cx="0" cy="-28" r="10" fill="url(#aurora-orange-vivid)" stroke="#FFFFFF" stroke-width="3" />
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <rect x="18" y="37" width="19" height="60" rx="9.5" fill="url(#gold)" />
+    <rect x="91" y="37" width="19" height="60" rx="9.5" fill="url(#green)" />
+    <path d="M37 39L64 76L91 39L78 30L64 55L50 30Z" fill="url(#violet)" />
+    <circle cx="64" cy="31" r="10" fill="url(#orange)" />
   </g>
 </svg>
