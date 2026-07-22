@@ -23,6 +23,14 @@ class TuyaService {
     get baseUrl() { return secretService.getSecretSync('TUYA_ENDPOINT') || 'https://openapi.tuyacn.com'; }
     get deviceId() { return secretService.getSecretSync('TUYA_DEVICE_ID'); }
 
+    assertCredentials() {
+        if (!this.accessKey || !this.secretKey) {
+            const error = new Error('Tuya API credentials are not configured');
+            error.statusCode = 503;
+            throw error;
+        }
+    }
+
     /**
      * Generate Tuya 2.0 Signature
      */
@@ -37,6 +45,7 @@ class TuyaService {
      * Get/Refresh Access Token
      */
     async getAccessToken() {
+        this.assertCredentials();
         if (this.token && Date.now() < this.tokenExpireTime) {
             return this.token;
         }
@@ -88,7 +97,8 @@ class TuyaService {
     /**
      * Generic Tuya Request
      */
-    async request(method, path, body = null) {
+    async request(method, path, body = null, options = {}) {
+        const retryAuth = options.retryAuth !== false;
         const accessToken = await this.getAccessToken();
         const timestamp = Date.now();
         const sign = this.calcSign(method, path, body || '', timestamp, accessToken);
@@ -116,6 +126,12 @@ class TuyaService {
 
             if (res.data && !res.data.success) {
                 logger.warn(`Tuya API ${method} ${path} Warning [${res.data.code}]: ${res.data.msg} (${duration}ms)`);
+                if (retryAuth && ['1010', '1011', '1400'].includes(String(res.data.code))) {
+                    this.token = null;
+                    this.tokenExpireTime = 0;
+                    logger.warn(`Tuya API ${method} ${path}: refreshing rejected access token once`);
+                    return this.request(method, path, body, { retryAuth: false });
+                }
             } else {
                 logger.info(`Tuya API ${method} ${path} Success (${duration}ms)`);
             }
@@ -134,9 +150,6 @@ class TuyaService {
     async getDeviceInfo(deviceId = this.deviceId) {
         if (!deviceId) throw new Error('Device ID not provided');
         const res = await this.request('GET', `/v1.0/devices/${deviceId}`);
-        if (res.success) {
-            logger.info(`Tuya Device [${deviceId}] Raw Data: ${JSON.stringify(res.result.status)}`);
-        }
         return res;
     }
 

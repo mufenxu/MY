@@ -63,8 +63,8 @@
               catchtouchstart="onDefaultSliderTouch" 
               catchtouchmove="onDefaultSliderTouch">
           <view class="slider-track">
-            <view class="slider-fill" style="width: {{(heatSchedule.defaultTemp - 20) / (55 - 20) * 100}}%"></view>
-            <view class="slider-handle" style="left: {{(heatSchedule.defaultTemp - 20) / (55 - 20) * 100}}%"></view>
+            <view class="slider-fill" style="width: {{(heatSchedule.defaultTemp - 15) / (60 - 15) * 100}}%"></view>
+            <view class="slider-handle" style="left: {{(heatSchedule.defaultTemp - 15) / (60 - 15) * 100}}%"></view>
           </view>
         </view>
       </view>
@@ -131,14 +131,14 @@
               catchtouchstart="onSliderTouchStart" 
               catchtouchmove="onSliderTouchMove">
           <view class="slider-track">
-            <view class="slider-fill" style="width: {{(editingPeriod.targetTemp - 20) / (55 - 20) * 100}}%"></view>
-            <view class="slider-handle" style="left: {{(editingPeriod.targetTemp - 20) / (55 - 20) * 100}}%"></view>
+            <view class="slider-fill" style="width: {{(editingPeriod.targetTemp - 15) / (60 - 15) * 100}}%"></view>
+            <view class="slider-handle" style="left: {{(editingPeriod.targetTemp - 15) / (60 - 15) * 100}}%"></view>
           </view>
         </view>
 
         <view class="slider-range">
-           <text>20°C</text>
-           <text>55°C</text>
+           <text>15°C</text>
+           <text>60°C</text>
         </view>
       </view>
     </view>

@@ -7,6 +7,7 @@
 const TuyaDeviceLog = require('../models/TuyaDeviceLog');
 const logger = require('../utils/logger');
 const dayjs = require('dayjs');
+const secretService = require('../services/secretService');
 
 const tuyaEnergyController = {
 
@@ -20,13 +21,10 @@ const tuyaEnergyController = {
             const startOfDay = dayjs().startOf('day').toDate();
             const endOfDay = dayjs().endOf('day').toDate();
 
-            // 默认使用的设备ID，如果支持多设备可以从 query 或 user context 获取
-            // 这里为了简单，先查询最近活跃的一个设备
-            const latestLog = await TuyaDeviceLog.findOne().sort({ timestamp: -1 });
-            if (!latestLog) {
-                return res.json({ success: true, result: { dailyConsumption: '0.00', estimatedCost: '0.00' } });
+            const deviceId = secretService.getSecretSync('TUYA_DEVICE_ID');
+            if (!deviceId) {
+                return res.status(503).json({ success: false, msg: 'Tuya heat pump device is not configured' });
             }
-            const deviceId = latestLog.deviceId;
 
             // 获取今日所有相关日志 (电压、电流、开关)，并按时间正序排列
             const logs = await TuyaDeviceLog.find({
@@ -64,12 +62,10 @@ const tuyaEnergyController = {
      */
     async getWeeklyEnergyStats(req, res) {
         try {
-            // 获取最近活跃的一个设备
-            const latestLog = await TuyaDeviceLog.findOne().sort({ timestamp: -1 });
-            if (!latestLog) {
-                return res.json({ success: true, result: [] });
+            const deviceId = secretService.getSecretSync('TUYA_DEVICE_ID');
+            if (!deviceId) {
+                return res.status(503).json({ success: false, msg: 'Tuya heat pump device is not configured' });
             }
-            const deviceId = latestLog.deviceId;
 
             const weeklyData = [];
 

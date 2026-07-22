@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const tuyaAutomationService = require('../services/tuyaAutomationService');
 // ... other imports
@@ -12,6 +13,98 @@ const authorizeAccess = require('../middleware/authorizeAccess');
 const TuyaDevice = require('../models/TuyaDevice');
 const TuyaDeviceLog = require('../models/TuyaDeviceLog');
 const secretService = require('../services/secretService');
+const logger = require('../utils/logger');
+const {
+    commandValuesMatch,
+    normalizeAutomationUpdate,
+    validateHeatPumpCommands,
+} = require('../utils/tuyaHeatPump');
+
+const STATUS_CACHE_TTL_MS = 60000;
+const COMMAND_CONFIRM_TIMEOUT_MS = 30000;
+
+function getConfiguredDeviceId() {
+    const deviceId = secretService.getSecretSync('TUYA_DEVICE_ID');
+    if (!deviceId) {
+        const error = new Error('Tuya heat pump device is not configured');
+        error.statusCode = 503;
+        throw error;
+    }
+    return deviceId;
+}
+
+function commandForResponse(lastCommand) {
+    if (!lastCommand?.commandId) return null;
+    return {
+        commandId: lastCommand.commandId,
+        commands: (lastCommand.commands || []).map((item) => ({ code: item.code, value: item.value })),
+        state: lastCommand.state,
+        issuedAt: lastCommand.issuedAt,
+        acceptedAt: lastCommand.acceptedAt,
+        confirmedAt: lastCommand.confirmedAt,
+        error: lastCommand.error || null,
+    };
+}
+
+async function refreshCommandState(device, status = device?.status) {
+    const lastCommand = device?.lastCommand;
+    if (!lastCommand?.commandId || !['pending', 'accepted', 'timed_out'].includes(lastCommand.state)) {
+        return commandForResponse(lastCommand);
+    }
+
+    let state = lastCommand.state;
+    const update = {};
+    if (commandValuesMatch(status, lastCommand.commands)) {
+        state = 'confirmed';
+        update['lastCommand.state'] = state;
+        update['lastCommand.confirmedAt'] = new Date();
+        update['lastCommand.error'] = null;
+    } else if (Date.now() - new Date(lastCommand.issuedAt).getTime() > COMMAND_CONFIRM_TIMEOUT_MS) {
+        state = 'timed_out';
+        update['lastCommand.state'] = state;
+        update['lastCommand.error'] = 'Device state was not confirmed within 30 seconds';
+    }
+
+    if (Object.keys(update).length > 0) {
+        await TuyaDevice.updateOne(
+            { deviceId: device.deviceId, 'lastCommand.commandId': lastCommand.commandId },
+            { $set: update },
+        );
+        Object.assign(lastCommand, {
+            state,
+            confirmedAt: update['lastCommand.confirmedAt'] || lastCommand.confirmedAt,
+            error: update['lastCommand.error'] ?? lastCommand.error,
+        });
+    }
+    return commandForResponse(lastCommand);
+}
+
+async function recordLastCommand(deviceId, command) {
+    try {
+        await TuyaDevice.findOneAndUpdate(
+            { deviceId },
+            { $set: { lastCommand: command } },
+            { upsert: true },
+        );
+    } catch (error) {
+        logger.error('Unable to persist Tuya command state:', error.message);
+    }
+}
+
+async function transitionLastCommand(deviceId, commandId, fromStates, update) {
+    try {
+        await TuyaDevice.updateOne(
+            {
+                deviceId,
+                'lastCommand.commandId': commandId,
+                'lastCommand.state': { $in: fromStates },
+            },
+            { $set: update },
+        );
+    } catch (error) {
+        logger.error('Unable to update Tuya command state:', error.message);
+    }
+}
 
 const tuyaViewAccess = authorizeAccess({
     roles: ['admin', 'super_admin'],
@@ -51,48 +144,82 @@ router.get('/devices/:deviceId/status', auth.verifyToken, tuyaViewAccess, async 
  */
 router.get('/heat-pump/status', auth.verifyToken, heatPumpViewAccess, async (req, res) => {
     try {
-        // 优先从本地数据库获取最新状态
-        const deviceId = secretService.getSecretSync('TUYA_DEVICE_ID');
+        const deviceId = getConfiguredDeviceId();
         const device = await TuyaDevice.findOne({ deviceId });
-
-        // 智能缓存策略:
-        // 1. 如果 WebSocket 长连接正常 (tuyaMessageService.connected)，完全信任本地数据库 (因为云端有变更会自动推过来)
-        // 2. 如果 WebSocket 断开，则退化为 1 分钟 TTL 缓存机制
-
         const wsStatus = tuyaMessageService.getStatus();
-        const isWsConnected = wsStatus.connected;
-        const isCacheValid = device && (Date.now() - new Date(device.updatedAt).getTime() < 60000);
+        const lastStatusAt = device?.lastStatusAt || device?.lastMessageAt;
+        const statusAgeMs = lastStatusAt ? Date.now() - new Date(lastStatusAt).getTime() : Number.POSITIVE_INFINITY;
+        const isCacheValid = device && statusAgeMs < STATUS_CACHE_TTL_MS;
+        const forceRefresh = req.query.fresh === '1';
 
-        if (device && (isWsConnected || isCacheValid)) {
-            // 返回本地缓存
+        if (isCacheValid && !forceRefresh) {
+            const messageAgeMs = device.lastMessageAt
+                ? Date.now() - new Date(device.lastMessageAt).getTime()
+                : null;
             return res.json({
                 success: true,
                 result: {
                     online: device.online,
                     status: device.status,
-                    source: isWsConnected ? 'realtime-push' : 'cache'
+                    source: wsStatus.connected && messageAgeMs !== null && messageAgeMs < STATUS_CACHE_TTL_MS
+                        ? 'realtime-push'
+                        : 'cache',
+                    lastStatusAt,
+                    messageConnection: wsStatus,
+                    lastCommand: await refreshCommandState(device),
                 }
             });
         }
 
-        // 如果长连接断了 且 本地数据也旧了，才主动去涂鸦云拉取
-        const result = await tuyaService.getDeviceInfo();
+        const result = await tuyaService.getDeviceInfo(deviceId);
 
         if (result.success) {
-            await TuyaDevice.findOneAndUpdate(
+            const now = new Date();
+            const updatedDevice = await TuyaDevice.findOneAndUpdate(
                 { deviceId },
                 {
                     online: result.result.online,
                     status: result.result.status,
+                    lastStatusAt: now,
+                    lastCloudSyncAt: now,
                     updatedAt: Date.now()
                 },
-                { upsert: true }
+                { upsert: true, new: true }
             );
+            result.result.source = 'cloud-api';
+            result.result.lastStatusAt = now;
+            result.result.messageConnection = wsStatus;
+            result.result.lastCommand = await refreshCommandState(updatedDevice, result.result.status);
         }
 
         res.json(result);
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(error.statusCode || 500).json({ success: false, error: error.message });
+    }
+});
+
+router.get('/heat-pump/health', auth.verifyToken, heatPumpViewAccess, async (req, res) => {
+    try {
+        const deviceId = getConfiguredDeviceId();
+        const device = await TuyaDevice.findOne({ deviceId }).select(
+            'deviceId online lastMessageAt lastStatusAt lastCloudSyncAt lastCommand.state',
+        );
+        const now = Date.now();
+        res.json({
+            success: true,
+            result: {
+                apiConfigured: Boolean(tuyaService.accessKey && tuyaService.secretKey && tuyaService.baseUrl),
+                deviceConfigured: true,
+                deviceOnline: device?.online ?? null,
+                lastMessageAgeMs: device?.lastMessageAt ? now - new Date(device.lastMessageAt).getTime() : null,
+                lastStatusAgeMs: device?.lastStatusAt ? now - new Date(device.lastStatusAt).getTime() : null,
+                lastCloudSyncAt: device?.lastCloudSyncAt || null,
+                lastCommandState: device?.lastCommand?.state || null,
+                messageConnection: tuyaMessageService.getStatus(),
+            },
+        });
+    } catch (error) {
+        res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
 });
 
@@ -108,10 +235,14 @@ router.post('/devices/:deviceId/commands', auth.verifyToken, tuyaManageAccess, a
             return res.status(400).json({ success: false, error: 'Invalid commands format' });
         }
 
-        const result = await tuyaService.sendCommand(deviceId, commands);
+        const configuredDeviceId = secretService.getSecretSync('TUYA_DEVICE_ID');
+        const validatedCommands = deviceId === configuredDeviceId
+            ? validateHeatPumpCommands(commands)
+            : commands;
+        const result = await tuyaService.sendCommand(deviceId, validatedCommands);
         res.json(result);
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
 });
 
@@ -119,12 +250,46 @@ router.post('/devices/:deviceId/commands', auth.verifyToken, tuyaManageAccess, a
  * 快捷控制热泵
  */
 router.post('/heat-pump/control', auth.verifyToken, heatPumpManageAccess, async (req, res) => {
+    let deviceId;
+    let commandId;
+    let commands = [];
+    let issuedAt;
     try {
-        const { commands } = req.body;
-        const result = await tuyaService.sendCommand(undefined, commands);
-        res.json(result);
+        deviceId = getConfiguredDeviceId();
+        commands = validateHeatPumpCommands(req.body?.commands);
+        commandId = crypto.randomUUID();
+        issuedAt = new Date();
+        await recordLastCommand(deviceId, {
+            commandId,
+            commands,
+            state: 'pending',
+            issuedAt,
+        });
+
+        const result = await tuyaService.sendCommand(deviceId, commands);
+        if (!result?.success) {
+            const error = [result?.code, result?.msg].filter(Boolean).join(': ') || 'Tuya rejected the command';
+            await transitionLastCommand(deviceId, commandId, ['pending', 'accepted'], {
+                'lastCommand.state': 'rejected',
+                'lastCommand.error': error,
+            });
+            return res.status(502).json({ ...result, commandId, commandState: 'rejected' });
+        }
+
+        await transitionLastCommand(deviceId, commandId, ['pending', 'accepted'], {
+            'lastCommand.state': 'accepted',
+            'lastCommand.acceptedAt': new Date(),
+            'lastCommand.error': null,
+        });
+        res.json({ ...result, commandId, commandState: 'accepted' });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        if (deviceId && commandId) {
+            await transitionLastCommand(deviceId, commandId, ['pending', 'accepted'], {
+                'lastCommand.state': 'rejected',
+                'lastCommand.error': error.message,
+            });
+        }
+        res.status(error.statusCode || 502).json({ success: false, error: error.message, commandId });
     }
 });
 
@@ -144,11 +309,10 @@ router.get('/devices/:deviceId/automation', auth.verifyToken, tuyaViewAccess, as
 router.post('/devices/:deviceId/automation', auth.verifyToken, tuyaManageAccess, async (req, res) => {
     try {
         const { deviceId } = req.params;
-        const { smartSchedule, otc } = req.body;
-
-        const update = {};
-        if (smartSchedule) update['automation.smartSchedule'] = smartSchedule;
-        if (otc) update['automation.otc'] = otc;
+        const normalized = normalizeAutomationUpdate(req.body);
+        const update = Object.fromEntries(
+            Object.entries(normalized).map(([key, value]) => [`automation.${key}`, value]),
+        );
 
         await TuyaDevice.findOneAndUpdate(
             { deviceId },
@@ -157,11 +321,13 @@ router.post('/devices/:deviceId/automation', auth.verifyToken, tuyaManageAccess,
         );
 
         // 立即触发自动化
-        tuyaAutomationService.triggerNow();
+        tuyaAutomationService.triggerNow().catch((error) => {
+            logger.error('Immediate Tuya automation run failed:', error.message);
+        });
 
         res.json({ success: true });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
 });
 
@@ -170,7 +336,7 @@ router.post('/devices/:deviceId/automation', auth.verifyToken, tuyaManageAccess,
  */
 router.get('/heat-pump/automation', auth.verifyToken, heatPumpViewAccess, async (req, res) => {
     try {
-        const deviceId = secretService.getSecretSync('TUYA_DEVICE_ID');
+        const deviceId = getConfiguredDeviceId();
         const device = await TuyaDevice.findOne({ deviceId });
         res.json({ success: true, automation: device ? device.automation : {} });
     } catch (error) {
@@ -180,14 +346,11 @@ router.get('/heat-pump/automation', auth.verifyToken, heatPumpViewAccess, async 
 
 router.post('/heat-pump/automation', auth.verifyToken, heatPumpManageAccess, async (req, res) => {
     try {
-        const deviceId = secretService.getSecretSync('TUYA_DEVICE_ID');
-        const { smartSchedule, otc, location, heatSchedule } = req.body;
-
-        const update = {};
-        if (smartSchedule) update['automation.smartSchedule'] = smartSchedule;
-        if (otc) update['automation.otc'] = otc;
-        if (location) update['automation.location'] = location;
-        if (heatSchedule) update['automation.heatSchedule'] = heatSchedule;
+        const deviceId = getConfiguredDeviceId();
+        const normalized = normalizeAutomationUpdate(req.body);
+        const update = Object.fromEntries(
+            Object.entries(normalized).map(([key, value]) => [`automation.${key}`, value]),
+        );
 
         await TuyaDevice.findOneAndUpdate(
             { deviceId },
@@ -195,12 +358,17 @@ router.post('/heat-pump/automation', auth.verifyToken, heatPumpManageAccess, asy
             { upsert: true }
         );
 
-        // 立即触发自动化
-        tuyaAutomationService.triggerNow();
+        let automationRun;
+        try {
+            automationRun = await tuyaAutomationService.triggerNow();
+        } catch (error) {
+            logger.error('Immediate Tuya automation run failed:', error.message);
+            automationRun = { success: false, error: 'initial-evaluation-failed' };
+        }
 
-        res.json({ success: true });
+        res.json({ success: true, automationRun });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
 });
 

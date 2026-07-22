@@ -64,6 +64,17 @@ Page({
     },
 
     async saveConfig() {
+        const temperatures = [
+            this.data.smartSchedule.valleyTemp,
+            this.data.smartSchedule.peakTemp,
+            this.data.heatSchedule.defaultTemp,
+            ...this.data.heatSchedule.periods.map(period => period.targetTemp)
+        ];
+        if (temperatures.some(temp => !Number.isInteger(temp) || temp < 15 || temp > 60)) {
+            wx.showToast({ title: '温度范围: 15-60°C', icon: 'none' });
+            return;
+        }
+
         wx.showLoading({ title: '保存中...' });
         try {
             const data = {
@@ -169,8 +180,8 @@ Page({
             let percent = x / rect.width;
             percent = Math.max(0, Math.min(1, percent));
 
-            const min = 20;
-            const max = 55;
+            const min = 15;
+            const max = 60;
             const val = Math.round(min + (max - min) * percent);
 
             // 只有数值变化时才更新，防止频繁 setData
@@ -196,8 +207,8 @@ Page({
             wx.showToast({ title: '请选择时间', icon: 'none' });
             return;
         }
-        if (editingPeriod.targetTemp < 20 || editingPeriod.targetTemp > 55) {
-            wx.showToast({ title: '温度范围: 20-55°C', icon: 'none' });
+        if (editingPeriod.targetTemp < 15 || editingPeriod.targetTemp > 60) {
+            wx.showToast({ title: '温度范围: 15-60°C', icon: 'none' });
             return;
         }
 

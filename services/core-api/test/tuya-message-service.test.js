@@ -6,6 +6,7 @@ process.env.CORE_JWT_SECRET = process.env.CORE_JWT_SECRET || 'tuya-message-secur
 
 const {
     TuyaMessageService,
+    extractBizMessage,
     resolveMessageConfig,
 } = require('../services/tuyaMessageService');
 
@@ -43,6 +44,23 @@ test('Tuya message configuration validates region and forbids test channel in pr
         /forbidden in production/,
     );
     assert.throws(() => resolveMessageConfig({ TUYA_MESSAGE_REGION: 'unknown' }), /Unsupported/);
+});
+
+test('Tuya legacy protocol 4 status reports are recognized and scoped to the device', () => {
+    const payload = {
+        protocol: 4,
+        data: {
+            devId: 'device-legacy',
+            status: [{ code: 'switch', value: true }],
+        },
+    };
+    assert.deepEqual(extractBizMessage(payload), {
+        bizCode: 'statusReport',
+        bizData: payload.data,
+    });
+
+    const service = new TuyaMessageService({ messageConfig: messageConfig() });
+    assert.equal(service._getQueueKey(payload), 'device-legacy');
 });
 
 test('Tuya websocket enables certificate verification', () => {

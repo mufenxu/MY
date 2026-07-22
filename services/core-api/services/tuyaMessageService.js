@@ -15,6 +15,7 @@ const TuyaDeviceLog = require('../models/TuyaDeviceLog');
 const TuyaMessageReceipt = require('../models/TuyaMessageReceipt');
 const logger = require('../utils/logger');
 const secretService = require('./secretService');
+const { commandValuesMatch } = require('../utils/tuyaHeatPump');
 
 // ========================= 配置 =========================
 
@@ -70,6 +71,20 @@ function isDuplicateKeyError(error) {
 
 function receiptId(messageId) {
     return crypto.createHash('sha256').update(String(messageId)).digest('hex');
+}
+
+function extractBizMessage(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    if (payload.bizCode && payload.data && typeof payload.data === 'object') {
+        return { bizCode: payload.bizCode, bizData: payload.data };
+    }
+    if (payload.data?.bizCode && payload.data?.bizData) {
+        return { bizCode: payload.data.bizCode, bizData: payload.data.bizData };
+    }
+    if (Number(payload.protocol) === 4 && payload.data && typeof payload.data === 'object') {
+        return { bizCode: 'statusReport', bizData: payload.data };
+    }
+    return null;
 }
 
 function createMongoMessageDeduplicator({
@@ -352,8 +367,7 @@ class TuyaMessageService extends EventEmitter {
     }
 
     _getQueueKey(payload) {
-        const bizData = payload?.bizCode ? payload.data : payload?.data?.bizData;
-        return String(bizData?.devId || '__unscoped__');
+        return String(extractBizMessage(payload)?.bizData?.devId || '__unscoped__');
     }
 
     _enqueueMessage(envelope) {
@@ -449,20 +463,12 @@ class TuyaMessageService extends EventEmitter {
         // payload = { data: { bizCode: '...', bizData: { ... } }, protocol: 20, ... }
         // We need to handle both direct structure (if V1) and nested structure (V2) safely.
 
-        let bizCode, bizData;
-
-        if (payload.bizCode) {
-            // V1 or simplified structure
-            bizCode = payload.bizCode;
-            bizData = payload.data;
-        } else if (payload.data && payload.data.bizCode) {
-            // V2 structure (as seen in logs)
-            bizCode = payload.data.bizCode;
-            bizData = payload.data.bizData;
-        } else {
+        const message = extractBizMessage(payload);
+        if (!message) {
             logger.debug('Unknown Tuya payload structure', JSON.stringify(payload).substring(0, 200));
             return;
         }
+        const { bizCode, bizData } = message;
 
         if (!bizData) return;
 
@@ -540,6 +546,16 @@ class TuyaMessageService extends EventEmitter {
 
             device.updatedAt = now;
             device.lastMessageAt = now;
+            device.lastStatusAt = now;
+            device.online = true;
+            if (
+                ['pending', 'accepted'].includes(device.lastCommand?.state)
+                && commandValuesMatch(device.status, device.lastCommand.commands)
+            ) {
+                device.lastCommand.state = 'confirmed';
+                device.lastCommand.confirmedAt = now;
+                device.lastCommand.error = undefined;
+            }
             await device.save(session ? { session } : undefined);
 
             if (logDocs.length > 0) {
@@ -563,7 +579,7 @@ class TuyaMessageService extends EventEmitter {
         try {
             await TuyaDevice.findOneAndUpdate(
                 { deviceId: devId },
-                { $set: { online: true, updatedAt: new Date() } },
+                { $set: { online: true, updatedAt: new Date(), lastMessageAt: new Date() } },
                 { upsert: true, ...(session ? { session } : {}) }
             );
             return { name: 'deviceOnline', payload: { devId } };
@@ -582,7 +598,7 @@ class TuyaMessageService extends EventEmitter {
         try {
             await TuyaDevice.findOneAndUpdate(
                 { deviceId: devId },
-                { $set: { online: false, updatedAt: new Date() } },
+                { $set: { online: false, updatedAt: new Date(), lastMessageAt: new Date() } },
                 { upsert: true, ...(session ? { session } : {}) }
             );
             return { name: 'deviceOffline', payload: { devId } };
@@ -645,7 +661,10 @@ class TuyaMessageService extends EventEmitter {
     getStatus() {
         return {
             connected: this.isConnected,
-            retryTimes: this.retryTimes
+            retryTimes: this.retryTimes,
+            region: this.region,
+            channel: this.env,
+            queued: this.totalQueued
         };
     }
 }
@@ -653,3 +672,4 @@ class TuyaMessageService extends EventEmitter {
 module.exports = new TuyaMessageService();
 module.exports.TuyaMessageService = TuyaMessageService;
 module.exports.resolveMessageConfig = resolveMessageConfig;
+module.exports.extractBizMessage = extractBizMessage;

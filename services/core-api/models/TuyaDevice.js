@@ -9,7 +9,25 @@ const tuyaDeviceSchema = new mongoose.Schema({
         value: mongoose.Schema.Types.Mixed,
         updatedAt: { type: Date, default: Date.now }
     }],
-    lastMessageAt: { type: Date, default: Date.now },
+    lastMessageAt: { type: Date, default: null },
+    lastStatusAt: { type: Date, default: null },
+    lastCloudSyncAt: { type: Date, default: null },
+    lastCommand: {
+        commandId: String,
+        commands: [{
+            _id: false,
+            code: String,
+            value: mongoose.Schema.Types.Mixed
+        }],
+        state: {
+            type: String,
+            enum: ['pending', 'accepted', 'confirmed', 'rejected', 'timed_out']
+        },
+        issuedAt: Date,
+        acceptedAt: Date,
+        confirmedAt: Date,
+        error: String
+    },
     createdAt: { type: Number, default: Date.now },
     updatedAt: { type: Number, default: Date.now },
 
@@ -22,6 +40,7 @@ const tuyaDeviceSchema = new mongoose.Schema({
         },
         heatSchedule: {
             enabled: { type: Boolean, default: false },
+            defaultTemp: { type: Number, default: 35 },
             periods: [{
                 id: String,
                 startTime: String,  // "HH:MM"

@@ -145,13 +145,13 @@ Page({
     /**
      * 获取设备最新状态
      */
-    async fetchStatus(isSilent = false) {
+    async fetchStatus(isSilent = false, forceRefresh = false) {
         if (this._isFetchingStatus) {
             return;
         }
         // 防止控制后的数据回跳：如果距离上次下发指令不足 4 秒，暂不拉取云端数据
         // (等待云端数据一致性达成，在此期间 UI 保持乐观更新的状态)
-        if (Date.now() - (this.lastCmdTime || 0) < 4000) {
+        if (!forceRefresh && Date.now() - (this.lastCmdTime || 0) < 4000) {
             return;
         }
 
@@ -159,7 +159,8 @@ Page({
         if (!isSilent) wx.showLoading({ title: '同步中...' });
 
         try {
-            const res = await request('/tuya/heat-pump/status', 'GET');
+            const statusPath = forceRefresh ? '/tuya/heat-pump/status?fresh=1' : '/tuya/heat-pump/status';
+            const res = await request(statusPath, 'GET');
             if (!this._isAlive) return;
 
             if (res && res.success && res.result) {
@@ -432,7 +433,7 @@ Page({
         const nextTemp = oldTemp + delta;
 
         // 温度范围限制
-        if (nextTemp < 15 || nextTemp > 55) {
+        if (nextTemp < 15 || nextTemp > 60) {
             wx.showToast({ title: '超出调节范围', icon: 'none' });
             return;
         }
@@ -459,8 +460,8 @@ Page({
         const oldTemp = this.data.targetTankTemp || 50;
         const nextTemp = oldTemp + delta;
 
-        // 范围限制 (通常水箱温度范围 10~55)
-        if (nextTemp < 10 || nextTemp > 55) {
+        // Device DP specification: SET_TANK_TEMP supports 20-60 degrees Celsius.
+        if (nextTemp < 20 || nextTemp > 60) {
             wx.showToast({ title: '超出调节范围', icon: 'none' });
             return;
         }
@@ -523,17 +524,18 @@ Page({
             const res = await request('/tuya/heat-pump/control', 'POST', { commands });
 
             if (res && res.success) {
+                this.lastCommandId = res.commandId || null;
                 if (loadingText) wx.showToast({ title: '操作成功', icon: 'success' });
-                // 操作成功后延迟 2 秒默默刷新一次，确保云端状态最终一致
+                // Force one cloud read after the device has had time to apply the command.
                 if (this._delayedRefreshTimer) {
                     clearTimeout(this._delayedRefreshTimer);
                 }
                 this._delayedRefreshTimer = setTimeout(() => {
                     this._delayedRefreshTimer = null;
                     if (this._isAlive) {
-                        this.fetchStatus(true);
+                        this.fetchStatus(true, true);
                     }
-                }, 2000);
+                }, 4200);
             } else {
                 throw new Error(res.msg || '操作失败');
             }
