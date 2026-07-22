@@ -1,14 +1,17 @@
 const request = require('../../../utils/request').default;
 const logger = require('../../../utils/logger');
+const { waitForCommandConfirmation } = require('../../../utils/heatPumpCommand');
 
 Page({
     _isAlive: false,
     _isFetchingStatus: false,
     _isFetchingEnergy: false,
-    _delayedRefreshTimer: null,
+    _commandGeneration: 0,
     data: {
         powerOn: false,
         online: false,
+        controlPending: false,
+        controlPendingLabel: '',
         currentTemp: '--',
         outdoorTemp: '--',
         targetTemp: '--',
@@ -81,13 +84,23 @@ Page({
     },
 
     onHide() {
+        this._cancelPendingCommand();
         this._isAlive = false;
         this._stopPollingTimers();
     },
 
     onUnload() {
+        this._cancelPendingCommand();
         this._isAlive = false;
         this._stopPollingTimers();
+    },
+
+    _cancelPendingCommand() {
+        this._commandGeneration += 1;
+        this.lastCmdTime = 0;
+        if (this._isAlive && this.data.controlPending) {
+            this.setData({ controlPending: false, controlPendingLabel: '' });
+        }
     },
 
     _setDataIfChanged(patch) {
@@ -130,10 +143,6 @@ Page({
             clearInterval(this.energyTimer);
             this.energyTimer = null;
         }
-        if (this._delayedRefreshTimer) {
-            clearTimeout(this._delayedRefreshTimer);
-            this._delayedRefreshTimer = null;
-        }
     },
 
     onPullDownRefresh() {
@@ -149,8 +158,7 @@ Page({
         if (this._isFetchingStatus) {
             return;
         }
-        // 防止控制后的数据回跳：如果距离上次下发指令不足 4 秒，暂不拉取云端数据
-        // (等待云端数据一致性达成，在此期间 UI 保持乐观更新的状态)
+        // 指令确认流程会独立查询状态；短时间内暂停普通轮询，避免重复请求。
         if (!forceRefresh && Date.now() - (this.lastCmdTime || 0) < 4000) {
             return;
         }
@@ -175,6 +183,28 @@ Page({
         } finally {
             this._isFetchingStatus = false;
             if (!isSilent) wx.hideLoading();
+        }
+    },
+
+    async _syncStatusAfterControl() {
+        try {
+            const res = await request(
+                '/tuya/heat-pump/status?fresh=1',
+                'GET',
+                {},
+                false,
+                {
+                    showNetworkToast: false,
+                    showRateLimitModal: false,
+                    slowThreshold: 5000,
+                },
+            );
+            if (!this._isAlive || !res?.success || !res.result) return false;
+            this.parseStatus(res.result);
+            return true;
+        } catch (error) {
+            logger.warn('Sync HeatPump Status After Control Failed', error);
+            return false;
         }
     },
 
@@ -404,20 +434,15 @@ Page({
      * 切换电源
      */
     async togglePower() {
+        if (this.data.controlPending) return;
         if (!this.checkOnline()) return;
 
-        const oldState = this.data.powerOn;
-        const nextState = !oldState;
-
-        // 乐观更新: 立即更新 UI
-        this.setData({ powerOn: nextState });
+        const nextState = !this.data.powerOn;
 
         const command = [{ code: this.data.DP_POWER, value: nextState }];
-
-        // 静默发送指令
-        this.sendCommands(command, null, () => {
-            // 失败回滚
-            this.setData({ powerOn: oldState });
+        await this.sendCommands(command, {
+            pendingLabel: nextState ? '正在开机' : '正在关机',
+            successLabel: nextState ? '设备已开机' : '设备已关机',
         });
     },
 
@@ -425,12 +450,17 @@ Page({
      * 调节制热/制冷目标温度
      */
     async adjustTemp(e) {
+        if (this.data.controlPending) return;
         if (!this.checkOnline()) return;
         if (!this.data.powerOn) return;
 
         const delta = parseInt(e.currentTarget.dataset.delta);
-        const oldTemp = this.data.targetTemp;
-        const nextTemp = oldTemp + delta;
+        const currentTemp = Number(this.data.targetTemp);
+        if (!Number.isFinite(currentTemp)) {
+            wx.showToast({ title: '温度尚未同步', icon: 'none' });
+            return;
+        }
+        const nextTemp = currentTemp + delta;
 
         // 温度范围限制
         if (nextTemp < 15 || nextTemp > 60) {
@@ -438,14 +468,10 @@ Page({
             return;
         }
 
-        // 乐观更新
-        this.setData({ targetTemp: nextTemp });
-
         const command = [{ code: this.data.DP_TEMP_SET, value: nextTemp }];
-
-        this.sendCommands(command, null, () => {
-            // 失败回滚
-            this.setData({ targetTemp: oldTemp });
+        await this.sendCommands(command, {
+            pendingLabel: '正在设置温度',
+            successLabel: `已设为${nextTemp}℃`,
         });
     },
 
@@ -453,12 +479,17 @@ Page({
      * 调节设定水箱温度
      */
     async adjustTankTemp(e) {
+        if (this.data.controlPending) return;
         if (!this.checkOnline()) return;
         if (!this.data.powerOn) return;
 
         const delta = parseInt(e.currentTarget.dataset.delta);
-        const oldTemp = this.data.targetTankTemp || 50;
-        const nextTemp = oldTemp + delta;
+        const currentTemp = Number(this.data.targetTankTemp);
+        if (!Number.isFinite(currentTemp)) {
+            wx.showToast({ title: '水箱温度尚未同步', icon: 'none' });
+            return;
+        }
+        const nextTemp = currentTemp + delta;
 
         // Device DP specification: SET_TANK_TEMP supports 20-60 degrees Celsius.
         if (nextTemp < 20 || nextTemp > 60) {
@@ -466,14 +497,10 @@ Page({
             return;
         }
 
-        // 乐观更新
-        this.setData({ targetTankTemp: nextTemp });
-
         const command = [{ code: this.data.DP_SET_TANK, value: nextTemp }];
-
-        this.sendCommands(command, null, () => {
-            // 失败回滚
-            this.setData({ targetTankTemp: oldTemp });
+        await this.sendCommands(command, {
+            pendingLabel: '正在设置水箱',
+            successLabel: `水箱${nextTemp}℃`,
         });
     },
 
@@ -481,70 +508,89 @@ Page({
      * 设置模式
      */
     async setMode(e) {
+        if (this.data.controlPending) return;
         if (!this.checkOnline()) return;
         if (!this.data.powerOn) return;
 
         const newMode = e.currentTarget.dataset.mode;
         const oldMode = this.data.mode;
-        const oldLabel = this.data.modeLabel;
 
         if (newMode === oldMode) return;
 
-        // 乐观更新
         const m = this.data.modes.find(m => m.value === newMode);
-        this.setData({
-            mode: newMode,
-            modeLabel: m ? m.label : '未知'
-        });
-
         const command = [{ code: this.data.DP_MODE, value: newMode }];
-        this.sendCommands(command, null, () => {
-            // 失败回滚
-            this.setData({
-                mode: oldMode,
-                modeLabel: oldLabel
-            });
+        await this.sendCommands(command, {
+            pendingLabel: '正在切换模式',
+            successLabel: m ? `已切换${m.label}` : '模式已切换',
         });
     },
 
     /**
-     * 统一下发指令 (支持乐观更新的回滚)
+     * 下发指令后等待设备 DP 状态确认，避免把云端接受误报为设备执行成功。
      * @param {Array} commands 指令集
-     * @param {String|null} loadingText 如果为空则不显示 Loading
-     * @param {Function} onError 失败回调
+     * @param {Object} options 交互文案
      */
-    async sendCommands(commands, loadingText = null, onError) {
-        // 记录最后一次控制时间，用于暂停自动轮询
-        this.lastCmdTime = Date.now();
+    async sendCommands(commands, options = {}) {
+        if (this.data.controlPending) return false;
 
-        if (loadingText) wx.showLoading({ title: loadingText });
+        const generation = this._commandGeneration + 1;
+        this._commandGeneration = generation;
+        this.lastCmdTime = Date.now();
+        const pendingLabel = options.pendingLabel || '等待设备确认';
+        const successLabel = options.successLabel || '设备已确认';
+        this.setData({ controlPending: true, controlPendingLabel: pendingLabel });
 
         try {
-            // 控制接口
             const res = await request('/tuya/heat-pump/control', 'POST', { commands });
-
-            if (res && res.success) {
-                this.lastCommandId = res.commandId || null;
-                if (loadingText) wx.showToast({ title: '操作成功', icon: 'success' });
-                // Force one cloud read after the device has had time to apply the command.
-                if (this._delayedRefreshTimer) {
-                    clearTimeout(this._delayedRefreshTimer);
-                }
-                this._delayedRefreshTimer = setTimeout(() => {
-                    this._delayedRefreshTimer = null;
-                    if (this._isAlive) {
-                        this.fetchStatus(true, true);
-                    }
-                }, 4200);
-            } else {
-                throw new Error(res.msg || '操作失败');
+            if (!res?.success || res.commandState === 'rejected') {
+                throw new Error(res?.error || res?.msg || '涂鸦未接受控制指令');
             }
+            if (!res.commandId) throw new Error('控制请求缺少确认编号');
+
+            this.lastCommandId = res.commandId;
+            await waitForCommandConfirmation({
+                commandId: res.commandId,
+                requestStatus: ({ forceRefresh }) => {
+                    const query = `?commandId=${encodeURIComponent(res.commandId)}${forceRefresh ? '&fresh=1' : ''}`;
+                    return request(
+                        `/tuya/heat-pump/status${query}`,
+                        'GET',
+                        {},
+                        false,
+                        {
+                            showNetworkToast: false,
+                            showRateLimitModal: false,
+                            slowThreshold: 5000,
+                        },
+                    );
+                },
+                onStatus: (result) => {
+                    if (this._isAlive && this._commandGeneration === generation) {
+                        this.parseStatus(result);
+                    }
+                },
+                isActive: () => this._isAlive && this._commandGeneration === generation,
+            });
+
+            if (!this._isAlive || this._commandGeneration !== generation) return false;
+            wx.showToast({ title: successLabel, icon: 'success' });
+            return true;
         } catch (err) {
             logger.error('Send Commands Failed', err);
-            wx.showToast({ title: '操作失败，正在恢复状态...', icon: 'none' });
-            if (onError) onError();
+            if (err?.state === 'cancelled' || !this._isAlive || this._commandGeneration !== generation) {
+                return false;
+            }
+
+            const synced = await this._syncStatusAfterControl();
+            const title = err?.state === 'timed_out'
+                ? (synced ? '设备未确认，状态已同步' : '设备未确认，请刷新状态')
+                : (synced ? '操作失败，状态已同步' : '操作失败，请刷新状态');
+            wx.showToast({ title, icon: 'none', duration: 2500 });
+            return false;
         } finally {
-            if (loadingText) wx.hideLoading();
+            if (this._isAlive && this._commandGeneration === generation) {
+                this.setData({ controlPending: false, controlPendingLabel: '' });
+            }
         }
     },
 

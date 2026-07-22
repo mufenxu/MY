@@ -15,7 +15,7 @@ const TuyaDeviceLog = require('../models/TuyaDeviceLog');
 const TuyaMessageReceipt = require('../models/TuyaMessageReceipt');
 const logger = require('../utils/logger');
 const secretService = require('./secretService');
-const { commandValuesMatch } = require('../utils/tuyaHeatPump');
+const { confirmAcceptedLatestCommand } = require('./tuyaCommandTracker');
 
 // ========================= 配置 =========================
 
@@ -548,14 +548,7 @@ class TuyaMessageService extends EventEmitter {
             device.lastMessageAt = now;
             device.lastStatusAt = now;
             device.online = true;
-            if (
-                ['pending', 'accepted'].includes(device.lastCommand?.state)
-                && commandValuesMatch(device.status, device.lastCommand.commands)
-            ) {
-                device.lastCommand.state = 'confirmed';
-                device.lastCommand.confirmedAt = now;
-                device.lastCommand.error = undefined;
-            }
+            confirmAcceptedLatestCommand(device, device.status, now);
             await device.save(session ? { session } : undefined);
 
             if (logDocs.length > 0) {

@@ -241,6 +241,11 @@
   background: #f1f5f9;
 }
 
+.power-btn.pending {
+  opacity: 0.62;
+  pointer-events: none;
+}
+
 .power-icon {
   width: 50rpx;
   height: 50rpx;
@@ -822,6 +827,11 @@
     inset -6rpx -6rpx 12rpx rgba(255, 255, 255, 0.9);
 }
 
+.mode-item.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 .mode-icon {
   width: 72rpx;
   height: 72rpx;
@@ -1015,6 +1025,10 @@
 
 .mini-btn:active {
   background: #f1f5f9 !important;
+}
+
+.mini-btn[disabled] {
+  opacity: 0.35;
 }
 
 .func-val {

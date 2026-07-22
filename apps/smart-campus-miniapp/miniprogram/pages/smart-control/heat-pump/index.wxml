@@ -44,9 +44,10 @@
           <text class="group-status">{{online ? '在线' : '离线'}} · {{powerOn ? '运行中' : '已关机'}}</text>
         </view>
       </view>
-      <view class="power-btn {{powerOn ? 'active' : ''}}" bindtap="togglePower">
+      <view class="power-btn {{powerOn ? 'active' : ''}} {{controlPending ? 'pending' : ''}}"
+            bindtap="togglePower" aria-disabled="{{controlPending}}">
         <view class="power-icon"></view>
-        <text>{{powerOn ? '点击关机' : '点击开机'}}</text>
+        <text>{{controlPending ? controlPendingLabel : (powerOn ? '点击关机' : '点击开机')}}</text>
       </view>
     </view>
 
@@ -57,8 +58,8 @@
       </view>
       <view class="mode-grid">
         <view wx:for="{{modes}}" wx:key="value" 
-              class="mode-item {{mode === item.value ? 'active' : ''}}" 
-              bindtap="setMode" data-mode="{{item.value}}">
+              class="mode-item {{mode === item.value ? 'active' : ''}} {{(!powerOn || controlPending) ? 'disabled' : ''}}"
+              bindtap="setMode" data-mode="{{item.value}}" aria-disabled="{{!powerOn || controlPending}}">
           <view class="mode-icon {{item.icon}}"></view>
           <text>{{item.label}}</text>
         </view>
@@ -71,12 +72,12 @@
         <text class="group-title">{{mode === 'heating' ? '制热目标设温' : (mode === 'cold' ? '制冷目标设温' : '水温调节')}}</text>
       </view>
       <view class="temp-slider-wrapper">
-        <button class="adjust-btn minus" bindtap="adjustTemp" data-delta="-1" disabled="{{!powerOn}}">-</button>
+        <button class="adjust-btn minus" bindtap="adjustTemp" data-delta="-1" disabled="{{!powerOn || controlPending}}">-</button>
         <view class="temp-val-wrapper">
            <text class="temp-val">{{targetTemp}}</text>
            <text class="unit">℃</text>
         </view>
-        <button class="adjust-btn plus" bindtap="adjustTemp" data-delta="1" disabled="{{!powerOn}}">+</button>
+        <button class="adjust-btn plus" bindtap="adjustTemp" data-delta="1" disabled="{{!powerOn || controlPending}}">+</button>
       </view>
     </view>
 
@@ -88,9 +89,9 @@
        <view class="function-item">
           <view class="func-label">设定水箱温度</view>
           <view class="func-control">
-             <button class="mini-btn" bindtap="adjustTankTemp" data-delta="-1" disabled="{{!powerOn}}">-</button>
+             <button class="mini-btn" bindtap="adjustTankTemp" data-delta="-1" disabled="{{!powerOn || controlPending}}">-</button>
              <text class="func-val">{{targetTankTemp || '--'}}℃</text>
-             <button class="mini-btn" bindtap="adjustTankTemp" data-delta="1" disabled="{{!powerOn}}">+</button>
+             <button class="mini-btn" bindtap="adjustTankTemp" data-delta="1" disabled="{{!powerOn || controlPending}}">+</button>
           </view>
        </view>
 

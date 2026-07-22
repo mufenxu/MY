@@ -1,5 +1,22 @@
 const mongoose = require('mongoose');
 
+const tuyaCommandSchema = new mongoose.Schema({
+    commandId: String,
+    commands: [{
+        _id: false,
+        code: String,
+        value: mongoose.Schema.Types.Mixed
+    }],
+    state: {
+        type: String,
+        enum: ['pending', 'accepted', 'confirmed', 'rejected', 'timed_out']
+    },
+    issuedAt: Date,
+    acceptedAt: Date,
+    confirmedAt: Date,
+    error: String
+}, { _id: false });
+
 const tuyaDeviceSchema = new mongoose.Schema({
     deviceId: { type: String, required: true, unique: true, index: true },
     name: { type: String, default: '' },
@@ -12,22 +29,8 @@ const tuyaDeviceSchema = new mongoose.Schema({
     lastMessageAt: { type: Date, default: null },
     lastStatusAt: { type: Date, default: null },
     lastCloudSyncAt: { type: Date, default: null },
-    lastCommand: {
-        commandId: String,
-        commands: [{
-            _id: false,
-            code: String,
-            value: mongoose.Schema.Types.Mixed
-        }],
-        state: {
-            type: String,
-            enum: ['pending', 'accepted', 'confirmed', 'rejected', 'timed_out']
-        },
-        issuedAt: Date,
-        acceptedAt: Date,
-        confirmedAt: Date,
-        error: String
-    },
+    lastCommand: tuyaCommandSchema,
+    recentCommands: { type: [tuyaCommandSchema], default: [] },
     createdAt: { type: Number, default: Date.now },
     updatedAt: { type: Number, default: Date.now },
 

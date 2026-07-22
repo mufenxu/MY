@@ -13,6 +13,6 @@
   "scripts": {
     "format:wxss": "npx prettier --write \"pages/**/*.wxss\" \"components/**/*.wxss\" app.wxss",
     "typecheck": "tsc --noEmit --project ../tsconfig.json",
-    "check": "npm run typecheck && node scripts/check-miniprogram.mjs"
+    "check": "npm run typecheck && node --test test/*.test.js && node scripts/check-miniprogram.mjs"
   }
 }

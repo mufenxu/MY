@@ -13,15 +13,15 @@ const authorizeAccess = require('../middleware/authorizeAccess');
 const TuyaDevice = require('../models/TuyaDevice');
 const TuyaDeviceLog = require('../models/TuyaDeviceLog');
 const secretService = require('../services/secretService');
+const { TuyaCommandTracker } = require('../services/tuyaCommandTracker');
 const logger = require('../utils/logger');
 const {
-    commandValuesMatch,
     normalizeAutomationUpdate,
     validateHeatPumpCommands,
 } = require('../utils/tuyaHeatPump');
 
 const STATUS_CACHE_TTL_MS = 60000;
-const COMMAND_CONFIRM_TIMEOUT_MS = 30000;
+const commandTracker = new TuyaCommandTracker();
 
 function getConfiguredDeviceId() {
     const deviceId = secretService.getSecretSync('TUYA_DEVICE_ID');
@@ -33,77 +33,25 @@ function getConfiguredDeviceId() {
     return deviceId;
 }
 
-function commandForResponse(lastCommand) {
-    if (!lastCommand?.commandId) return null;
-    return {
-        commandId: lastCommand.commandId,
-        commands: (lastCommand.commands || []).map((item) => ({ code: item.code, value: item.value })),
-        state: lastCommand.state,
-        issuedAt: lastCommand.issuedAt,
-        acceptedAt: lastCommand.acceptedAt,
-        confirmedAt: lastCommand.confirmedAt,
-        error: lastCommand.error || null,
-    };
+function getRequestedCommandId(req) {
+    const value = req.query.commandId;
+    if (value === undefined) return null;
+    if (typeof value !== 'string'
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+        const error = new Error('Invalid commandId');
+        error.statusCode = 400;
+        throw error;
+    }
+    return value;
 }
 
-async function refreshCommandState(device, status = device?.status) {
-    const lastCommand = device?.lastCommand;
-    if (!lastCommand?.commandId || !['pending', 'accepted', 'timed_out'].includes(lastCommand.state)) {
-        return commandForResponse(lastCommand);
-    }
-
-    let state = lastCommand.state;
-    const update = {};
-    if (commandValuesMatch(status, lastCommand.commands)) {
-        state = 'confirmed';
-        update['lastCommand.state'] = state;
-        update['lastCommand.confirmedAt'] = new Date();
-        update['lastCommand.error'] = null;
-    } else if (Date.now() - new Date(lastCommand.issuedAt).getTime() > COMMAND_CONFIRM_TIMEOUT_MS) {
-        state = 'timed_out';
-        update['lastCommand.state'] = state;
-        update['lastCommand.error'] = 'Device state was not confirmed within 30 seconds';
-    }
-
-    if (Object.keys(update).length > 0) {
-        await TuyaDevice.updateOne(
-            { deviceId: device.deviceId, 'lastCommand.commandId': lastCommand.commandId },
-            { $set: update },
-        );
-        Object.assign(lastCommand, {
-            state,
-            confirmedAt: update['lastCommand.confirmedAt'] || lastCommand.confirmedAt,
-            error: update['lastCommand.error'] ?? lastCommand.error,
-        });
-    }
-    return commandForResponse(lastCommand);
-}
-
-async function recordLastCommand(deviceId, command) {
-    try {
-        await TuyaDevice.findOneAndUpdate(
-            { deviceId },
-            { $set: { lastCommand: command } },
-            { upsert: true },
-        );
-    } catch (error) {
-        logger.error('Unable to persist Tuya command state:', error.message);
-    }
-}
-
-async function transitionLastCommand(deviceId, commandId, fromStates, update) {
-    try {
-        await TuyaDevice.updateOne(
-            {
-                deviceId,
-                'lastCommand.commandId': commandId,
-                'lastCommand.state': { $in: fromStates },
-            },
-            { $set: update },
-        );
-    } catch (error) {
-        logger.error('Unable to update Tuya command state:', error.message);
-    }
+async function getCommandStates(device, status, commandId) {
+    const lastCommand = await commandTracker.refresh(device, status);
+    if (!commandId) return { lastCommand, command: null };
+    const command = lastCommand?.commandId === commandId
+        ? lastCommand
+        : await commandTracker.refresh(device, status, commandId);
+    return { lastCommand, command };
 }
 
 const tuyaViewAccess = authorizeAccess({
@@ -145,6 +93,7 @@ router.get('/devices/:deviceId/status', auth.verifyToken, tuyaViewAccess, async 
 router.get('/heat-pump/status', auth.verifyToken, heatPumpViewAccess, async (req, res) => {
     try {
         const deviceId = getConfiguredDeviceId();
+        const commandId = getRequestedCommandId(req);
         const device = await TuyaDevice.findOne({ deviceId });
         const wsStatus = tuyaMessageService.getStatus();
         const lastStatusAt = device?.lastStatusAt || device?.lastMessageAt;
@@ -156,6 +105,7 @@ router.get('/heat-pump/status', auth.verifyToken, heatPumpViewAccess, async (req
             const messageAgeMs = device.lastMessageAt
                 ? Date.now() - new Date(device.lastMessageAt).getTime()
                 : null;
+            const commandStates = await getCommandStates(device, device.status, commandId);
             return res.json({
                 success: true,
                 result: {
@@ -166,7 +116,7 @@ router.get('/heat-pump/status', auth.verifyToken, heatPumpViewAccess, async (req
                         : 'cache',
                     lastStatusAt,
                     messageConnection: wsStatus,
-                    lastCommand: await refreshCommandState(device),
+                    ...commandStates,
                 }
             });
         }
@@ -189,7 +139,10 @@ router.get('/heat-pump/status', auth.verifyToken, heatPumpViewAccess, async (req
             result.result.source = 'cloud-api';
             result.result.lastStatusAt = now;
             result.result.messageConnection = wsStatus;
-            result.result.lastCommand = await refreshCommandState(updatedDevice, result.result.status);
+            Object.assign(
+                result.result,
+                await getCommandStates(updatedDevice, result.result.status, commandId),
+            );
         }
 
         res.json(result);
@@ -259,7 +212,7 @@ router.post('/heat-pump/control', auth.verifyToken, heatPumpManageAccess, async 
         commands = validateHeatPumpCommands(req.body?.commands);
         commandId = crypto.randomUUID();
         issuedAt = new Date();
-        await recordLastCommand(deviceId, {
+        await commandTracker.record(deviceId, {
             commandId,
             commands,
             state: 'pending',
@@ -269,24 +222,24 @@ router.post('/heat-pump/control', auth.verifyToken, heatPumpManageAccess, async 
         const result = await tuyaService.sendCommand(deviceId, commands);
         if (!result?.success) {
             const error = [result?.code, result?.msg].filter(Boolean).join(': ') || 'Tuya rejected the command';
-            await transitionLastCommand(deviceId, commandId, ['pending', 'accepted'], {
-                'lastCommand.state': 'rejected',
-                'lastCommand.error': error,
+            await commandTracker.transition(deviceId, commandId, ['pending', 'accepted'], {
+                state: 'rejected',
+                error,
             });
             return res.status(502).json({ ...result, commandId, commandState: 'rejected' });
         }
 
-        await transitionLastCommand(deviceId, commandId, ['pending', 'accepted'], {
-            'lastCommand.state': 'accepted',
-            'lastCommand.acceptedAt': new Date(),
-            'lastCommand.error': null,
+        await commandTracker.transition(deviceId, commandId, ['pending', 'accepted'], {
+            state: 'accepted',
+            acceptedAt: new Date(),
+            error: null,
         });
         res.json({ ...result, commandId, commandState: 'accepted' });
     } catch (error) {
         if (deviceId && commandId) {
-            await transitionLastCommand(deviceId, commandId, ['pending', 'accepted'], {
-                'lastCommand.state': 'rejected',
-                'lastCommand.error': error.message,
+            await commandTracker.transition(deviceId, commandId, ['pending', 'accepted'], {
+                state: 'rejected',
+                error: error.message,
             });
         }
         res.status(error.statusCode || 502).json({ success: false, error: error.message, commandId });
