@@ -60,6 +60,7 @@
 .automation-field select {
   width: 100%;
   min-height: 42px;
+  min-width: 0;
   padding: 9px 11px;
   border: 1px solid var(--border-card);
   border-radius: 7px;
@@ -68,6 +69,9 @@
   color: var(--text-main);
   font: inherit;
   letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .automation-field input:focus,
@@ -83,9 +87,11 @@
 
 .automation-action-editor {
   display: grid;
-  grid-template-columns: repeat(3, minmax(130px, 1fr)) auto;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(160px, 200px) minmax(200px, 260px) minmax(136px, 180px) auto;
   gap: 12px;
   align-items: end;
+  justify-content: start;
 }
 
 .automation-add-action {

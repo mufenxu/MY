@@ -2,9 +2,16 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { checkEnvironment, getComplianceErrors } = require('./check-compliance-config');
 
-test('trial and release placeholders block distribution', () => {
-    assert.ok(checkEnvironment('trial').length > 0);
-    assert.ok(checkEnvironment('release').length > 0);
+test('trial and release compliance config passes distribution checks', () => {
+    assert.deepEqual(checkEnvironment('trial'), []);
+    assert.deepEqual(checkEnvironment('release'), []);
+});
+
+test('placeholder compliance values block distribution', () => {
+    assert.ok(getComplianceErrors({
+        companyName: '__REQUIRED_COMPANY_NAME__',
+        supportEmail: '__REQUIRED_SUPPORT_EMAIL__',
+    }).length > 0);
 });
 
 test('realistic compliance values pass validation', () => {
