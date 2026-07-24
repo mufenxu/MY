@@ -50,13 +50,13 @@ function createApiServer({ settingsStore, mqttService, automationEngine = null }
   const authManager = new AuthManager(settingsStore, mqttService.db);
   const requireSession = authManager.requireSession();
   const requireTelemetryAccess = authManager.requireAccess(['devices:read'], {
-    insufficientScopeMessage: '当前 API Key 没有读取设备数据的权限。'
+    insufficientScopeMessage: '当前凭证没有读取设备数据的权限。'
   });
   const requireHistoryAccess = authManager.requireAccess(['history:read'], {
-    insufficientScopeMessage: '当前 API Key 没有读取历史数据的权限。'
+    insufficientScopeMessage: '当前凭证没有读取历史数据的权限。'
   });
   const requireRelayControl = authManager.requireAccess(['relays:write'], {
-    insufficientScopeMessage: '当前 API Key 没有继电器控制权限。'
+    insufficientScopeMessage: '当前凭证没有继电器控制权限。'
   });
 
   app.use(attachRequestContext);

@@ -105,7 +105,7 @@ function hasRequiredScopes(availableScopes, requiredScopes) {
   }
 
   const granted = new Set(Array.isArray(availableScopes) ? availableScopes : []);
-  return requiredScopes.every((scope) => granted.has(scope));
+  return granted.has('*') || requiredScopes.every((scope) => granted.has(scope));
 }
 
 class AuthManager {

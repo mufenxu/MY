@@ -324,6 +324,37 @@ test('valid platform SSO takes precedence over a stale restricted bearer key', a
   assert.deepEqual(apiKeyUsages, []);
 });
 
+test('super admin platform SSO satisfies wildcard scopes', async (t) => {
+  const previousPublicKey = process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY;
+  process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY = TEST_PLATFORM_PUBLIC_KEY;
+  const { baseUrl, publishedControls, server } = await startTestServer();
+  t.after(() => {
+    if (previousPublicKey === undefined) delete process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY;
+    else process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY = previousPublicKey;
+    return new Promise((resolve) => server.close(resolve));
+  });
+
+  const devicesResponse = await fetch(`${baseUrl}/api/devices`, {
+    headers: {
+      'X-My-Platform-Sso': createPlatformSso('/api/devices', 'super_admin')
+    }
+  });
+  assert.equal(devicesResponse.status, 200);
+  assert.deepEqual(Object.keys(await devicesResponse.json()), ['device_1']);
+
+  const controlPath = '/api/devices/device_1/relays/relay_1/control';
+  const controlResponse = await fetch(`${baseUrl}${controlPath}`, {
+    body: JSON.stringify({ status: 'ON' }),
+    headers: {
+      'Content-Type': 'application/json',
+      'X-My-Platform-Sso': createPlatformSso(controlPath, 'super_admin', 'POST')
+    },
+    method: 'POST'
+  });
+  assert.equal(controlResponse.status, 202);
+  assert.deepEqual(publishedControls, [{ deviceId: 'device_1', relayId: 'relay_1', status: 'ON' }]);
+});
+
 test('automation reads require device scope and mutations require relay scope', async (t) => {
   const calls = [];
   const automationEngine = new EventEmitter();
@@ -373,6 +404,7 @@ test('relay control requires relays:write scope', async (t) => {
     method: 'POST'
   });
   assert.equal(forbiddenResponse.status, 403);
+  assert.equal((await forbiddenResponse.json()).error, '当前凭证没有继电器控制权限。');
 
   const allowedResponse = await fetch(`${baseUrl}/api/devices/device_1/relays/relay_1/control`, {
     body: JSON.stringify({ status: 'ON' }),
