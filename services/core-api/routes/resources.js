@@ -5,7 +5,7 @@ const validate = require('../middleware/validate');
 const { userResourceSchema } = require('../schemas/resourceSchemas');
 
 const ResourceConfig = require('../models/ResourceConfig');
-const { prepareResourceList, maskResourceSecrets } = require('../utils/resourceSecrets');
+const { prepareResourceList, revealResourcePasswords } = require('../utils/resourceSecrets');
 
 function buildDocId(ownerId) {
     const safe = (ownerId || 'anonymous').replace(/[^a-zA-Z0-9_:\-]/g, '_');
@@ -72,7 +72,7 @@ router.get('/', auth, async (req, res) => {
 
         return res.json({
             success: true,
-            result: maskResourceSecrets({ ...stored, servers, domains })
+            result: revealResourcePasswords({ ...stored, servers, domains })
         });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -107,7 +107,7 @@ router.post('/', auth, validate(userResourceSchema), async (req, res) => {
         );
 
         const stored = typeof result.toObject === 'function' ? result.toObject() : result;
-        res.json({ success: true, result: maskResourceSecrets(stored) });
+        res.json({ success: true, result: revealResourcePasswords(stored) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

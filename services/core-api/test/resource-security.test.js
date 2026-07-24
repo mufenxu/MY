@@ -7,6 +7,7 @@ const {
     SECRET_MASK,
     prepareResourceList,
     maskResourceSecrets,
+    revealResourcePasswords,
     decryptResourceSecrets
 } = require('../utils/resourceSecrets');
 const {
@@ -42,6 +43,26 @@ test('resource passwords and nested secrets are encrypted, masked and recoverabl
     const recovered = decryptResourceSecrets(stored);
     assert.equal(recovered[0].password, 'plain-password');
     assert.equal(recovered[0].config.apiToken, 'plain-token');
+});
+
+test('resource management responses reveal top-level passwords only', () => {
+    const stored = {
+        servers: prepareResourceList([{
+            name: 'Server A',
+            password: 'visible-password',
+            config: { apiToken: 'hidden-token' }
+        }]),
+        domains: prepareResourceList([{
+            host: 'example.test',
+            password: 'domain-password'
+        }])
+    };
+
+    const response = revealResourcePasswords(stored);
+
+    assert.equal(response.servers[0].password, 'visible-password');
+    assert.equal(response.domains[0].password, 'domain-password');
+    assert.equal(response.servers[0].config.apiToken, SECRET_MASK);
 });
 
 test('unknown credential containers and common session fields never remain plaintext', () => {

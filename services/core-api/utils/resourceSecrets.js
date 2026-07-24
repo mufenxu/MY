@@ -153,6 +153,45 @@ function maskResourceSecrets(value) {
     return transformSecrets(value, undefined, 'mask');
 }
 
+function revealResourcePasswords(value) {
+    const masked = maskResourceSecrets(value);
+
+    const revealListPasswords = (maskedList, storedList) => {
+        if (!Array.isArray(maskedList)) return maskedList;
+        const sourceList = Array.isArray(storedList) ? storedList : [];
+
+        return maskedList.map((item, index) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+
+            const storedItem = sourceList[index];
+            if (!storedItem || !Object.prototype.hasOwnProperty.call(storedItem, 'password')) {
+                return item;
+            }
+
+            return {
+                ...item,
+                password: typeof storedItem.password === 'string'
+                    ? decrypt(storedItem.password)
+                    : storedItem.password
+            };
+        });
+    };
+
+    if (Array.isArray(masked)) {
+        return revealListPasswords(masked, value);
+    }
+
+    if (masked && typeof masked === 'object' && value && typeof value === 'object') {
+        return {
+            ...masked,
+            servers: revealListPasswords(masked.servers, value.servers),
+            domains: revealListPasswords(masked.domains, value.domains)
+        };
+    }
+
+    return masked;
+}
+
 function decryptResourceSecrets(value) {
     return transformSecrets(value, undefined, 'decrypt');
 }
@@ -162,5 +201,6 @@ module.exports = {
     isSecretKey,
     prepareResourceList,
     maskResourceSecrets,
+    revealResourcePasswords,
     decryptResourceSecrets
 };
