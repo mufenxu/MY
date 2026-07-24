@@ -7,6 +7,9 @@ const BUILD_CALLBACK_STATES = new Set(['queued', 'building', 'succeeded', 'faile
 const DEPLOYMENT_CALLBACK_STATES = new Set(['queued', 'running', 'succeeded', 'failed', 'rolled_back']);
 const ACTIVE_BUILD_STATES = new Set(['queued', 'building']);
 const ACTIVE_DEPLOYMENT_STATES = new Set(['queued', 'running']);
+const TERMINAL_BUILD_STATES = new Set(['succeeded', 'failed', 'cancelled']);
+const WORKFLOW_DISPATCH_MATCH_BEFORE_MS = 30 * 1000;
+const WORKFLOW_DISPATCH_MATCH_AFTER_MS = 10 * 60 * 1000;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const REVISION_PATTERN = /^[a-f0-9]{40}$/i;
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/i;
@@ -24,6 +27,20 @@ const COMPONENT_SERVICE_IDS = {
 function shortRevision(value) {
   const revision = String(value || '');
   return revision ? revision.slice(0, 12) : '';
+}
+
+function workflowConclusionStatus(run) {
+  const status = String(run?.status || '').toLowerCase();
+  const conclusion = String(run?.conclusion || '').toLowerCase();
+  if (status !== 'completed') return status === 'queued' ? 'queued' : 'building';
+  if (conclusion === 'success') return 'succeeded';
+  if (['cancelled', 'canceled'].includes(conclusion)) return 'cancelled';
+  return 'failed';
+}
+
+function validTimestamp(value) {
+  const timestamp = Date.parse(value || '');
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 function stringValue(value, maximum = 512) {
@@ -52,6 +69,7 @@ function mapWorkflowRun(run) {
     status: run.status || 'unknown',
     conclusion: run.conclusion || null,
     branch: run.head_branch || '',
+    headSha: run.head_sha || '',
     revision: shortRevision(run.head_sha),
     createdAt: run.created_at || null,
     startedAt: run.run_started_at || run.created_at || null,
@@ -229,7 +247,7 @@ export function createReleaseService({
     if (!githubConfigured) return { runs: [], issue: '' };
     try {
       const [owner, repository] = config.githubRepository.split('/');
-      const data = await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/actions/workflows/${encodeURIComponent(config.githubWorkflow)}/runs?per_page=10`);
+      const data = await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/actions/workflows/${encodeURIComponent(config.githubWorkflow)}/runs?per_page=30`);
       return { runs: (data.workflow_runs || []).map(mapWorkflowRun), issue: '' };
     } catch (error) {
       return { runs: [], issue: error.message };
@@ -274,14 +292,48 @@ export function createReleaseService({
     ]);
     const runnerJobs = new Map((runtimeStatus?.jobs || []).map((job) => [job.id, job]));
     const githubRuns = new Map(runs.map((run) => [String(run.id), run]));
+    const usedInferredRunIds = new Set(storedBuilds.map((build) => String(build.workflowRun?.id || '')).filter(Boolean));
+    const findInferredRun = (build) => {
+      if (build.workflowRun?.id || build.source !== 'manual') return null;
+      const buildCreatedAt = validTimestamp(build.createdAt);
+      if (!buildCreatedAt) return null;
+      const candidates = runs
+        .filter((run) => !usedInferredRunIds.has(String(run.id)))
+        .filter((run) => run.event === 'workflow_dispatch')
+        .filter((run) => !build.ref || !run.branch || run.branch === build.ref)
+        .map((run) => ({ run, createdAt: validTimestamp(run.createdAt) }))
+        .filter(({ createdAt }) => createdAt !== null)
+        .filter(({ createdAt }) => (
+          createdAt >= buildCreatedAt - WORKFLOW_DISPATCH_MATCH_BEFORE_MS
+          && createdAt <= buildCreatedAt + WORKFLOW_DISPATCH_MATCH_AFTER_MS
+        ))
+        .sort((left, right) => Math.abs(left.createdAt - buildCreatedAt) - Math.abs(right.createdAt - buildCreatedAt));
+      const inferred = candidates[0]?.run || null;
+      if (inferred) usedInferredRunIds.add(String(inferred.id));
+      return inferred;
+    };
     const builds = storedBuilds.map((build) => {
-      const run = githubRuns.get(String(build.workflowRun?.id || ''));
+      const run = githubRuns.get(String(build.workflowRun?.id || '')) || findInferredRun(build);
       if (!run) return build;
+      const reconciledStatus = workflowConclusionStatus(run);
+      const canFinalizeFromRun = reconciledStatus !== 'succeeded' || (build.artifacts || []).length > 0;
+      const status = TERMINAL_BUILD_STATES.has(build.status)
+        ? build.status
+        : canFinalizeFromRun ? reconciledStatus : 'succeeded';
       return {
         ...build,
+        status,
+        revision: build.revision || run.headSha || run.revision,
         startedAt: build.startedAt || run.startedAt || build.createdAt,
         updatedAt: run.updatedAt || build.updatedAt,
-        completedAt: build.completedAt || run.completedAt,
+        completedAt: build.completedAt || (TERMINAL_BUILD_STATES.has(status) ? run.completedAt : null),
+        workflowRun: {
+          id: String(run.id),
+          attempt: Number(build.workflowRun?.attempt) || 1,
+          url: run.url || build.workflowRun?.url || '',
+          actor: build.workflowRun?.actor || run.actor || '',
+          event: build.workflowRun?.event || run.event || '',
+        },
       };
     });
     const deployments = await Promise.all(storedDeployments.map(async (deployment) => {

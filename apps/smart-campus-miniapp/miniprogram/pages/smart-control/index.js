@@ -2,6 +2,10 @@ const { EMQX_API, ESP01S_RELAY_API, TEMP_HUMIDITY_API } = require('../../utils/c
 const logger = require('../../utils/logger')
 const request = require('../../utils/request').default
 
+const RELAY_CONFIRMATION_TIMEOUT_MS = 10000
+const RELAY_CONFIRMATION_REFRESH_DELAYS = [250, 800, 1600, 3000, 5000, 7500]
+const FETCH_LATEST_RETRY_DELAY = 150
+
 const ensureWeappRuntime = () => {
   if (typeof wx === 'undefined') {
     return
@@ -167,6 +171,8 @@ Page({
   _pendingRelay2: null,
   _relayConfirmTimer: null,
   _relay2ConfirmTimer: null,
+  _relayStatusRefreshTimers: [],
+  _fetchLatestQueued: false,
   data: {
     relayOn: false,
     switching: false,
@@ -259,9 +265,12 @@ Page({
     }
 
     const prevState = this.data.relayOn
+    const relayStatusDisplay = nextState ? '已开启' : '已关闭'
     this.setData({
+      relayOn: nextState,
       switching: true,
-      statusText: nextState ? '正在开启…' : '正在关闭…',
+      statusText: nextState ? '正在开启，等待设备确认' : '正在关闭，等待设备确认',
+      relayStatusDisplay,
     })
 
     request(EMQX_API.publishUrl, 'POST', {
@@ -277,9 +286,9 @@ Page({
           desiredState: nextState,
           commandId: res && (res.commandId || (res.data && res.data.commandId)),
         }
-        this.setData({ statusText: '指令已入队，等待设备确认' })
+        this.setData({ statusText: '指令已发送，等待状态回传' })
         this.scheduleRelayConfirmation('primary')
-        this.fetchLatestData()
+        this.scheduleRelayStatusRefresh()
         wx.showToast({
           title: '等待设备确认',
           icon: 'none',
@@ -297,9 +306,12 @@ Page({
     }
 
     const prevState = this.data.relay2On
+    const relayStatusDisplay = nextState ? '已开启' : '已关闭'
     this.setData({
+      relay2On: nextState,
       switching2: true,
-      statusText2: nextState ? '正在开启…' : '正在关闭…',
+      statusText2: nextState ? '正在开启，等待设备确认' : '正在关闭，等待设备确认',
+      relayStatusDisplay2: relayStatusDisplay,
     })
 
     request(ESP01S_RELAY_API.publishUrl, 'POST', {
@@ -315,9 +327,9 @@ Page({
           desiredState: nextState,
           commandId: res && (res.commandId || (res.data && res.data.commandId)),
         }
-        this.setData({ statusText2: '指令已入队，等待设备确认' })
+        this.setData({ statusText2: '指令已发送，等待状态回传' })
         this.scheduleRelayConfirmation('secondary')
-        this.fetchLatestData()
+        this.scheduleRelayStatusRefresh()
         wx.showToast({
           title: '等待设备确认',
           icon: 'none',
@@ -360,16 +372,21 @@ Page({
         this._pendingRelay2 = null
         this.setData({
           switching2: false,
-          statusText2: '未收到设备确认，请刷新状态',
+          statusText2: '未收到状态回传，请刷新状态',
         })
+        this.fetchLatestData()
       } else {
         this._pendingRelay = null
         this.setData({
           switching: false,
-          statusText: '未收到设备确认，请刷新状态',
+          statusText: '未收到状态回传，请刷新状态',
         })
+        this.fetchLatestData()
       }
-    }, 10000)
+      if (!this._pendingRelay && !this._pendingRelay2) {
+        this.clearRelayStatusRefresh()
+      }
+    }, RELAY_CONFIRMATION_TIMEOUT_MS)
   },
 
   clearRelayConfirmation(slot) {
@@ -381,6 +398,26 @@ Page({
     }
     if (isSecondary) this._pendingRelay2 = null
     else this._pendingRelay = null
+    if (!this._pendingRelay && !this._pendingRelay2) {
+      this.clearRelayStatusRefresh()
+    }
+  },
+
+  scheduleRelayStatusRefresh() {
+    this.clearRelayStatusRefresh()
+    RELAY_CONFIRMATION_REFRESH_DELAYS.forEach((delay) => {
+      const timer = setTimeout(() => {
+        this._relayStatusRefreshTimers = this._relayStatusRefreshTimers.filter((item) => item !== timer)
+        if (!this._isAlive || (!this._pendingRelay && !this._pendingRelay2)) return
+        this.fetchLatestData()
+      }, delay)
+      this._relayStatusRefreshTimers.push(timer)
+    })
+  },
+
+  clearRelayStatusRefresh() {
+    this._relayStatusRefreshTimers.forEach((timer) => clearTimeout(timer))
+    this._relayStatusRefreshTimers = []
   },
 
   // ========== 温湿度数据相关方法 ==========
@@ -391,8 +428,11 @@ Page({
   },
 
   // HTTP 拉取最新数据和状态
-  fetchLatestData() {
-    if (this._isFetchingLatest) return
+  fetchLatestData(options = {}) {
+    if (this._isFetchingLatest) {
+      if (options.queue !== false) this._fetchLatestQueued = true
+      return
+    }
     this._isFetchingLatest = true
     request('/iot/info', 'GET')
       .then((res) => {
@@ -414,6 +454,12 @@ Page({
       })
       .finally(() => {
         this._isFetchingLatest = false
+        if (this._isAlive && this._fetchLatestQueued) {
+          this._fetchLatestQueued = false
+          setTimeout(() => {
+            if (this._isAlive) this.fetchLatestData({ queue: false })
+          }, FETCH_LATEST_RETRY_DELAY)
+        }
       })
   },
 
@@ -488,24 +534,42 @@ Page({
   // 构建继电器状态更新 patch（不直接 setData，供批量合并）
   buildRelayStatusPatch(relayStatus) {
     if (!relayStatus) {
+      if (this._pendingRelay) {
+        const desiredDisplay = this._pendingRelay.desiredState ? '已开启' : '已关闭'
+        return {
+          relayOn: this._pendingRelay.desiredState,
+          relayStatusDisplay: desiredDisplay,
+          switching: true,
+          statusText: '指令已发送，等待状态回传',
+        }
+      }
       return this.data.relayStatusDisplay ? {} : { relayStatusDisplay: '未知状态' }
     }
     const isOn = relayStatus === 'ON'
     const relayStatusDisplay = isOn ? '已开启' : '已关闭'
-    const dataToSet = {
-      relayOn: isOn,
-      relayStatusDisplay,
-    }
     if (this._pendingRelay) {
       if (this._pendingRelay.desiredState === isOn) {
+        const dataToSet = {
+          relayOn: isOn,
+          relayStatusDisplay,
+        }
         this.clearRelayConfirmation('primary')
         dataToSet.switching = false
         dataToSet.statusText = `设备已确认${relayStatusDisplay}`
+        return dataToSet
       } else {
-        dataToSet.switching = true
-        dataToSet.statusText = '指令已入队，等待设备确认'
+        const desiredDisplay = this._pendingRelay.desiredState ? '已开启' : '已关闭'
+        return {
+          relayOn: this._pendingRelay.desiredState,
+          relayStatusDisplay: desiredDisplay,
+          switching: true,
+          statusText: '指令已发送，等待状态回传',
+        }
       }
-      return dataToSet
+    }
+    const dataToSet = {
+      relayOn: isOn,
+      relayStatusDisplay,
     }
     if (!this.data.switching) {
       dataToSet.statusText = `继电器${relayStatusDisplay}`
@@ -516,24 +580,42 @@ Page({
   // 构建继电器 2 状态更新 patch（不直接 setData，供批量合并）
   buildRelay2StatusPatch(relayStatus) {
     if (!relayStatus) {
+      if (this._pendingRelay2) {
+        const desiredDisplay = this._pendingRelay2.desiredState ? '已开启' : '已关闭'
+        return {
+          relay2On: this._pendingRelay2.desiredState,
+          relayStatusDisplay2: desiredDisplay,
+          switching2: true,
+          statusText2: '指令已发送，等待状态回传',
+        }
+      }
       return this.data.relayStatusDisplay2 ? {} : { relayStatusDisplay2: '未知状态' }
     }
     const isOn = relayStatus === 'ON'
     const relayStatusDisplay = isOn ? '已开启' : '已关闭'
-    const dataToSet = {
-      relay2On: isOn,
-      relayStatusDisplay2: relayStatusDisplay,
-    }
     if (this._pendingRelay2) {
       if (this._pendingRelay2.desiredState === isOn) {
+        const dataToSet = {
+          relay2On: isOn,
+          relayStatusDisplay2: relayStatusDisplay,
+        }
         this.clearRelayConfirmation('secondary')
         dataToSet.switching2 = false
         dataToSet.statusText2 = `设备已确认${relayStatusDisplay}`
+        return dataToSet
       } else {
-        dataToSet.switching2 = true
-        dataToSet.statusText2 = '指令已入队，等待设备确认'
+        const desiredDisplay = this._pendingRelay2.desiredState ? '已开启' : '已关闭'
+        return {
+          relay2On: this._pendingRelay2.desiredState,
+          relayStatusDisplay2: desiredDisplay,
+          switching2: true,
+          statusText2: '指令已发送，等待状态回传',
+        }
       }
-      return dataToSet
+    }
+    const dataToSet = {
+      relay2On: isOn,
+      relayStatusDisplay2: relayStatusDisplay,
     }
     if (!this.data.switching2) {
       dataToSet.statusText2 = `继电器${relayStatusDisplay}`
@@ -641,5 +723,7 @@ Page({
   cleanup() {
     this.stopPolling()
     this.stopUpdateDisplay()
+    this.clearRelayStatusRefresh()
+    this._fetchLatestQueued = false
   },
 })

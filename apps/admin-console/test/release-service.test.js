@@ -232,6 +232,57 @@ test('release summary exposes GitHub start, update and completion timestamps', a
   assert.ok(Date.parse(summary.refreshedAt));
 });
 
+test('release summary reconciles manually dispatched builds when callbacks miss the run id', async () => {
+  const requests = [];
+  const store = createMemoryReleaseStore({
+    now: () => new Date('2026-07-23T02:52:48Z'),
+  });
+  const releases = createReleaseService({
+    config: enabledConfig(),
+    store,
+    idFactory: () => '5174a26e-32b',
+    fetchImpl: async (url, options = {}) => {
+      requests.push({ url: String(url), options });
+      if (options.method === 'POST') return jsonResponse(null, 204);
+      return jsonResponse({
+        workflow_runs: [{
+          id: 29975512070,
+          name: 'Build and push Aliyun ACR images',
+          event: 'workflow_dispatch',
+          status: 'completed',
+          conclusion: 'success',
+          head_branch: 'main',
+          head_sha: '4766b850dcf26cb841950619522caabd38be8a27',
+          created_at: '2026-07-23T02:52:49Z',
+          run_started_at: '2026-07-23T02:52:49Z',
+          updated_at: '2026-07-23T02:55:33Z',
+          html_url: 'https://github.com/mufenxu/MY/actions/runs/29975512070',
+        }],
+      });
+    },
+  });
+
+  await releases.dispatchBuild({ targets: ['notification'], requestedBy: 'admin' });
+  const summary = await releases.getSummary();
+  assert.equal(summary.builds[0].status, 'succeeded');
+  assert.equal(summary.builds[0].workflowRun.id, '29975512070');
+  assert.equal(summary.builds[0].completedAt, '2026-07-23T02:55:33Z');
+  assert.equal((await store.getBuild('5174a26e-32b')).status, 'queued');
+
+  const callback = await releases.acceptCallback({
+    type: 'build',
+    releaseId: '5174a26e-32b',
+    status: 'succeeded',
+    event: 'workflow_dispatch',
+    targets: ['notification'],
+    artifacts: [artifact('notification')],
+    revision: '4766b850dcf26cb841950619522caabd38be8a27',
+    runId: '29975512070',
+  });
+  assert.equal(callback.status, 'succeeded');
+  assert.equal(callback.artifacts[0].component, 'notification');
+});
+
 test('deployment uses build digests only after runner and platform preflight checks pass', async () => {
   const store = createMemoryReleaseStore();
   const requests = [];
