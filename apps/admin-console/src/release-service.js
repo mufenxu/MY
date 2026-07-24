@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { inflateRawSync } from 'node:zlib';
 import { createMemoryReleaseStore } from './release-store.js';
 
 export const RELEASE_TARGETS = new Set(['platform', 'backup', 'core', 'exam', 'notification', 'campus', 'iot', 'mongodb', 'all']);
@@ -9,6 +10,7 @@ const ACTIVE_BUILD_STATES = new Set(['queued', 'building']);
 const ACTIVE_DEPLOYMENT_STATES = new Set(['queued', 'running']);
 const TERMINAL_BUILD_STATES = new Set(['succeeded', 'failed', 'cancelled']);
 const IMAGE_REFERENCE_MODES = new Set(['digest', 'tag']);
+const RELEASE_ARTIFACTS_FILE = 'release-artifacts.tsv';
 const WORKFLOW_DISPATCH_MATCH_BEFORE_MS = 30 * 1000;
 const WORKFLOW_DISPATCH_MATCH_AFTER_MS = 10 * 60 * 1000;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -157,6 +159,53 @@ function validateArtifact(value, config) {
   return { component, image, shaTag, digest, reference };
 }
 
+function parseReleaseArtifactsTsv(source, config) {
+  return String(source || '')
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => {
+      const [component, image, digest, reference, shaTag] = line.split('\t');
+      return validateArtifact({ component, image, digest, reference, shaTag }, config);
+    });
+}
+
+function extractZipTextEntry(buffer, filename) {
+  const archive = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  let endOfCentralDirectory = -1;
+  for (let offset = archive.length - 22; offset >= Math.max(0, archive.length - 65557); offset -= 1) {
+    if (archive.readUInt32LE(offset) === 0x06054b50) {
+      endOfCentralDirectory = offset;
+      break;
+    }
+  }
+  if (endOfCentralDirectory < 0) return '';
+  const entries = archive.readUInt16LE(endOfCentralDirectory + 10);
+  let cursor = archive.readUInt32LE(endOfCentralDirectory + 16);
+  for (let index = 0; index < entries; index += 1) {
+    if (archive.readUInt32LE(cursor) !== 0x02014b50) return '';
+    const method = archive.readUInt16LE(cursor + 10);
+    const compressedSize = archive.readUInt32LE(cursor + 20);
+    const nameLength = archive.readUInt16LE(cursor + 28);
+    const extraLength = archive.readUInt16LE(cursor + 30);
+    const commentLength = archive.readUInt16LE(cursor + 32);
+    const localHeaderOffset = archive.readUInt32LE(cursor + 42);
+    const entryName = archive.toString('utf8', cursor + 46, cursor + 46 + nameLength);
+    const matches = entryName === filename || entryName.endsWith(`/${filename}`);
+    if (matches) {
+      if (archive.readUInt32LE(localHeaderOffset) !== 0x04034b50) return '';
+      const localNameLength = archive.readUInt16LE(localHeaderOffset + 26);
+      const localExtraLength = archive.readUInt16LE(localHeaderOffset + 28);
+      const dataStart = localHeaderOffset + 30 + localNameLength + localExtraLength;
+      const compressed = archive.subarray(dataStart, dataStart + compressedSize);
+      if (method === 0) return compressed.toString('utf8');
+      if (method === 8) return inflateRawSync(compressed).toString('utf8');
+      return '';
+    }
+    cursor += 46 + nameLength + extraLength + commentLength;
+  }
+  return '';
+}
+
 function mapRuntimeComponents(componentImages, runtimeStatus) {
   const runtimeComponents = new Map((runtimeStatus?.components || []).map((item) => [item.component, item]));
   return componentImages.map((component) => {
@@ -244,6 +293,46 @@ export function createReleaseService({
     }
   }
 
+  async function githubRequestBuffer(resource, options = {}) {
+    if (!githubConfigured) {
+      throw new ReleaseOperationError(503, 'GITHUB_NOT_CONFIGURED', 'GitHub 发布集成尚未配置。');
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    try {
+      const url = String(resource).startsWith('http') ? String(resource) : `https://api.github.com${resource}`;
+      const response = await fetchImpl(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${config.githubToken}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'MY-Platform-Release-Center/2.0',
+          ...options.headers,
+        },
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new ReleaseOperationError(
+          response.status >= 500 ? 502 : response.status,
+          'GITHUB_REQUEST_FAILED',
+          detail.message || `GitHub 请求失败（HTTP ${response.status}）。`,
+        );
+      }
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      if (error instanceof ReleaseOperationError) throw error;
+      throw new ReleaseOperationError(
+        error?.name === 'AbortError' ? 504 : 502,
+        error?.name === 'AbortError' ? 'GITHUB_TIMEOUT' : 'GITHUB_UNAVAILABLE',
+        error?.name === 'AbortError' ? 'GitHub 请求超时。' : 'GitHub 发布集成暂不可用。',
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function runnerRequest(resource, { method = 'GET', body, timeoutMs = 10000 } = {}) {
     if (!deployRunnerConfigured) {
       throw new ReleaseOperationError(503, 'DEPLOY_RUNNER_NOT_CONFIGURED', '服务器部署执行器未配置。');
@@ -291,6 +380,23 @@ export function createReleaseService({
       return { runs: (data.workflow_runs || []).map(mapWorkflowRun), issue: '' };
     } catch (error) {
       return { runs: [], issue: error.message };
+    }
+  }
+
+  async function loadGitHubRunArtifacts(runId) {
+    if (!githubConfigured || !runId) return [];
+    try {
+      const [owner, repository] = config.githubRepository.split('/');
+      const data = await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/actions/runs/${encodeURIComponent(runId)}/artifacts?per_page=100`);
+      const manifest = (data.artifacts || [])
+        .filter((artifact) => !artifact.expired)
+        .find((artifact) => String(artifact.name || '').startsWith('release-artifacts') && artifact.archive_download_url);
+      if (!manifest) return [];
+      const archive = await githubRequestBuffer(manifest.archive_download_url);
+      const tsv = extractZipTextEntry(archive, RELEASE_ARTIFACTS_FILE);
+      return tsv ? parseReleaseArtifactsTsv(tsv, config) : [];
+    } catch {
+      return [];
     }
   }
 
@@ -352,7 +458,7 @@ export function createReleaseService({
       if (inferred) usedInferredRunIds.add(String(inferred.id));
       return inferred;
     };
-    const reconciledBuilds = storedBuilds.map((build) => {
+    const reconciledBuilds = await Promise.all(storedBuilds.map(async (build) => {
       const run = githubRuns.get(String(build.workflowRun?.id || '')) || findInferredRun(build);
       if (!run) return build;
       const reconciledStatus = workflowConclusionStatus(run);
@@ -360,7 +466,7 @@ export function createReleaseService({
       const status = TERMINAL_BUILD_STATES.has(build.status)
         ? build.status
         : canFinalizeFromRun ? reconciledStatus : 'succeeded';
-      return {
+      const reconciled = {
         ...build,
         status,
         revision: build.revision || run.headSha || run.revision,
@@ -375,7 +481,32 @@ export function createReleaseService({
           event: build.workflowRun?.event || run.event || '',
         },
       };
-    });
+      if (status === 'succeeded' && !(reconciled.artifacts || []).length) {
+        const artifacts = await loadGitHubRunArtifacts(run.id);
+        const targets = (reconciled.targets || []).length ? reconciled.targets : artifacts.map((artifact) => artifact.component);
+        const hasAllTargets = targets.length > 0
+          && artifacts.length === targets.length
+          && targets.every((target) => artifacts.some((artifact) => artifact.component === target));
+        const revision = stringValue(reconciled.revision || run.headSha, 64).toLowerCase();
+        if (hasAllTargets && REVISION_PATTERN.test(revision)) {
+          return store.updateBuild(reconciled.id, {
+            status: 'succeeded',
+            targets,
+            artifacts,
+            revision,
+            startedAt: reconciled.startedAt,
+            updatedAt: run.updatedAt || reconciled.updatedAt,
+            completedAt: reconciled.completedAt || run.completedAt,
+            workflowRun: reconciled.workflowRun,
+          }, releaseEvent('succeeded', '从 GitHub Actions 产物清单恢复构建产物'));
+        }
+        return {
+          ...reconciled,
+          artifactSyncStatus: 'missing',
+        };
+      }
+      return reconciled;
+    }));
     const buildRunIds = new Set(reconciledBuilds.map((build) => String(build.workflowRun?.id || '')).filter(Boolean));
     const observedBuilds = runs
       .filter((run) => !buildRunIds.has(String(run.id)))

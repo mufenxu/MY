@@ -431,6 +431,15 @@ jobs:
             promote_with_retry "${candidate}" "${deployment_tag}"
           done
 
+      - name: Retain release artifact manifest
+        if: always() && hashFiles('release-artifacts.tsv') != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-artifacts-${{ github.event.inputs.release_id || format('gha-{0}-{1}', github.run_id, github.run_attempt) }}
+          path: release-artifacts.tsv
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Synchronize final build result with release center
         if: always() && steps.resolve.outputs.release_targets != ''
         continue-on-error: true

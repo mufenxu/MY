@@ -1659,11 +1659,11 @@ input:focus-visible {
   z-index: 25;
   display: flex;
   flex: 0 0 auto;
-  min-height: 84px;
+  min-height: 66px;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 10px 28px 8px;
+  padding: 10px 28px 4px;
 }
 
 .topbar-leading,
@@ -4932,8 +4932,8 @@ input:focus-visible {
   }
 
   .topbar {
-    min-height: 78px;
-    padding: 9px 22px 8px;
+    min-height: 64px;
+    padding: 9px 22px 4px;
   }
 
   .welcome-avatar {
@@ -4973,7 +4973,7 @@ input:focus-visible {
     min-height: 0;
     align-items: center;
     gap: 12px;
-    padding: 9px 16px 10px;
+    padding: 9px 16px 4px;
   }
 
   .topbar-leading {
@@ -6292,6 +6292,39 @@ input:focus-visible {
   min-height: 68px;
   padding: 0 8px;
   border-bottom: 1px solid var(--line);
+}
+
+.release-history-more {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 8px 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.release-history-more > button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 11px;
+  color: var(--blue);
+  background: var(--panel-muted);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.release-history-more > button:hover {
+  border-color: var(--blue-soft);
+  box-shadow: 0 6px 16px rgba(44, 113, 248, 0.12);
 }
 
 .release-status {
@@ -8393,7 +8426,7 @@ input:focus-visible {
 .workspace-section-nav {
   position: sticky;
   z-index: 20;
-  top: 8px;
+  top: 0;
   display: flex;
   min-height: 54px;
   align-items: center;
@@ -8675,7 +8708,7 @@ input:focus-visible {
   }
 
   .workspace-section-nav {
-    top: 6px;
+    top: 0;
     min-height: 58px;
     gap: 6px;
     margin-bottom: 14px;

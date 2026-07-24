@@ -55,6 +55,47 @@ function jsonResponse(data, status = 200) {
   };
 }
 
+function binaryResponse(buffer, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => ({}),
+    arrayBuffer: async () => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+  };
+}
+
+function zipStoredText(filename, content) {
+  const name = Buffer.from(filename);
+  const data = Buffer.from(content);
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(20, 4);
+  local.writeUInt32LE(0, 6);
+  local.writeUInt32LE(0, 10);
+  local.writeUInt32LE(0, 14);
+  local.writeUInt32LE(data.length, 18);
+  local.writeUInt32LE(data.length, 22);
+  local.writeUInt16LE(name.length, 26);
+  const central = Buffer.alloc(46);
+  central.writeUInt32LE(0x02014b50, 0);
+  central.writeUInt16LE(20, 4);
+  central.writeUInt16LE(20, 6);
+  central.writeUInt32LE(0, 8);
+  central.writeUInt32LE(0, 12);
+  central.writeUInt32LE(0, 16);
+  central.writeUInt32LE(data.length, 20);
+  central.writeUInt32LE(data.length, 24);
+  central.writeUInt16LE(name.length, 28);
+  const localSize = local.length + name.length + data.length;
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(1, 8);
+  end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(central.length + name.length, 12);
+  end.writeUInt32LE(localSize, 16);
+  return Buffer.concat([local, name, data, central, name, end]);
+}
+
 test('release center remains explicitly read-only without credentials', async () => {
   const releases = createReleaseService({ config: config() });
   const summary = await releases.getSummary();
@@ -339,6 +380,71 @@ test('release summary reconciles manually dispatched builds when callbacks miss 
   });
   assert.equal(callback.status, 'succeeded');
   assert.equal(callback.artifacts[0].component, 'notification');
+});
+
+test('release summary restores missing artifacts from GitHub run artifact manifest', async () => {
+  const store = createMemoryReleaseStore({
+    now: () => new Date('2026-07-24T11:16:58Z'),
+  });
+  const coreArtifact = artifact('core');
+  const artifactManifest = [
+    coreArtifact.component,
+    coreArtifact.image,
+    coreArtifact.digest,
+    coreArtifact.reference,
+    coreArtifact.shaTag,
+  ].join('\t');
+  const requests = [];
+  const releases = createReleaseService({
+    config: enabledConfig(),
+    store,
+    idFactory: () => 'e5ad557074e4',
+    fetchImpl: async (url, options = {}) => {
+      const resource = String(url);
+      requests.push(resource);
+      if (options.method === 'POST') return jsonResponse(null, 204);
+      if (resource.endsWith('/actions/runs/300/artifacts?per_page=100')) {
+        return jsonResponse({
+          artifacts: [{
+            name: 'release-artifacts-e5ad557074e4',
+            expired: false,
+            archive_download_url: 'https://api.github.example/artifacts/300.zip',
+          }],
+        });
+      }
+      if (resource === 'https://api.github.example/artifacts/300.zip') {
+        return binaryResponse(zipStoredText('release-artifacts.tsv', `${artifactManifest}\n`));
+      }
+      if (resource.includes('/actions/workflows/aliyun-acr.yml/runs?per_page=30')) {
+        return jsonResponse({
+          workflow_runs: [{
+            id: 300,
+            name: 'Build and push Aliyun ACR images',
+            event: 'workflow_dispatch',
+            status: 'completed',
+            conclusion: 'success',
+            head_branch: 'main',
+            head_sha: 'e5ad557074e4aabbccddeeff0011223344556677',
+            created_at: '2026-07-24T11:16:58Z',
+            run_started_at: '2026-07-24T11:16:58Z',
+            updated_at: '2026-07-24T11:19:56Z',
+            html_url: 'https://github.example/runs/300',
+            actor: { login: 'admin' },
+          }],
+        });
+      }
+      throw new Error(`Unexpected request: ${resource}`);
+    },
+  });
+
+  await releases.dispatchBuild({ targets: ['core'], requestedBy: 'admin' });
+  const summary = await releases.getSummary();
+  assert.equal(summary.builds[0].id, 'e5ad557074e4');
+  assert.equal(summary.builds[0].status, 'succeeded');
+  assert.equal(summary.builds[0].artifacts[0].component, 'core');
+  assert.equal(summary.builds[0].artifactSyncStatus, undefined);
+  assert.equal((await store.getBuild('e5ad557074e4')).artifacts[0].reference, coreArtifact.reference);
+  assert.ok(requests.includes('https://api.github.example/artifacts/300.zip'));
 });
 
 test('deployment uses build digests only after runner and platform preflight checks pass', async () => {

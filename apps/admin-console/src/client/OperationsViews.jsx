@@ -7,7 +7,9 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   CircleAlert,
   Clock3,
   Cloud,
@@ -114,6 +116,7 @@ const ACTION_LABELS = {
   'gateway.proxy_error': '网关请求异常',
 };
 const CHART_COLORS = ['#2877f7', '#11ad78', '#ff8a00', '#8a45ef', '#d75467', '#13bad6'];
+const RELEASE_HISTORY_COLLAPSED_LIMIT = 5;
 const RELEASE_IMAGE_ENV_KEYS = {
   platform: 'PLATFORM_API_IMAGE',
   backup: 'BACKUP_RUNNER_IMAGE',
@@ -765,6 +768,7 @@ export function ReleasesView({ session }) {
   const [message, setMessage] = useState('');
   const [clockNow, setClockNow] = useState(Date.now());
   const [historyTab, setHistoryTab] = useState('builds');
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [targets, setTargets] = useState(['platform']);
   const [credentials, setCredentials] = useState({ password: '', totp: '' });
   const [operation, setOperation] = useState({
@@ -803,6 +807,11 @@ export function ReleasesView({ session }) {
 
   function toggleTarget(target) {
     setTargets((current) => current.includes(target) ? current.filter((value) => value !== target) : [...current, target]);
+  }
+
+  function switchHistoryTab(tab) {
+    setHistoryTab(tab);
+    setHistoryExpanded(false);
   }
 
   function selectBuild(build) {
@@ -920,6 +929,10 @@ export function ReleasesView({ session }) {
   const successRate = metrics.completedBuilds ? Math.round((metrics.successfulBuilds / metrics.completedBuilds) * 100) : null;
   const buildRows = data?.builds || [];
   const deployments = data?.deployments || [];
+  const activeHistoryRows = historyTab === 'builds' ? buildRows : deployments;
+  const visibleBuildRows = historyExpanded ? buildRows : buildRows.slice(0, RELEASE_HISTORY_COLLAPSED_LIMIT);
+  const visibleDeployments = historyExpanded ? deployments : deployments.slice(0, RELEASE_HISTORY_COLLAPSED_LIMIT);
+  const hiddenHistoryCount = Math.max(0, activeHistoryRows.length - RELEASE_HISTORY_COLLAPSED_LIMIT);
   const selectedSource = operation.action === 'deploy'
     ? (data?.builds || []).find((build) => build.id === operation.buildId)
     : deployments.find((deployment) => deployment.id === operation.sourceDeploymentId);
@@ -993,16 +1006,16 @@ export function ReleasesView({ session }) {
             panelId="release-history-panel"
             items={[{ id: 'builds', label: '构建' }, { id: 'deployments', label: '部署' }]}
             value={historyTab}
-            onChange={setHistoryTab}
+            onChange={switchHistoryTab}
           />
         </header>
         <div id="release-history-panel" role="tabpanel" aria-labelledby={`release-history-tab-${historyTab}`}>
-        {(historyTab === 'builds' ? buildRows.length : deployments.length) > 0 && (
+        {activeHistoryRows.length > 0 && (
           <div className="release-history-head" aria-hidden="true">
             <span /><span>版本 / 任务</span><span>执行人</span><span>执行时间</span><span>耗时 / 同步</span><span>状态</span><span>操作</span>
           </div>
         )}
-        {historyTab === 'builds' && (buildRows.length ? buildRows.map((build) => (
+        {historyTab === 'builds' && (buildRows.length ? visibleBuildRows.map((build) => (
           <div className="release-history-row" key={build.id}>
             <span className={`run-state ${releaseStateClass(build.status)}`}><i /></span>
             <span className="release-run-source"><strong>{shortValue(build.revision || build.id)}</strong><small>{build.observedOnly ? `GitHub 观察 · ${workflowNameLabel(build.name || build.workflow)}` : build.targets?.length ? build.targets.join('、') : workflowNameLabel(build.name || build.workflow)}</small></span>
@@ -1016,11 +1029,12 @@ export function ReleasesView({ session }) {
             <span className="release-row-actions">
               {build.workflowRun?.url && <a href={build.workflowRun.url} target="_blank" rel="noreferrer" aria-label="打开 GitHub 运行记录"><ExternalLink size={15} /></a>}
               {build.observedOnly && <span className="release-observed-badge">未同步</span>}
+              {!build.observedOnly && build.status === 'succeeded' && !build.artifacts?.length && <span className="release-observed-badge" title="缺少镜像 digest，等待 GitHub 回调或产物恢复">产物未同步</span>}
               {roleAtLeast(session.user?.role, 'super_admin') && !build.observedOnly && build.status === 'succeeded' && build.artifacts?.length > 0 && <button type="button" onClick={() => selectBuild(build)} disabled={!capabilities.canDeploy}><Rocket size={15} />部署</button>}
             </span>
           </div>
         )) : <div className="ops-empty">暂无构建记录</div>)}
-        {historyTab === 'deployments' && (deployments.length ? deployments.map((deployment) => (
+        {historyTab === 'deployments' && (deployments.length ? visibleDeployments.map((deployment) => (
           <div className="release-history-row" key={deployment.id}>
             <span className={`run-state ${releaseStateClass(deployment.status)}`}><i /></span>
             <span className="release-run-source"><strong>{deployment.action === 'rollback' ? '回滚' : '部署'} · {shortValue(deployment.buildId || deployment.sourceDeploymentId)}</strong><small>{deployment.components.join('、')}</small></span>
@@ -1036,6 +1050,15 @@ export function ReleasesView({ session }) {
             </span>
           </div>
         )) : <div className="ops-empty">暂无部署记录</div>)}
+        {hiddenHistoryCount > 0 && (
+          <div className="release-history-more">
+            <button type="button" onClick={() => setHistoryExpanded((current) => !current)}>
+              {historyExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              {historyExpanded ? '收起历史记录' : `展开 ${hiddenHistoryCount} 条历史记录`}
+            </button>
+            <span>显示 {historyExpanded ? activeHistoryRows.length : Math.min(RELEASE_HISTORY_COLLAPSED_LIMIT, activeHistoryRows.length)} / {activeHistoryRows.length}</span>
+          </div>
+        )}
         </div>
       </section>
 
