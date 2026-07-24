@@ -918,15 +918,7 @@ export function ReleasesView({ session }) {
   const capabilities = data?.capabilities || {};
   const metrics = data?.metrics || {};
   const successRate = metrics.completedBuilds ? Math.round((metrics.successfulBuilds / metrics.completedBuilds) * 100) : null;
-  const buildRows = (data?.builds || []).length
-    ? data.builds
-    : (data?.runs || []).map((run) => ({
-      ...run,
-      status: run.conclusion || run.status,
-      workflowRun: { url: run.url, actor: run.actor, event: run.event },
-      targets: [],
-      legacy: true,
-    }));
+  const buildRows = data?.builds || [];
   const deployments = data?.deployments || [];
   const selectedSource = operation.action === 'deploy'
     ? (data?.builds || []).find((build) => build.id === operation.buildId)
@@ -1013,7 +1005,7 @@ export function ReleasesView({ session }) {
         {historyTab === 'builds' && (buildRows.length ? buildRows.map((build) => (
           <div className="release-history-row" key={build.id}>
             <span className={`run-state ${releaseStateClass(build.status)}`}><i /></span>
-            <span className="release-run-source"><strong>{shortValue(build.revision || build.id)}</strong><small>{build.targets?.length ? build.targets.join('、') : workflowNameLabel(build.name)}</small></span>
+            <span className="release-run-source"><strong>{shortValue(build.revision || build.id)}</strong><small>{build.observedOnly ? `GitHub 观察 · ${workflowNameLabel(build.name || build.workflow)}` : build.targets?.length ? build.targets.join('、') : workflowNameLabel(build.name || build.workflow)}</small></span>
             <span className="release-run-actor"><strong>{build.requestedBy || build.workflowRun?.actor || '--'}</strong><small>构建发起人</small></span>
             <span className="release-run-date"><strong>{formatDateTime(releaseIsActive(build.status) ? build.startedAt || build.createdAt : build.completedAt || build.updatedAt || build.createdAt)}</strong><small>{releaseIsActive(build.status) ? '开始时间' : '完成时间'}</small></span>
             <span className="release-run-duration">
@@ -1023,7 +1015,8 @@ export function ReleasesView({ session }) {
             <span className={`release-status status-${releaseStateClass(build.status)}`}>{releaseStatusLabel(build.status)}</span>
             <span className="release-row-actions">
               {build.workflowRun?.url && <a href={build.workflowRun.url} target="_blank" rel="noreferrer" aria-label="打开 GitHub 运行记录"><ExternalLink size={15} /></a>}
-              {roleAtLeast(session.user?.role, 'super_admin') && build.status === 'succeeded' && build.artifacts?.length > 0 && <button type="button" onClick={() => selectBuild(build)} disabled={!capabilities.canDeploy}><Rocket size={15} />部署</button>}
+              {build.observedOnly && <span className="release-observed-badge">未同步</span>}
+              {roleAtLeast(session.user?.role, 'super_admin') && !build.observedOnly && build.status === 'succeeded' && build.artifacts?.length > 0 && <button type="button" onClick={() => selectBuild(build)} disabled={!capabilities.canDeploy}><Rocket size={15} />部署</button>}
             </span>
           </div>
         )) : <div className="ops-empty">暂无构建记录</div>)}

@@ -6346,6 +6346,20 @@ input:focus-visible {
 .release-row-actions > a { width: 30px; padding: 0; }
 .release-row-actions > button:disabled { cursor: not-allowed; opacity: 0.45; }
 
+.release-observed-badge {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 9px;
+  color: var(--muted);
+  background: var(--panel-muted);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .release-disabled-reason {
   display: flex;
   align-items: flex-start;

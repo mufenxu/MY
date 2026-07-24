@@ -44,6 +44,10 @@ function validTimestamp(value) {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
+function sortTimestamp(value) {
+  return validTimestamp(value) || 0;
+}
+
 function normalizeImageReferenceMode(value, action = 'deploy') {
   if (action === 'rollback') return 'digest';
   const mode = stringValue(value, 16).toLowerCase();
@@ -84,6 +88,35 @@ function mapWorkflowRun(run) {
     completedAt: run.conclusion ? (run.updated_at || null) : null,
     url: run.html_url || null,
     actor: run.actor?.login || null,
+  };
+}
+
+function mapObservedBuild(run, config) {
+  return {
+    id: `github-${run.id}`,
+    environment: config.releaseEnvironment || 'production',
+    source: 'github',
+    observedOnly: true,
+    status: workflowConclusionStatus(run),
+    repository: config.githubRepository,
+    workflow: config.githubWorkflow,
+    ref: run.branch || '',
+    revision: run.headSha || run.revision || '',
+    targets: [],
+    artifacts: [],
+    requestedBy: run.actor || 'github-actions',
+    workflowRun: {
+      id: String(run.id),
+      attempt: 1,
+      url: run.url || '',
+      actor: run.actor || '',
+      event: run.event || '',
+    },
+    createdAt: run.createdAt,
+    updatedAt: run.updatedAt,
+    startedAt: run.startedAt,
+    completedAt: run.completedAt,
+    timeline: [],
   };
 }
 
@@ -319,7 +352,7 @@ export function createReleaseService({
       if (inferred) usedInferredRunIds.add(String(inferred.id));
       return inferred;
     };
-    const builds = storedBuilds.map((build) => {
+    const reconciledBuilds = storedBuilds.map((build) => {
       const run = githubRuns.get(String(build.workflowRun?.id || '')) || findInferredRun(build);
       if (!run) return build;
       const reconciledStatus = workflowConclusionStatus(run);
@@ -343,6 +376,13 @@ export function createReleaseService({
         },
       };
     });
+    const buildRunIds = new Set(reconciledBuilds.map((build) => String(build.workflowRun?.id || '')).filter(Boolean));
+    const observedBuilds = runs
+      .filter((run) => !buildRunIds.has(String(run.id)))
+      .map((run) => mapObservedBuild(run, config));
+    const builds = [...reconciledBuilds, ...observedBuilds]
+      .sort((left, right) => sortTimestamp(right.createdAt || right.startedAt || right.updatedAt) - sortTimestamp(left.createdAt || left.startedAt || left.updatedAt))
+      .slice(0, 30);
     const deployments = await Promise.all(storedDeployments.map(async (deployment) => {
       const runnerJob = runnerJobs.get(deployment.id);
       if (!runnerJob || runnerJob.status === deployment.status || ['succeeded', 'failed', 'rolled_back'].includes(deployment.status)) return deployment;

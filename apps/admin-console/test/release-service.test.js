@@ -232,6 +232,64 @@ test('release summary exposes GitHub start, update and completion timestamps', a
   assert.ok(Date.parse(summary.refreshedAt));
 });
 
+test('release summary keeps GitHub-only runs visible after release center builds exist', async () => {
+  const store = createMemoryReleaseStore();
+  await store.createBuild({
+    id: 'release-center-build',
+    status: 'succeeded',
+    source: 'manual',
+    targets: ['platform'],
+    artifacts: [artifact()],
+    revision: 'a'.repeat(40),
+    workflowRun: { id: '100', attempt: 1, url: 'https://github.example/runs/100', actor: 'admin', event: 'workflow_dispatch' },
+    createdAt: '2026-07-20T10:00:00Z',
+    completedAt: '2026-07-20T10:04:00Z',
+  });
+  const releases = createReleaseService({
+    config: config({ githubToken: 'token' }),
+    store,
+    fetchImpl: async () => jsonResponse({
+      workflow_runs: [
+        {
+          id: 200,
+          name: 'Build and push Aliyun ACR images',
+          event: 'push',
+          status: 'completed',
+          conclusion: 'success',
+          head_branch: 'main',
+          head_sha: 'b'.repeat(40),
+          created_at: '2026-07-20T11:00:00Z',
+          run_started_at: '2026-07-20T11:00:02Z',
+          updated_at: '2026-07-20T11:05:00Z',
+          html_url: 'https://github.example/runs/200',
+          actor: { login: 'developer' },
+        },
+        {
+          id: 100,
+          name: 'Build and push Aliyun ACR images',
+          event: 'workflow_dispatch',
+          status: 'completed',
+          conclusion: 'success',
+          head_branch: 'main',
+          head_sha: 'a'.repeat(40),
+          created_at: '2026-07-20T10:00:00Z',
+          run_started_at: '2026-07-20T10:00:02Z',
+          updated_at: '2026-07-20T10:04:00Z',
+          html_url: 'https://github.example/runs/100',
+          actor: { login: 'admin' },
+        },
+      ],
+    }),
+  });
+
+  const summary = await releases.getSummary();
+  assert.deepEqual(summary.builds.map((item) => item.id), ['github-200', 'release-center-build']);
+  assert.equal(summary.builds[0].observedOnly, true);
+  assert.equal(summary.builds[0].status, 'succeeded');
+  assert.equal(summary.builds[0].workflowRun.url, 'https://github.example/runs/200');
+  assert.equal(summary.builds[1].observedOnly, undefined);
+});
+
 test('release summary reconciles manually dispatched builds when callbacks miss the run id', async () => {
   const requests = [];
   const store = createMemoryReleaseStore({
