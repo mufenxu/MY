@@ -433,7 +433,7 @@ jobs:
 
       - name: Retain release artifact manifest
         if: always() && hashFiles('release-artifacts.tsv') != ''
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: release-artifacts-${{ github.event.inputs.release_id || format('gha-{0}-{1}', github.run_id, github.run_attempt) }}
           path: release-artifacts.tsv
