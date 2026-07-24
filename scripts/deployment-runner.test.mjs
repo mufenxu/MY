@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   createDeploymentRunner,
+  deploymentImageReference,
   indexDockerObjectsById,
   loadRunnerConfig,
   normalizeComponents,
@@ -61,6 +62,18 @@ test('deployment runner accepts an allowlisted digest reference', () => {
   }, config);
   assert.equal(artifact.component, 'platform');
   assert.equal(artifact.digest, digest);
+  assert.equal(deploymentImageReference(artifact, 'digest'), `registry.example.com/team/app@${digest}`);
+  assert.equal(deploymentImageReference(artifact, 'tag'), 'registry.example.com/team/app:platform-api-latest');
+});
+
+test('deployment runner rejects mutable tags outside the allowlisted repository', () => {
+  const config = loadRunnerConfig({ DEPLOY_RUNNER_ALLOWED_IMAGE_REPOSITORY: 'registry.example.com/team/app' });
+  assert.throws(() => validateRunnerArtifact({
+    component: 'platform',
+    digest: `sha256:${'c'.repeat(64)}`,
+    reference: `registry.example.com/team/app@sha256:${'c'.repeat(64)}`,
+    image: 'evil.example/team/app:platform-api-latest',
+  }, config), /标签必须属于允许的镜像仓库/);
 });
 
 test('deployment runner requires matching host and container workspace paths', () => {

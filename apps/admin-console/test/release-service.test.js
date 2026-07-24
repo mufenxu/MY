@@ -329,6 +329,54 @@ test('deployment uses build digests only after runner and platform preflight che
   assert.equal(JSON.parse(request.options.body).artifacts[0].digest, digest);
 });
 
+test('deployment can preserve the mutable latest tag by explicit request', async () => {
+  const store = createMemoryReleaseStore();
+  const requests = [];
+  const releases = createReleaseService({
+    config: enabledConfig({
+      deployHookUrl: 'http://deploy-runner.internal/',
+      deployHookToken: 'd'.repeat(32),
+    }),
+    store,
+    idFactory: () => 'deployment-tag-mode',
+    operationsStore: {
+      listIncidents: async () => [],
+      getSettings: async () => ({ maintenanceWindows: [] }),
+      addAudit: async () => ({}),
+    },
+    fetchImpl: async (url, options = {}) => {
+      const resource = String(url);
+      requests.push({ url: resource, options });
+      if (resource.includes('api.github.com')) return jsonResponse({ workflow_runs: [] });
+      if (resource.endsWith('/status')) return jsonResponse({ components: [] });
+      if (resource.endsWith('/preflight')) return jsonResponse({ ok: true, checks: [{ id: 'docker', status: 'passed' }] });
+      if (resource.endsWith('/deployments')) return jsonResponse({ id: 'deployment-tag-mode', status: 'queued' }, 202);
+      throw new Error(`Unexpected request: ${resource}`);
+    },
+  });
+  await releases.acceptCallback({
+    type: 'build',
+    releaseId: 'build-tag-mode',
+    status: 'succeeded',
+    targets: ['platform'],
+    artifacts: [artifact()],
+    revision: 'd'.repeat(40),
+  });
+
+  const deployment = await releases.dispatchDeployment({
+    action: 'deploy',
+    buildId: 'build-tag-mode',
+    components: ['platform'],
+    imageReferenceMode: 'tag',
+    requestedBy: 'admin',
+  });
+  assert.equal(deployment.imageReferenceMode, 'tag');
+  const request = requests.find((item) => item.url.endsWith('/deployments'));
+  const body = JSON.parse(request.options.body);
+  assert.equal(body.imageReferenceMode, 'tag');
+  assert.equal(body.artifacts[0].image, `${imageRepository}:platform-latest`);
+});
+
 test('release preflight blocks deployment while a critical incident is active', async () => {
   const releases = createReleaseService({
     config: enabledConfig({ deployHookUrl: 'http://runner/', deployHookToken: 'd'.repeat(32) }),

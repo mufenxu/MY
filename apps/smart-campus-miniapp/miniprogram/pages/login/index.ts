@@ -117,4 +117,19 @@ Page({
   onOpenPrivacy() {
     pageHelper.openPrivacyContract()
   },
+
+  onSkipLogin() {
+    const pages = getCurrentPages()
+    if (pages.length > 1) {
+      wx.navigateBack()
+      return
+    }
+
+    wx.switchTab({
+      url: constants.ROUTES.INDEX,
+      fail: () => {
+        wx.reLaunch({ url: constants.ROUTES.INDEX })
+      },
+    })
+  },
 })

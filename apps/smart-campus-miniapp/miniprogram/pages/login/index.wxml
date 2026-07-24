@@ -47,6 +47,9 @@
           <text wx:if="{{!loggingIn}}">进入星轨</text>
           <text wx:else>同步数据中...</text>
         </button>
+        <button class="skip-btn" bindtap="onSkipLogin" disabled="{{loggingIn}}">
+          暂不登录，返回首页
+        </button>
       </view>
 
       <!-- Privacy Link -->

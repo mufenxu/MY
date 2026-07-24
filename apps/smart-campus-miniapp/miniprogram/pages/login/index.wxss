@@ -18,11 +18,14 @@ page {
 .login-container {
   position: relative;
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 48rpx 0;
 }
 
 /* Dynamic Background Shapes */
@@ -297,6 +300,29 @@ page {
   box-shadow: 
     inset 6rpx 6rpx 12rpx rgba(99, 102, 241, 0.6),
     inset -6rpx -6rpx 12rpx rgba(255, 255, 255, 0.3);
+}
+
+.skip-btn {
+  width: 100% !important;
+  height: 88rpx;
+  margin-top: 24rpx;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-secondary);
+  font-size: 28rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid rgba(100, 116, 139, 0.18);
+  box-shadow:
+    6rpx 6rpx 12rpx rgba(166, 180, 200, 0.22),
+    -6rpx -6rpx 12rpx rgba(255, 255, 255, 0.72);
+}
+
+.skip-btn:active {
+  transform: scale(0.98);
+  background: rgba(248, 250, 252, 0.9);
 }
 
 /* Privacy Section */

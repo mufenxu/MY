@@ -54,6 +54,7 @@ function createDeploymentDocument(input, { idFactory, now }) {
     environment: 'production',
     action: 'deploy',
     status: 'queued',
+    imageReferenceMode: 'digest',
     buildId: null,
     sourceDeploymentId: null,
     components: [],

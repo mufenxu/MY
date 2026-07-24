@@ -8,6 +8,7 @@ const DEPLOYMENT_CALLBACK_STATES = new Set(['queued', 'running', 'succeeded', 'f
 const ACTIVE_BUILD_STATES = new Set(['queued', 'building']);
 const ACTIVE_DEPLOYMENT_STATES = new Set(['queued', 'running']);
 const TERMINAL_BUILD_STATES = new Set(['succeeded', 'failed', 'cancelled']);
+const IMAGE_REFERENCE_MODES = new Set(['digest', 'tag']);
 const WORKFLOW_DISPATCH_MATCH_BEFORE_MS = 30 * 1000;
 const WORKFLOW_DISPATCH_MATCH_AFTER_MS = 10 * 60 * 1000;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -41,6 +42,12 @@ function workflowConclusionStatus(run) {
 function validTimestamp(value) {
   const timestamp = Date.parse(value || '');
   return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function normalizeImageReferenceMode(value, action = 'deploy') {
+  if (action === 'rollback') return 'digest';
+  const mode = stringValue(value, 16).toLowerCase();
+  return IMAGE_REFERENCE_MODES.has(mode) ? mode : 'digest';
 }
 
 function stringValue(value, maximum = 512) {
@@ -644,6 +651,7 @@ export function createReleaseService({
     buildId,
     sourceDeploymentId,
     components,
+    imageReferenceMode = 'digest',
     requestedBy = 'system',
     maintenanceApproved = false,
   }) {
@@ -674,6 +682,7 @@ export function createReleaseService({
       throw new ReleaseOperationError(409, 'RELEASE_ARTIFACT_MISSING', '所选版本不包含全部目标组件。');
     }
     artifacts = artifacts.map((artifact) => validateArtifact(artifact, config));
+    const referenceMode = normalizeImageReferenceMode(imageReferenceMode, action);
     const preflight = await getPreflight({ components: normalized, action, maintenanceApproved });
     if (!preflight.ok) {
       throw new ReleaseOperationError(409, 'RELEASE_PREFLIGHT_FAILED', '发布前检查未通过。', preflight);
@@ -684,6 +693,7 @@ export function createReleaseService({
       environment: config.releaseEnvironment || 'production',
       action,
       status: 'queued',
+      imageReferenceMode: referenceMode,
       buildId: sourceBuild?.id || null,
       sourceDeploymentId: sourceDeployment?.id || null,
       components: normalized,
@@ -701,6 +711,7 @@ export function createReleaseService({
           action,
           environment: deployment.environment,
           components: normalized,
+          imageReferenceMode: referenceMode,
           artifacts,
           previousArtifacts: deployment.previousArtifacts,
           buildId: deployment.buildId,

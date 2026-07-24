@@ -8,7 +8,7 @@
         <view class="content-wrapper">
             <view bindtap="onGoMe" class="user-card">
                 <image class="uc-avatar" mode="aspectFill" src="{{avatarUrl}}" wx:if="{{avatarUrl}}"></image>
-                <view class="uc-avatar placeholder" wx:else></view>
+                <image class="uc-avatar guest-avatar" mode="aspectFill" src="/assets/guest-kawaii-avatar.svg" wx:else></image>
                 <view class="uc-main">
                     <view class="uc-name">{{loggedIn&&nickName?nickName:'访客用户'}}</view>
                     <view class="uc-sub">{{loggedIn?'欢迎回来':'未登录，功能受限'}}</view>
@@ -68,13 +68,23 @@
 <view class="notice-mask" wx:if="{{showNoticeModal}}" bindtap="onCloseNoticeModal"></view>
 <view class="notice-modal" wx:if="{{showNoticeModal}}">
   <view class="notice-header">
-    <view class="notice-title">{{noticeTitle}}</view>
+    <view class="notice-icon" aria-hidden="true">
+      <image class="notice-icon-img" lazy-load="true" mode="aspectFit" src="../../assets/tab/notification-bell.svg"></image>
+    </view>
+    <view class="notice-heading">
+      <view class="notice-kicker">星轨通知</view>
+      <view class="notice-title">{{noticeTitle}}</view>
+    </view>
+    <view class="notice-close" aria-role="button" aria-label="关闭通知" bindtap="onCloseNoticeModal">
+      <view class="notice-close-line notice-close-line-a"></view>
+      <view class="notice-close-line notice-close-line-b"></view>
+    </view>
   </view>
   <view class="notice-body">
     <view class="notice-content">{{noticeContent}}</view>
-    <view class="notice-time" wx:if="{{noticeTime}}">发布时间：{{noticeTime}}</view>
+    <view class="notice-time" wx:if="{{noticeTime}}">发布时间 {{noticeTime}}</view>
   </view>
   <view class="notice-footer">
-    <button class="btn btn--primary" bindtap="onCloseNoticeModal">知道了</button>
+    <button class="notice-primary" bindtap="onCloseNoticeModal">知道啦</button>
   </view>
 </view>

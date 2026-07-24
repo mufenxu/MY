@@ -1624,6 +1624,7 @@ export function createApp({
         buildId: req.body?.buildId,
         sourceDeploymentId: req.body?.sourceDeploymentId,
         components,
+        imageReferenceMode: req.body?.imageReferenceMode,
         maintenanceApproved: Boolean(req.body?.maintenanceApproved),
         requestedBy: req.consoleUser.username,
       });
@@ -1631,7 +1632,7 @@ export function createApp({
         action: `release.${action}`,
         targetType: 'release',
         targetId: result.id,
-        details: { components, buildId: result.buildId, sourceDeploymentId: result.sourceDeploymentId },
+        details: { components, buildId: result.buildId, sourceDeploymentId: result.sourceDeploymentId, imageReferenceMode: result.imageReferenceMode },
       });
       return res.status(202).json(result);
     } catch (error) {

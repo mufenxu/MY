@@ -1,6 +1,5 @@
 // app.ts
 import * as logger from './utils/logger'
-import { ensureAuthorized } from './utils/auth'
 
 interface IAppOption {
   globalData: {
@@ -107,12 +106,9 @@ App<IAppOption>({
       })
     }
 
-    // 将登录和隐私检查延迟到下一个事件循环执行，不阻塞首页渲染
+    // 将隐私检查延迟到下一个事件循环执行，不阻塞首页渲染。
+    // 登录只在用户主动点击登录或进入受限功能时触发，避免首页形成强制登录环节。
     setTimeout(() => {
-      ensureAuthorized().catch(err => {
-        logger.error('App Launch Login Failed', err, 'App')
-      })
-
       if (this.ensurePrivacy) {
         this.ensurePrivacy()
       }

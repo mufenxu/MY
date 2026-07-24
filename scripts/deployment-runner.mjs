@@ -15,6 +15,7 @@ const COMPONENTS = {
   iot: { service: 'iot-service', envKey: 'IOT_SERVICE_IMAGE' },
   mongodb: { service: 'mongodb', envKey: 'MONGODB_IMAGE' },
 };
+const IMAGE_REFERENCE_MODES = new Set(['digest', 'tag']);
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/i;
 const MAX_BODY_BYTES = 128 * 1024;
@@ -127,17 +128,32 @@ export function validateRunnerArtifact(value, config) {
   const component = String(value?.component || '').trim().toLowerCase();
   const digest = String(value?.digest || '').trim().toLowerCase();
   const reference = String(value?.reference || '').trim();
+  const image = String(value.image || '').trim();
+  const shaTag = String(value.shaTag || '').trim();
   const repository = config.allowedImageRepository;
   if (!COMPONENTS[component] || !DIGEST_PATTERN.test(digest) || reference !== `${repository}@${digest}`) {
     throw new RunnerError(400, 'INVALID_ARTIFACT', '部署产物必须是允许仓库中的不可变 Digest。');
+  }
+  if ((image && !image.startsWith(`${repository}:`)) || (shaTag && !shaTag.startsWith(`${repository}:`))) {
+    throw new RunnerError(400, 'INVALID_ARTIFACT', '部署产物标签必须属于允许的镜像仓库。');
   }
   return {
     component,
     digest,
     reference,
-    image: String(value.image || '').trim(),
-    shaTag: String(value.shaTag || '').trim(),
+    image,
+    shaTag,
   };
+}
+
+function normalizeImageReferenceMode(value, action = 'deploy') {
+  if (action === 'rollback') return 'digest';
+  const mode = String(value || 'digest').trim().toLowerCase();
+  return IMAGE_REFERENCE_MODES.has(mode) ? mode : 'digest';
+}
+
+export function deploymentImageReference(artifact, imageReferenceMode) {
+  return imageReferenceMode === 'tag' ? artifact.image : artifact.reference;
 }
 
 export function loadRunnerConfig(env = process.env) {
@@ -528,7 +544,10 @@ export function createDeploymentRunner({
       await persistJobs();
       await callback(job, { attempts: 2 });
 
-      const updates = Object.fromEntries(job.artifacts.map((artifact) => [COMPONENTS[artifact.component].envKey, artifact.reference]));
+      const updates = Object.fromEntries(job.artifacts.map((artifact) => [
+        COMPONENTS[artifact.component].envKey,
+        deploymentImageReference(artifact, job.imageReferenceMode),
+      ]));
       const services = job.components.map((component) => COMPONENTS[component].service);
       await updateImages(updates);
       const pull = await runDocker(composeArgs('pull', ...services));
@@ -598,16 +617,25 @@ export function createDeploymentRunner({
     if (components.includes('mongodb') && (!config.allowMongoDb || !input.maintenanceApproved)) {
       throw new RunnerError(409, 'MONGODB_MAINTENANCE_REQUIRED', 'MongoDB 更新需要启用维护策略并明确确认维护操作。');
     }
+    const action = input.action === 'rollback' ? 'rollback' : 'deploy';
+    const imageReferenceMode = normalizeImageReferenceMode(input.imageReferenceMode, action);
     const artifacts = (Array.isArray(input.artifacts) ? input.artifacts : []).map((item) => validateRunnerArtifact(item, config));
     if (artifacts.length !== components.length || components.some((component) => !artifacts.some((item) => item.component === component))) {
       throw new RunnerError(400, 'INCOMPLETE_DEPLOYMENT_ARTIFACTS', '部署任务缺少组件产物。');
     }
+    if (imageReferenceMode === 'tag' && artifacts.some((artifact) => !artifact.image)) {
+      throw new RunnerError(400, 'INCOMPLETE_DEPLOYMENT_ARTIFACTS', '保持 latest 标签部署需要构建产物包含标签引用。');
+    }
     const requestHash = crypto.createHash('sha256').update(JSON.stringify({
-      action: input.action === 'rollback' ? 'rollback' : 'deploy',
+      action,
       environment: String(input.environment || 'production'),
       buildId: String(input.buildId || ''),
       components,
-      artifacts: artifacts.map((artifact) => ({ component: artifact.component, reference: artifact.reference })),
+      imageReferenceMode,
+      artifacts: artifacts.map((artifact) => ({
+        component: artifact.component,
+        reference: deploymentImageReference(artifact, imageReferenceMode),
+      })),
     })).digest('hex');
     const existing = jobs.get(id);
     if (existing) {
@@ -616,12 +644,13 @@ export function createDeploymentRunner({
     }
     const job = {
       id,
-      action: input.action === 'rollback' ? 'rollback' : 'deploy',
+      action,
       environment: String(input.environment || 'production').slice(0, 32),
       buildId: String(input.buildId || '').slice(0, 128),
       revision: String(input.revision || '').slice(0, 40),
       components,
       artifacts,
+      imageReferenceMode,
       requestedBy: String(input.requestedBy || 'system').slice(0, 100),
       status: 'queued',
       createdAt: now().toISOString(),

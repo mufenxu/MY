@@ -114,6 +114,16 @@ const ACTION_LABELS = {
   'gateway.proxy_error': '网关请求异常',
 };
 const CHART_COLORS = ['#2877f7', '#11ad78', '#ff8a00', '#8a45ef', '#d75467', '#13bad6'];
+const RELEASE_IMAGE_ENV_KEYS = {
+  platform: 'PLATFORM_API_IMAGE',
+  backup: 'BACKUP_RUNNER_IMAGE',
+  core: 'CORE_API_IMAGE',
+  exam: 'EXAM_API_IMAGE',
+  notification: 'NOTIFICATION_SERVICE_IMAGE',
+  campus: 'CAMPUS_SERVICE_IMAGE',
+  iot: 'IOT_SERVICE_IMAGE',
+  mongodb: 'MONGODB_IMAGE',
+};
 const SLO_STATUS_LABELS = { healthy: '预算充足', at_risk: '预算承压', exhausted: '预算耗尽', no_data: '暂无数据' };
 const CALENDAR_TYPE_LABELS = { release: '发布', configuration: '配置', maintenance: '维护', incident: '事件' };
 const SEARCH_TYPE_LABELS = { service: '服务', incident: '事件', task: '任务', release: '发布', configuration: '配置' };
@@ -759,7 +769,7 @@ export function ReleasesView({ session }) {
   const [credentials, setCredentials] = useState({ password: '', totp: '' });
   const [operation, setOperation] = useState({
     action: 'deploy', buildId: '', sourceDeploymentId: '', components: [], confirmText: '',
-    password: '', totp: '', maintenanceApproved: false,
+    password: '', totp: '', maintenanceApproved: false, imageReferenceMode: 'digest',
   });
   const [preflight, setPreflight] = useState(null);
 
@@ -801,7 +811,7 @@ export function ReleasesView({ session }) {
     setOperation({
       action: 'deploy', buildId: build.id, sourceDeploymentId: '',
       components: (build.artifacts || []).map((artifact) => artifact.component),
-      confirmText: '', password: '', totp: '', maintenanceApproved: false,
+      confirmText: '', password: '', totp: '', maintenanceApproved: false, imageReferenceMode: 'digest',
     });
   }
 
@@ -813,7 +823,7 @@ export function ReleasesView({ session }) {
     setPreflight(null);
     setOperation({
       action: 'deploy', buildId: build.id, sourceDeploymentId: '', components,
-      confirmText: '', password: '', totp: '', maintenanceApproved: false,
+      confirmText: '', password: '', totp: '', maintenanceApproved: false, imageReferenceMode: 'digest',
     });
   }
 
@@ -823,7 +833,7 @@ export function ReleasesView({ session }) {
     setOperation({
       action: 'rollback', buildId: '', sourceDeploymentId: deployment.id,
       components: [...(deployment.components || [])],
-      confirmText: '', password: '', totp: '', maintenanceApproved: false,
+      confirmText: '', password: '', totp: '', maintenanceApproved: false, imageReferenceMode: 'digest',
     });
   }
 
@@ -925,6 +935,13 @@ export function ReleasesView({ session }) {
   const confirmation = `${operation.action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${operation.components.join(',')}`;
   const operationAllowed = operation.action === 'rollback' ? capabilities.canRollback : capabilities.canDeploy;
   const totpReady = !session.user?.totpEnabled || operation.totp.length === 6;
+  const selectedArtifactReferences = availableArtifacts
+    .filter((artifact) => operation.components.includes(artifact.component))
+    .map((artifact) => ({
+      component: artifact.component,
+      envKey: RELEASE_IMAGE_ENV_KEYS[artifact.component] || `${artifact.component.toUpperCase()}_IMAGE`,
+      value: operation.imageReferenceMode === 'tag' && operation.action === 'deploy' ? artifact.image : artifact.reference,
+    }));
   const mode = capabilities.canDeploy ? '受控发布' : capabilities.canBuild ? '仅构建' : '只读';
   return (
     <section className="page-view ops-page" aria-label="发布中心">
@@ -1052,9 +1069,26 @@ export function ReleasesView({ session }) {
             <span><strong>{operation.action === 'rollback' ? shortValue(selectedSource.buildId || selectedSource.id) : shortValue(selectedSource.revision || selectedSource.id)}</strong><small>{availableArtifacts.length} 个不可变产物</small></span>
             <button type="button" onClick={() => { setOperation((current) => ({ ...current, buildId: '', sourceDeploymentId: '', components: [] })); setPreflight(null); }} aria-label="关闭发布操作"><XCircle size={18} /></button>
           </div>
+          {operation.action === 'deploy' && (
+            <div className="release-reference-mode">
+              <span><strong>部署方式</strong><small>{operation.imageReferenceMode === 'tag' ? '写入 latest 标签，保留服务器手动更新习惯' : '写入本次构建 digest，锁定生产版本'}</small></span>
+              <SegmentedTabs
+                ariaLabel="部署镜像引用方式"
+                idPrefix="release-image-reference-mode"
+                items={[{ id: 'digest', label: '固定版本' }, { id: 'tag', label: '保持 latest' }]}
+                value={operation.imageReferenceMode}
+                onChange={(imageReferenceMode) => { setPreflight(null); setOperation({ ...operation, imageReferenceMode, confirmText: '' }); }}
+              />
+            </div>
+          )}
           <div className="release-targets">
             {availableArtifacts.map((artifact) => <label key={artifact.component}><input type="checkbox" checked={operation.components.includes(artifact.component)} onChange={() => toggleOperationComponent(artifact.component)} /><span>{artifact.component} · {shortValue(artifact.digest, 18)}</span></label>)}
           </div>
+          {selectedArtifactReferences.length > 0 && (
+            <div className="release-env-preview">
+              {selectedArtifactReferences.map((item) => <div key={item.component}><strong>{item.envKey}</strong><span title={item.value}>{item.value || '--'}</span></div>)}
+            </div>
+          )}
           {preflight?.checks?.length > 0 && <div className="release-preflight-list">
             {preflight.checks.map((check) => <div key={check.id} className={`check-${check.status}`}><span>{check.status === 'passed' ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}</span><span><strong>{check.label}</strong><small>{check.detail}</small></span></div>)}
           </div>}
