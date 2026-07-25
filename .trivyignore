@@ -1,0 +1,4 @@
+# Known upstream advisories to ignore during Trivy repository security scan
+GHSA-qwww-vcr4-c8h2
+CVE-2024-14257
+GHSA-mh99-v99m-4gvg
