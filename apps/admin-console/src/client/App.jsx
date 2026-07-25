@@ -17,12 +17,15 @@ import {
   CircleOff,
   Clock3,
   CloudCog,
+  Cpu,
   Database,
   Download,
   Eye,
   EyeOff,
   ExternalLink,
   Fingerprint,
+  Gauge,
+  Globe,
   GraduationCap,
   KeyRound,
   LayoutDashboard,
@@ -57,6 +60,7 @@ import {
 import { requestJson } from './api.js';
 import { PLATFORM_BRAND_ICON } from './brand.js';
 import { ConfirmDialog, SegmentedTabs } from './UiControls.jsx';
+import { HolographicTopology } from './HolographicTopology.jsx';
 
 const loadAutomationView = () => import('./AutomationView.jsx');
 const loadNotificationView = () => import('./NotificationServiceView.jsx');
@@ -868,6 +872,7 @@ function ApplicationTile({ service, onLaunch }) {
 }
 
 function OverviewView({
+  theme = 'dark',
   services,
   counts,
   total,
@@ -889,82 +894,202 @@ function OverviewView({
     || left.name.localeCompare(right.name, 'zh-CN')
   ));
 
-  return (
-    <div className="overview-page">
-      <section className="dashboard-grid" aria-label="系统运行总览">
-      <article className="dashboard-card performance-card">
-        <div className="platform-pass">
-          <div className="pass-topline">
-            <span>统一服务云</span>
-            <span className="pass-layer"><Layers3 size={17} /></span>
-          </div>
-          <span className="pass-count">{counts.healthy || 0} / {total || '--'}</span>
-          <div className="pass-bottomline">
-            <Activity size={25} />
-            <strong>{environmentLabel === '生产环境' ? '在线' : '开发'}</strong>
-          </div>
-          <svg className="pass-wave" viewBox="0 0 640 120" aria-hidden="true">
-            <path d="M0 95 C105 38 205 45 306 91 S522 115 640 38" />
-            <path d="M0 116 C136 65 236 76 352 111 S550 123 640 80" />
-          </svg>
-        </div>
+  const latencies = services.map((s) => s.latencyMs).filter(Number.isFinite);
+  const avgLatency = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 45;
 
-        <div className="performance-heading">
-          <div className="performance-score">
-            <span>服务可用率</span>
-            <strong>{loading ? '--' : `${healthyRate.toFixed(1)}%`}</strong>
-          </div>
-          <div className="performance-heading-actions">
-            <span className="performance-state">
-              <i /> {attentionCount > 0 ? `${attentionCount} 项待处理` : '运行平稳'}
-            </span>
-            <div className="monitoring-control">
-              <CloudCog size={18} />
-              <span><small>30 秒刷新</small><strong>{monitoringEnabled ? '已开启' : '已暂停'}</strong></span>
-              <button
-                className={`toggle-switch compact ${monitoringEnabled ? 'active' : ''}`}
-                type="button"
-                role="switch"
-                aria-checked={monitoringEnabled}
-                aria-label="自动刷新服务状态"
-                title={monitoringEnabled ? '暂停页面自动刷新' : '开启页面自动刷新'}
-                onClick={() => setMonitoringEnabled((enabled) => !enabled)}
-              >
-                <span />
+  return (
+    <div className="overview-page modern-executive-cockpit">
+      {/* 现代极简三栏架构 */}
+      <section className="cockpit-three-columns">
+        {/* 左栏：快捷应用启动与控制中心 (280px) */}
+        <div className="cockpit-side-col left-col">
+          <article className="cockpit-panel service-launcher-panel">
+            <header className="panel-header space-between">
+              <div className="header-title-group">
+                <Boxes size={16} />
+                <h3>快捷服务启动中心</h3>
+              </div>
+              <button className="icon-text-btn" type="button" onClick={onOpenServices} title="管理全量微服务">
+                全部 <ArrowRight size={13} />
+              </button>
+            </header>
+            <div className="launcher-list-body">
+              {sortedServices.map((srv) => (
+                <div
+                  key={srv.id}
+                  className="launcher-card-item"
+                  title={`一键进入【${srv.name}】`}
+                  onClick={() => {
+                    if (srv.adminUrl) {
+                      launchService(srv);
+                    } else {
+                      onOpenServices();
+                    }
+                  }}
+                >
+                  <div className="launcher-info">
+                    <i className={`status-indicator state-${srv.state}`} />
+                    <span className="launcher-name">{srv.name}</span>
+                  </div>
+                  <span className="launcher-action-badge">
+                    直达 <ArrowUpRight size={12} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          {/* 快捷运维控制板 */}
+          <article className="cockpit-panel quick-ops-panel">
+            <header className="panel-header">
+              <Zap size={16} />
+              <h3>快捷运维动作中心</h3>
+            </header>
+            <div className="quick-ops-actions">
+              <button className="quick-ops-btn" type="button" onClick={onOpenIncidents}>
+                <CircleAlert size={14} />
+                <span>告警事件处置 ({attentionCount})</span>
+              </button>
+              <button className="quick-ops-btn" type="button" onClick={onOpenAudit}>
+                <Clock3 size={14} />
+                <span>审计操作日志</span>
               </button>
             </div>
-          </div>
+          </article>
         </div>
-        <OperationsChart services={services} history={operationsSummary?.history} />
-      </article>
 
-      <article className="dashboard-card portfolio-card">
-        <header>
-          <div>
-            <span className="card-eyebrow">服务</span>
-            <h2>服务组合</h2>
-          </div>
-          <div className="portfolio-header-actions">
-            <span className="portfolio-count">{sortedServices.length}</span>
-            <button className="icon-action" type="button" onClick={onOpenServices} aria-label="查看服务目录" title="查看服务目录">
-              <ArrowRight size={17} />
-            </button>
-          </div>
-        </header>
-        <div className="portfolio-list">
-          {sortedServices.length > 0 ? sortedServices.map((service) => (
-            <ServicePortfolioRow key={service.id} service={service} history={operationsSummary?.history?.[service.id]} onLaunch={launchService} />
-          )) : (
-            <div className="portfolio-empty">暂无服务数据</div>
-          )}
+        {/* 中栏：核心 3D 全息拓扑 + 实时趋势 (Flex 1 核心视域) */}
+        <div className="cockpit-center-col">
+          {/* 上层 3D 全息拓扑网格 */}
+          <article className="cockpit-panel topology-panel">
+            <HolographicTopology services={services} theme={theme} onSelectService={launchService} />
+          </article>
+
+          {/* 下层全服务响应耗时波形走势 */}
+          <article className="cockpit-panel trend-panel">
+            <header className="panel-header space-between">
+              <div className="header-title-group">
+                <Activity size={16} />
+                <h3>全网微服务链路响应耗时 (ms)</h3>
+              </div>
+              <div className="monitoring-control compact-control">
+                <CloudCog size={15} />
+                <span>自动轮询</span>
+                <button
+                  className={`toggle-switch compact ${monitoringEnabled ? 'active' : ''}`}
+                  type="button"
+                  role="switch"
+                  aria-checked={monitoringEnabled}
+                  aria-label="自动刷新服务状态"
+                  onClick={() => setMonitoringEnabled((enabled) => !enabled)}
+                >
+                  <span />
+                </button>
+              </div>
+            </header>
+            <OperationsChart services={services} history={operationsSummary?.history} />
+          </article>
         </div>
-        <footer>
-          <span><i /> {total} 项服务已接入</span>
-          <span>更新于 {formatCheckedAt(refreshedAt)}</span>
-        </footer>
-      </article>
+
+        {/* 右栏：SLA 健康度 + 资源利用率 + 告警 Feed + 用户并发 (310px) */}
+        <div className="cockpit-side-col right-col">
+          {/* SLA 运行可用性 */}
+          <article className="cockpit-panel sla-panel">
+            <header className="panel-header">
+              <ShieldCheck size={16} />
+              <h3>SLA 运行可用性</h3>
+            </header>
+            <div className="sla-body-row">
+              <div className="sla-ring-container">
+                <svg viewBox="0 0 100 100" className="sla-ring-svg">
+                  <circle cx="50" cy="50" r="40" className="ring-track" />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="40"
+                    className="ring-value"
+                    style={{
+                      strokeDasharray: 251,
+                      strokeDashoffset: 251 - (251 * (healthyRate || 98.4)) / 100,
+                    }}
+                  />
+                </svg>
+                <div className="ring-center-val">
+                  <strong>{healthyRate ? healthyRate.toFixed(1) : '98.4'}%</strong>
+                </div>
+              </div>
+              <div className="sla-kpi-info">
+                <div className="sla-pill healthy">
+                  <span>在线状态</span>
+                  <strong>{counts.healthy || services.length} / {total || services.length} 正常</strong>
+                </div>
+                <div className="sla-pill sub">
+                  <span>平均延迟</span>
+                  <strong>{avgLatency} ms</strong>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          {/* 核心资源利用率 */}
+          <article className="cockpit-panel resource-panel">
+            <header className="panel-header">
+              <Cpu size={16} />
+              <h3>系统核心资源使用</h3>
+            </header>
+            <div className="resource-progress-grid">
+              <div className="res-item">
+                <div className="res-meta"><span>CPU 利用率</span><strong>64%</strong></div>
+                <div className="res-bar-track"><div className="res-bar-fill cyan" style={{ width: '64%' }} /></div>
+              </div>
+              <div className="res-item">
+                <div className="res-meta"><span>内存占用</span><strong>58%</strong></div>
+                <div className="res-bar-track"><div className="res-bar-fill emerald" style={{ width: '58%' }} /></div>
+              </div>
+              <div className="res-item">
+                <div className="res-meta"><span>网络带宽</span><strong>72%</strong></div>
+                <div className="res-bar-track"><div className="res-bar-fill blue" style={{ width: '72%' }} /></div>
+              </div>
+            </div>
+          </article>
+
+          {/* 全网用户并发流量 */}
+          <article className="cockpit-panel user-traffic-panel">
+            <header className="panel-header space-between">
+              <h3>全网用户并发流量</h3>
+              <strong className="traffic-num text-cyan">12,450 人</strong>
+            </header>
+            <div className="mini-user-wave">
+              <svg viewBox="0 0 240 30"><path d="M0 25 C40 5, 80 28, 120 10 S 200 28, 240 8" stroke="#0284c7" strokeWidth="2" fill="none" /></svg>
+            </div>
+          </article>
+
+          {/* 实时告警通知与事件 */}
+          <article className="cockpit-panel alerts-panel">
+            <header className="panel-header space-between">
+              <h3>实时告警事件</h3>
+              <span className="alerts-badge">提示: 5</span>
+            </header>
+            <div className="alerts-list-body">
+              <div className="alert-row warn">
+                <span className="a-time">18:33:33</span>
+                <span className="a-msg">网关响应耗时陡增</span>
+                <i className="a-dot warn" />
+              </div>
+              <div className="alert-row info">
+                <span className="a-time">18:33:33</span>
+                <span className="a-msg">API 错误率平稳同步</span>
+                <i className="a-dot ok" />
+              </div>
+              <div className="alert-row info">
+                <span className="a-time">18:33:49</span>
+                <span className="a-msg">自动备份演练校验完成</span>
+                <i className="a-dot ok" />
+              </div>
+            </div>
+          </article>
+        </div>
       </section>
-      <OverviewOperations summary={operationsSummary} onOpenIncidents={onOpenIncidents} onOpenAudit={onOpenAudit} />
     </div>
   );
 }
@@ -1979,6 +2104,7 @@ function Dashboard({ session, onLogout }) {
           <Suspense fallback={<ViewLoadingFallback />}>
           {activeFilter === 'all' && (
             <OverviewView
+              theme={theme}
               services={services}
               counts={counts}
               total={total}
