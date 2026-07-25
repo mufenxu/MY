@@ -12,13 +12,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@my-platform/platform-browser-runtime": "file:../../packages/platform-browser-runtime",
     "@ant-design/icons": "^6.1.0",
     "@marsidev/react-turnstile": "^1.4.2",
+    "@my-platform/platform-browser-runtime": "file:../../packages/platform-browser-runtime",
     "antd": "^6.0.0",
     "axios": "^1.18.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-router": "^8.3.0",
     "react-router-dom": "^7.18.1",
     "recharts": "^3.8.0",
     "swr": "^2.3.6"
