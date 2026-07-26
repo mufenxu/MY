@@ -9,8 +9,9 @@ const logger = require('../utils/logger');
 const { resolveInternalServiceUrl } = require('../utils/internalServiceUrl');
 
 const DEFAULT_PRIMARY_DEVICE_ID = 'esp8266_living';
-const DEFAULT_SECONDARY_DEVICE_ID = 'esp01s_relay';
-const DEFAULT_RELAY_ID = 'relay1';
+const DEFAULT_PRIMARY_RELAY_ID = 'relay1';
+const DEFAULT_SECONDARY_DEVICE_ID = 'relay_balcony';
+const DEFAULT_SECONDARY_RELAY_ID = 'relay2';
 
 function getMqttRequestTimeoutMs() {
     const parsed = Number.parseInt(process.env.CORE_MQTT_API_TIMEOUT_MS || '8000', 10);
@@ -110,7 +111,8 @@ function getConfiguredDevice(slot) {
     return {
         deviceId: getSecretValue(`${prefix}_DEVICE_ID`)
             || (slot === 'secondary' ? DEFAULT_SECONDARY_DEVICE_ID : DEFAULT_PRIMARY_DEVICE_ID),
-        relayId: getSecretValue(`${prefix}_RELAY_ID`) || DEFAULT_RELAY_ID,
+        relayId: getSecretValue(`${prefix}_RELAY_ID`)
+            || (slot === 'secondary' ? DEFAULT_SECONDARY_RELAY_ID : DEFAULT_PRIMARY_RELAY_ID),
     };
 }
 
@@ -583,5 +585,10 @@ router.post('/control', auth.verifyToken, smartControlManageAccess, async (req, 
         });
     }
 });
+
+router._test = {
+    getConfiguredDevice,
+    resolveControlTarget,
+};
 
 module.exports = router;

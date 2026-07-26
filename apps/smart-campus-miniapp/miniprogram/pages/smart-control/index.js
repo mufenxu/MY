@@ -316,6 +316,8 @@ Page({
 
     request(ESP01S_RELAY_API.publishUrl, 'POST', {
         target: ESP01S_RELAY_API.target,
+        deviceId: ESP01S_RELAY_API.deviceId,
+        relayId: ESP01S_RELAY_API.relayId,
         status: nextState ? 'on' : 'off',
       })
       .then((res) => {

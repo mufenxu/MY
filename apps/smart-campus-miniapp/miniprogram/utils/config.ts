@@ -114,6 +114,8 @@ export const EMQX_API = {
 export const ESP01S_RELAY_API = {
   publishUrl: joinUrl(API_PREFIX, '/iot/control'),
   target: 'secondary',
+  deviceId: 'relay_balcony',
+  relayId: 'relay2',
   topic: 'home/relay/control',
   statusTopic: 'home/relay/status',
   clientId: 'miniapp-esp01s-relay',
