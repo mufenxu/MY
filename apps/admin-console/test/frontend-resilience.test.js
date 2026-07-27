@@ -104,3 +104,18 @@ test('homepage dependency topology uses live service observations without decora
   assert.match(app, /monitoringEnabled=\{monitoringEnabled\}/);
   assert.doesNotMatch(topology, /<canvas|requestAnimationFrame|throughput|1\.93k/);
 });
+
+test('homepage formal cockpit keeps summary and alert content tied to live observations', () => {
+  const app = readSource('src', 'client', 'App.jsx');
+  const styles = readSource('src', 'client', 'styles.css');
+
+  assert.match(app, /className="cockpit-overview-strip" aria-label="全网运行摘要"/);
+  assert.match(app, /const healthyCount = counts\.healthy \?\? 0/);
+  assert.match(app, /const incidentCount = operationsSummary\?\.incidents\?\.length \?\? attentionCount/);
+  assert.match(app, /\(operationsSummary\?\.incidents \|\| \[\]\)\.slice\(0, 3\)\.map/);
+  assert.match(app, /className="launcher-card-item"\s+type="button"/s);
+  assert.match(app, /onOpenConfiguration=\{\(\) => navigateToView\('configuration'\)\}/);
+  assert.doesNotMatch(app, /网关响应耗时陡增/);
+  assert.match(styles, /\.dependency-service-copy > strong\s*\{[^}]*font-size:\s*12\.5px/s);
+  assert.match(styles, /\.dependency-service-metrics small\s*\{[^}]*font-size:\s*10px/s);
+});

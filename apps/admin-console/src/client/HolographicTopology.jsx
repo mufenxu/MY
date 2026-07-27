@@ -100,7 +100,6 @@ export function HolographicTopology({ services = [], monitoringEnabled = true, o
   const topologyServices = buildTopologyServices(services);
   const total = topologyServices.length;
   const healthyCount = topologyServices.filter((service) => service.state === 'healthy').length;
-  const attentionCount = topologyServices.filter((service) => ['degraded', 'offline'].includes(service.state)).length;
   const latencies = topologyServices.map((service) => service.latencyMs).filter(Number.isFinite);
   const averageLatency = latencies.length
     ? Math.round(latencies.reduce((sum, latency) => sum + latency, 0) / latencies.length)
@@ -126,18 +125,6 @@ export function HolographicTopology({ services = [], monitoringEnabled = true, o
           </div>
         </div>
         <div className="dependency-summary" aria-label="服务链路摘要">
-          <span className="dependency-summary-item">
-            <small>服务可用</small>
-            <strong className="is-healthy">{healthyCount} / {total}</strong>
-          </span>
-          <span className="dependency-summary-item">
-            <small>平均响应</small>
-            <strong>{formatLatency(averageLatency)}</strong>
-          </span>
-          <span className="dependency-summary-item">
-            <small>需关注</small>
-            <strong className={attentionCount > 0 ? 'has-attention' : ''}>{attentionCount}</strong>
-          </span>
           <span className={`dependency-refresh-state ${monitoringEnabled ? 'is-active' : ''}`}>
             <i />
             {monitoringEnabled ? '自动轮询' : '轮询暂停'}

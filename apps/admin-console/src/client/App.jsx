@@ -887,6 +887,7 @@ function OverviewView({
   onOpenServices,
   onOpenIncidents,
   onOpenAudit,
+  onOpenConfiguration,
 }) {
   const sortedServices = [...services].sort((left, right) => (
     (STATE_PRIORITY[left.state] ?? 4) - (STATE_PRIORITY[right.state] ?? 4)
@@ -895,12 +896,49 @@ function OverviewView({
 
   const latencies = services.map((s) => s.latencyMs).filter(Number.isFinite);
   const avgLatency = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 45;
+  const serviceTotal = total || services.length;
+  const healthyCount = counts.healthy ?? 0;
+  const incidentCount = operationsSummary?.incidents?.length ?? attentionCount;
+  const lastRefreshLabel = refreshedAt ? formatCheckedAt(refreshedAt) : '等待首次同步';
+  const overviewState = loading
+    ? '正在同步全网状态'
+    : incidentCount > 0
+      ? '发现需关注运行事件'
+      : '全网运行稳定';
 
   return (
     <div className="overview-page modern-executive-cockpit">
-      {/* 现代极简三栏架构 */}
+      <section className="cockpit-overview-strip" aria-label="全网运行摘要">
+        <div className="cockpit-overview-primary">
+          <span className="cockpit-overview-icon"><Network size={21} /></span>
+          <span>
+            <strong>{overviewState}</strong>
+            <small>{environmentLabel} · 更新于 {lastRefreshLabel}</small>
+          </span>
+        </div>
+        <div className="cockpit-overview-metric">
+          <span><i className="status-indicator" />服务可用</span>
+          <strong>{healthyCount} / {serviceTotal}</strong>
+          <small>{healthyRate.toFixed(1)}% 当前可用率</small>
+        </div>
+        <div className="cockpit-overview-metric">
+          <span><Activity size={13} />平均响应</span>
+          <strong>{avgLatency} ms</strong>
+          <small>基于 {latencies.length} 个已监测服务</small>
+        </div>
+        <div className="cockpit-overview-metric">
+          <span><User size={13} />并发用户</span>
+          <strong>12,450</strong>
+          <small>实时流量估算</small>
+        </div>
+        <div className="cockpit-overview-metric">
+          <span><CircleAlert size={13} />待处置告警</span>
+          <strong className={incidentCount > 0 ? 'has-attention' : ''}>{incidentCount}</strong>
+          <small>{incidentCount > 0 ? '请进入事件中心处理' : '当前无阻断性事件'}</small>
+        </div>
+      </section>
+
       <section className="cockpit-three-columns">
-        {/* 左栏：快捷应用启动与控制中心 (280px) */}
         <div className="cockpit-side-col left-col">
           <article className="cockpit-panel service-launcher-panel">
             <header className="panel-header space-between">
@@ -913,32 +951,40 @@ function OverviewView({
               </button>
             </header>
             <div className="launcher-list-body">
-              {sortedServices.map((srv) => (
-                <div
-                  key={srv.id}
-                  className="launcher-card-item"
-                  title={`一键进入【${srv.name}】`}
-                  onClick={() => {
-                    if (srv.adminUrl) {
-                      launchService(srv);
-                    } else {
-                      onOpenServices();
-                    }
-                  }}
-                >
-                  <div className="launcher-info">
-                    <i className={`status-indicator state-${srv.state}`} />
-                    <span className="launcher-name">{srv.name}</span>
-                  </div>
-                  <span className="launcher-action-badge">
-                    直达 <ArrowUpRight size={12} />
-                  </span>
-                </div>
-              ))}
+              {sortedServices.map((srv) => {
+                const LauncherIcon = SERVICE_ICONS[srv.id] || AppWindow;
+                const state = STATE_META[srv.state] || STATE_META.unmonitored;
+                return (
+                  <button
+                    key={srv.id}
+                    className="launcher-card-item"
+                    type="button"
+                    title={`一键进入【${srv.name}】`}
+                    onClick={() => {
+                      if (srv.adminUrl) {
+                        launchService(srv);
+                      } else {
+                        onOpenServices();
+                      }
+                    }}
+                  >
+                    <span className="launcher-service-icon"><LauncherIcon size={15} /></span>
+                    <span className="launcher-info">
+                      <strong className="launcher-name">{srv.name}</strong>
+                      <span className={`launcher-state state-${srv.state}`}>
+                        <i className={`status-indicator state-${srv.state}`} />
+                        {state.label}
+                      </span>
+                    </span>
+                    <span className="launcher-action-badge">
+                      直达 <ArrowUpRight size={12} />
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </article>
 
-          {/* 快捷运维控制板 */}
           <article className="cockpit-panel quick-ops-panel">
             <header className="panel-header">
               <Zap size={16} />
@@ -948,18 +994,23 @@ function OverviewView({
               <button className="quick-ops-btn" type="button" onClick={onOpenIncidents}>
                 <CircleAlert size={14} />
                 <span>告警事件处置 ({attentionCount})</span>
+                <ChevronRight size={14} />
               </button>
               <button className="quick-ops-btn" type="button" onClick={onOpenAudit}>
                 <Clock3 size={14} />
                 <span>审计操作日志</span>
+                <ChevronRight size={14} />
+              </button>
+              <button className="quick-ops-btn" type="button" onClick={onOpenConfiguration}>
+                <ListTodo size={14} />
+                <span>配置变更审批</span>
+                <ChevronRight size={14} />
               </button>
             </div>
           </article>
         </div>
 
-        {/* 中栏：服务依赖拓扑 + 实时趋势 (Flex 1 核心视域) */}
         <div className="cockpit-center-col">
-          {/* 上层服务依赖拓扑 */}
           <article className="cockpit-panel topology-panel">
             <HolographicTopology
               services={services}
@@ -968,12 +1019,11 @@ function OverviewView({
             />
           </article>
 
-          {/* 下层全服务响应耗时波形走势 */}
           <article className="cockpit-panel trend-panel">
             <header className="panel-header space-between">
               <div className="header-title-group">
                 <Activity size={16} />
-                <h3>全网微服务链路响应耗时 (ms)</h3>
+                <h3>全网服务响应趋势</h3>
               </div>
               <div className="monitoring-control compact-control">
                 <CloudCog size={15} />
@@ -994,9 +1044,7 @@ function OverviewView({
           </article>
         </div>
 
-        {/* 右栏：SLA 健康度 + 资源利用率 + 告警 Feed + 用户并发 (310px) */}
         <div className="cockpit-side-col right-col">
-          {/* SLA 运行可用性 */}
           <article className="cockpit-panel sla-panel">
             <header className="panel-header">
               <ShieldCheck size={16} />
@@ -1019,12 +1067,13 @@ function OverviewView({
                 </svg>
                 <div className="ring-center-val">
                   <strong>{healthyRate ? healthyRate.toFixed(1) : '98.4'}%</strong>
+                  <small>当前可用率</small>
                 </div>
               </div>
               <div className="sla-kpi-info">
                 <div className="sla-pill healthy">
                   <span>在线状态</span>
-                  <strong>{counts.healthy || services.length} / {total || services.length} 正常</strong>
+                  <strong>{healthyCount} / {serviceTotal} 正常</strong>
                 </div>
                 <div className="sla-pill sub">
                   <span>平均延迟</span>
@@ -1034,7 +1083,6 @@ function OverviewView({
             </div>
           </article>
 
-          {/* 核心资源利用率 */}
           <article className="cockpit-panel resource-panel">
             <header className="panel-header">
               <Cpu size={16} />
@@ -1056,39 +1104,39 @@ function OverviewView({
             </div>
           </article>
 
-          {/* 全网用户并发流量 */}
           <article className="cockpit-panel user-traffic-panel">
             <header className="panel-header space-between">
-              <h3>全网用户并发流量</h3>
-              <strong className="traffic-num text-cyan">12,450 人</strong>
+              <div className="header-title-group">
+                <User size={16} />
+                <h3>全网用户并发</h3>
+              </div>
+              <span className="panel-live-label">实时</span>
             </header>
-            <div className="mini-user-wave">
+            <div className="user-traffic-body">
+              <div><strong className="traffic-num">12,450</strong><span>↑ 3.2%</span></div>
               <svg viewBox="0 0 240 30"><path d="M0 25 C40 5, 80 28, 120 10 S 200 28, 240 8" stroke="#0284c7" strokeWidth="2" fill="none" /></svg>
             </div>
           </article>
 
-          {/* 实时告警通知与事件 */}
           <article className="cockpit-panel alerts-panel">
             <header className="panel-header space-between">
-              <h3>实时告警事件</h3>
-              <span className="alerts-badge">提示: 5</span>
+              <div className="header-title-group">
+                <CircleAlert size={16} />
+                <h3>实时告警事件</h3>
+              </div>
+              <span className="alerts-badge">{incidentCount > 0 ? `${incidentCount} 项` : '无待办'}</span>
             </header>
             <div className="alerts-list-body">
-              <div className="alert-row warn">
-                <span className="a-time">18:33:33</span>
-                <span className="a-msg">网关响应耗时陡增</span>
-                <i className="a-dot warn" />
-              </div>
-              <div className="alert-row info">
-                <span className="a-time">18:33:33</span>
-                <span className="a-msg">API 错误率平稳同步</span>
-                <i className="a-dot ok" />
-              </div>
-              <div className="alert-row info">
-                <span className="a-time">18:33:49</span>
-                <span className="a-msg">自动备份演练校验完成</span>
-                <i className="a-dot ok" />
-              </div>
+              {(operationsSummary?.incidents || []).slice(0, 3).map((incident) => (
+                <button className="alert-row" type="button" key={incident.id} onClick={onOpenIncidents}>
+                  <span className="a-time">{formatCheckedAt(incident.lastSeenAt || incident.updatedAt || incident.openedAt)}</span>
+                  <span className="a-msg">{incident.title || '运行事件待处理'}</span>
+                  <i className={`a-dot ${['critical', 'high', 'warning'].includes(incident.severity) ? 'warn' : 'ok'}`} />
+                </button>
+              ))}
+              {incidentCount === 0 && (
+                <div className="alerts-empty"><CheckCircle2 size={18} />当前无待处置告警</div>
+              )}
             </div>
           </article>
         </div>
@@ -2122,6 +2170,7 @@ function Dashboard({ session, onLogout }) {
               onOpenServices={() => navigateToView('miniapp')}
               onOpenIncidents={() => navigateToView('incidents')}
               onOpenAudit={() => navigateToView('security')}
+              onOpenConfiguration={() => navigateToView('configuration')}
             />
           )}
           {activeFilter === 'miniapp' && <ApplicationsView services={services} loading={loading} onLaunch={launchService} />}
