@@ -872,7 +872,6 @@ function ApplicationTile({ service, onLaunch }) {
 }
 
 function OverviewView({
-  theme = 'dark',
   services,
   counts,
   total,
@@ -958,11 +957,15 @@ function OverviewView({
           </article>
         </div>
 
-        {/* 中栏：核心 3D 全息拓扑 + 实时趋势 (Flex 1 核心视域) */}
+        {/* 中栏：服务依赖拓扑 + 实时趋势 (Flex 1 核心视域) */}
         <div className="cockpit-center-col">
-          {/* 上层 3D 全息拓扑网格 */}
+          {/* 上层服务依赖拓扑 */}
           <article className="cockpit-panel topology-panel">
-            <HolographicTopology services={services} theme={theme} onSelectService={launchService} />
+            <HolographicTopology
+              services={services}
+              monitoringEnabled={monitoringEnabled}
+              onSelectService={launchService}
+            />
           </article>
 
           {/* 下层全服务响应耗时波形走势 */}
@@ -2104,7 +2107,6 @@ function Dashboard({ session, onLogout }) {
           <Suspense fallback={<ViewLoadingFallback />}>
           {activeFilter === 'all' && (
             <OverviewView
-              theme={theme}
               services={services}
               counts={counts}
               total={total}

@@ -89,3 +89,18 @@ test('notification nested tabs keep the existing panel spacing and accessible la
   assert.match(source, /className="notify-view-panel"[^>]+aria-labelledby=\{panelLabelledBy\}/);
   assert.match(styles, /\.notify-view-panel\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*gap:\s*14px;/s);
 });
+
+test('homepage dependency topology uses live service observations without decorative canvas data', () => {
+  const topology = readSource('src', 'client', 'HolographicTopology.jsx');
+  const app = readSource('src', 'client', 'App.jsx');
+
+  for (const serviceId of ['core', 'exam', 'campus', 'mqtt', 'notify', 'ct8-automation']) {
+    assert.match(topology, new RegExp(`id: '${serviceId}'`));
+  }
+  assert.match(topology, /service\.latencyMs/);
+  assert.match(topology, /service\.httpStatus/);
+  assert.match(topology, /service\.checkedAt/);
+  assert.match(topology, /aria-label="核心网关与六个服务的依赖关系"/);
+  assert.match(app, /monitoringEnabled=\{monitoringEnabled\}/);
+  assert.doesNotMatch(topology, /<canvas|requestAnimationFrame|throughput|1\.93k/);
+});
