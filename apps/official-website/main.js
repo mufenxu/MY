@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
   init3DTiltCards();
   initNumberCounters();
   initFloatingNavbar();
-  initMobileDrawer();
 });
 
 // Interactive Particle Background
@@ -240,35 +239,5 @@ function initFloatingNavbar() {
     } else {
       navbar.classList.remove('scrolled');
     }
-  });
-}
-
-// Mobile Drawer Interaction
-function initMobileDrawer() {
-  const toggleBtn = document.getElementById('mobile-toggle');
-  const drawer = document.getElementById('mobile-drawer');
-  const navLinks = document.querySelectorAll('.mobile-nav-link');
-
-  if (!toggleBtn || !drawer) return;
-
-  toggleBtn.addEventListener('click', () => {
-    toggleBtn.classList.toggle('active');
-    drawer.classList.toggle('open');
-  });
-
-  navLinks.forEach((link) => {
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      toggleBtn.classList.remove('active');
-      drawer.classList.remove('open');
-
-      const targetId = link.getAttribute('href');
-      if (targetId && targetId.startsWith('#')) {
-        const targetElem = document.querySelector(targetId);
-        if (targetElem) {
-          targetElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }
-    });
   });
 }
