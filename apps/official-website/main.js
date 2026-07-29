@@ -1,11 +1,36 @@
 // MY Platform Official Website - Dynamic Floating Island & Responsive Motion Engine
 
 document.addEventListener('DOMContentLoaded', () => {
+  initThemeToggle();
   initQuantumCanvas();
   init3DTiltCards();
   initNumberCounters();
-  initFloatingNavbar();
 });
+
+function initThemeToggle() {
+  const toggle = document.getElementById('theme-toggle');
+  if (!toggle) return;
+
+  function updateLabel() {
+    const isDark = document.documentElement.dataset.theme === 'dark';
+    const label = isDark ? '切换至浅色模式' : '切换至深色模式';
+    toggle.setAttribute('aria-label', label);
+    toggle.setAttribute('title', label);
+  }
+
+  toggle.addEventListener('click', () => {
+    const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = nextTheme;
+    try {
+      localStorage.setItem('my-official-theme', nextTheme);
+    } catch {
+      // 受限浏览器环境下仍允许本次切换生效。
+    }
+    updateLabel();
+  });
+
+  updateLabel();
+}
 
 // Interactive Particle Background
 function initQuantumCanvas() {
@@ -188,56 +213,4 @@ function initNumberCounters() {
   );
 
   counters.forEach((counter) => observer.observe(counter));
-}
-
-// Floating Dynamic Island Menu & Scroll
-function initFloatingNavbar() {
-  const navbar = document.getElementById('navbar');
-  const menu = document.getElementById('nav-menu');
-  const indicator = document.getElementById('menu-indicator');
-  const items = document.querySelectorAll('.menu-item');
-
-  function updateIndicator(target) {
-    if (!indicator || !target || !menu || window.innerWidth < 1024) return;
-    const rect = target.getBoundingClientRect();
-    const menuRect = menu.getBoundingClientRect();
-    indicator.style.width = `${rect.width}px`;
-    indicator.style.left = `${rect.left - menuRect.left}px`;
-  }
-
-  setTimeout(() => {
-    const activeItem = document.querySelector('.menu-item.active');
-    if (activeItem) updateIndicator(activeItem);
-  }, 100);
-
-  items.forEach((item) => {
-    item.addEventListener('mouseenter', () => updateIndicator(item));
-    item.addEventListener('click', function (e) {
-      e.preventDefault();
-      items.forEach((i) => i.classList.remove('active'));
-      this.classList.add('active');
-      updateIndicator(this);
-
-      const targetId = this.getAttribute('href');
-      if (targetId && targetId.startsWith('#')) {
-        const targetElem = document.querySelector(targetId);
-        if (targetElem) {
-          targetElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }
-    });
-  });
-
-  menu?.addEventListener('mouseleave', () => {
-    const currentActive = document.querySelector('.menu-item.active');
-    if (currentActive) updateIndicator(currentActive);
-  });
-
-  window.addEventListener('scroll', () => {
-    if (window.scrollY > 30) {
-      navbar.classList.add('scrolled');
-    } else {
-      navbar.classList.remove('scrolled');
-    }
-  });
 }

@@ -8,46 +8,40 @@
   <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260723_1">
   <link rel="alternate icon" type="image/png" href="./favicon.png?v=20260723_1">
   <link rel="shortcut icon" href="./favicon.ico?v=20260723_1">
-  <link rel="stylesheet" href="./index.css?v=20260728_1">
+  <script>
+    try {
+      const savedTheme = localStorage.getItem('my-official-theme');
+      const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = savedTheme || (prefersDark ? 'dark' : 'light');
+    } catch {
+      document.documentElement.dataset.theme = 'light';
+    }
+  </script>
+  <link rel="stylesheet" href="./index.css?v=20260729_1">
 </head>
 <body>
   <!-- 动态 Canvas 背景粒子网格 -->
   <canvas id="bg-canvas"></canvas>
 
-  <!-- 顶部悬浮浮岛导航栏 -->
-  <div class="navbar-wrapper">
-    <header class="floating-navbar" id="navbar">
-      <!-- 品牌 Logo -->
-      <a href="/" class="brand-logo">
-        <div class="logo-box">
-          <img src="./favicon.svg?v=20260723_1" alt="MY Platform Logo" class="logo-icon-svg">
-        </div>
-        <div class="brand-info">
-          <span class="brand-title">MY PLATFORM</span>
-        </div>
+  <div class="top-actions-wrapper">
+    <div class="top-actions">
+      <a href="/console" class="shimmer-btn top-console-btn">
+        <span class="btn-text">控制台</span>
+        <svg class="btn-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
       </a>
-
-      <!-- 桌面端导航菜单 -->
-      <nav class="nav-menu" id="nav-menu">
-        <div class="menu-indicator" id="menu-indicator"></div>
-        <a href="#features" class="menu-item active">产品矩阵</a>
-      </nav>
-
-      <!-- 导航右侧按钮与切换 -->
-      <div class="nav-actions">
-        <div class="status-chip">
-          <span class="chip-text">v2.4 Live</span>
-        </div>
-
-        <a href="/console" class="shimmer-btn">
-          <span class="btn-text">进入控制台</span>
-          <svg class="btn-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-            <polyline points="12 5 19 12 12 19"></polyline>
-          </svg>
-        </a>
-      </div>
-    </header>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="切换至深色模式" title="切换至深色模式">
+        <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>
+        </svg>
+        <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
+    </div>
   </div>
 
   <main>
@@ -302,6 +296,6 @@
     </div>
   </footer>
 
-  <script type="module" src="./main.js?v=20260728_1"></script>
+  <script type="module" src="./main.js?v=20260729_1"></script>
 </body>
 </html>
