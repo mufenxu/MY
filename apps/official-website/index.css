@@ -142,9 +142,7 @@ button:focus, button:active, button:focus-visible {
 }
 
 .top-actions {
-  max-width: 1180px;
   width: 100%;
-  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1060,12 +1058,36 @@ button:focus, button:active, button:focus-visible {
 /* Mobile Devices (< 768px) */
 @media (max-width: 768px) {
   .top-actions-wrapper { padding: 8px 12px; }
+  .top-actions { gap: 6px; }
   .brand-title { font-size: 13px; }
 
   .shimmer-btn {
     padding: 6px 12px;
     font-size: 12px;
     height: 34px;
+  }
+
+  .shimmer-btn.top-console-btn {
+    min-height: 32px;
+    height: 32px;
+    padding: 5px 10px;
+    gap: 4px !important;
+    font-size: 11px;
+  }
+
+  .top-console-btn .btn-arrow {
+    width: 12px;
+    height: 12px;
+  }
+
+  .theme-toggle {
+    width: 32px;
+    height: 32px;
+  }
+
+  .theme-icon {
+    width: 16px;
+    height: 16px;
   }
 
   .hero-section { padding: 110px 16px 50px; }
@@ -1085,7 +1107,8 @@ button:focus, button:active, button:focus-visible {
 
 /* Small Mobile Screens (< 480px / iPhone SE) */
 @media (max-width: 480px) {
-  .top-actions-wrapper { padding: 6px 10px; }
+  .top-actions-wrapper { padding: 6px 8px; }
+  .top-actions { gap: 5px; }
   .logo-box { width: 28px; height: 28px; border-radius: 6px; }
   .brand-title { font-size: 12px; }
 
@@ -1096,9 +1119,20 @@ button:focus, button:active, button:focus-visible {
     gap: 3px;
   }
 
+  .shimmer-btn.top-console-btn {
+    min-height: 30px;
+    height: 30px;
+    padding: 4px 9px;
+  }
+
   .theme-toggle {
-    width: 38px;
-    height: 38px;
+    width: 30px;
+    height: 30px;
+  }
+
+  .theme-icon {
+    width: 15px;
+    height: 15px;
   }
 
   .badge-tag { font-size: 11px; padding: 5px 10px; }
