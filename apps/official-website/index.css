@@ -354,7 +354,7 @@ button:focus, button:active, button:focus-visible {
 .hero-section {
   position: relative;
   overflow-x: clip;
-  padding: 140px 20px 80px;
+  padding: 110px 20px 80px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1090,7 +1090,7 @@ button:focus, button:active, button:focus-visible {
     height: 16px;
   }
 
-  .hero-section { padding: 110px 16px 50px; }
+  .hero-section { padding: 82px 16px 50px; }
   .hero-cta-group { flex-direction: column; width: 100%; max-width: 320px; margin-left: auto; margin-right: auto; margin-bottom: 16px; }
   .hero-highlights-chips { gap: 8px; margin-bottom: 36px; }
   .chip-item { padding: 5px 12px; font-size: 12px; }
