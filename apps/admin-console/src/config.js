@@ -49,7 +49,10 @@ function parseAndroidCertificateFingerprints(value) {
 }
 
 function androidPasskeyOrigin(fingerprint) {
-  return `android:apk-key-hash:${Buffer.from(fingerprint.replaceAll(':', ''), 'hex').toString('base64url')}`;
+  const certificateHash = Buffer.from(fingerprint.replaceAll(':', ''), 'hex')
+    .toString('base64')
+    .replace(/=+$/, '');
+  return `android:apk-key-hash:${certificateHash}`;
 }
 
 function parseHttpUrl(value) {
