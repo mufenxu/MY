@@ -1,8 +1,10 @@
 package cn.pxyb.mycontrol.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.Ct8Data
@@ -14,8 +16,10 @@ import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.PlatformTask
 import cn.pxyb.mycontrol.data.PlatformUser
 import cn.pxyb.mycontrol.data.ReleaseData
+import cn.pxyb.mycontrol.data.QrLoginTarget
 import cn.pxyb.mycontrol.data.SecurityData
 import cn.pxyb.mycontrol.data.SessionStore
+import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +37,9 @@ data class AppUiState(
     val selectedTab: MainTab = MainTab.Overview,
     val loginBusy: Boolean = false,
     val secondFactorRequired: Boolean = false,
+    val recoveryCodeAllowed: Boolean = false,
+    val androidPasskeySupported: Boolean = false,
+    val suggestedUsername: String = "",
     val refreshing: Boolean = false,
     val busyAction: String? = null,
     val overview: OverviewData? = null,
@@ -44,9 +51,16 @@ data class AppUiState(
     val ct8: Ct8Data? = null,
     val diagnostics: DiagnosticData? = null,
     val security: SecurityData? = null,
+    val qrLoginOpen: Boolean = false,
+    val qrLoginBusy: Boolean = false,
+    val qrLoginTarget: QrLoginTarget? = null,
+    val qrLoginError: String? = null,
     val error: String? = null,
     val message: String? = null,
-)
+) {
+    val activeIncidents: List<IncidentInfo>
+        get() = incidents.filter { it.status != "resolved" }
+}
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionStore = SessionStore(application)
@@ -55,63 +69,139 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         AppUiState(
             booting = false,
             locked = sessionStore.hasSession(),
+            suggestedUsername = sessionStore.readLastUsername(),
         ),
     )
     val state: StateFlow<AppUiState> = mutableState.asStateFlow()
+    private var pendingQrLogin: Pair<String, String>? = null
+
+    init {
+        viewModelScope.launch {
+            runCatching { api.loginCapabilities() }.onSuccess { capabilities ->
+                mutableState.update { it.copy(androidPasskeySupported = capabilities.androidPasskeySupported) }
+            }
+        }
+    }
 
     fun unlockSession() {
         viewModelScope.launch {
             mutableState.update { it.copy(booting = true, error = null) }
             val user = api.authStatus()
             if (user == null) {
-                mutableState.value = AppUiState(booting = false, error = "登录会话已过期，请重新登录。")
+                mutableState.update { it.copy(booting = false, locked = false, user = null, error = "登录会话已过期，请重新登录。") }
+                MyControlWidgetProvider.clear(getApplication())
             } else {
                 mutableState.update { it.copy(booting = false, locked = false, user = user) }
                 refreshAll()
+                scanPendingQrLogin()
             }
         }
     }
 
     fun discardLockedSession() {
         sessionStore.clear()
-        mutableState.value = AppUiState(booting = false)
+        mutableState.update { it.copy(booting = false, locked = false, user = null, error = null) }
+        MyControlWidgetProvider.clear(getApplication())
     }
 
-    fun login(username: String, password: String, factor: String) {
+    fun login(username: String, password: String, factor: String, useRecoveryCode: Boolean) {
         if (username.isBlank() || password.isBlank()) {
-            mutableState.update { it.copy(error = "请输入平台账号和密码。") }
+            mutableState.update { it.copy(error = "请输入平台账号和密码。", message = null) }
             return
         }
         viewModelScope.launch {
             mutableState.update { it.copy(loginBusy = true, error = null, message = null) }
-            runCatching { api.login(username, password, totp = factor) }
-                .onSuccess { result ->
-                    mutableState.update {
-                        it.copy(
-                            loginBusy = false,
-                            locked = false,
-                            user = result.user,
-                            secondFactorRequired = false,
-                            message = result.recoveryCodes.takeIf(List<String>::isNotEmpty)?.let {
-                                "动态验证已启用，请妥善保存网页登录页显示的恢复码。"
-                            },
-                        )
-                    }
-                    refreshAll()
-                }
-                .onFailure { error ->
-                    val apiError = error as? ApiException
-                    val requiresFactor = apiError?.code == "SECOND_FACTOR_REQUIRED"
-                    val message = when (apiError?.code) {
-                        "MFA_ENROLLMENT_REQUIRED" -> "首次绑定动态验证请先在网页控制台完成。"
-                        "PASSKEY_REQUIRED" -> "该账号要求使用 Passkey，请先在网页控制台登录。"
-                        "BOT_CHALLENGE_REQUIRED" -> "登录触发了安全验证，请先在网页控制台完成验证。"
-                        else -> error.message ?: "登录失败，请稍后重试。"
-                    }
-                    mutableState.update {
-                        it.copy(loginBusy = false, secondFactorRequired = requiresFactor, error = message)
-                    }
-                }
+            runCatching {
+                api.login(
+                    username,
+                    password,
+                    totp = factor.takeUnless { useRecoveryCode }.orEmpty(),
+                    recoveryCode = factor.takeIf { useRecoveryCode }.orEmpty(),
+                )
+            }.onSuccess(::completeLogin).onFailure(::handleLoginFailure)
+        }
+    }
+
+    fun loginWithPasskey(username: String, requestCredential: suspend (String) -> String) {
+        if (username.isBlank()) {
+            mutableState.update { it.copy(error = "请先输入平台账号。", message = null) }
+            return
+        }
+        viewModelScope.launch {
+            mutableState.update { it.copy(loginBusy = true, error = null, message = null) }
+            runCatching {
+                val challenge = api.beginPasskeyLogin(username)
+                api.completePasskeyLogin(challenge, requestCredential(challenge.optionsJson))
+            }.onSuccess(::completeLogin).onFailure(::handleLoginFailure)
+        }
+    }
+
+    fun resetSecondFactor() {
+        mutableState.update {
+            it.copy(
+                loginBusy = false,
+                secondFactorRequired = false,
+                recoveryCodeAllowed = false,
+                error = null,
+                message = null,
+            )
+        }
+    }
+
+    fun lockSession() {
+        if (mutableState.value.user != null && sessionStore.hasSession() && !mutableState.value.qrLoginBusy) {
+            mutableState.update { it.copy(locked = true) }
+        }
+    }
+
+    private fun completeLogin(result: cn.pxyb.mycontrol.data.LoginResult) {
+        mutableState.update {
+            it.copy(
+                loginBusy = false,
+                locked = false,
+                user = result.user,
+                suggestedUsername = result.user.username,
+                secondFactorRequired = false,
+                recoveryCodeAllowed = false,
+                message = result.recoveryCodes.takeIf(List<String>::isNotEmpty)?.let {
+                    "动态验证已启用，请妥善保存网页登录页显示的恢复码。"
+                },
+            )
+        }
+        refreshAll()
+        scanPendingQrLogin()
+    }
+
+    private fun handleLoginFailure(error: Throwable) {
+        val apiError = error as? ApiException
+        if (apiError?.code == "SECOND_FACTOR_REQUIRED") {
+            mutableState.update {
+                it.copy(
+                    loginBusy = false,
+                    secondFactorRequired = true,
+                    recoveryCodeAllowed = apiError.details?.optBoolean("recoveryCodeAllowed") == true,
+                    error = null,
+                    message = "账号密码验证通过，请完成第二步验证。",
+                )
+            }
+            return
+        }
+        val requiresFactor = apiError?.code == "SECOND_FACTOR_REQUIRED" || mutableState.value.secondFactorRequired
+        val recoveryAllowed = apiError?.details?.optBoolean("recoveryCodeAllowed") == true || mutableState.value.recoveryCodeAllowed
+        val message = when (apiError?.code) {
+            "MFA_ENROLLMENT_REQUIRED" -> "首次绑定动态验证请先在网页控制台完成。"
+            "PASSKEY_REQUIRED" -> "该账号要求使用 Passkey，请使用下方 Passkey 登录。"
+            "BOT_CHALLENGE_REQUIRED" -> "登录触发了安全验证，请先在网页控制台完成验证。"
+            else -> error.message ?: "登录失败，请稍后重试。"
+        }
+        mutableState.update {
+            it.copy(
+                loginBusy = false,
+                secondFactorRequired = requiresFactor,
+                recoveryCodeAllowed = recoveryAllowed,
+                error = message,
+                message = null,
+            )
         }
     }
 
@@ -119,12 +209,148 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             mutableState.update { it.copy(busyAction = "logout", error = null) }
             api.logout()
-            mutableState.value = AppUiState(booting = false)
+            mutableState.update {
+                AppUiState(
+                    booting = false,
+                    androidPasskeySupported = it.androidPasskeySupported,
+                    suggestedUsername = sessionStore.readLastUsername(),
+                )
+            }
+            MyControlWidgetProvider.clear(getApplication())
         }
     }
 
     fun selectTab(tab: MainTab) {
         mutableState.update { it.copy(selectedTab = tab, error = null, message = null) }
+    }
+
+    fun openQrScanner() {
+        mutableState.update {
+            it.copy(qrLoginOpen = true, qrLoginBusy = false, qrLoginTarget = null, qrLoginError = null)
+        }
+    }
+
+    fun handleQrLoginUrl(rawUrl: String?) {
+        if (rawUrl.isNullOrBlank()) return
+        val parsed = parseQrLoginUrl(rawUrl)
+        if (parsed == null) {
+            mutableState.update {
+                it.copy(qrLoginOpen = true, qrLoginTarget = null, qrLoginError = "二维码不是有效的 MY Platform 登录请求。")
+            }
+            return
+        }
+        pendingQrLogin = parsed
+        if (mutableState.value.user != null && !mutableState.value.locked) {
+            scanPendingQrLogin()
+        }
+    }
+
+    fun scanQrCode(rawValue: String) {
+        if (mutableState.value.qrLoginBusy || mutableState.value.qrLoginTarget != null) return
+        handleQrLoginUrl(rawValue)
+    }
+
+    fun resetQrScanner() {
+        pendingQrLogin = null
+        mutableState.update {
+            it.copy(qrLoginOpen = true, qrLoginBusy = false, qrLoginTarget = null, qrLoginError = null)
+        }
+    }
+
+    fun closeQrLogin() {
+        pendingQrLogin = null
+        mutableState.update {
+            it.copy(qrLoginOpen = false, qrLoginBusy = false, qrLoginTarget = null, qrLoginError = null)
+        }
+    }
+
+    fun rejectQrLogin() {
+        val target = mutableState.value.qrLoginTarget ?: return closeQrLogin()
+        if (mutableState.value.qrLoginBusy) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(qrLoginBusy = true, qrLoginError = null) }
+            runCatching { api.rejectQrLogin(target.requestId) }
+                .onSuccess {
+                    mutableState.update {
+                        it.copy(qrLoginOpen = false, qrLoginBusy = false, qrLoginTarget = null, message = "已拒绝本次网页登录。")
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update { it.copy(qrLoginBusy = false, qrLoginError = qrErrorMessage(error)) }
+                }
+        }
+    }
+
+    fun approveQrLogin(
+        requestCredential: suspend (String) -> String,
+        requestBiometric: suspend () -> Boolean,
+    ) {
+        val target = mutableState.value.qrLoginTarget ?: return
+        if (mutableState.value.qrLoginBusy || target.status == "approved") return
+        viewModelScope.launch {
+            mutableState.update { it.copy(qrLoginBusy = true, qrLoginError = null) }
+            runCatching {
+                if (target.confirmationMethod == "passkey") {
+                    val challenge = api.beginQrPasskey(target.requestId)
+                    api.approveQrWithPasskey(
+                        target.requestId,
+                        challenge,
+                        requestCredential(challenge.optionsJson),
+                    )
+                } else {
+                    if (!requestBiometric()) throw IllegalStateException("身份验证已取消，未批准网页登录。")
+                    api.approveQrWithBiometric(target.requestId)
+                }
+            }.onSuccess { approved ->
+                mutableState.update {
+                    it.copy(qrLoginBusy = false, qrLoginTarget = approved, message = "网页登录已安全批准。")
+                }
+            }.onFailure { error ->
+                mutableState.update { it.copy(qrLoginBusy = false, qrLoginError = qrErrorMessage(error)) }
+            }
+        }
+    }
+
+    private fun scanPendingQrLogin() {
+        val pending = pendingQrLogin ?: return
+        if (mutableState.value.user == null || mutableState.value.locked || mutableState.value.qrLoginBusy) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(qrLoginOpen = true, qrLoginBusy = true, qrLoginTarget = null, qrLoginError = null)
+            }
+            runCatching { api.scanQrLogin(pending.first, pending.second) }
+                .onSuccess { target ->
+                    pendingQrLogin = null
+                    mutableState.update { it.copy(qrLoginBusy = false, qrLoginTarget = target) }
+                }
+                .onFailure { error ->
+                    pendingQrLogin = null
+                    mutableState.update { it.copy(qrLoginBusy = false, qrLoginError = qrErrorMessage(error)) }
+                }
+        }
+    }
+
+    private fun parseQrLoginUrl(rawUrl: String): Pair<String, String>? {
+        return runCatching {
+            val uri = Uri.parse(rawUrl)
+            val expectedHost = Uri.parse(BuildConfig.PLATFORM_BASE_URL).host
+            if (uri.scheme != "https" || uri.host != expectedHost || uri.path != "/app/qr-login") return null
+            val requestId = uri.getQueryParameter("requestId").orEmpty()
+            val fragment = Uri.parse("https://local.invalid/?${uri.fragment.orEmpty()}")
+            val scanToken = fragment.getQueryParameter("scanToken").orEmpty()
+            if (!requestId.matches(Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")) || scanToken.length !in 32..128) return null
+            requestId to scanToken
+        }.getOrNull()
+    }
+
+    private fun qrErrorMessage(error: Throwable): String {
+        val apiError = error as? ApiException
+        return when (apiError?.code) {
+            "QR_LOGIN_UNAVAILABLE", "QR_LOGIN_EXPIRED" -> "二维码已过期或已被使用，请在网页刷新后重试。"
+            "QR_PASSKEY_REQUIRED" -> "超级管理员需先在账号安全设置中绑定 Passkey。"
+            "QR_PASSKEY_INVALID" -> "Passkey 验证失败，未批准网页登录。"
+            else -> error.message ?: "扫码登录操作失败，请稍后重试。"
+        }
     }
 
     fun refreshAll(force: Boolean = false) {
@@ -162,6 +388,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val unauthorized = failures.filterIsInstance<ApiException>().firstOrNull { it.status == 401 }
                 if (unauthorized != null) {
                     mutableState.value = AppUiState(booting = false, error = unauthorized.message)
+                    MyControlWidgetProvider.clear(getApplication())
                     return@supervisorScope
                 }
                 mutableState.update { current ->
@@ -178,14 +405,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         error = failures.firstOrNull()?.message?.let { "部分数据暂不可用：$it" },
                     )
                 }
+                publishWidget()
             }
         }
     }
 
-    fun acknowledgeIncident(id: String) = runAction("incident", "事件已确认。") {
-        api.acknowledgeIncident(id)
-        val incidents = api.incidents()
-        mutableState.update { it.copy(incidents = incidents) }
+    fun acknowledgeIncident(id: String) = updateIncident("事件已确认。") {
+        api.updateIncident(id, "acknowledge", note = "通过 MY Control Android 确认")
+    }
+
+    fun assignIncident(id: String, assignedTo: String) = updateIncident("事件负责人已更新。") {
+        api.updateIncident(id, "assign", assignedTo = assignedTo)
+    }
+
+    fun addIncidentNote(id: String, note: String) = updateIncident("处理备注已记录。") {
+        api.updateIncident(id, "note", note = note)
+    }
+
+    fun muteIncident(id: String, muteMinutes: Int) = updateIncident("事件已静默。") {
+        api.updateIncident(id, "mute", muteMinutes = muteMinutes)
+    }
+
+    fun resolveIncident(id: String, note: String) = updateIncident("事件已关闭。") {
+        api.updateIncident(id, "resolve", note = note)
     }
 
     fun runDiagnostics() = runAction("diagnostics", "系统自检已完成。") {
@@ -206,6 +448,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun runIotScene(id: String) = runAction("scene", "IoT 场景指令已进入执行队列。") {
         api.runIotScene(id)
         mutableState.update { it.copy(iot = api.iot()) }
+        publishWidget()
     }
 
     fun revokeSession(nonce: String) = runAction("session", "远程会话已撤销。") {
@@ -217,6 +460,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         mutableState.update { it.copy(error = null, message = null) }
     }
 
+    private fun updateIncident(successMessage: String, action: suspend () -> Unit) =
+        runAction("incident", successMessage) {
+            action()
+            mutableState.update { it.copy(incidents = api.incidents()) }
+            publishWidget()
+        }
+
+    private fun publishWidget() {
+        val current = mutableState.value
+        MyControlWidgetProvider.publish(
+            context = getApplication(),
+            overview = current.overview,
+            activeIncidents = current.activeIncidents,
+            iot = current.iot,
+        )
+    }
+
     private fun runAction(action: String, successMessage: String, block: suspend () -> Unit) {
         if (mutableState.value.busyAction != null) return
         viewModelScope.launch {
@@ -226,6 +486,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 .onFailure { error ->
                     if (error is ApiException && error.status == 401) {
                         mutableState.value = AppUiState(booting = false, error = error.message)
+                        MyControlWidgetProvider.clear(getApplication())
                     } else {
                         mutableState.update {
                             it.copy(busyAction = null, error = error.message ?: "操作失败，请稍后重试。")

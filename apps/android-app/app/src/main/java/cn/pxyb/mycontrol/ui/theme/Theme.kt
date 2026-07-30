@@ -12,14 +12,14 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 
 private val LightColors = lightColorScheme(
-    primary = Forest,
+    primary = BrandBlue,
     onPrimary = Surface,
-    primaryContainer = MintPale,
-    onPrimaryContainer = Forest,
-    secondary = Ocean,
+    primaryContainer = OceanPale,
+    onPrimaryContainer = Ink,
+    secondary = BrandGreen,
     onSecondary = Surface,
-    secondaryContainer = OceanPale,
-    onSecondaryContainer = Ocean,
+    secondaryContainer = MintPale,
+    onSecondaryContainer = Forest,
     tertiary = Amber,
     onTertiary = Surface,
     tertiaryContainer = AmberPale,
@@ -37,11 +37,11 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Mint,
-    onPrimary = Forest,
-    primaryContainer = ForestSoft,
+    primary = BrandCyan,
+    onPrimary = DarkCanvas,
+    primaryContainer = ColorTokens.OceanContainerDark,
     onPrimaryContainer = DarkText,
-    secondary = ColorTokens.OceanDark,
+    secondary = ColorTokens.GreenDark,
     onSecondary = DarkCanvas,
     secondaryContainer = ColorTokens.OceanContainerDark,
     onSecondaryContainer = DarkText,
@@ -60,9 +60,10 @@ private val DarkColors = darkColorScheme(
 )
 
 object ColorTokens {
-    val SurfaceSubtle = androidx.compose.ui.graphics.Color(0xFFF0F3F1)
+    val SurfaceSubtle = androidx.compose.ui.graphics.Color(0xFFEEF2F7)
     val OceanDark = androidx.compose.ui.graphics.Color(0xFF8BC6DE)
-    val OceanContainerDark = androidx.compose.ui.graphics.Color(0xFF1F4556)
+    val OceanContainerDark = androidx.compose.ui.graphics.Color(0xFF123A64)
+    val GreenDark = androidx.compose.ui.graphics.Color(0xFF5AD8AA)
     val AmberDark = androidx.compose.ui.graphics.Color(0xFFF0C26F)
     val CoralDark = androidx.compose.ui.graphics.Color(0xFFFFB4AE)
     val CoralContainerDark = androidx.compose.ui.graphics.Color(0xFF6A302D)
@@ -79,7 +80,7 @@ fun MYControlTheme(
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colors.background.toArgb()
-            window.navigationBarColor = colors.background.toArgb()
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 window.isStatusBarContrastEnforced = false
                 window.isNavigationBarContrastEnforced = false
@@ -93,4 +94,3 @@ fun MYControlTheme(
         content = content,
     )
 }
-

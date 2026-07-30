@@ -1,4 +1,10 @@
 <resources>
-    <string name="app_name">MY Control</string>
+    <string name="app_name">智控中心</string>
+    <string name="asset_statements" translatable="false">[{\"include\":\"https://pxyb.cn/.well-known/assetlinks.json\"}]</string>
+    <string name="widget_name">智控中心状态</string>
+    <string name="widget_description">平台运行状态、严重事件和 IoT 设备概览</string>
+    <string name="widget_open_app">打开智控中心</string>
+    <string name="widget_service_label">服务</string>
+    <string name="widget_incident_label">严重事件</string>
+    <string name="widget_device_label">在线设备</string>
 </resources>
-

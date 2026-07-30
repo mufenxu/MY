@@ -6,6 +6,7 @@ import compression from 'compression';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
+import QRCode from 'qrcode';
 import {
   SESSION_COOKIE_NAME,
   createPasswordHash,
@@ -32,6 +33,7 @@ import { createMemoryOperationsStore } from './operations-store.js';
 import { OperationalIntelligenceError } from './operational-query.js';
 import { createOperationalSearch } from './operational-search.js';
 import { createPasskeyService } from './passkeys.js';
+import { QR_LOGIN_TTL_MS, createMemoryQrLoginStore } from './qr-login-store.js';
 import { ReleaseOperationError, createReleaseService } from './release-service.js';
 import { createMemoryReleaseStore } from './release-store.js';
 import { createRequestDiagnostics } from './request-diagnostics.js';
@@ -55,6 +57,42 @@ function clearSessionCookies(res, config) {
   const options = { ...sessionCookieOptions(config), maxAge: 0 };
   res.clearCookie(sessionCookieName(config.isProduction), options);
   if (config.isProduction) res.clearCookie(SESSION_COOKIE_NAME, options);
+}
+
+function qrLoginCookieName(config, requestId) {
+  const prefix = config.isProduction ? '__Host-' : '';
+  return `${prefix}my_platform_qr_${String(requestId || '').replace(/[^A-Za-z0-9]/g, '')}`;
+}
+
+function qrLoginCookieOptions(config, maxAge = QR_LOGIN_TTL_MS) {
+  return {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: config.isProduction,
+    path: '/',
+    maxAge,
+  };
+}
+
+function validQrRequestId(value) {
+  const id = String(value || '');
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ? id : '';
+}
+
+function userAgentLabel(value) {
+  const userAgent = String(value || '');
+  const browser = userAgent.includes('Edg/') ? 'Microsoft Edge'
+    : userAgent.includes('Chrome/') ? 'Google Chrome'
+      : userAgent.includes('Firefox/') ? 'Firefox'
+        : userAgent.includes('Safari/') ? 'Safari'
+          : '未知浏览器';
+  const system = userAgent.includes('Windows') ? 'Windows'
+    : userAgent.includes('Android') ? 'Android'
+      : /iPhone|iPad/.test(userAgent) ? 'iOS'
+        : userAgent.includes('Mac OS') ? 'macOS'
+          : userAgent.includes('Linux') ? 'Linux'
+            : '未知系统';
+  return `${browser} · ${system}`;
 }
 
 function requireConsoleRequest(req, res, next) {
@@ -108,6 +146,7 @@ export function createApp({
   notificationManager = null,
   authStore = null,
   authRiskStore = null,
+  qrLoginStore = null,
   configurationStore = null,
   configurationManager = null,
   taskManager = null,
@@ -146,12 +185,14 @@ export function createApp({
     backoffBaseMs: config.loginBackoffBaseMs,
     backoffMaxMs: config.loginBackoffMaxMs,
   });
+  const qrLogins = qrLoginStore || createMemoryQrLoginStore();
   const publicUrl = new URL(config.publicOrigin || 'http://127.0.0.1');
+  const passkeyOrigins = [publicUrl.origin, ...(config.androidPasskeyOrigins || [])];
   const passkeys = createPasskeyService({
     authStore: accounts,
     rpName: config.webauthnRpName || 'MY Platform',
     rpID: config.webauthnRpId || publicUrl.hostname,
-    origin: publicUrl.origin,
+    origin: passkeyOrigins.length === 1 ? passkeyOrigins[0] : passkeyOrigins,
   });
   const metrics = createMetrics({ serviceIds: registry.services.map((service) => service.id) });
   const backups = backupManager || (config.backupRunnerUrl
@@ -242,6 +283,39 @@ export function createApp({
 
   async function readSession(req) {
     return sessions.verify(readSessionToken(req));
+  }
+
+  function readQrBrowserVerifier(req, requestId) {
+    return parseCookies(req.headers.cookie)[qrLoginCookieName(config, requestId)] || '';
+  }
+
+  function clearQrBrowserVerifier(res, requestId) {
+    res.clearCookie(qrLoginCookieName(config, requestId), qrLoginCookieOptions(config, 0));
+  }
+
+  function browserQrResponse(record) {
+    return {
+      requestId: record.id,
+      status: record.status,
+      verificationCode: record.verificationCode,
+      scannedBy: record.scannedBy || null,
+      expiresAt: record.expiresAt,
+    };
+  }
+
+  function appQrResponse(record, role) {
+    return {
+      requestId: record.id,
+      status: record.status,
+      verificationCode: record.verificationCode,
+      browser: {
+        label: userAgentLabel(record.browserUserAgent),
+        ip: record.browserIp || '未知 IP',
+        userAgent: record.browserUserAgent || '未知设备',
+      },
+      expiresAt: record.expiresAt,
+      confirmationMethod: role === 'super_admin' ? 'passkey' : 'biometric',
+    };
   }
 
   function sendBackupError(res, error) {
@@ -451,6 +525,7 @@ export function createApp({
   app.locals.requestDiagnostics = diagnostics;
   app.locals.authStore = accounts;
   app.locals.authRiskStore = risk;
+  app.locals.qrLoginStore = qrLogins;
 
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -527,6 +602,22 @@ export function createApp({
   app.use('/api', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     next();
+  });
+
+  app.get('/.well-known/assetlinks.json', (req, res) => {
+    const fingerprints = config.androidAppCertFingerprints || [];
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.json(fingerprints.length === 0 ? [] : [{
+      relation: [
+        'delegate_permission/common.handle_all_urls',
+        'delegate_permission/common.get_login_creds',
+      ],
+      target: {
+        namespace: 'android_app',
+        package_name: config.androidAppPackage,
+        sha256_cert_fingerprints: fingerprints,
+      },
+    }]);
   });
 
   app.get('/api/health', (req, res) => {
@@ -630,6 +721,7 @@ export function createApp({
       mfaRequired: Boolean(config.requireMfa),
       mfaEnrollmentRequired: Boolean(account?.active && !mfaCompliant),
       passkeySupported: true,
+      androidPasskeySupported: (config.androidAppCertFingerprints || []).length > 0,
       botProtectionConfigured: Boolean(config.turnstileSiteKey && config.turnstileSecretKey),
       user: session && account?.active && mfaCompliant ? authUser(account) : null,
     });
@@ -642,6 +734,20 @@ export function createApp({
     legacyHeaders: false,
     skipSuccessfulRequests: true,
     message: { error: '登录尝试过多，请稍后再试。', code: 'LOGIN_RATE_LIMITED' },
+  });
+  const qrCreateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 20,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: '二维码创建过于频繁，请稍后再试。', code: 'QR_LOGIN_RATE_LIMITED' },
+  });
+  const qrApprovalLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 60,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: '扫码确认请求过于频繁，请稍后再试。', code: 'QR_LOGIN_RATE_LIMITED' },
   });
 
   app.post('/api/auth/login', loginLimiter, requireConsoleRequest, async (req, res) => {
@@ -785,6 +891,72 @@ export function createApp({
     }
   });
 
+  app.post('/api/auth/qr/requests', qrCreateLimiter, requireConsoleRequest, async (req, res, next) => {
+    if (config.authDisabled) {
+      return res.status(400).json({ error: '本地免登录模式不需要扫码登录。', code: 'QR_LOGIN_DISABLED' });
+    }
+    try {
+      const created = await qrLogins.create({
+        browserIp: req.ip,
+        browserUserAgent: req.get('user-agent'),
+      });
+      const loginUrl = new URL('/app/qr-login', publicUrl.origin);
+      loginUrl.searchParams.set('requestId', created.requestId);
+      loginUrl.hash = new URLSearchParams({ scanToken: created.scanToken }).toString();
+      res.cookie(
+        qrLoginCookieName(config, created.requestId),
+        created.browserVerifier,
+        qrLoginCookieOptions(config),
+      );
+      return res.status(201).json({
+        ...browserQrResponse(created.record),
+        qrDataUrl: await QRCode.toDataURL(loginUrl.toString(), {
+          errorCorrectionLevel: 'M',
+          margin: 1,
+          width: 280,
+        }),
+      });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/api/auth/qr/requests/:id', async (req, res) => {
+    const requestId = validQrRequestId(req.params.id);
+    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
+    const record = await qrLogins.getForBrowser(requestId, readQrBrowserVerifier(req, requestId));
+    if (!record) return res.status(410).json({ error: '二维码已过期，请刷新后重试。', code: 'QR_LOGIN_EXPIRED' });
+    return res.json(browserQrResponse(record));
+  });
+
+  app.post('/api/auth/qr/requests/:id/consume', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
+    const requestId = validQrRequestId(req.params.id);
+    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
+    const browserVerifier = readQrBrowserVerifier(req, requestId);
+    const record = await qrLogins.getForBrowser(requestId, browserVerifier);
+    if (!record) return res.status(410).json({ error: '二维码已过期，请刷新后重试。', code: 'QR_LOGIN_EXPIRED' });
+    if (record.status !== 'approved') {
+      return res.status(409).json({ error: 'App 尚未完成登录确认。', code: 'QR_LOGIN_NOT_APPROVED', details: { status: record.status } });
+    }
+    const account = await accounts.findAccount(record.approvedBy);
+    if (!account?.active || (config.requireMfa && !strongFactorEnabled(account))) {
+      return res.status(403).json({ error: '批准账号当前不可用于登录。', code: 'QR_LOGIN_ACCOUNT_UNAVAILABLE' });
+    }
+    const consumed = await qrLogins.consume(requestId, browserVerifier);
+    if (!consumed) return res.status(409).json({ error: '二维码已被使用。', code: 'QR_LOGIN_ALREADY_USED' });
+    clearQrBrowserVerifier(res, requestId);
+    return issueAuthenticatedSession(req, res, account, `qr_app_${consumed.confirmationMethod || 'biometric'}`);
+  });
+
+  app.delete('/api/auth/qr/requests/:id', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
+    const requestId = validQrRequestId(req.params.id);
+    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
+    const cancelled = await qrLogins.cancel(requestId, readQrBrowserVerifier(req, requestId));
+    clearQrBrowserVerifier(res, requestId);
+    return res.json({ cancelled: Boolean(cancelled) });
+  });
+
   app.post('/api/auth/logout', requireConsoleRequest, async (req, res) => {
     const token = readSessionToken(req);
     const session = await sessions.verify(token);
@@ -851,6 +1023,92 @@ export function createApp({
     req.consoleUser = { username: account.username, role: account.role };
     req.consoleAccount = account;
     return next();
+  });
+
+  app.post('/api/auth/qr/requests/:id/scan', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
+    const requestId = validQrRequestId(req.params.id);
+    const scanToken = String(req.body?.scanToken || '');
+    if (!requestId || scanToken.length < 32 || scanToken.length > 128) {
+      return res.status(400).json({ error: '二维码内容无效。', code: 'QR_LOGIN_INVALID' });
+    }
+    const record = await qrLogins.scan(requestId, scanToken, req.consoleUser.username);
+    if (!record) return res.status(410).json({ error: '二维码已失效或已由其他账号扫描。', code: 'QR_LOGIN_UNAVAILABLE' });
+    await recordAudit(req, {
+      action: 'auth.qr_scan',
+      targetType: 'qr_login',
+      targetId: requestId,
+      details: { browserIp: record.browserIp, browser: userAgentLabel(record.browserUserAgent) },
+    });
+    return res.json(appQrResponse(record, req.consoleUser.role));
+  });
+
+  app.post('/api/auth/qr/requests/:id/passkey/options', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
+    const requestId = validQrRequestId(req.params.id);
+    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
+    const record = await qrLogins.getForActor(requestId, req.consoleUser.username);
+    if (!record || record.status !== 'scanned') {
+      return res.status(409).json({ error: '扫码请求当前不可确认。', code: 'QR_LOGIN_NOT_SCANNED' });
+    }
+    if (req.consoleUser.role !== 'super_admin') {
+      return res.status(400).json({ error: '当前账号使用设备生物识别确认。', code: 'QR_PASSKEY_NOT_REQUIRED' });
+    }
+    const result = await passkeys.authenticationOptions(req.consoleUser.username);
+    if (!result) {
+      return res.status(403).json({ error: '超级管理员必须先绑定 Passkey 才能使用扫码登录。', code: 'QR_PASSKEY_REQUIRED' });
+    }
+    return res.json(result);
+  });
+
+  app.post('/api/auth/qr/requests/:id/approve', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
+    const requestId = validQrRequestId(req.params.id);
+    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
+    const record = await qrLogins.getForActor(requestId, req.consoleUser.username);
+    if (!record || record.status !== 'scanned') {
+      return res.status(409).json({ error: '扫码请求当前不可确认。', code: 'QR_LOGIN_NOT_SCANNED' });
+    }
+
+    let confirmationMethod = 'biometric';
+    if (req.consoleUser.role === 'super_admin') {
+      try {
+        const verification = await passkeys.verifyAuthentication(req.consoleUser.username, req.body?.passkey);
+        if (!verification.verified) throw new Error('Passkey verification failed.');
+        confirmationMethod = 'passkey';
+      } catch {
+        await recordAudit(req, {
+          action: 'auth.qr_approve',
+          outcome: 'failure',
+          targetType: 'qr_login',
+          targetId: requestId,
+          details: { reason: 'invalid_passkey' },
+        });
+        return res.status(403).json({ error: 'Passkey 验证失败，未批准网页登录。', code: 'QR_PASSKEY_INVALID' });
+      }
+    } else if (req.body?.localConfirmation !== true) {
+      return res.status(400).json({ error: '请先完成设备生物识别。', code: 'QR_BIOMETRIC_REQUIRED' });
+    }
+
+    const approved = await qrLogins.approve(requestId, req.consoleUser.username, confirmationMethod);
+    if (!approved) return res.status(409).json({ error: '扫码请求状态已变化，请重新扫描。', code: 'QR_LOGIN_STATE_CHANGED' });
+    await recordAudit(req, {
+      action: 'auth.qr_approve',
+      targetType: 'qr_login',
+      targetId: requestId,
+      details: { confirmationMethod, browserIp: approved.browserIp, browser: userAgentLabel(approved.browserUserAgent) },
+    });
+    return res.json({ approved: true, ...appQrResponse(approved, req.consoleUser.role) });
+  });
+
+  app.post('/api/auth/qr/requests/:id/reject', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
+    const requestId = validQrRequestId(req.params.id);
+    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
+    const rejected = await qrLogins.reject(requestId, req.consoleUser.username);
+    if (!rejected) return res.status(409).json({ error: '扫码请求状态已变化。', code: 'QR_LOGIN_STATE_CHANGED' });
+    await recordAudit(req, {
+      action: 'auth.qr_reject',
+      targetType: 'qr_login',
+      targetId: requestId,
+    });
+    return res.json({ rejected: true });
   });
 
   app.post('/api/auth/reauth', loginLimiter, requireConsoleRequest, requireRole('super_admin'), async (req, res) => {

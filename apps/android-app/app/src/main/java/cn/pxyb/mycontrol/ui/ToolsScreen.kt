@@ -57,6 +57,7 @@ fun ToolsScreen(
     contentPadding: PaddingValues,
     onTriggerCt8: () -> Unit,
     onRunScene: (String) -> Unit,
+    onRefresh: () -> Unit,
 ) {
     var confirmation by remember { mutableStateOf<ToolConfirmation?>(null) }
     val canOperate = state.user?.role in setOf("operator", "super_admin")
@@ -65,9 +66,16 @@ fun ToolsScreen(
 
     LazyColumn(
         modifier = screenPadding(contentPadding),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        item {
+            ImmersiveHeader(
+                title = "平台工具",
+                refreshing = state.refreshing,
+                onRefresh = onRefresh
+            )
+        }
         item { SectionHeader("IoT 实时状态", "设备和自动化场景") }
         item {
             AppPanel {
@@ -155,6 +163,7 @@ fun ToolsScreen(
                             FilledTonalButton(
                                 onClick = { confirmation = ToolConfirmation.Scene(scene) },
                                 enabled = canOperate && state.busyAction == null,
+                                shape = MaterialTheme.shapes.medium,
                             ) {
                                 Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Text("运行", modifier = Modifier.padding(start = 5.dp))
@@ -187,6 +196,7 @@ fun ToolsScreen(
                         onClick = { confirmation = ToolConfirmation.Ct8 },
                         enabled = canOperate && state.busyAction == null && ct8?.activeStatus !in setOf("running", "queued", "in_progress"),
                         modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
                     ) {
                         if (state.busyAction == "ct8") CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
                         else Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(19.dp))
@@ -259,11 +269,12 @@ private fun ToolConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.medium,
         icon = { Icon(Icons.Outlined.AutoMode, contentDescription = null) },
         title = { Text(title) },
         text = { Text(detail) },
-        confirmButton = { Button(onClick = onConfirm) { Text(confirmLabel) } },
-        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("取消") } },
+        confirmButton = { Button(onClick = onConfirm, shape = MaterialTheme.shapes.medium) { Text(confirmLabel) } },
+        dismissButton = { OutlinedButton(onClick = onDismiss, shape = MaterialTheme.shapes.medium) { Text("取消") } },
     )
 }
 

@@ -1,6 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,7 +12,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -29,9 +34,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.theme.Amber
 import cn.pxyb.mycontrol.ui.theme.AmberPale
 import cn.pxyb.mycontrol.ui.theme.Coral
@@ -70,17 +77,21 @@ fun StatusBadge(status: String, label: String? = null, modifier: Modifier = Modi
     val style = statusStyle(status)
     Surface(
         modifier = modifier,
-        color = style.background,
+        color = style.background.copy(alpha = 0.9f),
         contentColor = style.foreground,
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(0.5.dp, style.foreground.copy(alpha = 0.25f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(style.icon, contentDescription = null, modifier = Modifier.size(14.dp))
-            Text(label ?: style.label, style = MaterialTheme.typography.labelMedium)
+            Text(
+                label ?: style.label,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+            )
         }
     }
 }
@@ -91,10 +102,10 @@ fun AppPanel(
     content: @Composable () -> Unit,
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
+        modifier = modifier.fillMaxWidth().animateContentSize(),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         content()
@@ -113,7 +124,7 @@ fun SectionHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(title, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     subtitle,
@@ -135,10 +146,16 @@ fun MetricCell(
     modifier: Modifier = Modifier,
     valueColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
-    Column(modifier = modifier.padding(vertical = 2.dp)) {
+    Column(modifier = modifier.padding(vertical = 4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(3.dp))
-        Text(value, style = MaterialTheme.typography.titleLarge, color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            value,
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+            color = valueColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -146,11 +163,11 @@ fun MetricCell(
 fun IconTile(icon: ImageVector, tint: Color, background: Color, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .size(40.dp)
-            .background(background, RoundedCornerShape(8.dp)),
+            .size(44.dp)
+            .background(background, RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(21.dp))
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -216,4 +233,69 @@ fun formatLastActive(value: Long?): String {
     return DateTimeFormatter.ofPattern("MM-dd HH:mm")
         .withZone(ZoneId.systemDefault())
         .format(Instant.ofEpochMilli(normalized))
+}
+
+@Composable
+fun ImmersiveHeader(
+    title: String,
+    subtitle: String = "生产环境 · 智控中心 LIVE",
+    refreshing: Boolean = false,
+    onRefresh: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 4.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp
+                ),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 3.dp)
+            ) {
+                Box(
+                    Modifier
+                        .size(7.dp)
+                        .background(cn.pxyb.mycontrol.ui.theme.BrandGreen, CircleShape)
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 6.dp)
+                )
+            }
+        }
+
+        if (onRefresh != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = CircleShape,
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier.padding(start = 12.dp)
+            ) {
+                androidx.compose.material3.IconButton(
+                    onClick = onRefresh,
+                    enabled = !refreshing,
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    Crossfade(targetState = refreshing, animationSpec = tween(160), label = "refresh") { busy ->
+                        if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = cn.pxyb.mycontrol.ui.theme.BrandBlue)
+                        else Icon(Icons.Outlined.Refresh, contentDescription = "刷新", tint = cn.pxyb.mycontrol.ui.theme.BrandBlue)
+                    }
+                }
+            }
+        }
+    }
 }

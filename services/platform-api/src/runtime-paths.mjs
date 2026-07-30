@@ -14,6 +14,7 @@ const runtimeFiles = {
   portalOperationsStore: ['PORTAL_OPERATIONS_STORE_PATH', 'apps/admin-console/src/operations-store.js'],
   portalReleaseStore: ['PORTAL_RELEASE_STORE_PATH', 'apps/admin-console/src/release-store.js'],
   portalConfigurationStore: ['PORTAL_CONFIGURATION_STORE_PATH', 'apps/admin-console/src/configuration-store.js'],
+  portalQrLoginStore: ['PORTAL_QR_LOGIN_STORE_PATH', 'apps/admin-console/src/qr-login-store.js'],
   officialWebsiteStatic: ['OFFICIAL_WEBSITE_STATIC_PATH', 'apps/official-website'],
 };
 const localServiceRuntimeNames = new Set(['coreServer', 'coreStatic', 'examServer', 'notifyApp']);

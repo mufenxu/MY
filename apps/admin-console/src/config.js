@@ -37,6 +37,21 @@ function parseOrigin(value) {
   }
 }
 
+function parseAndroidCertificateFingerprints(value) {
+  const fingerprints = String(value || '')
+    .split(/[,;\n]+/)
+    .map((item) => item.trim().toUpperCase())
+    .filter(Boolean);
+  if (fingerprints.some((item) => !/^(?:[0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(item))) {
+    throw new Error('PLATFORM_ANDROID_APP_CERT_SHA256 must contain comma-separated SHA-256 certificate fingerprints.');
+  }
+  return [...new Set(fingerprints)];
+}
+
+function androidPasskeyOrigin(fingerprint) {
+  return `android:apk-key-hash:${Buffer.from(fingerprint.replaceAll(':', ''), 'hex').toString('base64url')}`;
+}
+
 function parseHttpUrl(value) {
   try {
     const url = new URL(String(value || '').trim());
@@ -148,6 +163,8 @@ export function loadConfig(env = process.env) {
     turnstileSecretKey: String(env.PLATFORM_TURNSTILE_SECRET_KEY || '').trim(),
     webauthnRpName: String(env.PLATFORM_WEBAUTHN_RP_NAME || 'MY Platform').trim().slice(0, 64),
     webauthnRpId: String(env.PLATFORM_WEBAUTHN_RP_ID || '').trim().toLowerCase(),
+    androidAppPackage: String(env.PLATFORM_ANDROID_APP_PACKAGE || 'cn.pxyb.mycontrol').trim(),
+    androidAppCertFingerprints: parseAndroidCertificateFingerprints(env.PLATFORM_ANDROID_APP_CERT_SHA256),
     serviceTimeoutMs: parseInteger(env.PLATFORM_SERVICE_TIMEOUT_MS, 8000, { min: 1000, max: 30000 }),
     monitorIntervalMs: parseInteger(env.PLATFORM_MONITOR_INTERVAL_MS, 30000, { min: 10000, max: 300000 }),
     statusRetentionDays: parseInteger(env.PLATFORM_STATUS_RETENTION_DAYS, 30, { min: 1, max: 365 }),
@@ -260,11 +277,16 @@ export function loadConfig(env = process.env) {
     if (config.webauthnRpId && publicHostname !== config.webauthnRpId && !publicHostname.endsWith(`.${config.webauthnRpId}`)) {
       missing.push('PLATFORM_WEBAUTHN_RP_ID');
     }
+    if (config.androidAppCertFingerprints.length > 0 && !/^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/.test(config.androidAppPackage)) {
+      missing.push('PLATFORM_ANDROID_APP_PACKAGE');
+    }
 
     if (missing.length > 0) {
       throw new Error(`管理门户鉴权配置不完整：${missing.join(', ')}`);
     }
   }
+
+  config.androidPasskeyOrigins = config.androidAppCertFingerprints.map(androidPasskeyOrigin);
 
   return config;
 }

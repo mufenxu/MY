@@ -54,6 +54,7 @@ fun OperationsScreen(
     contentPadding: PaddingValues,
     onRunDiagnostics: () -> Unit,
     onTriggerBackup: () -> Unit,
+    onRefresh: () -> Unit,
 ) {
     var confirmBackup by remember { mutableStateOf(false) }
     val canOperate = state.user?.role in setOf("operator", "super_admin")
@@ -62,9 +63,16 @@ fun OperationsScreen(
 
     LazyColumn(
         modifier = screenPadding(contentPadding),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        item {
+            ImmersiveHeader(
+                title = "执行中心",
+                refreshing = state.refreshing,
+                onRefresh = onRefresh
+            )
+        }
         item {
             AppPanel {
                 Row(
@@ -177,6 +185,7 @@ fun OperationsScreen(
                         onClick = { confirmBackup = true },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = canOperate && backup?.canBackup == true && state.busyAction == null,
+                        shape = MaterialTheme.shapes.medium,
                     ) {
                         if (state.busyAction == "backup") CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
                         else Icon(Icons.Outlined.Backup, contentDescription = null, modifier = Modifier.size(19.dp))
@@ -200,11 +209,13 @@ fun OperationsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        FilledTonalButton(
+                        Button(
                             onClick = onRunDiagnostics,
                             enabled = canOperate && state.busyAction == null,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
-                            if (state.busyAction == "diagnostics") CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                            if (state.busyAction == "diagnostics") CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = androidx.compose.ui.graphics.Color.White)
                             else Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                             Text("运行", modifier = Modifier.padding(start = 5.dp))
                         }
@@ -233,14 +244,15 @@ fun OperationsScreen(
     if (confirmBackup) {
         AlertDialog(
             onDismissRequest = { confirmBackup = false },
+            shape = MaterialTheme.shapes.medium,
             icon = { Icon(Icons.Outlined.Backup, contentDescription = null) },
             title = { Text("立即执行平台备份？") },
             text = { Text("备份任务将由内网执行器运行，不会执行恢复或删除操作。") },
             confirmButton = {
-                Button(onClick = { confirmBackup = false; onTriggerBackup() }) { Text("确认备份") }
+                Button(onClick = { confirmBackup = false; onTriggerBackup() }, shape = MaterialTheme.shapes.medium) { Text("确认备份") }
             },
             dismissButton = {
-                OutlinedButton(onClick = { confirmBackup = false }) { Text("取消") }
+                OutlinedButton(onClick = { confirmBackup = false }, shape = MaterialTheme.shapes.medium) { Text("取消") }
             },
         )
     }

@@ -1,4 +1,9 @@
 <resources>
-    <color name="launcher_background">#12342F</color>
+    <color name="launcher_background">#F7FAFF</color>
+    <color name="widget_background">#F8FAFC</color>
+    <color name="widget_border">#DCE3EC</color>
+    <color name="widget_text_primary">#172033</color>
+    <color name="widget_text_secondary">#667085</color>
+    <color name="widget_status_healthy">#18794E</color>
+    <color name="widget_status_attention">#B54708</color>
 </resources>
-

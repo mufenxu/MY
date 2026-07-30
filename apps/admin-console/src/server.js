@@ -6,6 +6,7 @@ import { createMongoSessionRegistry } from './mongo-session-registry.js';
 import { createMongoOperationsStore } from './operations-store.js';
 import { createMongoReleaseStore } from './release-store.js';
 import { createMongoConfigurationStore } from './configuration-store.js';
+import { createMongoQrLoginStore } from './qr-login-store.js';
 
 const config = loadConfig();
 const authStore = config.mongoUri
@@ -53,6 +54,9 @@ const releaseStore = config.mongoUri
 const configurationStore = config.mongoUri
   ? await createMongoConfigurationStore({ uri: config.mongoUri })
   : null;
+const qrLoginStore = config.mongoUri
+  ? await createMongoQrLoginStore({ uri: config.mongoUri })
+  : null;
 const app = createApp({
   config,
   authStore,
@@ -61,16 +65,18 @@ const app = createApp({
   operationsStore,
   releaseStore,
   configurationStore,
+  qrLoginStore,
   readinessCheck: async () => {
-    const [authReady, riskReady, sessionsReady, operationsReady, releasesReady, configurationReady] = await Promise.all([
+    const [authReady, riskReady, sessionsReady, operationsReady, releasesReady, configurationReady, qrLoginReady] = await Promise.all([
       authStore ? authStore.ping() : true,
       authRiskStore ? authRiskStore.ping() : true,
       sessionRegistry ? sessionRegistry.ping() : true,
       operationsStore ? operationsStore.ping() : true,
       releaseStore ? releaseStore.ping() : true,
       configurationStore ? configurationStore.ping() : true,
+      qrLoginStore ? qrLoginStore.ping() : true,
     ]);
-    return authReady && riskReady && sessionsReady && operationsReady && releasesReady && configurationReady;
+    return authReady && riskReady && sessionsReady && operationsReady && releasesReady && configurationReady && qrLoginReady;
   },
 });
 app.locals.operationsCenter.start();
@@ -92,7 +98,7 @@ function shutdown(signal) {
       console.error(error);
       process.exitCode = 1;
     }
-    await Promise.allSettled([authStore?.close(), authRiskStore?.close(), sessionRegistry?.close()]);
+    await Promise.allSettled([authStore?.close(), authRiskStore?.close(), sessionRegistry?.close(), qrLoginStore?.close()]);
     app.locals.operationsCenter.stop();
     await operationsStore?.close();
     await releaseStore?.close();

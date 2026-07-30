@@ -12,6 +12,10 @@
 **/*.sqlite3
 **/*.db
 
+# Android source package, not runtime data
+!apps/android-app/app/src/main/java/cn/pxyb/mycontrol/data/
+!apps/android-app/app/src/main/java/cn/pxyb/mycontrol/data/**
+
 # Local migration archive (kept outside the maintained repository)
 /archive/
 /backups/

@@ -38,11 +38,13 @@ import {
   Moon,
   Network,
   Play,
+  QrCode,
   Radio,
   RefreshCw,
   Server,
   ShieldCheck,
   ShieldAlert,
+  Smartphone,
   Sun,
   Timer,
   Trash2,
@@ -206,7 +208,56 @@ function getGreeting() {
   return '晚上好';
 }
 
+function QrLoginPanel({ request, busy, error, remainingSeconds, onRefresh }) {
+  const scanned = request?.status === 'scanned';
+  return (
+    <div className="qr-login-flow" aria-live="polite">
+      {busy && !request ? (
+        <div className="qr-login-loading">
+          <LoaderCircle className="spin" size={24} />
+          <span>正在创建安全二维码...</span>
+        </div>
+      ) : request ? (
+        <>
+          {scanned ? (
+            <div className="qr-login-scanned">
+              <span><Smartphone size={30} /></span>
+              <strong>已扫码，等待 App 确认</strong>
+              <p>请核对 App 中的浏览器与验证码</p>
+            </div>
+          ) : (
+            <div className="qr-login-code">
+              <img src={request.qrDataUrl} alt="MY Control 扫码登录二维码" />
+              <span className="qr-login-expiry">{remainingSeconds > 0 ? `${remainingSeconds} 秒后失效` : '二维码已失效'}</span>
+            </div>
+          )}
+          <div className="qr-verification-code">
+            <span>安全验证码</span>
+            <strong>{request.verificationCode}</strong>
+          </div>
+          <p className="qr-login-status">
+            {scanned ? '确认后此页面将自动登录' : '使用 MY Control 扫码并确认本次登录'}
+          </p>
+        </>
+      ) : null}
+      {error && (
+        <div className="form-error" role="alert">
+          <ShieldAlert size={16} />
+          <span>{error}</span>
+        </div>
+      )}
+      {(!request || remainingSeconds <= 0 || error) && !busy && (
+        <button className="secondary-action login-passkey-button" type="button" onClick={onRefresh}>
+          <RefreshCw size={17} />
+          刷新二维码
+        </button>
+      )}
+    </div>
+  );
+}
+
 function LoginScreen({ onAuthenticated, totpRequired = false }) {
+  const [loginMode, setLoginMode] = useState('credentials');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -222,7 +273,85 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
   const [recoveryCodes, setRecoveryCodes] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [qrLogin, setQrLogin] = useState(null);
+  const [qrBusy, setQrBusy] = useState(false);
+  const [qrError, setQrError] = useState('');
+  const [qrRefreshKey, setQrRefreshKey] = useState(0);
+  const [qrNow, setQrNow] = useState(Date.now());
   const turnstileRef = useRef(null);
+
+  useEffect(() => {
+    if (loginMode !== 'qr' || secondFactorRequired) return undefined;
+    const controller = new AbortController();
+    let pollTimer = 0;
+    let active = true;
+
+    async function poll(requestId) {
+      try {
+        const current = await requestJson(`/api/auth/qr/requests/${requestId}`, { signal: controller.signal });
+        if (!active) return;
+        setQrLogin((previous) => ({ ...previous, ...current }));
+        if (current.status === 'approved') {
+          setQrBusy(true);
+          const session = await requestJson(`/api/auth/qr/requests/${requestId}/consume`, {
+            method: 'POST',
+            body: '{}',
+            signal: controller.signal,
+          });
+          if (active) onAuthenticated(session);
+          return;
+        }
+        if (current.status === 'rejected') {
+          setQrError('本次登录已在 App 中拒绝。');
+          return;
+        }
+        pollTimer = window.setTimeout(() => poll(requestId), 1500);
+      } catch (pollError) {
+        if (!active || pollError.code === 'REQUEST_ABORTED') return;
+        setQrError(pollError.code === 'QR_LOGIN_EXPIRED' ? '二维码已过期，请刷新后重试。' : pollError.message);
+      } finally {
+        if (active) setQrBusy(false);
+      }
+    }
+
+    async function createRequest() {
+      setQrBusy(true);
+      setQrError('');
+      setQrLogin(null);
+      try {
+        const created = await requestJson('/api/auth/qr/requests', {
+          method: 'POST',
+          body: '{}',
+          signal: controller.signal,
+        });
+        if (!active) return;
+        setQrLogin(created);
+        setQrNow(Date.now());
+        pollTimer = window.setTimeout(() => poll(created.requestId), 900);
+      } catch (createError) {
+        if (active && createError.code !== 'REQUEST_ABORTED') setQrError(createError.message);
+      } finally {
+        if (active) setQrBusy(false);
+      }
+    }
+
+    createRequest();
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearTimeout(pollTimer);
+    };
+  }, [loginMode, onAuthenticated, qrRefreshKey, secondFactorRequired]);
+
+  useEffect(() => {
+    if (!qrLogin?.expiresAt || loginMode !== 'qr') return undefined;
+    const timer = window.setInterval(() => setQrNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [loginMode, qrLogin?.expiresAt]);
+
+  const qrRemainingSeconds = qrLogin?.expiresAt
+    ? Math.max(0, Math.ceil((Date.parse(qrLogin.expiresAt) - qrNow) / 1000))
+    : 0;
 
   useEffect(() => {
     const canvas = document.getElementById('login-bg-canvas');
@@ -413,22 +542,55 @@ function LoginScreen({ onAuthenticated, totpRequired = false }) {
 
         <div className="login-heading">
           <span className="login-icon">
-            {secondFactorRequired ? <KeyRound size={22} /> : <LockKeyhole size={22} />}
+            {secondFactorRequired ? <KeyRound size={22} /> : loginMode === 'qr' ? <QrCode size={22} /> : <LockKeyhole size={22} />}
           </span>
           <div>
             <h1 id="login-title">
-              {secondFactorRequired ? '安全二次验证' : '管理员身份验证'}
+              {secondFactorRequired ? '安全二次验证' : loginMode === 'qr' ? 'App 扫码登录' : '管理员身份验证'}
             </h1>
             <p>
               {secondFactorRequired
                 ? '为了确保您的账户安全，请输入 6 位动态验证码'
-                : '登录后掌控平台运维、身份与灾备系统'}
+                : loginMode === 'qr' ? '由已登录的 MY Control 安全确认' : '登录后掌控平台运维、身份与灾备系统'}
             </p>
           </div>
         </div>
 
+        {!secondFactorRequired && recoveryCodes.length === 0 && (
+          <div className="login-method-tabs" role="tablist" aria-label="登录方式">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={loginMode === 'credentials'}
+              className={loginMode === 'credentials' ? 'active' : ''}
+              onClick={() => { setLoginMode('credentials'); setError(''); }}
+            >
+              <LockKeyhole size={16} />
+              账号登录
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={loginMode === 'qr'}
+              className={loginMode === 'qr' ? 'active' : ''}
+              onClick={() => { setLoginMode('qr'); setError(''); }}
+            >
+              <QrCode size={16} />
+              App 扫码
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="login-form">
-          {recoveryCodes.length > 0 ? (
+          {loginMode === 'qr' && !secondFactorRequired && recoveryCodes.length === 0 ? (
+            <QrLoginPanel
+              request={qrLogin}
+              busy={qrBusy}
+              error={qrError}
+              remainingSeconds={qrRemainingSeconds}
+              onRefresh={() => setQrRefreshKey((value) => value + 1)}
+            />
+          ) : recoveryCodes.length > 0 ? (
             <div className="login-recovery-codes">
               <div>
                 <CheckCircle2 size={20} />
