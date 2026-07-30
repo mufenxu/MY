@@ -9,11 +9,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -81,6 +78,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -89,9 +87,7 @@ import androidx.compose.ui.autofill.AutofillType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -113,7 +109,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.ui.theme.BrandBlue
-import cn.pxyb.mycontrol.ui.theme.BrandGreen
 
 private data class TabItem(val tab: MainTab, val label: String, val icon: ImageVector)
 private enum class SecondFactorMode { Totp, RecoveryCode }
@@ -140,7 +135,7 @@ fun MyControlApp(
         state.user == null -> "login"
         else -> "app"
     }
-    Crossfade(targetState = destination, animationSpec = tween(260), label = "app-state") { screen ->
+    Crossfade(targetState = destination, animationSpec = tween(180), label = "app-state") { screen ->
         when (screen) {
             "loading" -> FullScreenLoading()
             "locked" -> LockScreen(onBiometricUnlock, viewModel::discardLockedSession)
@@ -229,21 +224,10 @@ private fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit) {
 
 @Composable
 private fun LoginAmbientBackground() {
-    val isDark = MaterialTheme.colorScheme.background.red < 0.3f
-    val backgroundColors = if (isDark) {
-        listOf(Color(0xFF101722), Color(0xFF0D131C), MaterialTheme.colorScheme.background)
-    } else {
-        listOf(Color(0xFFF8FBFE), Color(0xFFF1F5F9), MaterialTheme.colorScheme.background)
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = backgroundColors
-                )
-            )
+            .background(MaterialTheme.colorScheme.background)
     )
 }
 
@@ -258,12 +242,12 @@ private fun LoginHeader() {
                 .size(72.dp)
                 .shadow(
                     elevation = 5.dp,
-                    shape = RoundedCornerShape(20.dp),
+                    shape = MaterialTheme.shapes.medium,
                     clip = false,
                     ambientColor = Color.Black.copy(alpha = 0.12f),
                     spotColor = Color.Black.copy(alpha = 0.12f),
                 ),
-            shape = RoundedCornerShape(20.dp),
+            shape = MaterialTheme.shapes.medium,
             color = Color.White,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
         ) {
@@ -348,10 +332,10 @@ private fun LoginScreen(
                         modifier = Modifier
                             .widthIn(max = 440.dp)
                             .fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
+                        shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.surface,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
-                        shadowElevation = 6.dp,
+                        shadowElevation = 2.dp,
                     ) {
                         Column(
                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp)
@@ -524,13 +508,13 @@ private fun PrototypeInputField(
     }
 
     val containerBgColor = if (isFocused) {
-        BrandBlue.copy(alpha = 0.06f)
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
     } else {
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
     }
-    val iconColor = if (isFocused) BrandBlue else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
+    val iconColor = if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
     val borderColor = if (isFocused) {
-        BrandBlue.copy(alpha = 0.72f)
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
     } else {
         MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
     }
@@ -550,7 +534,7 @@ private fun PrototypeInputField(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
-            shape = RoundedCornerShape(12.dp),
+            shape = MaterialTheme.shapes.medium,
             color = containerBgColor,
             border = BorderStroke(1.dp, borderColor),
         ) {
@@ -606,7 +590,7 @@ private fun PrototypeInputField(
                             fontSize = 15.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         ),
-                        cursorBrush = SolidColor(BrandBlue)
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
                     )
                 }
 
@@ -634,7 +618,7 @@ private fun PrototypeInputField(
 private fun SecondFactorSelector(selected: SecondFactorMode, onSelect: (SecondFactorMode) -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
+        shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
     ) {
@@ -644,16 +628,16 @@ private fun SecondFactorSelector(selected: SecondFactorMode, onSelect: (SecondFa
                 Surface(
                     onClick = { onSelect(mode) },
                     modifier = Modifier.weight(1f).height(38.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (active) BrandBlue.copy(alpha = 0.1f) else Color.Transparent,
-                    border = if (active) BorderStroke(1.dp, BrandBlue.copy(alpha = 0.18f)) else null,
+                    shape = MaterialTheme.shapes.small,
+                    color = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                    border = if (active) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)) else null,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             if (mode == SecondFactorMode.Totp) "动态验证码" else "恢复码",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-                            color = if (active) BrandBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -679,7 +663,7 @@ private fun PasskeyLoginMethod(enabled: Boolean, onClick: () -> Unit) {
             onClick = onClick,
             enabled = enabled,
             modifier = Modifier.fillMaxWidth().padding(top = 15.dp).height(52.dp),
-            shape = RoundedCornerShape(12.dp),
+            shape = MaterialTheme.shapes.medium,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.36f)),
         ) {
             Icon(Icons.Outlined.Fingerprint, contentDescription = null, modifier = Modifier.size(20.dp))
@@ -721,17 +705,17 @@ private fun PrimaryLoginButton(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1.0f,
-        animationSpec = spring(),
+        animationSpec = tween(90),
         label = "btn-scale"
     )
 
     val buttonColor = if (enabled || loading) {
-        BrandBlue
+        MaterialTheme.colorScheme.primary
     } else {
         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     }
     val contentColor = if (enabled || loading) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-    val buttonShape = RoundedCornerShape(12.dp)
+    val buttonShape = MaterialTheme.shapes.medium
 
     Box(
         modifier = modifier
@@ -811,6 +795,8 @@ private fun AuthenticatedShell(
         return
     }
     val snackbarHost = remember { SnackbarHostState() }
+    val saveableStateHolder = rememberSaveableStateHolder()
+    val onRefresh = remember(viewModel) { { viewModel.refreshAll(true) } }
     LaunchedEffect(state.error, state.message) {
         val text = state.error ?: state.message
         if (!text.isNullOrBlank()) {
@@ -823,19 +809,23 @@ private fun AuthenticatedShell(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHost) },
+        bottomBar = {
+            AppBottomNavigation(
+                selected = state.selectedTab,
+                onSelect = viewModel::selectTab,
+            )
+        },
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            AnimatedContent(
-                targetState = state.selectedTab,
-                modifier = Modifier.fillMaxSize(),
-                transitionSpec = {
-                    val direction = if (targetState.ordinal >= initialState.ordinal) 1 else -1
-                    (slideInHorizontally(tween(240)) { direction * it / 10 } + fadeIn(tween(180))) togetherWith
-                        (slideOutHorizontally(tween(180)) { -direction * it / 12 } + fadeOut(tween(140)))
-                },
-                label = "main-navigation",
-            ) { tab ->
-                val onRefresh = { viewModel.refreshAll(true) }
+        AnimatedContent(
+            targetState = state.selectedTab,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                fadeIn(tween(durationMillis = 160, delayMillis = 40)) togetherWith
+                    fadeOut(tween(durationMillis = 90))
+            },
+            label = "main-navigation",
+        ) { tab ->
+            saveableStateHolder.SaveableStateProvider(tab.name) {
                 when (tab) {
                     MainTab.Overview -> OverviewScreen(state, padding, viewModel::selectTab, onRefresh)
                     MainTab.Events -> EventsScreen(
@@ -860,11 +850,6 @@ private fun AuthenticatedShell(
                     )
                 }
             }
-            AppBottomNavigation(
-                selected = state.selectedTab,
-                onSelect = viewModel::selectTab,
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
         }
     }
 }
@@ -874,7 +859,7 @@ private fun AppHeader(tab: MainTab, refreshing: Boolean, onRefresh: () -> Unit) 
     Surface(
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(
             modifier = Modifier
@@ -885,7 +870,7 @@ private fun AppHeader(tab: MainTab, refreshing: Boolean, onRefresh: () -> Unit) 
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.medium,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
             ) {
@@ -909,7 +894,7 @@ private fun AppHeader(tab: MainTab, refreshing: Boolean, onRefresh: () -> Unit) 
                     Box(
                         Modifier
                             .size(7.dp)
-                            .background(BrandGreen, CircleShape)
+                            .background(MaterialTheme.colorScheme.secondary, CircleShape)
                     )
                     Text(
                         "生产环境 · 智控中心 LIVE",
@@ -921,12 +906,12 @@ private fun AppHeader(tab: MainTab, refreshing: Boolean, onRefresh: () -> Unit) 
             }
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.medium,
             ) {
                 IconButton(onClick = onRefresh, enabled = !refreshing, modifier = Modifier.size(42.dp)) {
                     Crossfade(targetState = refreshing, animationSpec = tween(160), label = "refresh") { busy ->
-                        if (busy) CircularProgressIndicator(Modifier.size(19.dp), strokeWidth = 2.dp, color = BrandBlue)
-                        else Icon(Icons.Outlined.Refresh, contentDescription = "刷新", tint = BrandBlue)
+                        if (busy) CircularProgressIndicator(Modifier.size(19.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
+                        else Icon(Icons.Outlined.Refresh, contentDescription = "刷新", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
@@ -1017,7 +1002,7 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onCl
 private fun BrandMark(compact: Boolean = false) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Surface(
-            shape = RoundedCornerShape(14.dp),
+            shape = MaterialTheme.shapes.medium,
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 4.dp,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
@@ -1035,7 +1020,7 @@ private fun BrandMark(compact: Boolean = false) {
                 "智控中心",
                 style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 0.5.sp,
+                letterSpacing = 0.sp,
             )
             if (!compact) Text(
                 "SMART CONTROL CENTER",

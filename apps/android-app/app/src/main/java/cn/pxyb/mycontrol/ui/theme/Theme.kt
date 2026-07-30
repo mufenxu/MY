@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
 private val LightColors = lightColorScheme(
     primary = BrandBlue,
@@ -34,19 +35,22 @@ private val LightColors = lightColorScheme(
     surfaceVariant = ColorTokens.SurfaceSubtle,
     onSurfaceVariant = InkMuted,
     outline = Border,
+    outlineVariant = ColorTokens.OutlineVariantLight,
 )
 
 private val DarkColors = darkColorScheme(
     primary = BrandCyan,
     onPrimary = DarkCanvas,
-    primaryContainer = ColorTokens.OceanContainerDark,
+    primaryContainer = ColorTokens.BlueContainerDark,
     onPrimaryContainer = DarkText,
     secondary = ColorTokens.GreenDark,
     onSecondary = DarkCanvas,
-    secondaryContainer = ColorTokens.OceanContainerDark,
+    secondaryContainer = ColorTokens.GreenContainerDark,
     onSecondaryContainer = DarkText,
     tertiary = ColorTokens.AmberDark,
     onTertiary = DarkCanvas,
+    tertiaryContainer = ColorTokens.AmberContainerDark,
+    onTertiaryContainer = DarkText,
     error = ColorTokens.CoralDark,
     errorContainer = ColorTokens.CoralContainerDark,
     onErrorContainer = DarkText,
@@ -57,12 +61,16 @@ private val DarkColors = darkColorScheme(
     surfaceVariant = DarkSurfaceRaised,
     onSurfaceVariant = DarkMuted,
     outline = DarkBorder,
+    outlineVariant = ColorTokens.OutlineVariantDark,
 )
 
 object ColorTokens {
-    val SurfaceSubtle = androidx.compose.ui.graphics.Color(0xFFEEF2F7)
-    val OceanDark = androidx.compose.ui.graphics.Color(0xFF8BC6DE)
-    val OceanContainerDark = androidx.compose.ui.graphics.Color(0xFF123A64)
+    val SurfaceSubtle = androidx.compose.ui.graphics.Color(0xFFF0F2F5)
+    val OutlineVariantLight = androidx.compose.ui.graphics.Color(0xFFE8EBEF)
+    val OutlineVariantDark = androidx.compose.ui.graphics.Color(0xFF292D32)
+    val BlueContainerDark = androidx.compose.ui.graphics.Color(0xFF17375D)
+    val GreenContainerDark = androidx.compose.ui.graphics.Color(0xFF153B30)
+    val AmberContainerDark = androidx.compose.ui.graphics.Color(0xFF4B3513)
     val GreenDark = androidx.compose.ui.graphics.Color(0xFF5AD8AA)
     val AmberDark = androidx.compose.ui.graphics.Color(0xFFF0C26F)
     val CoralDark = androidx.compose.ui.graphics.Color(0xFFFFB4AE)
@@ -84,6 +92,10 @@ fun MYControlTheme(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 window.isStatusBarContrastEnforced = false
                 window.isNavigationBarContrastEnforced = false
+            }
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
             }
         }
     }

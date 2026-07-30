@@ -63,10 +63,16 @@ fun ToolsScreen(
     val canOperate = state.user?.role in setOf("operator", "super_admin")
     val iot = state.iot
     val ct8 = state.ct8
+    val modules = remember(state.overview?.services) {
+        state.overview?.services.orEmpty().filter { service ->
+            service.id in setOf("core", "exam", "campus", "mqtt", "notify") ||
+                service.name.lowercase() in setOf("core", "exam", "campus", "iot", "notification")
+        }
+    }
 
     LazyColumn(
         modifier = screenPadding(contentPadding),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
@@ -209,10 +215,6 @@ fun ToolsScreen(
         item { SectionHeader("业务模块", "统一平台服务可用性") }
         item {
             AppPanel {
-                val modules = state.overview?.services.orEmpty().filter { service ->
-                    service.id in setOf("core", "exam", "campus", "mqtt", "notify") ||
-                        service.name.lowercase() in setOf("core", "exam", "campus", "iot", "notification")
-                }
                 if (modules.isEmpty()) {
                     EmptyBlock("等待模块状态", "完成平台同步后显示")
                 } else {

@@ -1,7 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
@@ -33,20 +31,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cn.pxyb.mycontrol.ui.theme.Amber
-import cn.pxyb.mycontrol.ui.theme.AmberPale
-import cn.pxyb.mycontrol.ui.theme.Coral
-import cn.pxyb.mycontrol.ui.theme.CoralPale
-import cn.pxyb.mycontrol.ui.theme.Forest
-import cn.pxyb.mycontrol.ui.theme.MintPale
-import cn.pxyb.mycontrol.ui.theme.Ocean
-import cn.pxyb.mycontrol.ui.theme.OceanPale
+import androidx.compose.foundation.isSystemInDarkTheme
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -62,13 +55,33 @@ data class StatusStyle(
 @Composable
 fun statusStyle(status: String): StatusStyle = when (status.lowercase()) {
     "healthy", "operational", "succeeded", "success", "passed", "resolved", "connected", "online" ->
-        StatusStyle("正常", Forest, MintPale, Icons.Outlined.CheckCircle)
+        StatusStyle(
+            "正常",
+            MaterialTheme.colorScheme.onSecondaryContainer,
+            MaterialTheme.colorScheme.secondaryContainer,
+            Icons.Outlined.CheckCircle,
+        )
     "critical", "failed", "failure", "offline", "outage", "error", "breached" ->
-        StatusStyle("异常", Coral, CoralPale, Icons.Outlined.ErrorOutline)
+        StatusStyle(
+            "异常",
+            MaterialTheme.colorScheme.onErrorContainer,
+            MaterialTheme.colorScheme.errorContainer,
+            Icons.Outlined.ErrorOutline,
+        )
     "warning", "degraded", "action_required", "overdue", "unhealthy" ->
-        StatusStyle("需关注", Amber, AmberPale, Icons.Outlined.WarningAmber)
+        StatusStyle(
+            "需关注",
+            MaterialTheme.colorScheme.onTertiaryContainer,
+            MaterialTheme.colorScheme.tertiaryContainer,
+            Icons.Outlined.WarningAmber,
+        )
     "running", "pending", "queued", "acknowledged", "in_progress" ->
-        StatusStyle("处理中", Ocean, OceanPale, Icons.Outlined.Schedule)
+        StatusStyle(
+            "处理中",
+            MaterialTheme.colorScheme.onPrimaryContainer,
+            MaterialTheme.colorScheme.primaryContainer,
+            Icons.Outlined.Schedule,
+        )
     else -> StatusStyle("未确认", MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant, Icons.Outlined.Schedule)
 }
 
@@ -77,10 +90,10 @@ fun StatusBadge(status: String, label: String? = null, modifier: Modifier = Modi
     val style = statusStyle(status)
     Surface(
         modifier = modifier,
-        color = style.background.copy(alpha = 0.9f),
+        color = style.background,
         contentColor = style.foreground,
-        shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(0.5.dp, style.foreground.copy(alpha = 0.25f))
+        shape = MaterialTheme.shapes.small,
+        border = BorderStroke(0.5.dp, style.foreground.copy(alpha = 0.18f))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -102,10 +115,10 @@ fun AppPanel(
     content: @Composable () -> Unit,
 ) {
     Card(
-        modifier = modifier.fillMaxWidth().animateContentSize(),
-        shape = RoundedCornerShape(18.dp),
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         content()
@@ -124,7 +137,7 @@ fun SectionHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+            Text(title, style = MaterialTheme.typography.titleLarge)
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     subtitle,
@@ -146,13 +159,14 @@ fun MetricCell(
     modifier: Modifier = Modifier,
     valueColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
+    val displayValueColor = if (isSystemInDarkTheme()) lerp(valueColor, Color.White, 0.28f) else valueColor
     Column(modifier = modifier.padding(vertical = 4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
         Text(
             value,
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-            color = valueColor,
+            style = MaterialTheme.typography.titleLarge,
+            color = displayValueColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -161,24 +175,31 @@ fun MetricCell(
 
 @Composable
 fun IconTile(icon: ImageVector, tint: Color, background: Color, modifier: Modifier = Modifier) {
+    val darkTheme = isSystemInDarkTheme()
+    val contentTint = if (darkTheme) lerp(tint, Color.White, 0.3f) else tint
+    val container = if (darkTheme) {
+        contentTint.copy(alpha = 0.16f).compositeOver(MaterialTheme.colorScheme.surface)
+    } else {
+        background
+    }
     Box(
         modifier = modifier
             .size(44.dp)
-            .background(background, RoundedCornerShape(12.dp)),
+            .background(container, MaterialTheme.shapes.medium),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = contentTint, modifier = Modifier.size(22.dp))
     }
 }
 
 @Composable
 fun FeedbackBanner(message: String, error: Boolean, modifier: Modifier = Modifier) {
-    val foreground = if (error) Coral else Forest
-    val background = if (error) CoralPale else MintPale
+    val foreground = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer
+    val background = if (error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(background, RoundedCornerShape(8.dp))
+            .background(background, MaterialTheme.shapes.medium)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
@@ -211,7 +232,12 @@ fun EmptyBlock(title: String, detail: String, modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Forest, modifier = Modifier.size(28.dp))
+        Icon(
+            Icons.Outlined.CheckCircle,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.size(28.dp),
+        )
         Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
         Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -267,7 +293,7 @@ fun ImmersiveHeader(
                 Box(
                     Modifier
                         .size(7.dp)
-                        .background(cn.pxyb.mycontrol.ui.theme.BrandGreen, CircleShape)
+                    .background(MaterialTheme.colorScheme.secondary, CircleShape)
                 )
                 Text(
                     subtitle,
@@ -282,7 +308,7 @@ fun ImmersiveHeader(
             Surface(
                 color = MaterialTheme.colorScheme.surface,
                 shape = CircleShape,
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.padding(start = 12.dp)
             ) {
                 androidx.compose.material3.IconButton(
@@ -291,8 +317,8 @@ fun ImmersiveHeader(
                     modifier = Modifier.size(42.dp)
                 ) {
                     Crossfade(targetState = refreshing, animationSpec = tween(160), label = "refresh") { busy ->
-                        if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = cn.pxyb.mycontrol.ui.theme.BrandBlue)
-                        else Icon(Icons.Outlined.Refresh, contentDescription = "刷新", tint = cn.pxyb.mycontrol.ui.theme.BrandBlue)
+                        if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
+                        else Icon(Icons.Outlined.Refresh, contentDescription = "刷新", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }

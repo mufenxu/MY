@@ -68,11 +68,13 @@ fun EventsScreen(
     var note by remember { mutableStateOf("") }
     var assignee by remember { mutableStateOf("") }
     val activeIncidents = state.activeIncidents
-    val incidents = when (filter) {
-        "critical" -> activeIncidents.filter { it.severity == "critical" }
-        "acknowledged" -> activeIncidents.filter { it.status == "acknowledged" }
-        "resolved" -> state.incidents.filter { it.status == "resolved" }
-        else -> activeIncidents
+    val incidents = remember(filter, activeIncidents, state.incidents) {
+        when (filter) {
+            "critical" -> activeIncidents.filter { it.severity == "critical" }
+            "acknowledged" -> activeIncidents.filter { it.status == "acknowledged" }
+            "resolved" -> state.incidents.filter { it.status == "resolved" }
+            else -> activeIncidents
+        }
     }
     val selected = state.incidents.firstOrNull { it.id == selectedId }
     val canOperate = state.user?.role in setOf("operator", "super_admin")
@@ -87,7 +89,7 @@ fun EventsScreen(
 
     LazyColumn(
         modifier = screenPadding(contentPadding),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
@@ -124,7 +126,7 @@ fun EventsScreen(
                 }
             }
         } else {
-            items(incidents, key = { it.id }) { incident ->
+            items(incidents, key = { it.id }, contentType = { "incident" }) { incident ->
                 IncidentCard(
                     incident = incident,
                     canOperate = canOperate,
@@ -140,7 +142,13 @@ fun EventsScreen(
         AlertDialog(
             onDismissRequest = { selectedId = null },
             shape = MaterialTheme.shapes.medium,
-            icon = { Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = if (incident.severity == "critical") Coral else Amber) },
+            icon = {
+                Icon(
+                    Icons.Outlined.ErrorOutline,
+                    contentDescription = null,
+                    tint = if (incident.severity == "critical") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary,
+                )
+            },
             title = { Text(incident.title) },
             text = {
                 Column(
@@ -282,7 +290,7 @@ private fun IncidentCard(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             incident.title,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleMedium,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -325,7 +333,7 @@ private fun IncidentCard(
                         Button(
                             onClick = onAcknowledge,
                             enabled = !busy,
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                            shape = MaterialTheme.shapes.medium,
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             if (busy) CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp, color = Color.White)

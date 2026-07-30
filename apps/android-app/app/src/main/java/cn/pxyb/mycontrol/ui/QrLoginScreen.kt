@@ -67,8 +67,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import cn.pxyb.mycontrol.data.QrLoginTarget
-import cn.pxyb.mycontrol.ui.theme.BrandBlue
-import cn.pxyb.mycontrol.ui.theme.Forest
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -285,9 +283,9 @@ private fun QrConfirmationScreen(
                 onClick = onApprove,
                 enabled = !busy && target.confirmationMethod != "unavailable",
                 modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.medium,
             ) {
-                if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                 else Icon(if (target.confirmationMethod == "passkey") Icons.Outlined.Fingerprint else Icons.Outlined.CheckCircle, contentDescription = null)
                 Text(
                     if (target.confirmationMethod == "unavailable") "暂不可用" else "确认登录",
@@ -299,7 +297,7 @@ private fun QrConfirmationScreen(
                 onClick = onReject,
                 enabled = !busy,
                 modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.medium,
             ) {
                 Text("拒绝")
             }
@@ -314,8 +312,13 @@ private fun QrDetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, l
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Surface(shape = RoundedCornerShape(10.dp), color = BrandBlue.copy(alpha = 0.1f)) {
-            Icon(icon, contentDescription = null, tint = BrandBlue, modifier = Modifier.padding(10.dp).size(20.dp))
+        Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(10.dp).size(20.dp),
+            )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -331,12 +334,21 @@ private fun QrApprovedScreen(target: QrLoginTarget, onClose: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Surface(shape = CircleShape, color = Forest.copy(alpha = 0.11f), border = BorderStroke(1.dp, Forest.copy(alpha = 0.2f))) {
-            Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Forest, modifier = Modifier.padding(18.dp).size(42.dp))
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f)),
+        ) {
+            Icon(
+                Icons.Outlined.CheckCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.padding(18.dp).size(42.dp),
+            )
         }
         Text("网页登录已批准", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp))
         Text("${target.browser.label} 将自动进入控制台", color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
-        Button(onClick = onClose, modifier = Modifier.fillMaxWidth().padding(top = 28.dp).height(48.dp), shape = RoundedCornerShape(12.dp)) {
+        Button(onClick = onClose, modifier = Modifier.fillMaxWidth().padding(top = 28.dp).height(48.dp), shape = MaterialTheme.shapes.medium) {
             Text("完成")
         }
     }
@@ -364,7 +376,7 @@ private fun QrErrorScreen(error: String, onRetry: () -> Unit, onClose: () -> Uni
         ) {
             Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(44.dp))
             Text(error, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp))
-            Button(onClick = onRetry, modifier = Modifier.fillMaxWidth().padding(top = 24.dp), shape = RoundedCornerShape(12.dp)) {
+            Button(onClick = onRetry, modifier = Modifier.fillMaxWidth().padding(top = 24.dp), shape = MaterialTheme.shapes.medium) {
                 Icon(Icons.Outlined.QrCodeScanner, contentDescription = null)
                 Text("重新扫码", modifier = Modifier.padding(start = 8.dp))
             }
@@ -379,6 +391,6 @@ private fun QrHeader(title: String, onClose: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onClose) { Icon(Icons.Outlined.ArrowBack, contentDescription = "返回") }
-        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
+        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 4.dp))
     }
 }

@@ -60,10 +60,11 @@ fun OperationsScreen(
     val canOperate = state.user?.role in setOf("operator", "super_admin")
     val activeTasks = state.tasks.count { it.status in setOf("pending", "running", "action_required") }
     val failedTasks = state.tasks.count { it.status == "failed" }
+    val visibleTasks = remember(state.tasks) { state.tasks.sortedBy { taskPriority(it.status) }.take(6) }
 
     LazyColumn(
         modifier = screenPadding(contentPadding),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
@@ -92,9 +93,9 @@ fun OperationsScreen(
                 if (state.tasks.isEmpty()) {
                     EmptyBlock("暂无任务", "新的平台任务将在这里显示")
                 } else {
-                    state.tasks.sortedBy { taskPriority(it.status) }.take(6).forEachIndexed { index, task ->
+                    visibleTasks.forEachIndexed { index, task ->
                         TaskRow(task)
-                        if (index < state.tasks.take(6).lastIndex) HorizontalDivider(Modifier.padding(horizontal = 14.dp))
+                        if (index < visibleTasks.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 14.dp))
                     }
                 }
             }
@@ -212,7 +213,7 @@ fun OperationsScreen(
                         Button(
                             onClick = onRunDiagnostics,
                             enabled = canOperate && state.busyAction == null,
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                            shape = MaterialTheme.shapes.medium,
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             if (state.busyAction == "diagnostics") CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = androidx.compose.ui.graphics.Color.White)
@@ -226,7 +227,7 @@ fun OperationsScreen(
                             Icon(
                                 if (check.status == "passed") Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
                                 contentDescription = null,
-                                tint = if (check.status == "passed") Forest else Coral,
+                                tint = if (check.status == "passed") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(19.dp),
                             )
                             Column(modifier = Modifier.weight(1f)) {

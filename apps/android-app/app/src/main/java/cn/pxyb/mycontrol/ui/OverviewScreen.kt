@@ -26,15 +26,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -44,9 +43,6 @@ import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.ServiceInfo
 import cn.pxyb.mycontrol.ui.theme.Coral
 import cn.pxyb.mycontrol.ui.theme.CoralPale
-import cn.pxyb.mycontrol.ui.theme.BrandBlue
-import cn.pxyb.mycontrol.ui.theme.BrandCyan
-import cn.pxyb.mycontrol.ui.theme.BrandYellow
 import cn.pxyb.mycontrol.ui.theme.Forest
 import cn.pxyb.mycontrol.ui.theme.MintPale
 import cn.pxyb.mycontrol.ui.theme.Ocean
@@ -60,9 +56,22 @@ fun OverviewScreen(
     onRefresh: () -> Unit,
 ) {
     val overview = state.overview
+    val activeIncidents = remember(state.incidents) { state.incidents.filter { it.status != "resolved" } }
+    val visibleIncidents = remember(activeIncidents) { activeIncidents.take(3) }
+    val sortedServices = remember(overview?.services) {
+        overview?.services.orEmpty().sortedWith(compareBy<ServiceInfo> { servicePriority(it.state) }.thenBy { it.name })
+    }
+    val recentAudits = remember(overview?.audits) { overview?.audits.orEmpty().take(5) }
+    val (healthyCount, monitoredCount, averageLatencyMs) = remember(overview?.services) {
+        val services = overview?.services.orEmpty()
+        val monitored = services.count { it.state != "unmonitored" }
+        val healthy = services.count { it.state == "healthy" }
+        val average = services.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
+        Triple(healthy, monitored, average)
+    }
     LazyColumn(
         modifier = screenPadding(contentPadding),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 104.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
@@ -77,21 +86,19 @@ fun OverviewScreen(
             return@LazyColumn
         }
         item {
-            val incidentCount = state.activeIncidents.size
-            val stable = incidentCount == 0 && overview.monitoredCount > 0 && overview.healthyCount == overview.monitoredCount
+            val incidentCount = activeIncidents.size
+            val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 shadowElevation = 0.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(Color(0xFF165DFF), Color(0xFF00C2FF))
-                            )
-                        )
                         .padding(horizontal = 20.dp, vertical = 22.dp)
                 ) {
                     Column {
@@ -100,20 +107,19 @@ fun OverviewScreen(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                val progress = if (overview.monitoredCount == 0) 0f
-                                else overview.healthyCount.toFloat() / overview.monitoredCount.toFloat()
+                                val progress = if (monitoredCount == 0) 0f else healthyCount.toFloat() / monitoredCount.toFloat()
                                 CircularProgressIndicator(
                                     progress = { progress },
                                     modifier = Modifier.size(62.dp),
-                                    color = if (stable) BrandCyan else BrandYellow,
-                                    trackColor = Color.White.copy(alpha = 0.22f),
+                                    color = if (stable) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary,
+                                    trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.14f),
                                     strokeWidth = 6.dp,
                                     strokeCap = StrokeCap.Round,
                                 )
                                 Icon(
                                     if (stable) Icons.Outlined.CloudDone else Icons.Outlined.ErrorOutline,
                                     contentDescription = null,
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                     modifier = Modifier.size(26.dp),
                                 )
                             }
@@ -124,38 +130,38 @@ fun OverviewScreen(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 20.sp
                                     ),
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 )
                                 Text(
-                                    "${overview.healthyCount}/${overview.monitoredCount} 个监控服务正常 · ${formatPlatformTime(overview.refreshedAt)}",
+                                    "$healthyCount/$monitoredCount 个监控服务正常 · ${formatPlatformTime(overview.refreshedAt)}",
                                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                                    color = Color.White.copy(alpha = 0.85f),
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
                                     modifier = Modifier.padding(top = 4.dp),
                                 )
                             }
                         }
                         HorizontalDivider(
                             modifier = Modifier.padding(top = 18.dp),
-                            color = Color.White.copy(alpha = 0.2f),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.14f),
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            HeroMetric("服务可用", "${overview.healthyCount}/${overview.monitoredCount}", Modifier.weight(1f))
-                            HeroMetric("平均响应", overview.averageLatencyMs?.let { "$it ms" } ?: "--", Modifier.weight(1f))
-                            HeroMetric("待处置", state.activeIncidents.size.toString(), Modifier.weight(1f))
+                            HeroMetric("服务可用", "$healthyCount/$monitoredCount", Modifier.weight(1f))
+                            HeroMetric("平均响应", averageLatencyMs?.let { "$it ms" } ?: "--", Modifier.weight(1f))
+                            HeroMetric("待处置", activeIncidents.size.toString(), Modifier.weight(1f))
                         }
                     }
                 }
             }
         }
 
-        if (state.activeIncidents.isNotEmpty()) {
+        if (activeIncidents.isNotEmpty()) {
             item {
-                SectionHeader("需要关注", "${state.activeIncidents.size} 个活动事件")
+                SectionHeader("需要关注", "${activeIncidents.size} 个活动事件")
             }
-            items(state.activeIncidents.take(3), key = { "overview-${it.id}" }) { incident ->
+            items(visibleIncidents, key = { "overview-${it.id}" }, contentType = { "incident" }) { incident ->
                 AppPanel(
                     modifier = Modifier.clickable { onSelectTab(MainTab.Events) },
                 ) {
@@ -182,9 +188,9 @@ fun OverviewScreen(
         item { SectionHeader("服务状态", "来自平台服务端监测") }
         item {
             AppPanel {
-                overview.services.sortedWith(compareBy<ServiceInfo> { servicePriority(it.state) }.thenBy { it.name }).forEachIndexed { index, service ->
+                sortedServices.forEachIndexed { index, service ->
                     ServiceRow(service)
-                    if (index < overview.services.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = MaterialTheme.colorScheme.outline)
+                    if (index < sortedServices.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
         }
@@ -195,7 +201,7 @@ fun OverviewScreen(
                 if (overview.audits.isEmpty()) {
                     EmptyBlock("暂无活动记录", "平台审计记录将在这里显示")
                 } else {
-                    overview.audits.take(5).forEachIndexed { index, audit ->
+                    recentAudits.forEachIndexed { index, audit ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -217,7 +223,7 @@ fun OverviewScreen(
                             }
                             StatusBadge(audit.outcome, if (audit.outcome == "failure") "失败" else "完成")
                         }
-                        if (index < overview.audits.take(5).lastIndex) HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = MaterialTheme.colorScheme.outline)
+                        if (index < recentAudits.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = MaterialTheme.colorScheme.outlineVariant)
                     }
                 }
             }
@@ -230,16 +236,16 @@ fun OverviewScreen(
 private fun OverviewSyncPanel(refreshing: Boolean) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = BrandBlue,
-        contentColor = Color.White,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         shape = MaterialTheme.shapes.medium,
         shadowElevation = 3.dp,
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
                 Surface(
-                    color = Color.White.copy(alpha = 0.16f),
-                    contentColor = Color.White,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.08f),
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     shape = MaterialTheme.shapes.medium,
                 ) {
                     Icon(Icons.Outlined.CloudSync, contentDescription = null, modifier = Modifier.padding(10.dp).size(26.dp))
@@ -249,18 +255,18 @@ private fun OverviewSyncPanel(refreshing: Boolean) {
                     Text(
                         "聚合服务、事件和任务数据",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.72f),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.68f),
                     )
                 }
             }
             if (refreshing) {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-                    color = BrandCyan,
-                    trackColor = Color.White.copy(alpha = 0.18f),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f),
                 )
             }
-            HorizontalDivider(modifier = Modifier.padding(top = 18.dp), color = Color.White.copy(alpha = 0.18f))
+            HorizontalDivider(modifier = Modifier.padding(top = 18.dp), color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f))
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -275,9 +281,10 @@ private fun OverviewSyncPanel(refreshing: Boolean) {
 
 @Composable
 private fun HeroMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    val contentColor = LocalContentColor.current
     Column(modifier = modifier) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.7f))
-        Text(value, style = MaterialTheme.typography.titleLarge, color = Color.White, modifier = Modifier.padding(top = 3.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = contentColor.copy(alpha = 0.68f))
+        Text(value, style = MaterialTheme.typography.titleLarge, color = contentColor, modifier = Modifier.padding(top = 3.dp))
     }
 }
 
