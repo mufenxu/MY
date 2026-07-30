@@ -128,19 +128,20 @@ test('authenticated Android approval issues a browser-bound central session', as
       body: JSON.stringify({ scanToken: 'second-scan-secret-value-that-is-long-enough' }),
     });
     assert.equal(privilegedScan.status, 200);
+    assert.equal((await privilegedScan.json()).confirmationMethod, 'unavailable');
 
     const passkeyOptions = await fetch(`${origin}/api/auth/qr/requests/${privilegedCreated.requestId}/passkey/options`, {
       method: 'POST', headers: { ...consoleHeaders, Cookie: appCookie }, body: '{}',
     });
-    assert.equal(passkeyOptions.status, 403);
-    assert.equal((await passkeyOptions.json()).code, 'QR_PASSKEY_REQUIRED');
+    assert.equal(passkeyOptions.status, 503);
+    assert.equal((await passkeyOptions.json()).code, 'QR_ANDROID_PASSKEY_UNAVAILABLE');
 
     const localBypass = await fetch(`${origin}/api/auth/qr/requests/${privilegedCreated.requestId}/approve`, {
       method: 'POST',
       headers: { ...consoleHeaders, Cookie: appCookie },
       body: JSON.stringify({ localConfirmation: true }),
     });
-    assert.equal(localBypass.status, 403);
-    assert.equal((await localBypass.json()).code, 'QR_PASSKEY_INVALID');
+    assert.equal(localBypass.status, 503);
+    assert.equal((await localBypass.json()).code, 'QR_ANDROID_PASSKEY_UNAVAILABLE');
   });
 });

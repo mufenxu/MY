@@ -260,7 +260,15 @@ private fun QrConfirmationScreen(
             Spacer(Modifier.height(28.dp))
             QrDetailRow(Icons.Outlined.Computer, "登录设备", target.browser.label)
             QrDetailRow(Icons.Outlined.Language, "网络地址", target.browser.ip)
-            QrDetailRow(Icons.Outlined.Fingerprint, "确认方式", if (target.confirmationMethod == "passkey") "Passkey" else "设备生物识别")
+            QrDetailRow(
+                Icons.Outlined.Fingerprint,
+                "确认方式",
+                when (target.confirmationMethod) {
+                    "passkey" -> "Passkey"
+                    "unavailable" -> "Android Passkey 尚未配置"
+                    else -> "设备生物识别"
+                },
+            )
             Text(
                 target.browser.userAgent,
                 style = MaterialTheme.typography.bodySmall,
@@ -275,13 +283,16 @@ private fun QrConfirmationScreen(
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = onApprove,
-                enabled = !busy,
+                enabled = !busy && target.confirmationMethod != "unavailable",
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
                 if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
                 else Icon(if (target.confirmationMethod == "passkey") Icons.Outlined.Fingerprint else Icons.Outlined.CheckCircle, contentDescription = null)
-                Text("确认登录", modifier = Modifier.padding(start = 8.dp))
+                Text(
+                    if (target.confirmationMethod == "unavailable") "暂不可用" else "确认登录",
+                    modifier = Modifier.padding(start = 8.dp),
+                )
             }
             Spacer(Modifier.height(10.dp))
             OutlinedButton(

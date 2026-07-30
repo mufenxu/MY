@@ -304,6 +304,7 @@ export function createApp({
   }
 
   function appQrResponse(record, role) {
+    const androidPasskeyConfigured = (config.androidAppCertFingerprints || []).length > 0;
     return {
       requestId: record.id,
       status: record.status,
@@ -314,7 +315,9 @@ export function createApp({
         userAgent: record.browserUserAgent || '未知设备',
       },
       expiresAt: record.expiresAt,
-      confirmationMethod: role === 'super_admin' ? 'passkey' : 'biometric',
+      confirmationMethod: role === 'super_admin'
+        ? (androidPasskeyConfigured ? 'passkey' : 'unavailable')
+        : 'biometric',
     };
   }
 
@@ -1052,6 +1055,9 @@ export function createApp({
     if (req.consoleUser.role !== 'super_admin') {
       return res.status(400).json({ error: '当前账号使用设备生物识别确认。', code: 'QR_PASSKEY_NOT_REQUIRED' });
     }
+    if ((config.androidAppCertFingerprints || []).length === 0) {
+      return res.status(503).json({ error: 'Android Passkey 尚未配置应用签名证书。', code: 'QR_ANDROID_PASSKEY_UNAVAILABLE' });
+    }
     const result = await passkeys.authenticationOptions(req.consoleUser.username);
     if (!result) {
       return res.status(403).json({ error: '超级管理员必须先绑定 Passkey 才能使用扫码登录。', code: 'QR_PASSKEY_REQUIRED' });
@@ -1069,6 +1075,9 @@ export function createApp({
 
     let confirmationMethod = 'biometric';
     if (req.consoleUser.role === 'super_admin') {
+      if ((config.androidAppCertFingerprints || []).length === 0) {
+        return res.status(503).json({ error: 'Android Passkey 尚未配置应用签名证书。', code: 'QR_ANDROID_PASSKEY_UNAVAILABLE' });
+      }
       try {
         const verification = await passkeys.verifyAuthentication(req.consoleUser.username, req.body?.passkey);
         if (!verification.verified) throw new Error('Passkey verification failed.');

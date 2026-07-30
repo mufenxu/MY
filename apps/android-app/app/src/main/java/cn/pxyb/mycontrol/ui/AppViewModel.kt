@@ -287,6 +287,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         val target = mutableState.value.qrLoginTarget ?: return
         if (mutableState.value.qrLoginBusy || target.status == "approved") return
+        if (
+            target.confirmationMethod == "unavailable" ||
+            target.confirmationMethod == "passkey" && !mutableState.value.androidPasskeySupported
+        ) {
+            mutableState.update { it.copy(qrLoginError = "服务器尚未关联当前 Android App 的签名证书。") }
+            return
+        }
         viewModelScope.launch {
             mutableState.update { it.copy(qrLoginBusy = true, qrLoginError = null) }
             runCatching {
@@ -348,6 +355,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return when (apiError?.code) {
             "QR_LOGIN_UNAVAILABLE", "QR_LOGIN_EXPIRED" -> "二维码已过期或已被使用，请在网页刷新后重试。"
             "QR_PASSKEY_REQUIRED" -> "超级管理员需先在账号安全设置中绑定 Passkey。"
+            "QR_ANDROID_PASSKEY_UNAVAILABLE" -> "服务器尚未关联当前 Android App 的签名证书。"
             "QR_PASSKEY_INVALID" -> "Passkey 验证失败，未批准网页登录。"
             else -> error.message ?: "扫码登录操作失败，请稍后重试。"
         }

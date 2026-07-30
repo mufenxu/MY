@@ -22,7 +22,9 @@ import cn.pxyb.mycontrol.ui.MyControlApp
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
 
 class MainActivity : ComponentActivity() {
     private val appViewModel: AppViewModel by viewModels()
@@ -64,12 +66,16 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun requestPasskey(requestJson: String): String {
         return try {
-            val request = GetCredentialRequest(
-                credentialOptions = listOf(GetPublicKeyCredentialOption(requestJson = requestJson)),
-            )
-            val credential = credentialManager.getCredential(context = this, request = request).credential
-            (credential as? PublicKeyCredential)?.authenticationResponseJson
-                ?: throw IllegalStateException("设备未返回可用的 Passkey。")
+            withTimeout(60_000) {
+                val request = GetCredentialRequest(
+                    credentialOptions = listOf(GetPublicKeyCredentialOption(requestJson = requestJson)),
+                )
+                val credential = credentialManager.getCredential(context = this@MainActivity, request = request).credential
+                (credential as? PublicKeyCredential)?.authenticationResponseJson
+                    ?: throw IllegalStateException("设备未返回可用的 Passkey。")
+            }
+        } catch (error: TimeoutCancellationException) {
+            throw IllegalStateException("系统 Passkey 窗口未响应，请确认域名已关联当前 App 签名后重试。", error)
         } catch (error: GetCredentialException) {
             throw IllegalStateException("Passkey 验证未完成，请确认设备已保存该账号的 Passkey。", error)
         }
