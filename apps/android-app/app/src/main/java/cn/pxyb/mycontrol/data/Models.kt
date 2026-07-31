@@ -9,6 +9,9 @@ data class PlatformUser(
 
 data class LoginResult(
     val user: PlatformUser,
+    val sessionCookie: String,
+    val sessionExpiresAtMillis: Long,
+    val sessionIdleMinutes: Int,
     val recoveryCodes: List<String> = emptyList(),
 )
 

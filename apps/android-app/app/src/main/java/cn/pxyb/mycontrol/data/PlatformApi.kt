@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.data
 
+import android.util.Base64
 import cn.pxyb.mycontrol.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -9,6 +10,8 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.nio.charset.StandardCharsets
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 class PlatformApi(private val sessionStore: SessionStore) {
@@ -33,11 +36,8 @@ class PlatformApi(private val sessionStore: SessionStore) {
         if (recoveryCode.isNotBlank()) body.put("recoveryCode", recoveryCode.trim())
 
         val response = execute("/api/auth/login", "POST", body, authenticated = false)
-        val cookie = response.cookie ?: throw ApiException("服务器未返回安全会话。", 500, "SESSION_MISSING")
-        sessionStore.writeCookie(cookie)
-        sessionStore.writeLastUsername(username)
         val user = response.json.optJSONObject("user").toPlatformUser()
-        LoginResult(user, response.json.optJSONArray("recoveryCodes").toStringList())
+        response.toLoginResult(user, response.json.optJSONArray("recoveryCodes").toStringList())
     }
 
     suspend fun loginCapabilities(): LoginCapabilities = withContext(Dispatchers.IO) {
@@ -72,11 +72,30 @@ class PlatformApi(private val sessionStore: SessionStore) {
                     .put("response", JSONObject(responseJson)),
                 authenticated = false,
             )
-            val cookie = response.cookie ?: throw ApiException("服务器未返回安全会话。", 500, "SESSION_MISSING")
-            sessionStore.writeCookie(cookie)
-            sessionStore.writeLastUsername(challenge.username)
-            LoginResult(response.json.optJSONObject("user").toPlatformUser())
+            response.toLoginResult(response.json.optJSONObject("user").toPlatformUser())
         }
+
+    suspend fun persistLogin(result: LoginResult): Unit = withContext(Dispatchers.IO) {
+        sessionStore.writeCookie(
+            result.sessionCookie,
+            result.sessionExpiresAtMillis,
+            result.sessionIdleMinutes,
+        )
+        sessionStore.writeLastUsername(result.user.username)
+    }
+
+    suspend fun discardLogin(result: LoginResult): Unit = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("${BuildConfig.PLATFORM_BASE_URL}/api/auth/logout")
+            .header("Accept", "application/json")
+            .header("User-Agent", "MY-Control-Android/${BuildConfig.VERSION_NAME}")
+            .header("Cookie", result.sessionCookie)
+            .header("X-Platform-Request", "console")
+            .post(JSONObject().toString().toRequestBody(jsonMediaType))
+            .build()
+        runCatching { client.newCall(request).execute().close() }
+        Unit
+    }
 
     suspend fun scanQrLogin(requestId: String, scanToken: String): QrLoginTarget = withContext(Dispatchers.IO) {
         execute(
@@ -410,8 +429,39 @@ class PlatformApi(private val sessionStore: SessionStore) {
                     json.optJSONObject("details"),
                 )
             }
+            if (authenticated) sessionStore.markUsed()
             return ApiResponse(json, jsonArray, extractSessionCookie(response.headers.values("Set-Cookie")))
         }
+    }
+
+    private fun ApiResponse.toLoginResult(
+        user: PlatformUser,
+        recoveryCodes: List<String> = emptyList(),
+    ): LoginResult {
+        val cookie = cookie ?: throw ApiException("服务器未返回安全会话。", 500, "SESSION_MISSING")
+        val session = json.optJSONObject("session") ?: JSONObject()
+        val expiresAtMillis = session.nullableString("expiresAt")
+            ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+            ?: decodeSessionExpiry(cookie)
+        if (expiresAtMillis <= System.currentTimeMillis()) {
+            throw ApiException("服务器返回的会话有效期无效。", 500, "SESSION_EXPIRY_INVALID")
+        }
+        return LoginResult(
+            user = user,
+            sessionCookie = cookie,
+            sessionExpiresAtMillis = expiresAtMillis,
+            sessionIdleMinutes = session.optInt("idleTimeoutMinutes", 30).coerceAtLeast(1),
+            recoveryCodes = recoveryCodes,
+        )
+    }
+
+    private fun decodeSessionExpiry(cookie: String): Long {
+        return runCatching {
+            val token = cookie.substringAfter('=', "")
+            val payload = token.substringBefore('.')
+            val decoded = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+            JSONObject(String(decoded, StandardCharsets.UTF_8)).optLong("exp") * 1000L
+        }.getOrDefault(0L)
     }
 
     private fun extractSessionCookie(headers: List<String>): String? = headers

@@ -43,13 +43,22 @@ import { createTaskCenter } from './task-center.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.resolve(__dirname, '..', 'dist');
 
-function sessionCookieOptions(config) {
+const ANDROID_APP_USER_AGENT_PREFIX = 'MY-Control-Android/';
+
+function sessionPolicyForRequest(req, config) {
+  const androidApp = String(req.get('user-agent') || '').startsWith(ANDROID_APP_USER_AGENT_PREFIX);
+  return androidApp
+    ? { ttlHours: config.androidSessionTtlHours, idleMinutes: config.androidSessionIdleMinutes }
+    : { ttlHours: config.sessionTtlHours, idleMinutes: config.sessionIdleMinutes };
+}
+
+function sessionCookieOptions(config, ttlHours = config.sessionTtlHours) {
   return {
     httpOnly: true,
     sameSite: 'strict',
     secure: config.isProduction,
     path: '/',
-    maxAge: config.sessionTtlHours * 60 * 60 * 1000,
+    maxAge: ttlHours * 60 * 60 * 1000,
   };
 }
 
@@ -423,14 +432,18 @@ export function createApp({
   }
 
   async function issueAuthenticatedSession(req, res, account, authenticationMethod, extra = {}) {
+    const policy = sessionPolicyForRequest(req, config);
+    const now = Date.now();
     const token = await sessions.issue({
       username: account.username,
       role: account.role,
-      ttlHours: config.sessionTtlHours,
+      ttlHours: policy.ttlHours,
+      idleTimeoutMinutes: policy.idleMinutes,
       ip: req.ip,
       userAgent: req.get('user-agent'),
+      now,
     });
-    res.cookie(sessionCookieName(config.isProduction), token, sessionCookieOptions(config));
+    res.cookie(sessionCookieName(config.isProduction), token, sessionCookieOptions(config, policy.ttlHours));
     if (config.isProduction) {
       res.clearCookie(SESSION_COOKIE_NAME, { ...sessionCookieOptions(config), maxAge: 0 });
     }
@@ -452,6 +465,10 @@ export function createApp({
       totpRequired: account.totpEnabled,
       mfaRequired: Boolean(config.requireMfa),
       user: authUser(account),
+      session: {
+        expiresAt: new Date(now + policy.ttlHours * 60 * 60 * 1000).toISOString(),
+        idleTimeoutMinutes: policy.idleMinutes,
+      },
       ...extra,
     });
   }
@@ -1619,6 +1636,7 @@ export function createApp({
   app.get('/api/security/sessions', async (req, res, next) => {
     try {
       const list = await sessions.list?.({ subject: req.consoleUser.role === 'super_admin' ? undefined : req.consoleUser.username }) || [];
+      const policy = sessionPolicyForRequest(req, config);
       res.json({
         currentNonce: req.consoleSession?.nonce || null,
         sessions: list,
@@ -1627,8 +1645,8 @@ export function createApp({
           totpEnabled: Boolean(req.consoleAccount?.totpEnabled),
           recoveryCodesRemaining: req.consoleAccount?.recoveryCodesRemaining || 0,
           passkeyCount: req.consoleAccount?.passkeyCount || 0,
-          sessionTtlHours: config.sessionTtlHours,
-          sessionIdleMinutes: config.sessionIdleMinutes,
+          sessionTtlHours: policy.ttlHours,
+          sessionIdleMinutes: policy.idleMinutes,
         },
       });
     } catch (error) {

@@ -68,8 +68,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val hasSavedSession = sessionStore.hasSession()
     private val mutableState = MutableStateFlow(
         AppUiState(
-            booting = hasSavedSession,
-            locked = false,
+            booting = false,
+            locked = hasSavedSession,
             suggestedUsername = sessionStore.readLastUsername(),
         ),
     )
@@ -82,43 +82,44 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 mutableState.update { it.copy(androidPasskeySupported = capabilities.androidPasskeySupported) }
             }
         }
-        if (hasSavedSession) {
-            viewModelScope.launch {
-                runCatching { api.authStatus() }
-                    .onSuccess { user ->
-                        if (user == null) {
-                            mutableState.update {
-                                it.copy(
-                                    booting = false,
-                                    locked = false,
-                                    user = null,
-                                    error = "登录会话已过期，请重新登录。",
-                                )
-                            }
-                            MyControlWidgetProvider.clear(getApplication())
-                        } else {
-                            mutableState.update { it.copy(booting = false, locked = true, user = user) }
-                        }
-                    }
-                    .onFailure {
-                        mutableState.update { it.copy(booting = false, locked = true) }
-                    }
-            }
-        }
+        if (!hasSavedSession) MyControlWidgetProvider.clear(getApplication())
     }
 
     fun unlockSession() {
         viewModelScope.launch {
             mutableState.update { it.copy(booting = true, error = null) }
-            val user = api.authStatus()
-            if (user == null) {
-                mutableState.update { it.copy(booting = false, locked = false, user = null, error = "登录会话已过期，请重新登录。") }
-                MyControlWidgetProvider.clear(getApplication())
-            } else {
-                mutableState.update { it.copy(booting = false, locked = false, user = user) }
-                refreshAll()
-                scanPendingQrLogin()
+            val locallyUnlocked = runCatching { sessionStore.unlock() }.getOrElse {
+                mutableState.update {
+                    it.copy(booting = false, locked = true, error = "设备身份验证已超时，请重新解锁。")
+                }
+                return@launch
             }
+            if (!locallyUnlocked) {
+                mutableState.update {
+                    it.copy(booting = false, locked = false, user = null, error = "本地安全会话已失效，请重新登录。")
+                }
+                MyControlWidgetProvider.clear(getApplication())
+                return@launch
+            }
+            runCatching { api.authStatus() }
+                .onSuccess { user ->
+                    if (user == null) {
+                        mutableState.update {
+                            it.copy(booting = false, locked = false, user = null, error = "登录会话已过期，请重新登录。")
+                        }
+                        MyControlWidgetProvider.clear(getApplication())
+                    } else {
+                        mutableState.update { it.copy(booting = false, locked = false, user = user) }
+                        refreshAll()
+                        scanPendingQrLogin()
+                    }
+                }
+                .onFailure { error ->
+                    sessionStore.lock()
+                    mutableState.update {
+                        it.copy(booting = false, locked = true, error = error.message ?: "暂时无法验证会话，请重试。")
+                    }
+                }
         }
     }
 
@@ -128,7 +129,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         MyControlWidgetProvider.clear(getApplication())
     }
 
-    fun login(username: String, password: String, factor: String, useRecoveryCode: Boolean) {
+    fun login(
+        username: String,
+        password: String,
+        factor: String,
+        useRecoveryCode: Boolean,
+        authorizeSession: suspend () -> Boolean,
+    ) {
         if (username.isBlank() || password.isBlank()) {
             mutableState.update { it.copy(error = "请输入平台账号和密码。", message = null) }
             return
@@ -136,17 +143,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             mutableState.update { it.copy(loginBusy = true, error = null, message = null) }
             runCatching {
-                api.login(
+                val result = api.login(
                     username,
                     password,
                     totp = factor.takeUnless { useRecoveryCode }.orEmpty(),
                     recoveryCode = factor.takeIf { useRecoveryCode }.orEmpty(),
                 )
+                protectLogin(result, authorizeSession)
             }.onSuccess(::completeLogin).onFailure(::handleLoginFailure)
         }
     }
 
-    fun loginWithPasskey(username: String, requestCredential: suspend (String) -> String) {
+    fun loginWithPasskey(
+        username: String,
+        requestCredential: suspend (String) -> String,
+        authorizeSession: suspend () -> Boolean,
+    ) {
         if (username.isBlank()) {
             mutableState.update { it.copy(error = "请先输入平台账号。", message = null) }
             return
@@ -155,8 +167,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             mutableState.update { it.copy(loginBusy = true, error = null, message = null) }
             runCatching {
                 val challenge = api.beginPasskeyLogin(username)
-                api.completePasskeyLogin(challenge, requestCredential(challenge.optionsJson))
+                val result = api.completePasskeyLogin(challenge, requestCredential(challenge.optionsJson))
+                protectLogin(result, authorizeSession)
             }.onSuccess(::completeLogin).onFailure(::handleLoginFailure)
+        }
+    }
+
+    private suspend fun protectLogin(
+        result: cn.pxyb.mycontrol.data.LoginResult,
+        authorizeSession: suspend () -> Boolean,
+    ): cn.pxyb.mycontrol.data.LoginResult {
+        return try {
+            sessionStore.prepareProtection()
+            if (!authorizeSession()) throw IllegalStateException("未完成设备身份验证，登录会话未保存。")
+            api.persistLogin(result)
+            result
+        } catch (error: Throwable) {
+            api.discardLogin(result)
+            throw error
         }
     }
 
@@ -173,8 +201,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun lockSession() {
-        if (mutableState.value.user != null && sessionStore.hasSession() && !mutableState.value.qrLoginBusy) {
-            mutableState.update { it.copy(locked = true) }
+        if (mutableState.value.user != null && !mutableState.value.qrLoginBusy) {
+            val hasSession = sessionStore.hasSession()
+            sessionStore.lock()
+            if (hasSession) {
+                mutableState.update { it.copy(locked = true) }
+            } else {
+                mutableState.update {
+                    it.copy(locked = false, user = null, error = "登录会话已过期，请重新登录。")
+                }
+                MyControlWidgetProvider.clear(getApplication())
+            }
         }
     }
 
@@ -458,7 +495,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         api.updateIncident(id, "mute", muteMinutes = muteMinutes)
     }
 
-    fun resolveIncident(id: String, note: String) = updateIncident("事件已关闭。") {
+    fun resolveIncident(id: String, note: String, confirmation: suspend () -> Boolean) =
+        updateIncident("事件已关闭。", confirmation) {
         api.updateIncident(id, "resolve", note = note)
     }
 
@@ -467,23 +505,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         mutableState.update { it.copy(diagnostics = diagnostics) }
     }
 
-    fun triggerBackup() = runAction("backup", "备份任务已进入执行队列。") {
+    fun triggerBackup(confirmation: suspend () -> Boolean) =
+        runAction("backup", "备份任务已进入执行队列。", confirmation) {
         api.triggerBackup()
         mutableState.update { it.copy(backup = api.backupQuality()) }
     }
 
-    fun triggerCt8() = runAction("ct8", "CT8 任务已提交。") {
+    fun triggerCt8(confirmation: suspend () -> Boolean) =
+        runAction("ct8", "CT8 任务已提交。", confirmation) {
         api.triggerCt8()
         mutableState.update { it.copy(ct8 = api.ct8()) }
     }
 
-    fun runIotScene(id: String) = runAction("scene", "IoT 场景指令已进入执行队列。") {
+    fun runIotScene(id: String, confirmation: suspend () -> Boolean) =
+        runAction("scene", "IoT 场景指令已进入执行队列。", confirmation) {
         api.runIotScene(id)
         mutableState.update { it.copy(iot = api.iot()) }
         publishWidget()
     }
 
-    fun revokeSession(nonce: String) = runAction("session", "远程会话已撤销。") {
+    fun revokeSession(nonce: String, confirmation: suspend () -> Boolean) =
+        runAction("session", "远程会话已撤销。", confirmation) {
         api.revokeSession(nonce)
         mutableState.update { it.copy(security = api.security()) }
     }
@@ -492,8 +534,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         mutableState.update { it.copy(error = null, message = null) }
     }
 
-    private fun updateIncident(successMessage: String, action: suspend () -> Unit) =
-        runAction("incident", successMessage) {
+    private fun updateIncident(
+        successMessage: String,
+        confirmation: (suspend () -> Boolean)? = null,
+        action: suspend () -> Unit,
+    ) = runAction("incident", successMessage, confirmation) {
             action()
             mutableState.update { it.copy(incidents = api.incidents()) }
             publishWidget()
@@ -509,10 +554,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun runAction(action: String, successMessage: String, block: suspend () -> Unit) {
+    private fun runAction(
+        action: String,
+        successMessage: String,
+        confirmation: (suspend () -> Boolean)? = null,
+        block: suspend () -> Unit,
+    ) {
         if (mutableState.value.busyAction != null) return
         viewModelScope.launch {
             mutableState.update { it.copy(busyAction = action, error = null, message = null) }
+            val confirmed = runCatching { confirmation?.invoke() ?: true }.getOrElse { error ->
+                mutableState.update {
+                    it.copy(busyAction = null, error = error.message ?: "设备身份验证失败。")
+                }
+                return@launch
+            }
+            if (!confirmed) {
+                mutableState.update { it.copy(busyAction = null) }
+                return@launch
+            }
             runCatching { block() }
                 .onSuccess { mutableState.update { it.copy(busyAction = null, message = successMessage) } }
                 .onFailure { error ->

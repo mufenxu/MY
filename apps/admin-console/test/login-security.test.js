@@ -97,6 +97,7 @@ test('production login enforces HTTPS, mandatory MFA enrollment, and host-only s
     const session = await confirmed.json();
     assert.equal(session.user.mfaCompliant, true);
     assert.equal(session.recoveryCodes.length, 10);
+    assert.equal(session.session.idleTimeoutMinutes, 30);
     const setCookie = confirmed.headers.get('set-cookie');
     assert.match(setCookie, /^__Host-my_platform_session=/);
     assert.match(setCookie, /HttpOnly/i);
@@ -112,6 +113,16 @@ test('production login enforces HTTPS, mandatory MFA enrollment, and host-only s
     const statusBody = await status.json();
     assert.equal(statusBody.authenticated, true);
     assert.equal(statusBody.mfaRequired, true);
+
+    const androidLogin = await fetch(`${origin}/api/auth/login`, {
+      method: 'POST',
+      headers: { ...headers, 'User-Agent': 'MY-Control-Android/1.0.0' },
+      body: JSON.stringify({ username: 'admin', password, recoveryCode: session.recoveryCodes[0] }),
+    });
+    assert.equal(androidLogin.status, 200);
+    const androidSession = await androidLogin.json();
+    assert.equal(androidSession.session.idleTimeoutMinutes, 1440);
+    assert.match(androidLogin.headers.get('set-cookie'), /Max-Age=2592000/i);
 
     const changed = await fetch(`${origin}/api/security/password`, {
       method: 'POST',

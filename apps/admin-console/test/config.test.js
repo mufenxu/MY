@@ -15,6 +15,9 @@ test('development defaults to local auth bypass', () => {
   assert.equal(config.port, 8788);
   assert.equal(config.publicOrigin, 'http://127.0.0.1:22100');
   assert.equal(config.requireMfa, false);
+  assert.equal(config.sessionIdleMinutes, 30);
+  assert.equal(config.androidSessionTtlHours, 720);
+  assert.equal(config.androidSessionIdleMinutes, 1440);
 });
 
 test('proxy trust is limited to an explicit hop count', () => {

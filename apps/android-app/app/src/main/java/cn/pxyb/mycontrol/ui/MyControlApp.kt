@@ -127,6 +127,8 @@ fun MyControlApp(
     onBiometricUnlock: () -> Unit,
     onPasskeyRequest: suspend (String) -> String,
     onBiometricConfirmation: suspend () -> Boolean,
+    onSessionProtection: suspend () -> Boolean,
+    onSensitiveActionConfirmation: suspend () -> Boolean,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val destination = when {
@@ -138,14 +140,24 @@ fun MyControlApp(
     Crossfade(targetState = destination, animationSpec = tween(180), label = "app-state") { screen ->
         when (screen) {
             "loading" -> FullScreenLoading()
-            "locked" -> LockScreen(onBiometricUnlock, viewModel::discardLockedSession)
+            "locked" -> LockScreen(onBiometricUnlock, viewModel::discardLockedSession, state.error)
             "login" -> LoginScreen(
                 state = state,
-                onLogin = viewModel::login,
-                onPasskeyLogin = { username -> viewModel.loginWithPasskey(username, onPasskeyRequest) },
+                onLogin = { username, password, factor, recovery ->
+                    viewModel.login(username, password, factor, recovery, onSessionProtection)
+                },
+                onPasskeyLogin = { username ->
+                    viewModel.loginWithPasskey(username, onPasskeyRequest, onSessionProtection)
+                },
                 onBackFromSecondFactor = viewModel::resetSecondFactor,
             )
-            else -> AuthenticatedShell(state, viewModel, onPasskeyRequest, onBiometricConfirmation)
+            else -> AuthenticatedShell(
+                state,
+                viewModel,
+                onPasskeyRequest,
+                onBiometricConfirmation,
+                onSensitiveActionConfirmation,
+            )
         }
     }
 }
@@ -168,7 +180,7 @@ private fun FullScreenLoading() {
 }
 
 @Composable
-private fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit) {
+private fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit, error: String?) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -198,6 +210,14 @@ private fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp),
             )
+            if (!error.isNullOrBlank()) {
+                Text(
+                    error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+            }
             Button(
                 onClick = onUnlock,
                 modifier = Modifier.fillMaxWidth().padding(top = 26.dp).height(52.dp),
@@ -782,6 +802,7 @@ private fun AuthenticatedShell(
     viewModel: AppViewModel,
     onPasskeyRequest: suspend (String) -> String,
     onBiometricConfirmation: suspend () -> Boolean,
+    onSensitiveActionConfirmation: suspend () -> Boolean,
 ) {
     if (state.qrLoginOpen) {
         QrLoginScreen(
@@ -835,15 +856,27 @@ private fun AuthenticatedShell(
                         onAssign = viewModel::assignIncident,
                         onAddNote = viewModel::addIncidentNote,
                         onMute = viewModel::muteIncident,
-                        onResolve = viewModel::resolveIncident,
+                        onResolve = { id, note -> viewModel.resolveIncident(id, note, onSensitiveActionConfirmation) },
                         onRefresh = onRefresh,
                     )
-                    MainTab.Operations -> OperationsScreen(state, padding, viewModel::runDiagnostics, viewModel::triggerBackup, onRefresh)
-                    MainTab.Tools -> ToolsScreen(state, padding, viewModel::triggerCt8, viewModel::runIotScene, onRefresh)
+                    MainTab.Operations -> OperationsScreen(
+                        state,
+                        padding,
+                        viewModel::runDiagnostics,
+                        { viewModel.triggerBackup(onSensitiveActionConfirmation) },
+                        onRefresh,
+                    )
+                    MainTab.Tools -> ToolsScreen(
+                        state,
+                        padding,
+                        { viewModel.triggerCt8(onSensitiveActionConfirmation) },
+                        { id -> viewModel.runIotScene(id, onSensitiveActionConfirmation) },
+                        onRefresh,
+                    )
                     MainTab.Profile -> ProfileScreen(
                         state,
                         padding,
-                        viewModel::revokeSession,
+                        { nonce -> viewModel.revokeSession(nonce, onSensitiveActionConfirmation) },
                         viewModel::openQrScanner,
                         viewModel::logout,
                         onRefresh,

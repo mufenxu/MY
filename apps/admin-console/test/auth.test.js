@@ -65,6 +65,22 @@ test('registered sessions expire after the configured idle timeout', () => {
   assert.equal(sessions.verify(untouched, now + 300_000), null);
 });
 
+test('registered sessions honor a per-session idle timeout', () => {
+  const now = Date.UTC(2026, 6, 15, 12, 0, 0);
+  const sessions = createSessionRegistry({ secret: 'j'.repeat(32), idleTimeoutMinutes: 5 });
+  const browserToken = sessions.issue({ username: 'browser-admin', ttlHours: 1, now });
+  const androidToken = sessions.issue({
+    username: 'android-admin',
+    ttlHours: 24,
+    idleTimeoutMinutes: 60,
+    now,
+  });
+
+  assert.equal(sessions.verify(browserToken, now + 300_000), null);
+  assert.equal(sessions.verify(androidToken, now + 300_000).sub, 'android-admin');
+  assert.equal(sessions.verify(androidToken, now + 65 * 60 * 1000), null);
+});
+
 test('registered sessions expose safe metadata and support remote revocation', () => {
   const sessions = createSessionRegistry({ secret: 'c'.repeat(32) });
   sessions.issue({

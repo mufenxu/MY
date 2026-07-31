@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,9 +30,12 @@ import kotlinx.coroutines.withTimeout
 class MainActivity : ComponentActivity() {
     private val appViewModel: AppViewModel by viewModels()
     private val credentialManager by lazy { CredentialManager.create(this) }
+    private var authenticationRequests = 0
+    private var activityStopped = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         handleQrLoginIntent(intent)
         enableEdgeToEdge()
         setContent {
@@ -43,19 +47,33 @@ class MainActivity : ComponentActivity() {
                 val biometricConfirmation: suspend () -> Boolean = remember {
                     { requestQrLoginConfirmation() }
                 }
+                val sessionProtection: suspend () -> Boolean = remember {
+                    { requestSessionProtection() }
+                }
+                val sensitiveActionConfirmation: suspend () -> Boolean = remember {
+                    { requestSensitiveActionConfirmation() }
+                }
                 MyControlApp(
                     viewModel = appViewModel,
                     onBiometricUnlock = biometricRequest,
                     onPasskeyRequest = passkeyRequest,
                     onBiometricConfirmation = biometricConfirmation,
+                    onSessionProtection = sessionProtection,
+                    onSensitiveActionConfirmation = sensitiveActionConfirmation,
                 )
             }
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        activityStopped = false
+    }
+
     override fun onStop() {
+        activityStopped = true
+        if (authenticationRequests == 0) appViewModel.lockSession()
         super.onStop()
-        appViewModel.lockSession()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -88,15 +106,34 @@ class MainActivity : ComponentActivity() {
         ) { authenticated -> if (authenticated) onSuccess() }
     }
 
-    private suspend fun requestQrLoginConfirmation(): Boolean = suspendCancellableCoroutine { continuation ->
-        val cancellationSignal = promptForAuthentication(
-            title = "确认网页登录",
-            subtitle = "验证身份后批准浏览器登录",
-        ) { authenticated ->
-            if (continuation.isActive) continuation.resume(authenticated)
+    private suspend fun requestQrLoginConfirmation(): Boolean = requestDeviceAuthentication(
+        title = "确认网页登录",
+        subtitle = "验证身份后批准浏览器登录",
+    )
+
+    private suspend fun requestSessionProtection(): Boolean = requestDeviceAuthentication(
+        title = "保护安全会话",
+        subtitle = "验证身份后将登录会话绑定到本设备",
+    )
+
+    private suspend fun requestSensitiveActionConfirmation(): Boolean = requestDeviceAuthentication(
+        title = "确认敏感操作",
+        subtitle = "验证身份后继续执行本次操作",
+    )
+
+    private suspend fun requestDeviceAuthentication(title: String, subtitle: String): Boolean =
+        try {
+            authenticationRequests += 1
+            suspendCancellableCoroutine { continuation ->
+                val cancellationSignal = promptForAuthentication(title, subtitle) { authenticated ->
+                    if (continuation.isActive) continuation.resume(authenticated)
+                }
+                continuation.invokeOnCancellation { cancellationSignal?.cancel() }
+            }
+        } finally {
+            authenticationRequests = (authenticationRequests - 1).coerceAtLeast(0)
+            if (activityStopped && authenticationRequests == 0) appViewModel.lockSession()
         }
-        continuation.invokeOnCancellation { cancellationSignal?.cancel() }
-    }
 
     private fun promptForAuthentication(
         title: String,
@@ -117,7 +154,13 @@ class MainActivity : ComponentActivity() {
         val promptBuilder = BiometricPrompt.Builder(this)
             .setTitle(title)
             .setSubtitle(subtitle)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            promptBuilder.setAllowedAuthenticators(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL,
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            @Suppress("DEPRECATION")
             promptBuilder.setDeviceCredentialAllowed(true)
         } else {
             promptBuilder.setNegativeButton("取消", executor) { _, _ -> }

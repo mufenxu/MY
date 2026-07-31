@@ -156,6 +156,8 @@ export function loadConfig(env = process.env) {
     blackboxIngestToken: env.PLATFORM_BLACKBOX_INGEST_TOKEN || '',
     sessionTtlHours: parseInteger(env.PLATFORM_SESSION_TTL_HOURS, 12, { min: 1, max: 168 }),
     sessionIdleMinutes: parseInteger(env.PLATFORM_SESSION_IDLE_MINUTES, 30, { min: 5, max: 240 }),
+    androidSessionTtlHours: parseInteger(env.PLATFORM_ANDROID_SESSION_TTL_HOURS, 24 * 30, { min: 24, max: 24 * 30 }),
+    androidSessionIdleMinutes: parseInteger(env.PLATFORM_ANDROID_SESSION_IDLE_MINUTES, 24 * 60, { min: 60, max: 24 * 30 * 60 }),
     requireMfa: parseBoolean(env.PLATFORM_REQUIRE_MFA, isProduction),
     loginWindowMinutes: parseInteger(env.PLATFORM_LOGIN_WINDOW_MINUTES, 15, { min: 1, max: 60 }),
     loginMaxAttempts: parseInteger(env.PLATFORM_LOGIN_MAX_ATTEMPTS, 10, { min: 3, max: 100 }),

@@ -86,16 +86,30 @@ export function createSessionRegistry({
   touchIntervalMs = 60_000,
 } = {}) {
   const activeSessions = new Map();
-  const idleTimeoutMs = Math.max(Number(idleTimeoutMinutes) || 30, 1) * 60_000;
+  const defaultIdleTimeoutMinutes = Math.max(Number(idleTimeoutMinutes) || 30, 1);
+
+  function sessionIdleTimeoutMs(session) {
+    return Math.max(Number(session?.idleTimeoutMinutes) || defaultIdleTimeoutMinutes, 1) * 60_000;
+  }
 
   function prune(now = Date.now()) {
     const nowSeconds = Math.floor(now / 1000);
     for (const [nonce, session] of activeSessions) {
-      if (session.exp <= nowSeconds) activeSessions.delete(nonce);
+      if (session.exp <= nowSeconds || session.lastSeenAt + sessionIdleTimeoutMs(session) <= now) {
+        activeSessions.delete(nonce);
+      }
     }
   }
 
-  function issue({ username, role = 'super_admin', ttlHours, ip = '', userAgent = '', now = Date.now() }) {
+  function issue({
+    username,
+    role = 'super_admin',
+    ttlHours,
+    idleTimeoutMinutes: sessionIdleTimeoutMinutes = defaultIdleTimeoutMinutes,
+    ip = '',
+    userAgent = '',
+    now = Date.now(),
+  }) {
     prune(now);
     while (activeSessions.size >= maxSessions) {
       activeSessions.delete(activeSessions.keys().next().value);
@@ -106,6 +120,7 @@ export function createSessionRegistry({
       ...session,
       ip: String(ip || '').slice(0, 128),
       userAgent: String(userAgent || '').slice(0, 256),
+      idleTimeoutMinutes: Math.max(Number(sessionIdleTimeoutMinutes) || defaultIdleTimeoutMinutes, 1),
       createdAt: new Date(now).toISOString(),
       lastSeenAt: now,
     });
@@ -117,6 +132,7 @@ export function createSessionRegistry({
     const session = verifySession(token, secret, now);
     const active = session ? activeSessions.get(session.nonce) : null;
     if (!active || active.exp !== session.exp || active.sub !== session.sub) return null;
+    const idleTimeoutMs = sessionIdleTimeoutMs(active);
     if (active.lastSeenAt + idleTimeoutMs <= now) {
       activeSessions.delete(session.nonce);
       return null;
@@ -175,7 +191,10 @@ export function createSessionRegistry({
         userAgent: session.userAgent,
         createdAt: session.createdAt,
         lastSeenAt: new Date(session.lastSeenAt).toISOString(),
-        idleExpiresAt: new Date(Math.min(session.exp * 1000, session.lastSeenAt + idleTimeoutMs)).toISOString(),
+        idleExpiresAt: new Date(Math.min(
+          session.exp * 1000,
+          session.lastSeenAt + sessionIdleTimeoutMs(session),
+        )).toISOString(),
         expiresAt: new Date(session.exp * 1000).toISOString(),
       }));
   }
