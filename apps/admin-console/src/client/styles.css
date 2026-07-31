@@ -10201,7 +10201,8 @@ button.dependency-service-card:focus-visible {
 
   /* 菜单与通知铃铛按钮微缩 */
   .topbar-leading button,
-  .topbar-actions button {
+  .topbar-actions > button,
+  .topbar-actions > .notification-wrap > .notification-button {
     width: 34px !important;
     height: 34px !important;
   }

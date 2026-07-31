@@ -65,10 +65,11 @@ data class AppUiState(
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionStore = SessionStore(application)
     private val api = PlatformApi(sessionStore)
+    private val hasSavedSession = sessionStore.hasSession()
     private val mutableState = MutableStateFlow(
         AppUiState(
-            booting = false,
-            locked = sessionStore.hasSession(),
+            booting = hasSavedSession,
+            locked = false,
             suggestedUsername = sessionStore.readLastUsername(),
         ),
     )
@@ -79,6 +80,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runCatching { api.loginCapabilities() }.onSuccess { capabilities ->
                 mutableState.update { it.copy(androidPasskeySupported = capabilities.androidPasskeySupported) }
+            }
+        }
+        if (hasSavedSession) {
+            viewModelScope.launch {
+                runCatching { api.authStatus() }
+                    .onSuccess { user ->
+                        if (user == null) {
+                            mutableState.update {
+                                it.copy(
+                                    booting = false,
+                                    locked = false,
+                                    user = null,
+                                    error = "登录会话已过期，请重新登录。",
+                                )
+                            }
+                            MyControlWidgetProvider.clear(getApplication())
+                        } else {
+                            mutableState.update { it.copy(booting = false, locked = true, user = user) }
+                        }
+                    }
+                    .onFailure {
+                        mutableState.update { it.copy(booting = false, locked = true) }
+                    }
             }
         }
     }

@@ -144,8 +144,12 @@ class PlatformApi(private val sessionStore: SessionStore) {
                 json.optJSONObject("user").toPlatformUser()
             }
         } catch (error: ApiException) {
-            if (error.status == 401 || error.status == 403) sessionStore.clear()
-            null
+            if (error.status == 401 || error.status == 403) {
+                sessionStore.clear()
+                null
+            } else {
+                throw error
+            }
         }
     }
 
