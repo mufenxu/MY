@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+process.env.CORE_JWT_SECRET = process.env.CORE_JWT_SECRET || 'todo-reminder-test-secret';
+
 const { buildSummaryMessage, selectReminderTasks } = require('../services/todoReminder');
 
 test('todo reminder selects only due unsent tasks and falls back to dueAt', () => {
