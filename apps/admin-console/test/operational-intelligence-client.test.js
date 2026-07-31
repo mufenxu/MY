@@ -77,6 +77,6 @@ test('all operational intelligence reads cancel stale requests before applying r
 
 test('operational search results route through existing console navigation', () => {
   const source = readSource('src', 'client', 'OperationsViews.jsx');
-  assert.match(source, /onNavigate\(resolveConsoleView\(result\.view\)\)/);
-  assert.match(source, /<ExternalLink size=\{15\} \/>进入模块/);
+  assert.match(source, /onNavigate\(resolveConsoleView\(result\.view\), \{ entity: result\.entityId \}\)/);
+  assert.match(source, /<ExternalLink size=\{15\} \/>打开对象/);
 });
