@@ -20,6 +20,7 @@ const {
 const { createInfoPayload } = require('./payloads/infoPayload');
 const { registerApiDocsRoute } = require('./routes/apiDocs');
 const { registerAuthRoutes } = require('./routes/auth');
+const { registerAssetRoutes } = require('./routes/assets');
 const { registerAutomationRoutes } = require('./routes/automations');
 const { registerDeviceRoutes } = require('./routes/devices');
 const { registerKeyRoutes } = require('./routes/keys');
@@ -57,6 +58,14 @@ function createApiServer({ settingsStore, mqttService, automationEngine = null }
   });
   const requireRelayControl = authManager.requireAccess(['relays:write'], {
     insufficientScopeMessage: '当前凭证没有继电器控制权限。'
+  });
+  const requireAssetRead = authManager.requireAccess(['assets:read'], {
+    allowApiKey: false,
+    insufficientScopeMessage: '当前身份没有读取设备资产的权限。'
+  });
+  const requireAssetWrite = authManager.requireAccess(['assets:write'], {
+    allowApiKey: false,
+    insufficientScopeMessage: '当前身份没有维护设备资产的权限。'
   });
 
   app.use(attachRequestContext);
@@ -187,6 +196,11 @@ function createApiServer({ settingsStore, mqttService, automationEngine = null }
     requireTelemetryAccess,
     requireHistoryAccess,
     requireRelayControl
+  });
+  registerAssetRoutes(app, {
+    db: mqttService.db,
+    requireAssetRead,
+    requireAssetWrite
   });
   if (automationEngine) {
     registerAutomationRoutes(app, {

@@ -3,8 +3,8 @@ const { isSafeHttpMethod } = require('@my-platform/platform-auth');
 const { verifyPlatformSso } = require('./platformSso');
 
 const PLATFORM_ROLE_SCOPES = Object.freeze({
-  viewer: Object.freeze(['devices:read', 'history:read']),
-  operator: Object.freeze(['devices:read', 'history:read', 'relays:write']),
+  viewer: Object.freeze(['devices:read', 'history:read', 'assets:read']),
+  operator: Object.freeze(['devices:read', 'history:read', 'relays:write', 'assets:read', 'assets:write']),
   super_admin: Object.freeze(['*'])
 });
 
@@ -18,7 +18,7 @@ function platformRoleAllowsRequest(role, method = 'GET', requiredScopes = []) {
   if (role === 'viewer') return isSafeHttpMethod(normalizedMethod);
   if (role !== 'operator') return false;
   if (isSafeHttpMethod(normalizedMethod)) return true;
-  return requiredScopes.length > 0 && requiredScopes.every((scope) => scope === 'relays:write');
+  return requiredScopes.length > 0 && hasRequiredScopes(PLATFORM_ROLE_SCOPES.operator, requiredScopes);
 }
 const { verifyPassword } = require('./password');
 

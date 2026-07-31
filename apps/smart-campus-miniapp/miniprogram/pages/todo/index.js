@@ -8,6 +8,19 @@ const constants = require('../../utils/constants')
 const storage = require('../../utils/storage')
 const request = require('../../utils/request').default
 const { ensureAuthorized } = require('../../utils/auth')
+const PRIORITY_OPTIONS = [
+  { label: '低优先级', value: 'low' },
+  { label: '普通', value: 'normal' },
+  { label: '高优先级', value: 'high' },
+]
+const RECURRENCE_OPTIONS = [
+  { label: '不重复', value: 'none' },
+  { label: '每天', value: 'daily' },
+  { label: '每周', value: 'weekly' },
+  { label: '每月', value: 'monthly' },
+]
+const PRIORITY_VALUES = new Set(PRIORITY_OPTIONS.map((item) => item.value))
+const RECURRENCE_VALUES = new Set(RECURRENCE_OPTIONS.map((item) => item.value))
 
 function currentTodoStorageScope() {
   try {
@@ -72,9 +85,40 @@ function normalizeTasks(raw) {
     }
     const createdAt = typeof item.createdAt === 'number' ? item.createdAt : now + index
     const updatedAt = typeof item.updatedAt === 'number' ? item.updatedAt : createdAt
-    result.push({ id, title, completed, createdAt, updatedAt })
+    const dueAt = normalizeOptionalLocalTimestamp(item.dueAt)
+    const reminderAt = normalizeOptionalLocalTimestamp(item.reminderAt)
+    const priority = PRIORITY_VALUES.has(item.priority) ? item.priority : 'normal'
+    const recurrence = RECURRENCE_VALUES.has(item.recurrence) ? item.recurrence : 'none'
+    const rawCourse = item.courseRef || {}
+    const courseRef = typeof rawCourse === 'string'
+      ? { id: '', name: rawCourse.trim().slice(0, 100) }
+      : {
+          id: String(rawCourse.id || '').trim().slice(0, 128),
+          name: String(rawCourse.name || '').trim().slice(0, 100),
+        }
+    result.push({
+      id,
+      title,
+      completed,
+      dueAt,
+      priority,
+      recurrence,
+      courseRef,
+      reminderAt,
+      reminderStatus: completed
+        ? 'dismissed'
+        : (['pending', 'sent', 'dismissed'].includes(item.reminderStatus) ? item.reminderStatus : 'pending'),
+      remindedAt: normalizeOptionalLocalTimestamp(item.remindedAt),
+      createdAt,
+      updatedAt,
+    })
   }
   return result.sort((a, b) => a.createdAt - b.createdAt)
+}
+
+function normalizeOptionalLocalTimestamp(value) {
+  const number = Number(value)
+  return Number.isSafeInteger(number) && number > 0 ? number : null
 }
 
 function sanitizeTasksForStorage(tasks) {
@@ -88,6 +132,18 @@ function sanitizeTasksForStorage(tasks) {
       id: String(item.id || `${Date.now()}-${i}`),
       title,
       completed: Boolean(item.completed),
+      dueAt: normalizeOptionalLocalTimestamp(item.dueAt),
+      priority: PRIORITY_VALUES.has(item.priority) ? item.priority : 'normal',
+      recurrence: RECURRENCE_VALUES.has(item.recurrence) ? item.recurrence : 'none',
+      courseRef: {
+        id: String(item.courseRef && item.courseRef.id || '').trim().slice(0, 128),
+        name: String(item.courseRef && item.courseRef.name || '').trim().slice(0, 100),
+      },
+      reminderAt: normalizeOptionalLocalTimestamp(item.reminderAt),
+      reminderStatus: item.completed
+        ? 'dismissed'
+        : (['pending', 'sent', 'dismissed'].includes(item.reminderStatus) ? item.reminderStatus : 'pending'),
+      remindedAt: normalizeOptionalLocalTimestamp(item.remindedAt),
       createdAt: typeof item.createdAt === 'number' ? item.createdAt : Date.now(),
       updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : Date.now(),
     }
@@ -173,6 +229,33 @@ function formatTimestamp(ts) {
   return `${y}-${m}-${d} ${hh}:${mm}`
 }
 
+function dateTimeParts(timestamp) {
+  if (!timestamp) return { date: '', time: '' }
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return { date: '', time: '' }
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  return { date: `${y}-${m}-${d}`, time: `${hh}:${mm}` }
+}
+
+function timestampFromParts(date, time, defaultTime) {
+  if (!date) return null
+  const value = new Date(`${date}T${time || defaultTime}:00`).getTime()
+  return Number.isFinite(value) ? value : null
+}
+
+function nextRecurringTimestamp(timestamp, recurrence) {
+  if (!timestamp || recurrence === 'none') return null
+  const date = new Date(timestamp)
+  if (recurrence === 'daily') date.setDate(date.getDate() + 1)
+  if (recurrence === 'weekly') date.setDate(date.getDate() + 7)
+  if (recurrence === 'monthly') date.setMonth(date.getMonth() + 1)
+  return date.getTime()
+}
+
 const pageOptions = {
   _cloudRevision: 0,
   _pendingOperations: [],
@@ -191,6 +274,7 @@ const pageOptions = {
     filter: 'all',
     completedCount: 0,
     activeCount: 0,
+    dueCount: 0,
     canSubmit: false,
     isLoading: true,
     syncing: false,
@@ -199,6 +283,15 @@ const pageOptions = {
     editorValue: '',
     editorCanSubmit: false,
     editingTaskId: '',
+    editorDueDate: '',
+    editorDueTime: '23:59',
+    editorReminderDate: '',
+    editorReminderTime: '09:00',
+    editorCourseName: '',
+    editorPriorityIndex: 1,
+    editorRecurrenceIndex: 0,
+    priorityOptions: PRIORITY_OPTIONS,
+    recurrenceOptions: RECURRENCE_OPTIONS,
   },
 
   async onLoad() {
@@ -442,34 +535,45 @@ const pageOptions = {
 
   async onAddTask() {
     const text = this.data.inputValue.trim()
-    if (!text) {
-      wx.showToast({ title: '请输入待办内容', icon: 'none' })
-      this.setData({ inputValue: '', canSubmit: false })
-      return
-    }
-    const newTask = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
-      title: text,
-      completed: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }
-    const tasks = [...this.data.tasks, newTask]
-    this.persist(tasks)
+    this.openEditor('', text)
     this.setData({ inputValue: '', canSubmit: false })
   },
 
   onToggleTask(e) {
     const id = (e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.id ? e.currentTarget.dataset.id : '').toString()
     if (!id) return
-    const tasks = this.data.tasks.map((item) => {
+    const nextTasks = []
+    this.data.tasks.forEach((item) => {
       if (!item || !item.id) return item
       if (String(item.id) === id) {
-        return Object.assign({}, item, { completed: !item.completed, updatedAt: Date.now() })
+        const completed = !item.completed
+        nextTasks.push(Object.assign({}, item, {
+          completed,
+          reminderStatus: completed ? 'dismissed' : 'pending',
+          remindedAt: completed ? item.remindedAt : null,
+          updatedAt: Date.now(),
+        }))
+        if (completed && item.recurrence !== 'none' && item.dueAt) {
+          const nextDueAt = nextRecurringTimestamp(item.dueAt, item.recurrence)
+          const nextReminderAt = item.reminderAt
+            ? nextRecurringTimestamp(item.reminderAt, item.recurrence)
+            : null
+          nextTasks.push(Object.assign({}, item, {
+            id: `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
+            completed: false,
+            dueAt: nextDueAt,
+            reminderAt: nextReminderAt,
+            reminderStatus: 'pending',
+            remindedAt: null,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          }))
+        }
+        return
       }
-      return item
+      nextTasks.push(item)
     })
-    this.persist(tasks)
+    this.persist(nextTasks)
   },
 
   onDeleteTask(e) {
@@ -495,15 +599,26 @@ const pageOptions = {
     if (!id) return
     const target = this.data.tasks.find((item) => String(item.id) === id)
     if (!target) return
-    this.openEditor(id, target.title)
+    this.openEditor(id, target.title, target)
   },
 
-  openEditor(id, text = '') {
+  openEditor(id, text = '', task = {}) {
+    const due = dateTimeParts(task.dueAt)
+    const reminder = dateTimeParts(task.reminderAt)
+    const priorityIndex = Math.max(0, PRIORITY_OPTIONS.findIndex((item) => item.value === task.priority))
+    const recurrenceIndex = Math.max(0, RECURRENCE_OPTIONS.findIndex((item) => item.value === task.recurrence))
     this.setData({
       showEditor: true,
       editorValue: text,
       editorCanSubmit: !!text.trim(),
       editingTaskId: id || '',
+      editorDueDate: due.date,
+      editorDueTime: due.time || '23:59',
+      editorReminderDate: reminder.date,
+      editorReminderTime: reminder.time || '09:00',
+      editorCourseName: task.courseRef && task.courseRef.name || '',
+      editorPriorityIndex: priorityIndex,
+      editorRecurrenceIndex: recurrenceIndex,
     })
   },
 
@@ -513,6 +628,13 @@ const pageOptions = {
       editorValue: '',
       editorCanSubmit: false,
       editingTaskId: '',
+      editorDueDate: '',
+      editorDueTime: '23:59',
+      editorReminderDate: '',
+      editorReminderTime: '09:00',
+      editorCourseName: '',
+      editorPriorityIndex: 1,
+      editorRecurrenceIndex: 0,
     })
   },
 
@@ -524,6 +646,30 @@ const pageOptions = {
     })
   },
 
+  onEditorFieldInput(e) {
+    const field = e.currentTarget.dataset.field
+    if (!field) return
+    this.setData({ [field]: String(e.detail.value || '') })
+  },
+
+  onEditorPickerChange(e) {
+    const field = e.currentTarget.dataset.field
+    if (!field) return
+    this.setData({ [field]: Number(e.detail.value) })
+  },
+
+  onEditorDateChange(e) {
+    const field = e.currentTarget.dataset.field
+    if (!field) return
+    this.setData({ [field]: e.detail.value })
+  },
+
+  clearEditorDate(e) {
+    const field = e.currentTarget.dataset.field
+    if (!field) return
+    this.setData({ [field]: '' })
+  },
+
   onSubmitEditor() {
     const text = this.data.editorValue.trim()
     if (!text) {
@@ -531,11 +677,31 @@ const pageOptions = {
       return
     }
     const editingId = this.data.editingTaskId
+    const dueAt = timestampFromParts(this.data.editorDueDate, this.data.editorDueTime, '23:59')
+    const reminderAt = timestampFromParts(this.data.editorReminderDate, this.data.editorReminderTime, '09:00')
+    if (dueAt && reminderAt && reminderAt > dueAt) {
+      wx.showToast({ title: '提醒时间不能晚于截止时间', icon: 'none' })
+      return
+    }
+    const priority = PRIORITY_OPTIONS[this.data.editorPriorityIndex]?.value || 'normal'
+    const recurrence = RECURRENCE_OPTIONS[this.data.editorRecurrenceIndex]?.value || 'none'
+    const courseRef = { id: '', name: this.data.editorCourseName.trim().slice(0, 100) }
     let tasks = []
     if (editingId) {
       tasks = this.data.tasks.map((item) => {
         if (String(item.id) === editingId) {
-          return Object.assign({}, item, { title: text, updatedAt: Date.now() })
+          const reminderChanged = item.dueAt !== dueAt || item.reminderAt !== reminderAt
+          return Object.assign({}, item, {
+            title: text,
+            dueAt,
+            reminderAt,
+            priority,
+            recurrence,
+            courseRef,
+            reminderStatus: reminderChanged && !item.completed ? 'pending' : item.reminderStatus,
+            remindedAt: reminderChanged ? null : item.remindedAt,
+            updatedAt: Date.now(),
+          })
         }
         return item
       })
@@ -544,6 +710,13 @@ const pageOptions = {
         id: `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`,
         title: text,
         completed: false,
+        dueAt,
+        priority,
+        recurrence,
+        courseRef,
+        reminderAt,
+        reminderStatus: 'pending',
+        remindedAt: null,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       }
@@ -577,17 +750,41 @@ const pageOptions = {
   },
 
   updateState(tasks, filter) {
+    const nowTs = Date.now()
+    const todayEnd = new Date()
+    todayEnd.setHours(23, 59, 59, 999)
+    const priorityRank = { high: 0, normal: 1, low: 2 }
     const enriched = tasks.map((item) => {
       const text = formatTimestamp(item.createdAt)
-      return Object.assign({}, item, { _createdText: text })
+      const dueText = item.dueAt ? formatTimestamp(item.dueAt) : ''
+      const reminderText = item.reminderAt ? formatTimestamp(item.reminderAt) : ''
+      return Object.assign({}, item, {
+        _createdText: text,
+        _dueText: dueText,
+        _reminderText: reminderText,
+        _priorityText: PRIORITY_OPTIONS.find((option) => option.value === item.priority)?.label || '普通',
+        _recurrenceText: RECURRENCE_OPTIONS.find((option) => option.value === item.recurrence)?.label || '',
+        _overdue: !item.completed && item.dueAt && item.dueAt < nowTs,
+      })
+    }).sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1
+      const priorityDiff = (priorityRank[a.priority] || 1) - (priorityRank[b.priority] || 1)
+      if (priorityDiff) return priorityDiff
+      if (a.dueAt && b.dueAt) return a.dueAt - b.dueAt
+      if (a.dueAt) return -1
+      if (b.dueAt) return 1
+      return a.createdAt - b.createdAt
     })
     const completedCount = tasks.filter((item) => item.completed).length
     const activeCount = tasks.length - completedCount
+    const dueCount = tasks.filter((item) => !item.completed && item.dueAt && item.dueAt <= todayEnd.getTime()).length
     let filteredTasks = enriched
     if (filter === 'active') {
       filteredTasks = enriched.filter((item) => !item.completed)
     } else if (filter === 'completed') {
       filteredTasks = enriched.filter((item) => item.completed)
+    } else if (filter === 'due') {
+      filteredTasks = enriched.filter((item) => !item.completed && item.dueAt && item.dueAt <= todayEnd.getTime())
     }
 
     // 计算进度百分比
@@ -604,6 +801,7 @@ const pageOptions = {
       filteredTasks,
       completedCount,
       activeCount,
+      dueCount,
       progressPercent,
       todayDate
     })

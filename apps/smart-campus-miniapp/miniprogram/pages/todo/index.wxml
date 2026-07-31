@@ -20,6 +20,11 @@
           <text class="stat-num">{{completedCount}}</text>
           <text class="stat-label">已完成</text>
         </view>
+        <view class="stat-divider"></view>
+        <view class="stat-item">
+          <text class="stat-num">{{dueCount}}</text>
+          <text class="stat-label">今日/逾期</text>
+        </view>
       </view>
       <view class="progress-bar">
         <view class="progress-bar__fill" style="width: {{progressPercent}}%"></view>
@@ -30,7 +35,7 @@
     <view class="glass-card input-card">
       <input
         class="todo-input"
-        placeholder="添加新的待办事项..."
+        placeholder="输入内容，继续设置截止与提醒..."
         placeholder-class="todo-input__placeholder"
         value="{{inputValue}}"
         confirm-type="done"
@@ -67,6 +72,13 @@
         aria-selected="{{filter === 'active'}}"
       >进行中</view>
       <view
+        class="filter-item {{filter==='due'?'filter-item--active':''}}"
+        data-filter="due"
+        bindtap="onFilterChange"
+        aria-role="tab"
+        aria-selected="{{filter === 'due'}}"
+      >临期</view>
+      <view
         class="filter-item {{filter==='completed'?'filter-item--active':''}}"
         data-filter="completed"
         bindtap="onFilterChange"
@@ -91,8 +103,16 @@
               <view class="checkmark" wx:if="{{item.completed}}"></view>
             </view>
             <view class="todo-content">
-              <view class="todo-title">{{item.title}}</view>
-              <view class="todo-time" wx:if="{{item._createdText}}">{{item._createdText}}</view>
+              <view class="todo-title-row">
+                <view class="todo-title">{{item.title}}</view>
+                <view class="priority-badge priority-{{item.priority}}">{{item._priorityText}}</view>
+              </view>
+              <view class="todo-meta" wx:if="{{item.courseRef.name || item._dueText || item.recurrence !== 'none'}}">
+                <text wx:if="{{item.courseRef.name}}">课程：{{item.courseRef.name}}</text>
+                <text class="{{item._overdue ? 'meta-overdue' : ''}}" wx:if="{{item._dueText}}">{{item._overdue ? '已逾期' : '截止'}} {{item._dueText}}</text>
+                <text wx:if="{{item.recurrence !== 'none'}}">{{item._recurrenceText}}</text>
+              </view>
+              <view class="todo-time" wx:if="{{item._reminderText}}">提醒 {{item._reminderText}}</view>
             </view>
           </view>
           <view class="todo-actions">
@@ -133,6 +153,52 @@
         bindinput="onEditorInput"
         aria-label="任务内容"
       />
+      <view class="editor-grid">
+        <view class="editor-field">
+          <text class="editor-label">优先级</text>
+          <picker mode="selector" range="{{priorityOptions}}" range-key="label" value="{{editorPriorityIndex}}" data-field="editorPriorityIndex" bindchange="onEditorPickerChange">
+            <view class="editor-picker">{{priorityOptions[editorPriorityIndex].label}}</view>
+          </picker>
+        </view>
+        <view class="editor-field">
+          <text class="editor-label">重复</text>
+          <picker mode="selector" range="{{recurrenceOptions}}" range-key="label" value="{{editorRecurrenceIndex}}" data-field="editorRecurrenceIndex" bindchange="onEditorPickerChange">
+            <view class="editor-picker">{{recurrenceOptions[editorRecurrenceIndex].label}}</view>
+          </picker>
+        </view>
+      </view>
+      <view class="editor-field editor-field-full">
+        <text class="editor-label">关联课程</text>
+        <input class="editor-input" value="{{editorCourseName}}" maxlength="100" placeholder="选填，例如：高等数学" data-field="editorCourseName" bindinput="onEditorFieldInput" />
+      </view>
+      <view class="editor-date-row">
+        <view class="editor-date-main">
+          <text class="editor-label">截止时间</text>
+          <view class="editor-date-controls">
+            <picker mode="date" value="{{editorDueDate}}" data-field="editorDueDate" bindchange="onEditorDateChange">
+              <view class="editor-picker">{{editorDueDate || '选择日期'}}</view>
+            </picker>
+            <picker mode="time" value="{{editorDueTime}}" data-field="editorDueTime" bindchange="onEditorDateChange">
+              <view class="editor-picker">{{editorDueTime}}</view>
+            </picker>
+          </view>
+        </view>
+        <view class="editor-clear" wx:if="{{editorDueDate}}" data-field="editorDueDate" bindtap="clearEditorDate">清除</view>
+      </view>
+      <view class="editor-date-row">
+        <view class="editor-date-main">
+          <text class="editor-label">提醒时间</text>
+          <view class="editor-date-controls">
+            <picker mode="date" value="{{editorReminderDate}}" data-field="editorReminderDate" bindchange="onEditorDateChange">
+              <view class="editor-picker">{{editorReminderDate || '选择日期'}}</view>
+            </picker>
+            <picker mode="time" value="{{editorReminderTime}}" data-field="editorReminderTime" bindchange="onEditorDateChange">
+              <view class="editor-picker">{{editorReminderTime}}</view>
+            </picker>
+          </view>
+        </view>
+        <view class="editor-clear" wx:if="{{editorReminderDate}}" data-field="editorReminderDate" bindtap="clearEditorDate">清除</view>
+      </view>
       <view class="modal-footer">
         <view class="modal-btn cancel-btn" bindtap="onCloseEditor" aria-role="button">取消</view>
         <view class="modal-btn confirm-btn {{!editorCanSubmit?'disabled':''}}" bindtap="onSubmitEditor" aria-role="button" aria-disabled="{{!editorCanSubmit}}">保存</view>

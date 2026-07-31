@@ -17,6 +17,7 @@ import {
   CircleOff,
   Clock3,
   CloudCog,
+  Copy,
   Cpu,
   Database,
   Download,
@@ -41,6 +42,7 @@ import {
   QrCode,
   Radio,
   RefreshCw,
+  Search,
   Server,
   ShieldCheck,
   ShieldAlert,
@@ -60,6 +62,7 @@ import {
   resolveConsoleView,
 } from './navigation.js';
 import { requestJson } from './api.js';
+import { reportConsoleExperience } from './experience.js';
 import { PLATFORM_BRAND_ICON } from './brand.js';
 import { ConfirmDialog, SegmentedTabs } from './UiControls.jsx';
 import { HolographicTopology } from './HolographicTopology.jsx';
@@ -82,6 +85,7 @@ const MonitoringView = lazyNamed(loadOperationsViews, 'MonitoringView');
 const OverviewOperations = lazyNamed(loadOperationsViews, 'OverviewOperations');
 const ReleasesView = lazyNamed(loadOperationsViews, 'ReleasesView');
 const SecurityAuditView = lazyNamed(loadOperationsViews, 'SecurityAuditView');
+const SettingsDiagnosticsView = lazyNamed(loadOperationsViews, 'SettingsDiagnosticsView');
 
 const VIEW_MODULE_LOADERS = {
   notification: loadNotificationView,
@@ -151,6 +155,7 @@ class ViewModuleBoundary extends Component {
 
   componentDidCatch(error, details) {
     console.error('Console view failed to load', error, details);
+    void reportConsoleExperience({ event: 'ui_error', error });
   }
 
   render() {
@@ -1346,7 +1351,7 @@ function ApplicationsView({ services, loading, onLaunch }) {
   );
 }
 
-function ServiceTableRow({ service, onLaunch }) {
+function ServiceTableRow({ service, onLaunch, targeted = false }) {
   const Icon = SERVICE_ICONS[service.id] || Server;
 
   function handleOpen(event) {
@@ -1356,7 +1361,7 @@ function ServiceTableRow({ service, onLaunch }) {
   }
 
   return (
-    <div className="service-table-row">
+    <div className={`service-table-row ${targeted ? 'targeted-entity' : ''}`} data-service-entity-id={service.id}>
       <div className="service-table-name">
         <span><Icon size={19} /></span>
         <div><strong>{service.shortName || service.name}</strong><small>{service.repositoryPath}</small></div>
@@ -1379,7 +1384,7 @@ function ServiceTableRow({ service, onLaunch }) {
   );
 }
 
-function ServicesView({ services, loading, onLaunch }) {
+function ServicesView({ services, loading, onLaunch, targetEntityId = '' }) {
   const infrastructure = services.filter((service) => service.category === 'service');
   const healthy = infrastructure.filter((service) => service.state === 'healthy').length;
   const attention = infrastructure.filter((service) => ['offline', 'degraded'].includes(service.state)).length;
@@ -1391,6 +1396,16 @@ function ServicesView({ services, loading, onLaunch }) {
   const averageLatency = latencies.length > 0
     ? Math.round(latencies.reduce((sum, value) => sum + value, 0) / latencies.length)
     : null;
+
+  useEffect(() => {
+    if (!targetEntityId || loading) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const target = [...document.querySelectorAll('[data-service-entity-id]')]
+        .find((element) => element.dataset.serviceEntityId === targetEntityId);
+      target?.scrollIntoView({ block: 'center' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [loading, targetEntityId]);
 
   return (
     <section className="page-view services-view" aria-label="服务运维">
@@ -1410,7 +1425,7 @@ function ServicesView({ services, loading, onLaunch }) {
             {loading ? (
               <div className="view-loading"><LoaderCircle className="spin" size={20} /> 正在加载服务</div>
             ) : infrastructure.map((service) => (
-              <ServiceTableRow key={service.id} service={service} onLaunch={onLaunch} />
+              <ServiceTableRow key={service.id} service={service} onLaunch={onLaunch} targeted={service.id === targetEntityId} />
             ))}
           </div>
         </section>
@@ -1919,11 +1934,181 @@ function BackupRecoveryView({ session }) {
   );
 }
 
+const COMMAND_TYPE_LABELS = {
+  service: '服务',
+  incident: '事件',
+  task: '任务',
+  release: '发布',
+  configuration: '配置',
+  navigation: '功能',
+};
+
+const COMMAND_SHORTCUTS = NAV_GROUPS.flatMap((group) => group.views.map((view) => ({
+  id: `navigation:${view.id}`,
+  entityId: '',
+  type: 'navigation',
+  title: view.label,
+  subtitle: group.label,
+  view: view.id,
+})));
+
+function commandTargetUrl(view, entityId) {
+  const url = new URL(window.location.href);
+  const resolvedView = resolveConsoleView(view);
+  if (resolvedView === 'all') url.searchParams.delete('view');
+  else url.searchParams.set('view', resolvedView);
+  if (entityId) url.searchParams.set('entity', entityId);
+  else url.searchParams.delete('entity');
+  return url.toString();
+}
+
+function CommandPalette({ open, onClose, onNavigate }) {
+  const [query, setQuery] = useState('');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const inputRef = useRef(null);
+  const requestRef = useRef(null);
+
+  const normalizedQuery = query.trim();
+  const items = normalizedQuery.length >= 2 ? data?.results || [] : COMMAND_SHORTCUTS;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+    return undefined;
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || normalizedQuery.length < 2) {
+      requestRef.current?.abort();
+      requestRef.current = null;
+      setData(null);
+      setLoading(false);
+      setError('');
+      setActiveIndex(0);
+      return undefined;
+    }
+    const controller = new AbortController();
+    requestRef.current?.abort();
+    requestRef.current = controller;
+    setLoading(true);
+    setError('');
+    const timer = window.setTimeout(async () => {
+      try {
+        const search = new URLSearchParams({ q: normalizedQuery, limit: '20' });
+        const result = await requestJson(`/api/operations/search?${search}`, { signal: controller.signal });
+        if (requestRef.current === controller) {
+          setData(result);
+          setActiveIndex(0);
+        }
+      } catch (requestError) {
+        if (requestRef.current === controller && requestError.code !== 'REQUEST_ABORTED') setError(requestError.message);
+      } finally {
+        if (requestRef.current === controller) {
+          requestRef.current = null;
+          setLoading(false);
+        }
+      }
+    }, 180);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+      if (requestRef.current === controller) requestRef.current = null;
+    };
+  }, [normalizedQuery, open]);
+
+  if (!open) return null;
+
+  function openItem(item) {
+    onNavigate(resolveConsoleView(item.view), item.entityId || null);
+  }
+
+  async function copyItemLink(item) {
+    setError('');
+    setMessage('');
+    try {
+      await navigator.clipboard.writeText(commandTargetUrl(item.view, item.entityId));
+      setMessage('对象链接已复制');
+    } catch {
+      setError('无法复制链接，请先授予浏览器剪贴板权限。');
+    }
+  }
+
+  function handleInputKeyDown(event) {
+    if (event.key === 'ArrowDown' && items.length) {
+      event.preventDefault();
+      setActiveIndex((current) => (current + 1) % items.length);
+    } else if (event.key === 'ArrowUp' && items.length) {
+      event.preventDefault();
+      setActiveIndex((current) => (current - 1 + items.length) % items.length);
+    } else if (event.key === 'Enter' && items[activeIndex]) {
+      event.preventDefault();
+      openItem(items[activeIndex]);
+    }
+  }
+
+  const unavailableSources = (data?.sources || []).filter((source) => !source.available).length;
+  return (
+    <div className="command-palette-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="command-palette" role="dialog" aria-modal="true" aria-label="全局运营检索">
+        <header>
+          <Search size={20} />
+          <input
+            ref={inputRef}
+            type="search"
+            value={query}
+            maxLength={80}
+            placeholder="搜索服务、事件、任务、发布或配置"
+            aria-label="搜索运营对象"
+            aria-controls="command-palette-results"
+            aria-activedescendant={items[activeIndex] ? `command-option-${activeIndex}` : undefined}
+            onChange={(event) => { setQuery(event.target.value); setMessage(''); }}
+            onKeyDown={handleInputKeyDown}
+          />
+          {loading && <LoaderCircle className="spin" size={18} aria-label="正在检索" />}
+          <button type="button" className="icon-action" onClick={onClose} aria-label="关闭全局检索"><X size={18} /></button>
+        </header>
+        {(error || message || unavailableSources > 0) && (
+          <div className={`command-palette-feedback ${error ? 'error' : ''}`} role={error ? 'alert' : 'status'}>
+            {error || message || `${unavailableSources} 个数据源暂不可用，已展示其余结果。`}
+          </div>
+        )}
+        <div id="command-palette-results" className="command-palette-results" role="listbox" aria-label={normalizedQuery.length >= 2 ? '检索结果' : '常用功能'}>
+          {items.map((item, index) => (
+            <div
+              id={`command-option-${index}`}
+              className={`command-result ${index === activeIndex ? 'active' : ''}`}
+              role="option"
+              aria-selected={index === activeIndex}
+              key={item.id}
+              onPointerEnter={() => setActiveIndex(index)}
+            >
+              <button type="button" className="command-result-main" onClick={() => openItem(item)}>
+                <span className="command-result-type">{COMMAND_TYPE_LABELS[item.type] || item.type}</span>
+                <span><strong>{item.title}</strong><small>{item.subtitle || item.entityId || '打开功能'}</small></span>
+                {item.status && <span className="command-result-status">{item.status}</span>}
+                <ChevronRight size={17} />
+              </button>
+              <button type="button" className="icon-action" onClick={() => copyItemLink(item)} aria-label={`复制${item.title}链接`} title="复制链接"><Copy size={16} /></button>
+            </div>
+          ))}
+          {!loading && normalizedQuery.length >= 2 && data && items.length === 0 && <div className="command-palette-empty">没有找到匹配的运营对象</div>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function Dashboard({ session, onLogout }) {
   const [activeFilter, setActiveFilter] = useState(() => {
     const requestedView = new URLSearchParams(window.location.search).get('view');
     return resolveConsoleView(requestedView);
   });
+  const [activeEntity, setActiveEntity] = useState(() => new URLSearchParams(window.location.search).get('entity') || '');
+  const [commandOpen, setCommandOpen] = useState(false);
   const [data, setData] = useState(null);
   const [operationsSummary, setOperationsSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1945,28 +2130,47 @@ function Dashboard({ session, onLogout }) {
   const notificationRef = useRef(null);
   const loadRequestRef = useRef(null);
 
-  const navigateToView = useCallback((viewId, { replace = false } = {}) => {
+  const navigateToView = useCallback((viewId, { replace = false, entity = null } = {}) => {
     const nextView = resolveConsoleView(viewId);
     const url = new URL(window.location.href);
     if (nextView === 'all') url.searchParams.delete('view');
     else url.searchParams.set('view', nextView);
+    if (entity) url.searchParams.set('entity', String(entity));
+    else url.searchParams.delete('entity');
     const nextUrl = `${url.pathname}${url.search}${url.hash}`;
     const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     setActiveFilter(nextView);
+    setActiveEntity(entity ? String(entity) : '');
     if (nextUrl === currentUrl) return;
-    window.history[replace ? 'replaceState' : 'pushState']({ view: nextView }, '', nextUrl);
+    window.history[replace ? 'replaceState' : 'pushState']({ view: nextView, entity: entity || null }, '', nextUrl);
   }, []);
 
   useEffect(() => {
-    const requestedView = new URLSearchParams(window.location.search).get('view');
-    navigateToView(resolveConsoleView(requestedView), { replace: true });
+    const initialSearch = new URLSearchParams(window.location.search);
+    const requestedView = initialSearch.get('view');
+    navigateToView(resolveConsoleView(requestedView), { replace: true, entity: initialSearch.get('entity') });
     const handlePopState = () => {
-      const nextView = new URLSearchParams(window.location.search).get('view');
+      const search = new URLSearchParams(window.location.search);
+      const nextView = search.get('view');
       setActiveFilter(resolveConsoleView(nextView));
+      setActiveEntity(search.get('entity') || '');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [navigateToView]);
+
+  useEffect(() => {
+    function handleCommandShortcut(event) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen((current) => !current);
+      } else if (event.key === 'Escape') {
+        setCommandOpen(false);
+      }
+    }
+    window.addEventListener('keydown', handleCommandShortcut);
+    return () => window.removeEventListener('keydown', handleCommandShortcut);
+  }, []);
 
   useEffect(() => {
     const activeLoader = VIEW_MODULE_LOADERS[activeFilter];
@@ -2181,7 +2385,16 @@ function Dashboard({ session, onLogout }) {
         </div>
       )}
 
-      <aside ref={sidebarRef} id="management-sidebar" className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
+      <CommandPalette
+        open={commandOpen}
+        onClose={() => setCommandOpen(false)}
+        onNavigate={(view, entity) => {
+          navigateToView(view, { entity });
+          setCommandOpen(false);
+        }}
+      />
+
+      <aside ref={sidebarRef} id="management-sidebar" className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`} aria-hidden={commandOpen || undefined} inert={commandOpen || undefined}>
         <nav className="main-nav" aria-label="管理模块">
           {NAV_GROUPS.map((group) => {
             const Icon = NAVIGATION_ICONS[group.id];
@@ -2221,7 +2434,7 @@ function Dashboard({ session, onLogout }) {
 
       {mobileNavOpen && <button className="nav-backdrop" type="button" aria-label="关闭导航" onClick={closeMobileNav} />}
 
-      <main className="workspace" aria-hidden={mobileNavOpen || undefined} inert={mobileNavOpen || undefined}>
+      <main className="workspace" aria-hidden={mobileNavOpen || commandOpen || undefined} inert={mobileNavOpen || commandOpen || undefined}>
         <header className="topbar">
           <div className="topbar-leading">
             <button
@@ -2245,6 +2458,10 @@ function Dashboard({ session, onLogout }) {
           </div>
 
           <div className="topbar-actions">
+            <button className="command-trigger" type="button" onClick={() => setCommandOpen(true)} aria-label="打开全局检索">
+              <Search size={17} />
+              <span>全局检索</span>
+            </button>
             <span className="environment-label"><i /> {environmentLabel}</span>
             <button
               className="theme-switch"
@@ -2336,10 +2553,10 @@ function Dashboard({ session, onLogout }) {
             />
           )}
           {activeFilter === 'miniapp' && <ApplicationsView services={services} loading={loading} onLaunch={launchService} />}
-          {activeFilter === 'service' && <ServicesView services={services} loading={loading} onLaunch={launchService} />}
+          {activeFilter === 'service' && <ServicesView services={services} loading={loading} onLaunch={launchService} targetEntityId={activeEntity} />}
           {activeFilter === 'notification' && <NotificationServiceView session={session} />}
           {activeFilter === 'monitoring' && <MonitoringView services={services} onNavigate={navigateToView} />}
-          {activeFilter === 'incidents' && <IncidentsView session={session} />}
+          {activeFilter === 'incidents' && <IncidentsView session={session} targetEntityId={activeEntity} onNavigate={navigateToView} />}
           {activeFilter === 'automation' && (
             <AutomationView
               services={services}
@@ -2351,10 +2568,10 @@ function Dashboard({ session, onLogout }) {
             />
           )}
           {activeFilter === 'backup' && <BackupRecoveryView session={session} />}
-          {activeFilter === 'releases' && <ReleasesView session={session} />}
-          {activeFilter === 'tasks' && <TaskCenterView onNavigate={navigateToView} />}
-          {activeFilter === 'configuration' && <ConfigurationView session={session} />}
-          {activeFilter === 'diagnostics' && <DiagnosticsView services={services} session={session} />}
+          {activeFilter === 'releases' && <ReleasesView session={session} targetEntityId={activeEntity} />}
+          {activeFilter === 'tasks' && <TaskCenterView onNavigate={navigateToView} targetEntityId={activeEntity} />}
+          {activeFilter === 'configuration' && <><ConfigurationView session={session} targetEntityId={activeEntity} /><SettingsDiagnosticsView session={session} /></>}
+          {activeFilter === 'diagnostics' && <DiagnosticsView services={services} session={session} targetEntityId={activeEntity} />}
           {activeFilter === 'security' && <SecurityAuditView session={session} onLogout={onLogout} />}
           </Suspense>
           </ViewModuleBoundary>

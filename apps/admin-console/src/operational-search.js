@@ -54,7 +54,7 @@ function serviceResults(services) {
     status: null,
     serviceId: safeIdentifier(service.id),
     occurredAt: null,
-    view: 'all',
+    view: 'service',
     searchText: [service.id, service.name, service.shortName, service.category, service.description, ...(service.capabilities || [])].join(' '),
   }));
 }

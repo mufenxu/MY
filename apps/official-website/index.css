@@ -686,6 +686,43 @@ button:focus, button:active, button:focus-visible {
   margin-bottom: 8px;
 }
 
+.metric-value-text {
+  font-size: 24px;
+}
+
+.metric-detail {
+  min-height: 18px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.preview-3d-card[data-status="operational"] .status-indicator,
+.preview-3d-card[data-status="operational"] .metric-box:first-child .metric-icon-small {
+  color: var(--color-accent-emerald);
+}
+
+.preview-3d-card[data-status="degraded"] .status-indicator,
+.preview-3d-card[data-status="degraded"] .metric-box:first-child .metric-icon-small,
+.preview-3d-card[data-status="unknown"] .status-indicator,
+.preview-3d-card[data-status="unknown"] .metric-box:first-child .metric-icon-small {
+  color: var(--color-accent-amber);
+}
+
+.preview-3d-card[data-status="outage"] .status-indicator,
+.preview-3d-card[data-status="outage"] .metric-box:first-child .metric-icon-small {
+  color: #c43d4f;
+}
+
+.preview-3d-card[data-status="degraded"] .radar-ping,
+.preview-3d-card[data-status="unknown"] .radar-ping {
+  background: var(--color-accent-amber);
+}
+
+.preview-3d-card[data-status="outage"] .radar-ping {
+  background: #c43d4f;
+}
+
 .metric-bar {
   height: 4px;
   background: rgba(0, 0, 0, 0.06);
@@ -713,6 +750,28 @@ button:focus, button:active, button:focus-visible {
   color: var(--color-text-muted);
   letter-spacing: 0;
   margin-bottom: 10px;
+}
+
+.status-source-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.status-source-row a,
+.status-text-link {
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+}
+
+.status-source-row a:hover,
+.status-text-link:hover {
+  color: var(--color-accent-gold);
+  text-decoration-color: currentColor;
 }
 
 .waveform-bars {
@@ -896,6 +955,18 @@ button:focus, button:active, button:focus-visible {
   background: linear-gradient(135deg, #1F1D1B 0%, #3B3632 100%);
   color: #FFFFFF;
   box-shadow: 0 10px 24px -6px rgba(31, 29, 27, 0.25);
+}
+
+.banner-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.status-text-link {
+  font-size: 13px;
 }
 
 .banner-action .btn-hero-primary:hover {
@@ -1097,6 +1168,7 @@ button:focus, button:active, button:focus-visible {
   .btn-hero-primary { width: 100%; text-align: center; }
 
   .preview-grid { grid-template-columns: 1fr; gap: 12px; }
+  .status-source-row { align-items: flex-start; flex-direction: column; gap: 6px; }
   .features-grid { grid-template-columns: 1fr; gap: 16px; }
   .feature-card { padding: 24px; }
 

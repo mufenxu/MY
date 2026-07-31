@@ -20,6 +20,10 @@
             <el-icon><User /></el-icon>
             <span>考生管理</span>
         </el-menu-item>
+        <el-menu-item v-if="!consoleMode" index="learning-plans">
+            <el-icon><Calendar /></el-icon>
+            <span>学习计划</span>
+        </el-menu-item>
         <el-menu-item v-if="!consoleMode" index="personal-categories">
             <el-icon><Files /></el-icon>
             <span>个人题库监管</span>

@@ -243,6 +243,39 @@ export interface StudyReport {
     }>;
 }
 
+export interface LearningPlanProgressCategory {
+    categoryId: string;
+    bestScore: number;
+    completed: boolean;
+}
+
+export interface LearningPlan {
+    _id: string;
+    title: string;
+    description: string;
+    categoryIds: Category[];
+    cohortIds: Array<{ _id: string; name: string }>;
+    dueAt?: string | null;
+    targetScore: number;
+    assignedAt: string;
+    createTime: string;
+    progress: {
+        assignedCount: number;
+        completedCount: number;
+        overdueCount: number;
+        averageProgress: number;
+        state: 'active' | 'completed' | 'overdue' | 'archived';
+        users?: Array<{
+            completedCategoryCount: number;
+            totalCategoryCount: number;
+            progressPercent: number;
+            completed: boolean;
+            overdue: boolean;
+            categories: LearningPlanProgressCategory[];
+        }>;
+    };
+}
+
 export interface LoginResult {
     openid: string;
     token: string;

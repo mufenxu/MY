@@ -50,6 +50,7 @@ const {
 } = require('../utils/resultSnapshot');
 const { removeUserAssignments } = require('../utils/userAssignment');
 const { cleanupAiAnalysesForDeletedUsers } = require('../utils/userDataCleanup');
+const { removeUsersFromLearningOperations } = require('../services/learningPlanService');
 const { buildRecentDayLabels, toDayLabel } = require('../utils/categoryAnalysis');
 const {
     normalizeShareCode,
@@ -2162,6 +2163,7 @@ exports.deleteAccount = asyncHandler(async (req, res) => {
         }),
         UserQuestionState.deleteMany({ userId: openid }),
         removeUserAssignments([openid]),
+        removeUsersFromLearningOperations([openid]),
     ]);
 
     success(res, null, 'Account deleted');

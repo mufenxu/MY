@@ -523,6 +523,13 @@ export function createMockAdminApi({ getIsConsoleMode } = {}) {
             availableCategories: categories,
         }),
         saveUserAssignments: () => ok(null, '预览模式不会保存分配'),
+        getLearningPlanOptions: () => ok({ categories: [], cohorts: [], users: [] }),
+        listCohorts: () => ok([]),
+        saveCohort: () => ok(null, '预览模式不会保存班组'),
+        archiveCohort: () => ok(null, '预览模式不会归档班组'),
+        listLearningPlans: () => ok([]),
+        saveLearningPlan: () => ok(null, '预览模式不会保存学习计划'),
+        archiveLearningPlan: () => ok(null, '预览模式不会归档学习计划'),
         listPersonalCategories: (params) => ok(paginate(filterPersonalCategories(params), params)),
         getPersonalCategory: (id) => ok({
             category: personalCategories.find((item) => item._id === id) || personalCategories[0],

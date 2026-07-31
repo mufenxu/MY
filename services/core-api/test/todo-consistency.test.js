@@ -29,6 +29,36 @@ test('todo operations preserve unrelated remote tasks and deletions', () => {
     assert.deepEqual(result.map((task) => task.id), ['b', 'c']);
 });
 
+test('todo task normalization upgrades legacy tasks and validates Todo 2.0 fields', () => {
+    const legacy = todoController.normalizeTask({
+        id: 'legacy',
+        title: ' Legacy task ',
+        completed: false,
+        createdAt: 1,
+        updatedAt: 2,
+    }, 3);
+    assert.equal(legacy.title, 'Legacy task');
+    assert.equal(legacy.priority, 'normal');
+    assert.equal(legacy.recurrence, 'none');
+    assert.equal(legacy.dueAt, null);
+    assert.deepEqual(legacy.courseRef, { id: '', name: '' });
+    assert.equal(legacy.reminderStatus, 'pending');
+
+    const enriched = todoController.normalizeTask({
+        ...legacy,
+        dueAt: 100,
+        priority: 'high',
+        recurrence: 'weekly',
+        courseRef: { id: 'math-1', name: 'Math' },
+        reminderAt: 90,
+    });
+    assert.equal(enriched.dueAt, 100);
+    assert.equal(enriched.priority, 'high');
+    assert.equal(enriched.recurrence, 'weekly');
+    assert.deepEqual(enriched.courseRef, { id: 'math-1', name: 'Math' });
+    assert.throws(() => todoController.normalizeTask({ ...legacy, priority: 'urgent' }), /priority/);
+});
+
 test('legacy full-list sync preserves unseen remote tasks and newer remote edits', async () => {
     const originalFindById = TodoList.findById;
     const originalFindOneAndUpdate = TodoList.findOneAndUpdate;

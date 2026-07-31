@@ -1,4 +1,5 @@
 import { runtimeConfig } from '../config/runtime';
+import { reportMiniappExperience } from './experience';
 
 const BASE_URL = runtimeConfig.baseUrl.replace(/\/$/, '');
 
@@ -175,12 +176,26 @@ export const request = <T = any>(options: RequestOptions): Promise<T> => {
                     statusCode: res.statusCode,
                     raw: res.data || res,
                 };
+                if (res.statusCode >= 500) {
+                    reportMiniappExperience({
+                        event: 'request_failure',
+                        outcome: 'error',
+                        error: `HTTP_${res.statusCode}`,
+                        route: options.url,
+                    });
+                }
                 if (showError) {
                     wx.showToast({ title: err.message, icon: 'none' });
                 }
                 reject(err);
             },
             fail: (err) => {
+                reportMiniappExperience({
+                    event: 'request_failure',
+                    outcome: /timeout/i.test(String((err && err.errMsg) || '')) ? 'timeout' : 'error',
+                    error: (err && err.errMsg) || 'network_error',
+                    route: options.url,
+                });
                 const requestErr: RequestError = {
                     message: '网络错误，请检查网络连接',
                     raw: err,

@@ -21,8 +21,8 @@ private val LightColors = lightColorScheme(
     onSecondary = Surface,
     secondaryContainer = MintPale,
     onSecondaryContainer = Forest,
-    tertiary = Amber,
-    onTertiary = Surface,
+    tertiary = BrandAccent,
+    onTertiary = AccentInk,
     tertiaryContainer = AmberPale,
     onTertiaryContainer = Ink,
     error = Coral,
@@ -65,16 +65,16 @@ private val DarkColors = darkColorScheme(
 )
 
 object ColorTokens {
-    val SurfaceSubtle = androidx.compose.ui.graphics.Color(0xFFF0F2F5)
-    val OutlineVariantLight = androidx.compose.ui.graphics.Color(0xFFE8EBEF)
-    val OutlineVariantDark = androidx.compose.ui.graphics.Color(0xFF292D32)
-    val BlueContainerDark = androidx.compose.ui.graphics.Color(0xFF17375D)
-    val GreenContainerDark = androidx.compose.ui.graphics.Color(0xFF153B30)
-    val AmberContainerDark = androidx.compose.ui.graphics.Color(0xFF4B3513)
-    val GreenDark = androidx.compose.ui.graphics.Color(0xFF5AD8AA)
-    val AmberDark = androidx.compose.ui.graphics.Color(0xFFF0C26F)
-    val CoralDark = androidx.compose.ui.graphics.Color(0xFFFFB4AE)
-    val CoralContainerDark = androidx.compose.ui.graphics.Color(0xFF6A302D)
+    val SurfaceSubtle = androidx.compose.ui.graphics.Color(0xFFEEF4F7)
+    val OutlineVariantLight = androidx.compose.ui.graphics.Color(0xFFE8EDF1)
+    val OutlineVariantDark = androidx.compose.ui.graphics.Color(0xFF2D3941)
+    val BlueContainerDark = androidx.compose.ui.graphics.Color(0xFF29485E)
+    val GreenContainerDark = androidx.compose.ui.graphics.Color(0xFF2E4B45)
+    val AmberContainerDark = androidx.compose.ui.graphics.Color(0xFF5B3630)
+    val GreenDark = androidx.compose.ui.graphics.Color(0xFFA9C9C1)
+    val AmberDark = androidx.compose.ui.graphics.Color(0xFFE7A89B)
+    val CoralDark = androidx.compose.ui.graphics.Color(0xFFFFB3B8)
+    val CoralContainerDark = androidx.compose.ui.graphics.Color(0xFF613238)
 }
 
 @Composable

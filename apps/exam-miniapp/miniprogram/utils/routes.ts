@@ -9,6 +9,7 @@ export const ROUTES = {
     QUESTION_SEARCH: '/subpackages/user/question-search/question-search',
     SCAN_LOGIN: '/subpackages/user/scan-login/scan-login',
     STUDY_REPORT: '/subpackages/user/study-report/study-report',
+    LEARNING_PLANS: '/subpackages/user/learning-plans/learning-plans',
     USER_AGREEMENT: '/subpackages/user/user-agreement/user-agreement',
     WRONG_BOOK: '/subpackages/user/wrong-book/wrong-book',
     WRONG_PRACTICE: '/subpackages/user/wrong-practice/wrong-practice',

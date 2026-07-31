@@ -1,15 +1,10 @@
 package cn.pxyb.mycontrol.ui
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -108,7 +103,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
-import cn.pxyb.mycontrol.ui.theme.BrandBlue
 
 private data class TabItem(val tab: MainTab, val label: String, val icon: ImageVector)
 private enum class SecondFactorMode { Totp, RecoveryCode }
@@ -352,7 +346,7 @@ private fun LoginScreen(
                         modifier = Modifier
                             .widthIn(max = 440.dp)
                             .fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
+                        shape = AppCardShape,
                         color = MaterialTheme.colorScheme.surface,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
                         shadowElevation = 2.dp,
@@ -837,15 +831,8 @@ private fun AuthenticatedShell(
             )
         },
     ) { padding ->
-        AnimatedContent(
-            targetState = state.selectedTab,
-            modifier = Modifier.fillMaxSize(),
-            transitionSpec = {
-                fadeIn(tween(durationMillis = 160, delayMillis = 40)) togetherWith
-                    fadeOut(tween(durationMillis = 90))
-            },
-            label = "main-navigation",
-        ) { tab ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            val tab = state.selectedTab
             saveableStateHolder.SaveableStateProvider(tab.name) {
                 when (tab) {
                     MainTab.Overview -> OverviewScreen(state, padding, viewModel::selectTab, onRefresh)
@@ -965,11 +952,15 @@ private fun AppBottomNavigation(
             .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 10.dp),
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth().height(62.dp),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .widthIn(max = 430.dp)
+                .fillMaxWidth()
+                .height(62.dp),
             color = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(31.dp),
-            shadowElevation = 0.dp,
-            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            shadowElevation = 4.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
             Row(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 5.dp),
@@ -985,18 +976,18 @@ private fun AppBottomNavigation(
 private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onClick: () -> Unit) {
     val itemShape = RoundedCornerShape(24.dp)
     val foreground by animateColorAsState(
-        if (selected) BrandBlue else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
         animationSpec = if (selected) tween(140) else snap(),
         label = "navigation-color",
     )
     val background by animateColorAsState(
-        if (selected) BrandBlue.copy(alpha = 0.12f) else Color.Transparent,
+        if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
         animationSpec = if (selected) tween(140) else snap(),
         label = "navigation-background",
     )
     val iconScale by animateFloatAsState(
         targetValue = if (selected) 1.15f else 1.0f,
-        animationSpec = spring(),
+        animationSpec = tween(100),
         label = "nav-icon-scale"
     )
 

@@ -3,6 +3,12 @@ const TodoList = require('../models/TodoList');
 const MAX_TASKS = 500;
 const MAX_OPERATIONS = 100;
 const MAX_TITLE_LENGTH = 200;
+const MAX_COURSE_ID_LENGTH = 128;
+const MAX_COURSE_NAME_LENGTH = 100;
+const MAX_TIMESTAMP = Date.UTC(2100, 0, 1);
+const PRIORITIES = new Set(['low', 'normal', 'high']);
+const RECURRENCES = new Set(['none', 'daily', 'weekly', 'monthly']);
+const REMINDER_STATUSES = new Set(['pending', 'sent', 'dismissed']);
 
 function parseRevision(req) {
     const bodyRevision = req.body && req.body.revision;
@@ -24,15 +30,73 @@ function normalizeTask(raw, now = Date.now()) {
         throw error;
     }
 
-    const createdAt = Number.isFinite(raw.createdAt) ? Number(raw.createdAt) : now;
-    const updatedAt = Number.isFinite(raw.updatedAt) ? Number(raw.updatedAt) : createdAt;
+    const createdAt = normalizeTimestamp(raw.createdAt, now, 'createdAt');
+    const updatedAt = normalizeTimestamp(raw.updatedAt, createdAt, 'updatedAt');
+    const dueAt = normalizeOptionalTimestamp(raw.dueAt, 'dueAt');
+    const reminderAt = normalizeOptionalTimestamp(raw.reminderAt, 'reminderAt');
+    const remindedAt = normalizeOptionalTimestamp(raw.remindedAt, 'remindedAt');
+    const priority = normalizeEnum(raw.priority, PRIORITIES, 'normal', 'priority');
+    const recurrence = normalizeEnum(raw.recurrence, RECURRENCES, 'none', 'recurrence');
+    const reminderStatus = Boolean(raw.completed)
+        ? 'dismissed'
+        : normalizeEnum(raw.reminderStatus, REMINDER_STATUSES, 'pending', 'reminderStatus');
     return {
         id,
         title,
         completed: Boolean(raw.completed),
+        dueAt,
+        priority,
+        recurrence,
+        courseRef: normalizeCourseRef(raw.courseRef),
+        reminderAt,
+        reminderStatus,
+        remindedAt,
         createdAt,
         updatedAt
     };
+}
+
+function invalidTaskField(field) {
+    const error = new Error(`Invalid todo ${field}`);
+    error.statusCode = 400;
+    throw error;
+}
+
+function normalizeTimestamp(value, fallback, field) {
+    if (value === undefined || value === null || value === '') return fallback;
+    const number = Number(value);
+    if (!Number.isSafeInteger(number) || number < 0 || number > MAX_TIMESTAMP) {
+        return invalidTaskField(field);
+    }
+    return number;
+}
+
+function normalizeOptionalTimestamp(value, field) {
+    if (value === undefined || value === null || value === '') return null;
+    return normalizeTimestamp(value, null, field);
+}
+
+function normalizeEnum(value, allowed, fallback, field) {
+    if (value === undefined || value === null || value === '') return fallback;
+    const normalized = String(value).trim().toLowerCase();
+    if (!allowed.has(normalized)) return invalidTaskField(field);
+    return normalized;
+}
+
+function normalizeCourseRef(value) {
+    if (value === undefined || value === null || value === '') return { id: '', name: '' };
+    if (typeof value === 'string') {
+        const name = value.trim();
+        if (name.length > MAX_COURSE_NAME_LENGTH) return invalidTaskField('courseRef');
+        return { id: '', name };
+    }
+    if (typeof value !== 'object' || Array.isArray(value)) return invalidTaskField('courseRef');
+    const id = String(value.id || '').trim();
+    const name = String(value.name || '').trim();
+    if (id.length > MAX_COURSE_ID_LENGTH || name.length > MAX_COURSE_NAME_LENGTH) {
+        return invalidTaskField('courseRef');
+    }
+    return { id, name };
 }
 
 function normalizeTasks(raw) {
@@ -279,4 +343,5 @@ exports.mutateTodos = async (req, res) => {
 
 exports.applyOperations = applyOperations;
 exports.mergeLegacyTasks = mergeLegacyTasks;
+exports.normalizeTask = normalizeTask;
 exports.parseRevision = parseRevision;

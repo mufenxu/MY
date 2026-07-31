@@ -66,7 +66,7 @@ const TASK_SOURCE = {
   configuration: '配置审批',
 };
 
-export function TaskCenterView({ onNavigate }) {
+export function TaskCenterView({ onNavigate, targetEntityId = '' }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -88,6 +88,17 @@ export function TaskCenterView({ onNavigate }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!targetEntityId || !data?.tasks) return undefined;
+    setStatusFilter('all');
+    setSourceFilter('all');
+    const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const target = [...document.querySelectorAll('[data-task-entity-id]')]
+        .find((element) => element.dataset.taskEntityId === targetEntityId);
+      target?.scrollIntoView({ block: 'center' });
+    }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [data?.tasks, targetEntityId]);
   useEffect(() => {
     const hasActive = data?.tasks?.some((task) => ['pending', 'running', 'action_required'].includes(task.status));
     if (!hasActive) return undefined;
@@ -149,12 +160,12 @@ export function TaskCenterView({ onNavigate }) {
             const meta = TASK_STATUS[task.status] || TASK_STATUS.pending;
             const StatusIcon = meta.icon;
             return (
-              <div className="control-table-row task-row" role="row" key={task.id}>
+              <div className={`control-table-row task-row ${(task.sourceId === targetEntityId || task.id === targetEntityId) ? 'targeted-entity' : ''}`} data-task-entity-id={task.sourceId || task.id} role="row" key={task.id}>
                 <div><strong>{task.title}</strong><small>{TASK_SOURCE[task.source] || task.source}{task.detail ? ` · ${task.detail}` : ''}</small></div>
                 <span className={`control-status ${meta.className}`}><StatusIcon className={task.status === 'running' ? 'spin' : ''} size={14} />{meta.label}</span>
                 <span>{task.requestedBy || '--'}</span>
                 <time dateTime={task.updatedAt || undefined}>{formatDateTime(task.updatedAt)}</time>
-                <button type="button" className="icon-action" title="打开关联模块" aria-label={`打开${task.title}`} onClick={() => onNavigate(task.view)}><ArrowRight size={17} /></button>
+                <button type="button" className="icon-action" title="打开关联模块" aria-label={`打开${task.title}`} onClick={() => onNavigate(task.view, { entity: task.sourceId || task.id })}><ArrowRight size={17} /></button>
               </div>
             );
           })}
@@ -184,7 +195,7 @@ const CHANGE_STATUS = {
   pending: '待审批', applying: '应用中', applied: '已应用', rejected: '已拒绝', conflicted: '版本冲突', failed: '应用失败',
 };
 
-export function ConfigurationView({ session }) {
+export function ConfigurationView({ session, targetEntityId = '' }) {
   const [overview, setOverview] = useState(null);
   const [draft, setDraft] = useState(null);
   const [summary, setSummary] = useState('');
@@ -212,6 +223,15 @@ export function ConfigurationView({ session }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!targetEntityId || !overview?.changes) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const target = [...document.querySelectorAll('[data-configuration-entity-id]')]
+        .find((element) => element.dataset.configurationEntityId === targetEntityId);
+      target?.scrollIntoView({ block: 'center' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [overview?.changes, targetEntityId]);
 
   function updateField(key, value) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -283,7 +303,7 @@ export function ConfigurationView({ session }) {
             {overview.changes.map((change) => {
               const selfApprovalBlocked = overview.twoPersonApproval && change.createdBy === username;
               return (
-                <article key={change.id}>
+                <article className={targetEntityId === change.id ? 'targeted-entity' : ''} data-configuration-entity-id={change.id} key={change.id}>
                   <div className="configuration-record-main"><span className={`change-status ${change.status}`}>{CHANGE_STATUS[change.status] || change.status}</span><div><strong>{change.summary}</strong><small>{change.kind === 'rollback' ? `回滚提案 · 目标 v${change.targetVersion}` : '参数变更'} · {change.createdBy} · {formatDateTime(change.createdAt)}</small></div></div>
                   <div className="changed-keys">{(change.changedKeys || []).map((key) => <code key={key}>{key}</code>)}</div>
                   {change.status === 'pending' && canApprove && (
@@ -331,14 +351,18 @@ const DIAGNOSIS_META = {
   service_unavailable: { label: '服务不可用', className: 'failed' },
 };
 
-export function DiagnosticsView({ services, session }) {
+export function DiagnosticsView({ services, session, targetEntityId = '' }) {
   const monitoredServices = services.filter((service) => service.healthPath || ['core', 'exam', 'campus', 'mqtt', 'notify'].includes(service.id));
-  const [serviceId, setServiceId] = useState('all');
+  const [serviceId, setServiceId] = useState(() => targetEntityId || 'all');
   const [traceResult, setTraceResult] = useState(null);
   const [systemResult, setSystemResult] = useState(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const canRun = hasRole(session.user?.role, 'operator');
+
+  useEffect(() => {
+    if (targetEntityId && monitoredServices.some((service) => service.id === targetEntityId)) setServiceId(targetEntityId);
+  }, [monitoredServices, targetEntityId]);
 
   async function runTrace() {
     setBusy('trace'); setError('');

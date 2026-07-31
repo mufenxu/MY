@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MQTT 智能后台管理系统</title>
-    <link rel="stylesheet" href="./styles.css?v=16" />
+    <link rel="stylesheet" href="./styles.css?v=17" />
     <link rel="stylesheet" href="./automation.css?v=2" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="alternate icon" type="image/png" href="./favicon.png" />
@@ -270,6 +270,10 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
               <span>设备配置</span>
             </button>
+            <button class="custom-subnav-item" data-subtab="assets" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" y1="22" x2="12" y2="12"></line></svg>
+              <span>资产运维</span>
+            </button>
             <button class="custom-subnav-item" data-subtab="discovery" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
               <span>自动发现</span>
@@ -341,7 +345,97 @@
               </section>
             </div>
 
-            <!-- 子面板 3: 自动发现 -->
+            <!-- 子面板 3: 资产运维 -->
+            <div id="devices-subtab-assets" class="subtab-content hidden">
+              <section class="panel asset-device-toolbar" aria-label="资产设备选择">
+                <label for="asset-device-selector">当前设备</label>
+                <select id="asset-device-selector">
+                  <option value="">选择设备...</option>
+                </select>
+                <button id="asset-refresh-button" class="button button-secondary" type="button">刷新</button>
+                <span id="asset-load-state" class="muted" aria-live="polite">请选择设备</span>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <h2>资产资料</h2>
+                    <p id="asset-profile-meta">尚未选择设备</p>
+                  </div>
+                </div>
+                <form id="asset-profile-form" class="asset-form-grid">
+                  <label><span>位置</span><input name="location" type="text" maxlength="120" autocomplete="off" /></label>
+                  <label><span>负责人</span><input name="owner" type="text" maxlength="80" autocomplete="off" /></label>
+                  <label><span>固件版本</span><input name="firmwareVersion" type="text" maxlength="80" autocomplete="off" /></label>
+                  <label><span>资产状态</span><select name="status"><option value="inventory">待投用</option><option value="active">运行中</option><option value="maintenance">维护中</option><option value="retired">已退役</option></select></label>
+                  <label><span>安装日期</span><input name="installedAt" type="date" /></label>
+                  <label><span>保修到期</span><input name="warrantyExpiresAt" type="date" /></label>
+                  <label class="asset-field-wide"><span>用途</span><textarea name="purpose" maxlength="500" rows="3"></textarea></label>
+                  <div class="asset-form-actions asset-field-wide">
+                    <button class="button button-primary" type="submit">保存资产资料</button>
+                    <button id="asset-profile-delete" class="button button-secondary" type="button">清空资料</button>
+                  </div>
+                </form>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <h2>维护记录</h2>
+                    <p><span id="maintenance-record-count">0</span> 条记录</p>
+                  </div>
+                </div>
+                <form id="maintenance-record-form" class="asset-form-grid asset-entry-form">
+                  <input name="id" type="hidden" />
+                  <label><span>维护主题</span><input name="title" type="text" maxlength="120" required /></label>
+                  <label><span>维护类型</span><select name="type"><option value="inspection">巡检</option><option value="repair">维修</option><option value="firmware">固件升级</option><option value="calibration">校准</option><option value="other">其他</option></select></label>
+                  <label><span>执行人</span><input name="performedBy" type="text" maxlength="80" /></label>
+                  <label><span>执行时间</span><input name="performedAt" type="datetime-local" required /></label>
+                  <label><span>下次维护</span><input name="nextDueAt" type="datetime-local" /></label>
+                  <label class="asset-field-wide"><span>维护说明</span><textarea name="description" maxlength="2000" rows="3"></textarea></label>
+                  <div class="asset-form-actions asset-field-wide">
+                    <button id="maintenance-submit-button" class="button button-primary" type="submit">新增维护记录</button>
+                    <button id="maintenance-cancel-button" class="button button-secondary hidden" type="button">取消编辑</button>
+                  </div>
+                </form>
+                <div class="table-wrap asset-table-wrap">
+                  <table>
+                    <thead><tr><th>时间</th><th>主题</th><th>类型</th><th>执行人</th><th>下次维护</th><th>操作</th></tr></thead>
+                    <tbody id="maintenance-records-body"><tr><td colspan="6" class="muted">暂无维护记录</td></tr></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <h2>故障工单</h2>
+                    <p><span id="fault-ticket-open-count">0</span> 个待处理</p>
+                  </div>
+                </div>
+                <form id="fault-ticket-form" class="asset-form-grid asset-entry-form">
+                  <input name="id" type="hidden" />
+                  <label><span>工单主题</span><input name="title" type="text" maxlength="120" required /></label>
+                  <label><span>优先级</span><select name="priority"><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="critical">紧急</option></select></label>
+                  <label><span>状态</span><select name="status"><option value="open">待处理</option><option value="in_progress">处理中</option><option value="resolved">已解决</option><option value="closed">已关闭</option></select></label>
+                  <label><span>处理人</span><input name="assignee" type="text" maxlength="80" /></label>
+                  <label><span>故障时间</span><input name="occurredAt" type="datetime-local" required /></label>
+                  <label class="asset-field-wide"><span>故障描述</span><textarea name="description" maxlength="4000" rows="3" required></textarea></label>
+                  <div class="asset-form-actions asset-field-wide">
+                    <button id="fault-ticket-submit-button" class="button button-primary" type="submit">新建故障工单</button>
+                    <button id="fault-ticket-cancel-button" class="button button-secondary hidden" type="button">取消编辑</button>
+                  </div>
+                </form>
+                <div class="table-wrap asset-table-wrap">
+                  <table>
+                    <thead><tr><th>故障时间</th><th>主题</th><th>优先级</th><th>状态</th><th>处理人</th><th>更新时间</th><th>操作</th></tr></thead>
+                    <tbody id="fault-tickets-body"><tr><td colspan="7" class="muted">暂无故障工单</td></tr></tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+
+            <!-- 子面板 4: 自动发现 -->
             <div id="devices-subtab-discovery" class="subtab-content hidden">
               <section class="panel" style="width: 100%;">
                 <div class="panel-head">
@@ -1231,9 +1325,10 @@ fetch("http://localhost:22102/api/devices/esp8266_living/history?range=24h", {
     <script src="./js/layoutController.js?v=1"></script>
     <script src="./js/formEnhancements.js?v=1"></script>
     <script src="./js/historyView.js?v=2"></script>
+    <script src="./js/deviceAssetsView.js?v=1"></script>
     <script src="./js/deviceGridView.js?v=2"></script>
     <script src="./js/deviceConfigView.js?v=2"></script>
     <script src="./js/automationView.js?v=1"></script>
-    <script src="./app.js?v=26"></script>
+    <script src="./app.js?v=27"></script>
   </body>
 </html>

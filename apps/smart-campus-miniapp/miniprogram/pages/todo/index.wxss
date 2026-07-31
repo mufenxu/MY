@@ -179,13 +179,16 @@
 /* 过滤器 */
 .filter-bar {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 16px;
   padding: 0 4px;
 }
 
 .filter-item {
-  padding: 6px 16px;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 8px;
+  text-align: center;
   border-radius: 20px;
   font-size: 13px;
   font-weight: 600;
@@ -275,11 +278,58 @@
 .todo-title {
   font-size: 16px;
   color: #334155;
-  margin-bottom: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
   transition: color 0.3s;
 }
 
+.todo-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.todo-title-row .todo-title {
+  flex: 1;
+}
+
+.priority-badge {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #64748b;
+  background: #e2e8f0;
+}
+
+.priority-high {
+  color: #b42318;
+  background: #fee4e2;
+}
+
+.priority-low {
+  color: #475467;
+  background: #f2f4f7;
+}
+
+.todo-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.meta-overdue {
+  color: #b42318;
+  font-weight: 600;
+}
+
 .todo-time {
+  margin-top: 4px;
   font-size: 12px;
   color: #94a3b8;
 }
@@ -412,7 +462,9 @@
 }
 
 .glass-modal {
-  width: 80%;
+  width: 88%;
+  max-height: 86vh;
+  overflow-y: auto;
   background: #ffffff;
   border-radius: 24px;
   padding: 24px;
@@ -441,8 +493,78 @@
   padding: 12px;
   box-sizing: border-box;
   font-size: 15px;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
   border: 1px solid #e2e8f0;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.editor-field,
+.editor-date-row {
+  min-width: 0;
+}
+
+.editor-field-full {
+  margin-bottom: 10px;
+}
+
+.editor-label {
+  display: block;
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.editor-picker,
+.editor-input {
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+  line-height: 40px;
+  box-sizing: border-box;
+}
+
+.editor-input {
+  width: 100%;
+}
+
+.editor-date-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.editor-date-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-date-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(74px, 0.75fr);
+  gap: 8px;
+}
+
+.editor-clear {
+  flex: none;
+  padding: 0 4px 11px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.modal-footer {
+  margin-top: 16px;
 }
 
 .modal-footer {

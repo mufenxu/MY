@@ -773,6 +773,32 @@ $shadow-soft: 0 12rpx 40rpx rgba(148, 163, 184, 0.12);
     background: linear-gradient(135deg, #0f766e 0%, #22c55e 100%);
 }
 
+.icon-wrap.plan {
+    background: #eaf2ff;
+    box-shadow: none;
+}
+
+.icon-wrap.plan::before {
+    width: 38rpx;
+    height: 38rpx;
+    left: 15rpx;
+    top: 17rpx;
+    border: 4rpx solid #2563eb;
+    border-radius: 8rpx;
+    box-sizing: border-box;
+    background: linear-gradient(to bottom, #bfdbfe 0 10rpx, #ffffff 10rpx 100%);
+}
+
+.icon-wrap.plan::after {
+    width: 22rpx;
+    height: 4rpx;
+    left: 23rpx;
+    top: 41rpx;
+    border-radius: 4rpx;
+    background: #2563eb;
+    box-shadow: 0 8rpx 0 #60a5fa;
+}
+
 .icon-wrap.review::before {
     width: 34rpx;
     height: 34rpx;

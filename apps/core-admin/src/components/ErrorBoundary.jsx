@@ -1,6 +1,7 @@
 import React from 'react';
 import { Result, Button, Typography } from 'antd';
 import { SyncOutlined, HomeOutlined } from '@ant-design/icons';
+import { reportExperience } from '../utils/runtime';
 
 const { Paragraph, Text } = Typography;
 
@@ -16,8 +17,8 @@ class ErrorBoundary extends React.Component {
     }
 
     componentDidCatch(error, errorInfo) {
-        // You can also log the error to an error reporting service like Sentry
         console.error('ErrorBoundary caught an error:', error, errorInfo);
+        void reportExperience({ event: 'ui_error', outcome: 'error', error });
         this.setState({ errorInfo });
     }
 

@@ -106,6 +106,26 @@ const elements = {
   addDeviceForm: document.getElementById('add-device-form'),
   addDeviceId: document.getElementById('add-device-id'),
   addDeviceName: document.getElementById('add-device-name'),
+
+  // 设备资产、维护记录与故障工单
+  assetPane: document.getElementById('devices-subtab-assets'),
+  assetSubtabButton: document.querySelector('.custom-subnav-item[data-subtab="assets"]'),
+  assetDeviceSelector: document.getElementById('asset-device-selector'),
+  assetRefreshButton: document.getElementById('asset-refresh-button'),
+  assetLoadState: document.getElementById('asset-load-state'),
+  assetProfileForm: document.getElementById('asset-profile-form'),
+  assetProfileMeta: document.getElementById('asset-profile-meta'),
+  assetProfileDelete: document.getElementById('asset-profile-delete'),
+  maintenanceRecordForm: document.getElementById('maintenance-record-form'),
+  maintenanceSubmitButton: document.getElementById('maintenance-submit-button'),
+  maintenanceCancelButton: document.getElementById('maintenance-cancel-button'),
+  maintenanceRecordCount: document.getElementById('maintenance-record-count'),
+  maintenanceRecordsBody: document.getElementById('maintenance-records-body'),
+  faultTicketForm: document.getElementById('fault-ticket-form'),
+  faultTicketSubmitButton: document.getElementById('fault-ticket-submit-button'),
+  faultTicketCancelButton: document.getElementById('fault-ticket-cancel-button'),
+  faultTicketOpenCount: document.getElementById('fault-ticket-open-count'),
+  faultTicketsBody: document.getElementById('fault-tickets-body'),
   
   // API Key 列表
   apiKeysTableBody: document.getElementById('api-keys-table-body'),
@@ -327,6 +347,30 @@ const deviceConfigView = window.MqttApiDeviceConfig.createDeviceConfigView({
     showCustomConfirm('警告：移除设备', `确定要移除设备 [${device.name}] 吗？保存后，原设备的所有实时面板将不再渲染。`, true),
   showToast,
   markUnsaved: () => setBadge(elements.saveState, '未保存', 'badge badge-warning')
+});
+const deviceAssetsView = window.MqttApiDeviceAssets.createDeviceAssetsView({
+  pane: elements.assetPane,
+  subtabButton: elements.assetSubtabButton,
+  deviceSelector: elements.assetDeviceSelector,
+  refreshButton: elements.assetRefreshButton,
+  loadState: elements.assetLoadState,
+  profileForm: elements.assetProfileForm,
+  profileMeta: elements.assetProfileMeta,
+  profileDeleteButton: elements.assetProfileDelete,
+  maintenanceForm: elements.maintenanceRecordForm,
+  maintenanceSubmitButton: elements.maintenanceSubmitButton,
+  maintenanceCancelButton: elements.maintenanceCancelButton,
+  maintenanceCount: elements.maintenanceRecordCount,
+  maintenanceBody: elements.maintenanceRecordsBody,
+  ticketForm: elements.faultTicketForm,
+  ticketSubmitButton: elements.faultTicketSubmitButton,
+  ticketCancelButton: elements.faultTicketCancelButton,
+  ticketOpenCount: elements.faultTicketOpenCount,
+  ticketBody: elements.faultTicketsBody,
+  requestJson,
+  showToast,
+  confirmDanger: (title, message) => showCustomConfirm(title, message, true),
+  addEvent
 });
 const automationView = window.MqttApiAutomation.createAutomationView({
   requestJson,
@@ -729,6 +773,7 @@ function renderConfig(config, secretState = {}) {
   // 接入可视化向导数据流
   state.localDevices = JSON.parse(JSON.stringify(config.devices || []));
   automationView.syncDevices();
+  deviceAssetsView.setDevices(state.localDevices);
   renderVisualDevicesList();
 
   elements.deviceOnlineThreshold.value = config.api.deviceOnlineThreshold;
@@ -1494,4 +1539,5 @@ bindSecretFieldToggle(elements.authPassword, elements.authPasswordClear);
 bindSecretFieldToggle(elements.authSessionSecret, elements.authSessionSecretClear);
 
 layoutController.init();
+deviceAssetsView.init();
 boot();

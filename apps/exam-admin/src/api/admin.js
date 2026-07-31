@@ -103,6 +103,31 @@ export function createAdminApi({ getIsConsoleMode, getIsDemoManage, apiBase = ''
         saveUserAssignments: (openid, payload) =>
             http.put(managementUrl(`/users/${resourceId(openid)}/assignments`), payload),
 
+        getLearningPlanOptions: (config = {}) =>
+            http.get(managementUrl('/learning-plan-options'), config),
+
+        listCohorts: (params = {}, config = {}) =>
+            http.get(managementUrl('/cohorts'), { ...config, params }),
+
+        saveCohort: (id, payload) =>
+            id
+                ? http.put(managementUrl(`/cohorts/${resourceId(id)}`), payload)
+                : http.post(managementUrl('/cohorts'), payload),
+
+        archiveCohort: (id) =>
+            http.delete(managementUrl(`/cohorts/${resourceId(id)}`)),
+
+        listLearningPlans: (params = {}, config = {}) =>
+            http.get(managementUrl('/learning-plans'), { ...config, params }),
+
+        saveLearningPlan: (id, payload) =>
+            id
+                ? http.put(managementUrl(`/learning-plans/${resourceId(id)}`), payload)
+                : http.post(managementUrl('/learning-plans'), payload),
+
+        archiveLearningPlan: (id) =>
+            http.delete(managementUrl(`/learning-plans/${resourceId(id)}`)),
+
         listPersonalCategories: (params, config = {}) =>
             http.get(managementUrl('/personal-categories'), { ...config, params }),
 

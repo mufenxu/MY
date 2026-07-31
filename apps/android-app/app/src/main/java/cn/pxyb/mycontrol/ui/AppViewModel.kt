@@ -282,7 +282,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectTab(tab: MainTab) {
-        mutableState.update { it.copy(selectedTab = tab, error = null, message = null) }
+        mutableState.update { current ->
+            if (current.selectedTab == tab && current.error == null && current.message == null) {
+                current
+            } else {
+                current.copy(selectedTab = tab, error = null, message = null)
+            }
+        }
     }
 
     fun openQrScanner() {

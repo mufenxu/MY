@@ -42,6 +42,7 @@ const {
     getAdminShareOwner,
 } = require('../services/paperShareService');
 const { generateQuestionAnalysis } = require('../services/aiAnalysisService');
+const { removeUsersFromLearningOperations } = require('../services/learningPlanService');
 const {
     recordQuestionVersion,
     updateQuestionWithVersion,
@@ -1075,6 +1076,7 @@ exports.deleteUsers = asyncHandler(async (req, res) => {
         }),
         UserQuestionState.deleteMany({ userId: { $in: openids } }),
         removeUserAssignments(openids),
+        removeUsersFromLearningOperations(openids),
     ]);
     success(res);
 });

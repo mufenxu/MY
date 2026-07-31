@@ -123,6 +123,45 @@ function safeDownloadName(filename) {
 
 const ROLE_LEVELS = { viewer: 1, operator: 2, super_admin: 3 };
 const INTERNAL_HEALTH_PATHS = new Set(['/api/health', '/api/livez', '/api/readyz']);
+const CLIENT_EXPERIENCE_APPLICATIONS = new Set(['console', 'core-admin', 'exam-admin']);
+const CLIENT_EXPERIENCE_EVENTS = new Set([
+  'page_load',
+  'route_change',
+  'ui_error',
+  'unhandled_error',
+  'unhandled_rejection',
+  'request_failure',
+]);
+
+function normalizeClientRoute(value) {
+  const route = String(value || 'unknown').split(/[?#]/, 1)[0].trim().slice(0, 120);
+  if (!route || !/^[A-Za-z0-9_/:.-]+$/.test(route)) return 'unknown';
+  return route
+    .split('/')
+    .map((segment) => (/^(?:\d{4,}|[0-9a-f]{12,}|[A-Za-z0-9_-]{32,})$/i.test(segment) ? ':id' : segment))
+    .join('/')
+    .slice(0, 80) || 'unknown';
+}
+
+function normalizeClientExperience(input) {
+  const application = String(input?.application || '');
+  const event = String(input?.event || '');
+  const outcome = String(input?.outcome || 'error');
+  if (!CLIENT_EXPERIENCE_APPLICATIONS.has(application) || !CLIENT_EXPERIENCE_EVENTS.has(event)) return null;
+  if (!['ok', 'error', 'timeout', 'aborted'].includes(outcome)) return null;
+  const duration = Number(input?.durationMs);
+  const fingerprint = /^[0-9a-f]{8,16}$/i.test(String(input?.fingerprint || ''))
+    ? String(input.fingerprint).toLowerCase()
+    : 'none';
+  return {
+    application,
+    event,
+    outcome,
+    route: normalizeClientRoute(input?.route),
+    fingerprint,
+    durationMs: Number.isFinite(duration) && duration >= 0 ? Math.min(Math.round(duration), 300_000) : null,
+  };
+}
 
 function requireRole(requiredRole) {
   return (req, res, next) => {
@@ -590,6 +629,13 @@ export function createApp({
     legacyHeaders: false,
     message: { error: 'External probe ingest rate exceeded.', code: 'BLACKBOX_RATE_LIMITED' },
   });
+  const clientExperienceLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 180,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: '体验事件上报过于频繁。', code: 'CLIENT_EXPERIENCE_RATE_LIMITED' },
+  });
   app.post(
     '/api/internal/blackbox/samples',
     blackboxIngestLimiter,
@@ -622,6 +668,20 @@ export function createApp({
   app.use('/api', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     next();
+  });
+
+  app.post('/api/client-experience', clientExperienceLimiter, requireConsoleRequest, (req, res) => {
+    const event = normalizeClientExperience(req.body);
+    if (!event) {
+      return res.status(400).json({ error: '体验事件格式无效。', code: 'INVALID_CLIENT_EXPERIENCE' });
+    }
+    metrics.recordClientExperience(event);
+    console.info(JSON.stringify({
+      logType: 'client_experience',
+      requestId: req.requestId,
+      ...event,
+    }));
+    return res.status(202).json({ accepted: true });
   });
 
   app.get('/.well-known/assetlinks.json', (req, res) => {
@@ -1506,6 +1566,9 @@ export function createApp({
         note: req.body?.note,
         assignedTo: req.body?.assignedTo,
         muteMinutes: req.body?.muteMinutes,
+        stepId: req.body?.stepId,
+        completed: req.body?.completed,
+        postmortem: req.body?.postmortem,
       });
       if (!incident) return res.status(404).json({ error: '事件不存在或操作无效。', code: 'INCIDENT_NOT_FOUND' });
       return res.json({ incident });

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
@@ -28,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,6 +53,8 @@ data class StatusStyle(
     val background: Color,
     val icon: ImageVector,
 )
+
+val AppCardShape = RoundedCornerShape(22.dp)
 
 @Composable
 fun statusStyle(status: String): StatusStyle = when (status.lowercase()) {
@@ -116,10 +120,10 @@ fun AppPanel(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
+        shape = AppCardShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         content()
     }
@@ -243,7 +247,12 @@ fun EmptyBlock(title: String, detail: String, modifier: Modifier = Modifier) {
     }
 }
 
-fun formatPlatformTime(value: String?): String {
+@Composable
+fun formatPlatformTime(value: String?): String = remember(value) {
+    formatPlatformTimeValue(value)
+}
+
+private fun formatPlatformTimeValue(value: String?): String {
     if (value.isNullOrBlank()) return "暂无"
     val instant = runCatching { Instant.parse(value) }.getOrNull()
         ?: runCatching { OffsetDateTime.parse(value).toInstant() }.getOrNull()

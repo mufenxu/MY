@@ -13,6 +13,7 @@
       "name": "user",
       "pages": [
         "study-report/study-report",
+        "learning-plans/learning-plans",
         "scan-login/scan-login",
         "account-manage/account-manage",
         "privacy-policy/privacy-policy",

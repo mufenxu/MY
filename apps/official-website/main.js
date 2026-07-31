@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initThemeToggle();
   initQuantumCanvas();
   init3DTiltCards();
-  initNumberCounters();
+  initPlatformStatus();
 });
 
 function initThemeToggle() {
@@ -177,40 +177,57 @@ function init3DTiltCards() {
   });
 }
 
-// Number Counter Animation
-function initNumberCounters() {
-  const counters = document.querySelectorAll('.counter');
-  if (!counters.length) return;
+async function initPlatformStatus() {
+  const card = document.querySelector('#platform-status .preview-3d-card');
+  const statusLabel = document.getElementById('platform-status-label');
+  const statusValue = document.getElementById('platform-status-value');
+  const statusUpdated = document.getElementById('platform-status-updated');
+  const healthyCount = document.getElementById('healthy-service-count');
+  const totalCount = document.getElementById('total-service-count');
+  const incidentCount = document.getElementById('active-incident-count');
+  if (!card || !statusLabel || !statusValue) return;
 
-  const observer = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const counter = entry.target;
-          const target = parseFloat(counter.getAttribute('data-target'));
-          const duration = 2000;
-          const isDecimal = target % 1 !== 0;
-          const stepTime = 30;
-          const steps = duration / stepTime;
-          let current = 0;
-          const increment = target / steps;
+  const stateMeta = {
+    operational: { label: '运行正常', detail: '所有已监测服务正常' },
+    degraded: { label: '部分异常', detail: '部分服务需要关注' },
+    outage: { label: '服务中断', detail: '关键服务当前不可用' },
+    unknown: { label: '待确认', detail: '最新探测数据不完整' },
+  };
 
-          const timer = setInterval(() => {
-            current += increment;
-            if (current >= target) {
-              counter.innerText = isDecimal ? target.toFixed(2) : Math.floor(target).toLocaleString();
-              clearInterval(timer);
-            } else {
-              counter.innerText = isDecimal ? current.toFixed(2) : Math.floor(current).toLocaleString();
-            }
-          }, stepTime);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 6000);
+  try {
+    const response = await fetch('/api/public/status', {
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`status request failed: ${response.status}`);
 
-          observer.unobserve(counter);
-        }
-      });
-    },
-    { threshold: 0.5 }
-  );
+    const payload = await response.json();
+    const meta = stateMeta[payload.overall] || stateMeta.unknown;
+    const services = Array.isArray(payload.services) ? payload.services : [];
+    const monitored = services.filter((service) => service.state !== 'unmonitored');
+    const healthy = monitored.filter((service) => service.state === 'healthy' && !service.stale);
+    const incidents = Array.isArray(payload.incidents) ? payload.incidents : [];
 
-  counters.forEach((counter) => observer.observe(counter));
+    card.dataset.status = payload.overall in stateMeta ? payload.overall : 'unknown';
+    statusLabel.textContent = meta.detail;
+    statusValue.textContent = meta.label;
+    healthyCount.textContent = String(healthy.length);
+    totalCount.textContent = String(monitored.length);
+    incidentCount.textContent = String(incidents.length);
+
+    const generatedAt = Date.parse(payload.generatedAt);
+    statusUpdated.textContent = Number.isFinite(generatedAt)
+      ? `更新于 ${new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(generatedAt)}`
+      : '已获取最新公开状态';
+  } catch {
+    card.dataset.status = 'unknown';
+    statusLabel.textContent = '公开状态暂时无法获取';
+    statusValue.textContent = '待确认';
+    statusUpdated.textContent = '请稍后重试或查看原始状态接口';
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }

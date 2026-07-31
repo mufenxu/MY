@@ -5,6 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const manageController = require('../controllers/manageController');
+const learningPlanController = require('../controllers/learningPlanController');
 const questionInsightsController = require('../controllers/questionInsightsController');
 const { auditMutations } = require('../middleware/auditLog');
 const authenticateAdmin = require('../middleware/auth');
@@ -60,6 +61,16 @@ router.get('/users/:openid/assignments', validate(mv.openidParam), manageControl
 router.put('/users/:openid/assignments', validate(mv.updateUserAssignments), manageController.updateUserAssignments);
 router.delete('/users', validate(mv.deleteUsers), manageController.deleteUsers);
 router.delete('/users/:openid/records', validate(mv.openidParam), manageController.clearUserRecords);
+
+router.get('/learning-plan-options', learningPlanController.getOptions);
+router.get('/cohorts', validate(mv.listCohorts), learningPlanController.listCohorts);
+router.post('/cohorts', validate(mv.createCohort), learningPlanController.createCohort);
+router.put('/cohorts/:id', validate(mv.updateCohort), learningPlanController.updateCohort);
+router.delete('/cohorts/:id', validate(mv.idParam), learningPlanController.archiveCohort);
+router.get('/learning-plans', validate(mv.listLearningPlans), learningPlanController.listLearningPlans);
+router.post('/learning-plans', validate(mv.createLearningPlan), learningPlanController.createLearningPlan);
+router.put('/learning-plans/:id', validate(mv.updateLearningPlan), learningPlanController.updateLearningPlan);
+router.delete('/learning-plans/:id', validate(mv.idParam), learningPlanController.archiveLearningPlan);
 
 router.get('/personal-categories', validate(mv.personalCategoryQuery), manageController.getPersonalCategories);
 router.get(

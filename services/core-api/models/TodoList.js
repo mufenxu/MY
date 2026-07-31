@@ -4,6 +4,17 @@ const todoTaskSchema = new mongoose.Schema({
     id: { type: String, required: true },
     title: { type: String, required: true },
     completed: { type: Boolean, default: false },
+    dueAt: { type: Number, default: null },
+    priority: { type: String, enum: ['low', 'normal', 'high'], default: 'normal' },
+    recurrence: { type: String, enum: ['none', 'daily', 'weekly', 'monthly'], default: 'none' },
+    courseRef: {
+        _id: false,
+        id: { type: String, default: '' },
+        name: { type: String, default: '' }
+    },
+    reminderAt: { type: Number, default: null },
+    reminderStatus: { type: String, enum: ['pending', 'sent', 'dismissed'], default: 'pending' },
+    remindedAt: { type: Number, default: null },
     createdAt: { type: Number, required: true },
     updatedAt: { type: Number, required: true }
 }, { _id: false, versionKey: false });

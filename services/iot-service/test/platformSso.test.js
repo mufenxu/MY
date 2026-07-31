@@ -43,12 +43,20 @@ test('iot SSO tokens are signed, short-lived and audience-bound', () => {
 });
 
 test('iot central roles map to least-privilege scopes and mutation policy', () => {
-  assert.deepEqual(platformScopesForRole('viewer'), ['devices:read', 'history:read']);
-  assert.deepEqual(platformScopesForRole('operator'), ['devices:read', 'history:read', 'relays:write']);
+  assert.deepEqual(platformScopesForRole('viewer'), ['devices:read', 'history:read', 'assets:read']);
+  assert.deepEqual(platformScopesForRole('operator'), [
+    'devices:read',
+    'history:read',
+    'relays:write',
+    'assets:read',
+    'assets:write'
+  ]);
   assert.deepEqual(platformScopesForRole('super_admin'), ['*']);
   assert.equal(platformRoleAllowsRequest('viewer', 'GET', ['devices:read']), true);
   assert.equal(platformRoleAllowsRequest('viewer', 'POST', ['relays:write']), false);
   assert.equal(platformRoleAllowsRequest('operator', 'POST', ['relays:write']), true);
+  assert.equal(platformRoleAllowsRequest('operator', 'PUT', ['assets:write']), true);
+  assert.equal(platformRoleAllowsRequest('viewer', 'PUT', ['assets:write']), false);
   assert.equal(platformRoleAllowsRequest('operator', 'PUT', []), false);
   assert.equal(platformRoleAllowsRequest('super_admin', 'DELETE', []), true);
 });

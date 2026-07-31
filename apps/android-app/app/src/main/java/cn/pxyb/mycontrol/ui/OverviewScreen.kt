@@ -90,7 +90,7 @@ fun OverviewScreen(
             val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
+                shape = AppCardShape,
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 shadowElevation = 0.dp,
@@ -238,7 +238,7 @@ private fun OverviewSyncPanel(refreshing: Boolean) {
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        shape = MaterialTheme.shapes.medium,
+        shape = AppCardShape,
         shadowElevation = 3.dp,
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 20.dp)) {

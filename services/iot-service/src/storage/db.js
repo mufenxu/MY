@@ -103,7 +103,15 @@ class Database {
       this.db.collection('automation_rules').createIndex({ enabled: 1, updated_at: -1 }),
       this.db.collection('automation_scenes').createIndex({ id: 1 }, { unique: true }),
       this.db.collection('automation_runs').createIndex({ created_at: -1 }),
-      this.db.collection('automation_runs').createIndex({ source_id: 1, created_at: -1 })
+      this.db.collection('automation_runs').createIndex({ source_id: 1, created_at: -1 }),
+      this.db.collection('device_assets').createIndex({ device_id: 1 }, { unique: true }),
+      this.db.collection('device_assets').createIndex({ status: 1, updated_at: -1 }),
+      this.db.collection('device_assets').createIndex({ warranty_expires_at: 1 }, { sparse: true }),
+      this.db.collection('device_maintenance').createIndex({ id: 1 }, { unique: true }),
+      this.db.collection('device_maintenance').createIndex({ device_id: 1, performed_at: -1 }),
+      this.db.collection('device_tickets').createIndex({ id: 1 }, { unique: true }),
+      this.db.collection('device_tickets').createIndex({ device_id: 1, status: 1, updated_at: -1 }),
+      this.db.collection('device_tickets').createIndex({ status: 1, priority: 1, updated_at: -1 })
     ]);
   }
 
@@ -224,6 +232,118 @@ class Database {
 
   async getDevices() {
     return this.db.collection('devices').find({}, { projection: { _id: 0 } }).toArray();
+  }
+
+  async getDevice(deviceId) {
+    return this.db.collection('devices').findOne({ id: deviceId }, { projection: { _id: 0 } });
+  }
+
+  async listDeviceAssets() {
+    return this.db.collection('device_assets')
+      .find({}, { projection: { _id: 0 } })
+      .sort({ updated_at: -1 })
+      .toArray();
+  }
+
+  async getDeviceAsset(deviceId) {
+    return this.db.collection('device_assets').findOne(
+      { device_id: deviceId },
+      { projection: { _id: 0 } }
+    );
+  }
+
+  async saveDeviceAsset(deviceId, asset) {
+    const now = Date.now();
+    await this.db.collection('device_assets').updateOne(
+      { device_id: deviceId },
+      {
+        $set: { ...clone(asset), device_id: deviceId, updated_at: now },
+        $setOnInsert: { created_at: now }
+      },
+      { upsert: true }
+    );
+    return this.getDeviceAsset(deviceId);
+  }
+
+  async deleteDeviceAsset(deviceId) {
+    const result = await this.db.collection('device_assets').deleteOne({ device_id: deviceId });
+    return result.deletedCount > 0;
+  }
+
+  async listMaintenanceRecords(deviceId, limit = 50) {
+    return this.db.collection('device_maintenance')
+      .find({ device_id: deviceId }, { projection: { _id: 0 } })
+      .sort({ performed_at: -1, created_at: -1 })
+      .limit(Math.min(200, Math.max(1, Number(limit) || 50)))
+      .toArray();
+  }
+
+  async getMaintenanceRecord(deviceId, recordId) {
+    return this.db.collection('device_maintenance').findOne(
+      { id: recordId, device_id: deviceId },
+      { projection: { _id: 0 } }
+    );
+  }
+
+  async createMaintenanceRecord(record) {
+    await this.db.collection('device_maintenance').insertOne(clone(record));
+    return clone(record);
+  }
+
+  async updateMaintenanceRecord(deviceId, recordId, updates) {
+    const result = await this.db.collection('device_maintenance').updateOne(
+      { id: recordId, device_id: deviceId },
+      { $set: clone(updates) }
+    );
+    if (result.matchedCount === 0) return null;
+    return this.getMaintenanceRecord(deviceId, recordId);
+  }
+
+  async deleteMaintenanceRecord(deviceId, recordId) {
+    const result = await this.db.collection('device_maintenance').deleteOne({
+      id: recordId,
+      device_id: deviceId
+    });
+    return result.deletedCount > 0;
+  }
+
+  async listFaultTickets(deviceId, options = {}) {
+    const query = { device_id: deviceId };
+    if (options.status) query.status = options.status;
+    return this.db.collection('device_tickets')
+      .find(query, { projection: { _id: 0 } })
+      .sort({ updated_at: -1 })
+      .limit(Math.min(200, Math.max(1, Number(options.limit) || 50)))
+      .toArray();
+  }
+
+  async getFaultTicket(deviceId, ticketId) {
+    return this.db.collection('device_tickets').findOne(
+      { id: ticketId, device_id: deviceId },
+      { projection: { _id: 0 } }
+    );
+  }
+
+  async createFaultTicket(ticket) {
+    await this.db.collection('device_tickets').insertOne(clone(ticket));
+    return clone(ticket);
+  }
+
+  async updateFaultTicket(deviceId, ticketId, updates) {
+    const result = await this.db.collection('device_tickets').updateOne(
+      { id: ticketId, device_id: deviceId },
+      { $set: clone(updates) }
+    );
+    if (result.matchedCount === 0) return null;
+    return this.getFaultTicket(deviceId, ticketId);
+  }
+
+  async deleteFaultTicket(deviceId, ticketId) {
+    const result = await this.db.collection('device_tickets').deleteOne({
+      id: ticketId,
+      device_id: deviceId
+    });
+    return result.deletedCount > 0;
   }
 
   async addApiKey(name, scopes = DEFAULT_API_KEY_SCOPES) {
@@ -373,6 +493,9 @@ class MemoryDatabase {
     this.automationRules = new Map();
     this.automationScenes = new Map();
     this.automationRuns = [];
+    this.deviceAssets = new Map();
+    this.maintenanceRecords = new Map();
+    this.faultTickets = new Map();
     this.settings = null;
     this.apiKeyCache = new BoundedTtlCache({
       maxEntries: API_KEY_CACHE_MAX_ENTRIES,
@@ -437,6 +560,95 @@ class MemoryDatabase {
   }
 
   async getDevices() { return Array.from(this.devices.values(), clone); }
+
+  async getDevice(deviceId) { return clone(this.devices.get(deviceId) || null); }
+
+  async listDeviceAssets() {
+    return Array.from(this.deviceAssets.values())
+      .sort((left, right) => right.updated_at - left.updated_at)
+      .map(clone);
+  }
+
+  async getDeviceAsset(deviceId) { return clone(this.deviceAssets.get(deviceId) || null); }
+
+  async saveDeviceAsset(deviceId, asset) {
+    const now = Date.now();
+    const existing = this.deviceAssets.get(deviceId);
+    const stored = {
+      ...(existing || { device_id: deviceId, created_at: now }),
+      ...clone(asset),
+      device_id: deviceId,
+      updated_at: now
+    };
+    this.deviceAssets.set(deviceId, stored);
+    return clone(stored);
+  }
+
+  async deleteDeviceAsset(deviceId) { return this.deviceAssets.delete(deviceId); }
+
+  async listMaintenanceRecords(deviceId, limit = 50) {
+    return Array.from(this.maintenanceRecords.values())
+      .filter((record) => record.device_id === deviceId)
+      .sort((left, right) => right.performed_at - left.performed_at || right.created_at - left.created_at)
+      .slice(0, Math.min(200, Math.max(1, Number(limit) || 50)))
+      .map(clone);
+  }
+
+  async getMaintenanceRecord(deviceId, recordId) {
+    const record = this.maintenanceRecords.get(recordId);
+    return record?.device_id === deviceId ? clone(record) : null;
+  }
+
+  async createMaintenanceRecord(record) {
+    this.maintenanceRecords.set(record.id, clone(record));
+    return clone(record);
+  }
+
+  async updateMaintenanceRecord(deviceId, recordId, updates) {
+    const existing = this.maintenanceRecords.get(recordId);
+    if (!existing || existing.device_id !== deviceId) return null;
+    const stored = { ...existing, ...clone(updates) };
+    this.maintenanceRecords.set(recordId, stored);
+    return clone(stored);
+  }
+
+  async deleteMaintenanceRecord(deviceId, recordId) {
+    const existing = this.maintenanceRecords.get(recordId);
+    if (!existing || existing.device_id !== deviceId) return false;
+    return this.maintenanceRecords.delete(recordId);
+  }
+
+  async listFaultTickets(deviceId, options = {}) {
+    return Array.from(this.faultTickets.values())
+      .filter((ticket) => ticket.device_id === deviceId && (!options.status || ticket.status === options.status))
+      .sort((left, right) => right.updated_at - left.updated_at)
+      .slice(0, Math.min(200, Math.max(1, Number(options.limit) || 50)))
+      .map(clone);
+  }
+
+  async getFaultTicket(deviceId, ticketId) {
+    const ticket = this.faultTickets.get(ticketId);
+    return ticket?.device_id === deviceId ? clone(ticket) : null;
+  }
+
+  async createFaultTicket(ticket) {
+    this.faultTickets.set(ticket.id, clone(ticket));
+    return clone(ticket);
+  }
+
+  async updateFaultTicket(deviceId, ticketId, updates) {
+    const existing = this.faultTickets.get(ticketId);
+    if (!existing || existing.device_id !== deviceId) return null;
+    const stored = { ...existing, ...clone(updates) };
+    this.faultTickets.set(ticketId, stored);
+    return clone(stored);
+  }
+
+  async deleteFaultTicket(deviceId, ticketId) {
+    const existing = this.faultTickets.get(ticketId);
+    if (!existing || existing.device_id !== deviceId) return false;
+    return this.faultTickets.delete(ticketId);
+  }
 
   async addApiKey(name, scopes = DEFAULT_API_KEY_SCOPES) {
     const token = `sk_mqttapi_${crypto.randomBytes(24).toString('hex')}`;

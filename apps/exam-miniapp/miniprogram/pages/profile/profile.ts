@@ -24,6 +24,10 @@ Page({
             masteredCount: 0,
             reviewedTodayCount: 0,
         },
+        learningPlanSummary: {
+            activeCount: 0,
+            overdueCount: 0,
+        },
         consoleProfile: {
             hasConsoleAccount: false,
             role: '',
@@ -86,6 +90,10 @@ Page({
                     masteredCount: 0,
                     reviewedTodayCount: 0,
                 },
+                learningPlanSummary: {
+                    activeCount: 0,
+                    overdueCount: 0,
+                },
                 userInfo: { nickname: '', avatarUrl: '' },
                 consoleProfile: {
                     hasConsoleAccount: false,
@@ -111,6 +119,7 @@ Page({
         await Promise.all([
             this.loadUserSummary(),
             this.loadReviewSummary(),
+            this.loadLearningPlanSummary(),
             this.loadConsoleProfile(),
         ]);
     },
@@ -130,6 +139,20 @@ Page({
             this.setData({ reviewSummary });
         } catch (error) {
             console.error('Load review summary failed', error);
+        }
+    },
+
+    async loadLearningPlanSummary() {
+        try {
+            const plans = await api.getLearningPlans();
+            this.setData({
+                learningPlanSummary: {
+                    activeCount: plans.length,
+                    overdueCount: plans.filter((plan) => plan.progress && plan.progress.state === 'overdue').length,
+                },
+            });
+        } catch (error) {
+            console.error('Load learning plan summary failed', error);
         }
     },
 
@@ -246,6 +269,18 @@ Page({
         wx.navigateTo({
             url: nextUrl,
         });
+    },
+
+    async goToLearningPlans() {
+        const nextUrl = buildPageUrl(ROUTES.LEARNING_PLANS);
+        if (!api.isLoggedIn()) {
+            await promptLogin({
+                message: '登录后才能查看学习计划，是否前往登录？',
+                nextUrl,
+            });
+            return;
+        }
+        wx.navigateTo({ url: nextUrl });
     },
 
     async goToScanLogin() {

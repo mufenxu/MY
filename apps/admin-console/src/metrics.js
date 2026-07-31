@@ -56,6 +56,19 @@ export function createMetrics({ serviceIds = [] } = {}) {
     help: 'Platform filesystem usage percentage.',
     registers: [registry],
   });
+  const clientExperienceEvents = new client.Counter({
+    name: 'my_platform_client_experience_events_total',
+    help: 'Privacy-safe client experience events reported by managed frontends.',
+    labelNames: ['application', 'event', 'outcome'],
+    registers: [registry],
+  });
+  const clientExperienceDuration = new client.Histogram({
+    name: 'my_platform_client_experience_duration_seconds',
+    help: 'Client-observed durations for supported experience events.',
+    labelNames: ['application', 'event'],
+    buckets: [0.1, 0.25, 0.5, 1, 2, 3, 5, 8, 15, 30],
+    registers: [registry],
+  });
   const allowedServiceIds = new Set(serviceIds);
 
   return {
@@ -98,6 +111,22 @@ export function createMetrics({ serviceIds = [] } = {}) {
     },
     recordCapacity(capacity) {
       if (Number.isFinite(capacity?.usedPercent)) diskUsage.set(capacity.usedPercent);
+    },
+    recordClientExperience({ application, event, outcome, durationMs }) {
+      const labels = {
+        application: ['console', 'core-admin', 'exam-admin'].includes(application) ? application : 'other',
+        event: ['page_load', 'route_change', 'ui_error', 'unhandled_error', 'unhandled_rejection', 'request_failure'].includes(event)
+          ? event
+          : 'other',
+        outcome: ['ok', 'error', 'timeout', 'aborted'].includes(outcome) ? outcome : 'error',
+      };
+      clientExperienceEvents.inc(labels);
+      if (Number.isFinite(durationMs) && durationMs >= 0) {
+        clientExperienceDuration.observe(
+          { application: labels.application, event: labels.event },
+          Math.min(durationMs, 300_000) / 1_000,
+        );
+      }
     },
     contentType: registry.contentType,
     render: () => registry.metrics(),

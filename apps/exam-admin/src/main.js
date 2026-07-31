@@ -49,7 +49,7 @@ import App from './App.vue';
 import router, { preloadDashboardView } from './router';
 import { setupHttpInterceptors } from './utils/setupHttp';
 import './assets/css/interaction-polish.css';
-import { fetchWithTimeout, IS_PLATFORM_SSO, redirectToPlatformLogin, resolveAppUrl } from './utils/runtime';
+import { fetchWithTimeout, installExperienceMonitoring, IS_PLATFORM_SSO, redirectToPlatformLogin, reportExperience, resolveAppUrl } from './utils/runtime';
 import { session } from './utils/session';
 
 const icons = {
@@ -127,6 +127,7 @@ function scheduleDashboardPreload() {
 }
 
 async function startApplication() {
+    installExperienceMonitoring();
     if (IS_PLATFORM_SSO) {
         await Promise.all([
             bootstrapPlatformSession(),
@@ -151,6 +152,7 @@ async function startApplication() {
 }
 
 startApplication().catch((error) => {
+    void reportExperience({ event: 'ui_error', outcome: 'error', error, route: 'bootstrap' });
     const root = document.getElementById('app');
     if (!root || document.querySelector('#platform-sso-error')) return;
     const main = document.createElement('main');

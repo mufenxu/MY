@@ -10,10 +10,13 @@ const authenticateUser = require('../middleware/clientAuth');
 const optionalClientAuth = require('../middleware/optionalClientAuth');
 const cv = require('../validators/clientValidator');
 const scanLoginController = require('../controllers/scanLoginController');
+const clientExperienceController = require('../controllers/clientExperienceController');
+const learningPlanController = require('../controllers/learningPlanController');
 
 router.use(clientLimiter);
 
 // Public APIs
+router.post('/client-experience', optionalClientAuth, clientExperienceController.record);
 router.post('/api/user/login', validate(cv.userLogin), clientController.userLogin);
 router.get('/categories', validate(cv.getCategories), clientController.getCategories);
 router.get('/questions', optionalClientAuth, validate(cv.getQuestions), clientController.getQuestions);
@@ -54,6 +57,7 @@ router.post('/api/user/review/:questionId', authenticateUser, validate(cv.review
 router.post('/api/user/profile', authenticateUser, validate(cv.updateProfile), clientController.updateProfile);
 router.get('/api/user/summary', authenticateUser, validate(cv.getUserSummary), clientController.getUserSummary);
 router.get('/api/user/study-report', authenticateUser, validate(cv.getStudyReport), clientController.getStudyReport);
+router.get('/api/user/learning-plans', authenticateUser, learningPlanController.listMyLearningPlans);
 router.get('/api/user/exam-history', authenticateUser, validate(cv.getExamHistory), clientController.getExamHistory);
 router.delete('/api/user/account', authenticateUser, clientController.deleteAccount);
 

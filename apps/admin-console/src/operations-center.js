@@ -58,6 +58,15 @@ function incidentSeverity(state) {
   return state === 'offline' ? 'critical' : 'warning';
 }
 
+function defaultIncidentRunbook(incident) {
+  return [
+    { id: 'scope', title: `确认${incident.serviceId ? ` ${incident.serviceId} ` : '平台'}影响范围`, completed: false },
+    { id: 'diagnostics', title: '运行端到端诊断并记录请求 ID', completed: false },
+    { id: 'changes', title: '核对最近发布与配置变更', completed: false },
+    { id: 'recovery', title: '验证恢复结果并通知相关方', completed: false },
+  ];
+}
+
 function operationDefaults(config) {
   return {
     alertingEnabled: config.incidentNotificationsEnabled !== false,
@@ -373,7 +382,15 @@ export function createOperationsCenter({
     };
   }
 
-  async function updateIncident(id, action, { actor, note = '', assignedTo = '', muteMinutes = 60 } = {}) {
+  async function updateIncident(id, action, {
+    actor,
+    note = '',
+    assignedTo = '',
+    muteMinutes = 60,
+    stepId = '',
+    completed = false,
+    postmortem: postmortemInput = null,
+  } = {}) {
     const incident = (await store.listIncidents({ limit: 1000 })).find((item) => item.id === id);
     if (!incident) return null;
     const timestamp = now().toISOString();
@@ -395,6 +412,34 @@ export function createOperationsCenter({
     } else if (action === 'note') {
       update = {};
       event = { type: 'note', at: timestamp, actor, message: String(note || '').slice(0, 500) };
+    } else if (action === 'runbook_step') {
+      const normalizedStepId = String(stepId || '');
+      const stepCompleted = Boolean(completed);
+      const steps = (Array.isArray(incident.runbookSteps) && incident.runbookSteps.length
+        ? incident.runbookSteps
+        : defaultIncidentRunbook(incident)).map((step) => step.id === normalizedStepId ? {
+        ...step,
+        completed: stepCompleted,
+        completedAt: stepCompleted ? timestamp : null,
+        completedBy: stepCompleted ? actor : null,
+      } : step);
+      if (!steps.some((step) => step.id === normalizedStepId)) return null;
+      update = { runbookSteps: steps, runbookUpdatedAt: timestamp };
+      const step = steps.find((item) => item.id === normalizedStepId);
+      event = { type: 'runbook', at: timestamp, actor, message: `${stepCompleted ? '完成' : '重新打开'}处置步骤：${step.title}` };
+    } else if (action === 'postmortem') {
+      if (incident.status !== 'resolved' || !postmortemInput || typeof postmortemInput !== 'object') return null;
+      const postmortem = {
+        summary: String(postmortemInput.summary || '').trim().slice(0, 1000),
+        rootCause: String(postmortemInput.rootCause || '').trim().slice(0, 2000),
+        impact: String(postmortemInput.impact || '').trim().slice(0, 2000),
+        correctiveActions: String(postmortemInput.correctiveActions || '').trim().slice(0, 3000),
+        completedAt: timestamp,
+        completedBy: actor,
+      };
+      if (!postmortem.summary || !postmortem.rootCause) return null;
+      update = { postmortem };
+      event = { type: 'postmortem', at: timestamp, actor, message: '事故复盘已更新' };
     } else {
       return null;
     }
@@ -404,7 +449,12 @@ export function createOperationsCenter({
       action: `incident.${action}`,
       targetType: 'incident',
       targetId: id,
-      details: { note: String(note || '').slice(0, 200), assignedTo: update.assignedTo || null },
+      details: {
+        note: String(note || '').slice(0, 200),
+        assignedTo: update.assignedTo || null,
+        stepId: action === 'runbook_step' ? String(stepId || '') : null,
+        postmortemCompleted: action === 'postmortem',
+      },
     });
     return updated;
   }
@@ -686,7 +736,8 @@ export function createOperationsCenter({
     const ageHours = latest ? durationHours(latest.createdAt, now()) : null;
     const restores = (status.jobs || []).filter((job) => job.type === 'restore' && job.status === 'succeeded');
     const lastRestore = restores.sort((left, right) => Date.parse(right.finishedAt || right.createdAt) - Date.parse(left.finishedAt || left.createdAt))[0] || null;
-    const lastPersistedRestore = (await store.listAudit({ action: 'backup.restore_succeeded', limit: 1 }))[0] || null;
+    const persistedRestores = await store.listAudit({ action: 'backup.restore_succeeded', limit: 10 });
+    const lastPersistedRestore = persistedRestores[0] || null;
     const restoreDrillMaxAgeDays = config.restoreDrillMaxAgeDays || 90;
     const restoreRtoMinutes = config.restoreRtoMinutes || 30;
     const lastRestoreDrillAt = lastRestore?.finishedAt || lastPersistedRestore?.occurredAt || null;
@@ -694,6 +745,9 @@ export function createOperationsCenter({
     const restoreDrillState = restoreDrillAgeDays === null
       ? 'missing'
       : restoreDrillAgeDays <= restoreDrillMaxAgeDays ? 'verified' : 'overdue';
+    const nextRestoreDrillAt = lastRestoreDrillAt
+      ? new Date(Date.parse(lastRestoreDrillAt) + restoreDrillMaxAgeDays * 86400000).toISOString()
+      : null;
     const persistedDurationMs = lastPersistedRestore?.details?.durationMs;
     const restoreDurationMs = lastRestore?.startedAt && lastRestore?.finishedAt
       ? Math.max(0, Date.parse(lastRestore.finishedAt) - Date.parse(lastRestore.startedAt))
@@ -718,9 +772,19 @@ export function createOperationsCenter({
       restoreDrillAgeDays: restoreDrillAgeDays === null ? null : Math.round(restoreDrillAgeDays * 10) / 10,
       restoreDrillMaxAgeDays,
       restoreDrillState,
+      nextRestoreDrillAt,
       restoreDurationMinutes,
       restoreRtoMinutes,
       restoreRtoState,
+      restoreDrills: persistedRestores.map((event) => ({
+        id: event.id,
+        occurredAt: event.occurredAt,
+        actor: event.actor,
+        backupName: event.targetId || null,
+        durationMinutes: Number.isFinite(Number(event.details?.durationMs))
+          ? Math.round((Number(event.details.durationMs) / 60000) * 10) / 10
+          : null,
+      })),
       offsite,
       schedule: settings.backupSchedule,
       capabilities: status.capabilities,

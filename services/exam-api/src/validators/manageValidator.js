@@ -173,6 +173,51 @@ const updateUserAssignments = {
     }),
 };
 
+const cohortFields = {
+    name: Joi.string().trim().max(100),
+    description: Joi.string().trim().max(500).allow(''),
+    memberOpenids: Joi.array().items(Joi.string().trim().max(200)).max(500),
+    status: Joi.string().valid('active', 'archived'),
+};
+
+const listCohorts = {
+    query: Joi.object({ status: Joi.string().valid('all', 'active', 'archived').default('all') }),
+};
+
+const createCohort = {
+    body: Joi.object(cohortFields).fork('name', (schema) => schema.required()),
+};
+
+const updateCohort = {
+    params: Joi.object({ id: objectId.required() }),
+    body: Joi.object(cohortFields).min(1),
+};
+
+const learningPlanFields = {
+    title: Joi.string().trim().max(120),
+    description: Joi.string().trim().max(1000).allow(''),
+    categoryIds: Joi.array().items(objectId).min(1).max(100),
+    cohortIds: Joi.array().items(objectId).max(100),
+    directUserOpenids: Joi.array().items(Joi.string().trim().max(200)).max(500),
+    dueAt: Joi.date().iso().allow(null),
+    targetScore: Joi.number().min(0).max(100),
+    status: Joi.string().valid('active', 'archived'),
+};
+
+const listLearningPlans = {
+    query: Joi.object({ status: Joi.string().valid('all', 'active', 'archived').default('all') }),
+};
+
+const createLearningPlan = {
+    body: Joi.object(learningPlanFields)
+        .fork(['title', 'categoryIds'], (schema) => schema.required()),
+};
+
+const updateLearningPlan = {
+    params: Joi.object({ id: objectId.required() }),
+    body: Joi.object(learningPlanFields).min(1),
+};
+
 const createCategory = {
     body: Joi.object(withScope(createCategoryFields)),
 };
@@ -267,6 +312,12 @@ module.exports = {
     deleteExamResults,
     deleteUsers,
     updateUserAssignments,
+    listCohorts,
+    createCohort,
+    updateCohort,
+    listLearningPlans,
+    createLearningPlan,
+    updateLearningPlan,
     createCategory,
     updateCategory,
     createMajorCategory,

@@ -1,8 +1,4 @@
-/*
-  todoReminder - 待办事项提醒服务
-  作用：检查 todo_lists 集合中所有用户的未完成待办事项，
-       统计每个用户的未完成任务数量，并生成汇总报告，通过企业微信发送提醒。
-*/
+/* Send only task-level reminders that have become due and were not acknowledged. */
 
 const TodoList = require('../models/TodoList');
 const NotifyConfig = require('../models/NotifyConfig');
@@ -12,43 +8,46 @@ const {
     sendWecomText,
 } = require('./wecomNotification');
 
-function buildSummaryMessage(groups) {
-    const nowTime = new Date().toLocaleString('zh-CN', { hour12: false });
-    let total = 0;
+function formatDueTime(timestamp) {
+    if (!Number.isFinite(timestamp)) return '';
+    return new Date(timestamp).toLocaleString('zh-CN', { hour12: false });
+}
 
-    groups.forEach(g => { total += g.tasks.length; });
+function selectReminderTasks(tasks, now = Date.now()) {
+    return (Array.isArray(tasks) ? tasks : []).filter((task) => {
+        if (!task || task.completed || task.reminderStatus === 'dismissed') return false;
+        const reminderAt = Number(task.reminderAt);
+        const dueAt = Number(task.dueAt);
+        const triggerAt = Number.isFinite(reminderAt) && reminderAt > 0
+            ? reminderAt
+            : (Number.isFinite(dueAt) && dueAt > 0 ? dueAt : null);
+        if (!triggerAt || triggerAt > now) return false;
+        const remindedAt = Number(task.remindedAt);
+        return task.reminderStatus !== 'sent'
+            || !Number.isFinite(remindedAt)
+            || remindedAt < triggerAt;
+    });
+}
 
-    let statusLevel = '🟢 正常 (Healthy)';
-    if (total > 20) statusLevel = '🔴 紧急 (Urgent)';
-    else if (total > 5) statusLevel = '🟡 需关注 (Attention)';
-
+function buildSummaryMessage(groups, now = Date.now()) {
+    const total = groups.reduce((sum, group) => sum + group.tasks.length, 0);
     const lines = [
-        '✨ 星轨轻具坊 · 每日播报',
-        '【团队待办事项追踪】',
-        '',
-        '新的一天开始啦！这里是您的未决待办跟进，',
-        '请合理安排今日工作计划。',
-        '',
-        `▶ 播报时间：${nowTime}`,
-        `▶ 待办积压：总计 ${total} 项任务待处理`,
-        `▶ 进度评级：${statusLevel}`
+        '待办提醒',
+        `提醒时间：${formatDueTime(now)}`,
+        `共 ${total} 项任务需要处理`
     ];
 
     groups.forEach((group, index) => {
         const name = group.ownerName || group.userId || `用户${index + 1}`;
-        lines.push('', `--- 👤 ${name} 的待办 (${group.tasks.length}) ---`);
+        lines.push('', `${name} (${group.tasks.length})`);
         group.tasks.forEach((task) => {
-            const title = task && task.title ? task.title : '未命名任务';
-            lines.push(` ◻️ ${title}`);
+            const details = [];
+            if (task.courseRef?.name) details.push(task.courseRef.name);
+            if (Number.isFinite(task.dueAt)) details.push(`截止 ${formatDueTime(task.dueAt)}`);
+            if (task.priority === 'high') details.push('高优先级');
+            lines.push(`- ${task.title}${details.length ? ` (${details.join(' / ')})` : ''}`);
         });
     });
-
-    lines.push(
-        '',
-        '💡 星轨提醒：积跬步至千里。',
-        '请及时登录系统面板进行任务流转与核销。'
-    );
-    
     return lines.join('\n');
 }
 
@@ -78,19 +77,19 @@ async function checkAndNotifyTodos() {
 
         const groups = [];
         let totalPending = 0;
+        const nowTs = Date.now();
 
         for (const doc of docs) {
             const tasksRaw = Array.isArray(doc.tasks) ? doc.tasks : [];
-            const pendingTasks = [];
-            for (const item of tasksRaw) {
-                if (item.completed) continue;
-                const title = typeof item.title === 'string' ? item.title : '';
-                if (!title) continue;
-                pendingTasks.push({
-                    title: title.trim(),
-                    createdAt: typeof item.createdAt === 'number' ? item.createdAt : null,
-                });
-            }
+            const pendingTasks = selectReminderTasks(tasksRaw, nowTs)
+                .filter((item) => typeof item.title === 'string' && item.title.trim())
+                .map((item) => ({
+                    id: String(item.id),
+                    title: item.title.trim(),
+                    priority: item.priority || 'normal',
+                    dueAt: Number.isFinite(item.dueAt) ? item.dueAt : null,
+                    courseRef: item.courseRef || null,
+                }));
             if (pendingTasks.length === 0) continue;
             totalPending += pendingTasks.length;
             groups.push({
@@ -105,19 +104,25 @@ async function checkAndNotifyTodos() {
             return { sent: false, pendingUsers: 0, pendingCount: 0 };
         }
 
-        const text = buildSummaryMessage(groups);
+        const text = buildSummaryMessage(groups, nowTs);
         const data = await sendWecomText(cfg, text);
         const ok = isWecomResponseOk(data);
 
         if (ok) {
             console.log('待办事项提醒发送成功');
-            const nowTs = Date.now();
             for (const group of groups) {
                 if (!group.userId) continue;
                 try {
+                    const reminderIds = new Set(group.tasks.map((task) => task.id));
+                    const doc = docs.find((item) => String(item._id) === String(group.userId));
+                    const tasks = (Array.isArray(doc?.tasks) ? doc.tasks : []).map((task) => {
+                        const plain = typeof task.toObject === 'function' ? task.toObject() : { ...task };
+                        if (!reminderIds.has(String(plain.id))) return plain;
+                        return { ...plain, reminderStatus: 'sent', remindedAt: nowTs };
+                    });
                     await TodoList.updateOne(
                         { _id: group.userId },
-                        { $set: { lastNotifiedAt: nowTs } }
+                        { $set: { tasks, lastNotifiedAt: nowTs } }
                     );
                 } catch (err) {
                     console.warn('更新 lastNotifiedAt 失败:', group.userId, err.message);
@@ -141,5 +146,7 @@ async function checkAndNotifyTodos() {
 }
 
 module.exports = {
-    checkAndNotifyTodos
+    buildSummaryMessage,
+    checkAndNotifyTodos,
+    selectReminderTasks,
 };

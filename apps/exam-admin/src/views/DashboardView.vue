@@ -657,6 +657,118 @@
                         </el-card>
                     </div>
 
+                    <!-- Learning Operations View -->
+                    <div v-if="!isConsoleMode && activeMenu === 'learning-plans'" class="learning-ops-view">
+                        <div class="content-toolbar admin-list-toolbar-shell learning-ops-toolbar">
+                            <div class="list-metric-strip toolbar-metric-strip">
+                                <div>
+                                    <span>进行中计划</span>
+                                    <strong>{{ learningOpsStats.activePlans }}</strong>
+                                </div>
+                                <div>
+                                    <span>覆盖考生</span>
+                                    <strong>{{ learningOpsStats.assignedUsers }}</strong>
+                                </div>
+                                <div>
+                                    <span>逾期未完成</span>
+                                    <strong>{{ learningOpsStats.overdueUsers }}</strong>
+                                </div>
+                            </div>
+                            <div class="admin-list-toolbar">
+                                <el-button icon="Refresh" :loading="viewLoading.learningPlans" @click="loadLearningOperations">刷新</el-button>
+                                <el-button icon="UserFilled" @click="openCohortDialog()">新建班组</el-button>
+                                <el-button type="primary" icon="Plus" @click="openLearningPlanDialog()">新建计划</el-button>
+                            </div>
+                        </div>
+
+                        <el-card shadow="never" class="table-card data-table-card learning-ops-card">
+                            <el-tabs v-model="learningOpsTab" class="learning-ops-tabs">
+                                <el-tab-pane label="学习计划" name="plans">
+                                    <el-table :data="learningPlans" v-loading="viewLoading.learningPlans" empty-text="暂无学习计划">
+                                        <el-table-column prop="title" label="计划" min-width="190">
+                                            <template #default="{ row }">
+                                                <div class="learning-primary-cell">
+                                                    <strong>{{ row.title }}</strong>
+                                                    <span>{{ row.categoryIds?.length || 0 }} 份试卷 · 目标 {{ row.targetScore }} 分</span>
+                                                </div>
+                                            </template>
+                                        </el-table-column>
+                                        <el-table-column label="分配范围" min-width="180">
+                                            <template #default="{ row }">
+                                                <div class="learning-tag-list">
+                                                    <el-tag v-for="cohort in row.cohortIds || []" :key="cohort._id" size="small" effect="plain">{{ cohort.name }}</el-tag>
+                                                    <span v-if="!(row.cohortIds || []).length">单独分配</span>
+                                                </div>
+                                            </template>
+                                        </el-table-column>
+                                        <el-table-column label="进度" min-width="190">
+                                            <template #default="{ row }">
+                                                <div class="learning-progress-cell">
+                                                    <el-progress :percentage="row.progress?.averageProgress || 0" :stroke-width="8" />
+                                                    <span>{{ row.progress?.completedCount || 0 }}/{{ row.progress?.assignedCount || 0 }} 人完成</span>
+                                                </div>
+                                            </template>
+                                        </el-table-column>
+                                        <el-table-column label="截止时间" width="170">
+                                            <template #default="{ row }">{{ formatLearningDeadline(row.dueAt) }}</template>
+                                        </el-table-column>
+                                        <el-table-column label="状态" width="120">
+                                            <template #default="{ row }">
+                                                <el-tag :type="learningPlanStateType(row)" effect="plain">{{ learningPlanStateText(row) }}</el-tag>
+                                            </template>
+                                        </el-table-column>
+                                        <el-table-column label="操作" width="150" fixed="right">
+                                            <template #default="{ row }">
+                                                <div class="row-actions">
+                                                    <el-button text type="primary" @click="openLearningPlanDialog(row)">编辑</el-button>
+                                                    <el-button v-if="row.status === 'active'" text type="danger" @click="archiveLearningPlan(row)">归档</el-button>
+                                                </div>
+                                            </template>
+                                        </el-table-column>
+                                    </el-table>
+                                </el-tab-pane>
+                                <el-tab-pane label="班组" name="cohorts">
+                                    <el-table :data="cohorts" v-loading="viewLoading.learningPlans" empty-text="暂无班组">
+                                        <el-table-column prop="name" label="班组" min-width="180">
+                                            <template #default="{ row }">
+                                                <div class="learning-primary-cell">
+                                                    <strong>{{ row.name }}</strong>
+                                                    <span>{{ row.description || '暂无备注' }}</span>
+                                                </div>
+                                            </template>
+                                        </el-table-column>
+                                        <el-table-column prop="memberCount" label="成员" width="100">
+                                            <template #default="{ row }">{{ row.memberCount || 0 }} 人</template>
+                                        </el-table-column>
+                                        <el-table-column label="成员预览" min-width="260">
+                                            <template #default="{ row }">
+                                                <div class="learning-tag-list">
+                                                    <el-tag v-for="member in (row.members || []).slice(0, 4)" :key="member.openid" size="small" effect="plain">
+                                                        {{ member.nickname || member.studyId }}
+                                                    </el-tag>
+                                                    <span v-if="(row.members || []).length > 4">+{{ row.members.length - 4 }}</span>
+                                                </div>
+                                            </template>
+                                        </el-table-column>
+                                        <el-table-column label="状态" width="100">
+                                            <template #default="{ row }">
+                                                <el-tag :type="row.status === 'active' ? 'success' : 'info'" effect="plain">{{ row.status === 'active' ? '使用中' : '已归档' }}</el-tag>
+                                            </template>
+                                        </el-table-column>
+                                        <el-table-column label="操作" width="150" fixed="right">
+                                            <template #default="{ row }">
+                                                <div class="row-actions">
+                                                    <el-button text type="primary" @click="openCohortDialog(row)">编辑</el-button>
+                                                    <el-button v-if="row.status === 'active'" text type="danger" @click="archiveCohort(row)">归档</el-button>
+                                                </div>
+                                            </template>
+                                        </el-table-column>
+                                    </el-table>
+                                </el-tab-pane>
+                            </el-tabs>
+                        </el-card>
+                    </div>
+
                     <!-- Personal Categories View -->
                     <div v-if="!isConsoleMode && activeMenu === 'personal-categories'" class="personal-categories-view">
                         <div class="content-toolbar admin-list-toolbar-shell">
@@ -1649,6 +1761,87 @@
             </template>
         </el-dialog>
 
+        <el-dialog v-model="cohortDialog.visible" :title="cohortDialog.id ? '编辑班组' : '新建班组'" width="620px"
+            :close-on-click-modal="false" append-to-body>
+            <el-form label-width="88px">
+                <el-form-item label="班组名称" required>
+                    <el-input v-model="cohortDialog.form.name" maxlength="100" show-word-limit></el-input>
+                </el-form-item>
+                <el-form-item label="成员">
+                    <el-select v-model="cohortDialog.form.memberOpenids" multiple filterable collapse-tags
+                        collapse-tags-tooltip class="full-width-control" placeholder="选择考生">
+                        <el-option v-for="user in learningPlanOptions.users" :key="user.openid"
+                            :label="`${user.nickname || '未命名考生'} · ${user.studyId}`" :value="user.openid"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="备注">
+                    <el-input v-model="cohortDialog.form.description" type="textarea" :rows="3" maxlength="500" show-word-limit></el-input>
+                </el-form-item>
+                <el-form-item v-if="cohortDialog.id" label="状态">
+                    <el-select v-model="cohortDialog.form.status" class="full-width-control">
+                        <el-option label="使用中" value="active"></el-option>
+                        <el-option label="已归档" value="archived"></el-option>
+                    </el-select>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="cohortDialog.visible = false">取消</el-button>
+                <el-button type="primary" :loading="cohortDialog.saving" @click="saveCohort">保存</el-button>
+            </template>
+        </el-dialog>
+
+        <el-dialog v-model="learningPlanDialog.visible" :title="learningPlanDialog.id ? '编辑学习计划' : '新建学习计划'"
+            width="720px" :close-on-click-modal="false" append-to-body top="5vh">
+            <el-form label-width="96px">
+                <el-form-item label="计划名称" required>
+                    <el-input v-model="learningPlanDialog.form.title" maxlength="120" show-word-limit></el-input>
+                </el-form-item>
+                <el-form-item label="试卷" required>
+                    <el-select v-model="learningPlanDialog.form.categoryIds" multiple filterable collapse-tags
+                        collapse-tags-tooltip class="full-width-control" placeholder="选择试卷">
+                        <el-option v-for="category in learningPlanOptions.categories" :key="category._id"
+                            :label="learningCategoryLabel(category)" :value="category._id"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="班组">
+                    <el-select v-model="learningPlanDialog.form.cohortIds" multiple filterable collapse-tags
+                        collapse-tags-tooltip class="full-width-control" placeholder="选择班组">
+                        <el-option v-for="cohort in learningPlanOptions.cohorts" :key="cohort._id"
+                            :label="`${cohort.name} · ${cohort.memberCount || 0} 人`" :value="cohort._id"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="单独分配">
+                    <el-select v-model="learningPlanDialog.form.directUserOpenids" multiple filterable collapse-tags
+                        collapse-tags-tooltip class="full-width-control" placeholder="选择额外考生">
+                        <el-option v-for="user in learningPlanOptions.users" :key="user.openid"
+                            :label="`${user.nickname || '未命名考生'} · ${user.studyId}`" :value="user.openid"></el-option>
+                    </el-select>
+                </el-form-item>
+                <div class="learning-plan-form-row">
+                    <el-form-item label="截止时间">
+                        <el-date-picker v-model="learningPlanDialog.form.dueAt" type="datetime" value-format="YYYY-MM-DDTHH:mm:ssZ"
+                            class="full-width-control" placeholder="不设截止时间"></el-date-picker>
+                    </el-form-item>
+                    <el-form-item label="目标分数">
+                        <el-input-number v-model="learningPlanDialog.form.targetScore" :min="0" :max="100" :step="5"></el-input-number>
+                    </el-form-item>
+                </div>
+                <el-form-item label="计划说明">
+                    <el-input v-model="learningPlanDialog.form.description" type="textarea" :rows="3" maxlength="1000" show-word-limit></el-input>
+                </el-form-item>
+                <el-form-item v-if="learningPlanDialog.id" label="状态">
+                    <el-select v-model="learningPlanDialog.form.status" class="full-width-control">
+                        <el-option label="进行中" value="active"></el-option>
+                        <el-option label="已归档" value="archived"></el-option>
+                    </el-select>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="learningPlanDialog.visible = false">取消</el-button>
+                <el-button type="primary" :loading="learningPlanDialog.saving" @click="saveLearningPlan">保存</el-button>
+            </template>
+        </el-dialog>
+
         <!-- User Delete Confirm Dialog -->
         <el-dialog v-model="userDeleteDialog.visible" title="确认删除考生" width="420px" :close-on-click-modal="false"
             append-to-body class="danger-confirm-dialog">
@@ -1739,6 +1932,7 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             categories: false,
             examResults: false,
             users: false,
+            learningPlans: false,
             personalCategories: false,
             feedbacks: false,
         });
@@ -1777,7 +1971,7 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         const allowedMenus = computed(() => (
             isConsoleMode.value
                 ? ['dashboard', 'major-categories', 'question-quality', 'feedbacks']
-                : ['dashboard', 'major-categories', 'exam-results', 'users', 'personal-categories', 'question-quality', 'feedbacks']
+                : ['dashboard', 'major-categories', 'exam-results', 'users', 'learning-plans', 'personal-categories', 'question-quality', 'feedbacks']
         ));
         const uiPreviewMode = isUiPreviewMode();
         const adminApi = uiPreviewMode
@@ -2565,6 +2759,7 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                 }
                 else if (activeMenu.value === 'exam-results') await loadExamResults();
                 else if (activeMenu.value === 'users') await loadUsers();
+                else if (activeMenu.value === 'learning-plans') await loadLearningOperations();
                 else if (activeMenu.value === 'personal-categories') await loadPersonalCategories();
                 else if (activeMenu.value === 'feedbacks') await loadFeedbacks();
 
@@ -2672,6 +2867,7 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             if (activeMenu.value === 'categories') loadCategories();
             if (activeMenu.value === 'exam-results') loadExamResults(1);
             if (activeMenu.value === 'users') loadUsers(1);
+            if (activeMenu.value === 'learning-plans') loadLearningOperations();
             if (activeMenu.value === 'personal-categories') loadPersonalCategories(personalCategories.page || 1);
             if (activeMenu.value === 'feedbacks') loadFeedbacks();
         };
@@ -2714,6 +2910,7 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                 if (categories.value.length === 0) loadCategories(); // Load categories for filter
             }
             if (index === 'users' && users.list.length === 0) loadUsers();
+            if (index === 'learning-plans') loadLearningOperations();
             if (index === 'personal-categories') loadPersonalCategories(personalCategories.page || 1);
             if (index === 'feedbacks') loadFeedbacks();
         };
@@ -3730,6 +3927,236 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                 categories: [],
             },
         });
+        const learningPlans = ref([]);
+        const cohorts = ref([]);
+        const learningOpsTab = ref('plans');
+        const learningPlanOptions = reactive({
+            categories: [],
+            cohorts: [],
+            users: [],
+        });
+        const cohortDialog = reactive({
+            visible: false,
+            saving: false,
+            id: '',
+            form: {
+                name: '',
+                description: '',
+                memberOpenids: [],
+                status: 'active',
+            },
+        });
+        const learningPlanDialog = reactive({
+            visible: false,
+            saving: false,
+            id: '',
+            form: {
+                title: '',
+                description: '',
+                categoryIds: [],
+                cohortIds: [],
+                directUserOpenids: [],
+                dueAt: '',
+                targetScore: 60,
+                status: 'active',
+            },
+        });
+
+        const learningOpsStats = computed(() => {
+            const activePlans = learningPlans.value.filter((plan) => plan.status === 'active');
+            const assignedUsers = new Set(activePlans.flatMap((plan) => plan.userOpenids || [])).size;
+            return {
+                activePlans: activePlans.length,
+                assignedUsers,
+                overdueUsers: activePlans.reduce((sum, plan) => sum + (Number(plan.progress?.overdueCount) || 0), 0),
+            };
+        });
+
+        const formatLearningDeadline = (value) => {
+            if (!value) return '长期有效';
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? '未设置' : date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
+        };
+
+        const learningPlanStateText = (plan) => ({
+            archived: '已归档',
+            completed: '已完成',
+            overdue: '有逾期',
+            active: '进行中',
+        }[plan.progress?.state || plan.status] || '进行中');
+
+        const learningPlanStateType = (plan) => ({
+            archived: 'info',
+            completed: 'success',
+            overdue: 'danger',
+            active: 'primary',
+        }[plan.progress?.state || plan.status] || 'primary');
+
+        const learningCategoryLabel = (category) => {
+            const majorName = category.majorCategoryId?.name || '';
+            return majorName ? `${majorName} / ${category.name}` : category.name;
+        };
+
+        const loadLearningOperations = async () => {
+            if (isConsoleMode.value) return;
+            const controller = beginViewRequest('learningPlans');
+            try {
+                const config = quietRequestConfig(controller);
+                const [plansRes, cohortsRes, optionsRes] = await Promise.all([
+                    adminApi.listLearningPlans({ status: 'all' }, config),
+                    adminApi.listCohorts({ status: 'all' }, config),
+                    adminApi.getLearningPlanOptions(config),
+                ]);
+                if (controller.signal.aborted) return;
+                learningPlans.value = plansRes.data.code === 0 ? (plansRes.data.data || []) : [];
+                cohorts.value = cohortsRes.data.code === 0 ? (cohortsRes.data.data || []) : [];
+                if (optionsRes.data.code === 0) {
+                    Object.assign(learningPlanOptions, {
+                        categories: optionsRes.data.data?.categories || [],
+                        cohorts: optionsRes.data.data?.cohorts || [],
+                        users: optionsRes.data.data?.users || [],
+                    });
+                }
+            } catch (err) {
+                if (!controller.signal.aborted) {
+                    ElMessage.error(err.response?.data?.message || '学习计划数据加载失败');
+                }
+            } finally {
+                finishViewRequest('learningPlans', controller);
+            }
+        };
+
+        const openCohortDialog = (cohort = null) => {
+            cohortDialog.id = cohort?._id || '';
+            cohortDialog.form.name = cohort?.name || '';
+            cohortDialog.form.description = cohort?.description || '';
+            cohortDialog.form.memberOpenids = [...(cohort?.memberOpenids || [])];
+            cohortDialog.form.status = cohort?.status || 'active';
+            cohortDialog.visible = true;
+        };
+
+        const saveCohort = async () => {
+            const name = cohortDialog.form.name.trim();
+            if (!name) {
+                ElMessage.warning('请输入班组名称');
+                return;
+            }
+            cohortDialog.saving = true;
+            try {
+                const payload = {
+                    name,
+                    description: cohortDialog.form.description.trim(),
+                    memberOpenids: cohortDialog.form.memberOpenids,
+                    ...(cohortDialog.id ? { status: cohortDialog.form.status } : {}),
+                };
+                const res = await adminApi.saveCohort(cohortDialog.id, payload);
+                if (res.data.code === 0) {
+                    ElMessage.success(res.data.message || '班组已保存');
+                    cohortDialog.visible = false;
+                    await loadLearningOperations();
+                }
+            } catch (err) {
+                ElMessage.error(err.response?.data?.message || '班组保存失败');
+            } finally {
+                cohortDialog.saving = false;
+            }
+        };
+
+        const archiveCohort = async (cohort) => {
+            try {
+                await ElMessageBox.confirm(`归档班组“${cohort.name}”？关联计划会立即重算覆盖考生。`, '归档班组', {
+                    type: 'warning',
+                    confirmButtonText: '归档',
+                    cancelButtonText: '取消',
+                });
+                const res = await adminApi.archiveCohort(cohort._id);
+                if (res.data.code === 0) {
+                    ElMessage.success('班组已归档');
+                    await loadLearningOperations();
+                }
+            } catch (err) {
+                if (err !== 'cancel' && err !== 'close') {
+                    ElMessage.error(err.response?.data?.message || '班组归档失败');
+                }
+            }
+        };
+
+        const openLearningPlanDialog = (plan = null) => {
+            learningPlanDialog.id = plan?._id || '';
+            learningPlanDialog.form.title = plan?.title || '';
+            learningPlanDialog.form.description = plan?.description || '';
+            learningPlanDialog.form.categoryIds = (plan?.categoryIds || []).map((item) => String(item?._id || item));
+            learningPlanDialog.form.cohortIds = (plan?.cohortIds || []).map((item) => String(item?._id || item));
+            learningPlanDialog.form.directUserOpenids = [...(plan?.directUserOpenids || [])];
+            learningPlanDialog.form.dueAt = plan?.dueAt || '';
+            learningPlanDialog.form.targetScore = Number(plan?.targetScore ?? 60);
+            learningPlanDialog.form.status = plan?.status || 'active';
+            learningPlanDialog.visible = true;
+        };
+
+        const saveLearningPlan = async () => {
+            const form = learningPlanDialog.form;
+            if (!form.title.trim()) {
+                ElMessage.warning('请输入计划名称');
+                return;
+            }
+            if (form.categoryIds.length === 0) {
+                ElMessage.warning('请至少选择一份试卷');
+                return;
+            }
+            if (form.cohortIds.length === 0 && form.directUserOpenids.length === 0) {
+                ElMessage.warning('请至少选择一个班组或一位考生');
+                return;
+            }
+            learningPlanDialog.saving = true;
+            try {
+                const payload = {
+                    title: form.title.trim(),
+                    description: form.description.trim(),
+                    categoryIds: form.categoryIds,
+                    cohortIds: form.cohortIds,
+                    directUserOpenids: form.directUserOpenids,
+                    dueAt: form.dueAt || null,
+                    targetScore: form.targetScore,
+                    ...(learningPlanDialog.id ? { status: form.status } : {}),
+                };
+                const res = await adminApi.saveLearningPlan(learningPlanDialog.id, payload);
+                if (res.data.code === 0) {
+                    ElMessage.success(res.data.message || '学习计划已保存');
+                    learningPlanDialog.visible = false;
+                    await loadLearningOperations();
+                }
+            } catch (err) {
+                ElMessage.error(err.response?.data?.message || '学习计划保存失败');
+            } finally {
+                learningPlanDialog.saving = false;
+            }
+        };
+
+        const archiveLearningPlan = async (plan) => {
+            try {
+                await ElMessageBox.confirm(`归档学习计划“${plan.title}”？`, '归档学习计划', {
+                    type: 'warning',
+                    confirmButtonText: '归档',
+                    cancelButtonText: '取消',
+                });
+                const res = await adminApi.archiveLearningPlan(plan._id);
+                if (res.data.code === 0) {
+                    ElMessage.success('学习计划已归档');
+                    await loadLearningOperations();
+                }
+            } catch (err) {
+                if (err !== 'cancel' && err !== 'close') {
+                    ElMessage.error(err.response?.data?.message || '学习计划归档失败');
+                }
+            }
+        };
 
         const loadUsers = async (page = 1) => {
             if (isConsoleMode.value) {
@@ -7568,6 +7995,7 @@ body:not(.exam-detail-active) .dashboard-page > .el-container > .el-container {
     body:not(.exam-detail-active) .dashboard-page .major-categories-view,
     body:not(.exam-detail-active) .dashboard-page .exam-results-view,
     body:not(.exam-detail-active) .dashboard-page .users-view,
+    body:not(.exam-detail-active) .dashboard-page .learning-ops-view,
     body:not(.exam-detail-active) .dashboard-page .personal-categories-view,
     body:not(.exam-detail-active) .dashboard-page .feedback-view,
     body:not(.exam-detail-active) .dashboard-page .el-main > div {
@@ -7595,6 +8023,78 @@ body:not(.exam-detail-active) .dashboard-page > .el-container > .el-container {
         animation: none !important;
         transition: none !important;
         scroll-behavior: auto !important;
+    }
+}
+
+.learning-ops-view {
+    display: grid;
+    gap: 18px;
+}
+
+.learning-ops-toolbar {
+    gap: 16px;
+}
+
+.learning-ops-card .el-card__body {
+    padding-top: 10px;
+}
+
+.learning-ops-tabs .el-tabs__header {
+    margin-bottom: 14px;
+}
+
+.learning-primary-cell,
+.learning-progress-cell {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.learning-primary-cell strong {
+    color: var(--exam-text, #172033);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.learning-primary-cell span,
+.learning-progress-cell > span,
+.learning-tag-list > span {
+    color: #708097;
+    font-size: 12px;
+}
+
+.learning-progress-cell .el-progress__text {
+    min-width: 38px;
+    font-size: 12px !important;
+}
+
+.learning-tag-list {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.learning-plan-form-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(180px, 1fr);
+    gap: 12px;
+}
+
+.learning-plan-form-row .el-form-item {
+    min-width: 0;
+}
+
+@media (max-width: 720px) {
+    .learning-ops-toolbar .admin-list-toolbar,
+    .learning-ops-toolbar .admin-list-toolbar .el-button {
+        width: 100%;
+    }
+
+    .learning-plan-form-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
     }
 }
 </style>

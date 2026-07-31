@@ -205,7 +205,7 @@ fun OperationsScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("端到端检查", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                state.diagnostics?.checkedAt?.let(::formatPlatformTime) ?: "尚未在本次会话运行",
+                                state.diagnostics?.checkedAt?.let { formatPlatformTime(it) } ?: "尚未在本次会话运行",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

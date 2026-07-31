@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>MY 统一平台 | 智慧校园 · 智能考务 · 动态数智生态</title>
-  <meta name="description" content="MY 统一平台为高校与教育机构提供全方位智慧校园小程序、线上智能考务系统、物联网设备网关及统一服务控制台解决方案。">
+  <title>MY 统一平台 | 智慧校园、考试学习与物联网运维</title>
+  <meta name="description" content="MY 统一平台整合智慧校园、考试学习、物联网控制与统一运维能力，并公开展示当前服务运行状态。">
   <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20260723_1">
   <link rel="alternate icon" type="image/png" href="./favicon.png?v=20260723_1">
   <link rel="shortcut icon" href="./favicon.ico?v=20260723_1">
@@ -54,36 +54,36 @@
       <div class="hero-container">
         <div class="badge-tag fade-in">
           <span class="badge-pulse"></span>
-          <span class="badge-text">2026 未来级智慧校园与物联网数字基础设施</span>
+          <span class="badge-text">智慧校园、考试学习与物联网统一服务平台</span>
         </div>
 
         <h1 class="hero-title fade-in delay-1">
-          连接数智校园<br>
-          <span class="gradient-headline">赋能智能考务与物联未来</span>
+          MY 统一平台<br>
+          <span class="gradient-headline">连接校园服务、学习与物联运维</span>
         </h1>
 
         <p class="hero-subtitle fade-in delay-2">
-          一体化高并发架构 · 全场景微服务协同 · 工业级 MQTT 实时交互 · 统一灾备安全控制台
+          从日常校园工具和自适应练习，到设备遥测、自动化与统一运维，在同一套身份和服务体系中协同运行。
         </p>
 
         <div class="hero-highlights-chips fade-in delay-3">
           <div class="chip-item">
             <span class="chip-dot blue"></span>
-            <span>全微服务架构</span>
+            <span>统一身份与权限</span>
           </div>
           <div class="chip-item">
             <span class="chip-dot orange"></span>
-            <span>MQTT 毫秒级响应</span>
+            <span>校园与学习服务</span>
           </div>
           <div class="chip-item">
             <span class="chip-dot purple"></span>
-            <span>统一灾备保障</span>
+            <span>可观测运维与物联控制</span>
           </div>
         </div>
 
         <!-- 3D 悬浮响应卡片看板 -->
-        <div class="hero-preview-wrapper fade-in delay-4">
-          <div class="preview-3d-card tilt-card shadow-hyper">
+        <div class="hero-preview-wrapper fade-in delay-4" id="platform-status">
+          <div class="preview-3d-card tilt-card shadow-hyper" aria-live="polite">
             <div class="card-border-glow"></div>
             
             <div class="card-header-bar">
@@ -93,40 +93,43 @@
                 <span class="dot green"></span>
               </div>
               <div class="window-title">
-                <span class="terminal-symbol">❯</span> MY UNIFIED PLATFORM REALTIME HUB · pxyb.cn
+                <span class="terminal-symbol">❯</span> MY PLATFORM STATUS · pxyb.cn
               </div>
               <div class="status-indicator">
-                <span class="radar-ping"></span>
-                <span class="live-text">实时连接中</span>
+                <span class="radar-ping" id="platform-status-dot"></span>
+                <span class="live-text" id="platform-status-label">正在获取公开状态</span>
               </div>
             </div>
             
             <div class="preview-grid">
               <div class="metric-box">
-                <div class="metric-icon-small">⚡</div>
-                <div class="metric-label">校园集群高可用率</div>
-                <div class="metric-value"><span class="counter" data-target="99.99">0</span>%</div>
-                <div class="metric-bar"><div class="bar-fill fill-1"></div></div>
+                <div class="metric-icon-small" aria-hidden="true">●</div>
+                <div class="metric-label">平台运行状态</div>
+                <div class="metric-value metric-value-text" id="platform-status-value">检测中</div>
+                <div class="metric-detail" id="platform-status-updated">等待状态数据</div>
               </div>
 
               <div class="metric-box">
-                <div class="metric-icon-small">🎯</div>
-                <div class="metric-label">考务在线实时并发</div>
-                <div class="metric-value"><span class="counter" data-target="15800">0</span>+</div>
-                <div class="metric-bar"><div class="bar-fill fill-2"></div></div>
+                <div class="metric-icon-small" aria-hidden="true">✓</div>
+                <div class="metric-label">正常服务</div>
+                <div class="metric-value"><span id="healthy-service-count">--</span> / <span id="total-service-count">--</span></div>
+                <div class="metric-detail">以最近一次服务探测为准</div>
               </div>
 
               <div class="metric-box">
-                <div class="metric-icon-small">📡</div>
-                <div class="metric-label">MQTT 物联网在线节点</div>
-                <div class="metric-value"><span class="counter" data-target="52400">0</span></div>
-                <div class="metric-bar"><div class="bar-fill fill-3"></div></div>
+                <div class="metric-icon-small" aria-hidden="true">!</div>
+                <div class="metric-label">当前事故</div>
+                <div class="metric-value" id="active-incident-count">--</div>
+                <div class="metric-detail">仅统计公开的活动事故</div>
               </div>
             </div>
 
             <!-- 动态脉冲扫描波形图 -->
             <div class="waveform-container">
-              <div class="waveform-title">集群节点数据流波谱 (REALTIME DATA STREAM)</div>
+              <div class="waveform-title status-source-row">
+                <span>状态来源：平台公开探测接口</span>
+                <a href="/api/public/status" target="_blank" rel="noopener">查看原始状态数据</a>
+              </div>
               <div class="waveform-bars">
                 <span class="wf-bar"></span><span class="wf-bar"></span><span class="wf-bar"></span>
                 <span class="wf-bar"></span><span class="wf-bar"></span><span class="wf-bar"></span>
@@ -146,8 +149,8 @@
       <div class="section-container">
         <div class="section-header">
           <div class="section-badge">PRODUCT MATRIX</div>
-          <h2 class="section-title">全场景未来级产品矩阵</h2>
-          <p class="section-subtitle">融合 3D 交互、微服务拓扑与毫秒级即时传输的高灵动数字体验</p>
+          <h2 class="section-title">已经接入平台的产品与能力</h2>
+          <p class="section-subtitle">每项说明均对应当前系统中可使用的功能和入口</p>
         </div>
 
         <div class="features-grid">
@@ -161,11 +164,15 @@
               </svg>
             </div>
             <h3 class="feature-title">智慧校园小程序生态</h3>
-            <p class="feature-desc">聚合师生应用、办事流程与全生命周期微服务，结合流畅动画与微交互，打造未来感校园门户。</p>
+            <p class="feature-desc">提供课表、日历导出、待办清单、课程提醒及校园设备控制等日常工具，并支持微信端使用。</p>
             <div class="feature-tags">
               <span class="tag">Smart Campus</span>
               <span class="tag">WeChat Miniapp</span>
             </div>
+            <a href="/apps/campus/" class="card-action-link">
+              <span>进入校园服务后台</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </a>
           </div>
 
           <!-- 在线考务 -->
@@ -180,11 +187,15 @@
               </svg>
             </div>
             <h3 class="feature-title">智能考务与测评系统</h3>
-            <p class="feature-desc">高并发智能分卷、实时防作弊监测与多维数据洞察，支持海量考生在线考试与精准测评。</p>
+            <p class="feature-desc">提供题库与试卷管理、每日复习、自适应练习、掌握度分析、学习报告和个性化内容分配。</p>
             <div class="feature-tags">
               <span class="tag">Exam System</span>
-              <span class="tag">High Concurrency</span>
+              <span class="tag">Adaptive Learning</span>
             </div>
+            <a href="/apps/exam/" class="card-action-link">
+              <span>进入考试管理后台</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </a>
           </div>
 
           <!-- 物联网 -->
@@ -199,11 +210,15 @@
               </svg>
             </div>
             <h3 class="feature-title">IoT 物联控制枢纽</h3>
-            <p class="feature-desc">基于 MQTT 工业级通信协议，实现海量物联网传感器与智能设备的毫秒级双向感知与远程调度。</p>
+            <p class="feature-desc">提供 MQTT 设备遥测、历史趋势、继电器控制、场景与规则自动化、执行记录和异常洞察。</p>
             <div class="feature-tags">
-              <span class="tag">MQTT 5.0</span>
-              <span class="tag">IoT Hub</span>
+              <span class="tag">MQTT</span>
+              <span class="tag">Automation</span>
             </div>
+            <a href="/apps/iot/" class="card-action-link">
+              <span>进入 IoT 管理后台</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </a>
           </div>
 
           <!-- 统一控制台 -->
@@ -217,7 +232,7 @@
               </svg>
             </div>
             <h3 class="feature-title">统一服务控制台</h3>
-            <p class="feature-desc">一站式身份鉴权、SSO 单点登录、自动化运维与灾备备份大屏，掌控整个平台的技术脉搏。</p>
+            <p class="feature-desc">统一查看服务状态、任务、事故、发布、配置审批和备份演练，并通过单点登录进入各管理后台。</p>
             <div class="feature-tags">
               <span class="tag">Console Hub</span>
               <span class="tag">Disaster Recovery</span>
@@ -234,14 +249,14 @@
       </div>
     </section>
 
-    <!-- 炫酷科技感横幅 Banner -->
+    <!-- 平台入口 -->
     <section class="banner-section">
       <div class="section-container">
         <div class="futuristic-banner tilt-card shadow-hyper">
           <div class="banner-glow-effect"></div>
           <div class="banner-content">
-            <h2 class="banner-title">开启您的数智管控新时代</h2>
-            <p class="banner-desc">无需等待，即刻接入 MY 统一服务控制台，感受科技与极简的交融。</p>
+            <h2 class="banner-title">从统一入口开始使用</h2>
+            <p class="banner-desc">管理员可进入控制台处理任务与事故；访客可直接查看公开运行状态。</p>
           </div>
           <div class="banner-action">
             <a href="/console" class="btn btn-hero-primary glow-button">
@@ -251,6 +266,7 @@
                 <polyline points="12 5 19 12 12 19"></polyline>
               </svg>
             </a>
+            <a href="#platform-status" class="status-text-link">查看运行状态</a>
           </div>
         </div>
       </div>
@@ -266,20 +282,21 @@
           </div>
           <span class="brand-title">MY PLATFORM</span>
         </div>
-        <p class="footer-tagline">新一代智慧校园与智能考务统一服务生态系统</p>
+        <p class="footer-tagline">智慧校园、考试学习、物联网与统一运维平台</p>
       </div>
 
       <div class="footer-links-group">
         <div class="footer-col">
           <h4>核心产品</h4>
-          <a href="#features">智慧校园小程序</a>
-          <a href="#features">智能考务测评</a>
-          <a href="#features">MQTT 物联网</a>
+          <a href="/apps/campus/">校园服务后台</a>
+          <a href="/apps/exam/">考试管理后台</a>
+          <a href="/apps/iot/">IoT 管理后台</a>
         </div>
         <div class="footer-col">
-          <h4>管理 portal</h4>
+          <h4>平台入口</h4>
           <a href="/console">统一服务控制台</a>
-          <a href="/console">安全灾备中心</a>
+          <a href="/apps/core/">综合管理后台</a>
+          <a href="#platform-status">公开运行状态</a>
         </div>
       </div>
     </div>

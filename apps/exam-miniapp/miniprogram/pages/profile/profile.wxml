@@ -113,6 +113,21 @@
           </view>
         </view>
 
+        <view class="menu-item" bindtap="goToLearningPlans" hover-class="menu-item-hover">
+          <view class="item-left">
+            <view class="icon-wrap plan"></view>
+            <view class="menu-text-block">
+              <text class="menu-title">学习计划</text>
+              <text class="menu-tip">查看班组任务、截止时间和完成进度</text>
+            </view>
+          </view>
+          <view class="item-right">
+            <text class="menu-status" wx:if="{{learningPlanSummary.overdueCount > 0}}">{{learningPlanSummary.overdueCount}} 个逾期</text>
+            <text class="menu-status" wx:elif="{{learningPlanSummary.activeCount > 0}}">{{learningPlanSummary.activeCount}} 个进行中</text>
+            <view class="arrow"></view>
+          </view>
+        </view>
+
         <view class="menu-item" bindtap="goToDailyReview" hover-class="menu-item-hover">
           <view class="item-left">
             <view class="icon-wrap review"></view>

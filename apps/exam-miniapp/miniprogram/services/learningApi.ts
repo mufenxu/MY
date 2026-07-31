@@ -9,6 +9,7 @@ import {
     ExamHistoryItem,
     ExamAttempt,
     ExamResult,
+    LearningPlan,
     ReviewQueue,
     ReviewRating,
     ReviewSummary,
@@ -96,6 +97,14 @@ export const learningApi = {
     getStudyReport: async () => {
         await authApi.ensureAuth();
         return request<StudyReport>({ url: '/api/user/study-report' });
+    },
+
+    getLearningPlans: async () => {
+        await authApi.ensureAuth();
+        return request<LearningPlan[]>({
+            url: '/api/user/learning-plans',
+            showError: false,
+        });
     },
 
     getWrongQuestions: async (options: { includeMastered?: boolean } = {}) => {

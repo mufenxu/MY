@@ -67,6 +67,13 @@ const STATE_LABELS = {
   unmonitored: '未监测',
 };
 const INCIDENT_LABELS = { open: '待处理', acknowledged: '已确认', resolved: '已恢复' };
+const DEFAULT_INCIDENT_RUNBOOK = [
+  { id: 'scope', title: '确认影响范围与受影响服务', completed: false },
+  { id: 'diagnostics', title: '运行端到端诊断并记录请求 ID', completed: false },
+  { id: 'changes', title: '核对最近发布与配置变更', completed: false },
+  { id: 'recovery', title: '验证恢复结果并通知相关方', completed: false },
+];
+const EMPTY_POSTMORTEM = { summary: '', rootCause: '', impact: '', correctiveActions: '' };
 const ROLE_LABELS = { viewer: '只读管理员', operator: '运维管理员', super_admin: '超级管理员' };
 const ACTION_LABELS = {
   'auth.login': '管理员登录',
@@ -87,6 +94,8 @@ const ACTION_LABELS = {
   'incident.mute': '静默事件',
   'incident.assign': '指派事件',
   'incident.note': '添加备注',
+  'incident.runbook_step': '更新处置步骤',
+  'incident.postmortem': '保存事故复盘',
   'backup.started': '启动备份',
   'backup.restore': '恢复备份',
   'backup.deleted': '删除备份',
@@ -611,7 +620,7 @@ function OperationalSearchPanel({ onNavigate }) {
               <span>{operationalStatusLabel(result.status, result.type)}</span>
               <span>{result.serviceId || '--'}</span>
               <span>{formatDateTime(result.occurredAt)}</span>
-              <span>{result.view && onNavigate ? <button className="secondary-action" type="button" onClick={() => onNavigate(resolveConsoleView(result.view))}><ExternalLink size={15} />进入模块</button> : '--'}</span>
+              <span>{result.view && onNavigate ? <button className="secondary-action" type="button" onClick={() => onNavigate(resolveConsoleView(result.view), { entity: result.entityId })}><ExternalLink size={15} />打开对象</button> : '--'}</span>
             </div>
           )) : <div className="ops-empty">没有找到匹配的运营对象</div>}
           <footer className="notify-pagination"><span>{data.truncated ? `匹配 ${data.totalMatched || results.length} 项，仅展示前 ${results.length} 项` : `共 ${data.totalMatched || 0} 项`}</span></footer>
@@ -642,12 +651,13 @@ export function MonitoringView({ services, onNavigate }) {
   );
 }
 
-export function IncidentsView({ session }) {
-  const [filter, setFilter] = useState('active');
+export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
+  const [filter, setFilter] = useState(targetEntityId ? 'all' : 'active');
   const [incidents, setIncidents] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [note, setNote] = useState('');
   const [assignee, setAssignee] = useState('');
+  const [postmortem, setPostmortem] = useState(EMPTY_POSTMORTEM);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState('');
   const [error, setError] = useState('');
@@ -662,20 +672,31 @@ export function IncidentsView({ session }) {
       const query = status ? `?status=${encodeURIComponent(status)}&limit=200` : '?limit=200';
       const data = await requestJson(`/api/incidents${query}`);
       setIncidents(data.incidents || []);
-      setSelectedId((current) => (data.incidents || []).some((item) => item.id === current) ? current : data.incidents?.[0]?.id || null);
+      setSelectedId((current) => {
+        if (targetEntityId && (data.incidents || []).some((item) => item.id === targetEntityId)) return targetEntityId;
+        return (data.incidents || []).some((item) => item.id === current) ? current : data.incidents?.[0]?.id || null;
+      });
     } catch (requestError) {
       setError(requestError.message);
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, targetEntityId]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!targetEntityId) return;
+    setFilter('all');
+    setSelectedId(targetEntityId);
+  }, [targetEntityId]);
   const selected = incidents.find((incident) => incident.id === selectedId) || null;
 
   useEffect(() => {
     setAssignee(selected?.assignedTo || '');
-  }, [selected?.id, selected?.assignedTo]);
+    setPostmortem(selected?.postmortem
+      ? { ...EMPTY_POSTMORTEM, ...selected.postmortem }
+      : EMPTY_POSTMORTEM);
+  }, [selected?.id, selected?.assignedTo, selected?.postmortem?.completedAt]);
 
   async function act(action, extra = {}) {
     if (!selected) return;
@@ -688,7 +709,12 @@ export function IncidentsView({ session }) {
         body: JSON.stringify({ action, note, ...extra }),
       });
       setNote('');
-      setMessage(action === 'acknowledge' ? '事件已确认' : action === 'resolve' ? '事件已关闭' : action === 'mute' ? '事件已静默' : '事件已更新');
+      setMessage(action === 'acknowledge' ? '事件已确认'
+        : action === 'resolve' ? '事件已关闭'
+          : action === 'mute' ? '事件已静默'
+            : action === 'runbook_step' ? '处置步骤已更新'
+              : action === 'postmortem' ? '事故复盘已保存'
+                : '事件已更新');
       await load();
     } catch (requestError) {
       setError(requestError.message);
@@ -715,7 +741,7 @@ export function IncidentsView({ session }) {
       <div className="incident-workspace">
         <section className="ops-panel incident-list-panel">
           {loading && incidents.length === 0 ? <LoadingBlock label="正在读取事件" /> : incidents.length ? incidents.map((incident) => (
-            <button type="button" className={`incident-list-row ${selectedId === incident.id ? 'selected' : ''}`} key={incident.id} onClick={() => setSelectedId(incident.id)}>
+            <button type="button" className={`incident-list-row ${selectedId === incident.id ? 'selected' : ''}`} data-entity-id={incident.id} key={incident.id} onClick={() => setSelectedId(incident.id)}>
               <span className={`incident-mark severity-${incident.severity}`}><CircleAlert size={17} /></span>
               <span><strong>{incident.title}</strong><small>{incident.description}</small></span>
               <span><SeverityPill value={incident.severity} /><small>{formatRelative(incident.lastSeenAt)}</small></span>
@@ -734,6 +760,29 @@ export function IncidentsView({ session }) {
                 <div><dt>最近观测</dt><dd>{formatDateTime(selected.lastSeenAt)}</dd></div>
                 <div><dt>负责人</dt><dd>{selected.assignedTo || '未指派'}</dd></div>
               </dl>
+              {onNavigate && (
+                <div className="incident-context-actions" aria-label="事件关联工具">
+                  <button type="button" onClick={() => onNavigate('diagnostics', { entity: selected.serviceId || null })}><Play size={15} />运行诊断</button>
+                  <button type="button" onClick={() => onNavigate('releases')}><Rocket size={15} />检查发布</button>
+                  <button type="button" onClick={() => onNavigate('configuration')}><Settings2 size={15} />检查配置</button>
+                </div>
+              )}
+              <section className="incident-runbook" aria-label="事件处置运行手册">
+                <header><strong>处置运行手册</strong><small>{(selected.runbookSteps || DEFAULT_INCIDENT_RUNBOOK).filter((step) => step.completed).length}/{(selected.runbookSteps || DEFAULT_INCIDENT_RUNBOOK).length} 已完成</small></header>
+                <div>
+                  {(selected.runbookSteps?.length ? selected.runbookSteps : DEFAULT_INCIDENT_RUNBOOK).map((step) => (
+                    <label key={step.id}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(step.completed)}
+                        disabled={!canOperate || Boolean(acting)}
+                        onChange={(event) => act('runbook_step', { stepId: step.id, completed: event.target.checked })}
+                      />
+                      <span><strong>{step.title}</strong>{step.completedAt && <small>{step.completedBy || 'operator'} · {formatDateTime(step.completedAt)}</small>}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
               <div className="incident-timeline">
                 {(selected.timeline || []).slice(-8).reverse().map((event, index) => <div key={`${event.at}-${index}`}><i /><span><strong>{event.message}</strong><small>{event.actor} · {formatDateTime(event.at)}</small></span></div>)}
               </div>
@@ -752,6 +801,16 @@ export function IncidentsView({ session }) {
                   </div>
                 </div>
               )}
+              {selected.status === 'resolved' && (
+                <section className="incident-postmortem" aria-label="事故复盘">
+                  <header><strong>事故复盘</strong><small>{selected.postmortem?.completedAt ? `${selected.postmortem.completedBy} · ${formatDateTime(selected.postmortem.completedAt)}` : '恢复后补充根因与改进项'}</small></header>
+                  <label>摘要<textarea value={postmortem.summary} disabled={!canOperate} maxLength={1000} onChange={(event) => setPostmortem({ ...postmortem, summary: event.target.value })} /></label>
+                  <label>根因<textarea value={postmortem.rootCause} disabled={!canOperate} maxLength={2000} onChange={(event) => setPostmortem({ ...postmortem, rootCause: event.target.value })} /></label>
+                  <label>影响<textarea value={postmortem.impact} disabled={!canOperate} maxLength={2000} onChange={(event) => setPostmortem({ ...postmortem, impact: event.target.value })} /></label>
+                  <label>纠正与预防措施<textarea value={postmortem.correctiveActions} disabled={!canOperate} maxLength={3000} onChange={(event) => setPostmortem({ ...postmortem, correctiveActions: event.target.value })} /></label>
+                  {canOperate && <button className="primary-button" type="button" disabled={Boolean(acting) || !postmortem.summary.trim() || !postmortem.rootCause.trim()} onClick={() => act('postmortem', { postmortem })}>{acting === 'postmortem' ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}保存复盘</button>}
+                </section>
+              )}
             </>
           ) : <div className="ops-empty">选择一个事件查看详情</div>}
         </aside>
@@ -760,7 +819,7 @@ export function IncidentsView({ session }) {
   );
 }
 
-export function ReleasesView({ session }) {
+export function ReleasesView({ session, targetEntityId = '' }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -783,6 +842,24 @@ export function ReleasesView({ session }) {
     try { setData(await requestJson('/api/releases')); } catch (requestError) { setError(requestError.message); } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!targetEntityId || !data) return undefined;
+    const buildIndex = (data.builds || []).findIndex((build) => build.id === targetEntityId);
+    const deploymentIndex = (data.deployments || []).findIndex((deployment) => deployment.id === targetEntityId);
+    if (buildIndex >= 0) {
+      setHistoryTab('builds');
+      setHistoryExpanded(buildIndex >= RELEASE_HISTORY_COLLAPSED_LIMIT);
+    } else if (deploymentIndex >= 0) {
+      setHistoryTab('deployments');
+      setHistoryExpanded(deploymentIndex >= RELEASE_HISTORY_COLLAPSED_LIMIT);
+    }
+    const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const target = [...document.querySelectorAll('[data-release-entity-id]')]
+        .find((element) => element.dataset.releaseEntityId === targetEntityId);
+      target?.scrollIntoView({ block: 'center' });
+    }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [data, targetEntityId]);
   const hasActiveOperations = Boolean(data?.metrics?.activeOperations)
     || (data?.runs || []).some((run) => releaseIsActive(run.conclusion || run.status));
   useEffect(() => {
@@ -1016,7 +1093,7 @@ export function ReleasesView({ session }) {
           </div>
         )}
         {historyTab === 'builds' && (buildRows.length ? visibleBuildRows.map((build) => (
-          <div className="release-history-row" key={build.id}>
+          <div className={`release-history-row ${targetEntityId === build.id ? 'targeted-entity' : ''}`} data-release-entity-id={build.id} key={build.id}>
             <span className={`run-state ${releaseStateClass(build.status)}`}><i /></span>
             <span className="release-run-source"><strong>{shortValue(build.revision || build.id)}</strong><small>{build.observedOnly ? `GitHub 观察 · ${workflowNameLabel(build.name || build.workflow)}` : build.targets?.length ? build.targets.join('、') : workflowNameLabel(build.name || build.workflow)}</small></span>
             <span className="release-run-actor"><strong>{build.requestedBy || build.workflowRun?.actor || '--'}</strong><small>构建发起人</small></span>
@@ -1035,7 +1112,7 @@ export function ReleasesView({ session }) {
           </div>
         )) : <div className="ops-empty">暂无构建记录</div>)}
         {historyTab === 'deployments' && (deployments.length ? visibleDeployments.map((deployment) => (
-          <div className="release-history-row" key={deployment.id}>
+          <div className={`release-history-row ${targetEntityId === deployment.id ? 'targeted-entity' : ''}`} data-release-entity-id={deployment.id} key={deployment.id}>
             <span className={`run-state ${releaseStateClass(deployment.status)}`}><i /></span>
             <span className="release-run-source"><strong>{deployment.action === 'rollback' ? '回滚' : '部署'} · {shortValue(deployment.buildId || deployment.sourceDeploymentId)}</strong><small>{deployment.components.join('、')}</small></span>
             <span className="release-run-actor"><strong>{deployment.requestedBy || '--'}</strong><small>操作发起人</small></span>
@@ -1382,7 +1459,7 @@ export function SettingsDiagnosticsView({ session }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [maintenance, setMaintenance] = useState({ serviceId: 'all', duration: 60, reason: '' });
-  const canSave = roleAtLeast(session.user?.role, 'super_admin');
+  const canSave = roleAtLeast(session.user?.role, 'operator');
   const canDiagnose = roleAtLeast(session.user?.role, 'operator');
 
   const load = useCallback(async () => {
@@ -1405,9 +1482,11 @@ export function SettingsDiagnosticsView({ session }) {
     setError('');
     setMessage('');
     try {
-      const result = await requestJson('/api/operations/settings', { method: 'PUT', body: JSON.stringify(draft) });
-      setDraft(result.settings);
-      setMessage('运行设置已保存');
+      const result = await requestJson('/api/operations/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ settings: draft, summary: '更新监控、告警与灾备运行参数' }),
+      });
+      setMessage(`变更提案已提交（${result.change.id}），审批通过后生效`);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -1436,7 +1515,7 @@ export function SettingsDiagnosticsView({ session }) {
   if (loading && !draft) return <section className="page-view ops-page"><LoadingBlock label="正在读取运行设置" /></section>;
   return (
     <section className="page-view ops-page" aria-label="系统设置与诊断">
-      <div className="ops-toolbar"><span className="integration-state ready"><i />配置不包含任何敏感值</span>{canSave && <button className="primary-button compact" type="button" onClick={save} disabled={saving}>{saving ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />}保存设置</button>}</div>
+      <div className="ops-toolbar"><span className="integration-state ready"><i />配置不包含任何敏感值，修改需经过审批</span>{canSave && <button className="primary-button compact" type="button" onClick={save} disabled={saving}>{saving ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />}提交变更审批</button>}</div>
       <Feedback error={error} message={message} />
       <div className="settings-layout">
         <section className="ops-panel settings-section">
@@ -1508,9 +1587,16 @@ export function BackupQualityStrip() {
   return (
     <section className="backup-quality-strip" aria-label="灾备质量">
       <div className={`quality-item ${quality.rpoState}`}><Clock3 size={18} /><span><strong>{quality.ageHours === null ? '暂无' : `${quality.ageHours} 小时`}</strong><small>最近可恢复备份 · RPO {quality.rpoHours}h</small></span></div>
-      <div className={`quality-item ${quality.restoreDrillState === 'verified' ? 'healthy' : 'warning'}`}><DatabaseBackup size={18} /><span><strong>{quality.lastRestoreDrillAt ? formatDateTime(quality.lastRestoreDrillAt) : '尚未演练'}</strong><small>最近恢复验证</small></span></div>
+      <div className={`quality-item ${quality.restoreDrillState === 'verified' ? 'healthy' : 'warning'}`}><DatabaseBackup size={18} /><span><strong>{quality.lastRestoreDrillAt ? formatDateTime(quality.lastRestoreDrillAt) : '尚未演练'}</strong><small>{quality.nextRestoreDrillAt ? `下次应在 ${formatDateTime(quality.nextRestoreDrillAt)} 前完成` : '需要完成首次恢复演练'}</small></span></div>
+      <div className={`quality-item ${quality.restoreRtoState === 'met' ? 'healthy' : quality.restoreRtoState === 'breached' ? 'warning' : 'unknown'}`}><Gauge size={18} /><span><strong>{quality.restoreDurationMinutes === null ? '暂无耗时' : `${quality.restoreDurationMinutes} 分钟`}</strong><small>最近恢复耗时 · RTO {quality.restoreRtoMinutes} 分钟</small></span></div>
       <div className={`quality-item ${quality.offsite.healthy === true ? 'healthy' : quality.offsite.configured ? 'warning' : 'unknown'}`}><Cloud size={18} /><span><strong>{quality.offsite.healthy === true ? '同步正常' : quality.offsite.configured ? '同步异常' : '未配置'}</strong><small>异地备份状态</small></span></div>
       <div className={`quality-item ${quality.schedule.enabled ? 'healthy' : 'unknown'}`}><FileClock size={18} /><span><strong>{quality.schedule.enabled ? `每日 ${quality.schedule.time}` : '手动执行'}</strong><small>自动备份计划</small></span></div>
+      {(quality.restoreDrills || []).length > 0 && (
+        <details className="backup-drill-evidence">
+          <summary>最近恢复演练证据（{quality.restoreDrills.length}）</summary>
+          <div>{quality.restoreDrills.slice(0, 5).map((drill) => <span key={drill.id}><strong>{formatDateTime(drill.occurredAt)}</strong><small>{drill.durationMinutes === null ? '耗时未记录' : `${drill.durationMinutes} 分钟`} · {drill.actor || 'system'} · {drill.backupName || '备份归档'}</small></span>)}</div>
+        </details>
+      )}
     </section>
   );
 }

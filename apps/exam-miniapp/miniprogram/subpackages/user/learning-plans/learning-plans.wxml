@@ -1,0 +1,69 @@
+<view class="learning-page">
+  <view class="custom-nav" style="padding-top: {{menuButtonTop}}px;">
+    <view class="nav-content" style="height: {{menuButtonHeight}}px;">
+      <view class="back-btn" bindtap="onBack"></view>
+      <text class="nav-title">学习计划</text>
+    </view>
+  </view>
+
+  <scroll-view class="learning-scroll" scroll-y enhanced="{{true}}" show-scrollbar="{{false}}" style="padding-top: {{navBarHeight}}px;">
+    <view class="summary-band">
+      <view class="summary-copy">
+        <text class="summary-kicker">当前任务</text>
+        <text class="summary-title">{{summary.activeCount + summary.overdueCount}} 个计划</text>
+      </view>
+      <view class="summary-stats">
+        <view><text>{{summary.completedCount}}</text><text>已完成</text></view>
+        <view><text>{{summary.overdueCount}}</text><text>已逾期</text></view>
+      </view>
+    </view>
+
+    <view wx:if="{{loading}}" class="page-state">正在同步学习计划...</view>
+
+    <view wx:elif="{{plans.length === 0}}" class="empty-state">
+      <view class="empty-mark">计</view>
+      <text class="empty-title">暂无学习计划</text>
+      <text class="empty-copy">新计划下发后会显示在这里</text>
+    </view>
+
+    <view wx:else class="plan-list">
+      <view class="plan-card" wx:for="{{plans}}" wx:key="_id">
+        <view class="plan-head">
+          <view class="plan-title-group">
+            <text class="plan-title">{{item.title}}</text>
+            <text class="plan-description" wx:if="{{item.description}}">{{item.description}}</text>
+          </view>
+          <text class="plan-state state-{{item.stateClass}}">{{item.stateText}}</text>
+        </view>
+
+        <view class="plan-meta">
+          <view><text class="meta-label">截止</text><text class="meta-value">{{item.dueText}}</text></view>
+          <view><text class="meta-label">目标</text><text class="meta-value">{{item.targetScore}} 分</text></view>
+          <text class="due-hint state-{{item.stateClass}}">{{item.dueHint}}</text>
+        </view>
+
+        <view class="progress-head">
+          <text>完成 {{item.completedCategoryCount}} / {{item.totalCategoryCount}}</text>
+          <text>{{item.progressPercent}}%</text>
+        </view>
+        <view class="progress-track"><view class="progress-fill" style="width: {{item.progressPercent}}%;"></view></view>
+
+        <view class="category-list">
+          <view class="category-row" wx:for="{{item.categories}}" wx:for-item="category" wx:key="_id">
+            <view class="category-main">
+              <view class="category-check {{category.completed ? 'is-complete' : ''}}">{{category.completed ? '✓' : ''}}</view>
+              <view class="category-copy">
+                <text class="category-title">{{category.name}}</text>
+                <text class="category-score">{{category.bestScore > 0 ? '最高 ' + category.bestScore + ' 分' : '尚未完成考试'}}</text>
+              </view>
+            </view>
+            <button class="category-action" data-plan-id="{{item._id}}" data-category-id="{{category._id}}" bindtap="onStartCategory">
+              {{category.bestScore > 0 ? '再练' : '开始'}}
+            </button>
+          </view>
+        </view>
+      </view>
+    </view>
+    <view class="bottom-space"></view>
+  </scroll-view>
+</view>

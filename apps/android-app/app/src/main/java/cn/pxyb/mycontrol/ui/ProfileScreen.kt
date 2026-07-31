@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,18 +10,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.PhoneAndroid
-import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.QrCodeScanner
-import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.VerifiedUser
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,9 +35,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,11 +45,7 @@ import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.data.SecuritySession
 import cn.pxyb.mycontrol.ui.theme.Amber
-import cn.pxyb.mycontrol.ui.theme.AmberPale
 import cn.pxyb.mycontrol.ui.theme.Forest
-import cn.pxyb.mycontrol.ui.theme.MintPale
-import cn.pxyb.mycontrol.ui.theme.Ocean
-import cn.pxyb.mycontrol.ui.theme.OceanPale
 
 @Composable
 fun ProfileScreen(
@@ -64,6 +60,14 @@ fun ProfileScreen(
     var confirmLogout by remember { mutableStateOf(false) }
     val user = state.user ?: return
     val security = state.security
+    val totpEnabled = security?.totpEnabled == true || user.totpEnabled
+    val passkeyCount = security?.passkeyCount ?: user.passkeyCount
+    val recoveryCodesRemaining = security?.recoveryCodesRemaining
+    val protectionCount = listOf(
+        totpEnabled,
+        passkeyCount > 0,
+        recoveryCodesRemaining == null || recoveryCodesRemaining > 0,
+    ).count { it }
 
     LazyColumn(
         modifier = screenPadding(contentPadding),
@@ -72,38 +76,29 @@ fun ProfileScreen(
     ) {
         item {
             ImmersiveHeader(
-                title = "账号与安全",
+                title = "我的",
+                subtitle = "账号、安全与设备",
                 refreshing = state.refreshing,
-                onRefresh = onRefresh
+                onRefresh = onRefresh,
             )
         }
+
         item {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                ),
-            ) {
+            AppPanel {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 22.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     Surface(
-                        color = MaterialTheme.colorScheme.surface,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = MaterialTheme.shapes.medium,
-                        shadowElevation = 1.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     ) {
                         androidx.compose.foundation.Image(
                             painter = painterResource(R.drawable.platform_logo),
-                            contentDescription = null,
-                            modifier = Modifier.padding(6.dp).size(44.dp),
+                            contentDescription = "MY Control",
+                            modifier = Modifier.padding(8.dp).size(48.dp),
                         )
                     }
                     Column(modifier = Modifier.weight(1f)) {
@@ -111,56 +106,108 @@ fun ProfileScreen(
                             user.username,
                             style = MaterialTheme.typography.headlineMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp
+                                fontSize = 20.sp,
                             ),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            "智控中心 · ${roleLabel(user.role)}",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(top = 2.dp)
+                            "MY Control · ${roleLabel(user.role)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 3.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    Surface(
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = MaterialTheme.shapes.small,
+                    StatusBadge("healthy", "在线")
+                }
+            }
+        }
+
+        item {
+            AppPanel {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp)) {
+                    ProfileGroupLabel("账号保护", if (protectionCount == 3) "状态良好" else "建议完善")
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text(
-                            "在线",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(
+                                protectionCount.toString(),
+                                style = MaterialTheme.typography.displaySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 34.sp,
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                " / 3 项已启用",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 5.dp),
+                            )
+                        }
+                        StatusBadge(if (protectionCount == 3) "healthy" else "warning")
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(top = 14.dp, bottom = 12.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.Devices,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp),
                         )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("${security?.sessions?.size ?: 0} 台活动设备", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                "可通过二维码安全登录网页端",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        OutlinedButton(onClick = onOpenQrLogin, shape = MaterialTheme.shapes.medium) {
+                            Icon(Icons.Outlined.QrCodeScanner, contentDescription = null, modifier = Modifier.size(17.dp))
+                            Text("扫码", modifier = Modifier.padding(start = 6.dp))
+                        }
                     }
                 }
             }
         }
 
-        item { SectionHeader("安全状态", "平台账号保护") }
         item {
             AppPanel {
+                ProfileGroupLabel("登录与安全", modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp))
                 SecurityRow(
                     icon = Icons.Outlined.Security,
                     title = "动态验证",
-                    detail = if (security?.totpEnabled == true || user.totpEnabled) "TOTP 已启用" else "尚未启用",
-                    status = if (security?.totpEnabled == true || user.totpEnabled) "healthy" else "warning",
+                    detail = if (totpEnabled) "TOTP 已启用" else "尚未启用",
+                    status = if (totpEnabled) "healthy" else "warning",
                 )
-                HorizontalDivider(Modifier.padding(horizontal = 14.dp))
+                ProfileDivider()
                 SecurityRow(
                     icon = Icons.Outlined.Fingerprint,
                     title = "Passkey",
-                    detail = "${security?.passkeyCount ?: user.passkeyCount} 个平台凭据",
-                    status = if ((security?.passkeyCount ?: user.passkeyCount) > 0) "healthy" else "unknown",
+                    detail = "$passkeyCount 个平台凭据",
+                    status = if (passkeyCount > 0) "healthy" else "unknown",
                 )
-                HorizontalDivider(Modifier.padding(horizontal = 14.dp))
+                ProfileDivider()
                 SecurityRow(
                     icon = Icons.Outlined.Key,
                     title = "恢复码",
-                    detail = security?.let { "剩余 ${it.recoveryCodesRemaining} 个" } ?: "等待安全数据",
-                    status = if ((security?.recoveryCodesRemaining ?: 1) > 0) "healthy" else "warning",
+                    detail = recoveryCodesRemaining?.let { "剩余 $it 个" } ?: "等待安全数据",
+                    status = if ((recoveryCodesRemaining ?: 1) > 0) "healthy" else "warning",
                 )
-                HorizontalDivider(Modifier.padding(horizontal = 14.dp))
+                ProfileDivider()
                 SecurityRow(
                     icon = Icons.Outlined.Lock,
                     title = "本地会话",
@@ -170,71 +217,88 @@ fun ProfileScreen(
             }
         }
 
-        item { SectionHeader("网页登录", "短效二维码 · 设备确认") }
         item {
             AppPanel {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    IconTile(Icons.Outlined.QrCodeScanner, Ocean, OceanPale)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("扫码登录 Web", style = MaterialTheme.typography.titleMedium)
-                        Text("核对设备与验证码后安全确认", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    OutlinedButton(onClick = onOpenQrLogin, shape = MaterialTheme.shapes.medium) {
-                        Icon(Icons.Outlined.QrCodeScanner, contentDescription = null, modifier = Modifier.size(17.dp))
-                        Text("扫码", modifier = Modifier.padding(start = 6.dp))
-                    }
-                }
-            }
-        }
-        item { SectionHeader("活动会话", security?.let { "${it.sessions.size} 台设备" } ?: "正在同步") }
-        item {
-            AppPanel {
+                ProfileGroupLabel(
+                    title = "活动会话",
+                    trailing = security?.let { "${it.sessions.size} 台设备" } ?: "正在同步",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                )
                 if (security?.sessions.isNullOrEmpty()) {
+                    ProfileDivider()
                     LoadingBlock("正在读取登录设备")
                 } else {
                     security!!.sessions.forEachIndexed { index, session ->
+                        if (index == 0) ProfileDivider()
                         SessionRow(
                             session = session,
                             busy = state.busyAction == "session",
                             onRevoke = { revokeTarget = session },
                         )
-                        if (index < security.sessions.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 14.dp))
+                        if (index < security.sessions.lastIndex) ProfileDivider()
                     }
                 }
             }
         }
 
-        item { SectionHeader("会话策略", "服务端强制执行") }
         item {
             AppPanel {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(18.dp),
-                ) {
-                    MetricCell("最长会话", security?.sessionTtlHours?.let { "$it 小时" } ?: "--", Modifier.weight(1f), Ocean)
-                    MetricCell("空闲超时", security?.sessionIdleMinutes?.let { "$it 分钟" } ?: "--", Modifier.weight(1f), Amber)
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp)) {
+                    ProfileGroupLabel("会话策略", "服务端强制执行")
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    ) {
+                        MetricCell(
+                            "最长会话",
+                            security?.sessionTtlHours?.let { "$it 小时" } ?: "--",
+                            Modifier.weight(1f),
+                            Forest,
+                        )
+                        MetricCell(
+                            "空闲超时",
+                            security?.sessionIdleMinutes?.let { "$it 分钟" } ?: "--",
+                            Modifier.weight(1f),
+                            Amber,
+                        )
+                    }
                 }
             }
         }
 
-        item { SectionHeader("应用", "MY Control Android") }
         item {
             AppPanel {
+                ProfileGroupLabel("关于", modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp))
+                ProfileDivider()
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    IconTile(Icons.Outlined.PhoneAndroid, Ocean, OceanPale)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("版本 ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleMedium)
-                        Text("cn.pxyb.mycontrol", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        androidx.compose.foundation.Image(
+                            painter = painterResource(R.drawable.platform_logo),
+                            contentDescription = null,
+                            modifier = Modifier.padding(7.dp).size(34.dp),
+                        )
                     }
-                    StatusBadge("healthy", "生产环境")
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("MY Control", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "版本 ${BuildConfig.VERSION_NAME} · 生产环境",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Icon(
+                        Icons.Outlined.PhoneAndroid,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
         }
@@ -245,9 +309,14 @@ fun ProfileScreen(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = state.busyAction == null,
                 shape = MaterialTheme.shapes.medium,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.24f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
             ) {
-                if (state.busyAction == "logout") CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
-                else Icon(Icons.Outlined.Logout, contentDescription = null)
+                if (state.busyAction == "logout") {
+                    CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null)
+                }
                 Text("退出当前账号", modifier = Modifier.padding(start = 8.dp))
             }
         }
@@ -261,9 +330,14 @@ fun ProfileScreen(
             title = { Text("撤销远程会话？") },
             text = { Text("${deviceLabel(session.userAgent)} · ${session.ip}\n该设备需要重新登录。") },
             confirmButton = {
-                Button(onClick = { revokeTarget = null; onRevokeSession(session.nonce) }, shape = MaterialTheme.shapes.medium) { Text("确认撤销") }
+                Button(
+                    onClick = { revokeTarget = null; onRevokeSession(session.nonce) },
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("确认撤销") }
             },
-            dismissButton = { OutlinedButton(onClick = { revokeTarget = null }, shape = MaterialTheme.shapes.medium) { Text("取消") } },
+            dismissButton = {
+                OutlinedButton(onClick = { revokeTarget = null }, shape = MaterialTheme.shapes.medium) { Text("取消") }
+            },
         )
     }
 
@@ -271,26 +345,83 @@ fun ProfileScreen(
         AlertDialog(
             onDismissRequest = { confirmLogout = false },
             shape = MaterialTheme.shapes.medium,
-            icon = { Icon(Icons.Outlined.Logout, contentDescription = null) },
+            icon = { Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null) },
             title = { Text("退出 MY Control？") },
             text = { Text("当前设备的中央平台会话将立即撤销。") },
-            confirmButton = { Button(onClick = { confirmLogout = false; onLogout() }, shape = MaterialTheme.shapes.medium) { Text("退出登录") } },
-            dismissButton = { OutlinedButton(onClick = { confirmLogout = false }, shape = MaterialTheme.shapes.medium) { Text("取消") } },
+            confirmButton = {
+                Button(
+                    onClick = { confirmLogout = false; onLogout() },
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("退出登录") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { confirmLogout = false }, shape = MaterialTheme.shapes.medium) { Text("取消") }
+            },
         )
     }
 }
 
 @Composable
-private fun SecurityRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, detail: String, status: String) {
+private fun ProfileGroupLabel(
+    title: String,
+    trailing: String? = null,
+    modifier: Modifier = Modifier,
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        IconTile(icon, Forest, MintPale, modifier = Modifier.size(38.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (!trailing.isNullOrBlank()) {
+            Text(
+                trailing,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
+}
+
+@Composable
+private fun SecurityRow(icon: ImageVector, title: String, detail: String, status: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(9.dp).size(20.dp),
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         StatusBadge(status)
     }
@@ -299,14 +430,30 @@ private fun SecurityRow(icon: androidx.compose.ui.graphics.vector.ImageVector, t
 @Composable
 private fun SessionRow(session: SecuritySession, busy: Boolean, onRevoke: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        IconTile(Icons.Outlined.Devices, if (session.current) Forest else Ocean, if (session.current) MintPale else OceanPale, modifier = Modifier.size(38.dp))
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Icon(
+                Icons.Outlined.Devices,
+                contentDescription = null,
+                tint = if (session.current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(9.dp).size(20.dp),
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text(deviceLabel(session.userAgent), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    deviceLabel(session.userAgent),
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
                 if (session.current) StatusBadge("healthy", "当前")
             }
             Text(
