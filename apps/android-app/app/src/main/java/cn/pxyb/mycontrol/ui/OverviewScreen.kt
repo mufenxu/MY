@@ -1,12 +1,16 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -70,8 +74,13 @@ fun OverviewScreen(
         Triple(healthy, monitored, average)
     }
     LazyColumn(
-        modifier = screenPadding(contentPadding),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = contentPadding.calculateTopPadding() + 8.dp,
+            bottom = contentPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
@@ -90,16 +99,15 @@ fun OverviewScreen(
             val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = AppCardShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shadowElevation = 0.dp,
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                shape = RoundedCornerShape(24.dp),
+                color = Color.White,
+                shadowElevation = 3.dp,
+                border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 22.dp)
+                        .padding(horizontal = 20.dp, vertical = 20.dp)
                 ) {
                     Column {
                         Row(
@@ -110,45 +118,46 @@ fun OverviewScreen(
                                 val progress = if (monitoredCount == 0) 0f else healthyCount.toFloat() / monitoredCount.toFloat()
                                 CircularProgressIndicator(
                                     progress = { progress },
-                                    modifier = Modifier.size(62.dp),
-                                    color = if (stable) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary,
-                                    trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.14f),
+                                    modifier = Modifier.size(64.dp),
+                                    color = if (stable) Color(0xFF10B981) else Color(0xFFF59E0B),
+                                    trackColor = Color(0xFFE2E8F0),
                                     strokeWidth = 6.dp,
                                     strokeCap = StrokeCap.Round,
                                 )
                                 Icon(
                                     if (stable) Icons.Outlined.CloudDone else Icons.Outlined.ErrorOutline,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(26.dp),
+                                    tint = if (stable) Color(0xFF10B981) else Color(0xFFF59E0B),
+                                    modifier = Modifier.size(28.dp),
                                 )
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    if (stable) "全网运行稳定" else "平台存在待关注事件",
+                                    if (stable) "全网服务稳定运行" else "存在异常排查事件",
                                     style = MaterialTheme.typography.headlineMedium.copy(
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 20.sp
+                                        fontSize = 20.sp,
+                                        letterSpacing = (-0.3).sp
                                     ),
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                                 Text(
-                                    "$healthyCount/$monitoredCount 个监控服务正常 · ${formatPlatformTime(overview.refreshedAt)}",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
+                                    "$healthyCount/$monitoredCount 服务正常监测 · ${formatPlatformTime(overview.refreshedAt)}",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 4.dp),
                                 )
                             }
                         }
                         HorizontalDivider(
                             modifier = Modifier.padding(top = 18.dp),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.14f),
+                            color = Color(0xFFF1F5F9),
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            HeroMetric("服务可用", "$healthyCount/$monitoredCount", Modifier.weight(1f))
+                            HeroMetric("健康服务", "$healthyCount/$monitoredCount", Modifier.weight(1f))
                             HeroMetric("平均响应", averageLatencyMs?.let { "$it ms" } ?: "--", Modifier.weight(1f))
                             HeroMetric("待处置", activeIncidents.size.toString(), Modifier.weight(1f))
                         }
@@ -281,10 +290,28 @@ private fun OverviewSyncPanel(refreshing: Boolean) {
 
 @Composable
 private fun HeroMetric(label: String, value: String, modifier: Modifier = Modifier) {
-    val contentColor = LocalContentColor.current
-    Column(modifier = modifier) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = contentColor.copy(alpha = 0.68f))
-        Text(value, style = MaterialTheme.typography.titleLarge, color = contentColor, modifier = Modifier.padding(top = 3.dp))
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFFFAF9F6),
+        border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.03f)),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
     }
 }
 

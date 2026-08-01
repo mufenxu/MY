@@ -8751,23 +8751,6 @@ body[data-app-locked="true"] #appGate::after {
   }
 }
 
-@media (min-width: 1280px) and (max-width: 1500px) {
-  body[data-route="overview"]:not([data-app-locked="true"]) .main-content {
-    grid-template-columns: minmax(190px, 1fr) minmax(190px, 1fr) minmax(190px, 1fr) minmax(280px, .82fr) !important;
-    gap: 14px !important;
-    padding: 20px !important;
-  }
-
-  body[data-route="overview"]:not([data-app-locked="true"]) .overview-card {
-    padding: 16px !important;
-    border-radius: 20px !important;
-  }
-
-  body[data-route="overview"]:not([data-app-locked="true"]) #authPanel.active-tab {
-    padding: 24px !important;
-  }
-}
-
 .app-dialog-backdrop {
   position: fixed;
   inset: 0;

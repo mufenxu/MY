@@ -54,36 +54,36 @@ data class StatusStyle(
     val icon: ImageVector,
 )
 
-val AppCardShape = RoundedCornerShape(22.dp)
+val AppCardShape = RoundedCornerShape(20.dp)
 
 @Composable
 fun statusStyle(status: String): StatusStyle = when (status.lowercase()) {
     "healthy", "operational", "succeeded", "success", "passed", "resolved", "connected", "online" ->
         StatusStyle(
             "正常",
-            MaterialTheme.colorScheme.onSecondaryContainer,
-            MaterialTheme.colorScheme.secondaryContainer,
+            Color(0xFF047857),
+            Color(0xFFD1FAE5),
             Icons.Outlined.CheckCircle,
         )
     "critical", "failed", "failure", "offline", "outage", "error", "breached" ->
         StatusStyle(
             "异常",
-            MaterialTheme.colorScheme.onErrorContainer,
-            MaterialTheme.colorScheme.errorContainer,
+            Color(0xFFB91C1C),
+            Color(0xFFFEE2E2),
             Icons.Outlined.ErrorOutline,
         )
     "warning", "degraded", "action_required", "overdue", "unhealthy" ->
         StatusStyle(
             "需关注",
-            MaterialTheme.colorScheme.onTertiaryContainer,
-            MaterialTheme.colorScheme.tertiaryContainer,
+            Color(0xFFB45309),
+            Color(0xFFFEF3C7),
             Icons.Outlined.WarningAmber,
         )
     "running", "pending", "queued", "acknowledged", "in_progress" ->
         StatusStyle(
             "处理中",
-            MaterialTheme.colorScheme.onPrimaryContainer,
-            MaterialTheme.colorScheme.primaryContainer,
+            Color(0xFF1D4ED8),
+            Color(0xFFEFF6FF),
             Icons.Outlined.Schedule,
         )
     else -> StatusStyle("未确认", MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant, Icons.Outlined.Schedule)
@@ -96,18 +96,18 @@ fun StatusBadge(status: String, label: String? = null, modifier: Modifier = Modi
         modifier = modifier,
         color = style.background,
         contentColor = style.foreground,
-        shape = MaterialTheme.shapes.small,
-        border = BorderStroke(0.5.dp, style.foreground.copy(alpha = 0.18f))
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(0.5.dp, style.foreground.copy(alpha = 0.2f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Icon(style.icon, contentDescription = null, modifier = Modifier.size(14.dp))
+            Icon(style.icon, contentDescription = null, modifier = Modifier.size(13.dp))
             Text(
                 label ?: style.label,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp)
             )
         }
     }
@@ -121,9 +121,9 @@ fun AppPanel(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = AppCardShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFCFCFA)),
+        border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         content()
     }

@@ -2,8 +2,10 @@ package cn.pxyb.mycontrol.ui
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -46,6 +48,7 @@ import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RocketLaunch
@@ -83,6 +86,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -175,101 +179,266 @@ private fun FullScreenLoading() {
 
 @Composable
 private fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit, error: String?) {
-    Column(
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val surfaceColor = MaterialTheme.colorScheme.surface
+
+    LaunchedEffect(Unit) {
+        onUnlock()
+    }
+
+    val backgroundBrush = remember(primaryColor, backgroundColor) {
+        Brush.verticalGradient(
+            colors = listOf(
+                primaryColor.copy(alpha = 0.08f),
+                backgroundColor,
+                backgroundColor,
+                primaryColor.copy(alpha = 0.05f),
+            )
+        )
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 28.dp, vertical = 36.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween,
+            .background(backgroundBrush)
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BrandMark(compact = true)
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.medium) {
-                Icon(
-                    Icons.Outlined.Fingerprint,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(20.dp).size(44.dp),
+        Box(
+            modifier = Modifier
+                .size(320.dp)
+                .align(Alignment.TopCenter)
+                .graphicsLayer {
+                    translationY = -120f
+                }
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            primaryColor.copy(alpha = 0.15f),
+                            Color.Transparent,
+                        )
+                    ),
+                    shape = CircleShape
                 )
-            }
-            Text("欢迎回来", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(top = 22.dp))
-            Text(
-                "验证设备身份以继续",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-            if (!error.isNullOrBlank()) {
-                Text(
-                    error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 10.dp),
-                )
-            }
-            Button(
-                onClick = onUnlock,
-                modifier = Modifier.fillMaxWidth().padding(top = 26.dp).height(52.dp),
-                shape = MaterialTheme.shapes.medium,
-            ) {
-                Icon(Icons.Outlined.Fingerprint, contentDescription = null)
-                Text("解锁", modifier = Modifier.padding(start = 8.dp))
-            }
-            OutlinedButton(
-                onClick = onUseLogin,
-                modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(50.dp),
-                shape = MaterialTheme.shapes.medium,
-            ) {
-                Text("改用平台账号登录")
-            }
-        }
-        Text(
-            "MY Control · 安全会话已加密",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 28.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BrandMark(compact = true)
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .padding(bottom = 24.dp)
+                        .size(76.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 4.dp,
+                    border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.18f)),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Outlined.Fingerprint,
+                            contentDescription = "指纹解锁",
+                            tint = primaryColor,
+                            modifier = Modifier.size(42.dp),
+                        )
+                    }
+                }
+
+                Text(
+                    "欢迎回来",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 26.sp,
+                        letterSpacing = 0.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+
+                Text(
+                    "验证设备身份以继续使用",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+
+                if (!error.isNullOrBlank()) {
+                    Surface(
+                        modifier = Modifier.padding(top = 16.dp),
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                    ) {
+                        Text(
+                            error,
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(32.dp))
+
+                PrimaryLoginButton(
+                    text = "点击解锁",
+                    onClick = onUnlock,
+                    enabled = true,
+                    loading = false,
+                    icon = Icons.Outlined.Fingerprint,
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                Surface(
+                    onClick = onUseLogin,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = surfaceColor.copy(alpha = 0.6f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            "改用平台账号登录",
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 14.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(Color(0xFF10B981), CircleShape)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.Outlined.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "MY Control · 会话已受安全保护",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                    )
+                }
+            }
+        }
     }
 }
 
 @Composable
 private fun LoginAmbientBackground() {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val backgroundColor = MaterialTheme.colorScheme.background
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    )
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        primaryColor.copy(alpha = 0.07f),
+                        backgroundColor,
+                        backgroundColor,
+                        primaryColor.copy(alpha = 0.05f),
+                    )
+                )
+            )
+    ) {
+        Box(
+            modifier = Modifier
+                .size(360.dp)
+                .align(Alignment.TopEnd)
+                .graphicsLayer {
+                    translationX = 140f
+                    translationY = -120f
+                }
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            primaryColor.copy(alpha = 0.16f),
+                            Color.Transparent,
+                        )
+                    ),
+                    shape = CircleShape
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(300.dp)
+                .align(Alignment.BottomStart)
+                .graphicsLayer {
+                    translationX = -100f
+                    translationY = 100f
+                }
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            primaryColor.copy(alpha = 0.10f),
+                            Color.Transparent,
+                        )
+                    ),
+                    shape = CircleShape
+                )
+        )
+    }
 }
 
 @Composable
 private fun LoginHeader() {
+    val primaryColor = MaterialTheme.colorScheme.primary
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Surface(
-            modifier = Modifier
-                .size(72.dp)
-                .shadow(
-                    elevation = 5.dp,
-                    shape = MaterialTheme.shapes.medium,
-                    clip = false,
-                    ambientColor = Color.Black.copy(alpha = 0.12f),
-                    spotColor = Color.Black.copy(alpha = 0.12f),
-                ),
-            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.size(76.dp),
+            shape = RoundedCornerShape(22.dp),
             color = Color.White,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
+            shadowElevation = 4.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 androidx.compose.foundation.Image(
                     painter = painterResource(R.drawable.platform_logo),
                     contentDescription = "智控中心",
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(52.dp),
                 )
             }
         }
@@ -280,18 +449,42 @@ private fun LoginHeader() {
             "智控中心",
             style = MaterialTheme.typography.headlineLarge.copy(
                 fontWeight = FontWeight.Bold,
-                fontSize = 25.sp,
+                fontSize = 27.sp,
                 letterSpacing = 0.sp,
             ),
             color = MaterialTheme.colorScheme.onBackground,
         )
 
-        Text(
-            "安全高效的设备管理平台",
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.76f),
-            modifier = Modifier.padding(top = 6.dp)
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = primaryColor.copy(alpha = 0.08f),
+                border = BorderStroke(0.5.dp, primaryColor.copy(alpha = 0.18f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(Color(0xFF10B981), CircleShape)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "安全高效的设备管理平台",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -521,51 +714,54 @@ private fun PrototypeInputField(
         }
     }
 
+    val primaryColor = MaterialTheme.colorScheme.primary
     val containerBgColor = if (isFocused) {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        Color.White
     } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f)
     }
-    val iconColor = if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
+    val iconColor = if (isFocused) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
     val borderColor = if (isFocused) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
+        primaryColor
     } else {
-        MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
+        MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
     }
+    val fieldShape = RoundedCornerShape(16.dp)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             label,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp
             ),
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
-            modifier = Modifier.padding(bottom = 7.dp)
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+            modifier = Modifier.padding(bottom = 7.dp, start = 2.dp)
         )
 
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
-            shape = MaterialTheme.shapes.medium,
+                .height(54.dp),
+            shape = fieldShape,
             color = containerBgColor,
-            border = BorderStroke(1.dp, borderColor),
+            border = BorderStroke(if (isFocused) 1.5.dp else 1.dp, borderColor),
+            shadowElevation = if (isFocused) 3.dp else 0.dp,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 15.dp),
+                    .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     icon,
                     contentDescription = null,
                     tint = iconColor,
-                    modifier = Modifier.size(19.dp)
+                    modifier = Modifier.size(20.dp)
                 )
 
-                Spacer(Modifier.width(11.dp))
+                Spacer(Modifier.width(12.dp))
 
                 Box(
                     modifier = Modifier
@@ -577,7 +773,7 @@ private fun PrototypeInputField(
                         Text(
                             placeholder,
                             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                         )
                     }
                     BasicTextField(
@@ -602,9 +798,10 @@ private fun PrototypeInputField(
                         keyboardActions = keyboardActions,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
                             fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+                        cursorBrush = SolidColor(primaryColor)
                     )
                 }
 
@@ -617,7 +814,7 @@ private fun PrototypeInputField(
                             Icons.Outlined.Cancel,
                             contentDescription = "清空",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
                 }
@@ -662,26 +859,44 @@ private fun SecondFactorSelector(selected: SecondFactorMode, onSelect: (SecondFa
 
 @Composable
 private fun PasskeyLoginMethod(enabled: Boolean, onClick: () -> Unit) {
+    val primaryColor = MaterialTheme.colorScheme.primary
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)))
+            Box(Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)))
             Text(
                 "其他登录方式",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                 modifier = Modifier.padding(horizontal = 14.dp),
             )
-            Box(Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)))
+            Box(Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)))
         }
-        OutlinedButton(
+        Surface(
             onClick = onClick,
             enabled = enabled,
             modifier = Modifier.fillMaxWidth().padding(top = 15.dp).height(52.dp),
-            shape = MaterialTheme.shapes.medium,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.36f)),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
         ) {
-            Icon(Icons.Outlined.Fingerprint, contentDescription = null, modifier = Modifier.size(20.dp))
-            Text("使用 Passkey 登录", modifier = Modifier.padding(start = 8.dp))
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Outlined.Fingerprint,
+                    contentDescription = null,
+                    tint = if (enabled) primaryColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    "使用 Passkey 快捷登录",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
         }
     }
 }
@@ -692,16 +907,25 @@ private fun LoginFooter() {
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Outlined.Lock,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(12.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                "© 2026 智控中心 · 安全传输已加密",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
+            )
+        }
         Text(
-            "© 2026 智控中心 版权所有",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
-        )
-        Text(
-            "版本 ${BuildConfig.VERSION_NAME}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f),
-            modifier = Modifier.padding(top = 2.dp)
+            "系统版本 v${BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+            modifier = Modifier.padding(top = 3.dp)
         )
     }
 }
@@ -723,13 +947,19 @@ private fun PrimaryLoginButton(
         label = "btn-scale"
     )
 
-    val buttonColor = if (enabled || loading) {
-        MaterialTheme.colorScheme.primary
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val buttonBrush = if (enabled || loading) {
+        Brush.horizontalGradient(
+            colors = listOf(
+                Color(0xFF2563EB),
+                Color(0xFF3B82F6),
+            )
+        )
     } else {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+        SolidColor(primaryColor.copy(alpha = 0.08f))
     }
     val contentColor = if (enabled || loading) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-    val buttonShape = MaterialTheme.shapes.medium
+    val buttonShape = RoundedCornerShape(16.dp)
 
     Box(
         modifier = modifier
@@ -740,14 +970,14 @@ private fun PrimaryLoginButton(
                 scaleY = scale
             }
             .shadow(
-                elevation = if (enabled || loading) 3.dp else 0.dp,
+                elevation = if (enabled || loading) 4.dp else 0.dp,
                 shape = buttonShape,
                 clip = false,
-                ambientColor = Color.Black.copy(alpha = 0.14f),
-                spotColor = Color.Black.copy(alpha = 0.14f),
+                ambientColor = Color(0xFF2563EB).copy(alpha = 0.35f),
+                spotColor = Color(0xFF2563EB).copy(alpha = 0.35f),
             )
             .clip(buttonShape)
-            .background(buttonColor)
+            .background(buttonBrush)
             .clickable(enabled = enabled && !loading, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -780,7 +1010,7 @@ private fun PrimaryLoginButton(
                 Text(
                     text,
                     color = contentColor,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     modifier = Modifier.padding(start = 8.dp)
                 )
@@ -823,22 +1053,51 @@ private fun AuthenticatedShell(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbarHost) },
-        bottomBar = {
-            AppBottomNavigation(
-                selected = state.selectedTab,
-                onSelect = viewModel::selectTab,
-            )
+        snackbarHost = {
+            SnackbarHost(snackbarHost) { data ->
+                Surface(
+                    modifier = Modifier
+                        .padding(horizontal = 18.dp, vertical = 8.dp)
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF0F172A),
+                    contentColor = Color.White,
+                    shadowElevation = 8.dp,
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.NotificationsActive,
+                            contentDescription = null,
+                            tint = Color(0xFF3B82F6),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            data.visuals.message,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
+                            color = Color.White
+                        )
+                    }
+                }
+            }
         },
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
             val tab = state.selectedTab
+            val contentPadding = PaddingValues(
+                top = padding.calculateTopPadding(),
+                bottom = 90.dp,
+            )
             saveableStateHolder.SaveableStateProvider(tab.name) {
                 when (tab) {
-                    MainTab.Overview -> OverviewScreen(state, padding, viewModel::selectTab, onRefresh)
+                    MainTab.Overview -> OverviewScreen(state, contentPadding, viewModel::selectTab, onRefresh)
                     MainTab.Events -> EventsScreen(
                         state = state,
-                        contentPadding = padding,
+                        contentPadding = contentPadding,
                         onAcknowledge = viewModel::acknowledgeIncident,
                         onAssign = viewModel::assignIncident,
                         onAddNote = viewModel::addIncidentNote,
@@ -848,21 +1107,21 @@ private fun AuthenticatedShell(
                     )
                     MainTab.Operations -> OperationsScreen(
                         state,
-                        padding,
+                        contentPadding,
                         viewModel::runDiagnostics,
                         { viewModel.triggerBackup(onSensitiveActionConfirmation) },
                         onRefresh,
                     )
                     MainTab.Tools -> ToolsScreen(
                         state,
-                        padding,
+                        contentPadding,
                         { viewModel.triggerCt8(onSensitiveActionConfirmation) },
                         { id -> viewModel.runIotScene(id, onSensitiveActionConfirmation) },
                         onRefresh,
                     )
                     MainTab.Profile -> ProfileScreen(
                         state,
-                        padding,
+                        contentPadding,
                         { nonce -> viewModel.revokeSession(nonce, onSensitiveActionConfirmation) },
                         viewModel::openQrScanner,
                         viewModel::logout,
@@ -870,68 +1129,81 @@ private fun AuthenticatedShell(
                     )
                 }
             }
+
+            AppBottomNavigation(
+                selected = state.selectedTab,
+                onSelect = viewModel::selectTab,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
         }
     }
 }
 
 @Composable
 private fun AppHeader(tab: MainTab, refreshing: Boolean, onRefresh: () -> Unit) {
+    val primaryColor = MaterialTheme.colorScheme.primary
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        shadowElevation = 1.dp,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .heightIn(min = 72.dp)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .heightIn(min = 68.dp)
+                .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                shadowElevation = 2.dp,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
             ) {
                 androidx.compose.foundation.Image(
                     painter = painterResource(R.drawable.platform_logo),
                     contentDescription = "智控中心",
                     modifier = Modifier
-                        .padding(5.dp)
+                        .padding(4.dp)
                         .size(34.dp),
                 )
             }
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+            Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
                 Text(
                     tabTitle(tab),
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
-                        fontSize = 19.sp
+                        fontSize = 20.sp,
+                        letterSpacing = (-0.3).sp
                     )
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
                     Box(
                         Modifier
-                            .size(7.dp)
-                            .background(MaterialTheme.colorScheme.secondary, CircleShape)
+                            .size(6.dp)
+                            .background(Color(0xFF10B981), CircleShape)
                     )
                     Text(
                         "生产环境 · 智控中心 LIVE",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                         modifier = Modifier.padding(start = 6.dp),
                     )
                 }
             }
             Surface(
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                shape = MaterialTheme.shapes.medium,
+                color = primaryColor.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(0.5.dp, primaryColor.copy(alpha = 0.15f))
             ) {
-                IconButton(onClick = onRefresh, enabled = !refreshing, modifier = Modifier.size(42.dp)) {
+                IconButton(onClick = onRefresh, enabled = !refreshing, modifier = Modifier.size(40.dp)) {
                     Crossfade(targetState = refreshing, animationSpec = tween(160), label = "refresh") { busy ->
-                        if (busy) CircularProgressIndicator(Modifier.size(19.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
-                        else Icon(Icons.Outlined.Refresh, contentDescription = "刷新", tint = MaterialTheme.colorScheme.primary)
+                        if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = primaryColor)
+                        else Icon(Icons.Outlined.Refresh, contentDescription = "刷新", tint = primaryColor, modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -945,49 +1217,49 @@ private fun AppBottomNavigation(
     onSelect: (MainTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(
+    Surface(
         modifier = modifier
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .widthIn(max = 420.dp)
             .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 10.dp),
+            .height(62.dp),
+        color = Color.White,
+        shape = RoundedCornerShape(31.dp),
+        shadowElevation = 10.dp,
+        border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.05f)),
     ) {
-        Surface(
+        Row(
             modifier = Modifier
-                .align(Alignment.Center)
-                .widthIn(max = 430.dp)
-                .fillMaxWidth()
-                .height(62.dp),
-            color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(31.dp),
-            shadowElevation = 4.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                .fillMaxSize()
+                .padding(horizontal = 6.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                tabs.forEach { item -> BottomNavigationItem(item, selected == item.tab) { onSelect(item.tab) } }
-            }
+            tabs.forEach { item -> BottomNavigationItem(item, selected == item.tab) { onSelect(item.tab) } }
         }
     }
 }
 
 @Composable
 private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onClick: () -> Unit) {
-    val itemShape = RoundedCornerShape(24.dp)
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val itemShape = RoundedCornerShape(22.dp)
+
     val foreground by animateColorAsState(
-        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-        animationSpec = if (selected) tween(140) else snap(),
-        label = "navigation-color",
+        targetValue = if (selected) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        label = "nav-color",
     )
     val background by animateColorAsState(
-        if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-        animationSpec = if (selected) tween(140) else snap(),
-        label = "navigation-background",
+        targetValue = if (selected) primaryColor.copy(alpha = 0.12f) else Color.Transparent,
+        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        label = "nav-background",
     )
     val iconScale by animateFloatAsState(
-        targetValue = if (selected) 1.15f else 1.0f,
-        animationSpec = tween(100),
+        targetValue = if (selected) 1.14f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
         label = "nav-icon-scale"
     )
 
@@ -1007,7 +1279,7 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onCl
             contentDescription = item.label,
             tint = foreground,
             modifier = Modifier
-                .size(20.dp)
+                .size(21.dp)
                 .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
         )
         Text(
@@ -1017,7 +1289,7 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onCl
                 fontSize = 11.sp
             ),
             color = foreground,
-            modifier = Modifier.padding(top = 2.dp),
+            modifier = Modifier.padding(top = 3.dp),
         )
     }
 }

@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -10,13 +11,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -88,8 +94,13 @@ fun EventsScreen(
     }
 
     LazyColumn(
-        modifier = screenPadding(contentPadding),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = contentPadding.calculateTopPadding() + 8.dp,
+            bottom = contentPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
@@ -139,34 +150,58 @@ fun EventsScreen(
     }
 
     selected?.let { incident ->
+        val isCritical = incident.severity == "critical"
         AlertDialog(
             onDismissRequest = { selectedId = null },
-            shape = MaterialTheme.shapes.medium,
+            shape = RoundedCornerShape(24.dp),
+            containerColor = Color.White,
             icon = {
-                Icon(
-                    Icons.Outlined.ErrorOutline,
-                    contentDescription = null,
-                    tint = if (incident.severity == "critical") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary,
+                Surface(
+                    shape = CircleShape,
+                    color = if (isCritical) Color(0xFFFEE2E2) else Color(0xFFFEF3C7),
+                    border = BorderStroke(1.dp, (if (isCritical) Color(0xFFEF4444) else Color(0xFFF59E0B)).copy(alpha = 0.2f)),
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Outlined.ErrorOutline,
+                            contentDescription = null,
+                            tint = if (isCritical) Color(0xFFB91C1C) else Color(0xFFB45309),
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+            },
+            title = {
+                Text(
+                    incident.title,
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 19.sp
+                    )
                 )
             },
-            title = { Text(incident.title) },
             text = {
                 Column(
                     modifier = Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text(incident.description.ifBlank { "该事件暂无补充描述。" }, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    HorizontalDivider()
+                    Text(
+                        incident.description.ifBlank { "该事件暂无补充描述。" },
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                     DetailLine("状态", incidentStatusLabel(incident.status))
-                    DetailLine("级别", if (incident.severity == "critical") "严重" else "警告")
+                    DetailLine("级别", if (isCritical) "严重" else "警告")
                     DetailLine("来源", incident.serviceId ?: incident.source)
                     DetailLine("首次发生", formatPlatformTime(incident.firstSeenAt ?: incident.openedAt))
                     DetailLine("最近观测", formatPlatformTime(incident.lastSeenAt ?: incident.updatedAt))
                     incident.assignedTo?.let { DetailLine("负责人", it) }
 
                     if (incident.timeline.isNotEmpty()) {
-                        HorizontalDivider()
-                        Text("处理记录", style = MaterialTheme.typography.titleMedium)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                        Text("处理记录", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                         incident.timeline.takeLast(8).asReversed().forEach { entry ->
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(entry.message, style = MaterialTheme.typography.bodyMedium)
@@ -180,7 +215,7 @@ fun EventsScreen(
                     }
 
                     if (canOperate && incident.status != "resolved") {
-                        HorizontalDivider()
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                         OutlinedTextField(
                             value = assignee,
                             onValueChange = { assignee = it.take(100) },
@@ -192,7 +227,7 @@ fun EventsScreen(
                             onClick = { onAssign(incident.id, assignee.trim()) },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = assignee.isNotBlank() && state.busyAction == null,
-                            shape = MaterialTheme.shapes.medium,
+                            shape = RoundedCornerShape(12.dp),
                         ) { Text("更新负责人") }
 
                         OutlinedTextField(
@@ -207,7 +242,7 @@ fun EventsScreen(
                             onClick = { onAddNote(incident.id, note.trim()) },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = note.isNotBlank() && state.busyAction == null,
-                            shape = MaterialTheme.shapes.medium,
+                            shape = RoundedCornerShape(12.dp),
                         ) { Text("记录备注") }
 
                         if (incident.status == "open") {
@@ -215,26 +250,30 @@ fun EventsScreen(
                                 onClick = { onAcknowledge(incident.id) },
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = state.busyAction == null,
-                                shape = MaterialTheme.shapes.medium,
+                                shape = RoundedCornerShape(12.dp),
                             ) { Text("确认并开始跟进") }
                         }
                         OutlinedButton(
                             onClick = { onMute(incident.id, 60) },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = state.busyAction == null,
-                            shape = MaterialTheme.shapes.medium,
+                            shape = RoundedCornerShape(12.dp),
                         ) { Text("静默 1 小时") }
                         Button(
                             onClick = { onResolve(incident.id, note.trim()) },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = state.busyAction == null,
-                            shape = MaterialTheme.shapes.medium,
+                            shape = RoundedCornerShape(12.dp),
                         ) { Text("关闭事件") }
                     }
                 }
             },
             confirmButton = {
-                Button(onClick = { selectedId = null }, shape = MaterialTheme.shapes.medium) { Text("完成") }
+                Button(
+                    onClick = { selectedId = null },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) { Text("完成", modifier = Modifier.padding(horizontal = 8.dp)) }
             },
         )
     }
@@ -244,8 +283,9 @@ fun EventsScreen(
 private fun EventFilter(selected: String, onSelect: (String) -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.medium,
+        color = Color(0xFFF7F6F2),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(0.5.dp, Color(0xFFEFECE6)),
     ) {
         Row(modifier = Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("active" to "待处理", "critical" to "严重", "acknowledged" to "已确认", "resolved" to "已恢复").forEach { (value, label) ->

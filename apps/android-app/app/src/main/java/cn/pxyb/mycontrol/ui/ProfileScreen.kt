@@ -2,13 +2,18 @@ package cn.pxyb.mycontrol.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Devices
@@ -70,8 +75,13 @@ fun ProfileScreen(
     ).count { it }
 
     LazyColumn(
-        modifier = screenPadding(contentPadding),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = contentPadding.calculateTopPadding() + 8.dp,
+            bottom = contentPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
@@ -325,18 +335,61 @@ fun ProfileScreen(
     revokeTarget?.let { session ->
         AlertDialog(
             onDismissRequest = { revokeTarget = null },
-            shape = MaterialTheme.shapes.medium,
-            icon = { Icon(Icons.Outlined.Devices, contentDescription = null) },
-            title = { Text("撤销远程会话？") },
-            text = { Text("${deviceLabel(session.userAgent)} · ${session.ip}\n该设备需要重新登录。") },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = Color.White,
+            icon = {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFFFEF3C7),
+                    border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.2f)),
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Outlined.Devices,
+                            contentDescription = null,
+                            tint = Color(0xFFB45309),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            },
+            title = {
+                Text(
+                    "撤销远程会话？",
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 19.sp
+                    )
+                )
+            },
+            text = {
+                Text(
+                    "${deviceLabel(session.userAgent)} · ${session.ip}\n该设备将立即失去权限并需要重新登录。",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
             confirmButton = {
                 Button(
                     onClick = { revokeTarget = null; onRevokeSession(session.nonce) },
-                    shape = MaterialTheme.shapes.medium,
-                ) { Text("确认撤销") }
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) { Text("确认撤销", modifier = Modifier.padding(horizontal = 4.dp)) }
             },
             dismissButton = {
-                OutlinedButton(onClick = { revokeTarget = null }, shape = MaterialTheme.shapes.medium) { Text("取消") }
+                Surface(
+                    onClick = { revokeTarget = null },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ) {
+                    Text(
+                        "取消",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                    )
+                }
             },
         )
     }
@@ -344,18 +397,61 @@ fun ProfileScreen(
     if (confirmLogout) {
         AlertDialog(
             onDismissRequest = { confirmLogout = false },
-            shape = MaterialTheme.shapes.medium,
-            icon = { Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null) },
-            title = { Text("退出 MY Control？") },
-            text = { Text("当前设备的中央平台会话将立即撤销。") },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = Color.White,
+            icon = {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFFFEE2E2),
+                    border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.2f)),
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.Logout,
+                            contentDescription = null,
+                            tint = Color(0xFFB91C1C),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            },
+            title = {
+                Text(
+                    "退出当前账号？",
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 19.sp
+                    )
+                )
+            },
+            text = {
+                Text(
+                    "当前设备的中央控制会话将立即撤销，下一次使用需要重新登录认证。",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
             confirmButton = {
                 Button(
                     onClick = { confirmLogout = false; onLogout() },
-                    shape = MaterialTheme.shapes.medium,
-                ) { Text("退出登录") }
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+                ) { Text("退出登录", modifier = Modifier.padding(horizontal = 4.dp)) }
             },
             dismissButton = {
-                OutlinedButton(onClick = { confirmLogout = false }, shape = MaterialTheme.shapes.medium) { Text("取消") }
+                Surface(
+                    onClick = { confirmLogout = false },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ) {
+                    Text(
+                        "取消",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                    )
+                }
             },
         )
     }
@@ -403,13 +499,14 @@ private fun SecurityRow(icon: ImageVector, title: String, detail: String, status
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = MaterialTheme.shapes.medium,
+            color = Color(0xFFEFF6FF),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(0.5.dp, Color(0xFF2563EB).copy(alpha = 0.15f)),
         ) {
             Icon(
                 icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = Color(0xFF2563EB),
                 modifier = Modifier.padding(9.dp).size(20.dp),
             )
         }
@@ -435,13 +532,14 @@ private fun SessionRow(session: SecuritySession, busy: Boolean, onRevoke: () -> 
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = MaterialTheme.shapes.medium,
+            color = if (session.current) Color(0xFFEFF6FF) else Color(0xFFF1F5F9),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(0.5.dp, (if (session.current) Color(0xFF2563EB) else Color(0xFF94A3B8)).copy(alpha = 0.18f)),
         ) {
             Icon(
                 Icons.Outlined.Devices,
                 contentDescription = null,
-                tint = if (session.current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = if (session.current) Color(0xFF2563EB) else Color(0xFF64748B),
                 modifier = Modifier.padding(9.dp).size(20.dp),
             )
         }
