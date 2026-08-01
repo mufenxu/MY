@@ -1,10 +1,21 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +32,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
@@ -123,7 +136,15 @@ fun EventsScreen(
             }
         }
         item {
-            EventFilter(selected = filter, onSelect = { filter = it })
+            val counts = remember(activeIncidents, state.incidents) {
+                mapOf(
+                    "active" to activeIncidents.size,
+                    "critical" to activeIncidents.count { it.severity == "critical" },
+                    "acknowledged" to activeIncidents.count { it.status == "acknowledged" },
+                    "resolved" to state.incidents.count { it.status == "resolved" }
+                )
+            }
+            EventFilter(selected = filter, onSelect = { filter = it }, counts = counts)
         }
         if (state.overview == null && state.refreshing) {
             item { LoadingBlock("正在读取事件") }
@@ -280,31 +301,115 @@ fun EventsScreen(
 }
 
 @Composable
-private fun EventFilter(selected: String, onSelect: (String) -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = Color(0xFFF7F6F2),
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(0.5.dp, Color(0xFFEFECE6)),
+private fun EventFilter(
+    selected: String,
+    onSelect: (String) -> Unit,
+    counts: Map<String, Int> = emptyMap(),
+) {
+    val options = remember {
+        listOf(
+            "active" to "待处理",
+            "critical" to "严重",
+            "acknowledged" to "已确认",
+            "resolved" to "已恢复"
+        )
+    }
+    val selectedIndex = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .background(Color(0xFFF1F5F9), RoundedCornerShape(16.dp))
+            .padding(3.dp)
     ) {
-        Row(modifier = Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf("active" to "待处理", "critical" to "严重", "acknowledged" to "已确认", "resolved" to "已恢复").forEach { (value, label) ->
-                val active = selected == value
-                val background by animateColorAsState(
-                    if (active) MaterialTheme.colorScheme.surface else Color.Transparent,
-                    animationSpec = tween(160),
-                    label = "event-filter",
-                )
-                val foreground by animateColorAsState(
-                    if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    animationSpec = tween(160),
-                    label = "event-filter-text",
-                )
-                Box(
-                    modifier = Modifier.weight(1f).background(background, MaterialTheme.shapes.small).clickable { onSelect(value) }.padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(label, style = MaterialTheme.typography.labelLarge, color = foreground)
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            val totalWidth = maxWidth
+            val segmentWidth = totalWidth / options.size
+
+            // 极速横向平滑滑块动画
+            val indicatorOffset by animateDpAsState(
+                targetValue = segmentWidth * selectedIndex,
+                animationSpec = spring(
+                    stiffness = Spring.StiffnessHigh,
+                    dampingRatio = Spring.DampingRatioNoBouncy
+                ),
+                label = "filter_indicator_offset"
+            )
+
+            // 纯白明亮滑块（零阴影、零暗色遮罩）
+            Box(
+                modifier = Modifier
+                    .offset(x = indicatorOffset)
+                    .size(width = segmentWidth, height = 38.dp)
+                    .background(Color.White, RoundedCornerShape(13.dp))
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                options.forEachIndexed { index, (value, label) ->
+                    val active = selectedIndex == index
+                    val textColor = when {
+                        active && value == "critical" -> Color(0xFFDC2626)
+                        active -> MaterialTheme.colorScheme.primary
+                        else -> Color(0xFF64748B)
+                    }
+
+                    // 使用 indication = null 彻底禁用 Compose 点击时变暗的水波纹
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { onSelect(value) }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 13.sp
+                                ),
+                                color = textColor
+                            )
+                            val count = counts[value]
+                            if (count != null && count > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(start = 4.dp)
+                                        .background(
+                                            color = if (active) {
+                                                if (value == "critical") Color(0xFFFEE2E2) else Color(0xFFEFF6FF)
+                                            } else Color(0xFFE2E8F0),
+                                            shape = CircleShape
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = count.toString(),
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp
+                                        ),
+                                        color = if (active) {
+                                            if (value == "critical") Color(0xFFDC2626) else MaterialTheme.colorScheme.primary
+                                        } else Color(0xFF64748B)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

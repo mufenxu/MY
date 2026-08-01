@@ -1136,15 +1136,15 @@ private fun AuthenticatedShell(
                             targetState = state.accountManagementOpen,
                             transitionSpec = {
                                 if (targetState) {
-                                    (slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
-                                            fadeIn(animationSpec = tween(300))) togetherWith
-                                            (slideOutHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 } +
-                                                    fadeOut(animationSpec = tween(220)))
+                                    (slideInHorizontally(animationSpec = tween(180, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
+                                            fadeIn(animationSpec = tween(180))) togetherWith
+                                            (slideOutHorizontally(animationSpec = tween(180, easing = FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 } +
+                                                    fadeOut(animationSpec = tween(140)))
                                 } else {
-                                    (slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 } +
-                                            fadeIn(animationSpec = tween(300))) togetherWith
-                                            (slideOutHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
-                                                    fadeOut(animationSpec = tween(220)))
+                                    (slideInHorizontally(animationSpec = tween(180, easing = FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 } +
+                                            fadeIn(animationSpec = tween(180))) togetherWith
+                                            (slideOutHorizontally(animationSpec = tween(180, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
+                                                    fadeOut(animationSpec = tween(140)))
                                 }
                             },
                             label = "profile_subscreen_transition"
@@ -1174,8 +1174,8 @@ private fun AuthenticatedShell(
 
             AnimatedVisibility(
                 visible = !isSubScreen,
-                enter = slideInVertically(animationSpec = tween(260, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeIn(animationSpec = tween(260)),
-                exit = slideOutVertically(animationSpec = tween(220, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeOut(animationSpec = tween(200)),
+                enter = slideInVertically(animationSpec = tween(160, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeIn(animationSpec = tween(160)),
+                exit = slideOutVertically(animationSpec = tween(140, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeOut(animationSpec = tween(120)),
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
                 AppBottomNavigation(
@@ -1317,7 +1317,11 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onCl
             .fillMaxHeight()
             .clip(itemShape)
             .background(background)
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
