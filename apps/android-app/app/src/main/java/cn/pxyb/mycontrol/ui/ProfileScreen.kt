@@ -1,31 +1,38 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.ManageAccounts
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -40,6 +47,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +69,7 @@ fun ProfileScreen(
     onOpenQrLogin: () -> Unit,
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
+    onOpenAccountManagement: () -> Unit,
 ) {
     var revokeTarget by remember { mutableStateOf<SecuritySession?>(null) }
     var confirmLogout by remember { mutableStateOf(false) }
@@ -90,47 +100,149 @@ fun ProfileScreen(
                 subtitle = "账号、安全与设备",
                 refreshing = state.refreshing,
                 onRefresh = onRefresh,
+                actions = {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = CircleShape,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    ) {
+                        androidx.compose.material3.IconButton(
+                            onClick = onOpenQrLogin,
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.QrCodeScanner,
+                                contentDescription = "扫码登录",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
             )
         }
 
         item {
             AppPanel {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 20.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = MaterialTheme.shapes.medium,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    // 美化为极具质感的双层圆形头像
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(64.dp)
                     ) {
-                        androidx.compose.foundation.Image(
-                            painter = painterResource(R.drawable.platform_logo),
-                            contentDescription = "MY Control",
-                            modifier = Modifier.padding(8.dp).size(48.dp),
-                        )
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                            modifier = Modifier.fillMaxSize()
+                        ) {}
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                            modifier = Modifier.size(54.dp)
+                        ) {
+                            androidx.compose.foundation.Image(
+                                painter = painterResource(R.drawable.platform_logo),
+                                contentDescription = "用户头像",
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .padding(8.dp)
+                                    .fillMaxSize(),
+                            )
+                        }
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             user.username,
                             style = MaterialTheme.typography.headlineMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
+                                fontSize = 21.sp,
                             ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text(
-                            "MY Control · ${roleLabel(user.role)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 3.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                shape = RoundedCornerShape(6.dp),
+                            ) {
+                                Text(
+                                    text = roleLabel(user.role),
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 11.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                )
+                            }
+                            Text(
+                                "MY Control",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     StatusBadge("healthy", "在线")
+                }
+            }
+        }
+
+        // 入口卡片：账号与安全管理
+        item {
+            AppPanel {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenAccountManagement() }
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ManageAccounts,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(10.dp)
+                                .size(22.dp),
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "账号与安全管理",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                            ),
+                        )
+                        Text(
+                            "修改密码、管理 MFA 验证、密保设置",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
         }
@@ -180,14 +292,10 @@ fun ProfileScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("${security?.sessions?.size ?: 0} 台活动设备", style = MaterialTheme.typography.titleSmall)
                             Text(
-                                "可通过二维码安全登录网页端",
+                                "可通过右上角二维码安全登录网页端",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                        }
-                        OutlinedButton(onClick = onOpenQrLogin, shape = MaterialTheme.shapes.medium) {
-                            Icon(Icons.Outlined.QrCodeScanner, contentDescription = null, modifier = Modifier.size(17.dp))
-                            Text("扫码", modifier = Modifier.padding(start = 6.dp))
                         }
                     }
                 }
@@ -287,12 +395,12 @@ fun ProfileScreen(
                 ) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = MaterialTheme.shapes.medium,
+                        shape = CircleShape,
                     ) {
                         androidx.compose.foundation.Image(
                             painter = painterResource(R.drawable.platform_logo),
                             contentDescription = null,
-                            modifier = Modifier.padding(7.dp).size(34.dp),
+                            modifier = Modifier.padding(7.dp).size(34.dp).clip(CircleShape),
                         )
                     }
                     Column(modifier = Modifier.weight(1f)) {
@@ -313,21 +421,51 @@ fun ProfileScreen(
             }
         }
 
+        // 退出登录卡片（与其他 AppPanel 卡片样式完全一致，仅颜色不同）
         item {
-            OutlinedButton(
+            Card(
                 onClick = { confirmLogout = true },
-                modifier = Modifier.fillMaxWidth(),
                 enabled = state.busyAction == null,
-                shape = MaterialTheme.shapes.medium,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.24f)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.fillMaxWidth(),
+                shape = AppCardShape,
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFFEF2F2),
+                    contentColor = Color(0xFFDC2626),
+                ),
+                border = BorderStroke(0.5.dp, Color(0xFFFECDD3).copy(alpha = 0.8f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
             ) {
-                if (state.busyAction == "logout") {
-                    CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    if (state.busyAction == "logout") {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = Color(0xFFDC2626),
+                            strokeWidth = 2.5.dp,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.Logout,
+                            contentDescription = null,
+                            tint = Color(0xFFDC2626),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Text(
+                        text = "退出当前账号",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                        ),
+                        color = Color(0xFFDC2626),
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
                 }
-                Text("退出当前账号", modifier = Modifier.padding(start = 8.dp))
             }
         }
     }

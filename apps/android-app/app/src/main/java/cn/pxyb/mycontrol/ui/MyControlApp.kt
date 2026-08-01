@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -7,6 +9,13 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -104,6 +113,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
@@ -1088,9 +1099,10 @@ private fun AuthenticatedShell(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
             val tab = state.selectedTab
+            val isSubScreen = state.accountManagementOpen
             val contentPadding = PaddingValues(
                 top = padding.calculateTopPadding(),
-                bottom = 90.dp,
+                bottom = if (isSubScreen) padding.calculateBottomPadding() + 16.dp else 90.dp,
             )
             saveableStateHolder.SaveableStateProvider(tab.name) {
                 when (tab) {
@@ -1119,22 +1131,58 @@ private fun AuthenticatedShell(
                         { id -> viewModel.runIotScene(id, onSensitiveActionConfirmation) },
                         onRefresh,
                     )
-                    MainTab.Profile -> ProfileScreen(
-                        state,
-                        contentPadding,
-                        { nonce -> viewModel.revokeSession(nonce, onSensitiveActionConfirmation) },
-                        viewModel::openQrScanner,
-                        viewModel::logout,
-                        onRefresh,
-                    )
+                    MainTab.Profile -> {
+                        AnimatedContent(
+                            targetState = state.accountManagementOpen,
+                            transitionSpec = {
+                                if (targetState) {
+                                    (slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
+                                            fadeIn(animationSpec = tween(300))) togetherWith
+                                            (slideOutHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 } +
+                                                    fadeOut(animationSpec = tween(220)))
+                                } else {
+                                    (slideInHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 } +
+                                            fadeIn(animationSpec = tween(300))) togetherWith
+                                            (slideOutHorizontally(animationSpec = tween(300, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
+                                                    fadeOut(animationSpec = tween(220)))
+                                }
+                            },
+                            label = "profile_subscreen_transition"
+                        ) { isAccountOpen ->
+                            if (isAccountOpen) {
+                                AccountManagementScreen(
+                                    state = state,
+                                    contentPadding = contentPadding,
+                                    onDismiss = viewModel::closeAccountManagement,
+                                    onRefresh = onRefresh,
+                                )
+                            } else {
+                                ProfileScreen(
+                                    state = state,
+                                    contentPadding = contentPadding,
+                                    onRevokeSession = { nonce -> viewModel.revokeSession(nonce, onSensitiveActionConfirmation) },
+                                    onOpenQrLogin = viewModel::openQrScanner,
+                                    onLogout = viewModel::logout,
+                                    onRefresh = onRefresh,
+                                    onOpenAccountManagement = viewModel::openAccountManagement,
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
-            AppBottomNavigation(
-                selected = state.selectedTab,
-                onSelect = viewModel::selectTab,
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
+            AnimatedVisibility(
+                visible = !isSubScreen,
+                enter = slideInVertically(animationSpec = tween(260, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeIn(animationSpec = tween(260)),
+                exit = slideOutVertically(animationSpec = tween(220, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeOut(animationSpec = tween(200)),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                AppBottomNavigation(
+                    selected = state.selectedTab,
+                    onSelect = viewModel::selectTab,
+                )
+            }
         }
     }
 }

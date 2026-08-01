@@ -55,6 +55,7 @@ data class AppUiState(
     val qrLoginBusy: Boolean = false,
     val qrLoginTarget: QrLoginTarget? = null,
     val qrLoginError: String? = null,
+    val accountManagementOpen: Boolean = false,
     val error: String? = null,
     val message: String? = null,
 ) {
@@ -295,6 +296,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         mutableState.update {
             it.copy(qrLoginOpen = true, qrLoginBusy = false, qrLoginTarget = null, qrLoginError = null)
         }
+    }
+
+    fun openAccountManagement() {
+        mutableState.update { it.copy(accountManagementOpen = true) }
+    }
+
+    fun closeAccountManagement() {
+        mutableState.update { it.copy(accountManagementOpen = false) }
     }
 
     fun handleQrLoginUrl(rawUrl: String?) {

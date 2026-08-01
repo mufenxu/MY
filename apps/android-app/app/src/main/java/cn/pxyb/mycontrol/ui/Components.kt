@@ -276,6 +276,7 @@ fun ImmersiveHeader(
     subtitle: String = "生产环境 · 智控中心 LIVE",
     refreshing: Boolean = false,
     onRefresh: (() -> Unit)? = null,
+    actions: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -302,7 +303,7 @@ fun ImmersiveHeader(
                 Box(
                     Modifier
                         .size(7.dp)
-                    .background(MaterialTheme.colorScheme.secondary, CircleShape)
+                        .background(MaterialTheme.colorScheme.secondary, CircleShape)
                 )
                 Text(
                     subtitle,
@@ -313,21 +314,28 @@ fun ImmersiveHeader(
             }
         }
 
-        if (onRefresh != null) {
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shape = CircleShape,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier.padding(start = 12.dp)
-            ) {
-                androidx.compose.material3.IconButton(
-                    onClick = onRefresh,
-                    enabled = !refreshing,
-                    modifier = Modifier.size(42.dp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(start = 12.dp)
+        ) {
+            actions?.invoke()
+
+            if (onRefresh != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = CircleShape,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
-                    Crossfade(targetState = refreshing, animationSpec = tween(160), label = "refresh") { busy ->
-                        if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
-                        else Icon(Icons.Outlined.Refresh, contentDescription = "刷新", tint = MaterialTheme.colorScheme.primary)
+                    androidx.compose.material3.IconButton(
+                        onClick = onRefresh,
+                        enabled = !refreshing,
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Crossfade(targetState = refreshing, animationSpec = tween(160), label = "refresh") { busy ->
+                            if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
+                            else Icon(Icons.Outlined.Refresh, contentDescription = "刷新", tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             }

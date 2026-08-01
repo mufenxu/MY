@@ -8497,7 +8497,7 @@ body[data-app-locked="true"] #appGate::after {
 @media (min-width: 1280px) {
   body[data-route="overview"]:not([data-app-locked="true"]) .main-content {
     display: grid !important;
-    grid-template-columns: minmax(210px, 1fr) minmax(210px, 1fr) minmax(210px, 1fr) minmax(310px, .9fr) !important;
+    grid-template-columns: minmax(210px, 1fr) minmax(210px, 1fr) minmax(210px, 1fr) minmax(380px, 1fr) !important;
     grid-template-rows: auto auto !important;
     grid-template-areas:
       "study study sync auth"
@@ -8712,6 +8712,7 @@ body[data-app-locked="true"] #appGate::after {
     grid-area: auth !important;
     position: static !important;
     width: auto !important;
+    max-width: none !important;
     min-width: 0 !important;
     min-height: 0 !important;
     height: auto !important;
@@ -8721,6 +8722,8 @@ body[data-app-locked="true"] #appGate::after {
     align-self: start !important;
     justify-content: start !important;
     gap: 18px !important;
+    transform: none !important;
+    animation: none !important;
   }
 
   body[data-route="overview"]:not([data-app-locked="true"]) #authPanel.active-tab h2 {
