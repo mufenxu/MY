@@ -8508,6 +8508,16 @@ body[data-app-locked="true"] #appGate::after {
     padding: 24px !important;
   }
 
+  body[data-route="overview"]:not([data-app-locked="true"]) #status:not(:empty) {
+    position: fixed !important;
+    right: 24px !important;
+    bottom: 24px !important;
+    z-index: 50 !important;
+    width: min(320px, calc(100vw - 48px)) !important;
+    max-width: 320px !important;
+    margin: 0 !important;
+  }
+
   body[data-route="overview"]:not([data-app-locked="true"]) #status:empty {
     display: none !important;
   }
