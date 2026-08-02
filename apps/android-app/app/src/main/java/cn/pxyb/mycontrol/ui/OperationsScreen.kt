@@ -25,9 +25,7 @@ import androidx.compose.material.icons.outlined.FactCheck
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.material.icons.outlined.TaskAlt
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.Color
@@ -39,7 +37,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -260,64 +257,13 @@ fun OperationsScreen(
     }
 
     if (confirmBackup) {
-        AlertDialog(
-            onDismissRequest = { confirmBackup = false },
-            shape = RoundedCornerShape(24.dp),
-            containerColor = Color.White,
-            icon = {
-                Surface(
-                    shape = CircleShape,
-                    color = Color(0xFFEFF6FF),
-                    border = BorderStroke(1.dp, Color(0xFF2563EB).copy(alpha = 0.2f)),
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Outlined.Backup,
-                            contentDescription = null,
-                            tint = Color(0xFF2563EB),
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-            },
-            title = {
-                Text(
-                    "立即执行平台备份？",
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 19.sp
-                    )
-                )
-            },
-            text = {
-                Text(
-                    "备份任务将由内网数据执行器后台运行，不会对现有数据进行覆盖或删除操作。",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { confirmBackup = false; onTriggerBackup() },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) { Text("确认备份", modifier = Modifier.padding(horizontal = 4.dp)) }
-            },
-            dismissButton = {
-                Surface(
-                    onClick = { confirmBackup = false },
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                ) {
-                    Text(
-                        "取消",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                    )
-                }
-            },
+        AppConfirmDialog(
+            title = "立即执行平台备份？",
+            detail = "备份任务将由内网数据执行器后台运行，不会对现有数据进行覆盖或删除操作。",
+            confirmLabel = "确认备份",
+            onDismiss = { confirmBackup = false },
+            onConfirm = { confirmBackup = false; onTriggerBackup() },
+            icon = Icons.Outlined.Backup,
         )
     }
 }

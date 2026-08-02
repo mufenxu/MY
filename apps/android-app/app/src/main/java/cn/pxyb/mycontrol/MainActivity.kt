@@ -12,10 +12,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.remember
+import androidx.credentials.CreatePublicKeyCredentialRequest
+import androidx.credentials.CreatePublicKeyCredentialResponse
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetPublicKeyCredentialOption
 import androidx.credentials.PublicKeyCredential
+import androidx.credentials.exceptions.CreateCredentialException
 import androidx.credentials.exceptions.GetCredentialException
 import cn.pxyb.mycontrol.ui.AppViewModel
 import cn.pxyb.mycontrol.ui.MyControlApp
@@ -42,6 +45,9 @@ class MainActivity : ComponentActivity() {
                 val passkeyRequest: suspend (String) -> String = remember {
                     { requestJson -> requestPasskey(requestJson) }
                 }
+                val passkeyRegistrationRequest: suspend (String) -> String = remember {
+                    { requestJson -> requestPasskeyRegistration(requestJson) }
+                }
                 val biometricConfirmation: suspend () -> Boolean = remember {
                     { requestQrLoginConfirmation() }
                 }
@@ -55,6 +61,7 @@ class MainActivity : ComponentActivity() {
                     viewModel = appViewModel,
                     onBiometricUnlock = biometricRequest,
                     onPasskeyRequest = passkeyRequest,
+                    onPasskeyRegistrationRequest = passkeyRegistrationRequest,
                     onBiometricConfirmation = biometricConfirmation,
                     onSessionProtection = sessionProtection,
                     onSensitiveActionConfirmation = sensitiveActionConfirmation,
@@ -94,6 +101,23 @@ class MainActivity : ComponentActivity() {
             throw IllegalStateException("系统 Passkey 窗口未响应，请确认域名已关联当前 App 签名后重试。", error)
         } catch (error: GetCredentialException) {
             throw IllegalStateException("Passkey 验证未完成，请确认设备已保存该账号的 Passkey。", error)
+        }
+    }
+
+    private suspend fun requestPasskeyRegistration(requestJson: String): String {
+        return try {
+            withTimeout(60_000) {
+                val response = credentialManager.createCredential(
+                    context = this@MainActivity,
+                    request = CreatePublicKeyCredentialRequest(requestJson = requestJson),
+                )
+                (response as? CreatePublicKeyCredentialResponse)?.registrationResponseJson
+                    ?: throw IllegalStateException("设备未返回可用的 Passkey 注册结果。")
+            }
+        } catch (error: TimeoutCancellationException) {
+            throw IllegalStateException("系统 Passkey 窗口未响应，请确认域名已关联当前 App 签名后重试。", error)
+        } catch (error: CreateCredentialException) {
+            throw IllegalStateException("Passkey 注册未完成，请确认设备支持并重试。", error)
         }
     }
 

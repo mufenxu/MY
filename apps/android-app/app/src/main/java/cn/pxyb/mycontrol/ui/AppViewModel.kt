@@ -12,6 +12,7 @@ import cn.pxyb.mycontrol.data.DiagnosticData
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.IotData
 import cn.pxyb.mycontrol.data.OverviewData
+import cn.pxyb.mycontrol.data.PlatformPasskey
 import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.PlatformTask
 import cn.pxyb.mycontrol.data.PlatformUser
@@ -19,6 +20,7 @@ import cn.pxyb.mycontrol.data.ReleaseData
 import cn.pxyb.mycontrol.data.QrLoginTarget
 import cn.pxyb.mycontrol.data.SecurityData
 import cn.pxyb.mycontrol.data.SessionStore
+import cn.pxyb.mycontrol.data.TotpEnrollment
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,6 +58,9 @@ data class AppUiState(
     val qrLoginTarget: QrLoginTarget? = null,
     val qrLoginError: String? = null,
     val accountManagementOpen: Boolean = false,
+    val totpEnrollment: TotpEnrollment? = null,
+    val recoveryCodes: List<String> = emptyList(),
+    val passkeys: List<PlatformPasskey> = emptyList(),
     val error: String? = null,
     val message: String? = null,
 ) {
@@ -534,15 +539,185 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun runIotScene(id: String, confirmation: suspend () -> Boolean) =
         runAction("scene", "IoT 场景指令已进入执行队列。", confirmation) {
-        api.runIotScene(id)
+            api.runIotScene(id)
+            mutableState.update { it.copy(iot = api.iot()) }
+            publishWidget()
+        }
+
+    fun controlIotRelay(
+        deviceId: String,
+        relayId: String,
+        enabled: Boolean,
+    ) = runAction("relay:$deviceId:$relayId", "继电器指令已发送。") {
+        api.controlIotRelay(deviceId, relayId, enabled)
         mutableState.update { it.copy(iot = api.iot()) }
         publishWidget()
     }
 
     fun revokeSession(nonce: String, confirmation: suspend () -> Boolean) =
         runAction("session", "远程会话已撤销。", confirmation) {
-        api.revokeSession(nonce)
-        mutableState.update { it.copy(security = api.security()) }
+            api.revokeSession(nonce)
+            mutableState.update { it.copy(security = api.security()) }
+        }
+
+    fun changePassword(oldPassword: String, newPassword: String, totp: String) {
+        if (mutableState.value.busyAction != null) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(busyAction = "password", error = null, message = null) }
+            runCatching { api.changePassword(oldPassword, newPassword, totp) }
+                .onSuccess { revoked ->
+                    if (revoked) {
+                        forceReauthentication("密码已修改，所有会话已退出，请使用新密码重新登录。")
+                    } else {
+                        mutableState.update { it.copy(busyAction = null, message = "登录密码已更新。") }
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(busyAction = null, error = error.message ?: "密码修改失败，请稍后重试。")
+                    }
+                }
+        }
+    }
+
+    fun beginTotpEnrollment(password: String, totp: String) {
+        if (mutableState.value.busyAction != null) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(busyAction = "totp-enroll", error = null, message = null) }
+            runCatching { api.beginTotpEnrollment(password, totp) }
+                .onSuccess { enrollment ->
+                    mutableState.update { it.copy(busyAction = null, totpEnrollment = enrollment) }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(busyAction = null, error = error.message ?: "动态验证注册启动失败，请稍后重试。")
+                    }
+                }
+        }
+    }
+
+    fun confirmTotpEnrollment(code: String) {
+        if (mutableState.value.busyAction != null) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(busyAction = "totp-confirm", error = null, message = null) }
+            runCatching { api.confirmTotpEnrollment(code) }
+                .onSuccess { codes ->
+                    mutableState.update {
+                        it.copy(busyAction = null, recoveryCodes = codes, message = "动态验证已启用。")
+                    }
+                    refreshSecurityData()
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(busyAction = null, error = error.message ?: "动态验证码无效，请重试。")
+                    }
+                }
+        }
+    }
+
+    fun regenerateRecoveryCodes(password: String, totp: String) {
+        if (mutableState.value.busyAction != null) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(busyAction = "recovery-codes", error = null, message = null) }
+            runCatching { api.regenerateRecoveryCodes(password, totp) }
+                .onSuccess { codes ->
+                    mutableState.update {
+                        it.copy(busyAction = null, recoveryCodes = codes, message = "恢复码已重置，旧恢复码全部失效。")
+                    }
+                    refreshSecurityData()
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(busyAction = null, error = error.message ?: "恢复码生成失败，请稍后重试。")
+                    }
+                }
+        }
+    }
+
+    fun disableTotp(password: String, totp: String) {
+        if (mutableState.value.busyAction != null) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(busyAction = "totp-disable", error = null, message = null) }
+            runCatching { api.disableTotp(password, totp) }
+                .onSuccess { revoked ->
+                    if (revoked) {
+                        forceReauthentication("动态验证已关闭，所有会话已退出，请重新登录。")
+                    } else {
+                        mutableState.update { it.copy(busyAction = null, message = "动态验证已关闭。") }
+                        refreshSecurityData()
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(busyAction = null, error = error.message ?: "动态验证关闭失败，请稍后重试。")
+                    }
+                }
+        }
+    }
+
+    fun clearTotpFlow() {
+        mutableState.update { it.copy(totpEnrollment = null, recoveryCodes = emptyList()) }
+    }
+
+    fun refreshPasskeys() {
+        if (mutableState.value.busyAction != null) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(busyAction = "passkey-list", error = null) }
+            runCatching { api.passkeys() }
+                .onSuccess { passkeys ->
+                    mutableState.update { it.copy(busyAction = null, passkeys = passkeys) }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(busyAction = null, error = error.message ?: "Passkey 列表读取失败，请稍后重试。")
+                    }
+                }
+        }
+    }
+
+    fun registerPasskey(
+        name: String,
+        password: String,
+        totp: String,
+        requestCredential: suspend (String) -> String,
+    ) {
+        if (mutableState.value.busyAction != null) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(busyAction = "passkey-register", error = null, message = null) }
+            runCatching {
+                val challenge = api.beginPasskeyRegistration(password, totp)
+                val responseJson = requestCredential(challenge.optionsJson)
+                api.completePasskeyRegistration(challenge.challengeId, responseJson, name)
+            }
+                .onSuccess {
+                    mutableState.update { it.copy(busyAction = null, message = "Passkey 已成功绑定。") }
+                    refreshPasskeysInternal()
+                    refreshSecurityData()
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(busyAction = null, error = error.message ?: "Passkey 注册失败，请稍后重试。")
+                    }
+                }
+        }
+    }
+
+    fun deletePasskey(id: String, password: String, totp: String) {
+        if (mutableState.value.busyAction != null) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(busyAction = "passkey-delete", error = null, message = null) }
+            runCatching { api.deletePasskey(id, password, totp) }
+                .onSuccess {
+                    mutableState.update { it.copy(busyAction = null, message = "Passkey 已删除。") }
+                    refreshPasskeysInternal()
+                    refreshSecurityData()
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(busyAction = null, error = error.message ?: "Passkey 删除失败，请稍后重试。")
+                    }
+                }
+        }
     }
 
     fun clearFeedback() {
@@ -601,5 +776,28 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
         }
+    }
+
+    private suspend fun refreshSecurityData() {
+        runCatching { api.security() }.onSuccess { security ->
+            mutableState.update { it.copy(security = security) }
+        }
+    }
+
+    private suspend fun refreshPasskeysInternal() {
+        runCatching { api.passkeys() }.onSuccess { passkeys ->
+            mutableState.update { it.copy(passkeys = passkeys) }
+        }
+    }
+
+    private fun forceReauthentication(message: String) {
+        sessionStore.clear()
+        mutableState.value = AppUiState(
+            booting = false,
+            androidPasskeySupported = mutableState.value.androidPasskeySupported,
+            suggestedUsername = sessionStore.readLastUsername(),
+            message = message,
+        )
+        MyControlWidgetProvider.clear(getApplication())
     }
 }

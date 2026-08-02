@@ -57,7 +57,6 @@ import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RocketLaunch
@@ -72,8 +71,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -115,9 +112,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
+import kotlinx.coroutines.delay
 
 private data class TabItem(val tab: MainTab, val label: String, val icon: ImageVector)
 private enum class SecondFactorMode { Totp, RecoveryCode }
@@ -135,6 +134,7 @@ fun MyControlApp(
     viewModel: AppViewModel,
     onBiometricUnlock: () -> Unit,
     onPasskeyRequest: suspend (String) -> String,
+    onPasskeyRegistrationRequest: suspend (String) -> String,
     onBiometricConfirmation: suspend () -> Boolean,
     onSessionProtection: suspend () -> Boolean,
     onSensitiveActionConfirmation: suspend () -> Boolean,
@@ -164,6 +164,7 @@ fun MyControlApp(
                 state,
                 viewModel,
                 onPasskeyRequest,
+                onPasskeyRegistrationRequest,
                 onBiometricConfirmation,
                 onSensitiveActionConfirmation,
             )
@@ -1036,6 +1037,7 @@ private fun AuthenticatedShell(
     state: AppUiState,
     viewModel: AppViewModel,
     onPasskeyRequest: suspend (String) -> String,
+    onPasskeyRegistrationRequest: suspend (String) -> String,
     onBiometricConfirmation: suspend () -> Boolean,
     onSensitiveActionConfirmation: suspend () -> Boolean,
 ) {
@@ -1050,13 +1052,23 @@ private fun AuthenticatedShell(
         )
         return
     }
-    val snackbarHost = remember { SnackbarHostState() }
+    var toastVisible by remember { mutableStateOf(false) }
+    var toastMessage by remember { mutableStateOf("") }
+    var toastError by remember { mutableStateOf(false) }
     val saveableStateHolder = rememberSaveableStateHolder()
     val onRefresh = remember(viewModel) { { viewModel.refreshAll(true) } }
     LaunchedEffect(state.error, state.message) {
         val text = state.error ?: state.message
         if (!text.isNullOrBlank()) {
-            snackbarHost.showSnackbar(text)
+            toastMessage = text
+            toastError = state.error != null
+            toastVisible = true
+        }
+    }
+    LaunchedEffect(toastVisible) {
+        if (toastVisible) {
+            delay(3800)
+            toastVisible = false
             viewModel.clearFeedback()
         }
     }
@@ -1064,38 +1076,6 @@ private fun AuthenticatedShell(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = {
-            SnackbarHost(snackbarHost) { data ->
-                Surface(
-                    modifier = Modifier
-                        .padding(horizontal = 18.dp, vertical = 8.dp)
-                        .fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFF0F172A),
-                    contentColor = Color.White,
-                    shadowElevation = 8.dp,
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            Icons.Outlined.NotificationsActive,
-                            contentDescription = null,
-                            tint = Color(0xFF3B82F6),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            data.visuals.message,
-                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
-                            color = Color.White
-                        )
-                    }
-                }
-            }
-        },
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
             val tab = state.selectedTab
@@ -1127,8 +1107,12 @@ private fun AuthenticatedShell(
                     MainTab.Tools -> ToolsScreen(
                         state,
                         contentPadding,
+                        state.selectedTab,
                         { viewModel.triggerCt8(onSensitiveActionConfirmation) },
                         { id -> viewModel.runIotScene(id, onSensitiveActionConfirmation) },
+                        { deviceId, relayId, enabled ->
+                            viewModel.controlIotRelay(deviceId, relayId, enabled)
+                        },
                         onRefresh,
                     )
                     MainTab.Profile -> {
@@ -1155,6 +1139,16 @@ private fun AuthenticatedShell(
                                     contentPadding = contentPadding,
                                     onDismiss = viewModel::closeAccountManagement,
                                     onRefresh = onRefresh,
+                                    onChangedPassword = viewModel::changePassword,
+                                    onBeginTotpEnrollment = viewModel::beginTotpEnrollment,
+                                    onConfirmTotpEnrollment = viewModel::confirmTotpEnrollment,
+                                    onRegenerateRecoveryCodes = viewModel::regenerateRecoveryCodes,
+                                    onDisableTotp = viewModel::disableTotp,
+                                    onClearTotpFlow = viewModel::clearTotpFlow,
+                                    onRefreshPasskeys = viewModel::refreshPasskeys,
+                                    onRegisterPasskey = viewModel::registerPasskey,
+                                    onDeletePasskey = viewModel::deletePasskey,
+                                    onRegisterPasskeyRequest = onPasskeyRegistrationRequest,
                                 )
                             } else {
                                 ProfileScreen(
@@ -1181,6 +1175,23 @@ private fun AuthenticatedShell(
                 AppBottomNavigation(
                     selected = state.selectedTab,
                     onSelect = viewModel::selectTab,
+                )
+            }
+
+            AnimatedVisibility(
+                visible = toastVisible,
+                enter = slideInVertically(animationSpec = tween(260, easing = FastOutSlowInEasing)) { -it } + fadeIn(animationSpec = tween(180)),
+                exit = slideOutVertically(animationSpec = tween(180, easing = FastOutSlowInEasing)) { -it } + fadeOut(animationSpec = tween(140)),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .zIndex(10f),
+            ) {
+                AppToast(
+                    message = toastMessage,
+                    error = toastError,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }

@@ -1,47 +1,76 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -227,6 +256,391 @@ fun LoadingBlock(label: String, modifier: Modifier = Modifier) {
     ) {
         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         Text(label, modifier = Modifier.padding(start = 10.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+// ---------------- 现代统一弹窗 ----------------
+
+/**
+ * 全 App 统一的现代弹窗容器：柔和遮罩、圆角卡片、入场缩放动画，
+ * 标题居中展示，底部为分隔线 + 全宽/双列胶囊按钮。
+ */
+@Composable
+fun AppDialog(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    iconBackground: Color = MaterialTheme.colorScheme.primaryContainer,
+    title: String? = null,
+    subtitle: String? = null,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 26.dp),
+    footer: (@Composable () -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+        ),
+    ) {
+        val scrim = if (isSystemInDarkTheme()) Color.Black.copy(alpha = 0.62f) else Color(0xFF0F172A).copy(alpha = 0.42f)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(scrim)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismissRequest,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(animationSpec = tween(160)) +
+                    scaleIn(initialScale = 0.9f, animationSpec = tween(260, easing = FastOutSlowInEasing)),
+                exit = fadeOut(animationSpec = tween(120)) +
+                    scaleOut(targetScale = 0.94f, animationSpec = tween(140)),
+                modifier = Modifier
+                    .imePadding()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {},
+                    ),
+            ) {
+                Surface(
+                    modifier = modifier.widthIn(max = 400.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shadowElevation = 28.dp,
+                    tonalElevation = 4.dp,
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(contentPadding),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(18.dp),
+                    ) {
+                        if (icon != null || title != null || subtitle != null) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                if (icon != null) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = iconBackground,
+                                        modifier = Modifier.size(54.dp),
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = null,
+                                                tint = iconTint,
+                                                modifier = Modifier.size(27.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                                if (title != null) {
+                                    Text(
+                                        text = title,
+                                        style = MaterialTheme.typography.titleLarge.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 20.sp,
+                                        ),
+                                        textAlign = TextAlign.Center,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                                if (subtitle != null) {
+                                    Text(
+                                        text = subtitle,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontSize = 13.5.sp,
+                                            lineHeight = 20.sp,
+                                        ),
+                                        textAlign = TextAlign.Center,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                        content()
+                        if (footer != null) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                            footer()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 弹窗主操作按钮：胶囊形主色全宽按钮。 */
+@Composable
+fun AppDialogPrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    busy: Boolean = false,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.height(48.dp),
+        enabled = enabled && !busy,
+        shape = RoundedCornerShape(50),
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp),
+    ) {
+        if (busy) {
+            CircularProgressIndicator(
+                Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        } else {
+            Text(
+                text,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        }
+    }
+}
+
+/** 弹窗次要操作按钮：浅灰胶囊按钮。 */
+@Composable
+fun AppDialogSecondaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    busy: Boolean = false,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.height(48.dp),
+        enabled = enabled && !busy,
+        shape = RoundedCornerShape(50),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp),
+    ) {
+        if (busy) {
+            CircularProgressIndicator(
+                Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        }
+    }
+}
+
+/** 弹窗危险操作按钮：红色胶囊按钮。 */
+@Composable
+fun AppDialogDangerButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    busy: Boolean = false,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.height(48.dp),
+        enabled = enabled && !busy,
+        shape = RoundedCornerShape(50),
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp),
+    ) {
+        if (busy) {
+            CircularProgressIndicator(
+                Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onError,
+            )
+        } else {
+            Text(
+                text,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onError,
+            )
+        }
+    }
+}
+
+/** 弹窗统一输入框：圆角浅底，聚焦时主色描边。 */
+@Composable
+fun DialogTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+    maxLines: Int = 1,
+    isPassword: Boolean = false,
+    keyboardType: KeyboardType = KeyboardType.Text,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.fillMaxWidth(),
+        label = { Text(label) },
+        singleLine = singleLine,
+        minLines = minLines,
+        maxLines = maxLines,
+        enabled = enabled,
+        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        shape = RoundedCornerShape(16.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+            focusedContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f),
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        ),
+    )
+}
+
+/** 弹窗内说明文字。 */
+@Composable
+fun DialogInfoText(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp, lineHeight = 20.sp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.fillMaxWidth(),
+    )
+}
+
+/** 通用的现代确认弹窗。 */
+@Composable
+fun AppConfirmDialog(
+    title: String,
+    detail: String,
+    confirmLabel: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    danger: Boolean = false,
+    busy: Boolean = false,
+    dismissLabel: String = "取消",
+) {
+    AppDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        modifier = modifier,
+        icon = icon,
+        iconTint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+        iconBackground = if (danger) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
+        title = title,
+        content = {
+            DialogInfoText(detail)
+        },
+        footer = {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppDialogSecondaryButton(
+                    text = dismissLabel,
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                    enabled = !busy,
+                )
+                if (danger) {
+                    AppDialogDangerButton(
+                        text = confirmLabel,
+                        onClick = onConfirm,
+                        modifier = Modifier.weight(1f),
+                        enabled = !busy,
+                        busy = busy,
+                    )
+                } else {
+                    AppDialogPrimaryButton(
+                        text = confirmLabel,
+                        onClick = onConfirm,
+                        modifier = Modifier.weight(1f),
+                        enabled = !busy,
+                        busy = busy,
+                    )
+                }
+            }
+        },
+    )
+}
+
+/** 顶部悬浮的现代提示 Toast：浅色模式白卡片 / 深色模式深色卡片，按成功/失败切换图标配色。 */
+@Composable
+fun AppToast(
+    message: String,
+    error: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val dark = isSystemInDarkTheme()
+    val container = if (dark) Color(0xFF1E293B).copy(alpha = 0.94f) else Color(0xFF0F172A).copy(alpha = 0.95f)
+    val border = if (dark) Color(0xFF475569).copy(alpha = 0.55f) else Color.White.copy(alpha = 0.22f)
+    val iconColor = if (error) Color(0xFFFCA5A5) else Color(0xFF93C5FD)
+    val iconBackground = Color.White.copy(alpha = if (dark) 0.14f else 0.16f)
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = container,
+        contentColor = Color(0xFFF8FAFC),
+        shadowElevation = 16.dp,
+        border = BorderStroke(0.5.dp, border),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(11.dp),
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = iconBackground,
+                modifier = Modifier.size(34.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (error) Icons.Outlined.ErrorOutline else Icons.Outlined.CheckCircle,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    lineHeight = 20.sp,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 

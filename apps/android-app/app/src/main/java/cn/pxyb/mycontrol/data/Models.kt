@@ -158,6 +158,7 @@ data class DeviceInfo(
     val temperature: Double?,
     val humidity: Double?,
     val lastActive: Long?,
+    val relays: Map<String, String?> = emptyMap(),
 )
 
 data class IotScene(
@@ -217,6 +218,26 @@ data class SecurityData(
     val recoveryCodesRemaining: Int,
     val sessionTtlHours: Int,
     val sessionIdleMinutes: Int,
+)
+
+data class PlatformPasskey(
+    val id: String,
+    val name: String,
+    val deviceType: String?,
+    val createdAt: String?,
+    val lastUsedAt: String?,
+)
+
+data class TotpEnrollment(
+    val secret: String,
+    val uri: String,
+    val qrDataUrl: String?,
+    val expiresAt: String?,
+)
+
+data class PasskeyRegistrationChallenge(
+    val challengeId: String,
+    val optionsJson: String,
 )
 
 class ApiException(

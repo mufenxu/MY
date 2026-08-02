@@ -417,10 +417,11 @@ function getRelayStatus(device, relayId) {
     return normalizeRelayStatus(collectionValue);
 }
 
-function getDeviceOnline(device) {
+function getDeviceOnline(device, fallbackRelayId) {
     if (!device) return false;
     const explicitStatus = firstDefined(
         device.deviceOnline,
+        device.onlineStatus,
         device.online,
         device.isOnline,
         device.is_online,
@@ -441,7 +442,7 @@ function getDeviceOnline(device) {
 
     return getMetric(device, 'temperature') !== undefined ||
         getMetric(device, 'humidity') !== undefined ||
-        getRelayStatus(device, getConfiguredDevice('primary').relayId) !== undefined;
+        (fallbackRelayId && getRelayStatus(device, fallbackRelayId) !== undefined);
 }
 
 function getDeviceTimestamp(device) {
@@ -486,17 +487,17 @@ function normalizeDeviceSnapshots(payload) {
         timestamp,
         mqttConnected: hasDevices,
         subscribed: hasDevices,
-        deviceOnline: getDeviceOnline(primaryDevice),
+        deviceOnline: getDeviceOnline(primaryDevice, primaryConfig.relayId),
         lastMsgTimestamp: timestamp,
         relayStatus: getRelayStatus(primaryDevice, primaryConfig.relayId),
         relay2Status: getRelayStatus(secondaryDevice, secondaryConfig.relayId),
-        esp01sOnline: getDeviceOnline(secondaryDevice),
+        esp01sOnline: getDeviceOnline(secondaryDevice, secondaryConfig.relayId),
         diagnosticMessage,
         configuredPrimaryDeviceId: primaryConfig.deviceId,
         matchedPrimaryDeviceId: primaryDeviceId || '',
         devices: devices.map((device) => ({
             deviceId: getDeviceId(device),
-            online: getDeviceOnline(device),
+            online: getDeviceOnline(device, primaryConfig.relayId),
             timestamp: getDeviceTimestamp(device),
         })),
     };

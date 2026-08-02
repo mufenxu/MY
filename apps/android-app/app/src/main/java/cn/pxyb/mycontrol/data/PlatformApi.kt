@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.data
 
+import android.net.Uri
 import android.util.Base64
 import cn.pxyb.mycontrol.BuildConfig
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +17,13 @@ import java.util.concurrent.TimeUnit
 
 class PlatformApi(private val sessionStore: SessionStore) {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private val platformOrigin = Uri.parse(BuildConfig.PLATFORM_BASE_URL).let { uri ->
+        if (uri.scheme.isNullOrBlank() || uri.authority.isNullOrBlank()) {
+            ""
+        } else {
+            "${uri.scheme}://${uri.authority}"
+        }
+    }
     private val client = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -290,6 +298,97 @@ class PlatformApi(private val sessionStore: SessionStore) {
         Unit
     }
 
+    suspend fun changePassword(password: String, newPassword: String, totp: String = ""): Boolean =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("password", password)
+                .put("newPassword", newPassword)
+            if (totp.isNotBlank()) body.put("totp", totp.trim())
+            execute("/api/security/password", "POST", body).json.optBoolean("currentSessionRevoked")
+        }
+
+    suspend fun beginTotpEnrollment(password: String, totp: String = ""): TotpEnrollment =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("password", password)
+            if (totp.isNotBlank()) body.put("totp", totp.trim())
+            val enrollment = execute("/api/security/totp/enrollment", "POST", body).json
+                .optJSONObject("enrollment")
+                ?: throw ApiException("服务器未返回动态验证注册参数。", 500, "TOTP_ENROLLMENT_MISSING")
+            TotpEnrollment(
+                secret = enrollment.optString("secret"),
+                uri = enrollment.optString("uri"),
+                qrDataUrl = enrollment.nullableString("qrDataUrl"),
+                expiresAt = enrollment.nullableString("expiresAt"),
+            )
+        }
+
+    suspend fun confirmTotpEnrollment(code: String): List<String> = withContext(Dispatchers.IO) {
+        execute("/api/security/totp/confirm", "POST", JSONObject().put("totp", code.trim())).json
+            .optJSONArray("recoveryCodes").toStringList()
+    }
+
+    suspend fun regenerateRecoveryCodes(password: String, totp: String = ""): List<String> =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("password", password)
+            if (totp.isNotBlank()) body.put("totp", totp.trim())
+            execute("/api/security/totp/recovery-codes", "POST", body).json
+                .optJSONArray("recoveryCodes").toStringList()
+        }
+
+    suspend fun disableTotp(password: String, totp: String = ""): Boolean = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("password", password)
+        if (totp.isNotBlank()) body.put("totp", totp.trim())
+        execute("/api/security/totp", "DELETE", body).json.optBoolean("currentSessionRevoked")
+    }
+
+    suspend fun passkeys(): List<PlatformPasskey> = withContext(Dispatchers.IO) {
+        execute("/api/security/passkeys").json.optJSONArray("passkeys").objects().map { item ->
+            PlatformPasskey(
+                id = item.optString("id"),
+                name = item.optString("name", "Passkey"),
+                deviceType = item.nullableString("deviceType"),
+                createdAt = item.nullableString("createdAt"),
+                lastUsedAt = item.nullableString("lastUsedAt"),
+            )
+        }
+    }
+
+    suspend fun beginPasskeyRegistration(password: String, totp: String = ""): PasskeyRegistrationChallenge =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("password", password)
+            if (totp.isNotBlank()) body.put("totp", totp.trim())
+            val json = execute("/api/security/passkeys/options", "POST", body).json
+            PasskeyRegistrationChallenge(
+                challengeId = json.optString("challengeId"),
+                optionsJson = json.optJSONObject("options")?.toString()
+                    ?: throw ApiException("服务器未返回 Passkey 注册参数。", 500, "PASSKEY_OPTIONS_MISSING"),
+            )
+        }
+
+    suspend fun completePasskeyRegistration(
+        challengeId: String,
+        responseJson: String,
+        name: String,
+    ): Unit = withContext(Dispatchers.IO) {
+        execute(
+            "/api/security/passkeys/verify",
+            "POST",
+            JSONObject()
+                .put("challengeId", challengeId)
+                .put("response", JSONObject(responseJson))
+                .put("name", name),
+        )
+        Unit
+    }
+
+    suspend fun deletePasskey(id: String, password: String, totp: String = ""): Unit =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject().put("password", password)
+            if (totp.isNotBlank()) body.put("totp", totp.trim())
+            execute("/api/security/passkeys/${encodePath(id)}", "DELETE", body)
+            Unit
+        }
+
     suspend fun iot(): IotData = withContext(Dispatchers.IO) {
         val status = execute("/apps/iot/api/status").json
         val devicesJson = execute("/apps/iot/api/devices").json
@@ -298,13 +397,27 @@ class PlatformApi(private val sessionStore: SessionStore) {
         val devices = devicesJson.keys().asSequence().mapNotNull { id ->
             devicesJson.optJSONObject(id)?.let { item ->
                 val lastActive = item.optLongOrNull("lastActive")
+                val onlineStatus = item.nullableString("onlineStatus")
+                val relays = item.optJSONObject("relays")?.let { relayJson ->
+                    relayJson.keys().asSequence().associateWith { relayId ->
+                        relayJson.nullableString(relayId)?.uppercase()
+                    }
+                } ?: emptyMap()
+                val relayOnline = relays.isNotEmpty() && relays.values.any { it != null }
+                val online = when {
+                    item.has("online") -> item.optBoolean("online")
+                    onlineStatus?.equals("online", ignoreCase = true) == true -> true
+                    relayOnline -> true
+                    else -> lastActive != null && now - lastActive < 180_000
+                }
                 DeviceInfo(
                     id = id,
                     name = item.optString("name", item.optString("deviceName", id)),
-                    online = item.optBoolean("online", lastActive != null && now - lastActive < 180_000),
+                    online = online,
                     temperature = item.optDoubleOrNull("temperature") ?: item.optDoubleOrNull("temp"),
-                    humidity = item.optDoubleOrNull("humidity"),
+                    humidity = item.optDoubleOrNull("humidity") ?: item.optDoubleOrNull("hum"),
                     lastActive = lastActive,
+                    relays = relays,
                 )
             }
         }.toList()
@@ -390,6 +503,16 @@ class PlatformApi(private val sessionStore: SessionStore) {
         Unit
     }
 
+    suspend fun controlIotRelay(deviceId: String, relayId: String, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
+        execute(
+            "/apps/iot/api/devices/${encodePath(deviceId)}/relays/${encodePath(relayId)}/control",
+            "POST",
+            JSONObject().put("status", if (enabled) "ON" else "OFF"),
+            timeoutSeconds = 15,
+        )
+        Unit
+    }
+
     private fun execute(
         path: String,
         method: String = "GET",
@@ -406,8 +529,11 @@ class PlatformApi(private val sessionStore: SessionStore) {
                 ?: throw ApiException("登录会话已失效，请重新登录。", 401, "UNAUTHORIZED")
             requestBuilder.header("Cookie", cookie)
         }
-        if (method != "GET") requestBuilder.header("X-Platform-Request", "console")
-        val requestBody = if (method == "GET" || method == "DELETE") null else (body ?: JSONObject()).toString().toRequestBody(jsonMediaType)
+        if (method != "GET") {
+            requestBuilder.header("X-Platform-Request", "console")
+            if (platformOrigin.isNotBlank()) requestBuilder.header("Origin", platformOrigin)
+        }
+        val requestBody = if (method == "GET") null else (body ?: JSONObject()).toString().toRequestBody(jsonMediaType)
         requestBuilder.method(method, requestBody)
 
         val requestClient = if (timeoutSeconds == 30L) client else client.newBuilder()

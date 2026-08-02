@@ -5,6 +5,11 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
@@ -32,6 +37,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -39,7 +45,9 @@ import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,7 +64,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -329,27 +339,137 @@ private fun QrDetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 
 @Composable
 private fun QrApprovedScreen(target: QrLoginTarget, onClose: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(horizontal = 28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            // 成功图标：外圈光环 + 渐变圆底白色对勾，带入场动画
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(animationSpec = tween(300)) +
+                    scaleIn(initialScale = 0.7f, animationSpec = tween(420, easing = FastOutSlowInEasing)),
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(124.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .size(124.dp)
+                            .border(1.5.dp, Color(0xFF10B981).copy(alpha = 0.30f), CircleShape),
+                    )
+                    Surface(
+                        shape = CircleShape,
+                        modifier = Modifier.size(92.dp),
+                        shadowElevation = 14.dp,
+                    ) {
+                        Box(
+                            modifier = Modifier.background(
+                                Brush.linearGradient(listOf(Color(0xFF34D399), Color(0xFF059669))),
+                            ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Outlined.Check,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(44.dp),
+                            )
+                        }
+                    }
+                }
+            }
+
+            Text(
+                "网页登录已批准",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp,
+                ),
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(top = 26.dp),
+            )
+            Text(
+                "${target.browser.label} 将自动进入控制台",
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+
+            // 登录信息卡片
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(top = 30.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 8.dp,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp)) {
+                    QrApprovedDetailRow(Icons.Outlined.Computer, "登录设备", target.browser.label)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    QrApprovedDetailRow(Icons.Outlined.Language, "网络地址", target.browser.ip)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    QrApprovedDetailRow(
+                        Icons.Outlined.Fingerprint,
+                        "确认方式",
+                        when (target.confirmationMethod) {
+                            "passkey" -> "Passkey 生物识别"
+                            "unavailable" -> "Android Passkey 尚未配置"
+                            else -> "设备生物识别"
+                        },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(34.dp))
+            Button(
+                onClick = onClose,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(50),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 0.dp),
+            ) {
+                Text("完成", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun QrApprovedDetailRow(icon: ImageVector, label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f)),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
         ) {
             Icon(
-                Icons.Outlined.CheckCircle,
+                icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.padding(18.dp).size(42.dp),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(9.dp).size(19.dp),
             )
         }
-        Text("网页登录已批准", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp))
-        Text("${target.browser.label} 将自动进入控制台", color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
-        Button(onClick = onClose, modifier = Modifier.fillMaxWidth().padding(top = 28.dp).height(48.dp), shape = MaterialTheme.shapes.medium) {
-            Text("完成")
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                value,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
