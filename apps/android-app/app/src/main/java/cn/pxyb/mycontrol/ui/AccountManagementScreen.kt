@@ -35,6 +35,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -75,6 +77,7 @@ fun AccountManagementScreen(
     onRegisterPasskey: (name: String, password: String, totp: String, requestCredential: suspend (String) -> String) -> Unit,
     onDeletePasskey: (id: String, password: String, totp: String) -> Unit,
     onRegisterPasskeyRequest: suspend (String) -> String,
+    onSetAppLockEnabled: (Boolean) -> Unit,
 ) {
     // 支持按键与滑动手势返回上一级
     BackHandler(enabled = true, onBack = onDismiss)
@@ -233,6 +236,64 @@ fun AccountManagementScreen(
                             if (totpEnabled) showTotpManageDialog = true else showTotpSetupDialog = true
                         }
                     )
+                }
+            }
+        }
+
+        // 本地解锁开关
+        item {
+            AppPanel {
+                Column {
+                    AccountSectionHeader("本地解锁")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Fingerprint,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .padding(9.dp)
+                                    .size(20.dp),
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "打开应用时验证身份",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp,
+                                ),
+                            )
+                            Text(
+                                text = if (state.appLockEnabled) {
+                                    "已开启 · 每次打开 App 需指纹或 PIN 验证"
+                                } else {
+                                    "已关闭 · 打开 App 无需验证"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Switch(
+                            checked = state.appLockEnabled,
+                            onCheckedChange = onSetAppLockEnabled,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
+                    }
                 }
             }
         }

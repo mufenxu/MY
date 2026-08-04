@@ -8,7 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
+import cn.pxyb.mycontrol.DeepLinks
 import cn.pxyb.mycontrol.MainActivity
+import cn.pxyb.mycontrol.ui.MainTab
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.IotData
@@ -101,9 +103,8 @@ class MyControlWidgetProvider : AppWidgetProvider() {
                 },
             )
 
-            val openIntent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            }
+            val openTab = if (tone == TONE_ATTENTION) MainTab.Events else MainTab.Overview
+            val openIntent = DeepLinks.openIntent(context, tab = openTab)
             val openPendingIntent = PendingIntent.getActivity(
                 context,
                 0,
@@ -111,6 +112,15 @@ class MyControlWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             views.setOnClickPendingIntent(R.id.widget_root, openPendingIntent)
+
+            val eventsIntent = DeepLinks.openIntent(context, tab = MainTab.Events)
+            val eventsPendingIntent = PendingIntent.getActivity(
+                context,
+                1,
+                eventsIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            runCatching { views.setOnClickPendingIntent(R.id.widget_incident_value, eventsPendingIntent) }
             return views
         }
     }

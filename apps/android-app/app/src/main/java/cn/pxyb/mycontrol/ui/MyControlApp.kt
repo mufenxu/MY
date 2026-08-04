@@ -8,6 +8,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -52,14 +53,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Fingerprint
-import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -122,10 +122,9 @@ private data class TabItem(val tab: MainTab, val label: String, val icon: ImageV
 private enum class SecondFactorMode { Totp, RecoveryCode }
 
 private val tabs = listOf(
-    TabItem(MainTab.Overview, "总览", Icons.Outlined.Dashboard),
-    TabItem(MainTab.Events, "事件", Icons.Outlined.Notifications),
-    TabItem(MainTab.Operations, "操作", Icons.Outlined.RocketLaunch),
-    TabItem(MainTab.Tools, "工具", Icons.Outlined.GridView),
+    TabItem(MainTab.Overview, "首页", Icons.Outlined.Home),
+    TabItem(MainTab.Events, "动态", Icons.Outlined.Notifications),
+    TabItem(MainTab.Tools, "设备", Icons.Outlined.Hub),
     TabItem(MainTab.Profile, "我的", Icons.Outlined.Person),
 )
 
@@ -138,6 +137,8 @@ fun MyControlApp(
     onBiometricConfirmation: suspend () -> Boolean,
     onSessionProtection: suspend () -> Boolean,
     onSensitiveActionConfirmation: suspend () -> Boolean,
+    notificationsEnabled: Boolean,
+    onRequestNotifications: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val destination = when {
@@ -167,6 +168,8 @@ fun MyControlApp(
                 onPasskeyRegistrationRequest,
                 onBiometricConfirmation,
                 onSensitiveActionConfirmation,
+                notificationsEnabled,
+                onRequestNotifications,
             )
         }
     }
@@ -1040,6 +1043,8 @@ private fun AuthenticatedShell(
     onPasskeyRegistrationRequest: suspend (String) -> String,
     onBiometricConfirmation: suspend () -> Boolean,
     onSensitiveActionConfirmation: suspend () -> Boolean,
+    notificationsEnabled: Boolean,
+    onRequestNotifications: () -> Unit,
 ) {
     if (state.qrLoginOpen) {
         QrLoginScreen(
@@ -1056,7 +1061,7 @@ private fun AuthenticatedShell(
     var toastMessage by remember { mutableStateOf("") }
     var toastError by remember { mutableStateOf(false) }
     val saveableStateHolder = rememberSaveableStateHolder()
-    val onRefresh = remember(viewModel) { { viewModel.refreshAll(true) } }
+    val onRefresh = remember(viewModel) { { viewModel.refreshCurrentTab(true) } }
     LaunchedEffect(state.error, state.message) {
         val text = state.error ?: state.message
         if (!text.isNullOrBlank()) {
@@ -1079,14 +1084,30 @@ private fun AuthenticatedShell(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
             val tab = state.selectedTab
-            val isSubScreen = state.accountManagementOpen
+            val isSubScreen = state.accountManagementOpen || state.selectedTab == MainTab.Operations
             val contentPadding = PaddingValues(
                 top = padding.calculateTopPadding(),
                 bottom = if (isSubScreen) padding.calculateBottomPadding() + 16.dp else 90.dp,
             )
-            saveableStateHolder.SaveableStateProvider(tab.name) {
-                when (tab) {
-                    MainTab.Overview -> OverviewScreen(state, contentPadding, viewModel::selectTab, onRefresh)
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(140)) togetherWith fadeOut(animationSpec = tween(110))
+                },
+                label = "tab_switch",
+            ) { currentTab ->
+                saveableStateHolder.SaveableStateProvider(currentTab.name) {
+                    when (currentTab) {
+                    MainTab.Overview -> OverviewScreen(
+                        state = state,
+                        contentPadding = contentPadding,
+                        onSelectTab = viewModel::selectTab,
+                        onRefresh = onRefresh,
+                        onRunDiagnostics = viewModel::runDiagnostics,
+                        onTriggerBackup = { viewModel.triggerBackup(onSensitiveActionConfirmation) },
+                        onOpenAccountManagement = viewModel::openAccountManagement,
+                        onOpenOperations = { viewModel.selectTab(MainTab.Operations) },
+                    )
                     MainTab.Events -> EventsScreen(
                         state = state,
                         contentPadding = contentPadding,
@@ -1095,14 +1116,41 @@ private fun AuthenticatedShell(
                         onAddNote = viewModel::addIncidentNote,
                         onMute = viewModel::muteIncident,
                         onResolve = { id, note -> viewModel.resolveIncident(id, note, onSensitiveActionConfirmation) },
+                        onCompleteRunbookStep = viewModel::completeRunbookStep,
+                        onSavePostmortem = viewModel::savePostmortem,
+                        focusIncidentId = state.focusIncidentId,
+                        onFocusConsumed = viewModel::clearFocusTargets,
                         onRefresh = onRefresh,
                     )
                     MainTab.Operations -> OperationsScreen(
-                        state,
-                        contentPadding,
-                        viewModel::runDiagnostics,
-                        { viewModel.triggerBackup(onSensitiveActionConfirmation) },
-                        onRefresh,
+                        state = state,
+                        contentPadding = contentPadding,
+                        onRunDiagnostics = viewModel::runDiagnostics,
+                        onTriggerBackup = { viewModel.triggerBackup(onSensitiveActionConfirmation) },
+                        onApproveConfiguration = { id, note ->
+                            viewModel.approveConfiguration(
+                                changeId = id,
+                                note = note.ifBlank { "通过 MY Control Android 审批" },
+                                confirmation = onSensitiveActionConfirmation,
+                            )
+                        },
+                        onRejectConfiguration = { id, note ->
+                            viewModel.rejectConfiguration(
+                                changeId = id,
+                                note = note.ifBlank { "通过 MY Control Android 拒绝" },
+                                confirmation = onSensitiveActionConfirmation,
+                            )
+                        },
+                        onOpenIncident = { incidentId ->
+                            viewModel.openOperationalTarget(
+                                tab = MainTab.Events,
+                                incidentId = incidentId,
+                            )
+                        },
+                        focusTaskId = state.focusTaskId,
+                        onFocusConsumed = viewModel::clearFocusTargets,
+                        onRefresh = onRefresh,
+                        onBack = { viewModel.selectTab(MainTab.Overview) },
                     )
                     MainTab.Tools -> ToolsScreen(
                         state,
@@ -1149,6 +1197,7 @@ private fun AuthenticatedShell(
                                     onRegisterPasskey = viewModel::registerPasskey,
                                     onDeletePasskey = viewModel::deletePasskey,
                                     onRegisterPasskeyRequest = onPasskeyRegistrationRequest,
+                                    onSetAppLockEnabled = viewModel::setAppLockEnabled,
                                 )
                             } else {
                                 ProfileScreen(
@@ -1159,11 +1208,14 @@ private fun AuthenticatedShell(
                                     onLogout = viewModel::logout,
                                     onRefresh = onRefresh,
                                     onOpenAccountManagement = viewModel::openAccountManagement,
+                                    notificationsEnabled = notificationsEnabled,
+                                    onRequestNotifications = onRequestNotifications,
                                 )
                             }
                         }
                     }
                 }
+            }
             }
 
             AnimatedVisibility(
@@ -1305,12 +1357,12 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onCl
 
     val foreground by animateColorAsState(
         targetValue = if (selected) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        animationSpec = if (selected) tween(140, easing = FastOutSlowInEasing) else snap(),
         label = "nav-color",
     )
     val background by animateColorAsState(
         targetValue = if (selected) primaryColor.copy(alpha = 0.12f) else Color.Transparent,
-        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        animationSpec = if (selected) tween(140, easing = FastOutSlowInEasing) else snap(),
         label = "nav-background",
     )
     val iconScale by animateFloatAsState(
@@ -1391,10 +1443,10 @@ private fun BrandMark(compact: Boolean = false) {
 }
 
 private fun tabTitle(tab: MainTab): String = when (tab) {
-    MainTab.Overview -> "运行总览"
-    MainTab.Events -> "事件中心"
-    MainTab.Operations -> "执行中心"
-    MainTab.Tools -> "平台工具"
+    MainTab.Overview -> "工作台"
+    MainTab.Events -> "系统动态"
+    MainTab.Operations -> "高级工具"
+    MainTab.Tools -> "设备与自动化"
     MainTab.Profile -> "账号与安全"
 }
 

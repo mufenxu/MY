@@ -55,6 +55,20 @@ data class ServiceInfo(
     val adminUrl: String?,
 )
 
+data class IncidentRunbookStep(
+    val id: String,
+    val title: String,
+    val completed: Boolean,
+)
+
+data class IncidentPostmortem(
+    val summary: String = "",
+    val rootCause: String = "",
+    val impact: String = "",
+    val correctiveActions: String = "",
+    val completedAt: String? = null,
+)
+
 data class IncidentInfo(
     val id: String,
     val title: String,
@@ -69,6 +83,8 @@ data class IncidentInfo(
     val updatedAt: String?,
     val assignedTo: String?,
     val timeline: List<IncidentTimelineEntry>,
+    val runbookSteps: List<IncidentRunbookStep> = emptyList(),
+    val postmortem: IncidentPostmortem? = null,
 )
 
 data class IncidentTimelineEntry(
@@ -104,6 +120,7 @@ data class PlatformTask(
     val detail: String,
     val status: String,
     val source: String,
+    val sourceId: String? = null,
     val requestedBy: String,
     val updatedAt: String?,
 )

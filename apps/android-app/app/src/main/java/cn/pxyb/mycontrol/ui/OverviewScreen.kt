@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,9 +16,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudDone
@@ -25,6 +27,9 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -38,13 +43,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cn.pxyb.mycontrol.data.AuditInfo
 import cn.pxyb.mycontrol.data.ServiceInfo
+import cn.pxyb.mycontrol.ui.theme.Amber
+import cn.pxyb.mycontrol.ui.theme.AmberPale
 import cn.pxyb.mycontrol.ui.theme.Coral
 import cn.pxyb.mycontrol.ui.theme.CoralPale
 import cn.pxyb.mycontrol.ui.theme.Forest
@@ -58,6 +68,10 @@ fun OverviewScreen(
     contentPadding: PaddingValues,
     onSelectTab: (MainTab) -> Unit,
     onRefresh: () -> Unit,
+    onRunDiagnostics: () -> Unit,
+    onTriggerBackup: () -> Unit,
+    onOpenAccountManagement: () -> Unit,
+    onOpenOperations: () -> Unit,
 ) {
     val overview = state.overview
     val activeIncidents = remember(state.incidents) { state.incidents.filter { it.status != "resolved" } }
@@ -73,35 +87,38 @@ fun OverviewScreen(
         val average = services.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
         Triple(healthy, monitored, average)
     }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = contentPadding.calculateTopPadding() + 8.dp,
-            bottom = contentPadding.calculateBottomPadding() + 16.dp
-        ),
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = contentPadding.calculateTopPadding() + 8.dp,
+                bottom = contentPadding.calculateBottomPadding() + 16.dp,
+            ),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        item {
+        item(key = "overview-header", contentType = "header") {
             ImmersiveHeader(
-                title = "运行总览",
+                title = "工作台",
+                subtitle = "系统状态与常用操作",
                 refreshing = state.refreshing,
                 onRefresh = onRefresh
             )
         }
         if (overview == null) {
-            item { OverviewSyncPanel(refreshing = state.refreshing) }
-            return@LazyColumn
+            item(key = "overview-sync", contentType = "sync") { OverviewSyncPanel(refreshing = state.refreshing) }
+            return@Column
         }
-        item {
+        item(key = "overview-status", contentType = "status") {
             val incidentCount = activeIncidents.size
             val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
                 color = Color.White,
-                shadowElevation = 3.dp,
+                shadowElevation = 1.dp,
                 border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
             ) {
                 Box(
@@ -133,7 +150,9 @@ fun OverviewScreen(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    if (stable) "全网服务稳定运行" else "存在异常排查事件",
+                                    if (stable) "一切正常，系统稳定运行"
+                                    else if (incidentCount > 0) "有 $incidentCount 件事需要你处理"
+                                    else "部分服务需要关注",
                                     style = MaterialTheme.typography.headlineMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 20.sp,
@@ -159,7 +178,40 @@ fun OverviewScreen(
                         ) {
                             HeroMetric("健康服务", "$healthyCount/$monitoredCount", Modifier.weight(1f))
                             HeroMetric("平均响应", averageLatencyMs?.let { "$it ms" } ?: "--", Modifier.weight(1f))
-                            HeroMetric("待处置", activeIncidents.size.toString(), Modifier.weight(1f))
+                            HeroMetric("待处理", activeIncidents.size.toString(), Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+
+        item { SectionHeader("快捷操作", "常用功能一键直达") }
+        item(key = "overview-quick-actions", contentType = "quick-actions") {
+            AppPanel {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        QuickAction(Icons.Outlined.Notifications, "最新动态", Ocean, OceanPale, Modifier.weight(1f)) {
+                            onSelectTab(MainTab.Events)
+                        }
+                        QuickAction(Icons.Outlined.Hub, "设备控制", Forest, MintPale, Modifier.weight(1f)) {
+                            onSelectTab(MainTab.Tools)
+                        }
+                        QuickAction(Icons.Outlined.Speed, "系统自检", Amber, AmberPale, Modifier.weight(1f)) {
+                            onRunDiagnostics()
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        QuickAction(Icons.Outlined.Backup, "数据备份", Coral, CoralPale, Modifier.weight(1f)) {
+                            onTriggerBackup()
+                        }
+                        QuickAction(Icons.Outlined.Security, "账号安全", Ocean, OceanPale, Modifier.weight(1f)) {
+                            onOpenAccountManagement()
+                        }
+                        QuickAction(Icons.Outlined.Settings, "高级工具", Amber, AmberPale, Modifier.weight(1f)) {
+                            onOpenOperations()
                         }
                     }
                 }
@@ -167,7 +219,7 @@ fun OverviewScreen(
         }
 
         if (activeIncidents.isNotEmpty()) {
-            item {
+            item(key = "overview-incidents-title", contentType = "section-header") {
                 SectionHeader("需要关注", "${activeIncidents.size} 个活动事件")
             }
             items(visibleIncidents, key = { "overview-${it.id}" }, contentType = { "incident" }) { incident ->
@@ -194,51 +246,49 @@ fun OverviewScreen(
             }
         }
 
-        item { SectionHeader("服务状态", "来自平台服务端监测") }
-        item {
-            AppPanel {
-                sortedServices.forEachIndexed { index, service ->
-                    ServiceRow(service)
-                    if (index < sortedServices.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                }
+        item { SectionHeader("服务状态", "平台全部核心服务实时状态") }
+        if (sortedServices.isEmpty()) {
+            item(key = "overview-services-empty", contentType = "empty") {
+                AppPanel { EmptyBlock("暂无服务监测", "等待平台状态同步") }
+            }
+        } else {
+            items(sortedServices, key = { "service-${it.id}" }, contentType = { "service" }) { service ->
+                AppPanel { ServiceRow(service) }
             }
         }
 
         item { SectionHeader("最近活动", "平台审计摘要") }
-        item {
-            AppPanel {
-                if (overview.audits.isEmpty()) {
-                    EmptyBlock("暂无活动记录", "平台审计记录将在这里显示")
-                } else {
-                    recentAudits.forEachIndexed { index, audit ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(11.dp),
-                        ) {
-                            IconTile(
-                                if (audit.outcome == "failure") Icons.Outlined.ErrorOutline else Icons.Outlined.History,
-                                if (audit.outcome == "failure") Coral else Ocean,
-                                if (audit.outcome == "failure") CoralPale else OceanPale,
-                                modifier = Modifier.size(36.dp),
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(audit.action, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(
-                                    "${audit.actor} · ${formatPlatformTime(audit.occurredAt)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            StatusBadge(audit.outcome, if (audit.outcome == "failure") "失败" else "完成")
-                        }
-                        if (index < recentAudits.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 14.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    }
-                }
+        if (recentAudits.isEmpty()) {
+            item(key = "overview-audits-empty", contentType = "empty") {
+                AppPanel { EmptyBlock("暂无活动记录", "平台审计记录将在这里显示") }
+            }
+        } else {
+            items(recentAudits, key = { "audit-${it.id}" }, contentType = { "audit" }) { audit ->
+                AppPanel { AuditRow(audit) }
             }
         }
-        item { Spacer(Modifier.height(4.dp)) }
+        item(key = "overview-bottom-spacer", contentType = "spacer") { Spacer(Modifier.height(4.dp)) }
     }
+}
+
+// The dashboard data is bounded; one scrollable column keeps flings as light as the device page.
+@Composable
+private fun ColumnScope.item(
+    key: Any? = null,
+    contentType: Any? = null,
+    content: @Composable () -> Unit,
+) {
+    content()
+}
+
+@Composable
+private fun <T> ColumnScope.items(
+    values: List<T>,
+    key: ((T) -> Any)? = null,
+    contentType: ((T) -> Any?)? = null,
+    content: @Composable (T) -> Unit,
+) {
+    values.forEach { value -> content(value) }
 }
 
 @Composable
@@ -316,6 +366,41 @@ private fun HeroMetric(label: String, value: String, modifier: Modifier = Modifi
 }
 
 @Composable
+private fun QuickAction(
+    icon: ImageVector,
+    label: String,
+    accent: Color,
+    accentPale: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(16.dp)
+    Surface(
+        modifier = modifier
+            .clip(shape)
+            .clickable(onClick = onClick),
+        shape = shape,
+        color = Color.White,
+        border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            IconTile(icon, accent, accentPale, modifier = Modifier.size(38.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+}
+
+@Composable
 private fun ServiceRow(service: ServiceInfo) {
     val style = statusStyle(service.state)
     Row(
@@ -337,6 +422,31 @@ private fun ServiceRow(service: ServiceInfo) {
             )
         }
         StatusBadge(service.state)
+    }
+}
+
+@Composable
+private fun AuditRow(audit: AuditInfo) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        IconTile(
+            if (audit.outcome == "failure") Icons.Outlined.ErrorOutline else Icons.Outlined.History,
+            if (audit.outcome == "failure") Coral else Ocean,
+            if (audit.outcome == "failure") CoralPale else OceanPale,
+            modifier = Modifier.size(36.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(audit.action, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                "${audit.actor} · ${formatPlatformTime(audit.occurredAt)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        StatusBadge(audit.outcome, if (audit.outcome == "failure") "失败" else "完成")
     }
 }
 

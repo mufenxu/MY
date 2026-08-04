@@ -1,8 +1,9 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,36 +16,28 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Backup
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.CloudSync
-import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.FactCheck
-import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.automirrored.outlined.FactCheck
 import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.material.icons.outlined.TaskAlt
-import androidx.compose.material3.Button
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.PlatformTask
@@ -63,13 +56,48 @@ fun OperationsScreen(
     contentPadding: PaddingValues,
     onRunDiagnostics: () -> Unit,
     onTriggerBackup: () -> Unit,
+    onApproveConfiguration: (String, String) -> Unit,
+    onRejectConfiguration: (String, String) -> Unit,
+    onOpenIncident: (String) -> Unit,
+    focusTaskId: String?,
+    onFocusConsumed: () -> Unit,
     onRefresh: () -> Unit,
+    onBack: () -> Unit,
 ) {
+    BackHandler(enabled = true, onBack = onBack)
     var confirmBackup by remember { mutableStateOf(false) }
+    var filter by remember { mutableStateOf("action") }
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    var decisionNote by remember { mutableStateOf("") }
+    var pendingDecision by remember { mutableStateOf<String?>(null) }
+
     val canOperate = state.user?.role in setOf("operator", "super_admin")
+    val canApproveConfig = state.user?.role == "super_admin"
     val activeTasks = state.tasks.count { it.status in setOf("pending", "running", "action_required") }
     val failedTasks = state.tasks.count { it.status == "failed" }
-    val visibleTasks = remember(state.tasks) { state.tasks.sortedBy { taskPriority(it.status) }.take(6) }
+    val actionTasks = state.actionRequiredTasks
+    val filteredTasks = remember(filter, state.tasks) {
+        val sorted = state.tasks.sortedWith(compareBy<PlatformTask> { taskPriority(it.status) }.thenByDescending { it.updatedAt.orEmpty() })
+        when (filter) {
+            "action" -> sorted.filter { it.status in setOf("action_required", "failed") }
+            "running" -> sorted.filter { it.status in setOf("pending", "running") }
+            "done" -> sorted.filter { it.status in setOf("succeeded", "cancelled") }
+            else -> sorted
+        }
+    }
+    val selected = state.tasks.firstOrNull { it.id == selectedId }
+
+    LaunchedEffect(focusTaskId, state.tasks) {
+        if (!focusTaskId.isNullOrBlank() && state.tasks.any { it.id == focusTaskId }) {
+            filter = "all"
+            selectedId = focusTaskId
+            onFocusConsumed()
+        }
+    }
+    LaunchedEffect(selectedId) {
+        decisionNote = ""
+        pendingDecision = null
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -77,15 +105,34 @@ fun OperationsScreen(
             start = 16.dp,
             end = 16.dp,
             top = contentPadding.calculateTopPadding() + 8.dp,
-            bottom = contentPadding.calculateBottomPadding() + 16.dp
+            bottom = contentPadding.calculateBottomPadding() + 16.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
             ImmersiveHeader(
-                title = "执行中心",
+                title = "高级工具",
+                subtitle = "任务、审批、发布与备份",
                 refreshing = state.refreshing,
-                onRefresh = onRefresh
+                onRefresh = onRefresh,
+                actions = {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = CircleShape,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    ) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier.size(42.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                                contentDescription = "返回首页",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                },
             )
         }
         item {
@@ -96,58 +143,60 @@ fun OperationsScreen(
                 ) {
                     MetricCell("执行中", activeTasks.toString(), Modifier.weight(1f), Ocean)
                     MetricCell("失败", failedTasks.toString(), Modifier.weight(1f), if (failedTasks > 0) Coral else Forest)
-                    MetricCell("已完成", state.tasks.count { it.status == "succeeded" }.toString(), Modifier.weight(1f), Forest)
+                    MetricCell("待处理", actionTasks.size.toString(), Modifier.weight(1f), if (actionTasks.isEmpty()) Forest else Amber)
                 }
             }
         }
 
-        item { SectionHeader("统一任务", "跨服务执行状态") }
+        item { SectionHeader("平台任务", "任务执行状态与变更审批") }
         item {
-            AppPanel {
-                if (state.tasks.isEmpty()) {
-                    EmptyBlock("暂无任务", "新的平台任务将在这里显示")
-                } else {
-                    visibleTasks.forEachIndexed { index, task ->
-                        TaskRow(task)
-                        if (index < visibleTasks.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 14.dp))
-                    }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    "action" to "待处理",
+                    "running" to "进行中",
+                    "done" to "已完成",
+                    "all" to "全部",
+                ).forEach { (key, label) ->
+                    FilterChip(
+                        selected = filter == key,
+                        onClick = { filter = key },
+                        label = { Text(label) },
+                    )
+                }
+            }
+        }
+        if (filteredTasks.isEmpty()) {
+            item {
+                AppPanel {
+                    EmptyBlock(
+                        if (filter == "action") "暂无待处理任务" else "暂无任务",
+                        if (filter == "action") "配置审批、失败任务和需跟进事项会显示在这里" else "新的平台任务将在这里显示",
+                    )
+                }
+            }
+        } else {
+            items(
+                items = filteredTasks,
+                key = { it.id },
+                contentType = { "task" },
+            ) { task ->
+                AppPanel {
+                    TaskRow(
+                        task = task,
+                        onClick = { selectedId = task.id },
+                    )
                 }
             }
         }
 
-        item { SectionHeader("发布状态", "受控构建与部署记录") }
+        item { SectionHeader("发布摘要", "只读状态，正式发布请在桌面控制台执行") }
         item {
-            val latestBuild = state.releases?.builds?.firstOrNull()
-            val latestDeployment = state.releases?.deployments?.firstOrNull()
             AppPanel {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        IconTile(Icons.Outlined.RocketLaunch, Ocean, OceanPale)
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("最近构建", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(
-                                latestBuild?.revision?.take(10)?.ifBlank { latestBuild.id.take(10) } ?: "暂无构建记录",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(formatPlatformTime(latestBuild?.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        latestBuild?.let { StatusBadge(it.conclusion, releaseStatusLabel(it.conclusion)) }
-                    }
-                    HorizontalDivider()
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        IconTile(Icons.Outlined.CloudSync, Forest, MintPale)
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("最近部署", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(
-                                latestDeployment?.components?.joinToString("、")?.ifBlank { "平台组件" } ?: "暂无部署记录",
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(formatPlatformTime(latestDeployment?.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        latestDeployment?.let { StatusBadge(it.status, releaseStatusLabel(it.status)) }
-                    }
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val latestBuild = state.releases?.builds?.firstOrNull()
+                    val latestDeployment = state.releases?.deployments?.firstOrNull()
+                    SummaryLine("最近构建", latestBuild?.revision?.ifBlank { latestBuild.id } ?: "暂无构建", latestBuild?.conclusion)
+                    SummaryLine("最近部署", latestDeployment?.action ?: "暂无部署", latestDeployment?.status)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatusBadge(
                             if (state.releases?.actionsEnabled == true) "healthy" else "unknown",
@@ -162,11 +211,11 @@ fun OperationsScreen(
             }
         }
 
-        item { SectionHeader("数据备份", "恢复操作保留在桌面控制台") }
+        item { SectionHeader("备份健康", "可触发备份，恢复操作保留在桌面控制台") }
         item {
             val backup = state.backup
             AppPanel {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         IconTile(
                             Icons.Outlined.Backup,
@@ -174,85 +223,156 @@ fun OperationsScreen(
                             if (backup?.rpoState == "healthy") MintPale else AmberPale,
                         )
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(backup?.latestName ?: "尚无可恢复备份", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(backup?.latestName ?: "尚无可恢复备份", style = MaterialTheme.typography.titleMedium)
                             Text(
                                 backup?.ageHours?.let { "距今 ${"%.1f".format(it)} 小时 · RPO ${backup.rpoHours} 小时" }
-                                    ?: "等待备份质量数据",
+                                    ?: "等待首次备份结果",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        StatusBadge(backup?.rpoState ?: "unknown", if (backup?.rpoState == "healthy") "RPO 正常" else "需检查")
+                        StatusBadge(backup?.rpoState ?: "unknown")
                     }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        MetricCell("有效备份", backup?.validBackups?.toString() ?: "--", Modifier.weight(1f))
-                        MetricCell(
-                            "异地备份",
-                            when {
-                                backup?.offsiteConfigured != true -> "未配置"
-                                backup.offsiteHealthy == true -> "正常"
-                                else -> "异常"
-                            },
-                            Modifier.weight(1f),
+                    if (canOperate && backup?.canBackup == true) {
+                        AppDialogPrimaryButton(
+                            text = if (state.busyAction == "backup") "备份提交中..." else "立即备份",
+                            onClick = { confirmBackup = true },
+                            enabled = state.busyAction == null,
+                            modifier = Modifier.fillMaxWidth(),
                         )
-                    }
-                    Button(
-                        onClick = { confirmBackup = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = canOperate && backup?.canBackup == true && state.busyAction == null,
-                        shape = MaterialTheme.shapes.medium,
-                    ) {
-                        if (state.busyAction == "backup") CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
-                        else Icon(Icons.Outlined.Backup, contentDescription = null, modifier = Modifier.size(19.dp))
-                        Text("立即备份", modifier = Modifier.padding(start = 8.dp))
                     }
                 }
             }
         }
 
-        item { SectionHeader("系统自检", "网关、服务和关键依赖") }
+        item { SectionHeader("系统自检", "快速验证关键链路") }
         item {
             AppPanel {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        IconTile(Icons.Outlined.FactCheck, Ocean, OceanPale)
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("端到端检查", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                state.diagnostics?.checkedAt?.let { formatPlatformTime(it) } ?: "尚未在本次会话运行",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Button(
-                            onClick = onRunDiagnostics,
-                            enabled = canOperate && state.busyAction == null,
-                            shape = MaterialTheme.shapes.medium,
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AppDialogSecondaryButton(
+                        text = if (state.busyAction == "diagnostics") "自检进行中..." else "运行系统自检",
+                        onClick = onRunDiagnostics,
+                        enabled = state.busyAction == null,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    state.diagnostics?.checks.orEmpty().take(4).forEach { check ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            if (state.busyAction == "diagnostics") CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = androidx.compose.ui.graphics.Color.White)
-                            else Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Text("运行", modifier = Modifier.padding(start = 5.dp))
-                        }
-                    }
-                    state.diagnostics?.checks?.forEach { check ->
-                        HorizontalDivider()
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Icon(
-                                if (check.status == "passed") Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
-                                contentDescription = null,
-                                tint = if (check.status == "passed") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(19.dp),
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(check.label, style = MaterialTheme.typography.bodyMedium)
-                                Text(check.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                            Text(check.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                             StatusBadge(check.status)
                         }
                     }
                 }
             }
+        }
+    }
+
+    selected?.let { task ->
+        val changeId = task.sourceId ?: task.id.removePrefix("configuration:")
+        val canDecide = task.source == "configuration" &&
+            task.status == "action_required" &&
+            canApproveConfig &&
+            changeId.isNotBlank()
+        AppDialog(
+            onDismissRequest = { selectedId = null },
+            icon = if (task.status in setOf("failed", "action_required")) Icons.Outlined.ErrorOutline else Icons.Outlined.TaskAlt,
+            iconTint = if (task.status in setOf("failed", "action_required")) MaterialTheme.colorScheme.error else Ocean,
+            title = task.title,
+            content = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatusBadge(task.status, taskStatusLabel(task.status))
+                    Text(
+                        listOf(taskSourceLabel(task.source), task.requestedBy, formatPlatformTime(task.updatedAt))
+                            .joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (task.detail.isNotBlank()) {
+                        Text(task.detail, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    if (task.source == "incident") {
+                        val incidentId = task.sourceId ?: task.id.removePrefix("incident:")
+                        AppDialogPrimaryButton(
+                            text = "打开关联事件",
+                            onClick = {
+                                selectedId = null
+                                onOpenIncident(incidentId)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    if (canDecide) {
+                        DialogTextField(
+                            value = decisionNote,
+                            onValueChange = { decisionNote = it.take(200) },
+                            label = "审批备注（可选）",
+                            minLines = 2,
+                            maxLines = 3,
+                        )
+                        AppDialogPrimaryButton(
+                            text = if (state.busyAction == "config-approve") "审批中..." else "批准并生效",
+                            onClick = { pendingDecision = "approve" },
+                            enabled = state.busyAction == null,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        AppDialogDangerButton(
+                            text = if (state.busyAction == "config-reject") "拒绝中..." else "拒绝提案",
+                            onClick = { pendingDecision = "reject" },
+                            enabled = state.busyAction == null,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else if (task.source == "configuration" && task.status == "action_required") {
+                        Text(
+                            "配置审批需要超级管理员角色。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else if (task.source in setOf("release_build", "release_deployment")) {
+                        Text(
+                            "发布构建与部署仅支持查看；正式操作请在桌面控制台完成。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            },
+            footer = {
+                AppDialogPrimaryButton(
+                    text = "完成",
+                    onClick = { selectedId = null },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+        )
+
+        when (pendingDecision) {
+            "approve" -> AppConfirmDialog(
+                title = "批准配置变更？",
+                detail = "批准后将立即生成新配置版本并应用到运行参数。\n${task.detail}",
+                confirmLabel = "确认批准",
+                onDismiss = { pendingDecision = null },
+                onConfirm = {
+                    pendingDecision = null
+                    selectedId = null
+                    onApproveConfiguration(changeId, decisionNote.trim())
+                },
+                icon = Icons.AutoMirrored.Outlined.FactCheck,
+            )
+            "reject" -> AppConfirmDialog(
+                title = "拒绝配置提案？",
+                detail = "拒绝后当前运行配置保持不变。\n${task.detail}",
+                confirmLabel = "确认拒绝",
+                onDismiss = { pendingDecision = null },
+                onConfirm = {
+                    pendingDecision = null
+                    selectedId = null
+                    onRejectConfiguration(changeId, decisionNote.trim())
+                },
+                icon = Icons.Outlined.ErrorOutline,
+            )
         }
     }
 
@@ -262,16 +382,22 @@ fun OperationsScreen(
             detail = "备份任务将由内网数据执行器后台运行，不会对现有数据进行覆盖或删除操作。",
             confirmLabel = "确认备份",
             onDismiss = { confirmBackup = false },
-            onConfirm = { confirmBackup = false; onTriggerBackup() },
+            onConfirm = {
+                confirmBackup = false
+                onTriggerBackup()
+            },
             icon = Icons.Outlined.Backup,
         )
     }
 }
 
 @Composable
-private fun TaskRow(task: PlatformTask) {
+private fun TaskRow(task: PlatformTask, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(11.dp),
     ) {
@@ -291,8 +417,32 @@ private fun TaskRow(task: PlatformTask) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (task.detail.isNotBlank()) {
+                Text(
+                    task.detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         StatusBadge(task.status, taskStatusLabel(task.status))
+    }
+}
+
+@Composable
+private fun SummaryLine(label: String, value: String, status: String?) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        status?.let { StatusBadge(it, releaseStatusLabel(it)) }
     }
 }
 

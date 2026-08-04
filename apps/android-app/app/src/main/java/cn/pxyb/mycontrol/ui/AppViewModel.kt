@@ -2,14 +2,18 @@ package cn.pxyb.mycontrol.ui
 
 import android.app.Application
 import android.net.Uri
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import cn.pxyb.mycontrol.AlertNotifier
 import cn.pxyb.mycontrol.BuildConfig
+import cn.pxyb.mycontrol.DeepLinks
 import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
 import cn.pxyb.mycontrol.data.IncidentInfo
+import cn.pxyb.mycontrol.data.IncidentPostmortem
 import cn.pxyb.mycontrol.data.IotData
 import cn.pxyb.mycontrol.data.OverviewData
 import cn.pxyb.mycontrol.data.PlatformPasskey
@@ -22,19 +26,26 @@ import cn.pxyb.mycontrol.data.SecurityData
 import cn.pxyb.mycontrol.data.SessionStore
 import cn.pxyb.mycontrol.data.TotpEnrollment
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
-import kotlinx.coroutines.async
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withContext
 
 enum class MainTab { Overview, Events, Operations, Tools, Profile }
+
+private enum class RefreshSection { Overview, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security }
 
 data class AppUiState(
     val booting: Boolean = true,
     val locked: Boolean = false,
+    val appLockEnabled: Boolean = true,
     val user: PlatformUser? = null,
     val selectedTab: MainTab = MainTab.Overview,
     val loginBusy: Boolean = false,
@@ -61,26 +72,37 @@ data class AppUiState(
     val totpEnrollment: TotpEnrollment? = null,
     val recoveryCodes: List<String> = emptyList(),
     val passkeys: List<PlatformPasskey> = emptyList(),
+    val focusIncidentId: String? = null,
+    val focusTaskId: String? = null,
     val error: String? = null,
     val message: String? = null,
 ) {
     val activeIncidents: List<IncidentInfo>
         get() = incidents.filter { it.status != "resolved" }
+    val actionRequiredTasks: List<PlatformTask>
+        get() = tasks.filter { it.status in setOf("action_required", "failed") }
 }
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionStore = SessionStore(application)
     private val api = PlatformApi(sessionStore)
+    private val alertNotifier = AlertNotifier(application)
     private val hasSavedSession = sessionStore.hasSession()
+    private val lockEnabled = sessionStore.isLockEnabled()
     private val mutableState = MutableStateFlow(
         AppUiState(
-            booting = false,
-            locked = hasSavedSession,
+            booting = hasSavedSession && !lockEnabled,
+            locked = hasSavedSession && lockEnabled,
             suggestedUsername = sessionStore.readLastUsername(),
+            appLockEnabled = lockEnabled,
         ),
     )
     val state: StateFlow<AppUiState> = mutableState.asStateFlow()
     private var pendingQrLogin: Pair<String, String>? = null
+    private var pollJob: Job? = null
+    private val refreshJobs = mutableMapOf<RefreshSection, Job>()
+    private val lastRefreshElapsedMs = mutableMapOf<RefreshSection, Long>()
+    private var alertsSeeded = false
 
     init {
         viewModelScope.launch {
@@ -89,6 +111,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         if (!hasSavedSession) MyControlWidgetProvider.clear(getApplication())
+        if (hasSavedSession && !lockEnabled) unlockSession()
     }
 
     fun unlockSession() {
@@ -116,20 +139,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         MyControlWidgetProvider.clear(getApplication())
                     } else {
                         mutableState.update { it.copy(booting = false, locked = false, user = user) }
-                        refreshAll()
+                        startOperationalPolling()
+                        refreshInitialData()
                         scanPendingQrLogin()
                     }
                 }
                 .onFailure { error ->
                     sessionStore.lock()
                     mutableState.update {
-                        it.copy(booting = false, locked = true, error = error.message ?: "暂时无法验证会话，请重试。")
+                        it.copy(
+                            booting = false,
+                            locked = sessionStore.isLockEnabled(),
+                            user = null,
+                            error = error.message ?: "暂时无法验证会话，请重试。",
+                        )
                     }
                 }
         }
     }
 
     fun discardLockedSession() {
+        stopOperationalPolling()
+        cancelRefreshes()
+        clearRefreshCache()
+        alertsSeeded = false
+        alertNotifier.clear()
         sessionStore.clear()
         mutableState.update { it.copy(booting = false, locked = false, user = null, error = null) }
         MyControlWidgetProvider.clear(getApplication())
@@ -207,18 +241,36 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun lockSession() {
+        if (!sessionStore.isLockEnabled()) return
         if (mutableState.value.user != null && !mutableState.value.qrLoginBusy) {
+            stopOperationalPolling()
+            cancelRefreshes()
+            clearRefreshCache()
             val hasSession = sessionStore.hasSession()
             sessionStore.lock()
             if (hasSession) {
-                mutableState.update { it.copy(locked = true) }
+                mutableState.update {
+                    it.copy(
+                        locked = true,
+                        focusIncidentId = null,
+                        focusTaskId = null,
+                    )
+                }
             } else {
+                alertsSeeded = false
+                alertNotifier.clear()
+                clearRefreshCache()
                 mutableState.update {
                     it.copy(locked = false, user = null, error = "登录会话已过期，请重新登录。")
                 }
                 MyControlWidgetProvider.clear(getApplication())
             }
         }
+    }
+
+    fun setAppLockEnabled(enabled: Boolean) {
+        sessionStore.setLockEnabled(enabled)
+        mutableState.update { it.copy(appLockEnabled = enabled) }
     }
 
     private fun completeLogin(result: cn.pxyb.mycontrol.data.LoginResult) {
@@ -235,7 +287,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 },
             )
         }
-        refreshAll()
+        alertsSeeded = false
+        startOperationalPolling()
+        refreshInitialData()
         scanPendingQrLogin()
     }
 
@@ -274,8 +328,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() {
         viewModelScope.launch {
+            stopOperationalPolling()
+            cancelRefreshes()
             mutableState.update { it.copy(busyAction = "logout", error = null) }
             api.logout()
+            alertsSeeded = false
+            alertNotifier.clear()
             mutableState.update {
                 AppUiState(
                     booting = false,
@@ -288,6 +346,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectTab(tab: MainTab) {
+        val changed = mutableState.value.selectedTab != tab
         mutableState.update { current ->
             if (current.selectedTab == tab && current.error == null && current.message == null) {
                 current
@@ -295,6 +354,49 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 current.copy(selectedTab = tab, error = null, message = null)
             }
         }
+        if (changed) refreshForTab(tab)
+    }
+
+    fun handleOpenIntent(uri: Uri?) {
+        if (uri == null) return
+        if (uri.scheme == DeepLinks.SCHEME && uri.host == DeepLinks.HOST_OPEN) {
+            openOperationalTarget(
+                tab = DeepLinks.parseTab(uri.getQueryParameter(DeepLinks.EXTRA_TAB)),
+                incidentId = uri.getQueryParameter(DeepLinks.EXTRA_INCIDENT_ID),
+                taskId = uri.getQueryParameter(DeepLinks.EXTRA_TASK_ID),
+            )
+            return
+        }
+        if (uri.path?.startsWith("/app/qr-login") == true) {
+            handleQrLoginUrl(uri.toString())
+        }
+    }
+
+    fun openOperationalTarget(
+        tab: MainTab? = null,
+        incidentId: String? = null,
+        taskId: String? = null,
+    ) {
+        val resolvedTab = tab ?: when {
+            !incidentId.isNullOrBlank() -> MainTab.Events
+            !taskId.isNullOrBlank() -> MainTab.Operations
+            else -> null
+        }
+        mutableState.update {
+            it.copy(
+                selectedTab = resolvedTab ?: it.selectedTab,
+                accountManagementOpen = false,
+                focusIncidentId = incidentId?.takeIf(String::isNotBlank),
+                focusTaskId = taskId?.takeIf(String::isNotBlank),
+                error = null,
+                message = null,
+            )
+        }
+        resolvedTab?.let(::refreshForTab)
+    }
+
+    fun clearFocusTargets() {
+        mutableState.update { it.copy(focusIncidentId = null, focusTaskId = null) }
     }
 
     fun openQrScanner() {
@@ -304,7 +406,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openAccountManagement() {
-        mutableState.update { it.copy(accountManagementOpen = true) }
+        val changedTab = mutableState.value.selectedTab != MainTab.Profile
+        mutableState.update {
+            it.copy(
+                selectedTab = MainTab.Profile,
+                accountManagementOpen = true,
+            )
+        }
+        if (changedTab) refreshForTab(MainTab.Profile)
     }
 
     fun closeAccountManagement() {
@@ -442,60 +551,119 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun refreshAll(force: Boolean = false) {
-        if (mutableState.value.user == null) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(refreshing = true, error = null) }
-            supervisorScope {
-                val overview = async { runCatching { api.overview(force) } }
-                val incidents = async { runCatching { api.incidents() } }
-                val tasks = async { runCatching { api.tasks() } }
-                val releases = async { runCatching { api.releases() } }
-                val backup = async { runCatching { api.backupQuality() } }
-                val iot = async { runCatching { api.iot() } }
-                val ct8 = async { runCatching { api.ct8() } }
-                val security = async { runCatching { api.security() } }
+    fun refreshCurrentTab(force: Boolean = true) {
+        mutableState.update { it.copy(error = null) }
+        refreshForTab(mutableState.value.selectedTab, force)
+    }
 
-                val overviewResult = overview.await()
-                val incidentResult = incidents.await()
-                val taskResult = tasks.await()
-                val releaseResult = releases.await()
-                val backupResult = backup.await()
-                val iotResult = iot.await()
-                val ct8Result = ct8.await()
-                val securityResult = security.await()
-                val failures = listOfNotNull(
-                    overviewResult.exceptionOrNull(),
-                    incidentResult.exceptionOrNull(),
-                    taskResult.exceptionOrNull(),
-                    releaseResult.exceptionOrNull(),
-                    backupResult.exceptionOrNull(),
-                    iotResult.exceptionOrNull(),
-                    ct8Result.exceptionOrNull(),
-                    securityResult.exceptionOrNull(),
-                )
-                val unauthorized = failures.filterIsInstance<ApiException>().firstOrNull { it.status == 401 }
-                if (unauthorized != null) {
-                    mutableState.value = AppUiState(booting = false, error = unauthorized.message)
-                    MyControlWidgetProvider.clear(getApplication())
-                    return@supervisorScope
-                }
-                mutableState.update { current ->
-                    current.copy(
-                        refreshing = false,
-                        overview = overviewResult.getOrNull() ?: current.overview,
-                        incidents = incidentResult.getOrNull() ?: current.incidents,
-                        tasks = taskResult.getOrNull()?.tasks ?: current.tasks,
-                        releases = releaseResult.getOrNull() ?: current.releases,
-                        backup = backupResult.getOrNull() ?: current.backup,
-                        iot = iotResult.getOrNull() ?: current.iot,
-                        ct8 = ct8Result.getOrNull() ?: current.ct8,
-                        security = securityResult.getOrNull() ?: current.security,
-                        error = failures.firstOrNull()?.message?.let { "部分数据暂不可用：$it" },
-                    )
-                }
-                publishWidget()
+    private fun refreshInitialData(force: Boolean = false) {
+        refreshOverview(force)
+        refreshIncidents(force)
+        refreshTasks(force)
+    }
+
+    private fun refreshForTab(tab: MainTab, force: Boolean = false) {
+        when (tab) {
+            MainTab.Overview -> refreshInitialData(force)
+            MainTab.Events -> refreshIncidents(force)
+            MainTab.Operations -> {
+                refreshTasks(force)
+                refreshReleases(force)
+                refreshBackup(force)
             }
+            MainTab.Tools -> {
+                refreshIot(force)
+                refreshCt8(force)
+            }
+            MainTab.Profile -> refreshSecurity(force)
+        }
+    }
+
+    private fun refreshOverview(force: Boolean) = launchRefresh(RefreshSection.Overview, force) {
+        val overview = api.overview(force)
+        mutableState.update { it.copy(overview = overview) }
+        publishWidget()
+    }
+
+    private fun refreshIncidents(force: Boolean = false) = launchRefresh(RefreshSection.Incidents, force) {
+        val incidents = api.incidents()
+        mutableState.update { it.copy(incidents = incidents) }
+        publishWidget()
+        evaluateAlerts(incidents = incidents, tasks = mutableState.value.tasks)
+    }
+
+    private fun refreshTasks(force: Boolean = false) = launchRefresh(RefreshSection.Tasks, force) {
+        val tasks = api.tasks().tasks
+        mutableState.update { it.copy(tasks = tasks) }
+        evaluateAlerts(incidents = mutableState.value.incidents, tasks = tasks)
+    }
+
+    private fun refreshReleases(force: Boolean = false) = launchRefresh(RefreshSection.Releases, force) {
+        val releases = api.releases()
+        mutableState.update { it.copy(releases = releases) }
+    }
+
+    private fun refreshBackup(force: Boolean = false) = launchRefresh(RefreshSection.Backup, force) {
+        val backup = api.backupQuality()
+        mutableState.update { it.copy(backup = backup) }
+    }
+
+    private fun refreshIot(force: Boolean = false) = launchRefresh(RefreshSection.Iot, force) {
+        val iot = api.iot()
+        mutableState.update { it.copy(iot = iot) }
+        publishWidget()
+    }
+
+    private fun refreshCt8(force: Boolean = false) = launchRefresh(RefreshSection.Ct8, force) {
+        val ct8 = api.ct8()
+        mutableState.update { it.copy(ct8 = ct8) }
+    }
+
+    private fun refreshSecurity(force: Boolean = false) = launchRefresh(RefreshSection.Security, force) {
+        val security = api.security()
+        mutableState.update { it.copy(security = security) }
+    }
+
+    private fun launchRefresh(section: RefreshSection, force: Boolean = false, block: suspend () -> Unit) {
+        if (mutableState.value.user == null || refreshJobs[section]?.isActive == true) return
+        val now = SystemClock.elapsedRealtime()
+        val lastRefresh = lastRefreshElapsedMs[section]
+        if (!force && lastRefresh != null && now - lastRefresh < REFRESH_CACHE_WINDOW_MS) return
+        val job = viewModelScope.launch {
+            try {
+                block()
+                lastRefreshElapsedMs[section] = SystemClock.elapsedRealtime()
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                if (error is ApiException && error.status == 401) {
+                    forceReauthentication(error.message ?: "登录会话已失效，请重新登录。")
+                } else {
+                    mutableState.update {
+                        it.copy(error = "部分数据暂不可用：${error.message ?: "请稍后重试。"}")
+                    }
+                }
+            } finally {
+                refreshJobs.remove(section)
+                updateRefreshingState()
+            }
+        }
+        refreshJobs[section] = job
+        updateRefreshingState()
+    }
+
+    private fun cancelRefreshes() {
+        refreshJobs.values.toList().forEach { it.cancel() }
+        refreshJobs.clear()
+    }
+
+    private fun clearRefreshCache() {
+        lastRefreshElapsedMs.clear()
+    }
+
+    private fun updateRefreshingState() {
+        val refreshing = refreshJobs.values.any { it.isActive }
+        mutableState.update { current ->
+            if (current.refreshing == refreshing) current else current.copy(refreshing = refreshing)
         }
     }
 
@@ -518,6 +686,36 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun resolveIncident(id: String, note: String, confirmation: suspend () -> Boolean) =
         updateIncident("事件已关闭。", confirmation) {
         api.updateIncident(id, "resolve", note = note)
+    }
+
+    fun completeRunbookStep(id: String, stepId: String, completed: Boolean) =
+        updateIncident(if (completed) "处置步骤已完成。" else "处置步骤已回退。") {
+            api.updateIncident(id, "runbook_step", stepId = stepId, completed = completed)
+        }
+
+    fun savePostmortem(id: String, postmortem: IncidentPostmortem) =
+        updateIncident("事故复盘已保存。") {
+            api.updateIncident(id, "postmortem", postmortem = postmortem)
+        }
+
+    fun approveConfiguration(
+        changeId: String,
+        note: String = "通过 MY Control Android 审批",
+        confirmation: suspend () -> Boolean,
+    ) = runAction("config-approve", "配置变更已审批并生效。", confirmation) {
+        api.approveConfiguration(changeId, note)
+        mutableState.update { it.copy(tasks = api.tasks().tasks) }
+        evaluateAlerts(incidents = mutableState.value.incidents, tasks = mutableState.value.tasks)
+    }
+
+    fun rejectConfiguration(
+        changeId: String,
+        note: String = "通过 MY Control Android 拒绝",
+        confirmation: suspend () -> Boolean,
+    ) = runAction("config-reject", "配置变更提案已拒绝。", confirmation) {
+        api.rejectConfiguration(changeId, note)
+        mutableState.update { it.copy(tasks = api.tasks().tasks) }
+        evaluateAlerts(incidents = mutableState.value.incidents, tasks = mutableState.value.tasks)
     }
 
     fun runDiagnostics() = runAction("diagnostics", "系统自检已完成。") {
@@ -730,18 +928,54 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         action: suspend () -> Unit,
     ) = runAction("incident", successMessage, confirmation) {
             action()
-            mutableState.update { it.copy(incidents = api.incidents()) }
+            val incidents = api.incidents()
+            mutableState.update { it.copy(incidents = incidents) }
             publishWidget()
+            evaluateAlerts(incidents = incidents, tasks = mutableState.value.tasks)
         }
 
-    private fun publishWidget() {
+    private suspend fun publishWidget() {
         val current = mutableState.value
-        MyControlWidgetProvider.publish(
-            context = getApplication(),
-            overview = current.overview,
-            activeIncidents = current.activeIncidents,
-            iot = current.iot,
-        )
+        withContext(Dispatchers.IO) {
+            MyControlWidgetProvider.publish(
+                context = getApplication(),
+                overview = current.overview,
+                activeIncidents = current.activeIncidents,
+                iot = current.iot,
+            )
+        }
+    }
+
+    private fun evaluateAlerts(incidents: List<IncidentInfo>, tasks: List<PlatformTask>) {
+        val seedOnly = !alertsSeeded
+        alertNotifier.evaluate(incidents = incidents, tasks = tasks, seedOnly = seedOnly)
+        alertsSeeded = true
+    }
+
+    private fun startOperationalPolling() {
+        pollJob?.cancel()
+        pollJob = viewModelScope.launch {
+            while (isActive) {
+                delay(90_000)
+                val current = mutableState.value
+                if (current.user == null || current.locked || current.refreshing) continue
+                runCatching {
+                    val incidents = api.incidents()
+                    val tasks = api.tasks().tasks
+                    val refreshedAt = SystemClock.elapsedRealtime()
+                    lastRefreshElapsedMs[RefreshSection.Incidents] = refreshedAt
+                    lastRefreshElapsedMs[RefreshSection.Tasks] = refreshedAt
+                    mutableState.update { it.copy(incidents = incidents, tasks = tasks) }
+                    publishWidget()
+                    evaluateAlerts(incidents = incidents, tasks = tasks)
+                }
+            }
+        }
+    }
+
+    private fun stopOperationalPolling() {
+        pollJob?.cancel()
+        pollJob = null
     }
 
     private fun runAction(
@@ -791,6 +1025,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun forceReauthentication(message: String) {
+        stopOperationalPolling()
+        cancelRefreshes()
+        clearRefreshCache()
         sessionStore.clear()
         mutableState.value = AppUiState(
             booting = false,
@@ -799,5 +1036,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             message = message,
         )
         MyControlWidgetProvider.clear(getApplication())
+    }
+
+    private companion object {
+        const val REFRESH_CACHE_WINDOW_MS = 30_000L
     }
 }

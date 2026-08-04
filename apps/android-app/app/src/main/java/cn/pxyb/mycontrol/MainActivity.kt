@@ -3,15 +3,22 @@ package cn.pxyb.mycontrol
 import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.content.Intent
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.core.app.NotificationManagerCompat
 import androidx.credentials.CreatePublicKeyCredentialRequest
 import androidx.credentials.CreatePublicKeyCredentialResponse
 import androidx.credentials.CredentialManager
@@ -20,6 +27,7 @@ import androidx.credentials.GetPublicKeyCredentialOption
 import androidx.credentials.PublicKeyCredential
 import androidx.credentials.exceptions.CreateCredentialException
 import androidx.credentials.exceptions.GetCredentialException
+import cn.pxyb.mycontrol.AlertNotifier
 import cn.pxyb.mycontrol.ui.AppViewModel
 import cn.pxyb.mycontrol.ui.MyControlApp
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
@@ -32,12 +40,20 @@ import kotlinx.coroutines.withTimeout
 class MainActivity : ComponentActivity() {
     private val appViewModel: AppViewModel by viewModels()
     private val credentialManager by lazy { CredentialManager.create(this) }
+    private val alertNotifier by lazy { AlertNotifier(this) }
     private var authenticationRequests = 0
     private var activityStopped = false
+    private var notificationsEnabled = mutableStateOf(false)
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> notificationsEnabled.value = granted && NotificationManagerCompat.from(this).areNotificationsEnabled() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleQrLoginIntent(intent)
+        alertNotifier.ensureChannel()
+        notificationsEnabled.value = hasNotificationPermission()
+        handleOpenIntent(intent)
         enableEdgeToEdge()
         setContent {
             MYControlTheme {
@@ -57,6 +73,7 @@ class MainActivity : ComponentActivity() {
                 val sensitiveActionConfirmation: suspend () -> Boolean = remember {
                     { requestSensitiveActionConfirmation() }
                 }
+                val notificationPermissionRequest = remember { { requestNotificationPermissionIfNeeded() } }
                 MyControlApp(
                     viewModel = appViewModel,
                     onBiometricUnlock = biometricRequest,
@@ -65,6 +82,8 @@ class MainActivity : ComponentActivity() {
                     onBiometricConfirmation = biometricConfirmation,
                     onSessionProtection = sessionProtection,
                     onSensitiveActionConfirmation = sensitiveActionConfirmation,
+                    notificationsEnabled = notificationsEnabled.value,
+                    onRequestNotifications = notificationPermissionRequest,
                 )
             }
         }
@@ -73,6 +92,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         activityStopped = false
+        notificationsEnabled.value = hasNotificationPermission()
     }
 
     override fun onStop() {
@@ -84,7 +104,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleQrLoginIntent(intent)
+        handleOpenIntent(intent)
     }
 
     private suspend fun requestPasskey(requestJson: String): String {
@@ -210,9 +230,41 @@ class MainActivity : ComponentActivity() {
         return cancellationSignal
     }
 
-    private fun handleQrLoginIntent(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_VIEW) {
-            appViewModel.handleQrLoginUrl(intent.dataString)
+    private fun requestNotificationPermissionIfNeeded() {
+        if (hasNotificationPermission()) return
+        val permissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (!permissionGranted) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            startActivity(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+            )
+        }
+    }
+
+    private fun hasNotificationPermission(): Boolean =
+        (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
+            NotificationManagerCompat.from(this).areNotificationsEnabled()
+
+    private fun handleOpenIntent(intent: Intent?) {
+        if (intent == null) return
+        val data = intent.data
+        if (data != null) {
+            appViewModel.handleOpenIntent(data)
+            return
+        }
+        val tab = intent.getStringExtra(DeepLinks.EXTRA_TAB)
+        val incidentId = intent.getStringExtra(DeepLinks.EXTRA_INCIDENT_ID)
+        val taskId = intent.getStringExtra(DeepLinks.EXTRA_TASK_ID)
+        if (!tab.isNullOrBlank() || !incidentId.isNullOrBlank() || !taskId.isNullOrBlank()) {
+            appViewModel.openOperationalTarget(
+                tab = DeepLinks.parseTab(tab),
+                incidentId = incidentId,
+                taskId = taskId,
+            )
         }
     }
 }

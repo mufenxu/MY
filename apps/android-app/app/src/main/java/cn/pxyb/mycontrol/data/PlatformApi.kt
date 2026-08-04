@@ -205,12 +205,17 @@ class PlatformApi(private val sessionStore: SessionStore) {
         val json = execute("/api/tasks?limit=100").json
         TaskData(
             tasks = json.optJSONArray("tasks").objects().map { item ->
+                val source = item.optString("source", "platform")
+                val rawId = item.optString("id")
+                val sourceId = item.nullableString("sourceId")
+                    ?: rawId.removePrefix("$source:").takeIf { it.isNotBlank() && it != rawId }
                 PlatformTask(
-                    id = item.optString("id"),
+                    id = rawId,
                     title = item.optString("title", "平台任务"),
                     detail = item.optString("detail"),
                     status = item.optString("status", "pending"),
-                    source = item.optString("source", "platform"),
+                    source = source,
+                    sourceId = sourceId,
                     requestedBy = item.optString("requestedBy", "--"),
                     updatedAt = item.nullableString("updatedAt"),
                 )
@@ -464,12 +469,41 @@ class PlatformApi(private val sessionStore: SessionStore) {
         note: String = "",
         assignedTo: String = "",
         muteMinutes: Int? = null,
+        stepId: String? = null,
+        completed: Boolean? = null,
+        postmortem: IncidentPostmortem? = null,
     ): Unit = withContext(Dispatchers.IO) {
         val body = JSONObject().put("action", action)
         if (note.isNotBlank()) body.put("note", note.trim())
         if (assignedTo.isNotBlank()) body.put("assignedTo", assignedTo.trim())
         if (muteMinutes != null) body.put("muteMinutes", muteMinutes)
+        if (!stepId.isNullOrBlank()) body.put("stepId", stepId.trim())
+        if (completed != null) body.put("completed", completed)
+        if (postmortem != null) {
+            body.put(
+                "postmortem",
+                JSONObject()
+                    .put("summary", postmortem.summary.trim())
+                    .put("rootCause", postmortem.rootCause.trim())
+                    .put("impact", postmortem.impact.trim())
+                    .put("correctiveActions", postmortem.correctiveActions.trim()),
+            )
+        }
         execute("/api/incidents/${encodePath(id)}/actions", "POST", body)
+        Unit
+    }
+
+    suspend fun approveConfiguration(id: String, note: String = ""): Unit = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+        if (note.isNotBlank()) body.put("note", note.trim())
+        execute("/api/configuration/changes/${encodePath(id)}/approve", "POST", body)
+        Unit
+    }
+
+    suspend fun rejectConfiguration(id: String, note: String = ""): Unit = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+        if (note.isNotBlank()) body.put("note", note.trim())
+        execute("/api/configuration/changes/${encodePath(id)}/reject", "POST", body)
         Unit
     }
 
@@ -654,6 +688,22 @@ private fun JSONObject.toIncidentInfo() = IncidentInfo(
             message = item.optString("message", "事件已更新"),
             actor = item.optString("actor", "system"),
             at = item.nullableString("at"),
+        )
+    },
+    runbookSteps = optJSONArray("runbookSteps").objects().map { item ->
+        IncidentRunbookStep(
+            id = item.optString("id"),
+            title = item.optString("title", item.optString("id", "处置步骤")),
+            completed = item.optBoolean("completed"),
+        )
+    },
+    postmortem = optJSONObject("postmortem")?.let { pm ->
+        IncidentPostmortem(
+            summary = pm.optString("summary"),
+            rootCause = pm.optString("rootCause"),
+            impact = pm.optString("impact"),
+            correctiveActions = pm.optString("correctiveActions"),
+            completedAt = pm.nullableString("completedAt"),
         )
     },
 )

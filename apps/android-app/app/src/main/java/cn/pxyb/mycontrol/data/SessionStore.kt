@@ -24,10 +24,28 @@ class SessionStore(context: Context) {
         }
     }
 
-    fun readCookie(): String? = activeCookie.takeIf { hasSession() }
+    fun readCookie(): String? {
+        if (!hasSession()) return null
+        activeCookie?.let { return it }
+        if (!isLockEnabled()) {
+            val plain = preferences.getString(KEY_PLAIN_COOKIE, null)
+            if (!plain.isNullOrBlank()) {
+                activeCookie = plain
+                return plain
+            }
+        }
+        return null
+    }
 
     fun unlock(): Boolean {
         if (!hasSession()) return false
+        if (!isLockEnabled()) {
+            val plain = preferences.getString(KEY_PLAIN_COOKIE, null)
+            if (!plain.isNullOrBlank()) {
+                activeCookie = plain
+                return true
+            }
+        }
         val payload = preferences.getString(KEY_COOKIE, null) ?: return false
         return runCatching {
             val bytes = Base64.decode(payload, Base64.NO_WRAP)
@@ -66,13 +84,14 @@ class SessionStore(context: Context) {
         val encrypted = cipher.doFinal(cookie.toByteArray(StandardCharsets.UTF_8))
         val payload = cipher.iv + encrypted
         val now = System.currentTimeMillis()
-        preferences.edit()
+        val edit = preferences.edit()
             .putInt(KEY_STORAGE_VERSION, STORAGE_VERSION)
             .putString(KEY_COOKIE, Base64.encodeToString(payload, Base64.NO_WRAP))
             .putLong(KEY_EXPIRES_AT, expiresAtMillis)
             .putLong(KEY_LAST_USED_AT, now)
             .putLong(KEY_IDLE_TIMEOUT, idleTimeoutMinutes.coerceAtLeast(1) * 60_000L)
-            .apply()
+        if (!isLockEnabled()) edit.putString(KEY_PLAIN_COOKIE, cookie)
+        edit.apply()
         activeCookie = cookie
     }
 
@@ -86,6 +105,7 @@ class SessionStore(context: Context) {
         activeCookie = null
         preferences.edit()
             .remove(KEY_COOKIE)
+            .remove(KEY_PLAIN_COOKIE)
             .remove(KEY_STORAGE_VERSION)
             .remove(KEY_EXPIRES_AT)
             .remove(KEY_LAST_USED_AT)
@@ -106,13 +126,30 @@ class SessionStore(context: Context) {
     fun hasSession(now: Long = System.currentTimeMillis()): Boolean {
         val validStorage = preferences.getInt(KEY_STORAGE_VERSION, 0) == STORAGE_VERSION
         val payloadPresent = !preferences.getString(KEY_COOKIE, null).isNullOrBlank()
+        val plainPayloadPresent = !preferences.getString(KEY_PLAIN_COOKIE, null).isNullOrBlank()
         val expiresAt = preferences.getLong(KEY_EXPIRES_AT, 0L)
         val lastUsedAt = preferences.getLong(KEY_LAST_USED_AT, 0L)
         val idleTimeout = preferences.getLong(KEY_IDLE_TIMEOUT, 0L)
-        val valid = validStorage && payloadPresent && expiresAt > now && lastUsedAt > 0L && idleTimeout > 0L
+        val metadataValid = validStorage && expiresAt > now && lastUsedAt > 0L && idleTimeout > 0L
             && lastUsedAt + idleTimeout > now
-        if (!valid && payloadPresent) clear()
-        return valid
+        val sessionPresent = metadataValid &&
+            (payloadPresent || (!isLockEnabled() && plainPayloadPresent))
+        if (!sessionPresent && (payloadPresent || plainPayloadPresent)) clear()
+        return sessionPresent
+    }
+
+    fun isLockEnabled(): Boolean = preferences.getBoolean(KEY_LOCK_ENABLED, true)
+
+    fun setLockEnabled(enabled: Boolean) {
+        val cookie = if (enabled) null else activeCookie ?: readCookie()
+        preferences.edit()
+            .putBoolean(KEY_LOCK_ENABLED, enabled)
+            .apply()
+        if (enabled) {
+            preferences.edit().remove(KEY_PLAIN_COOKIE).apply()
+        } else if (!cookie.isNullOrBlank()) {
+            preferences.edit().putString(KEY_PLAIN_COOKIE, cookie).apply()
+        }
     }
 
     private fun getOrCreateKey(): SecretKey {
@@ -154,6 +191,8 @@ class SessionStore(context: Context) {
         const val AUTH_VALIDITY_SECONDS = 15
         const val LAST_USED_WRITE_INTERVAL_MS = 60_000L
         const val KEY_COOKIE = "cookie"
+        const val KEY_PLAIN_COOKIE = "plain_cookie"
+        const val KEY_LOCK_ENABLED = "lock_enabled"
         const val KEY_STORAGE_VERSION = "storage_version"
         const val KEY_EXPIRES_AT = "expires_at"
         const val KEY_LAST_USED_AT = "last_used_at"

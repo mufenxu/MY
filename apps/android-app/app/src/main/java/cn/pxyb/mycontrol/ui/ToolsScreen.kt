@@ -144,7 +144,7 @@ fun ToolsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         ImmersiveHeader(
-            title = "平台工具",
+            title = "设备与自动化",
             refreshing = state.refreshing,
             onRefresh = onRefresh,
         )

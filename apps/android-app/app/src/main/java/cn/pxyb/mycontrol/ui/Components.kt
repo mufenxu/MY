@@ -1,6 +1,8 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.compose.animation.Crossfade
+import android.graphics.drawable.ColorDrawable
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -10,6 +12,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -50,16 +53,22 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -71,10 +80,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+private val PlatformTimeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm")
+    .withZone(ZoneId.systemDefault())
 
 data class StatusStyle(
     val label: String,
@@ -148,11 +162,14 @@ fun AppPanel(
     content: @Composable () -> Unit,
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier
+            .clip(AppCardShape)
+            .then(modifier)
+            .fillMaxWidth(),
         shape = AppCardShape,
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFCFCFA)),
         border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         content()
     }
@@ -274,12 +291,13 @@ fun AppDialog(
     iconBackground: Color = MaterialTheme.colorScheme.primaryContainer,
     title: String? = null,
     subtitle: String? = null,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 26.dp),
+    contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
     footer: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(
@@ -289,11 +307,38 @@ fun AppDialog(
             dismissOnClickOutside = true,
         ),
     ) {
-        val scrim = if (isSystemInDarkTheme()) Color.Black.copy(alpha = 0.62f) else Color(0xFF0F172A).copy(alpha = 0.42f)
+        val view = LocalView.current
+        val dark = isSystemInDarkTheme()
+        val dimAlpha = if (dark) 0.58f else 0.38f
+        SideEffect {
+            val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+            window.setDimAmount(dimAlpha)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.isStatusBarContrastEnforced = false
+                window.isNavigationBarContrastEnforced = false
+            }
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
+
+        val sheetColor = if (dark) Color(0xFF1E293B) else Color(0xFFFFFBFE)
+        val sheetBorder = if (dark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
+        val headerWash = Brush.verticalGradient(
+            colors = listOf(
+                iconBackground.copy(alpha = if (dark) 0.34f else 0.55f),
+                sheetColor.copy(alpha = 0f),
+            ),
+        )
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(scrim)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -303,87 +348,118 @@ fun AppDialog(
         ) {
             AnimatedVisibility(
                 visible = visible,
-                enter = fadeIn(animationSpec = tween(160)) +
-                    scaleIn(initialScale = 0.9f, animationSpec = tween(260, easing = FastOutSlowInEasing)),
-                exit = fadeOut(animationSpec = tween(120)) +
-                    scaleOut(targetScale = 0.94f, animationSpec = tween(140)),
+                enter = fadeIn(animationSpec = tween(150)) +
+                    scaleIn(initialScale = 0.94f, animationSpec = tween(220, easing = FastOutSlowInEasing)),
+                exit = fadeOut(animationSpec = tween(110)) +
+                    scaleOut(targetScale = 0.97f, animationSpec = tween(130)),
                 modifier = Modifier
                     .imePadding()
                     .statusBarsPadding()
                     .navigationBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .padding(horizontal = 18.dp, vertical = 16.dp)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {},
                     ),
             ) {
-                Surface(
-                    modifier = modifier.widthIn(max = 400.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    shadowElevation = 28.dp,
-                    tonalElevation = 4.dp,
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
+                Box(
+                    modifier = modifier
+                        .widthIn(max = 420.dp)
+                        .fillMaxWidth()
+                        .shadow(
+                            elevation = 28.dp,
+                            shape = RoundedCornerShape(28.dp),
+                            ambientColor = Color.Black.copy(alpha = 0.18f),
+                            spotColor = Color.Black.copy(alpha = 0.22f),
+                        )
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(sheetColor)
+                        .background(headerWash)
+                        .border(1.dp, sheetBorder, RoundedCornerShape(28.dp)),
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(contentPadding),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(18.dp),
-                    ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         if (icon != null || title != null || subtitle != null) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth(),
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                verticalAlignment = Alignment.Top,
                             ) {
                                 if (icon != null) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = iconBackground,
-                                        modifier = Modifier.size(54.dp),
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(iconBackground.copy(alpha = if (dark) 0.9f else 1f)),
+                                        contentAlignment = Alignment.Center,
                                     ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = icon,
-                                                contentDescription = null,
-                                                tint = iconTint,
-                                                modifier = Modifier.size(27.dp),
-                                            )
-                                        }
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            tint = iconTint,
+                                            modifier = Modifier.size(24.dp),
+                                        )
                                     }
                                 }
-                                if (title != null) {
-                                    Text(
-                                        text = title,
-                                        style = MaterialTheme.typography.titleLarge.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 20.sp,
-                                        ),
-                                        textAlign = TextAlign.Center,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                }
-                                if (subtitle != null) {
-                                    Text(
-                                        text = subtitle,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontSize = 13.5.sp,
-                                            lineHeight = 20.sp,
-                                        ),
-                                        textAlign = TextAlign.Center,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    if (title != null) {
+                                        Text(
+                                            text = title,
+                                            style = MaterialTheme.typography.titleLarge.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 19.sp,
+                                                lineHeight = 25.sp,
+                                                letterSpacing = (-0.2).sp,
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                        )
+                                    }
+                                    if (subtitle != null) {
+                                        Text(
+                                            text = subtitle,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontSize = 13.5.sp,
+                                                lineHeight = 19.sp,
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 }
                             }
                         }
-                        content()
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(contentPadding),
+                            horizontalAlignment = Alignment.Start,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            content()
+                        }
+
                         if (footer != null) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
-                            footer()
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        if (dark) Color.White.copy(alpha = 0.04f)
+                                        else Color(0xFFF8FAFC).copy(alpha = 0.92f),
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    footer()
+                                }
+                            }
                         }
                     }
                 }
@@ -392,7 +468,8 @@ fun AppDialog(
     }
 }
 
-/** 弹窗主操作按钮：胶囊形主色全宽按钮。 */
+
+/** 弹窗主操作按钮：柔和圆角主色按钮。 */
 @Composable
 fun AppDialogPrimaryButton(
     text: String,
@@ -405,9 +482,21 @@ fun AppDialogPrimaryButton(
         onClick = onClick,
         modifier = modifier.height(48.dp),
         enabled = enabled && !busy,
-        shape = RoundedCornerShape(50),
-        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            focusedElevation = 0.dp,
+            hoveredElevation = 0.dp,
+            disabledElevation = 0.dp,
+        ),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
+            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+        ),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
     ) {
         if (busy) {
             CircularProgressIndicator(
@@ -416,17 +505,12 @@ fun AppDialogPrimaryButton(
                 color = MaterialTheme.colorScheme.onPrimary,
             )
         } else {
-            Text(
-                text,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp,
-                color = MaterialTheme.colorScheme.onPrimary,
-            )
+            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
         }
     }
 }
 
-/** 弹窗次要操作按钮：浅灰胶囊按钮。 */
+/** 弹窗次要操作按钮：浅底弱强调。 */
 @Composable
 fun AppDialogSecondaryButton(
     text: String,
@@ -435,16 +519,20 @@ fun AppDialogSecondaryButton(
     enabled: Boolean = true,
     busy: Boolean = false,
 ) {
+    val dark = isSystemInDarkTheme()
     Button(
         onClick = onClick,
         modifier = modifier.height(48.dp),
         enabled = enabled && !busy,
-        shape = RoundedCornerShape(50),
+        shape = RoundedCornerShape(16.dp),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            containerColor = if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            disabledContainerColor = if (dark) Color.White.copy(alpha = 0.04f) else Color(0xFFF8FAFC),
+            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
         ),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
     ) {
         if (busy) {
             CircularProgressIndicator(
@@ -458,7 +546,7 @@ fun AppDialogSecondaryButton(
     }
 }
 
-/** 弹窗危险操作按钮：红色胶囊按钮。 */
+/** 弹窗危险操作按钮：柔和危险色。 */
 @Composable
 fun AppDialogDangerButton(
     text: String,
@@ -467,32 +555,34 @@ fun AppDialogDangerButton(
     enabled: Boolean = true,
     busy: Boolean = false,
 ) {
+    val dark = isSystemInDarkTheme()
     Button(
         onClick = onClick,
         modifier = modifier.height(48.dp),
         enabled = enabled && !busy,
-        shape = RoundedCornerShape(50),
-        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (dark) Color(0xFF7F1D1D) else Color(0xFFFEE2E2),
+            contentColor = if (dark) Color(0xFFFECACA) else Color(0xFFB91C1C),
+            disabledContainerColor = if (dark) Color(0xFF7F1D1D).copy(alpha = 0.45f) else Color(0xFFFEE2E2).copy(alpha = 0.55f),
+            disabledContentColor = if (dark) Color(0xFFFECACA).copy(alpha = 0.55f) else Color(0xFFB91C1C).copy(alpha = 0.45f),
+        ),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
     ) {
         if (busy) {
             CircularProgressIndicator(
                 Modifier.size(18.dp),
                 strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.onError,
+                color = if (dark) Color(0xFFFECACA) else Color(0xFFB91C1C),
             )
         } else {
-            Text(
-                text,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp,
-                color = MaterialTheme.colorScheme.onError,
-            )
+            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
         }
     }
 }
 
-/** 弹窗统一输入框：圆角浅底，聚焦时主色描边。 */
+/** 弹窗统一输入框：浅填色 + 细描边。 */
 @Composable
 fun DialogTextField(
     value: String,
@@ -506,23 +596,34 @@ fun DialogTextField(
     isPassword: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
 ) {
+    val dark = isSystemInDarkTheme()
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
-        label = { Text(label) },
-        singleLine = singleLine,
+        label = {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+            )
+        },
+        singleLine = singleLine && minLines <= 1,
         minLines = minLines,
-        maxLines = maxLines,
+        maxLines = maxLines.coerceAtLeast(minLines),
         enabled = enabled,
         visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         shape = RoundedCornerShape(16.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-            focusedContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f),
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+            unfocusedBorderColor = if (dark) Color.White.copy(alpha = 0.10f) else Color(0xFFE2E8F0),
+            disabledBorderColor = if (dark) Color.White.copy(alpha = 0.06f) else Color(0xFFE2E8F0),
+            focusedContainerColor = if (dark) Color.White.copy(alpha = 0.06f) else Color(0xFFF8FAFC),
+            unfocusedContainerColor = if (dark) Color.White.copy(alpha = 0.04f) else Color(0xFFF8FAFC),
+            disabledContainerColor = if (dark) Color.White.copy(alpha = 0.02f) else Color(0xFFF1F5F9),
+            focusedLabelColor = MaterialTheme.colorScheme.primary,
+            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            cursorColor = MaterialTheme.colorScheme.primary,
         ),
     )
 }
@@ -532,7 +633,7 @@ fun DialogTextField(
 fun DialogInfoText(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
-        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp, lineHeight = 20.sp),
+        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 21.sp),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier.fillMaxWidth(),
     )
@@ -556,14 +657,25 @@ fun AppConfirmDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         modifier = modifier,
         icon = icon,
-        iconTint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-        iconBackground = if (danger) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
+        iconTint = if (danger) {
+            if (isSystemInDarkTheme()) Color(0xFFFCA5A5) else Color(0xFFDC2626)
+        } else {
+            MaterialTheme.colorScheme.primary
+        },
+        iconBackground = if (danger) {
+            if (isSystemInDarkTheme()) Color(0xFF7F1D1D).copy(alpha = 0.55f) else Color(0xFFFEE2E2)
+        } else {
+            MaterialTheme.colorScheme.primaryContainer
+        },
         title = title,
         content = {
             DialogInfoText(detail)
         },
         footer = {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 AppDialogSecondaryButton(
                     text = dismissLabel,
                     onClick = onDismiss,
@@ -671,17 +783,13 @@ private fun formatPlatformTimeValue(value: String?): String {
     val instant = runCatching { Instant.parse(value) }.getOrNull()
         ?: runCatching { OffsetDateTime.parse(value).toInstant() }.getOrNull()
         ?: return value.take(16)
-    return DateTimeFormatter.ofPattern("MM-dd HH:mm")
-        .withZone(ZoneId.systemDefault())
-        .format(instant)
+    return PlatformTimeFormatter.format(instant)
 }
 
 fun formatLastActive(value: Long?): String {
     if (value == null) return "暂无数据"
     val normalized = if (value < 10_000_000_000L) value * 1000 else value
-    return DateTimeFormatter.ofPattern("MM-dd HH:mm")
-        .withZone(ZoneId.systemDefault())
-        .format(Instant.ofEpochMilli(normalized))
+    return PlatformTimeFormatter.format(Instant.ofEpochMilli(normalized))
 }
 
 @Composable

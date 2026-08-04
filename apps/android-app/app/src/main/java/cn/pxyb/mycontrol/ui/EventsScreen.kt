@@ -42,6 +42,7 @@ import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -76,12 +77,20 @@ fun EventsScreen(
     onAddNote: (String, String) -> Unit,
     onMute: (String, Int) -> Unit,
     onResolve: (String, String) -> Unit,
+    onCompleteRunbookStep: (String, String, Boolean) -> Unit,
+    onSavePostmortem: (String, cn.pxyb.mycontrol.data.IncidentPostmortem) -> Unit,
+    focusIncidentId: String?,
+    onFocusConsumed: () -> Unit,
     onRefresh: () -> Unit,
 ) {
     var filter by remember { mutableStateOf("active") }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf("") }
     var assignee by remember { mutableStateOf("") }
+    var postmortemSummary by remember { mutableStateOf("") }
+    var postmortemRootCause by remember { mutableStateOf("") }
+    var postmortemImpact by remember { mutableStateOf("") }
+    var postmortemActions by remember { mutableStateOf("") }
     val activeIncidents = state.activeIncidents
     val incidents = remember(filter, activeIncidents, state.incidents) {
         when (filter) {
@@ -92,11 +101,28 @@ fun EventsScreen(
         }
     }
     val selected = state.incidents.firstOrNull { it.id == selectedId }
+    val runbookSteps = remember(selected) {
+        val steps = selected?.runbookSteps.orEmpty()
+        if (steps.isNotEmpty()) steps else defaultIncidentRunbook(selected)
+    }
+
+    LaunchedEffect(focusIncidentId, state.incidents) {
+        val target = focusIncidentId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        if (state.incidents.any { it.id == target }) {
+            selectedId = target
+            filter = "active"
+            onFocusConsumed()
+        }
+    }
     val canOperate = state.user?.role in setOf("operator", "super_admin")
 
-    LaunchedEffect(selectedId) {
+    LaunchedEffect(selectedId, selected?.id, selected?.postmortem?.completedAt) {
         note = ""
         assignee = selected?.assignedTo.orEmpty()
+        postmortemSummary = selected?.postmortem?.summary.orEmpty()
+        postmortemRootCause = selected?.postmortem?.rootCause.orEmpty()
+        postmortemImpact = selected?.postmortem?.impact.orEmpty()
+        postmortemActions = selected?.postmortem?.correctiveActions.orEmpty()
     }
     LaunchedEffect(state.message) {
         if (state.message == "处理备注已记录。") note = ""
@@ -114,7 +140,8 @@ fun EventsScreen(
     ) {
         item {
             ImmersiveHeader(
-                title = "事件中心",
+                title = "系统动态",
+                subtitle = "最近发生的异常与处理进度",
                 refreshing = state.refreshing,
                 onRefresh = onRefresh
             )
@@ -206,6 +233,29 @@ fun EventsScreen(
                         }
                     }
 
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    Text("处理步骤", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                    runbookSteps.forEach { step ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Checkbox(
+                                checked = step.completed,
+                                onCheckedChange = { checked ->
+                                    if (canOperate) onCompleteRunbookStep(incident.id, step.id, checked)
+                                },
+                                enabled = canOperate && state.busyAction == null && incident.status != "resolved",
+                            )
+                            Text(
+                                step.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+
                     if (canOperate && incident.status != "resolved") {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                         DialogTextField(
@@ -236,7 +286,7 @@ fun EventsScreen(
 
                         if (incident.status == "open") {
                             AppDialogPrimaryButton(
-                                text = "确认并开始跟进",
+                                text = "确认并处理",
                                 onClick = { onAcknowledge(incident.id) },
                                 enabled = state.busyAction == null,
                                 modifier = Modifier.fillMaxWidth(),
@@ -254,6 +304,66 @@ fun EventsScreen(
                             enabled = state.busyAction == null,
                             modifier = Modifier.fillMaxWidth(),
                         )
+                    }
+
+                    if (incident.status == "resolved") {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                        Text("问题回顾", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        if (incident.postmortem?.completedAt != null) {
+                            Text(
+                                "已保存 · ${formatPlatformTime(incident.postmortem.completedAt)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        DialogTextField(
+                            value = postmortemSummary,
+                            onValueChange = { postmortemSummary = it.take(1000) },
+                            label = "摘要",
+                            minLines = 2,
+                            maxLines = 3,
+                        )
+                        DialogTextField(
+                            value = postmortemRootCause,
+                            onValueChange = { postmortemRootCause = it.take(2000) },
+                            label = "根因",
+                            minLines = 2,
+                            maxLines = 3,
+                        )
+                        DialogTextField(
+                            value = postmortemImpact,
+                            onValueChange = { postmortemImpact = it.take(2000) },
+                            label = "影响",
+                            minLines = 2,
+                            maxLines = 3,
+                        )
+                        DialogTextField(
+                            value = postmortemActions,
+                            onValueChange = { postmortemActions = it.take(2000) },
+                            label = "纠正与预防措施",
+                            minLines = 2,
+                            maxLines = 3,
+                        )
+                        if (canOperate) {
+                            AppDialogPrimaryButton(
+                                text = if (state.busyAction == "incident") "保存中..." else "保存回顾",
+                                onClick = {
+                                    onSavePostmortem(
+                                        incident.id,
+                                        cn.pxyb.mycontrol.data.IncidentPostmortem(
+                                            summary = postmortemSummary.trim(),
+                                            rootCause = postmortemRootCause.trim(),
+                                            impact = postmortemImpact.trim(),
+                                            correctiveActions = postmortemActions.trim(),
+                                        ),
+                                    )
+                                },
+                                enabled = state.busyAction == null &&
+                                    postmortemSummary.isNotBlank() &&
+                                    postmortemRootCause.isNotBlank(),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
             },
@@ -472,4 +582,15 @@ private fun DetailLine(label: String, value: String) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodySmall)
     }
+}
+
+
+private fun defaultIncidentRunbook(incident: IncidentInfo?): List<cn.pxyb.mycontrol.data.IncidentRunbookStep> {
+    val service = incident?.serviceId?.takeIf { it.isNotBlank() }?.let { " $it " } ?: "平台"
+    return listOf(
+        cn.pxyb.mycontrol.data.IncidentRunbookStep("scope", "确认${service}影响范围", false),
+        cn.pxyb.mycontrol.data.IncidentRunbookStep("diagnostics", "运行端到端诊断并记录请求 ID", false),
+        cn.pxyb.mycontrol.data.IncidentRunbookStep("changes", "核对最近发布与配置变更", false),
+        cn.pxyb.mycontrol.data.IncidentRunbookStep("recovery", "验证恢复结果并通知相关方", false),
+    )
 }

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.ManageAccounts
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -56,6 +57,8 @@ fun ProfileScreen(
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
     onOpenAccountManagement: () -> Unit,
+    notificationsEnabled: Boolean,
+    onRequestNotifications: () -> Unit,
 ) {
     var revokeTarget by remember { mutableStateOf<SecuritySession?>(null) }
     var confirmLogout by remember { mutableStateOf(false) }
@@ -193,6 +196,47 @@ fun ProfileScreen(
                         }
                     }
                     StatusBadge("healthy", "已登录")
+                }
+            }
+        }
+
+        if (!notificationsEnabled) {
+            item {
+                AppPanel {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onRequestNotifications() }
+                            .padding(horizontal = 18.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Icon(
+                                Icons.Outlined.Notifications,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.padding(9.dp).size(22.dp),
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            ProfileGroupLabel("状态提醒")
+                            Text(
+                                "接收系统异常与待处理任务提醒",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 3.dp),
+                            )
+                        }
+                        Text(
+                            "开启",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
             }
         }

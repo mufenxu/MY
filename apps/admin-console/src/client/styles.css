@@ -10473,16 +10473,31 @@ button.dependency-service-card:focus-visible {
   }
 
   /* 缩小手机端头部问候文本 */
-  .topbar-leading h2 {
-    font-size: 13.5px !important;
+  .welcome-copy h1 {
+    max-width: min(220px, calc(100vw - 160px));
+    font-size: 16px !important;
   }
 
   /* 菜单与通知铃铛按钮微缩 */
-  .topbar-leading button,
-  .topbar-actions > button,
+  .topbar-leading .mobile-menu-button,
   .topbar-actions > .notification-wrap > .notification-button {
-    width: 34px !important;
-    height: 34px !important;
+    width: 40px !important;
+    height: 40px !important;
+    flex: 0 0 40px !important;
+  }
+
+  .command-trigger {
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    flex: 0 0 40px !important;
+    justify-content: center;
+    padding: 0 !important;
+  }
+
+  .command-trigger > span {
+    display: none;
   }
 
   /* 手机端收窄子选项切换导航条 */
@@ -10505,5 +10520,74 @@ button.dependency-service-card:focus-visible {
     padding: 0 8px !important;
     font-size: 11px !important;
     border-radius: 6px !important;
+  }
+
+  .overview-page.modern-executive-cockpit {
+    padding: 0;
+    gap: 10px;
+  }
+
+  .cockpit-overview-primary,
+  .cockpit-overview-metric {
+    padding: 12px;
+  }
+
+  .cockpit-overview-primary {
+    gap: 10px;
+  }
+
+  .command-palette-backdrop {
+    align-items: stretch;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  }
+
+  .command-palette {
+    width: 100%;
+    max-height: 100%;
+    min-height: 0;
+    border-radius: 16px;
+  }
+
+  .command-palette > header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-height: 64px;
+    gap: 8px;
+    padding: 8px 10px 8px 14px;
+  }
+
+  .command-palette > header input {
+    height: 44px;
+    font-size: 16px;
+  }
+
+  .command-palette > header .icon-action,
+  .command-result > .icon-action {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+  }
+
+  .command-palette-results {
+    padding: 8px 10px 12px;
+  }
+
+  .command-result {
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 6px;
+  }
+
+  .command-result-main {
+    min-height: 64px;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 8px 4px 8px 10px;
+  }
+
+  .command-result-main strong {
+    font-size: 14px;
+  }
+
+  .command-result-main small {
+    font-size: 12px;
   }
 }
