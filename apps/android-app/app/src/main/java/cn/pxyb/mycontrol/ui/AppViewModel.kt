@@ -43,6 +43,7 @@ import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.TodoTask
 import cn.pxyb.mycontrol.data.TrendSample
 import cn.pxyb.mycontrol.data.todayTrendSample
+import cn.pxyb.mycontrol.data.shouldInvalidatePlatformSession
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
@@ -1356,7 +1357,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 updateSectionLoadState(section) {
                     it.copy(error = error.message ?: "请稍后重试。")
                 }
-                if (error is ApiException && error.status == 401) {
+                if (error is ApiException && shouldInvalidatePlatformSession(error.status, error.code)) {
                     forceReauthentication(error.message ?: "登录会话已失效，请重新登录。")
                 } else if (force) {
                     mutableState.update {
@@ -1818,7 +1819,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             runCatching { block() }
                 .onSuccess { mutableState.update { it.copy(busyAction = null, message = successMessage) } }
                 .onFailure { error ->
-                    if (error is ApiException && error.status == 401) {
+                    if (error is ApiException && shouldInvalidatePlatformSession(error.status, error.code)) {
                         val current = mutableState.value
                         mutableState.value = AppUiState(
                             booting = false,
