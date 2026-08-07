@@ -5,6 +5,8 @@ const MAX_ACCOUNTS = 1000;
 const MAX_ALIASES = 100;
 const MAX_ID_LENGTH = 128;
 const MAX_TEXT_LENGTH = 1000;
+const MAX_TAG_LENGTH = 40;
+const MAX_TAGS = 20;
 const MAX_TIMESTAMP = Date.UTC(2100, 0, 1);
 const ALIAS_TYPES = new Set(['plus', 'workspace', 'custom', 'other']);
 const ALIAS_STATUSES = new Set(['candidate', 'confirmed', 'unavailable']);
@@ -33,6 +35,16 @@ function normalizeText(value, field) {
   if (value === undefined || value === null) return '';
   if (typeof value !== 'string' || value.trim().length > MAX_TEXT_LENGTH) return invalid(field);
   return value.trim();
+}
+
+function normalizeTags(value) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > MAX_TAGS) return invalid('tags');
+  const tags = value.map((tag) => {
+    if (typeof tag !== 'string' || tag.trim().length > MAX_TAG_LENGTH) return invalid('tag');
+    return tag.trim();
+  }).filter(Boolean);
+  return [...new Set(tags)];
 }
 
 function normalizeEnum(value, allowed, fallback, field) {
@@ -68,6 +80,7 @@ function normalizeAccount(raw) {
   if (!Array.isArray(raw.aliases) || raw.aliases.length > MAX_ALIASES) return invalid('aliases');
   const primaryEmail = normalizeEmail(raw.primaryEmail, 'primary email');
   const aliases = raw.aliases.map(normalizeAlias);
+  const legacyOpenAiStatus = aliases.some((alias) => alias.openAiStatus === 'registered') ? 'registered' : 'unregistered';
   const aliasIds = new Set();
   const aliasAddresses = new Set();
   for (const alias of aliases) {
@@ -82,8 +95,12 @@ function normalizeAccount(raw) {
     primaryEmail,
     displayName: normalizeText(raw.displayName, 'display name'),
     emailStatus: normalizeEnum(raw.emailStatus, EMAIL_STATUSES, 'unknown', 'email status'),
+    openAiStatus: normalizeEnum(raw.openAiStatus, OPENAI_STATUSES, legacyOpenAiStatus, 'OpenAI status'),
     note: normalizeText(raw.note, 'note'),
     lastCheckedAt: normalizeTimestamp(raw.lastCheckedAt, 'lastCheckedAt'),
+    nextReviewAt: normalizeTimestamp(raw.nextReviewAt, 'nextReviewAt'),
+    tags: normalizeTags(raw.tags),
+    archived: raw.archived === true,
     aliases,
   };
 }

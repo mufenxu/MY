@@ -76,7 +76,7 @@ class GoogleAccountStore(context: Context) {
         const val KEY_PAYLOAD = "payload"
         const val KEY_VERSION = "version"
         const val KEY_ACCOUNTS = "accounts"
-        const val STORAGE_VERSION = 1
+        const val STORAGE_VERSION = 2
         const val KEY_ALIAS = "my_control_google_accounts_key_v1"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val IV_SIZE = 12
@@ -88,8 +88,12 @@ private fun GoogleAccountRecord.toJson(): JSONObject = JSONObject().apply {
     put("primaryEmail", primaryEmail)
     put("displayName", displayName)
     put("emailStatus", emailStatus)
+    put("openAiStatus", openAiStatus)
     put("note", note)
     putNullable("lastCheckedAt", lastCheckedAt)
+    putNullable("nextReviewAt", nextReviewAt)
+    put("tags", JSONArray().apply { tags.forEach { put(it) } })
+    put("archived", archived)
     put("aliases", JSONArray().apply { aliases.forEach { put(it.toJson()) } })
 }
 
@@ -113,15 +117,24 @@ private fun JSONArray?.toGoogleAccounts(): List<GoogleAccountRecord> {
     }
 }
 
-private fun JSONObject.toGoogleAccount(): GoogleAccountRecord = GoogleAccountRecord(
-    id = optString("id"),
-    primaryEmail = optString("primaryEmail"),
-    displayName = optString("displayName"),
-    emailStatus = optString("emailStatus", "unknown"),
-    note = optString("note"),
-    lastCheckedAt = optNullableLong("lastCheckedAt"),
-    aliases = optJSONArray("aliases").toGoogleAliases(),
-)
+private fun JSONObject.toGoogleAccount(): GoogleAccountRecord {
+    val aliases = optJSONArray("aliases").toGoogleAliases()
+    return GoogleAccountRecord(
+        id = optString("id"),
+        primaryEmail = optString("primaryEmail"),
+        displayName = optString("displayName"),
+        emailStatus = optString("emailStatus", "unknown"),
+        openAiStatus = optString("openAiStatus").ifBlank {
+            if (aliases.any { it.openAiStatus == "registered" }) "registered" else "unregistered"
+        },
+        note = optString("note"),
+        lastCheckedAt = optNullableLong("lastCheckedAt"),
+        nextReviewAt = optNullableLong("nextReviewAt"),
+        tags = optJSONArray("tags").toStrings(),
+        archived = optBoolean("archived", false),
+        aliases = aliases,
+    )
+}
 
 private fun JSONArray?.toGoogleAliases(): List<GoogleAliasRecord> {
     if (this == null) return emptyList()
@@ -149,3 +162,12 @@ private fun JSONObject.putNullable(key: String, value: Long?) {
 
 private fun JSONObject.optNullableLong(key: String): Long? =
     if (isNull(key)) null else optLong(key).takeIf { it > 0L }
+
+private fun JSONArray?.toStrings(): List<String> {
+    if (this == null) return emptyList()
+    return buildList {
+        for (index in 0 until length()) {
+            optString(index).trim().takeIf(String::isNotBlank)?.let(::add)
+        }
+    }.distinct()
+}

@@ -40,6 +40,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 
 enum class MainTab { Overview, Events, Operations, Tools, Profile }
@@ -492,8 +494,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         mutableState.update { it.copy(googleAccountDeskOpen = false) }
     }
 
-    fun addGoogleAccount(primaryEmail: String, displayName: String, note: String) {
+    fun addGoogleAccount(
+        primaryEmail: String,
+        displayName: String,
+        emailStatus: String,
+        openAiStatus: String,
+        tagsText: String,
+        nextReviewAtText: String,
+        note: String,
+    ) {
         val email = normalizeGoogleAddress(primaryEmail)
+        val tags = normalizeGoogleTags(tagsText) ?: return
+        val nextReviewAt = parseGoogleReviewDate(nextReviewAtText)
+        if (nextReviewAtText.isNotBlank() && nextReviewAt == null) {
+            setGoogleAccountError("检查日期请使用 yyyy-MM-dd 格式。")
+            return
+        }
         when {
             !isValidGoogleAddress(email) -> setGoogleAccountError("请输入有效的 Google 邮箱地址。")
             mutableState.value.googleAccounts.any { it.primaryEmail == email } ->
@@ -504,7 +520,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         id = UUID.randomUUID().toString(),
                         primaryEmail = email,
                         displayName = displayName.trim(),
+                        emailStatus = emailStatus,
+                        openAiStatus = openAiStatus,
                         note = note.trim(),
+                        nextReviewAt = nextReviewAt,
+                        tags = tags,
                     )
                 },
                 successMessage = "Google 邮箱已添加。",
@@ -549,9 +569,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         primaryEmail: String,
         displayName: String,
         emailStatus: String,
+        openAiStatus: String,
+        tagsText: String,
+        nextReviewAtText: String,
         note: String,
     ) {
         val email = normalizeGoogleAddress(primaryEmail)
+        val tags = normalizeGoogleTags(tagsText) ?: return
+        val nextReviewAt = parseGoogleReviewDate(nextReviewAtText)
+        if (nextReviewAtText.isNotBlank() && nextReviewAt == null) {
+            setGoogleAccountError("检查日期请使用 yyyy-MM-dd 格式。")
+            return
+        }
         when {
             !isValidGoogleAddress(email) -> setGoogleAccountError("请输入有效的 Google 邮箱地址。")
             mutableState.value.googleAccounts.any { it.id != id && it.primaryEmail == email } ->
@@ -563,8 +592,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             primaryEmail = email,
                             displayName = displayName.trim(),
                             emailStatus = emailStatus,
+                            openAiStatus = openAiStatus,
                             note = note.trim(),
                             lastCheckedAt = System.currentTimeMillis(),
+                            nextReviewAt = nextReviewAt,
+                            tags = tags,
                         )
                     }
                 },
@@ -577,6 +609,41 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         transform = { accounts -> accounts.filterNot { it.id == id } },
         successMessage = "邮箱记录已删除。",
     )
+
+    fun bulkUpdateGoogleAccounts(ids: Set<String>, openAiStatus: String) {
+        if (ids.isEmpty()) return
+        persistGoogleAccounts(
+            transform = { accounts ->
+                accounts.map { account ->
+                    if (account.id in ids) account.copy(
+                        openAiStatus = openAiStatus,
+                        lastCheckedAt = System.currentTimeMillis(),
+                    ) else account
+                }
+            },
+            successMessage = "已批量更新 ${ids.size} 个邮箱状态。",
+        )
+    }
+
+    fun bulkSetGoogleAccountsArchived(ids: Set<String>, archived: Boolean) {
+        if (ids.isEmpty()) return
+        persistGoogleAccounts(
+            transform = { accounts ->
+                accounts.map { account ->
+                    if (account.id in ids) account.copy(archived = archived) else account
+                }
+            },
+            successMessage = if (archived) "已归档 ${ids.size} 个邮箱。" else "已恢复 ${ids.size} 个邮箱。",
+        )
+    }
+
+    fun bulkDeleteGoogleAccounts(ids: Set<String>) {
+        if (ids.isEmpty()) return
+        persistGoogleAccounts(
+            transform = { accounts -> accounts.filterNot { it.id in ids } },
+            successMessage = "已删除 ${ids.size} 个邮箱记录。",
+        )
+    }
 
     fun addGoogleAlias(accountId: String, address: String, aliasType: String = "plus") {
         val normalizedAddress = normalizeGoogleAddress(address)
@@ -778,6 +845,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun setGoogleAccountError(message: String) {
         mutableState.update { it.copy(error = message, message = null) }
     }
+
+    private fun normalizeGoogleTags(raw: String): List<String>? {
+        val tags = raw.split(',', '，', ';', '；', '\n')
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinct()
+        if (tags.size > 20 || tags.any { it.length > 40 }) {
+            setGoogleAccountError("标签最多 20 个，每个标签不超过 40 个字符。")
+            return null
+        }
+        return tags
+    }
+
+    private fun parseGoogleReviewDate(raw: String): Long? = runCatching {
+        LocalDate.parse(raw.trim())
+            .atStartOfDay(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+    }.getOrNull()
 
     private fun normalizeGoogleAddress(address: String): String = address.trim().lowercase()
 

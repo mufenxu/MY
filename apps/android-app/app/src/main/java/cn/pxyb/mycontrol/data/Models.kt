@@ -262,8 +262,12 @@ data class GoogleAccountRecord(
     val primaryEmail: String,
     val displayName: String = "",
     val emailStatus: String = "unknown",
+    val openAiStatus: String = "unregistered",
     val note: String = "",
     val lastCheckedAt: Long? = null,
+    val nextReviewAt: Long? = null,
+    val tags: List<String> = emptyList(),
+    val archived: Boolean = false,
     val aliases: List<GoogleAliasRecord> = emptyList(),
 )
 

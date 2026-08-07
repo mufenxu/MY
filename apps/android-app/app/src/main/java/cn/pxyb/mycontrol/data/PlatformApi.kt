@@ -731,7 +731,7 @@ private fun JSONObject.toAuditInfo() = AuditInfo(
 )
 
 private fun JSONObject.toGoogleAccountSnapshot(): GoogleAccountSnapshot {
-    val data = optJSONArray("data") ?: JSONArray()
+    val data = optJSONArray("accounts") ?: optJSONArray("data") ?: JSONArray()
     return GoogleAccountSnapshot(
         accounts = data.toGoogleAccounts(),
         revision = optInt("revision", 0).coerceAtLeast(0),
@@ -742,15 +742,24 @@ private fun JSONArray.toGoogleAccounts(): List<GoogleAccountRecord> = buildList 
     for (index in 0 until length()) optJSONObject(index)?.let { add(it.toGoogleAccount()) }
 }
 
-private fun JSONObject.toGoogleAccount(): GoogleAccountRecord = GoogleAccountRecord(
-    id = optString("id"),
-    primaryEmail = optString("primaryEmail"),
-    displayName = optString("displayName"),
-    emailStatus = optString("emailStatus", "unknown"),
-    note = optString("note"),
-    lastCheckedAt = optLongOrNull("lastCheckedAt"),
-    aliases = (optJSONArray("aliases") ?: JSONArray()).toGoogleAliases(),
-)
+private fun JSONObject.toGoogleAccount(): GoogleAccountRecord {
+    val aliases = (optJSONArray("aliases") ?: JSONArray()).toGoogleAliases()
+    return GoogleAccountRecord(
+        id = optString("id"),
+        primaryEmail = optString("primaryEmail"),
+        displayName = optString("displayName"),
+        emailStatus = optString("emailStatus", "unknown"),
+        openAiStatus = optString("openAiStatus").ifBlank {
+            if (aliases.any { it.openAiStatus == "registered" }) "registered" else "unregistered"
+        },
+        note = optString("note"),
+        lastCheckedAt = optLongOrNull("lastCheckedAt"),
+        nextReviewAt = optLongOrNull("nextReviewAt"),
+        tags = (optJSONArray("tags") ?: JSONArray()).toStrings(),
+        archived = optBoolean("archived", false),
+        aliases = aliases,
+    )
+}
 
 private fun JSONArray.toGoogleAliases(): List<GoogleAliasRecord> = buildList {
     for (index in 0 until length()) optJSONObject(index)?.let { add(it.toGoogleAlias()) }
@@ -772,8 +781,12 @@ private fun GoogleAccountRecord.toGoogleAccountJson(): JSONObject = JSONObject()
     put("primaryEmail", primaryEmail)
     put("displayName", displayName)
     put("emailStatus", emailStatus)
+    put("openAiStatus", openAiStatus)
     put("note", note)
     put("lastCheckedAt", lastCheckedAt ?: JSONObject.NULL)
+    put("nextReviewAt", nextReviewAt ?: JSONObject.NULL)
+    put("tags", JSONArray().apply { tags.forEach { put(it) } })
+    put("archived", archived)
     put("aliases", JSONArray().apply { aliases.forEach { put(it.toGoogleAliasJson()) } })
 }
 
@@ -787,6 +800,12 @@ private fun GoogleAliasRecord.toGoogleAliasJson(): JSONObject = JSONObject().app
     put("lastVerifiedAt", lastVerifiedAt ?: JSONObject.NULL)
     put("note", note)
 }
+
+private fun JSONArray.toStrings(): List<String> = buildList {
+    for (index in 0 until length()) {
+        optString(index).trim().takeIf(String::isNotBlank)?.let(::add)
+    }
+}.distinct()
 
 private fun JSONArray?.objects(): List<JSONObject> {
     if (this == null) return emptyList()
