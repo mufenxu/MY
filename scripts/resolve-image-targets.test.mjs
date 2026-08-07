@@ -13,7 +13,7 @@ test('shared package changes resolve every image that copies the package', async
   assert.deepEqual(resolveChangedImageTargets(['packages/platform-browser-runtime/index.js'], graph), ['core', 'exam']);
   assert.deepEqual(
     resolveChangedImageTargets(['packages/platform-auth/index.cjs'], graph),
-    ['platform', 'core', 'exam', 'notification', 'campus', 'iot'],
+    ['platform', 'core', 'exam', 'notification', 'backup', 'campus', 'iot'],
   );
 });
 
