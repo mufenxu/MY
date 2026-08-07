@@ -37,3 +37,12 @@ test('backup transfer limits stay aligned across application, runner, Compose, a
   assert.match(nginx, /location \^~ \/api\/backups\/ \{[\s\S]*client_max_body_size 5g;/);
   assert.match(nginx, /location \^~ \/api\/backups\/ \{[\s\S]*proxy_read_timeout 600s;[\s\S]*proxy_send_timeout 600s;/);
 });
+
+test('backup runner keeps private database access and outbound object storage access', async () => {
+  const compose = await readFile(new URL('../infra/docker/compose.yml', import.meta.url), 'utf8');
+  const start = compose.indexOf('\n  backup-runner:');
+  const end = compose.indexOf('\n  campus-service:', start);
+  const service = compose.slice(start, end);
+
+  assert.match(service, /\n    networks:\r?\n      - frontend\r?\n      - backend(?:\r?\n|$)/);
+});
