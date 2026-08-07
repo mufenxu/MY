@@ -73,6 +73,10 @@ class MyControlWidgetProvider : AppWidgetProvider() {
             updateAll(context)
         }
 
+        fun refresh(context: Context) {
+            updateAll(context)
+        }
+
         private fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, MyControlWidgetProvider::class.java)
@@ -83,9 +87,12 @@ class MyControlWidgetProvider : AppWidgetProvider() {
             val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
             val hasData = preferences.getBoolean(KEY_HAS_DATA, false)
             val tone = preferences.getString(KEY_STATUS_TONE, null)
-            val statusColor = when (tone) {
-                TONE_HEALTHY -> R.color.widget_status_healthy
-                TONE_ATTENTION -> R.color.widget_status_attention
+            val updatedAtMillis = preferences.getLong(KEY_UPDATED_AT, 0L)
+            val stale = updatedAtMillis <= 0L || System.currentTimeMillis() - updatedAtMillis > STALE_AFTER_MS
+            val statusColor = when {
+                stale -> R.color.widget_text_secondary
+                tone == TONE_HEALTHY -> R.color.widget_status_healthy
+                tone == TONE_ATTENTION -> R.color.widget_status_attention
                 else -> R.color.widget_text_secondary
             }
             val views = RemoteViews(context.packageName, R.layout.widget_my_control)
@@ -97,14 +104,14 @@ class MyControlWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(
                 R.id.widget_updated_at,
                 if (hasData) {
-                    "更新 ${android.text.format.DateFormat.getTimeFormat(context).format(Date(preferences.getLong(KEY_UPDATED_AT, 0L)))}"
+                    val updatedAt = android.text.format.DateFormat.getTimeFormat(context).format(Date(updatedAtMillis))
+                    if (stale) "数据可能已过期 · $updatedAt" else "更新 $updatedAt"
                 } else {
                     "尚未同步"
                 },
             )
 
-            val openTab = if (tone == TONE_ATTENTION) MainTab.Events else MainTab.Overview
-            val openIntent = DeepLinks.openIntent(context, tab = openTab)
+            val openIntent = DeepLinks.openIntent(context, destination = "today")
             val openPendingIntent = PendingIntent.getActivity(
                 context,
                 0,
@@ -121,7 +128,25 @@ class MyControlWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             runCatching { views.setOnClickPendingIntent(R.id.widget_incident_value, eventsPendingIntent) }
+
+            val overviewPendingIntent = PendingIntent.getActivity(
+                context,
+                2,
+                DeepLinks.openIntent(context, tab = MainTab.Overview),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            runCatching { views.setOnClickPendingIntent(R.id.widget_service_value, overviewPendingIntent) }
+
+            val devicesPendingIntent = PendingIntent.getActivity(
+                context,
+                3,
+                DeepLinks.openIntent(context, tab = MainTab.Tools),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            runCatching { views.setOnClickPendingIntent(R.id.widget_device_value, devicesPendingIntent) }
             return views
         }
+
+        private const val STALE_AFTER_MS = 30 * 60_000L
     }
 }

@@ -119,3 +119,28 @@ test('homepage formal cockpit keeps summary and alert content tied to live obser
   assert.match(styles, /\.dependency-service-copy > strong\s*\{[^}]*font-size:\s*12\.5px/s);
   assert.match(styles, /\.dependency-service-metrics small\s*\{[^}]*font-size:\s*10px/s);
 });
+
+test('backup view manages scheduled and S3-compatible offsite backups without exposing saved secrets', () => {
+  const app = readSource('src', 'client', 'App.jsx');
+  const operations = readSource('src', 'client', 'OperationsViews.jsx');
+  const styles = readSource('src', 'client', 'styles.css');
+
+  assert.match(app, /const BackupOffsitePanel = lazyNamed\(loadOperationsViews, 'BackupOffsitePanel'\)/);
+  assert.match(app, /<BackupOffsitePanel/);
+  assert.match(app, /\/api\/backups\/\$\{encodeURIComponent\(backup\.name\)\}\/sync/);
+  assert.match(operations, /export function BackupOffsitePanel/);
+  for (const endpoint of [
+    '/api/backups/offsite/config',
+    '/api/backups/offsite/test',
+    '/api/backups/offsite',
+    '/api/backups/offsite/import',
+    '/api/operations/settings',
+  ]) {
+    assert.match(operations, new RegExp(endpoint.replaceAll('/', '\\/')));
+  }
+  assert.match(operations, /type="password"[^>]+autoComplete="new-password"/);
+  assert.match(operations, /accessKeyIdMasked/);
+  assert.doesNotMatch(operations, /value=\{config\.(?:accessKeyId|secretAccessKey)\}/);
+  assert.match(styles, /\.backup-offsite-panel/);
+  assert.match(styles, /\.offsite-backup-row/);
+});

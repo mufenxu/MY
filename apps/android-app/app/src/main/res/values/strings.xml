@@ -7,4 +7,12 @@
     <string name="widget_service_label">服务</string>
     <string name="widget_incident_label">严重事件</string>
     <string name="widget_device_label">在线设备</string>
+    <string name="shortcut_today">今日</string>
+    <string name="shortcut_today_long">打开今日工作台</string>
+    <string name="shortcut_devices">设备</string>
+    <string name="shortcut_devices_long">打开设备控制</string>
+    <string name="shortcut_notifications">通知</string>
+    <string name="shortcut_notifications_long">打开通知中心</string>
+    <string name="tile_device_control">设备控制</string>
+    <string name="tile_device_control_subtitle">打开安全控制页</string>
 </resources>

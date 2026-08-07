@@ -11,7 +11,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.camera.core.CameraSelector
-import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -36,7 +35,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Computer
@@ -86,7 +85,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 @Composable
 fun QrLoginScreen(
-    state: AppUiState,
+    state: QrLoginUiState,
     onCodeDetected: (String) -> Unit,
     onApprove: () -> Unit,
     onReject: () -> Unit,
@@ -153,7 +152,7 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
         ) {
             Surface(color = Color.Black.copy(alpha = 0.46f), shape = CircleShape) {
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Outlined.ArrowBack, contentDescription = "返回", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", tint = Color.White)
                 }
             }
             Text("扫描网页登录二维码", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(start = 12.dp))
@@ -173,7 +172,6 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
     }
 }
 
-@OptIn(ExperimentalGetImage::class)
 @Composable
 private fun CameraPreview(onCodeDetected: (String) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -510,7 +508,7 @@ private fun QrHeader(title: String, onClose: () -> Unit) {
         modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onClose) { Icon(Icons.Outlined.ArrowBack, contentDescription = "返回") }
+        IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回") }
         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 4.dp))
     }
 }

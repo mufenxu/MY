@@ -97,7 +97,9 @@ data class StatusStyle(
     val icon: ImageVector,
 )
 
-val AppCardShape = RoundedCornerShape(20.dp)
+val AppCardShape = RoundedCornerShape(24.dp)
+val AppSearchFieldShape = RoundedCornerShape(24.dp)
+private val AppDialogShape = RoundedCornerShape(28.dp)
 
 @Composable
 fun statusStyle(status: String): StatusStyle = when (status.lowercase()) {
@@ -163,8 +165,8 @@ fun AppPanel(
 ) {
     Card(
         modifier = Modifier
-            .clip(AppCardShape)
             .then(modifier)
+            .clip(AppCardShape)
             .fillMaxWidth(),
         shape = AppCardShape,
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFCFCFA)),
@@ -249,7 +251,7 @@ fun FeedbackBanner(message: String, error: Boolean, modifier: Modifier = Modifie
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(background, MaterialTheme.shapes.medium)
+            .background(background, RoundedCornerShape(16.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
@@ -369,14 +371,14 @@ fun AppDialog(
                         .fillMaxWidth()
                         .shadow(
                             elevation = 28.dp,
-                            shape = RoundedCornerShape(28.dp),
+                            shape = AppDialogShape,
                             ambientColor = Color.Black.copy(alpha = 0.18f),
                             spotColor = Color.Black.copy(alpha = 0.22f),
                         )
-                        .clip(RoundedCornerShape(28.dp))
+                        .clip(AppDialogShape)
                         .background(sheetColor)
                         .background(headerWash)
-                        .border(1.dp, sheetBorder, RoundedCornerShape(28.dp)),
+                        .border(1.dp, sheetBorder, AppDialogShape),
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         if (icon != null || title != null || subtitle != null) {
@@ -482,7 +484,7 @@ fun AppDialogPrimaryButton(
         onClick = onClick,
         modifier = modifier.height(48.dp),
         enabled = enabled && !busy,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         elevation = ButtonDefaults.buttonElevation(
             defaultElevation = 0.dp,
             pressedElevation = 0.dp,
@@ -524,7 +526,7 @@ fun AppDialogSecondaryButton(
         onClick = onClick,
         modifier = modifier.height(48.dp),
         enabled = enabled && !busy,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9),
@@ -560,7 +562,7 @@ fun AppDialogDangerButton(
         onClick = onClick,
         modifier = modifier.height(48.dp),
         enabled = enabled && !busy,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (dark) Color(0xFF7F1D1D) else Color(0xFFFEE2E2),
@@ -613,7 +615,7 @@ fun DialogTextField(
         enabled = enabled,
         visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
             unfocusedBorderColor = if (dark) Color.White.copy(alpha = 0.10f) else Color(0xFFE2E8F0),
@@ -712,16 +714,17 @@ fun AppToast(
     modifier: Modifier = Modifier,
 ) {
     val dark = isSystemInDarkTheme()
-    val container = if (dark) Color(0xFF1E293B).copy(alpha = 0.94f) else Color(0xFF0F172A).copy(alpha = 0.95f)
-    val border = if (dark) Color(0xFF475569).copy(alpha = 0.55f) else Color.White.copy(alpha = 0.22f)
-    val iconColor = if (error) Color(0xFFFCA5A5) else Color(0xFF93C5FD)
-    val iconBackground = Color.White.copy(alpha = if (dark) 0.14f else 0.16f)
+    val container = if (error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer
+    val contentColor = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer
+    val accentColor = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
+    val border = accentColor.copy(alpha = if (dark) 0.32f else 0.18f)
+    val iconBackground = accentColor.copy(alpha = if (dark) 0.2f else 0.12f)
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         color = container,
-        contentColor = Color(0xFFF8FAFC),
-        shadowElevation = 16.dp,
+        contentColor = contentColor,
+        shadowElevation = 10.dp,
         border = BorderStroke(0.5.dp, border),
     ) {
         Row(
@@ -738,7 +741,7 @@ fun AppToast(
                     Icon(
                         imageVector = if (error) Icons.Outlined.ErrorOutline else Icons.Outlined.CheckCircle,
                         contentDescription = null,
-                        tint = iconColor,
+                        tint = accentColor,
                         modifier = Modifier.size(18.dp),
                     )
                 }

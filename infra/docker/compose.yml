@@ -441,6 +441,8 @@ services:
       PLATFORM_BACKUP_COMMAND_TIMEOUT_MS: ${PLATFORM_BACKUP_COMMAND_TIMEOUT_MS:-1800000}
       PLATFORM_BACKUP_TRANSFER_TIMEOUT_MS: ${PLATFORM_BACKUP_TRANSFER_TIMEOUT_MS:-600000}
       PLATFORM_BACKUP_UPLOAD_MAX_BYTES: ${PLATFORM_BACKUP_UPLOAD_MAX_BYTES:-5368709120}
+      PLATFORM_BACKUP_STORAGE_ENCRYPTION_KEY: ${PLATFORM_BACKUP_STORAGE_ENCRYPTION_KEY:-}
+      PLATFORM_BACKUP_STORAGE_STATE_PATH: /app/state/offsite.json
       PLATFORM_BACKUP_COMMAND: node /app/scripts/backup-mongodb-container.mjs
       PLATFORM_RESTORE_COMMAND: node /app/scripts/restore-mongodb-container.mjs
       PLATFORM_RESTORE_CONFIRM_TEXT: ${PLATFORM_RESTORE_CONFIRM_TEXT:-RESTORE ALL DATA}
@@ -454,6 +456,7 @@ services:
     read_only: true
     volumes:
       - platform_backups:/app/backups
+      - backup_runner_state:/app/state
       - core_uploads:/app/services/core-api/uploads
     tmpfs:
       - /tmp:size=64m,noexec,nosuid,nodev
@@ -582,6 +585,7 @@ networks:
 volumes:
   mongodb_data:
   platform_backups:
+  backup_runner_state:
   core_uploads:
   core_logs:
   deployment_runner_state:

@@ -53,6 +53,7 @@ const policies = new Map([
   ['IOT_SESSION_SECRET', 32],
 ]);
 const optionalPolicies = new Map([
+  ['PLATFORM_BACKUP_STORAGE_ENCRYPTION_KEY', 43],
   ['PLATFORM_GITHUB_TOKEN', 20],
   ['PLATFORM_RELEASE_CALLBACK_TOKEN', 32],
   ['GH_TOKEN', 20],
@@ -83,6 +84,14 @@ if (authEncryptionKey && (
   || Buffer.from(authEncryptionKey, 'base64url').length !== 32
 )) {
   errors.push('PLATFORM_AUTH_ENCRYPTION_KEY must be a Base64URL-encoded 32-byte key');
+}
+
+const backupStorageEncryptionKey = values.get('PLATFORM_BACKUP_STORAGE_ENCRYPTION_KEY') || '';
+if (backupStorageEncryptionKey && (
+  !/^[A-Za-z0-9_-]+$/.test(backupStorageEncryptionKey)
+  || Buffer.from(backupStorageEncryptionKey, 'base64url').length !== 32
+)) {
+  errors.push('PLATFORM_BACKUP_STORAGE_ENCRYPTION_KEY must be a Base64URL-encoded 32-byte key');
 }
 
 const composeProfiles = new Set(String(values.get('COMPOSE_PROFILES') || '').split(',').map((value) => value.trim()).filter(Boolean));

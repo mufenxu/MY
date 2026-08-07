@@ -183,6 +183,13 @@ data class IotScene(
     val name: String,
     val actionCount: Int,
     val updatedAt: String?,
+    val actions: List<IotSceneAction> = emptyList(),
+)
+
+data class IotSceneAction(
+    val deviceId: String,
+    val relayId: String,
+    val status: String,
 )
 
 data class IotData(

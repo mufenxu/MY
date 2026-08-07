@@ -106,7 +106,7 @@ private val relayTargets = listOf(
 
 @Composable
 fun ToolsScreen(
-    state: AppUiState,
+    state: ToolsUiState,
     contentPadding: PaddingValues,
     currentTab: MainTab,
     onTriggerCt8: () -> Unit,
@@ -148,6 +148,9 @@ fun ToolsScreen(
             refreshing = state.refreshing,
             onRefresh = onRefresh,
         )
+        state.sectionError?.let { message ->
+            FeedbackBanner("设备数据暂不可用：$message", error = true)
+        }
 
         ToolSectionHeader("IoT 实时状态", "设备与自动化场景", Ocean)
         MqttStatusPanel(

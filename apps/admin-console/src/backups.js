@@ -211,6 +211,39 @@ export function createBackupRunnerClient({ config } = {}) {
       );
       return response.json().catch(() => ({}));
     },
+    async getOffsiteConfig() {
+      const data = await requestRunner(config, '/offsite/config');
+      return data.config;
+    },
+    async configureOffsite(input) {
+      const data = await requestRunner(config, '/offsite/config', { method: 'PUT', body: input || {} });
+      return data.config;
+    },
+    async testOffsiteConnection() {
+      const data = await requestRunner(config, '/offsite/test', { method: 'POST', body: {} });
+      return data.config;
+    },
+    async listOffsiteBackups() {
+      const data = await requestRunner(config, '/offsite/backups', {
+        timeoutMs: config.backupTransferTimeoutMs ?? DEFAULT_TRANSFER_TIMEOUT_MS,
+      });
+      return data.backups || [];
+    },
+    async importOffsiteBackup({ key } = {}) {
+      return requestRunner(config, '/offsite/backups/import', {
+        method: 'POST',
+        body: { key },
+        timeoutMs: config.backupTransferTimeoutMs ?? DEFAULT_TRANSFER_TIMEOUT_MS,
+      });
+    },
+    async syncOffsiteBackup({ backupName } = {}) {
+      const data = await requestRunner(config, '/offsite/backups/sync', {
+        method: 'POST',
+        body: { backupName },
+        timeoutMs: config.backupTransferTimeoutMs ?? DEFAULT_TRANSFER_TIMEOUT_MS,
+      });
+      return data.sync;
+    },
   };
 }
 
@@ -389,6 +422,7 @@ async function listBackupManifests(backupRoot) {
 
 export function createBackupManager({
   config,
+  offsiteStorage = null,
   spawnImpl = spawn,
   env = process.env,
   idFactory = () => crypto.randomUUID(),
@@ -492,6 +526,16 @@ export function createBackupManager({
     return backupDirectory ? { backupDirectory, backupName: path.basename(backupDirectory) } : null;
   }
 
+  async function uploadDirectoryOffsite(backupName, backupDirectory) {
+    if (!offsiteStorage?.uploadBackup) {
+      throw new BackupOperationError(503, 'BACKUP_STORAGE_UNAVAILABLE', '异地备份存储不可用。');
+    }
+    return offsiteStorage.uploadBackup({
+      backupName,
+      bodyFactory: () => createBackupArchiveStream(backupDirectory, backupName),
+    });
+  }
+
   function runCommand(job, spec, variables, options = {}) {
     const commandSpec = commandWithVariables(spec, variables, options);
     const stdoutStart = job.stdout.length;
@@ -520,7 +564,7 @@ export function createBackupManager({
       try {
         child = spawnImpl(commandSpec.command, commandSpec.args, {
           cwd: config.workspaceRoot,
-          env: { ...env, BACKUP_DIR: backupRoot },
+          env: { ...env, BACKUP_DIR: backupRoot, ...(options.env || {}) },
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
         });
@@ -556,7 +600,7 @@ export function createBackupManager({
       : `${step.label}命令退出码 ${result.code}`;
   }
 
-  async function runJobSteps(job, steps) {
+  async function runJobSteps(job, steps, { onSuccess } = {}) {
     for (const step of steps) {
       const result = await runCommand(job, step.spec, step.variables, { ...step.options, label: step.label });
       job.exitCode = result.code;
@@ -582,12 +626,14 @@ export function createBackupManager({
       }
     }
 
+    if (onSuccess) await onSuccess(job);
+
     job.status = 'succeeded';
     job.finishedAt = now().toISOString();
   }
 
-  function startJobSteps(job, steps) {
-    runJobSteps(job, steps).catch((error) => {
+  function startJobSteps(job, steps, options) {
+    runJobSteps(job, steps, options).catch((error) => {
       job.status = 'failed';
       job.finishedAt = now().toISOString();
       job.error = error.message;
@@ -605,14 +651,41 @@ export function createBackupManager({
 
     await mkdir(backupRoot, { recursive: true, mode: 0o700 });
     const spec = parseCommandSpec(config.backupCommand, { command: process.execPath, args: [backupScript] });
+    const retention = await offsiteStorage?.getRetentionPolicy?.().catch(() => null);
     const job = createJob('backup', { requestedBy });
     startJobSteps(job, [{
       label: '备份',
       spec,
       variables: {},
-      options: {},
+      options: {
+        env: retention?.localRetentionDays
+          ? { BACKUP_RETENTION_DAYS: String(retention.localRetentionDays) }
+          : {},
+      },
       captureBackupResult: true,
-    }]);
+    }], {
+      onSuccess: async (completedJob) => {
+        if (!offsiteStorage || !completedJob.result?.backupDirectory || !completedJob.result?.backupName) return;
+        const publicConfig = await offsiteStorage.getPublicConfig?.().catch(() => null);
+        if (publicConfig && !publicConfig.enabled) {
+          completedJob.result.offsite = { status: 'disabled' };
+          return;
+        }
+        try {
+          const uploaded = await uploadDirectoryOffsite(
+            completedJob.result.backupName,
+            completedJob.result.backupDirectory,
+          );
+          completedJob.result.offsite = { status: 'succeeded', ...uploaded };
+        } catch (error) {
+          completedJob.result.offsite = {
+            status: 'failed',
+            code: String(error.code || 'BACKUP_STORAGE_UPLOAD_FAILED'),
+            error: String(error.message || error).slice(0, 200),
+          };
+        }
+      },
+    });
     return serializeJob(job);
   }
 
@@ -706,6 +779,20 @@ export function createBackupManager({
     }
   }
 
+  async function importOffsiteBackup({ key } = {}) {
+    if (!offsiteStorage?.downloadBackup) {
+      throw new BackupOperationError(503, 'BACKUP_STORAGE_UNAVAILABLE', '异地备份存储不可用。');
+    }
+    const download = await offsiteStorage.downloadBackup({ key });
+    return uploadBackup({ filename: download.filename, stream: download.stream });
+  }
+
+  async function syncOffsiteBackup({ backupName } = {}) {
+    const backupDirectory = await resolveBackupDirectory(backupName);
+    const uploaded = await uploadDirectoryOffsite(backupName, backupDirectory);
+    return { status: 'succeeded', backupName, ...uploaded };
+  }
+
   async function startRestore({ backupName, requestedBy } = {}) {
     const caps = await capabilities();
     if (!caps.canRestore) {
@@ -755,5 +842,7 @@ export function createBackupManager({
     downloadBackup,
     deleteBackup,
     uploadBackup,
+    importOffsiteBackup,
+    syncOffsiteBackup,
   };
 }

@@ -13,9 +13,13 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 import java.time.Instant
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class PlatformApi(private val sessionStore: SessionStore) {
+class PlatformApi(
+    private val sessionStore: SessionStore,
+    private val snapshotStore: ResponseSnapshotStore,
+) {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val platformOrigin = Uri.parse(BuildConfig.PLATFORM_BASE_URL).let { uri ->
         if (uri.scheme.isNullOrBlank() || uri.authority.isNullOrBlank()) {
@@ -30,6 +34,12 @@ class PlatformApi(private val sessionStore: SessionStore) {
         .writeTimeout(30, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .build()
+    @Volatile private var offline = false
+    @Volatile private var cachedAtMillis: Long? = null
+
+    fun isOffline(): Boolean = offline
+
+    fun cachedAtMillis(): Long? = cachedAtMillis
 
     suspend fun login(
         username: String,
@@ -183,6 +193,7 @@ class PlatformApi(private val sessionStore: SessionStore) {
     suspend fun logout() = withContext(Dispatchers.IO) {
         runCatching { execute("/api/auth/logout", "POST", JSONObject()) }
         sessionStore.clear()
+        snapshotStore.clear()
     }
 
     suspend fun overview(force: Boolean = false): OverviewData = withContext(Dispatchers.IO) {
@@ -222,6 +233,60 @@ class PlatformApi(private val sessionStore: SessionStore) {
             },
             generatedAt = json.nullableString("generatedAt"),
         )
+    }
+
+    suspend fun todos(): TodoSnapshot = withContext(Dispatchers.IO) {
+        execute(TODOS_PATH).json.toTodoSnapshotEnvelope()
+    }
+
+    suspend fun mutateTodos(revision: Int, mutations: List<TodoMutation>): TodoSnapshot =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("revision", revision)
+                .put("operations", JSONArray().apply { mutations.forEach { put(it.toJson()) } })
+            execute("/api/todos/mutations", "POST", body).json.toTodoSnapshotEnvelope()
+        }
+
+    suspend fun campusTimetable(): CampusTimetable = withContext(Dispatchers.IO) {
+        val envelope = execute(CAMPUS_TIMETABLE_PATH).json
+        val json = envelope.optJSONObject("data") ?: envelope
+        CampusTimetable(
+            currentCalendarText = json.optString("currentCalendarText"),
+            termText = json.optString("termText"),
+            generatedAt = json.nullableString("generatedAt"),
+            live = json.optBoolean("live"),
+            staleReason = json.nullableString("staleReason"),
+            courses = json.optJSONArray("courses").objects().map { item ->
+                val location = item.optJSONObject("location")
+                CampusCourse(
+                    id = item.optString("id"),
+                    courseCode = item.optString("courseCode"),
+                    courseName = item.optString("courseName", "课程"),
+                    teacher = item.optString("teacher"),
+                    weekText = item.optString("weekText"),
+                    weeks = item.optJSONArray("weeks").toInts(),
+                    day = item.optInt("day"),
+                    dayName = item.optString("dayName"),
+                    sectionText = item.optString("sectionText"),
+                    startSection = item.optInt("startSection"),
+                    endSection = item.optInt("endSection"),
+                    timeRange = item.optString("timeRange"),
+                    location = location?.optString("display") ?: item.optString("location"),
+                )
+            },
+        )
+    }
+
+    suspend fun resourceExpiries(): List<ResourceExpiry> = withContext(Dispatchers.IO) {
+        execute(RESOURCE_EXPIRIES_PATH).json.optJSONArray("data").objects().map { item ->
+            ResourceExpiry(
+                id = item.optString("id"),
+                type = item.optString("type"),
+                name = item.optString("name", "未命名资源"),
+                expiresAt = item.optString("expiresAt"),
+                advanceNoticeDays = item.optInt("advanceNoticeDays").coerceAtLeast(0),
+            )
+        }
     }
 
     suspend fun releases(): ReleaseData = withContext(Dispatchers.IO) {
@@ -438,6 +503,13 @@ class PlatformApi(private val sessionStore: SessionStore) {
                     name = item.optString("name", "未命名场景"),
                     actionCount = item.optJSONArray("actions")?.length() ?: 0,
                     updatedAt = item.nullableString("updated_at") ?: item.nullableString("updatedAt"),
+                    actions = item.optJSONArray("actions").objects().map { action ->
+                        IotSceneAction(
+                            deviceId = action.optString("deviceId"),
+                            relayId = action.optString("relayId"),
+                            status = action.optString("status", "OFF").uppercase(),
+                        )
+                    },
                 )
             },
         )
@@ -537,6 +609,26 @@ class PlatformApi(private val sessionStore: SessionStore) {
         Unit
     }
 
+    suspend fun createIotScene(name: String, actions: List<IotSceneAction>): Unit = withContext(Dispatchers.IO) {
+        execute("/apps/iot/api/automations/scenes", "POST", sceneBody(name, actions))
+        Unit
+    }
+
+    suspend fun updateIotScene(id: String, name: String, actions: List<IotSceneAction>): Unit =
+        withContext(Dispatchers.IO) {
+            execute(
+                "/apps/iot/api/automations/scenes/${encodePath(id)}",
+                "PUT",
+                sceneBody(name, actions),
+            )
+            Unit
+        }
+
+    suspend fun deleteIotScene(id: String): Unit = withContext(Dispatchers.IO) {
+        execute("/apps/iot/api/automations/scenes/${encodePath(id)}", "DELETE", JSONObject())
+        Unit
+    }
+
     suspend fun controlIotRelay(deviceId: String, relayId: String, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
         execute(
             "/apps/iot/api/devices/${encodePath(deviceId)}/relays/${encodePath(relayId)}/control",
@@ -588,25 +680,50 @@ class PlatformApi(private val sessionStore: SessionStore) {
             .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
             .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
             .build()
-        requestClient.newCall(requestBuilder.build()).execute().use { response ->
-            val raw = response.body?.string().orEmpty()
-            val json = runCatching { if (raw.isBlank() || raw.trimStart().startsWith("[")) JSONObject() else JSONObject(raw) }.getOrElse { JSONObject() }
-            val jsonArray = runCatching { if (raw.trimStart().startsWith("[")) JSONArray(raw) else JSONArray() }.getOrElse { JSONArray() }
-            if (!response.isSuccessful) {
-                if (response.code == 401 || response.code == 403 && json.optString("code") == "UNAUTHORIZED") {
-                    sessionStore.clear()
+        val cacheable = method == "GET" && path in CACHEABLE_PATHS &&
+            (path != AUTH_STATUS_PATH || authenticated)
+        try {
+            requestClient.newCall(requestBuilder.build()).execute().use { response ->
+                val raw = response.body?.string().orEmpty()
+                val json = parseJsonObject(raw)
+                val jsonArray = parseJsonArray(raw)
+                if (!response.isSuccessful) {
+                    if (shouldInvalidatePlatformSession(response.code, json.optString("code"))) {
+                        sessionStore.clear()
+                    }
+                    throw ApiException(
+                        json.optString("message", json.optString("error", "请求失败（HTTP ${response.code}）")),
+                        response.code,
+                        json.optString("code", "HTTP_ERROR"),
+                        json.optJSONObject("details"),
+                    )
                 }
-                throw ApiException(
-                    json.optString("message", json.optString("error", "请求失败（HTTP ${response.code}）")),
-                    response.code,
-                    json.optString("code", "HTTP_ERROR"),
-                    json.optJSONObject("details"),
-                )
+                if (authenticated) sessionStore.markUsed()
+                if (cacheable) snapshotStore.write(path, raw)
+                offline = false
+                cachedAtMillis = null
+                return ApiResponse(json, jsonArray, extractSessionCookie(response.headers.values("Set-Cookie")))
             }
-            if (authenticated) sessionStore.markUsed()
-            return ApiResponse(json, jsonArray, extractSessionCookie(response.headers.values("Set-Cookie")))
+        } catch (error: IOException) {
+            val snapshot = if (cacheable) snapshotStore.read(path) else null
+            offline = true
+            cachedAtMillis = snapshot?.savedAtMillis
+            if (snapshot == null) throw error
+            return ApiResponse(
+                json = parseJsonObject(snapshot.body),
+                jsonArray = parseJsonArray(snapshot.body),
+                cookie = null,
+            )
         }
     }
+
+    private fun parseJsonObject(raw: String): JSONObject = runCatching {
+        if (raw.isBlank() || raw.trimStart().startsWith("[")) JSONObject() else JSONObject(raw)
+    }.getOrElse { JSONObject() }
+
+    private fun parseJsonArray(raw: String): JSONArray = runCatching {
+        if (raw.trimStart().startsWith("[")) JSONArray(raw) else JSONArray()
+    }.getOrElse { JSONArray() }
 
     private fun ApiResponse.toLoginResult(
         user: PlatformUser,
@@ -644,7 +761,41 @@ class PlatformApi(private val sessionStore: SessionStore) {
 
     private fun encodePath(value: String): String = java.net.URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
 
+    private fun sceneBody(name: String, actions: List<IotSceneAction>): JSONObject = JSONObject()
+        .put("name", name.trim())
+        .put(
+            "actions",
+            JSONArray().apply {
+                actions.forEach { action ->
+                    put(
+                        JSONObject()
+                            .put("deviceId", action.deviceId)
+                            .put("relayId", action.relayId)
+                            .put("status", action.status.uppercase()),
+                    )
+                }
+            },
+        )
+
     private data class ApiResponse(val json: JSONObject, val jsonArray: JSONArray, val cookie: String?)
+
+    private companion object {
+        const val AUTH_STATUS_PATH = "/api/auth/status"
+        const val TODOS_PATH = "/api/todos"
+        const val RESOURCE_EXPIRIES_PATH = "/apps/core/api/resources/expiry-summary"
+        val CACHEABLE_PATHS = setOf(
+            AUTH_STATUS_PATH,
+            "/api/operations/overview",
+            "/api/incidents?limit=100",
+            "/api/tasks?limit=100",
+            TODOS_PATH,
+            CAMPUS_TIMETABLE_PATH,
+            RESOURCE_EXPIRIES_PATH,
+            "/apps/iot/api/status",
+            "/apps/iot/api/devices",
+            "/apps/iot/api/automations/scenes",
+        )
+    }
 }
 
 private fun JSONObject?.toPlatformUser(): PlatformUser {
@@ -806,6 +957,21 @@ private fun JSONArray.toStrings(): List<String> = buildList {
         optString(index).trim().takeIf(String::isNotBlank)?.let(::add)
     }
 }.distinct()
+
+private fun JSONArray?.toInts(): List<Int> {
+    if (this == null) return emptyList()
+    return buildList {
+        for (index in 0 until length()) optInt(index).takeIf { it > 0 }?.let(::add)
+    }
+}
+
+private fun JSONObject.toTodoSnapshotEnvelope(): TodoSnapshot {
+    val data = optJSONArray("data") ?: optJSONArray("tasks") ?: JSONArray()
+    return TodoSnapshot(
+        tasks = data.objects().mapNotNull(JSONObject::toTodoTask),
+        revision = optInt("revision", 0).coerceAtLeast(0),
+    )
+}
 
 private fun JSONArray?.objects(): List<JSONObject> {
     if (this == null) return emptyList()

@@ -14,6 +14,7 @@ import {
   Clock3,
   Cloud,
   DatabaseBackup,
+  Download,
   ExternalLink,
   FileClock,
   Fingerprint,
@@ -75,6 +76,24 @@ const DEFAULT_INCIDENT_RUNBOOK = [
 ];
 const EMPTY_POSTMORTEM = { summary: '', rootCause: '', impact: '', correctiveActions: '' };
 const ROLE_LABELS = { viewer: '只读管理员', operator: '运维管理员', super_admin: '超级管理员' };
+const BACKUP_STORAGE_PROVIDERS = [
+  { value: 'r2', label: 'Cloudflare R2' },
+  { value: 'aws-s3', label: 'AWS S3' },
+  { value: 'minio', label: 'MinIO' },
+  { value: 'b2', label: 'Backblaze B2' },
+];
+const EMPTY_BACKUP_STORAGE = {
+  enabled: false,
+  provider: 'r2',
+  accountId: '',
+  endpoint: '',
+  region: 'auto',
+  bucket: '',
+  prefix: 'my-platform/backups',
+  forcePathStyle: false,
+  localRetentionDays: 30,
+  remoteRetentionDays: 90,
+};
 const ACTION_LABELS = {
   'auth.login': '管理员登录',
   'auth.logout': '退出登录',
@@ -150,6 +169,14 @@ function formatDateTime(value) {
   return new Intl.DateTimeFormat('zh-CN', {
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   }).format(new Date(value));
+}
+
+function formatBackupBytes(value) {
+  const size = Number(value || 0);
+  if (size >= 1024 * 1024 * 1024) return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+  if (size >= 1024) return `${Math.round(size / 1024)} KB`;
+  return `${size} B`;
 }
 
 function formatRelative(value, nowValue = Date.now()) {
@@ -1570,6 +1597,205 @@ export function OverviewOperations({ summary, onOpenIncidents, onOpenAudit }) {
         <div className="overview-band">
           <header><div><FileClock size={18} /><span><strong>最近活动</strong><small>关键操作均已审计</small></span></div><button type="button" onClick={onOpenAudit}>审计日志 <ChevronRight size={15} /></button></header>
           <div>{audit.length ? audit.slice(0, 3).map((event) => <button type="button" key={event.id} onClick={onOpenAudit}><span className={`activity-icon ${event.outcome}`}><TerminalSquare size={16} /></span><span><strong>{ACTION_LABELS[event.action] || event.action}</strong><small>{event.actor} · {formatRelative(event.occurredAt)}</small></span></button>) : <div className="overview-empty"><History size={18} />暂无最近活动</div>}</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function BackupOffsitePanel({ session, localBackups = [], onImported }) {
+  const [config, setConfig] = useState(null);
+  const [draft, setDraft] = useState(EMPTY_BACKUP_STORAGE);
+  const [schedule, setSchedule] = useState({ enabled: false, time: '02:30' });
+  const [remoteBackups, setRemoteBackups] = useState([]);
+  const [secrets, setSecrets] = useState({ accessKeyId: '', secretAccessKey: '', password: '', totp: '' });
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const canOperate = roleAtLeast(session.user?.role, 'operator');
+  const canManage = roleAtLeast(session.user?.role, 'super_admin');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    const loadErrors = [];
+    const [configResult, remoteResult, settingsResult] = await Promise.allSettled([
+      requestJson('/api/backups/offsite/config'),
+      requestJson('/api/backups/offsite'),
+      requestJson('/api/operations/settings'),
+    ]);
+    let next = null;
+    if (configResult.status === 'fulfilled') {
+      next = configResult.value.config || EMPTY_BACKUP_STORAGE;
+      setConfig(next);
+      setDraft({ ...EMPTY_BACKUP_STORAGE, ...next, accessKeyId: '', secretAccessKey: '' });
+    } else {
+      loadErrors.push(configResult.reason.message);
+    }
+    setRemoteBackups(remoteResult.status === 'fulfilled' ? remoteResult.value.backups || [] : []);
+    if (remoteResult.status === 'rejected' && next?.enabled) loadErrors.push(remoteResult.reason.message);
+    if (settingsResult.status === 'fulfilled') {
+      setSchedule(settingsResult.value.settings?.backupSchedule || { enabled: false, time: '02:30' });
+    } else {
+      loadErrors.push(settingsResult.reason.message);
+    }
+    setError(loadErrors.join('；'));
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function credentialsReady() {
+    if (session.authDisabled) return true;
+    return Boolean(secrets.password) && (!session.user?.totpEnabled || secrets.totp.length === 6);
+  }
+
+  async function saveConfig() {
+    if (!credentialsReady()) {
+      setError(session.user?.totpEnabled ? '请输入管理员密码和六位动态验证码。' : '请输入管理员密码。');
+      return;
+    }
+    setBusy('save');
+    setError('');
+    setMessage('');
+    try {
+      const result = await requestJson('/api/backups/offsite/config', {
+        method: 'PUT',
+        body: JSON.stringify({
+          ...draft,
+          accessKeyId: secrets.accessKeyId,
+          secretAccessKey: secrets.secretAccessKey,
+          password: secrets.password,
+          totp: secrets.totp,
+        }),
+      });
+      const next = result.config;
+      setConfig(next);
+      setDraft({ ...EMPTY_BACKUP_STORAGE, ...next, accessKeyId: '', secretAccessKey: '' });
+      setSecrets({ accessKeyId: '', secretAccessKey: '', password: '', totp: '' });
+      setMessage('外部存储配置已保存。');
+      await load();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function testConnection() {
+    if (!credentialsReady()) {
+      setError(session.user?.totpEnabled ? '请输入管理员密码和六位动态验证码。' : '请输入管理员密码。');
+      return;
+    }
+    setBusy('test');
+    setError('');
+    setMessage('');
+    try {
+      const result = await requestJson('/api/backups/offsite/test', {
+        method: 'POST',
+        body: JSON.stringify({ password: secrets.password, totp: secrets.totp }),
+      });
+      setConfig(result.config);
+      setSecrets((current) => ({ ...current, password: '', totp: '' }));
+      setMessage('对象存储连接正常。');
+      await load();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function saveSchedule() {
+    setBusy('schedule');
+    setError('');
+    setMessage('');
+    try {
+      const result = await requestJson('/api/operations/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ settings: { backupSchedule: schedule }, summary: '更新每日自动备份计划' }),
+      });
+      setMessage(`自动备份变更已提交（${result.change.id}）`);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function importRemote(backup) {
+    setBusy(`import:${backup.key}`);
+    setError('');
+    setMessage('');
+    try {
+      const result = await requestJson('/api/backups/offsite/import', {
+        method: 'POST',
+        body: JSON.stringify({ key: backup.key }),
+        timeoutMs: 10 * 60 * 1000,
+      });
+      setMessage('远端备份已拉回本地。');
+      onImported?.(result.backup);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  const localNames = new Set(localBackups.map((backup) => backup.name));
+  const encryptionReady = config?.encryptionReady !== false;
+  const providerNeedsEndpoint = draft.provider !== 'r2' && draft.provider !== 'aws-s3';
+  const providerNeedsAccount = draft.provider === 'r2';
+
+  return (
+    <section className="view-card backup-offsite-panel" aria-label="自动备份与外部存储">
+      <header className="section-bar">
+        <div><h3>自动备份与外部存储</h3><span>{config?.configured ? `${config.provider} · ${config.bucket}` : '尚未配置存储目标'}</span></div>
+        <span className={`offsite-health ${config?.healthy === true ? 'healthy' : config?.configured ? 'warning' : 'unknown'}`}>
+          <Cloud size={18} />{config?.healthy === true ? '同步正常' : config?.configured ? '等待检查' : '未配置'}
+        </span>
+      </header>
+      <Feedback error={error} message={message} />
+      {!encryptionReady && <div className="ops-feedback error"><CircleAlert size={17} />备份存储加密密钥未配置</div>}
+      <div className="backup-offsite-layout">
+        <div className="backup-offsite-config">
+          <div className="offsite-subsection-head"><span>每日计划</span><FileClock size={18} /></div>
+          <div className="offsite-schedule-controls">
+            <label className="toggle-field"><span><strong>自动备份</strong><small>每日执行</small></span><input type="checkbox" checked={schedule.enabled} disabled={!canOperate || loading} onChange={(event) => setSchedule({ ...schedule, enabled: event.target.checked })} /></label>
+            <label><span>执行时间</span><input type="time" value={schedule.time} disabled={!canOperate || loading} onChange={(event) => setSchedule({ ...schedule, time: event.target.value })} /></label>
+            <button className="secondary-action" type="button" disabled={!canOperate || loading || busy === 'schedule'} onClick={saveSchedule}>{busy === 'schedule' ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}保存计划</button>
+          </div>
+
+          <div className="offsite-subsection-head"><span>S3 兼容目标</span><DatabaseBackup size={18} /></div>
+          <div className="offsite-config-grid">
+            <label className="toggle-field"><span><strong>启用异地同步</strong><small>单一目标</small></span><input type="checkbox" checked={draft.enabled} disabled={!canManage || loading} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} /></label>
+            <div className="settings-control-field"><span>存储类型</span><SelectControl ariaLabel="外部存储类型" disabled={!canManage || loading} value={draft.provider} options={BACKUP_STORAGE_PROVIDERS} onChange={(provider) => setDraft({ ...draft, provider, accountId: '', endpoint: '', region: provider === 'r2' ? 'auto' : 'us-east-1', bucket: '', forcePathStyle: provider === 'minio' })} /></div>
+            {providerNeedsAccount && <label><span>Cloudflare Account ID</span><input value={draft.accountId} disabled={!canManage} onChange={(event) => setDraft({ ...draft, accountId: event.target.value })} /></label>}
+            {providerNeedsEndpoint && <label><span>Endpoint</span><input type="url" value={draft.endpoint} disabled={!canManage} placeholder="https://s3.example.com" onChange={(event) => setDraft({ ...draft, endpoint: event.target.value })} /></label>}
+            <label><span>Region</span><input value={draft.region} disabled={!canManage || draft.provider === 'r2'} onChange={(event) => setDraft({ ...draft, region: event.target.value })} /></label>
+            <label><span>Bucket</span><input value={draft.bucket} disabled={!canManage} onChange={(event) => setDraft({ ...draft, bucket: event.target.value })} /></label>
+            <label><span>对象前缀</span><input value={draft.prefix} disabled={!canManage} onChange={(event) => setDraft({ ...draft, prefix: event.target.value })} /></label>
+            <label><span>本地保留天数</span><input type="number" min="1" max="3650" value={draft.localRetentionDays} disabled={!canManage} onChange={(event) => setDraft({ ...draft, localRetentionDays: Number(event.target.value) })} /></label>
+            <label><span>远端保留天数</span><input type="number" min="1" max="3650" value={draft.remoteRetentionDays} disabled={!canManage} onChange={(event) => setDraft({ ...draft, remoteRetentionDays: Number(event.target.value) })} /></label>
+            <label className="toggle-field"><span><strong>Path Style</strong><small>MinIO 常用</small></span><input type="checkbox" checked={draft.forcePathStyle} disabled={!canManage} onChange={(event) => setDraft({ ...draft, forcePathStyle: event.target.checked })} /></label>
+            <label><span>Access Key ID</span><input type="password" autoComplete="new-password" value={secrets.accessKeyId} disabled={!canManage} placeholder={config?.accessKeyIdMasked || 'Access Key ID'} onChange={(event) => setSecrets({ ...secrets, accessKeyId: event.target.value })} /></label>
+            <label><span>Secret Access Key</span><input type="password" autoComplete="new-password" value={secrets.secretAccessKey} disabled={!canManage} placeholder={config?.secretConfigured ? '已保存，留空则不修改' : 'Secret Access Key'} onChange={(event) => setSecrets({ ...secrets, secretAccessKey: event.target.value })} /></label>
+            {!session.authDisabled && <label><span>管理员密码</span><input type="password" autoComplete="current-password" value={secrets.password} disabled={!canManage} onChange={(event) => setSecrets({ ...secrets, password: event.target.value })} /></label>}
+            {!session.authDisabled && session.user?.totpEnabled && <label><span>动态验证码</span><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={secrets.totp} disabled={!canManage} onChange={(event) => setSecrets({ ...secrets, totp: event.target.value.replace(/\D/g, '').slice(0, 6) })} /></label>}
+          </div>
+          {canManage && <div className="offsite-config-actions"><button className="secondary-action" type="button" disabled={!config?.configured || !config?.enabled || loading || busy === 'test' || !encryptionReady} onClick={testConnection}>{busy === 'test' ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}测试已保存配置</button><button className="primary-button" type="button" disabled={loading || busy === 'save' || !encryptionReady} onClick={saveConfig}>{busy === 'save' ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}保存存储配置</button></div>}
+        </div>
+
+        <div className="backup-offsite-remote">
+          <div className="offsite-subsection-head"><span>远端备份</span><button className="backup-row-action" type="button" title="刷新远端清单" aria-label="刷新远端清单" onClick={load} disabled={loading}>{loading ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}</button></div>
+          <div className="offsite-backup-list">
+            {loading ? <LoadingBlock label="正在读取远端备份" /> : remoteBackups.length > 0 ? remoteBackups.map((backup) => {
+              const existsLocally = localNames.has(backup.name);
+              const importing = busy === `import:${backup.key}`;
+              return <div className="offsite-backup-row" key={backup.key}><span><strong>{backup.name}</strong><small>{formatDateTime(backup.createdAt)}</small></span><span>{formatBackupBytes(backup.sizeBytes)}</span><span className={existsLocally ? 'healthy' : 'unknown'}>{existsLocally ? '本地已有' : '仅远端'}</span><button className="backup-row-action" type="button" title="拉回本地" aria-label={`拉回远端备份 ${backup.name}`} disabled={!canOperate || existsLocally || importing} onClick={() => importRemote(backup)}>{importing ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />}</button></div>;
+            }) : <div className="ops-empty compact">暂无远端备份</div>}
+          </div>
         </div>
       </div>
     </section>

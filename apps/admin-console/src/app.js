@@ -2045,6 +2045,142 @@ export function createApp({
     }
   });
 
+  app.get('/api/backups/offsite/config', requireRole('operator'), async (req, res, next) => {
+    try {
+      res.json({ config: await backups.getOffsiteConfig() });
+    } catch (error) {
+      try {
+        sendBackupError(res, error);
+      } catch (unexpectedError) {
+        next(unexpectedError);
+      }
+    }
+  });
+
+  app.put('/api/backups/offsite/config', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      if (!await confirmSensitiveAuthentication(req, res, 'backup.offsite_config')) return;
+      const input = {
+        enabled: req.body?.enabled,
+        provider: req.body?.provider,
+        accountId: req.body?.accountId,
+        endpoint: req.body?.endpoint,
+        region: req.body?.region,
+        bucket: req.body?.bucket,
+        prefix: req.body?.prefix,
+        forcePathStyle: req.body?.forcePathStyle,
+        accessKeyId: req.body?.accessKeyId,
+        secretAccessKey: req.body?.secretAccessKey,
+        localRetentionDays: req.body?.localRetentionDays,
+        remoteRetentionDays: req.body?.remoteRetentionDays,
+      };
+      const updated = await backups.configureOffsite(input);
+      await recordAudit(req, {
+        action: 'backup.offsite_configured',
+        targetType: 'backup_storage',
+        targetId: updated.provider || 's3',
+        details: {
+          enabled: Boolean(updated.enabled),
+          provider: updated.provider || '',
+          bucket: updated.bucket || '',
+          localRetentionDays: updated.localRetentionDays || null,
+          remoteRetentionDays: updated.remoteRetentionDays || null,
+        },
+      });
+      res.json({ config: updated });
+    } catch (error) {
+      try {
+        sendBackupError(res, error);
+      } catch (unexpectedError) {
+        next(unexpectedError);
+      }
+    }
+  });
+
+  app.post('/api/backups/offsite/test', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      if (!await confirmSensitiveAuthentication(req, res, 'backup.offsite_test')) return;
+      const checked = await backups.testOffsiteConnection();
+      await recordAudit(req, {
+        action: 'backup.offsite_tested',
+        targetType: 'backup_storage',
+        targetId: checked.provider || 's3',
+        details: { healthy: checked.healthy === true },
+      });
+      res.json({ config: checked });
+    } catch (error) {
+      await recordAudit(req, {
+        action: 'backup.offsite_tested',
+        outcome: 'failure',
+        targetType: 'backup_storage',
+        details: { error: String(error.message || error).slice(0, 200) },
+      });
+      try {
+        sendBackupError(res, error);
+      } catch (unexpectedError) {
+        next(unexpectedError);
+      }
+    }
+  });
+
+  app.get('/api/backups/offsite', requireRole('operator'), async (req, res, next) => {
+    try {
+      res.json({ backups: await backups.listOffsiteBackups() });
+    } catch (error) {
+      try {
+        sendBackupError(res, error);
+      } catch (unexpectedError) {
+        next(unexpectedError);
+      }
+    }
+  });
+
+  app.post('/api/backups/offsite/import', requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
+    try {
+      const key = String(req.body?.key || '');
+      const result = await backups.importOffsiteBackup({ key });
+      await recordAudit(req, {
+        action: 'backup.offsite_imported',
+        targetType: 'backup',
+        targetId: result.backup?.name || '',
+        details: { key },
+      });
+      res.status(201).json(result);
+    } catch (error) {
+      try {
+        sendBackupError(res, error);
+      } catch (unexpectedError) {
+        next(unexpectedError);
+      }
+    }
+  });
+
+  app.post('/api/backups/:backupName/sync', requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
+    try {
+      const sync = await backups.syncOffsiteBackup({ backupName: req.params.backupName });
+      await recordAudit(req, {
+        action: 'backup.offsite_synced',
+        targetType: 'backup',
+        targetId: req.params.backupName,
+        details: { key: sync.key || '' },
+      });
+      res.json({ sync });
+    } catch (error) {
+      await recordAudit(req, {
+        action: 'backup.offsite_synced',
+        outcome: 'failure',
+        targetType: 'backup',
+        targetId: req.params.backupName,
+        details: { error: String(error.message || error).slice(0, 200) },
+      });
+      try {
+        sendBackupError(res, error);
+      } catch (unexpectedError) {
+        next(unexpectedError);
+      }
+    }
+  });
+
   app.post('/api/backups/run', requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
     try {
       const job = await backups.startBackup({ requestedBy: req.consoleUser?.username || 'admin' });

@@ -179,6 +179,61 @@ test('backup archives can be downloaded, deleted, and uploaded again', async (t)
   assert.deepEqual(afterUpload.backups.map((backup) => backup.name), [backupName]);
 });
 
+test('remote backups are imported through the existing archive validation path', async (t) => {
+  const sourceRoot = await mkdtemp(join(tmpdir(), 'my-platform-backups-source-'));
+  const targetRoot = await mkdtemp(join(tmpdir(), 'my-platform-backups-target-'));
+  const workspaceRoot = await mkdtemp(join(tmpdir(), 'my-platform-workspace-'));
+  const backupName = '2026-08-07T05-00-00-000Z';
+  t.after(() => rm(sourceRoot, { recursive: true, force: true }));
+  t.after(() => rm(targetRoot, { recursive: true, force: true }));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  await createBackupFixture(sourceRoot, backupName);
+
+  const source = createBackupManager({
+    config: { backupRoot: sourceRoot, workspaceRoot, backupOperationsEnabled: true, restoreOperationsEnabled: false },
+  });
+  const archive = await collectStream((await source.downloadBackup({ backupName })).stream);
+  const target = createBackupManager({
+    offsiteStorage: {
+      downloadBackup: async ({ key }) => {
+        assert.equal(key, `production/${backupName}.tar.gz`);
+        return { filename: `${backupName}.tar.gz`, stream: Readable.from(archive) };
+      },
+    },
+    config: { backupRoot: targetRoot, workspaceRoot, backupOperationsEnabled: true, restoreOperationsEnabled: false },
+  });
+
+  const imported = await target.importOffsiteBackup({ key: `production/${backupName}.tar.gz` });
+  assert.equal(imported.backup.name, backupName);
+  assert.equal(imported.backup.restorable, true);
+  assert.deepEqual((await target.getStatus()).backups.map((backup) => backup.name), [backupName]);
+});
+
+test('local backups can be manually synchronized to offsite storage', async (t) => {
+  const backupRoot = await mkdtemp(join(tmpdir(), 'my-platform-backups-'));
+  const workspaceRoot = await mkdtemp(join(tmpdir(), 'my-platform-workspace-'));
+  const backupName = '2026-08-07T05-30-00-000Z';
+  t.after(() => rm(backupRoot, { recursive: true, force: true }));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  await createBackupFixture(backupRoot, backupName);
+  let archiveSize = 0;
+  const manager = createBackupManager({
+    offsiteStorage: {
+      uploadBackup: async ({ backupName: syncedName, bodyFactory }) => {
+        assert.equal(syncedName, backupName);
+        archiveSize = (await collectStream(bodyFactory())).length;
+        return { key: `production/${backupName}.tar.gz` };
+      },
+    },
+    config: { backupRoot, workspaceRoot, backupOperationsEnabled: true, restoreOperationsEnabled: false },
+  });
+
+  const result = await manager.syncOffsiteBackup({ backupName });
+  assert.equal(result.status, 'succeeded');
+  assert.equal(result.key, `production/${backupName}.tar.gz`);
+  assert.ok(archiveSize > 0);
+});
+
 test('backup uploads enforce the compressed stream limit without trusting content-length', async (t) => {
   const backupRoot = await mkdtemp(join(tmpdir(), 'my-platform-backups-'));
   const workspaceRoot = await mkdtemp(join(tmpdir(), 'my-platform-workspace-'));
@@ -238,6 +293,90 @@ test('backup command starts a tracked job', async (t) => {
   assert.equal(finished.status, 'succeeded');
   assert.equal(finished.result.backupName, 'done');
   assert.equal(fake.calls[0].options.env.BACKUP_DIR, backupRoot);
+});
+
+test('successful backup jobs stream archives to offsite storage with configured local retention', async (t) => {
+  const backupRoot = await mkdtemp(join(tmpdir(), 'my-platform-backups-'));
+  const workspaceRoot = await mkdtemp(join(tmpdir(), 'my-platform-workspace-'));
+  const backupName = '2026-08-07T03-00-00-000Z';
+  const directory = await createBackupFixture(backupRoot, backupName);
+  t.after(() => rm(backupRoot, { recursive: true, force: true }));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  await writeFile(join(workspaceRoot, 'backup.js'), '');
+  const fake = fakeSpawnFactory({ stdout: `${directory}\n` });
+  let uploadedArchive = Buffer.alloc(0);
+
+  const manager = createBackupManager({
+    spawnImpl: fake.spawnImpl,
+    offsiteStorage: {
+      getRetentionPolicy: async () => ({ localRetentionDays: 14, remoteRetentionDays: 90 }),
+      uploadBackup: async ({ backupName: uploadedName, bodyFactory }) => {
+        assert.equal(uploadedName, backupName);
+        uploadedArchive = await collectStream(bodyFactory());
+        return { key: `production/${backupName}.tar.gz`, uploadedAt: '2026-08-07T03:01:00.000Z' };
+      },
+    },
+    config: {
+      backupRoot,
+      workspaceRoot,
+      backupOperationsEnabled: true,
+      restoreOperationsEnabled: false,
+      backupCommand: 'node backup.js',
+      restoreConfirmText: 'RESTORE ALL DATA',
+    },
+  });
+
+  const job = await manager.startBackup({ requestedBy: 'system:scheduler' });
+  for (let attempt = 0; attempt < 20 && manager.getJob(job.id).status === 'running'; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  const finished = manager.getJob(job.id);
+
+  assert.equal(finished.status, 'succeeded');
+  assert.equal(finished.result.offsite.status, 'succeeded');
+  assert.equal(finished.result.offsite.key, `production/${backupName}.tar.gz`);
+  assert.ok(uploadedArchive.length > 0);
+  assert.equal(fake.calls[0].options.env.BACKUP_RETENTION_DAYS, '14');
+});
+
+test('offsite upload failures preserve a successful local backup job', async (t) => {
+  const backupRoot = await mkdtemp(join(tmpdir(), 'my-platform-backups-'));
+  const workspaceRoot = await mkdtemp(join(tmpdir(), 'my-platform-workspace-'));
+  const backupName = '2026-08-07T04-00-00-000Z';
+  const directory = await createBackupFixture(backupRoot, backupName);
+  t.after(() => rm(backupRoot, { recursive: true, force: true }));
+  t.after(() => rm(workspaceRoot, { recursive: true, force: true }));
+  await writeFile(join(workspaceRoot, 'backup.js'), '');
+  const fake = fakeSpawnFactory({ stdout: `${directory}\n` });
+  const manager = createBackupManager({
+    spawnImpl: fake.spawnImpl,
+    offsiteStorage: {
+      getPublicConfig: async () => ({ enabled: true }),
+      uploadBackup: async () => {
+        const error = new Error('object storage unavailable');
+        error.code = 'BACKUP_STORAGE_UPLOAD_FAILED';
+        throw error;
+      },
+    },
+    config: {
+      backupRoot,
+      workspaceRoot,
+      backupOperationsEnabled: true,
+      restoreOperationsEnabled: false,
+      backupCommand: 'node backup.js',
+    },
+  });
+
+  const job = await manager.startBackup({ requestedBy: 'admin' });
+  for (let attempt = 0; attempt < 20 && manager.getJob(job.id).status === 'running'; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  const finished = manager.getJob(job.id);
+  assert.equal(finished.status, 'succeeded');
+  assert.equal(finished.result.backupName, backupName);
+  assert.equal(finished.result.offsite.status, 'failed');
+  assert.equal((await manager.getStatus()).backups[0].restorable, true);
 });
 
 test('failed backup jobs include stderr details', async (t) => {
@@ -399,6 +538,63 @@ test('runner client sends bearer token and proxies backup jobs', async () => {
   });
 
   assert.deepEqual(seen.map((request) => request.authorization), [`Bearer ${token}`, `Bearer ${token}`]);
+});
+
+test('runner client proxies offsite configuration and recovery operations', async () => {
+  const token = 'o'.repeat(32);
+  const seen = [];
+  await withHttpServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = chunks.length > 0 ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
+    seen.push({ method: req.method, url: req.url, body });
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    if (req.method === 'GET' && req.url === '/offsite/config') {
+      res.end(JSON.stringify({ config: { configured: true, provider: 'r2' } }));
+      return;
+    }
+    if (req.method === 'PUT' && req.url === '/offsite/config') {
+      res.end(JSON.stringify({ config: { configured: true, bucket: body.bucket } }));
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/offsite/test') {
+      res.end(JSON.stringify({ config: { healthy: true } }));
+      return;
+    }
+    if (req.method === 'GET' && req.url === '/offsite/backups') {
+      res.end(JSON.stringify({ backups: [{ key: 'production/remote.tar.gz' }] }));
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/offsite/backups/import') {
+      res.end(JSON.stringify({ backup: { name: body.key.split('/').at(-1).replace('.tar.gz', '') } }));
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/offsite/backups/sync') {
+      res.end(JSON.stringify({ sync: { status: 'succeeded', backupName: body.backupName } }));
+      return;
+    }
+    res.writeHead(404);
+    res.end(JSON.stringify({ error: 'not found' }));
+  }, async (origin) => {
+    const client = createBackupRunnerClient({
+      config: { backupRunnerUrl: origin, backupRunnerToken: token, backupRunnerTimeoutMs: 1000 },
+    });
+    assert.equal((await client.getOffsiteConfig()).provider, 'r2');
+    assert.equal((await client.configureOffsite({ bucket: 'backups' })).bucket, 'backups');
+    assert.equal((await client.testOffsiteConnection()).healthy, true);
+    assert.equal((await client.listOffsiteBackups())[0].key, 'production/remote.tar.gz');
+    assert.equal((await client.importOffsiteBackup({ key: 'production/remote.tar.gz' })).backup.name, 'remote');
+    assert.equal((await client.syncOffsiteBackup({ backupName: 'local' })).status, 'succeeded');
+  });
+
+  assert.deepEqual(seen.map((request) => `${request.method} ${request.url}`), [
+    'GET /offsite/config',
+    'PUT /offsite/config',
+    'POST /offsite/test',
+    'GET /offsite/backups',
+    'POST /offsite/backups/import',
+    'POST /offsite/backups/sync',
+  ]);
 });
 
 test('runner client recovers a backup job after the start request times out', async () => {

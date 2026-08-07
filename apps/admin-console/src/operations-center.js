@@ -723,7 +723,10 @@ export function createOperationsCenter({
   async function getBackupQuality({ force = false } = {}) {
     if (!force && backupQualityCache && now().getTime() - backupQualityCachedAt < 300000) return backupQualityCache;
     const settings = await getSettings();
-    const [status, offsite] = await Promise.all([backups.getStatus(), checkOffsiteBackup()]);
+    const status = await backups.getStatus();
+    const offsite = config.offsiteBackupStatusUrl
+      ? await checkOffsiteBackup()
+      : { configured: false, healthy: null, ...(status.offsite || {}) };
     const offsiteAgeHours = offsite.lastBackupAt ? durationHours(offsite.lastBackupAt, now()) : null;
     if (offsite.healthy && offsiteAgeHours !== null && offsiteAgeHours > settings.backupRpoHours) {
       offsite.healthy = false;

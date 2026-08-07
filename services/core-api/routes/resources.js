@@ -43,6 +43,32 @@ function sanitizeResourceList(list) {
     return Array.isArray(list) ? stripClientOnlyFields(list) : [];
 }
 
+function toExpirySummary(type, item, index) {
+    if (!item || typeof item !== 'object' || !item.expiresAt) return null;
+    return {
+        id: String(item.resourceId || `${type}-${index}`),
+        type,
+        name: String(item.name || item.host || item.siteUrl || (type === 'domain' ? '未命名域名' : '未命名服务器')),
+        expiresAt: String(item.expiresAt),
+        advanceNoticeDays: Math.max(0, Number.parseInt(item.advanceNoticeDays, 10) || 0)
+    };
+}
+
+// Passwords and connection details are intentionally excluded from this mobile-safe summary.
+router.get('/expiry-summary', auth, async (req, res) => {
+    setNoStoreHeaders(res);
+    try {
+        const doc = await ResourceConfig.findById(buildDocId(req.user._id)).lean();
+        const items = [
+            ...(doc?.servers || []).map((item, index) => toExpirySummary('server', item, index)),
+            ...(doc?.domains || []).map((item, index) => toExpirySummary('domain', item, index))
+        ].filter(Boolean);
+        return res.json({ success: true, data: items, generatedAt: new Date().toISOString() });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // Get Resources
 router.get('/', auth, async (req, res) => {
     setNoStoreHeaders(res);

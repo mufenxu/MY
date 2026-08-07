@@ -21,7 +21,7 @@
       "targets": ["platform"]
     },
     {
-      "paths": ["backup-runner.Dockerfile", "scripts/backup-runner.mjs", "scripts/backup-mongodb-container.mjs", "scripts/restore-mongodb-container.mjs", "apps/admin-console/package.json", "apps/admin-console/src/backups.js", "apps/admin-console/src/backupArchives.js"],
+      "paths": ["backup-runner.Dockerfile", "scripts/backup-runner.mjs", "scripts/backup-mongodb-container.mjs", "scripts/restore-mongodb-container.mjs", "apps/admin-console/package.json", "apps/admin-console/package-lock.json", "apps/admin-console/src/backups.js", "apps/admin-console/src/backupArchives.js", "apps/admin-console/src/backupStorage.js"],
       "targets": ["backup"]
     },
     {
@@ -58,7 +58,7 @@
     },
     {
       "paths": ["packages/platform-auth/**"],
-      "targets": ["platform", "core", "exam", "notification", "campus", "iot"]
+      "targets": ["platform", "core", "exam", "notification", "backup", "campus", "iot"]
     },
     {
       "paths": ["packages/platform-browser-runtime/**"],

@@ -3924,10 +3924,159 @@ input:focus-visible {
   gap: 14px;
 }
 
+.backup-offsite-panel {
+  margin-top: 14px;
+  padding: 18px;
+}
+
+.offsite-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.offsite-health.healthy { color: var(--green); }
+.offsite-health.warning { color: var(--orange); }
+
+.backup-offsite-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
+  gap: 22px;
+  margin-top: 16px;
+}
+
+.backup-offsite-config,
+.backup-offsite-remote { min-width: 0; }
+
+.offsite-subsection-head {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.offsite-subsection-head + .offsite-config-grid,
+.offsite-subsection-head + .offsite-schedule-controls,
+.offsite-subsection-head + .offsite-backup-list { margin-top: 10px; }
+
+.offsite-schedule-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 0.65fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.offsite-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.offsite-config-grid > label,
+.offsite-schedule-controls > label,
+.offsite-config-grid > .settings-control-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.offsite-config-grid input:not([type='checkbox']),
+.offsite-schedule-controls input:not([type='checkbox']) {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 10px;
+  color: var(--text);
+  background: var(--panel-solid);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  outline: 0;
+}
+
+.offsite-config-grid input:focus,
+.offsite-schedule-controls input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-soft);
+}
+
+.offsite-config-grid .toggle-field,
+.offsite-schedule-controls .toggle-field {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  background: var(--panel-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.offsite-config-grid .toggle-field > span,
+.offsite-schedule-controls .toggle-field > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.offsite-config-grid .toggle-field strong,
+.offsite-schedule-controls .toggle-field strong { color: var(--ink); font-size: 11px; }
+.offsite-config-grid .toggle-field small,
+.offsite-schedule-controls .toggle-field small { color: var(--muted); font-size: 9px; }
+
+.offsite-config-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.offsite-backup-list { display: grid; }
+
+.offsite-backup-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 62px 34px;
+  min-height: 58px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.offsite-backup-row > span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.offsite-backup-row > span:first-child { display: grid; gap: 3px; }
+.offsite-backup-row strong,
+.offsite-backup-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.offsite-backup-row strong { color: var(--ink); font-size: 11px; }
+.offsite-backup-row small { color: var(--subtle); font-size: 9px; }
+.offsite-backup-row .healthy { color: var(--green); font-weight: 800; }
+.offsite-backup-row .unknown { color: var(--muted); font-weight: 750; }
+
 .backup-action-card,
 .backup-list-card,
 .restore-card,
-.backup-job-card {
+.backup-job-card,
+.backup-offsite-panel {
   padding: 16px;
 }
 
@@ -3961,7 +4110,7 @@ input:focus-visible {
 .backup-table-head,
 .backup-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1.25fr) 82px 66px 58px 72px;
+  grid-template-columns: minmax(160px, 1.25fr) 82px 66px 58px 108px;
   align-items: center;
   gap: 10px;
 }
@@ -5035,6 +5184,10 @@ input:focus-visible {
   .backup-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .backup-offsite-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 760px) {
@@ -5046,8 +5199,14 @@ input:focus-visible {
   .backup-action-card,
   .backup-list-card,
   .restore-card,
-  .backup-job-card {
+  .backup-job-card,
+  .backup-offsite-panel {
     padding: 16px;
+  }
+
+  .offsite-schedule-controls,
+  .offsite-config-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .backup-table-head {

@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         alertNotifier.ensureChannel()
+        OperationalSyncScheduler.schedule(this)
         notificationsEnabled.value = hasNotificationPermission()
         handleOpenIntent(intent)
         enableEdgeToEdge()
@@ -92,11 +93,15 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         activityStopped = false
+        OperationalSyncScheduler.setAppForeground(this, true)
+        appViewModel.setAppInForeground(true)
         notificationsEnabled.value = hasNotificationPermission()
     }
 
     override fun onStop() {
         activityStopped = true
+        OperationalSyncScheduler.setAppForeground(this, false)
+        appViewModel.setAppInForeground(false)
         if (authenticationRequests == 0) appViewModel.lockSession()
         super.onStop()
     }

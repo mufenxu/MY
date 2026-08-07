@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="today"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/shortcut_today"
+        android:shortcutLongLabel="@string/shortcut_today_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="cn.pxyb.mycontrol"
+            android:targetClass="cn.pxyb.mycontrol.MainActivity"
+            android:data="mycontrol://open?destination=today" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="devices"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/shortcut_devices"
+        android:shortcutLongLabel="@string/shortcut_devices_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="cn.pxyb.mycontrol"
+            android:targetClass="cn.pxyb.mycontrol.MainActivity"
+            android:data="mycontrol://open?tab=tools" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="notifications"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/shortcut_notifications"
+        android:shortcutLongLabel="@string/shortcut_notifications_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="cn.pxyb.mycontrol"
+            android:targetClass="cn.pxyb.mycontrol.MainActivity"
+            android:data="mycontrol://open?destination=notifications" />
+    </shortcut>
+</shortcuts>

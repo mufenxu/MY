@@ -79,6 +79,7 @@ const ConfigurationView = lazyNamed(loadPlatformViews, 'ConfigurationView');
 const DiagnosticsView = lazyNamed(loadPlatformViews, 'DiagnosticsView');
 const PublicStatusView = lazyNamed(loadPlatformViews, 'PublicStatusView');
 const TaskCenterView = lazyNamed(loadPlatformViews, 'TaskCenterView');
+const BackupOffsitePanel = lazyNamed(loadOperationsViews, 'BackupOffsitePanel');
 const BackupQualityStrip = lazyNamed(loadOperationsViews, 'BackupQualityStrip');
 const IncidentsView = lazyNamed(loadOperationsViews, 'IncidentsView');
 const MonitoringView = lazyNamed(loadOperationsViews, 'MonitoringView');
@@ -1456,6 +1457,7 @@ function BackupRecoveryView({ session }) {
   const [deletingBackup, setDeletingBackup] = useState('');
   const [downloadingBackup, setDownloadingBackup] = useState('');
   const [uploadingBackup, setUploadingBackup] = useState(false);
+  const [syncingBackup, setSyncingBackup] = useState('');
   const [restorePassword, setRestorePassword] = useState('');
   const [restoreTotp, setRestoreTotp] = useState('');
   const [confirmText, setConfirmText] = useState('');
@@ -1559,6 +1561,26 @@ function BackupRecoveryView({ session }) {
       await loadBackupStatus(true);
     } catch (error) {
       setActionError(error.message);
+    }
+  }
+
+  async function handleSyncBackup(backup) {
+    if (!backup?.restorable) return;
+    setSyncingBackup(backup.name);
+    setActionError('');
+    setActionMessage('');
+    try {
+      await requestJson(`/api/backups/${encodeURIComponent(backup.name)}/sync`, {
+        method: 'POST',
+        body: '{}',
+        timeoutMs: 10 * 60 * 1000,
+      });
+      setActionMessage('备份已同步到外部存储。');
+      await loadBackupStatus(true);
+    } catch (error) {
+      setActionError(error.message);
+    } finally {
+      setSyncingBackup('');
     }
   }
 
@@ -1793,6 +1815,19 @@ function BackupRecoveryView({ session }) {
                   <button
                     className="backup-row-action"
                     type="button"
+                    aria-label={`同步备份 ${backup.name}`}
+                    title="同步到外部存储"
+                    disabled={!canOperateBackups || !statusData?.offsite?.enabled || !backup.restorable || Boolean(runningJob) || syncingBackup === backup.name}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleSyncBackup(backup);
+                    }}
+                  >
+                    {syncingBackup === backup.name ? <LoaderCircle className="spin" size={15} /> : <CloudCog size={15} />}
+                  </button>
+                  <button
+                    className="backup-row-action"
+                    type="button"
                     aria-label={`下载备份 ${backup.name}`}
                     title="下载备份"
                     disabled={!canManageBackups || !backup.restorable || downloadingBackup === backup.name}
@@ -1895,6 +1930,15 @@ function BackupRecoveryView({ session }) {
           </button>
         </aside>
       </div>
+
+      <BackupOffsitePanel
+        session={session}
+        localBackups={backups}
+        onImported={(backup) => {
+          if (backup) setSelectedBackup(backup);
+          loadBackupStatus(true);
+        }}
+      />
 
       {latestJob && (
         <section className={`view-card backup-job-card job-${latestJob.status}`}>

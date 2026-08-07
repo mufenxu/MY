@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import http from 'node:http';
 import path from 'node:path';
 import { createBackupManager, BackupOperationError } from '../apps/admin-console/src/backups.js';
+import { BackupStorageError, createBackupStorageService } from '../apps/admin-console/src/backupStorage.js';
 
 const workspaceRoot = path.resolve(import.meta.dirname, '..');
 const host = process.env.BACKUP_RUNNER_HOST || '127.0.0.1';
@@ -15,6 +16,14 @@ if (token.length < 32 || /^(?:replace|change)_with_/i.test(token)) {
   throw new Error('PLATFORM_BACKUP_RUNNER_TOKEN must be at least 32 random characters.');
 }
 
+const storageEncryptionKey = process.env.PLATFORM_BACKUP_STORAGE_ENCRYPTION_KEY || '';
+const offsiteStorage = storageEncryptionKey
+  ? createBackupStorageService({
+    statePath: process.env.PLATFORM_BACKUP_STORAGE_STATE_PATH || '/app/state/offsite.json',
+    encryptionKey: storageEncryptionKey,
+  })
+  : null;
+
 function parseInteger(value, fallback, { min, max }) {
   const parsed = Number.parseInt(value ?? '', 10);
   if (!Number.isFinite(parsed)) return fallback;
@@ -22,6 +31,7 @@ function parseInteger(value, fallback, { min, max }) {
 }
 
 const manager = createBackupManager({
+  offsiteStorage,
   config: {
     workspaceRoot,
     backupRoot: path.resolve(process.env.PLATFORM_BACKUP_DIR || process.env.BACKUP_DIR || path.join(workspaceRoot, 'backups')),
@@ -41,6 +51,24 @@ const manager = createBackupManager({
     }),
   },
 });
+
+async function getOffsiteStatus() {
+  if (!offsiteStorage) {
+    return { configured: false, enabled: false, healthy: null, encryptionReady: false };
+  }
+  try {
+    return await offsiteStorage.getPublicConfig();
+  } catch (error) {
+    return {
+      configured: false,
+      enabled: false,
+      healthy: false,
+      encryptionReady: true,
+      lastError: String(error.message || error).slice(0, 200),
+    };
+  }
+}
+
 const transferTimeoutMs = parseInteger(
   process.env.PLATFORM_BACKUP_TRANSFER_TIMEOUT_MS,
   10 * 60 * 1000,
@@ -140,7 +168,53 @@ async function route(req, res) {
   if (!requireToken(req, res)) return;
 
   if (req.method === 'GET' && url.pathname === '/status') {
-    writeJson(res, 200, await manager.getStatus());
+    const status = await manager.getStatus();
+    status.offsite = await getOffsiteStatus();
+    writeJson(res, 200, status);
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/offsite/config') {
+    const config = offsiteStorage
+      ? await offsiteStorage.getPublicConfig()
+      : { configured: false, enabled: false, healthy: null, encryptionReady: false };
+    writeJson(res, 200, { config });
+    return;
+  }
+
+  if (req.method === 'PUT' && url.pathname === '/offsite/config') {
+    if (!offsiteStorage) {
+      throw new BackupStorageError(503, 'BACKUP_STORAGE_KEY_MISSING', '备份存储加密密钥未配置。');
+    }
+    writeJson(res, 200, { config: await offsiteStorage.configure(await readJsonBody(req)) });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/offsite/test') {
+    if (!offsiteStorage) {
+      throw new BackupStorageError(503, 'BACKUP_STORAGE_KEY_MISSING', '备份存储加密密钥未配置。');
+    }
+    writeJson(res, 200, { config: await offsiteStorage.testConnection() });
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/offsite/backups') {
+    if (!offsiteStorage) {
+      throw new BackupStorageError(503, 'BACKUP_STORAGE_KEY_MISSING', '备份存储加密密钥未配置。');
+    }
+    writeJson(res, 200, { backups: await offsiteStorage.listBackups() });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/offsite/backups/import') {
+    const body = await readJsonBody(req);
+    writeJson(res, 201, await manager.importOffsiteBackup({ key: String(body.key || '') }));
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/offsite/backups/sync') {
+    const body = await readJsonBody(req);
+    writeJson(res, 200, { sync: await manager.syncOffsiteBackup({ backupName: String(body.backupName || '') }) });
     return;
   }
 
@@ -198,7 +272,7 @@ async function route(req, res) {
 
 const server = http.createServer((req, res) => {
   route(req, res).catch((error) => {
-    if (error instanceof BackupOperationError) {
+    if (error instanceof BackupOperationError || error instanceof BackupStorageError) {
       writeJson(res, error.status, { error: error.message, code: error.code });
       return;
     }

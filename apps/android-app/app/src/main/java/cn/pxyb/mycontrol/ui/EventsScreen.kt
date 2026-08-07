@@ -70,7 +70,7 @@ import cn.pxyb.mycontrol.ui.theme.Forest
 
 @Composable
 fun EventsScreen(
-    state: AppUiState,
+    state: EventsUiState,
     contentPadding: PaddingValues,
     onAcknowledge: (String) -> Unit,
     onAssign: (String, String) -> Unit,
@@ -145,6 +145,9 @@ fun EventsScreen(
                 refreshing = state.refreshing,
                 onRefresh = onRefresh
             )
+        }
+        state.sectionError?.let { message ->
+            item { FeedbackBanner("事件数据暂不可用：$message", error = true) }
         }
         item {
             AppPanel {

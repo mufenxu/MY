@@ -82,6 +82,38 @@ test('operation settings validate thresholds and maintenance service ids', () =>
   assert.equal(settings.maintenanceWindows[0].serviceId, 'all');
 });
 
+test('backup quality uses the backup runner offsite status when no legacy status URL is configured', async () => {
+  const current = new Date('2026-08-07T07:00:00.000Z');
+  const center = createOperationsCenter({
+    services: [service],
+    monitor: { refresh: async () => [] },
+    store: createMemoryOperationsStore({ now: () => current }),
+    notifier: { check: async () => ({ configured: false }), sendIncident: async () => ({ delivered: false }) },
+    backups: {
+      getStatus: async () => ({
+        backups: [{ name: 'local', createdAt: current.toISOString(), restorable: true }],
+        jobs: [],
+        capabilities: {},
+        offsite: {
+          configured: true,
+          enabled: true,
+          healthy: true,
+          provider: 'r2',
+          lastBackupAt: current.toISOString(),
+        },
+      }),
+    },
+    releaseService: { getSummary: async () => ({ capabilities: {} }) },
+    now: () => current,
+    config: { monitorIntervalMs: 30000, backupRpoHours: 26, workspaceRoot: process.cwd() },
+  });
+
+  const quality = await center.getBackupQuality({ force: true });
+  assert.equal(quality.offsite.configured, true);
+  assert.equal(quality.offsite.healthy, true);
+  assert.equal(quality.offsite.provider, 'r2');
+});
+
 test('gateway error-rate observations create and recover a derived incident', async () => {
   let current = new Date('2026-07-18T12:00:00.000Z');
   const store = createMemoryOperationsStore({ now: () => current });

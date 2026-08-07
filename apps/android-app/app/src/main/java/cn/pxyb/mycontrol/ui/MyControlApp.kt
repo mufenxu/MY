@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -12,14 +11,12 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -78,11 +75,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -99,8 +96,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalAutofill
 import androidx.compose.ui.platform.LocalAutofillTree
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -114,12 +113,33 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 
 private data class TabItem(val tab: MainTab, val label: String, val icon: ImageVector)
 private enum class SecondFactorMode { Totp, RecoveryCode }
+
+private object AppRoute {
+    const val Overview = "overview"
+    const val Events = "events"
+    const val Tools = "tools"
+    const val Profile = "profile"
+    const val Operations = "operations"
+    const val Account = "account"
+    const val GoogleAccounts = "google-accounts"
+    const val Search = "search"
+    const val Today = "today"
+    const val Notifications = "notifications"
+    const val Insights = "insights"
+    const val Scenes = "scenes"
+}
 
 private val tabs = listOf(
     TabItem(MainTab.Overview, "首页", Icons.Outlined.Home),
@@ -127,6 +147,25 @@ private val tabs = listOf(
     TabItem(MainTab.Tools, "设备", Icons.Outlined.Hub),
     TabItem(MainTab.Profile, "我的", Icons.Outlined.Person),
 )
+
+private fun MainTab.route(): String = when (this) {
+    MainTab.Overview -> AppRoute.Overview
+    MainTab.Events -> AppRoute.Events
+    MainTab.Operations -> AppRoute.Operations
+    MainTab.Tools -> AppRoute.Tools
+    MainTab.Profile -> AppRoute.Profile
+}
+
+private fun AppEntryUiState.requestedRoute(): String = when {
+    workspaceDestination == WorkspaceDestination.Today -> AppRoute.Today
+    workspaceDestination == WorkspaceDestination.Notifications -> AppRoute.Notifications
+    workspaceDestination == WorkspaceDestination.Insights -> AppRoute.Insights
+    workspaceDestination == WorkspaceDestination.Scenes -> AppRoute.Scenes
+    globalSearchOpen -> AppRoute.Search
+    googleAccountDeskOpen -> AppRoute.GoogleAccounts
+    accountManagementOpen -> AppRoute.Account
+    else -> selectedTab.route()
+}
 
 @Composable
 fun MyControlApp(
@@ -140,7 +179,7 @@ fun MyControlApp(
     notificationsEnabled: Boolean,
     onRequestNotifications: () -> Unit,
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    val state by viewModel.entryState.collectAsStateWithLifecycle()
     val destination = when {
         state.booting -> "loading"
         state.locked -> "locked"
@@ -506,7 +545,7 @@ private fun LoginHeader() {
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun LoginScreen(
-    state: AppUiState,
+    state: AppEntryUiState,
     onLogin: (String, String, String, Boolean) -> Unit,
     onPasskeyLogin: (String) -> Unit,
     onBackFromSecondFactor: () -> Unit,
@@ -1037,7 +1076,7 @@ private fun PrimaryLoginButton(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AuthenticatedShell(
-    state: AppUiState,
+    state: AppEntryUiState,
     viewModel: AppViewModel,
     onPasskeyRequest: suspend (String) -> String,
     onPasskeyRegistrationRequest: suspend (String) -> String,
@@ -1047,8 +1086,9 @@ private fun AuthenticatedShell(
     onRequestNotifications: () -> Unit,
 ) {
     if (state.qrLoginOpen) {
+        val qrLoginState by viewModel.qrLoginState.collectAsStateWithLifecycle()
         QrLoginScreen(
-            state = state,
+            state = qrLoginState,
             onCodeDetected = viewModel::scanQrCode,
             onApprove = { viewModel.approveQrLogin(onPasskeyRequest, onBiometricConfirmation) },
             onReject = viewModel::rejectQrLogin,
@@ -1060,18 +1100,70 @@ private fun AuthenticatedShell(
     var toastVisible by remember { mutableStateOf(false) }
     var toastMessage by remember { mutableStateOf("") }
     var toastError by remember { mutableStateOf(false) }
-    val saveableStateHolder = rememberSaveableStateHolder()
+    var toastDragOffset by remember { mutableFloatStateOf(0f) }
+    var toastDragging by remember { mutableStateOf(false) }
+    val toastDismissThreshold = with(LocalDensity.current) { 72.dp.toPx() }
+    val animatedToastOffset by animateFloatAsState(
+        targetValue = toastDragOffset,
+        animationSpec = if (toastDragging) snap() else spring(stiffness = Spring.StiffnessMediumLow),
+        label = "toast-swipe-offset",
+    )
+    val navController = rememberNavController()
+    val initialRoute = remember { state.requestedRoute() }
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = currentBackStackEntry?.destination?.route ?: initialRoute
+    val isSubScreen = currentRoute in setOf(
+        AppRoute.Operations,
+        AppRoute.Account,
+        AppRoute.GoogleAccounts,
+        AppRoute.Search,
+        AppRoute.Today,
+        AppRoute.Notifications,
+        AppRoute.Insights,
+        AppRoute.Scenes,
+    )
     val onRefresh = remember(viewModel) { { viewModel.refreshCurrentTab(true) } }
+    LaunchedEffect(state.selectedTab, state.accountManagementOpen, state.googleAccountDeskOpen, state.globalSearchOpen, state.workspaceDestination) {
+        val targetRoute = state.requestedRoute()
+        if (targetRoute == currentRoute) return@LaunchedEffect
+        if (targetRoute in setOf(AppRoute.Overview, AppRoute.Events, AppRoute.Tools, AppRoute.Profile)) {
+            navController.navigate(targetRoute) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        } else {
+            navController.navigate(targetRoute) { launchSingleTop = true }
+        }
+    }
+    LaunchedEffect(currentRoute) {
+        when (currentRoute) {
+            AppRoute.Overview -> viewModel.syncNavigationDestination(MainTab.Overview)
+            AppRoute.Events -> viewModel.syncNavigationDestination(MainTab.Events)
+            AppRoute.Tools -> viewModel.syncNavigationDestination(MainTab.Tools)
+            AppRoute.Profile -> viewModel.syncNavigationDestination(MainTab.Profile)
+            AppRoute.Operations -> viewModel.syncNavigationDestination(MainTab.Operations)
+            AppRoute.Account -> viewModel.syncNavigationDestination(MainTab.Profile, accountManagementOpen = true)
+            AppRoute.GoogleAccounts -> viewModel.syncNavigationDestination(MainTab.Profile, googleAccountDeskOpen = true)
+            AppRoute.Search -> viewModel.syncNavigationDestination(MainTab.Overview, globalSearchOpen = true)
+            AppRoute.Today -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
+            AppRoute.Notifications -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Notifications)
+            AppRoute.Insights -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Insights)
+            AppRoute.Scenes -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Scenes)
+        }
+    }
     LaunchedEffect(state.error, state.message) {
         val text = state.error ?: state.message
         if (!text.isNullOrBlank()) {
             toastMessage = text
             toastError = state.error != null
+            toastDragOffset = 0f
+            toastDragging = false
             toastVisible = true
         }
     }
-    LaunchedEffect(toastVisible) {
-        if (toastVisible) {
+    LaunchedEffect(toastVisible, toastDragging) {
+        if (toastVisible && !toastDragging) {
             delay(3800)
             toastVisible = false
             viewModel.clearFeedback()
@@ -1083,23 +1175,23 @@ private fun AuthenticatedShell(
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            val tab = state.selectedTab
-            val isSubScreen = state.accountManagementOpen || state.googleAccountDeskOpen || state.selectedTab == MainTab.Operations
             val contentPadding = PaddingValues(
                 top = padding.calculateTopPadding(),
                 bottom = if (isSubScreen) padding.calculateBottomPadding() + 16.dp else 90.dp,
             )
-            AnimatedContent(
-                targetState = tab,
-                transitionSpec = {
-                    fadeIn(animationSpec = tween(140)) togetherWith fadeOut(animationSpec = tween(110))
-                },
-                label = "tab_switch",
-            ) { currentTab ->
-                saveableStateHolder.SaveableStateProvider(currentTab.name) {
-                    when (currentTab) {
-                    MainTab.Overview -> OverviewScreen(
-                        state = state,
+            NavHost(
+                navController = navController,
+                startDestination = initialRoute,
+                modifier = Modifier.fillMaxSize(),
+                enterTransition = { fadeIn(animationSpec = tween(140)) },
+                exitTransition = { fadeOut(animationSpec = tween(110)) },
+                popEnterTransition = { fadeIn(animationSpec = tween(140)) },
+                popExitTransition = { fadeOut(animationSpec = tween(110)) },
+            ) {
+                composable(AppRoute.Overview) {
+                    val overviewState by viewModel.overviewState.collectAsStateWithLifecycle()
+                    OverviewScreen(
+                        state = overviewState,
                         contentPadding = contentPadding,
                         onSelectTab = viewModel::selectTab,
                         onRefresh = onRefresh,
@@ -1107,9 +1199,15 @@ private fun AuthenticatedShell(
                         onTriggerBackup = { viewModel.triggerBackup(onSensitiveActionConfirmation) },
                         onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
                         onOpenOperations = { viewModel.selectTab(MainTab.Operations) },
+                        onOpenSearch = viewModel::openGlobalSearch,
+                        onOpenWorkspace = viewModel::openWorkspace,
+                        onUpdateQuickActions = viewModel::updateHomeQuickActions,
                     )
-                    MainTab.Events -> EventsScreen(
-                        state = state,
+                }
+                composable(AppRoute.Events) {
+                    val eventsState by viewModel.eventsState.collectAsStateWithLifecycle()
+                    EventsScreen(
+                        state = eventsState,
                         contentPadding = contentPadding,
                         onAcknowledge = viewModel::acknowledgeIncident,
                         onAssign = viewModel::assignIncident,
@@ -1122,8 +1220,11 @@ private fun AuthenticatedShell(
                         onFocusConsumed = viewModel::clearFocusTargets,
                         onRefresh = onRefresh,
                     )
-                    MainTab.Operations -> OperationsScreen(
-                        state = state,
+                }
+                composable(AppRoute.Operations) {
+                    val operationsState by viewModel.operationsState.collectAsStateWithLifecycle()
+                    OperationsScreen(
+                        state = operationsState,
                         contentPadding = contentPadding,
                         onRunDiagnostics = viewModel::runDiagnostics,
                         onTriggerBackup = { viewModel.triggerBackup(onSensitiveActionConfirmation) },
@@ -1150,10 +1251,18 @@ private fun AuthenticatedShell(
                         focusTaskId = state.focusTaskId,
                         onFocusConsumed = viewModel::clearFocusTargets,
                         onRefresh = onRefresh,
-                        onBack = { viewModel.selectTab(MainTab.Overview) },
+                        onBack = {
+                            viewModel.selectTab(MainTab.Overview)
+                            if (!navController.popBackStack()) {
+                                navController.navigate(AppRoute.Overview) { launchSingleTop = true }
+                            }
+                        },
                     )
-                    MainTab.Tools -> ToolsScreen(
-                        state,
+                }
+                composable(AppRoute.Tools) {
+                    val toolsState by viewModel.toolsState.collectAsStateWithLifecycle()
+                    ToolsScreen(
+                        toolsState,
                         contentPadding,
                         state.selectedTab,
                         { viewModel.triggerCt8(onSensitiveActionConfirmation) },
@@ -1163,80 +1272,146 @@ private fun AuthenticatedShell(
                         },
                         onRefresh,
                     )
-                    MainTab.Profile -> {
-                        AnimatedContent(
-                            targetState = state.accountManagementOpen || state.googleAccountDeskOpen,
-                            transitionSpec = {
-                                if (targetState) {
-                                    (slideInHorizontally(animationSpec = tween(180, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
-                                            fadeIn(animationSpec = tween(180))) togetherWith
-                                            (slideOutHorizontally(animationSpec = tween(180, easing = FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 } +
-                                                    fadeOut(animationSpec = tween(140)))
-                                } else {
-                                    (slideInHorizontally(animationSpec = tween(180, easing = FastOutSlowInEasing)) { fullWidth -> -fullWidth / 4 } +
-                                            fadeIn(animationSpec = tween(180))) togetherWith
-                                            (slideOutHorizontally(animationSpec = tween(180, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
-                                                    fadeOut(animationSpec = tween(140)))
-                                }
-                            },
-                            label = "profile_subscreen_transition"
-                        ) { isAccountOpen ->
-                            if (isAccountOpen) {
-                                if (state.googleAccountDeskOpen) {
-                                    GoogleAccountDeskScreen(
-                                        state = state,
-                                        contentPadding = contentPadding,
-                                        onDismiss = viewModel::closeGoogleAccountDesk,
-                                        onAddAccount = viewModel::addGoogleAccount,
-                                        onImportAccounts = viewModel::importGoogleAccounts,
-                                        onUpdateAccount = viewModel::updateGoogleAccount,
-                                        onDeleteAccount = viewModel::deleteGoogleAccount,
-                                        onBulkUpdateAccounts = viewModel::bulkUpdateGoogleAccounts,
-                                        onBulkArchiveAccounts = viewModel::bulkSetGoogleAccountsArchived,
-                                        onBulkDeleteAccounts = viewModel::bulkDeleteGoogleAccounts,
-                                        onAddAlias = viewModel::addGoogleAlias,
-                                        onUpdateAlias = viewModel::updateGoogleAlias,
-                                        onDeleteAlias = viewModel::deleteGoogleAlias,
-                                        onUploadLocalAccounts = viewModel::uploadLocalGoogleAccounts,
-                                        onDiscardLocalAccounts = viewModel::discardLocalGoogleAccounts,
-                                    )
-                                } else {
-                                AccountManagementScreen(
-                                    state = state,
-                                    contentPadding = contentPadding,
-                                    onDismiss = viewModel::closeAccountManagement,
-                                    onRefresh = onRefresh,
-                                    onChangedPassword = viewModel::changePassword,
-                                    onBeginTotpEnrollment = viewModel::beginTotpEnrollment,
-                                    onConfirmTotpEnrollment = viewModel::confirmTotpEnrollment,
-                                    onRegenerateRecoveryCodes = viewModel::regenerateRecoveryCodes,
-                                    onDisableTotp = viewModel::disableTotp,
-                                    onClearTotpFlow = viewModel::clearTotpFlow,
-                                    onRefreshPasskeys = viewModel::refreshPasskeys,
-                                    onRegisterPasskey = viewModel::registerPasskey,
-                                    onDeletePasskey = viewModel::deletePasskey,
-                                    onRegisterPasskeyRequest = onPasskeyRegistrationRequest,
-                                    onSetAppLockEnabled = viewModel::setAppLockEnabled,
-                                )
-                                }
-                            } else {
-                                ProfileScreen(
-                                    state = state,
-                                    contentPadding = contentPadding,
-                                    onRevokeSession = { nonce -> viewModel.revokeSession(nonce, onSensitiveActionConfirmation) },
-                                    onOpenQrLogin = viewModel::openQrScanner,
-                                    onLogout = viewModel::logout,
-                                    onRefresh = onRefresh,
-                                    onOpenAccountManagement = viewModel::openAccountManagement,
-                                    onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
-                                    notificationsEnabled = notificationsEnabled,
-                                    onRequestNotifications = onRequestNotifications,
-                                )
-                            }
-                        }
-                    }
                 }
-            }
+                composable(AppRoute.Profile) {
+                    val profileState by viewModel.profileState.collectAsStateWithLifecycle()
+                    ProfileScreen(
+                        state = profileState,
+                        contentPadding = contentPadding,
+                        onRevokeSession = { nonce -> viewModel.revokeSession(nonce, onSensitiveActionConfirmation) },
+                        onOpenQrLogin = viewModel::openQrScanner,
+                        onLogout = viewModel::logout,
+                        onRefresh = onRefresh,
+                        onOpenAccountManagement = viewModel::openAccountManagement,
+                        onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
+                        notificationsEnabled = notificationsEnabled,
+                        onRequestNotifications = onRequestNotifications,
+                    )
+                }
+                composable(AppRoute.Account) {
+                    val accountState by viewModel.accountManagementState.collectAsStateWithLifecycle()
+                    AccountManagementScreen(
+                        state = accountState,
+                        contentPadding = contentPadding,
+                        onDismiss = {
+                            viewModel.closeAccountManagement()
+                            if (!navController.popBackStack()) {
+                                navController.navigate(AppRoute.Profile) { launchSingleTop = true }
+                            }
+                        },
+                        onRefresh = onRefresh,
+                        onChangedPassword = viewModel::changePassword,
+                        onBeginTotpEnrollment = viewModel::beginTotpEnrollment,
+                        onConfirmTotpEnrollment = viewModel::confirmTotpEnrollment,
+                        onRegenerateRecoveryCodes = viewModel::regenerateRecoveryCodes,
+                        onDisableTotp = viewModel::disableTotp,
+                        onClearTotpFlow = viewModel::clearTotpFlow,
+                        onRefreshPasskeys = viewModel::refreshPasskeys,
+                        onRegisterPasskey = viewModel::registerPasskey,
+                        onDeletePasskey = viewModel::deletePasskey,
+                        onRegisterPasskeyRequest = onPasskeyRegistrationRequest,
+                        onSetAppLockEnabled = viewModel::setAppLockEnabled,
+                    )
+                }
+                composable(AppRoute.GoogleAccounts) {
+                    val googleAccountState by viewModel.googleAccountDeskState.collectAsStateWithLifecycle()
+                    GoogleAccountDeskScreen(
+                        state = googleAccountState,
+                        contentPadding = contentPadding,
+                        onDismiss = {
+                            viewModel.closeGoogleAccountDesk()
+                            if (!navController.popBackStack()) {
+                                navController.navigate(AppRoute.Profile) { launchSingleTop = true }
+                            }
+                        },
+                        onAddAccount = viewModel::addGoogleAccount,
+                        onImportAccounts = viewModel::importGoogleAccounts,
+                        onUpdateAccount = viewModel::updateGoogleAccount,
+                        onDeleteAccount = viewModel::deleteGoogleAccount,
+                        onBulkUpdateAccounts = viewModel::bulkUpdateGoogleAccounts,
+                        onBulkArchiveAccounts = viewModel::bulkSetGoogleAccountsArchived,
+                        onBulkDeleteAccounts = viewModel::bulkDeleteGoogleAccounts,
+                        onAddAlias = viewModel::addGoogleAlias,
+                        onUpdateAlias = viewModel::updateGoogleAlias,
+                        onDeleteAlias = viewModel::deleteGoogleAlias,
+                        onUploadLocalAccounts = viewModel::uploadLocalGoogleAccounts,
+                        onDiscardLocalAccounts = viewModel::discardLocalGoogleAccounts,
+                    )
+                }
+                composable(AppRoute.Search) {
+                    val searchState by viewModel.globalSearchState.collectAsStateWithLifecycle()
+                    GlobalSearchScreen(
+                        state = searchState,
+                        contentPadding = contentPadding,
+                        onBack = {
+                            viewModel.closeGlobalSearch()
+                            if (!navController.popBackStack()) {
+                                navController.navigate(AppRoute.Overview) { launchSingleTop = true }
+                            }
+                        },
+                        onSelect = viewModel::openGlobalSearchResult,
+                    )
+                }
+                composable(AppRoute.Today) {
+                    val todayState by viewModel.todayState.collectAsStateWithLifecycle()
+                    TodayScreen(
+                        state = todayState,
+                        contentPadding = contentPadding,
+                        onBack = {
+                            viewModel.closeWorkspace()
+                            if (!navController.popBackStack()) navController.navigate(AppRoute.Overview) { launchSingleTop = true }
+                        },
+                        onRefresh = { viewModel.refreshCurrentWorkspace() },
+                        onSaveTodo = viewModel::saveTodo,
+                        onToggleTodo = viewModel::toggleTodo,
+                        onDeleteTodo = viewModel::deleteTodo,
+                        onOpenEvents = { viewModel.selectTab(MainTab.Events) },
+                        onOpenTasks = { viewModel.selectTab(MainTab.Operations) },
+                    )
+                }
+                composable(AppRoute.Notifications) {
+                    val notificationState by viewModel.notificationCenterState.collectAsStateWithLifecycle()
+                    NotificationCenterScreen(
+                        state = notificationState,
+                        contentPadding = contentPadding,
+                        onBack = {
+                            viewModel.closeWorkspace()
+                            if (!navController.popBackStack()) navController.navigate(AppRoute.Overview) { launchSingleTop = true }
+                        },
+                        onOpen = viewModel::openAlert,
+                        onMarkRead = viewModel::markAlertRead,
+                        onMarkAllRead = viewModel::markAllAlertsRead,
+                        onClearRead = viewModel::clearReadAlerts,
+                        onSnooze = { id -> viewModel.snoozeAlert(id) },
+                        onUpdatePreferences = viewModel::updateAlertPreferences,
+                    )
+                }
+                composable(AppRoute.Insights) {
+                    val insightsState by viewModel.insightsState.collectAsStateWithLifecycle()
+                    InsightsScreen(
+                        state = insightsState,
+                        contentPadding = contentPadding,
+                        onBack = {
+                            viewModel.closeWorkspace()
+                            if (!navController.popBackStack()) navController.navigate(AppRoute.Overview) { launchSingleTop = true }
+                        },
+                    )
+                }
+                composable(AppRoute.Scenes) {
+                    val scenesState by viewModel.scenesState.collectAsStateWithLifecycle()
+                    ScenesScreen(
+                        state = scenesState,
+                        contentPadding = contentPadding,
+                        onBack = {
+                            viewModel.closeWorkspace()
+                            if (!navController.popBackStack()) navController.navigate(AppRoute.Overview) { launchSingleTop = true }
+                        },
+                        onRefresh = { viewModel.refreshCurrentWorkspace() },
+                        onRun = { id -> viewModel.runIotScene(id, onSensitiveActionConfirmation) },
+                        onSave = viewModel::saveIotScene,
+                        onDelete = { id -> viewModel.deleteIotScene(id, onSensitiveActionConfirmation) },
+                    )
+                }
             }
 
             AnimatedVisibility(
@@ -1259,6 +1434,38 @@ private fun AuthenticatedShell(
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .graphicsLayer {
+                        translationX = animatedToastOffset
+                        alpha = (1f - abs(animatedToastOffset) / (toastDismissThreshold * 2f))
+                            .coerceIn(0.45f, 1f)
+                    }
+                    .pointerInput(toastMessage, toastDismissThreshold) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { toastDragging = true },
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                toastDragOffset += dragAmount
+                            },
+                            onDragEnd = {
+                                toastDragging = false
+                                if (abs(toastDragOffset) >= toastDismissThreshold) {
+                                    toastDragOffset = if (toastDragOffset < 0f) {
+                                        -toastDismissThreshold * 1.5f
+                                    } else {
+                                        toastDismissThreshold * 1.5f
+                                    }
+                                    toastVisible = false
+                                    viewModel.clearFeedback()
+                                } else {
+                                    toastDragOffset = 0f
+                                }
+                            },
+                            onDragCancel = {
+                                toastDragging = false
+                                toastDragOffset = 0f
+                            },
+                        )
+                    }
                     .zIndex(10f),
             ) {
                 AppToast(

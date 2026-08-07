@@ -16,13 +16,16 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=mongo-tools /usr/bin/mongodump /usr/bin/mongorestore /usr/local/bin/
-COPY --chown=node:node apps/admin-console/package.json ./apps/admin-console/package.json
-COPY --chown=node:node apps/admin-console/src/backups.js apps/admin-console/src/backupArchives.js ./apps/admin-console/src/
+COPY --chown=node:node packages/platform-auth ./packages/platform-auth
+COPY --chown=node:node apps/admin-console/package.json apps/admin-console/package-lock.json ./apps/admin-console/
+RUN npm ci --omit=dev --prefix apps/admin-console \
+    && npm cache clean --force
+COPY --chown=node:node apps/admin-console/src/backups.js apps/admin-console/src/backupArchives.js apps/admin-console/src/backupStorage.js ./apps/admin-console/src/
 COPY --chown=node:node scripts/backup-runner.mjs scripts/backup-mongodb-container.mjs scripts/restore-mongodb-container.mjs ./scripts/
 
 RUN mongodump --version >/dev/null \
     && mongorestore --version >/dev/null \
-    && mkdir -p /app/backups /app/services/core-api/uploads \
+    && mkdir -p /app/backups /app/state /app/services/core-api/uploads \
     && chown -R node:node /app
 
 USER node

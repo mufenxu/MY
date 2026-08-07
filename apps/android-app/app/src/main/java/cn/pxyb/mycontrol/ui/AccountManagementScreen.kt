@@ -63,7 +63,7 @@ import cn.pxyb.mycontrol.data.PlatformPasskey
 
 @Composable
 fun AccountManagementScreen(
-    state: AppUiState,
+    state: AccountManagementUiState,
     contentPadding: PaddingValues,
     onDismiss: () -> Unit,
     onRefresh: () -> Unit,
@@ -132,6 +132,9 @@ fun AccountManagementScreen(
                     }
                 }
             )
+        }
+        state.sectionError?.let { message ->
+            item { FeedbackBanner("安全数据暂不可用：$message", error = true) }
         }
 
         // 1. 个人资料概览卡片
@@ -424,7 +427,7 @@ fun AccountManagementScreen(
 
 @Composable
 private fun ChangePasswordDialog(
-    state: AppUiState,
+    state: AccountManagementUiState,
     totpEnabled: Boolean,
     onDismiss: () -> Unit,
     onSubmit: (oldPassword: String, newPassword: String, totp: String) -> Unit,
@@ -519,7 +522,7 @@ private fun ChangePasswordDialog(
 
 @Composable
 private fun TotpSetupDialog(
-    state: AppUiState,
+    state: AccountManagementUiState,
     onDismiss: () -> Unit,
     onBegin: (password: String) -> Unit,
     onConfirm: (code: String) -> Unit,
@@ -690,7 +693,7 @@ private fun TotpSetupDialog(
 
 @Composable
 private fun TotpManageDialog(
-    state: AppUiState,
+    state: AccountManagementUiState,
     onDismiss: () -> Unit,
     onRegenerate: (password: String, totp: String) -> Unit,
     onDisable: (password: String, totp: String) -> Unit,
@@ -820,7 +823,7 @@ private fun RecoveryCodesDialog(
 
 @Composable
 private fun PasskeyListDialog(
-    state: AppUiState,
+    state: AccountManagementUiState,
     onDismiss: () -> Unit,
     onRegister: () -> Unit,
     onDelete: (PlatformPasskey) -> Unit,
@@ -908,7 +911,7 @@ private fun PasskeyListDialog(
 
 @Composable
 private fun PasskeyRegisterDialog(
-    state: AppUiState,
+    state: AccountManagementUiState,
     totpEnabled: Boolean,
     onDismiss: () -> Unit,
     onRegister: (name: String, password: String, totp: String) -> Unit,
@@ -991,7 +994,7 @@ private fun PasskeyRegisterDialog(
 
 @Composable
 private fun DeletePasskeyDialog(
-    state: AppUiState,
+    state: AccountManagementUiState,
     passkey: PlatformPasskey,
     totpEnabled: Boolean,
     onDismiss: () -> Unit,

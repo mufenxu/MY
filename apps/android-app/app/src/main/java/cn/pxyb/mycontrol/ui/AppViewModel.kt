@@ -8,34 +8,53 @@ import androidx.lifecycle.viewModelScope
 import cn.pxyb.mycontrol.AlertNotifier
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.DeepLinks
+import cn.pxyb.mycontrol.SnoozedAlertScheduler
 import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.BackupQuality
+import cn.pxyb.mycontrol.data.AlertPreferences
+import cn.pxyb.mycontrol.data.AppAlertRecord
+import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAccountStore
 import cn.pxyb.mycontrol.data.GoogleAliasRecord
+import cn.pxyb.mycontrol.data.HomePreferences
+import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.IncidentPostmortem
 import cn.pxyb.mycontrol.data.IotData
+import cn.pxyb.mycontrol.data.IotSceneAction
 import cn.pxyb.mycontrol.data.OverviewData
 import cn.pxyb.mycontrol.data.PlatformPasskey
 import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.PlatformTask
 import cn.pxyb.mycontrol.data.PlatformUser
+import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.ReleaseData
+import cn.pxyb.mycontrol.data.ResourceExpiry
+import cn.pxyb.mycontrol.data.ResponseSnapshotStore
 import cn.pxyb.mycontrol.data.QrLoginTarget
 import cn.pxyb.mycontrol.data.SecurityData
 import cn.pxyb.mycontrol.data.SessionStore
 import cn.pxyb.mycontrol.data.TotpEnrollment
+import cn.pxyb.mycontrol.data.TodoMutation
+import cn.pxyb.mycontrol.data.TodoSnapshot
+import cn.pxyb.mycontrol.data.TodoTask
+import cn.pxyb.mycontrol.data.TrendSample
+import cn.pxyb.mycontrol.data.todayTrendSample
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -43,10 +62,20 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
+import java.io.IOException
 
 enum class MainTab { Overview, Events, Operations, Tools, Profile }
 
-private enum class RefreshSection { Overview, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security }
+enum class WorkspaceDestination { Today, Notifications, Insights, Scenes }
+
+enum class DataSection { Overview, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, Resources }
+
+data class SectionLoadState(
+    val refreshing: Boolean = false,
+    val error: String? = null,
+    val updatedAtMillis: Long? = null,
+    val fromCache: Boolean = false,
+)
 
 data class AppUiState(
     val booting: Boolean = true,
@@ -76,6 +105,8 @@ data class AppUiState(
     val qrLoginError: String? = null,
     val accountManagementOpen: Boolean = false,
     val googleAccountDeskOpen: Boolean = false,
+    val globalSearchOpen: Boolean = false,
+    val workspaceDestination: WorkspaceDestination? = null,
     val googleAccounts: List<GoogleAccountRecord> = emptyList(),
     val googleAccountsLoaded: Boolean = false,
     val googleAccountsRevision: Int = 0,
@@ -88,6 +119,18 @@ data class AppUiState(
     val focusTaskId: String? = null,
     val error: String? = null,
     val message: String? = null,
+    val offlineMode: Boolean = false,
+    val cachedAtMillis: Long? = null,
+    val sectionLoadStates: Map<DataSection, SectionLoadState> = emptyMap(),
+    val homeQuickActionOrder: List<HomeQuickAction> = HomeQuickAction.entries,
+    val hiddenHomeQuickActions: Set<HomeQuickAction> = emptySet(),
+    val todoSnapshot: TodoSnapshot = TodoSnapshot(),
+    val pendingTodoMutations: Int = 0,
+    val campusTimetable: CampusTimetable? = null,
+    val resourceExpiries: List<ResourceExpiry> = emptyList(),
+    val alerts: List<AppAlertRecord> = emptyList(),
+    val alertPreferences: AlertPreferences = AlertPreferences(),
+    val trendSamples: List<TrendSample> = emptyList(),
 ) {
     val activeIncidents: List<IncidentInfo>
         get() = incidents.filter { it.status != "resolved" }
@@ -98,24 +141,56 @@ data class AppUiState(
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionStore = SessionStore(application)
     private val googleAccountStore = GoogleAccountStore(application)
-    private val api = PlatformApi(sessionStore)
+    private val homePreferences = HomePreferences(application)
+    private val personalStore = PersonalWorkspaceStore(application)
+    private val api = PlatformApi(sessionStore, ResponseSnapshotStore(application))
     private val alertNotifier = AlertNotifier(application)
     private val hasSavedSession = sessionStore.hasSession()
     private val lockEnabled = sessionStore.isLockEnabled()
+    private val savedHomePreferences = homePreferences.read()
+    private val savedTodoSnapshot = personalStore.readTodoSnapshot()
+    private val savedTodoQueue = personalStore.readPendingTodoMutations()
     private val mutableState = MutableStateFlow(
         AppUiState(
             booting = hasSavedSession && !lockEnabled,
             locked = hasSavedSession && lockEnabled,
             suggestedUsername = sessionStore.readLastUsername(),
             appLockEnabled = lockEnabled,
+            homeQuickActionOrder = savedHomePreferences.order,
+            hiddenHomeQuickActions = savedHomePreferences.hidden,
+            todoSnapshot = applyTodoMutations(savedTodoSnapshot, savedTodoQueue),
+            pendingTodoMutations = savedTodoQueue.size,
+            alerts = personalStore.readAlerts(),
+            alertPreferences = personalStore.readAlertPreferences(),
+            trendSamples = personalStore.readTrendSamples(),
         ),
     )
     val state: StateFlow<AppUiState> = mutableState.asStateFlow()
+    val entryState = deriveState(AppUiState::toEntryUiState)
+    val overviewState = deriveState(AppUiState::toOverviewUiState)
+    val eventsState = deriveState(AppUiState::toEventsUiState)
+    val operationsState = deriveState(AppUiState::toOperationsUiState)
+    val toolsState = deriveState(AppUiState::toToolsUiState)
+    val profileState = deriveState(AppUiState::toProfileUiState)
+    val accountManagementState = deriveState(AppUiState::toAccountManagementUiState)
+    val googleAccountDeskState = deriveState(AppUiState::toGoogleAccountDeskUiState)
+    val qrLoginState = deriveState(AppUiState::toQrLoginUiState)
+    val globalSearchState = deriveState(AppUiState::toGlobalSearchUiState)
+    val todayState = deriveState(AppUiState::toTodayUiState)
+    val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
+    val insightsState = deriveState(AppUiState::toInsightsUiState)
+    val scenesState = deriveState(AppUiState::toScenesUiState)
     private var pendingQrLogin: Pair<String, String>? = null
     private var pollJob: Job? = null
-    private val refreshJobs = mutableMapOf<RefreshSection, Job>()
-    private val lastRefreshElapsedMs = mutableMapOf<RefreshSection, Long>()
+    private var appInForeground = false
+    private val refreshJobs = mutableMapOf<DataSection, Job>()
+    private val lastRefreshElapsedMs = mutableMapOf<DataSection, Long>()
     private var alertsSeeded = false
+
+    private fun <T> deriveState(transform: (AppUiState) -> T): StateFlow<T> = mutableState
+        .map(transform)
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), transform(mutableState.value))
 
     init {
         viewModelScope.launch {
@@ -171,7 +246,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         MyControlWidgetProvider.clear(getApplication())
                     } else {
-                        mutableState.update { it.copy(booting = false, locked = false, user = user) }
+                        mutableState.update {
+                            it.copy(
+                                booting = false,
+                                locked = false,
+                                user = user,
+                                offlineMode = api.isOffline(),
+                                cachedAtMillis = api.cachedAtMillis(),
+                            )
+                        }
                         loadGoogleAccounts()
                         startOperationalPolling()
                         refreshInitialData()
@@ -203,6 +286,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         clearRefreshCache()
         alertsSeeded = false
         alertNotifier.clear()
+        personalStore.clearAccountData()
         sessionStore.clear()
         mutableState.update { it.copy(booting = false, locked = false, user = null, error = null) }
         MyControlWidgetProvider.clear(getApplication())
@@ -293,6 +377,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         locked = true,
                         accountManagementOpen = false,
                         googleAccountDeskOpen = false,
+                        globalSearchOpen = false,
                         googleAccounts = emptyList(),
                         googleAccountsLoaded = false,
                         googleAccountsRevision = 0,
@@ -323,9 +408,33 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setAppInForeground(inForeground: Boolean) {
+        appInForeground = inForeground
+        if (!inForeground) {
+            stopOperationalPolling()
+        } else if (mutableState.value.user != null && !mutableState.value.locked) {
+            startOperationalPolling()
+            refreshForTab(mutableState.value.selectedTab)
+        }
+    }
+
     fun setAppLockEnabled(enabled: Boolean) {
         sessionStore.setLockEnabled(enabled)
         mutableState.update { it.copy(appLockEnabled = enabled) }
+    }
+
+    fun updateHomeQuickActions(order: List<HomeQuickAction>, hidden: Set<HomeQuickAction>) {
+        val normalizedOrder = (order + HomeQuickAction.entries).distinct()
+        val normalizedHidden = hidden.intersect(HomeQuickAction.entries.toSet())
+            .takeIf { it.size < HomeQuickAction.entries.size }
+            ?: emptySet()
+        homePreferences.write(normalizedOrder, normalizedHidden)
+        mutableState.update {
+            it.copy(
+                homeQuickActionOrder = normalizedOrder,
+                hiddenHomeQuickActions = normalizedHidden,
+            )
+        }
     }
 
     private fun completeLogin(result: cn.pxyb.mycontrol.data.LoginResult) {
@@ -340,6 +449,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 message = result.recoveryCodes.takeIf(List<String>::isNotEmpty)?.let {
                     "动态验证已启用，请妥善保存网页登录页显示的恢复码。"
                 },
+                offlineMode = false,
+                cachedAtMillis = null,
             )
         }
         loadGoogleAccounts()
@@ -390,11 +501,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             api.logout()
             alertsSeeded = false
             alertNotifier.clear()
+            personalStore.clearAccountData()
             mutableState.update {
                 AppUiState(
                     booting = false,
                     androidPasskeySupported = it.androidPasskeySupported,
                     suggestedUsername = sessionStore.readLastUsername(),
+                    appLockEnabled = it.appLockEnabled,
+                    homeQuickActionOrder = it.homeQuickActionOrder,
+                    hiddenHomeQuickActions = it.hiddenHomeQuickActions,
                 )
             }
             MyControlWidgetProvider.clear(getApplication())
@@ -407,15 +522,46 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             if (current.selectedTab == tab && current.error == null && current.message == null) {
                 current
             } else {
-                current.copy(selectedTab = tab, error = null, message = null)
+                current.copy(
+                    selectedTab = tab,
+                    workspaceDestination = null,
+                    error = null,
+                    message = null,
+                )
             }
         }
         if (changed) refreshForTab(tab)
     }
 
+    fun syncNavigationDestination(
+        tab: MainTab,
+        accountManagementOpen: Boolean = false,
+        googleAccountDeskOpen: Boolean = false,
+        globalSearchOpen: Boolean = false,
+        workspaceDestination: WorkspaceDestination? = null,
+    ) {
+        val changedTab = mutableState.value.selectedTab != tab
+        mutableState.update { current ->
+            current.copy(
+                selectedTab = tab,
+                accountManagementOpen = accountManagementOpen,
+                googleAccountDeskOpen = googleAccountDeskOpen,
+                globalSearchOpen = globalSearchOpen,
+                workspaceDestination = workspaceDestination,
+            )
+        }
+        if (changedTab) refreshForTab(tab)
+    }
+
     fun handleOpenIntent(uri: Uri?) {
         if (uri == null) return
         if (uri.scheme == DeepLinks.SCHEME && uri.host == DeepLinks.HOST_OPEN) {
+            val workspace = uri.getQueryParameter(DeepLinks.EXTRA_DESTINATION)
+                ?.let { value -> WorkspaceDestination.entries.firstOrNull { it.name.equals(value, ignoreCase = true) } }
+            if (workspace != null) {
+                openWorkspace(workspace)
+                return
+            }
             openOperationalTarget(
                 tab = DeepLinks.parseTab(uri.getQueryParameter(DeepLinks.EXTRA_TAB)),
                 incidentId = uri.getQueryParameter(DeepLinks.EXTRA_INCIDENT_ID),
@@ -442,6 +588,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(
                 selectedTab = resolvedTab ?: it.selectedTab,
                 accountManagementOpen = false,
+                googleAccountDeskOpen = false,
+                globalSearchOpen = false,
+                workspaceDestination = null,
                 focusIncidentId = incidentId?.takeIf(String::isNotBlank),
                 focusTaskId = taskId?.takeIf(String::isNotBlank),
                 error = null,
@@ -461,6 +610,58 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun openWorkspace(destination: WorkspaceDestination) {
+        mutableState.update {
+            it.copy(
+                selectedTab = MainTab.Overview,
+                accountManagementOpen = false,
+                googleAccountDeskOpen = false,
+                globalSearchOpen = false,
+                workspaceDestination = destination,
+                error = null,
+                message = null,
+            )
+        }
+        when (destination) {
+            WorkspaceDestination.Today -> refreshToday()
+            WorkspaceDestination.Notifications -> reloadPersonalState()
+            WorkspaceDestination.Insights -> reloadPersonalState()
+            WorkspaceDestination.Scenes -> refreshIot()
+        }
+    }
+
+    fun closeWorkspace() {
+        mutableState.update { it.copy(workspaceDestination = null) }
+    }
+
+    fun openGlobalSearch() {
+        mutableState.update {
+            it.copy(
+                globalSearchOpen = true,
+                accountManagementOpen = false,
+                googleAccountDeskOpen = false,
+            )
+        }
+        loadGoogleAccounts()
+    }
+
+    fun closeGlobalSearch() {
+        mutableState.update { it.copy(globalSearchOpen = false) }
+    }
+
+    fun openGlobalSearchResult(item: GlobalSearchItem) {
+        mutableState.update { it.copy(globalSearchOpen = false) }
+        when (item.destination) {
+            SearchDestination.Overview -> selectTab(MainTab.Overview)
+            SearchDestination.Events -> openOperationalTarget(MainTab.Events, incidentId = item.focusId)
+            SearchDestination.Operations -> openOperationalTarget(MainTab.Operations, taskId = item.focusId)
+            SearchDestination.Tools -> selectTab(MainTab.Tools)
+            SearchDestination.GoogleAccounts -> openGoogleAccountDesk()
+            SearchDestination.Today -> openWorkspace(WorkspaceDestination.Today)
+            SearchDestination.Scenes -> openWorkspace(WorkspaceDestination.Scenes)
+        }
+    }
+
     fun openAccountManagement() {
         val changedTab = mutableState.value.selectedTab != MainTab.Profile
         mutableState.update {
@@ -468,6 +669,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 selectedTab = MainTab.Profile,
                 accountManagementOpen = true,
                 googleAccountDeskOpen = false,
+                globalSearchOpen = false,
             )
         }
         if (changedTab) refreshForTab(MainTab.Profile)
@@ -484,6 +686,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 selectedTab = MainTab.Profile,
                 accountManagementOpen = false,
                 googleAccountDeskOpen = true,
+                globalSearchOpen = false,
             )
         }
         if (changedTab) refreshForTab(MainTab.Profile)
@@ -1009,10 +1212,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refreshForTab(mutableState.value.selectedTab, force)
     }
 
+    fun refreshCurrentWorkspace(force: Boolean = true) {
+        when (mutableState.value.workspaceDestination) {
+            WorkspaceDestination.Today -> refreshToday(force)
+            WorkspaceDestination.Scenes -> refreshIot(force)
+            WorkspaceDestination.Notifications, WorkspaceDestination.Insights -> reloadPersonalState()
+            null -> refreshCurrentTab(force)
+        }
+    }
+
     private fun refreshInitialData(force: Boolean = false) {
         refreshOverview(force)
         refreshIncidents(force)
         refreshTasks(force)
+        refreshTodos(force)
+        refreshCampus(force)
     }
 
     private fun refreshForTab(tab: MainTab, force: Boolean = false) {
@@ -1032,71 +1246,126 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun refreshOverview(force: Boolean) = launchRefresh(RefreshSection.Overview, force) {
+    private fun refreshOverview(force: Boolean) = launchRefresh(DataSection.Overview, force) {
         val overview = api.overview(force)
         mutableState.update { it.copy(overview = overview) }
         publishWidget()
+        recordTrendSample()
     }
 
-    private fun refreshIncidents(force: Boolean = false) = launchRefresh(RefreshSection.Incidents, force) {
+    private fun refreshIncidents(force: Boolean = false) = launchRefresh(DataSection.Incidents, force) {
         val incidents = api.incidents()
         mutableState.update { it.copy(incidents = incidents) }
         publishWidget()
         evaluateAlerts(incidents = incidents, tasks = mutableState.value.tasks)
+        recordTrendSample()
     }
 
-    private fun refreshTasks(force: Boolean = false) = launchRefresh(RefreshSection.Tasks, force) {
+    private fun refreshTasks(force: Boolean = false) = launchRefresh(DataSection.Tasks, force) {
         val tasks = api.tasks().tasks
         mutableState.update { it.copy(tasks = tasks) }
         evaluateAlerts(incidents = mutableState.value.incidents, tasks = tasks)
+        recordTrendSample()
     }
 
-    private fun refreshReleases(force: Boolean = false) = launchRefresh(RefreshSection.Releases, force) {
+    private fun refreshReleases(force: Boolean = false) = launchRefresh(DataSection.Releases, force) {
         val releases = api.releases()
         mutableState.update { it.copy(releases = releases) }
     }
 
-    private fun refreshBackup(force: Boolean = false) = launchRefresh(RefreshSection.Backup, force) {
+    private fun refreshBackup(force: Boolean = false) = launchRefresh(DataSection.Backup, force) {
         val backup = api.backupQuality()
         mutableState.update { it.copy(backup = backup) }
     }
 
-    private fun refreshIot(force: Boolean = false) = launchRefresh(RefreshSection.Iot, force) {
+    private fun refreshIot(force: Boolean = false) = launchRefresh(DataSection.Iot, force) {
         val iot = api.iot()
         mutableState.update { it.copy(iot = iot) }
         publishWidget()
+        recordTrendSample()
     }
 
-    private fun refreshCt8(force: Boolean = false) = launchRefresh(RefreshSection.Ct8, force) {
+    private fun refreshToday(force: Boolean = false) {
+        refreshTodos(force)
+        refreshCampus(force)
+        refreshResourceExpiries(force)
+        refreshIncidents(force)
+        refreshTasks(force)
+    }
+
+    private fun refreshTodos(force: Boolean = false) = launchRefresh(DataSection.Todos, force) {
+        val remote = api.todos()
+        val pending = personalStore.readPendingTodoMutations()
+        if (api.isOffline()) {
+            val local = applyTodoMutations(remote, pending)
+            personalStore.writeTodoSnapshot(local)
+            mutableState.update {
+                it.copy(todoSnapshot = local, pendingTodoMutations = pending.size)
+            }
+        } else {
+            personalStore.writeTodoSnapshot(remote)
+            mutableState.update { it.copy(todoSnapshot = remote) }
+            syncPendingTodos()
+        }
+        evaluatePersonalReminders()
+    }
+
+    private fun refreshCampus(force: Boolean = false) = launchRefresh(DataSection.Campus, force) {
+        mutableState.update { it.copy(campusTimetable = api.campusTimetable()) }
+        evaluatePersonalReminders()
+    }
+
+    private fun refreshResourceExpiries(force: Boolean = false) = launchRefresh(DataSection.Resources, force) {
+        val resources = api.resourceExpiries()
+        mutableState.update { it.copy(resourceExpiries = resources) }
+        alertNotifier.evaluateResourceExpiries(resources)
+        reloadPersonalState()
+    }
+
+    private fun refreshCt8(force: Boolean = false) = launchRefresh(DataSection.Ct8, force) {
         val ct8 = api.ct8()
         mutableState.update { it.copy(ct8 = ct8) }
     }
 
-    private fun refreshSecurity(force: Boolean = false) = launchRefresh(RefreshSection.Security, force) {
+    private fun refreshSecurity(force: Boolean = false) = launchRefresh(DataSection.Security, force) {
         val security = api.security()
         mutableState.update { it.copy(security = security) }
     }
 
-    private fun launchRefresh(section: RefreshSection, force: Boolean = false, block: suspend () -> Unit) {
+    private fun launchRefresh(section: DataSection, force: Boolean = false, block: suspend () -> Unit) {
         if (mutableState.value.user == null || refreshJobs[section]?.isActive == true) return
         val now = SystemClock.elapsedRealtime()
         val lastRefresh = lastRefreshElapsedMs[section]
         if (!force && lastRefresh != null && now - lastRefresh < REFRESH_CACHE_WINDOW_MS) return
+        updateSectionLoadState(section) { it.copy(refreshing = true, error = null) }
         val job = viewModelScope.launch {
             try {
                 block()
                 lastRefreshElapsedMs[section] = SystemClock.elapsedRealtime()
+                updateConnectivityState()
+                updateSectionLoadState(section) {
+                    it.copy(
+                        error = null,
+                        updatedAtMillis = System.currentTimeMillis(),
+                        fromCache = api.isOffline(),
+                    )
+                }
             } catch (error: Throwable) {
                 if (error is CancellationException) throw error
+                updateConnectivityState()
+                updateSectionLoadState(section) {
+                    it.copy(error = error.message ?: "请稍后重试。")
+                }
                 if (error is ApiException && error.status == 401) {
                     forceReauthentication(error.message ?: "登录会话已失效，请重新登录。")
-                } else {
+                } else if (force) {
                     mutableState.update {
                         it.copy(error = "部分数据暂不可用：${error.message ?: "请稍后重试。"}")
                     }
                 }
             } finally {
                 refreshJobs.remove(section)
+                updateSectionLoadState(section) { it.copy(refreshing = false) }
                 updateRefreshingState()
             }
         }
@@ -1117,6 +1386,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val refreshing = refreshJobs.values.any { it.isActive }
         mutableState.update { current ->
             if (current.refreshing == refreshing) current else current.copy(refreshing = refreshing)
+        }
+    }
+
+    private fun updateConnectivityState() {
+        mutableState.update { current ->
+            current.copy(
+                offlineMode = api.isOffline(),
+                cachedAtMillis = api.cachedAtMillis(),
+            )
+        }
+    }
+
+    private fun updateSectionLoadState(
+        section: DataSection,
+        transform: (SectionLoadState) -> SectionLoadState,
+    ) {
+        mutableState.update { current ->
+            current.copy(
+                sectionLoadStates = current.sectionLoadStates +
+                    (section to transform(current.sectionLoadStates[section] ?: SectionLoadState())),
+            )
         }
     }
 
@@ -1170,6 +1460,74 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         mutableState.update { it.copy(tasks = api.tasks().tasks) }
         evaluateAlerts(incidents = mutableState.value.incidents, tasks = mutableState.value.tasks)
     }
+
+    fun saveTodo(task: TodoTask) {
+        if (task.title.isBlank()) return
+        enqueueTodoMutation(
+            TodoMutation(
+                type = "upsert",
+                task = task.copy(title = task.title.trim(), updatedAt = System.currentTimeMillis()),
+            ),
+        )
+    }
+
+    fun toggleTodo(id: String) {
+        val task = mutableState.value.todoSnapshot.tasks.firstOrNull { it.id == id } ?: return
+        saveTodo(task.copy(completed = !task.completed))
+    }
+
+    fun deleteTodo(id: String) {
+        enqueueTodoMutation(TodoMutation(type = "delete", id = id))
+    }
+
+    fun markAlertRead(id: String) = updateAlerts { alerts ->
+        alerts.map { if (it.id == id) it.copy(read = true) else it }
+    }
+
+    fun markAllAlertsRead() = updateAlerts { alerts -> alerts.map { it.copy(read = true) } }
+
+    fun clearReadAlerts() = updateAlerts { alerts -> alerts.filterNot(AppAlertRecord::read) }
+
+    fun snoozeAlert(id: String, durationMillis: Long = 60 * 60_000L) {
+        updateAlerts { alerts ->
+            alerts.map {
+                if (it.id == id) it.copy(read = false, snoozedUntil = System.currentTimeMillis() + durationMillis) else it
+            }
+        }
+        SnoozedAlertScheduler.schedule(getApplication(), id, durationMillis)
+    }
+
+    fun updateAlertPreferences(preferences: AlertPreferences) {
+        personalStore.writeAlertPreferences(preferences)
+        mutableState.update { it.copy(alertPreferences = preferences, message = "提醒设置已保存。") }
+    }
+
+    fun openAlert(record: AppAlertRecord) {
+        markAlertRead(record.id)
+        when (record.type) {
+            "incident" -> openOperationalTarget(MainTab.Events, incidentId = record.sourceId)
+            "task" -> openOperationalTarget(MainTab.Operations, taskId = record.sourceId)
+            "todo", "course" -> openWorkspace(WorkspaceDestination.Today)
+            else -> Unit
+        }
+    }
+
+    fun saveIotScene(id: String?, name: String, actions: List<IotSceneAction>) {
+        if (name.isBlank() || actions.isEmpty()) {
+            mutableState.update { it.copy(error = "请填写场景名称并至少添加一个设备动作。") }
+            return
+        }
+        runAction("scene-edit", if (id == null) "智能场景已创建。" else "智能场景已更新。") {
+            if (id == null) api.createIotScene(name, actions) else api.updateIotScene(id, name, actions)
+            mutableState.update { it.copy(iot = api.iot()) }
+        }
+    }
+
+    fun deleteIotScene(id: String, confirmation: suspend () -> Boolean) =
+        runAction("scene-delete", "智能场景已删除。", confirmation) {
+            api.deleteIotScene(id)
+            mutableState.update { it.copy(iot = api.iot()) }
+        }
 
     fun runDiagnostics() = runAction("diagnostics", "系统自检已完成。") {
         val diagnostics = api.runDiagnostics()
@@ -1403,9 +1761,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val seedOnly = !alertsSeeded
         alertNotifier.evaluate(incidents = incidents, tasks = tasks, seedOnly = seedOnly)
         alertsSeeded = true
+        reloadPersonalState()
     }
 
     private fun startOperationalPolling() {
+        if (!appInForeground || mutableState.value.user == null || mutableState.value.locked) return
         pollJob?.cancel()
         pollJob = viewModelScope.launch {
             while (isActive) {
@@ -1416,9 +1776,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     val incidents = api.incidents()
                     val tasks = api.tasks().tasks
                     val refreshedAt = SystemClock.elapsedRealtime()
-                    lastRefreshElapsedMs[RefreshSection.Incidents] = refreshedAt
-                    lastRefreshElapsedMs[RefreshSection.Tasks] = refreshedAt
+                    lastRefreshElapsedMs[DataSection.Incidents] = refreshedAt
+                    lastRefreshElapsedMs[DataSection.Tasks] = refreshedAt
                     mutableState.update { it.copy(incidents = incidents, tasks = tasks) }
+                    updateConnectivityState()
                     publishWidget()
                     evaluateAlerts(incidents = incidents, tasks = tasks)
                 }
@@ -1438,6 +1799,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         block: suspend () -> Unit,
     ) {
         if (mutableState.value.busyAction != null) return
+        if (mutableState.value.offlineMode) {
+            mutableState.update { it.copy(error = "当前处于离线只读模式，联网后才能执行操作。") }
+            return
+        }
         viewModelScope.launch {
             mutableState.update { it.copy(busyAction = action, error = null, message = null) }
             val confirmed = runCatching { confirmation?.invoke() ?: true }.getOrElse { error ->
@@ -1454,7 +1819,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 .onSuccess { mutableState.update { it.copy(busyAction = null, message = successMessage) } }
                 .onFailure { error ->
                     if (error is ApiException && error.status == 401) {
-                        mutableState.value = AppUiState(booting = false, error = error.message)
+                        val current = mutableState.value
+                        mutableState.value = AppUiState(
+                            booting = false,
+                            error = error.message,
+                            appLockEnabled = current.appLockEnabled,
+                            androidPasskeySupported = current.androidPasskeySupported,
+                            suggestedUsername = sessionStore.readLastUsername(),
+                            homeQuickActionOrder = current.homeQuickActionOrder,
+                            hiddenHomeQuickActions = current.hiddenHomeQuickActions,
+                        )
                         MyControlWidgetProvider.clear(getApplication())
                     } else {
                         mutableState.update {
@@ -1478,20 +1852,127 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun forceReauthentication(message: String) {
+        val current = mutableState.value
         stopOperationalPolling()
         cancelRefreshes()
         clearRefreshCache()
         sessionStore.clear()
         mutableState.value = AppUiState(
             booting = false,
-            androidPasskeySupported = mutableState.value.androidPasskeySupported,
+            androidPasskeySupported = current.androidPasskeySupported,
             suggestedUsername = sessionStore.readLastUsername(),
             message = message,
+            appLockEnabled = current.appLockEnabled,
+            homeQuickActionOrder = current.homeQuickActionOrder,
+            hiddenHomeQuickActions = current.hiddenHomeQuickActions,
         )
         MyControlWidgetProvider.clear(getApplication())
+    }
+
+    private fun enqueueTodoMutation(mutation: TodoMutation) {
+        val existing = personalStore.readPendingTodoMutations()
+        val targetId = mutation.task?.id ?: mutation.id
+        val compacted = existing.filterNot { queued ->
+            val queuedId = queued.task?.id ?: queued.id
+            targetId != null && queuedId == targetId
+        } + mutation
+        val snapshot = applyTodoMutations(mutableState.value.todoSnapshot, listOf(mutation))
+        personalStore.writeTodoSnapshot(snapshot)
+        personalStore.writePendingTodoMutations(compacted)
+        mutableState.update {
+            it.copy(
+                todoSnapshot = snapshot,
+                pendingTodoMutations = compacted.size,
+                message = "待办已保存，正在同步。",
+            )
+        }
+        viewModelScope.launch { syncPendingTodos() }
+    }
+
+    private suspend fun syncPendingTodos() {
+        val pending = personalStore.readPendingTodoMutations()
+        if (pending.isEmpty()) return
+        try {
+            val current = mutableState.value.todoSnapshot
+            val synced = try {
+                api.mutateTodos(current.revision, pending)
+            } catch (error: ApiException) {
+                if (error.code != "TODO_REVISION_CONFLICT") throw error
+                val latest = api.todos()
+                api.mutateTodos(latest.revision, pending)
+            }
+            personalStore.writePendingTodoMutations(emptyList())
+            personalStore.writeTodoSnapshot(synced)
+            mutableState.update {
+                it.copy(
+                    todoSnapshot = synced,
+                    pendingTodoMutations = 0,
+                    offlineMode = false,
+                    message = "待办已同步。",
+                )
+            }
+        } catch (error: Throwable) {
+            if (error is CancellationException) throw error
+            if (error is IOException || api.isOffline()) {
+                mutableState.update {
+                    it.copy(
+                        pendingTodoMutations = pending.size,
+                        offlineMode = true,
+                        message = "已离线保存，联网后自动同步。",
+                    )
+                }
+            } else {
+                mutableState.update {
+                    it.copy(
+                        pendingTodoMutations = pending.size,
+                        error = error.message ?: "待办暂未同步，请稍后重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun updateAlerts(transform: (List<AppAlertRecord>) -> List<AppAlertRecord>) {
+        val alerts = transform(mutableState.value.alerts)
+        personalStore.writeAlerts(alerts)
+        mutableState.update { it.copy(alerts = alerts) }
+    }
+
+    private fun reloadPersonalState() {
+        mutableState.update {
+            it.copy(
+                alerts = personalStore.readAlerts(),
+                alertPreferences = personalStore.readAlertPreferences(),
+                trendSamples = personalStore.readTrendSamples(),
+            )
+        }
+    }
+
+    private fun recordTrendSample() {
+        val current = mutableState.value
+        val sample = todayTrendSample(current.overview, current.incidents, current.tasks, current.iot) ?: return
+        personalStore.upsertTrendSample(sample)
+        mutableState.update { it.copy(trendSamples = personalStore.readTrendSamples()) }
+    }
+
+    private fun evaluatePersonalReminders() {
+        val current = mutableState.value
+        alertNotifier.evaluatePersonal(current.todoSnapshot, current.campusTimetable)
+        reloadPersonalState()
     }
 
     private companion object {
         const val REFRESH_CACHE_WINDOW_MS = 30_000L
     }
+}
+
+private fun applyTodoMutations(snapshot: TodoSnapshot, mutations: List<TodoMutation>): TodoSnapshot {
+    val tasks = snapshot.tasks.associateBy(TodoTask::id).toMutableMap()
+    mutations.forEach { mutation ->
+        when (mutation.type) {
+            "upsert" -> mutation.task?.let { tasks[it.id] = it }
+            "delete" -> mutation.id?.let(tasks::remove)
+        }
+    }
+    return snapshot.copy(tasks = tasks.values.sortedWith(compareBy<TodoTask> { it.completed }.thenBy { it.dueAt ?: Long.MAX_VALUE }))
 }

@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.activity.compose.BackHandler
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.BorderStroke
@@ -23,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AlternateEmail
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -36,8 +38,8 @@ import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Unarchive
-import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -47,6 +49,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -59,6 +62,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -107,7 +111,7 @@ private val DeskTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
 @Composable
 fun GoogleAccountDeskScreen(
-    state: AppUiState,
+    state: GoogleAccountDeskUiState,
     contentPadding: PaddingValues,
     onDismiss: () -> Unit,
     onAddAccount: (String, String, String, String, String, String, String) -> Unit,
@@ -123,6 +127,7 @@ fun GoogleAccountDeskScreen(
     onUploadLocalAccounts: () -> Unit,
     onDiscardLocalAccounts: () -> Unit,
 ) {
+    BackHandler(enabled = true, onBack = onDismiss)
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(FILTER_ALL) }
     var sort by rememberSaveable { mutableStateOf(SORT_ATTENTION) }
@@ -234,7 +239,7 @@ fun GoogleAccountDeskScreen(
                         )
                         DropdownMenuItem(
                             text = { Text("按${sortLabel(sort)}排序") },
-                            leadingIcon = { Icon(Icons.Outlined.Sort, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Sort, contentDescription = null) },
                             onClick = {
                                 sort = nextSort(sort)
                                 actionMenuExpanded = false
@@ -293,8 +298,16 @@ fun GoogleAccountDeskScreen(
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("搜索邮箱或备注") },
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                 singleLine = true,
+                shape = AppSearchFieldShape,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Email),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f),
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                ),
             )
         }
 
@@ -591,6 +604,7 @@ private fun StatusFilterRow(selected: String, onSelect: (String) -> Unit) {
             Surface(
                 modifier = Modifier
                     .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
                     .clickable { onSelect(value) },
                 color = if (selected == value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(12.dp),
@@ -735,13 +749,27 @@ private fun GoogleAccountDetail(
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("邮箱状态", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                StatusBadge(accountStatusKey(account.emailStatus), accountStatusLabel(account.emailStatus))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("OpenAI 状态", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                StatusBadge(openAiStatusKey(account.openAiStatus), openAiStatusLabel(account.openAiStatus))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("邮箱", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    StatusBadge(accountStatusKey(account.emailStatus), accountStatusLabel(account.emailStatus))
+                }
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("OpenAI", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    StatusBadge(openAiStatusKey(account.openAiStatus), openAiStatusLabel(account.openAiStatus))
+                }
             }
             if (account.tags.isNotEmpty()) {
                 Text("标签：${account.tags.joinToString(" · ")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -962,14 +990,17 @@ private fun GoogleAliasFormDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         icon = Icons.Outlined.AlternateEmail,
         title = "添加邮箱别名",
-        subtitle = "Gmail +tag 会投递到同一个主邮箱，不能当作独立 Google 账号。",
+        subtitle = "默认按主邮箱后追加 + 三位编号生成，例如 name+001@gmail.com。",
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 DialogTextField(address, { address = it; localError = null }, "别名地址", keyboardType = KeyboardType.Email, enabled = !busy)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    DialogTextField(tag, { tag = it }, "标签（可生成候选）", modifier = Modifier.weight(1f), enabled = !busy)
+                    DialogTextField(tag, { tag = it }, "编号（可选，如 002）", modifier = Modifier.weight(1f), enabled = !busy)
                     OutlinedButton(onClick = {
-                        val generated = plusAlias(account.primaryEmail, tag.ifBlank { "openai" })
+                        val generated = numberedAlias(
+                            account.primaryEmail,
+                            tag.ifBlank { nextAliasNumber(account) },
+                        )
                         if (generated != null) address = generated
                     }, enabled = !busy) {
                         Text("生成")
@@ -1061,14 +1092,23 @@ private fun DeskStatusPicker(
 }
 
 private fun nextAliasSuggestion(account: GoogleAccountRecord): String =
-    plusAlias(account.primaryEmail, "openai${account.aliases.size + 1}") ?: ""
+    numberedAlias(account.primaryEmail, nextAliasNumber(account)) ?: ""
 
-private fun plusAlias(primaryEmail: String, tag: String): String? {
+private fun nextAliasNumber(account: GoogleAccountRecord): String {
+    val local = account.primaryEmail.substringBefore('@')
+    val domain = account.primaryEmail.substringAfter('@')
+    val usedAddresses = account.aliases.map { it.address }.toSet() + account.primaryEmail
+    val nextIndex = (1..9999).firstOrNull { index ->
+        "$local+${index.toString().padStart(3, '0')}@$domain" !in usedAddresses
+    } ?: (account.aliases.size + 1)
+    return nextIndex.toString().padStart(3, '0')
+}
+
+private fun numberedAlias(primaryEmail: String, number: String): String? {
     val local = primaryEmail.substringBefore('@').takeIf(String::isNotBlank) ?: return null
     val domain = primaryEmail.substringAfter('@').takeIf(String::isNotBlank) ?: return null
-    val normalizedTag = tag.trim().replace(Regex("[^A-Za-z0-9_-]"), "-").trim('-')
-    if (normalizedTag.isBlank()) return null
-    return "$local+$normalizedTag@$domain"
+    val normalizedNumber = number.trim().filter(Char::isDigit).toIntOrNull() ?: return null
+    return "$local+${normalizedNumber.toString().padStart(3, '0')}@$domain"
 }
 
 private fun accountStatusKey(status: String): String = when (status) {
@@ -1094,7 +1134,7 @@ private fun aliasStatusLabel(status: String): String = when (status) {
 private fun aliasTypeLabel(type: String): String = when (type) {
     "plus" -> "+tag 别名"
     "workspace" -> "Workspace 别名"
-    "custom" -> "自定义域名"
+    "custom" -> "自定义别名"
     else -> "其他别名"
 }
 

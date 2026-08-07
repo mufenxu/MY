@@ -52,7 +52,7 @@ import cn.pxyb.mycontrol.ui.theme.OceanPale
 
 @Composable
 fun OperationsScreen(
-    state: AppUiState,
+    state: OperationsUiState,
     contentPadding: PaddingValues,
     onRunDiagnostics: () -> Unit,
     onTriggerBackup: () -> Unit,
@@ -134,6 +134,9 @@ fun OperationsScreen(
                     }
                 },
             )
+        }
+        state.sectionError?.let { message ->
+            item { FeedbackBanner("部分工具数据暂不可用：$message", error = true) }
         }
         item {
             AppPanel {

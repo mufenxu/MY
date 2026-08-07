@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,45 +15,63 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudDone
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.AuditInfo
+import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.ServiceInfo
 import cn.pxyb.mycontrol.ui.theme.Amber
 import cn.pxyb.mycontrol.ui.theme.AmberPale
@@ -62,10 +81,12 @@ import cn.pxyb.mycontrol.ui.theme.Forest
 import cn.pxyb.mycontrol.ui.theme.MintPale
 import cn.pxyb.mycontrol.ui.theme.Ocean
 import cn.pxyb.mycontrol.ui.theme.OceanPale
+import java.util.Date
+import java.time.LocalDate
 
 @Composable
 fun OverviewScreen(
-    state: AppUiState,
+    state: OverviewUiState,
     contentPadding: PaddingValues,
     onSelectTab: (MainTab) -> Unit,
     onRefresh: () -> Unit,
@@ -73,7 +94,11 @@ fun OverviewScreen(
     onTriggerBackup: () -> Unit,
     onOpenGoogleAccountDesk: () -> Unit,
     onOpenOperations: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onOpenWorkspace: (WorkspaceDestination) -> Unit,
+    onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
 ) {
+    var customizingQuickActions by remember { mutableStateOf(false) }
     val overview = state.overview
     val activeIncidents = remember(state.incidents) { state.incidents.filter { it.status != "resolved" } }
     val visibleIncidents = remember(activeIncidents) { activeIncidents.take(3) }
@@ -105,8 +130,29 @@ fun OverviewScreen(
                 title = "工作台",
                 subtitle = "系统状态与常用操作",
                 refreshing = state.refreshing,
-                onRefresh = onRefresh
+                onRefresh = onRefresh,
+                actions = {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = CircleShape,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    ) {
+                        IconButton(onClick = onOpenSearch, modifier = Modifier.size(42.dp)) {
+                            Icon(Icons.Outlined.Search, contentDescription = "全局搜索")
+                        }
+                    }
+                },
             )
+        }
+        state.sectionError?.let { message ->
+            item(key = "overview-error", contentType = "status") {
+                FeedbackBanner("部分数据暂不可用：$message", error = true)
+            }
+        }
+        if (state.offlineMode) {
+            item(key = "overview-offline", contentType = "status") {
+                OfflineSnapshotNotice(state.cachedAtMillis)
+            }
         }
         if (overview == null) {
             item(key = "overview-sync", contentType = "sync") { OverviewSyncPanel(refreshing = state.refreshing) }
@@ -186,33 +232,65 @@ fun OverviewScreen(
             }
         }
 
-        item { SectionHeader("快捷操作", "常用功能一键直达") }
+        item {
+            SectionHeader("今天", "课程、待办与提醒集中查看")
+        }
+        item(key = "overview-today", contentType = "today") {
+            AppPanel(modifier = Modifier.clickable { onOpenWorkspace(WorkspaceDestination.Today) }) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconTile(Icons.Outlined.CalendarMonth, Ocean, OceanPale)
+                    MetricCell("今日课程", todayCourseCount(state).toString(), Modifier.weight(1f))
+                    MetricCell("未完成", state.todoSnapshot.tasks.count { !it.completed }.toString(), Modifier.weight(1f))
+                    MetricCell("未读提醒", state.unreadAlerts.toString(), Modifier.weight(1f))
+                    Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        item {
+            SectionHeader(
+                title = "快捷操作",
+                subtitle = "常用功能一键直达",
+                trailing = {
+                    IconButton(onClick = { customizingQuickActions = true }) {
+                        Icon(Icons.Outlined.Edit, contentDescription = "调整快捷操作")
+                    }
+                },
+            )
+        }
         item(key = "overview-quick-actions", contentType = "quick-actions") {
             AppPanel {
                 Column(
                     modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        QuickAction(Icons.Outlined.Notifications, "最新动态", Ocean, OceanPale, Modifier.weight(1f)) {
-                            onSelectTab(MainTab.Events)
-                        }
-                        QuickAction(Icons.Outlined.Hub, "设备控制", Forest, MintPale, Modifier.weight(1f)) {
-                            onSelectTab(MainTab.Tools)
-                        }
-                        QuickAction(Icons.Outlined.Speed, "系统自检", Amber, AmberPale, Modifier.weight(1f)) {
-                            onRunDiagnostics()
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        QuickAction(Icons.Outlined.Backup, "数据备份", Coral, CoralPale, Modifier.weight(1f)) {
-                            onTriggerBackup()
-                        }
-                        QuickAction(Icons.Outlined.Email, "邮箱台账", Ocean, OceanPale, Modifier.weight(1f)) {
-                            onOpenGoogleAccountDesk()
-                        }
-                        QuickAction(Icons.Outlined.Settings, "高级工具", Amber, AmberPale, Modifier.weight(1f)) {
-                            onOpenOperations()
+                    val visibleActions = state.homeQuickActionOrder.filterNot(state.hiddenHomeQuickActions::contains)
+                    visibleActions.chunked(3).forEach { rowActions ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            rowActions.forEach { action ->
+                                val spec = homeQuickActionSpec(
+                                    action = action,
+                                    onSelectTab = onSelectTab,
+                                    onRunDiagnostics = onRunDiagnostics,
+                                    onTriggerBackup = onTriggerBackup,
+                                    onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
+                                    onOpenOperations = onOpenOperations,
+                                    onOpenWorkspace = onOpenWorkspace,
+                                )
+                                QuickAction(
+                                    icon = spec.icon,
+                                    label = spec.label,
+                                    accent = spec.accent,
+                                    accentPale = spec.accentPale,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = spec.onClick,
+                                )
+                            }
+                            repeat(3 - rowActions.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                 }
@@ -269,6 +347,182 @@ fun OverviewScreen(
             }
         }
         item(key = "overview-bottom-spacer", contentType = "spacer") { Spacer(Modifier.height(4.dp)) }
+    }
+
+    if (customizingQuickActions) {
+        QuickActionsDialog(
+            order = state.homeQuickActionOrder,
+            hidden = state.hiddenHomeQuickActions,
+            onDismiss = { customizingQuickActions = false },
+            onSave = { order, hidden ->
+                onUpdateQuickActions(order, hidden)
+                customizingQuickActions = false
+            },
+        )
+    }
+}
+
+private data class HomeQuickActionSpec(
+    val icon: ImageVector,
+    val label: String,
+    val accent: Color,
+    val accentPale: Color,
+    val onClick: () -> Unit,
+)
+
+private fun homeQuickActionSpec(
+    action: HomeQuickAction,
+    onSelectTab: (MainTab) -> Unit,
+    onRunDiagnostics: () -> Unit,
+    onTriggerBackup: () -> Unit,
+    onOpenGoogleAccountDesk: () -> Unit,
+    onOpenOperations: () -> Unit,
+    onOpenWorkspace: (WorkspaceDestination) -> Unit,
+): HomeQuickActionSpec = when (action) {
+    HomeQuickAction.Today -> HomeQuickActionSpec(Icons.Outlined.CalendarMonth, "今日工作台", Ocean, OceanPale) {
+        onOpenWorkspace(WorkspaceDestination.Today)
+    }
+    HomeQuickAction.Notifications -> HomeQuickActionSpec(Icons.Outlined.Notifications, "通知中心", Coral, CoralPale) {
+        onOpenWorkspace(WorkspaceDestination.Notifications)
+    }
+    HomeQuickAction.Insights -> HomeQuickActionSpec(Icons.Outlined.BarChart, "趋势周报", Forest, MintPale) {
+        onOpenWorkspace(WorkspaceDestination.Insights)
+    }
+    HomeQuickAction.Scenes -> HomeQuickActionSpec(Icons.Outlined.Tune, "智能场景", Amber, AmberPale) {
+        onOpenWorkspace(WorkspaceDestination.Scenes)
+    }
+    HomeQuickAction.Events -> HomeQuickActionSpec(Icons.Outlined.Notifications, "最新动态", Ocean, OceanPale) {
+        onSelectTab(MainTab.Events)
+    }
+    HomeQuickAction.Devices -> HomeQuickActionSpec(Icons.Outlined.Hub, "设备控制", Forest, MintPale) {
+        onSelectTab(MainTab.Tools)
+    }
+    HomeQuickAction.Diagnostics -> HomeQuickActionSpec(Icons.Outlined.Speed, "系统自检", Amber, AmberPale, onRunDiagnostics)
+    HomeQuickAction.Backup -> HomeQuickActionSpec(Icons.Outlined.Backup, "数据备份", Coral, CoralPale, onTriggerBackup)
+    HomeQuickAction.GoogleAccounts -> HomeQuickActionSpec(Icons.Outlined.Email, "邮箱台账", Ocean, OceanPale, onOpenGoogleAccountDesk)
+    HomeQuickAction.Operations -> HomeQuickActionSpec(Icons.Outlined.Settings, "高级工具", Amber, AmberPale, onOpenOperations)
+}
+
+@Composable
+private fun QuickActionsDialog(
+    order: List<HomeQuickAction>,
+    hidden: Set<HomeQuickAction>,
+    onDismiss: () -> Unit,
+    onSave: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
+) {
+    var localOrder by remember(order) { mutableStateOf(order) }
+    var localHidden by remember(hidden) { mutableStateOf(hidden) }
+    AppDialog(
+        onDismissRequest = onDismiss,
+        icon = Icons.Outlined.Edit,
+        title = "调整快捷操作",
+        subtitle = "选择显示项目并调整顺序",
+        modifier = Modifier.heightIn(max = 700.dp),
+        footer = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onDismiss) { Text("取消") }
+                Button(onClick = { onSave(localOrder, localHidden) }) { Text("保存") }
+            }
+        },
+    ) {
+        Column(
+            modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            localOrder.forEachIndexed { index, action ->
+                val visibleCount = localOrder.count { it !in localHidden }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = action !in localHidden,
+                        enabled = action in localHidden || visibleCount > 1,
+                        onCheckedChange = { checked ->
+                            localHidden = if (checked) localHidden - action else localHidden + action
+                        },
+                    )
+                    Text(homeQuickActionLabel(action), modifier = Modifier.weight(1f))
+                    IconButton(
+                        onClick = {
+                            localOrder = localOrder.toMutableList().also {
+                                val item = it.removeAt(index)
+                                it.add(index - 1, item)
+                            }
+                        },
+                        enabled = index > 0,
+                    ) {
+                        Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "上移")
+                    }
+                    IconButton(
+                        onClick = {
+                            localOrder = localOrder.toMutableList().also {
+                                val item = it.removeAt(index)
+                                it.add(index + 1, item)
+                            }
+                        },
+                        enabled = index < localOrder.lastIndex,
+                    ) {
+                        Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "下移")
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action) {
+    HomeQuickAction.Today -> "今日工作台"
+    HomeQuickAction.Notifications -> "通知中心"
+    HomeQuickAction.Insights -> "趋势周报"
+    HomeQuickAction.Scenes -> "智能场景"
+    HomeQuickAction.Events -> "最新动态"
+    HomeQuickAction.Devices -> "设备控制"
+    HomeQuickAction.Diagnostics -> "系统自检"
+    HomeQuickAction.Backup -> "数据备份"
+    HomeQuickAction.GoogleAccounts -> "邮箱台账"
+    HomeQuickAction.Operations -> "高级工具"
+}
+
+private fun todayCourseCount(state: OverviewUiState): Int {
+    val day = LocalDate.now().dayOfWeek.value
+    val week = Regex("第(\\d+)周").find(state.timetable?.currentCalendarText.orEmpty())
+        ?.groupValues?.getOrNull(1)?.toIntOrNull()
+    return state.timetable?.courses.orEmpty().count { course ->
+        course.day == day && (week == null || course.weeks.isEmpty() || week in course.weeks)
+    }
+}
+
+@Composable
+private fun OfflineSnapshotNotice(cachedAtMillis: Long?) {
+    val context = LocalContext.current
+    val updatedAt = remember(context, cachedAtMillis) {
+        cachedAtMillis?.let { android.text.format.DateFormat.getTimeFormat(context).format(Date(it)) }
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(Icons.Outlined.CloudOff, contentDescription = null, modifier = Modifier.size(20.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("当前离线，仅显示上次同步数据", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    updatedAt?.let { "缓存更新时间 $it" } ?: "联网后将自动恢复同步",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
     }
 }
 

@@ -51,7 +51,7 @@ import cn.pxyb.mycontrol.data.SecuritySession
 
 @Composable
 fun ProfileScreen(
-    state: AppUiState,
+    state: ProfileUiState,
     contentPadding: PaddingValues,
     onRevokeSession: (String) -> Unit,
     onOpenQrLogin: () -> Unit,
@@ -123,6 +123,9 @@ fun ProfileScreen(
                     }
                 }
             )
+        }
+        state.sectionError?.let { message ->
+            item { FeedbackBanner("账号数据暂不可用：$message", error = true) }
         }
 
         item {
