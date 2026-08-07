@@ -39,6 +39,7 @@ import { createMemoryReleaseStore } from './release-store.js';
 import { createRequestDiagnostics } from './request-diagnostics.js';
 import { createSloService } from './slo-service.js';
 import { createTaskCenter } from './task-center.js';
+import { createMemoryGoogleAccountStore } from './google-account-store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.resolve(__dirname, '..', 'dist');
@@ -195,6 +196,7 @@ export function createApp({
   authStore = null,
   authRiskStore = null,
   qrLoginStore = null,
+  googleAccountStore = null,
   configurationStore = null,
   configurationManager = null,
   taskManager = null,
@@ -234,6 +236,7 @@ export function createApp({
     backoffMaxMs: config.loginBackoffMaxMs,
   });
   const qrLogins = qrLoginStore || createMemoryQrLoginStore();
+  const googleAccounts = googleAccountStore || createMemoryGoogleAccountStore();
   const publicUrl = new URL(config.publicOrigin || 'http://127.0.0.1');
   const passkeyOrigins = [publicUrl.origin, ...(config.androidPasskeyOrigins || [])];
   const passkeys = createPasskeyService({
@@ -585,6 +588,7 @@ export function createApp({
   app.locals.authStore = accounts;
   app.locals.authRiskStore = risk;
   app.locals.qrLoginStore = qrLogins;
+  app.locals.googleAccountStore = googleAccounts;
 
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -1103,6 +1107,41 @@ export function createApp({
     req.consoleUser = { username: account.username, role: account.role };
     req.consoleAccount = account;
     return next();
+  });
+
+  app.get('/api/google-accounts', async (req, res, next) => {
+    try {
+      return res.json({ success: true, ...await googleAccounts.get(req.consoleUser.username) });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.put('/api/google-accounts', requireConsoleRequest, async (req, res, next) => {
+    try {
+      const revision = req.body?.revision;
+      if (!Number.isSafeInteger(revision) || revision < 0) {
+        const error = new Error('Invalid Google account revision');
+        error.statusCode = 400;
+        throw error;
+      }
+      const snapshot = await googleAccounts.replace(
+        req.consoleUser.username,
+        req.body?.accounts,
+        revision,
+      );
+      if (!snapshot) {
+        return res.status(409).json({
+          success: false,
+          code: 'GOOGLE_ACCOUNT_REVISION_CONFLICT',
+          message: 'Google account ledger changed on another device',
+          details: await googleAccounts.get(req.consoleUser.username),
+        });
+      }
+      return res.json({ success: true, ...snapshot });
+    } catch (error) {
+      return next(error);
+    }
   });
 
   app.post('/api/auth/qr/requests/:id/scan', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
