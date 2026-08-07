@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AlternateEmail
@@ -72,7 +71,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.statusBarsPadding
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAliasRecord
 import org.json.JSONArray
@@ -188,82 +186,74 @@ fun GoogleAccountDeskScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = contentPadding.calculateTopPadding() + 8.dp,
-            bottom = contentPadding.calculateBottomPadding() + 16.dp,
-        ),
+        contentPadding = appPageContentPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Google 邮箱台账", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "记录主邮箱、别名和 OpenAI 使用状态",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            AppSecondaryHeader(
+                title = "Google 邮箱台账",
+                subtitle = "记录主邮箱、别名和 OpenAI 使用状态",
+                onBack = onDismiss,
+                actions = {
+                    AppHeaderIconButton(
+                        icon = Icons.Outlined.Add,
+                        contentDescription = "添加主邮箱",
+                        onClick = { showAddAccount = true },
+                        enabled = !busy && !state.googleAccountMigrationPending,
                     )
-                }
-                IconButton(onClick = { showAddAccount = true }, enabled = !busy && !state.googleAccountMigrationPending) {
-                    Icon(Icons.Outlined.Add, contentDescription = "添加主邮箱", tint = MaterialTheme.colorScheme.primary)
-                }
-                IconButton(onClick = { showImportAccounts = true }, enabled = !busy && !state.googleAccountMigrationPending) {
-                    Icon(Icons.Outlined.ContentPaste, contentDescription = "批量导入邮箱", tint = MaterialTheme.colorScheme.primary)
-                }
-                Box {
-                    IconButton(onClick = { actionMenuExpanded = true }) {
-                        Icon(Icons.Outlined.MoreVert, contentDescription = "更多操作")
+                    AppHeaderIconButton(
+                        icon = Icons.Outlined.ContentPaste,
+                        contentDescription = "批量导入邮箱",
+                        onClick = { showImportAccounts = true },
+                        enabled = !busy && !state.googleAccountMigrationPending,
+                    )
+                    Box {
+                        AppHeaderIconButton(
+                            icon = Icons.Outlined.MoreVert,
+                            contentDescription = "更多操作",
+                            onClick = { actionMenuExpanded = true },
+                        )
+                        DropdownMenu(
+                            expanded = actionMenuExpanded,
+                            onDismissRequest = { actionMenuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(if (selectionMode) "退出批量管理" else "批量管理") },
+                                leadingIcon = { Icon(Icons.Outlined.Checklist, contentDescription = null) },
+                                onClick = {
+                                    selectionMode = !selectionMode
+                                    selectedAccountIds = emptySet()
+                                    actionMenuExpanded = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("按${sortLabel(sort)}排序") },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Sort, contentDescription = null) },
+                                onClick = {
+                                    sort = nextSort(sort)
+                                    actionMenuExpanded = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (showArchived) "隐藏归档邮箱" else "显示归档邮箱") },
+                                leadingIcon = { Icon(if (showArchived) Icons.Outlined.Archive else Icons.Outlined.Unarchive, contentDescription = null) },
+                                onClick = {
+                                    showArchived = !showArchived
+                                    actionMenuExpanded = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("导出台账备份") },
+                                leadingIcon = { Icon(Icons.Outlined.FileDownload, contentDescription = null) },
+                                onClick = {
+                                    exportGoogleAccounts(context, accounts)
+                                    actionMenuExpanded = false
+                                },
+                            )
+                        }
                     }
-                    DropdownMenu(
-                        expanded = actionMenuExpanded,
-                        onDismissRequest = { actionMenuExpanded = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(if (selectionMode) "退出批量管理" else "批量管理") },
-                            leadingIcon = { Icon(Icons.Outlined.Checklist, contentDescription = null) },
-                            onClick = {
-                                selectionMode = !selectionMode
-                                selectedAccountIds = emptySet()
-                                actionMenuExpanded = false
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("按${sortLabel(sort)}排序") },
-                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Sort, contentDescription = null) },
-                            onClick = {
-                                sort = nextSort(sort)
-                                actionMenuExpanded = false
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(if (showArchived) "隐藏归档邮箱" else "显示归档邮箱") },
-                            leadingIcon = { Icon(if (showArchived) Icons.Outlined.Archive else Icons.Outlined.Unarchive, contentDescription = null) },
-                            onClick = {
-                                showArchived = !showArchived
-                                actionMenuExpanded = false
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("导出台账备份") },
-                            leadingIcon = { Icon(Icons.Outlined.FileDownload, contentDescription = null) },
-                            onClick = {
-                                exportGoogleAccounts(context, accounts)
-                                actionMenuExpanded = false
-                            },
-                        )
-                    }
-                }
-            }
+                },
+            )
         }
 
         item {

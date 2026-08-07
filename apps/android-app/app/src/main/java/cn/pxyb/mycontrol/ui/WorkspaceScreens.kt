@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,11 +19,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -34,7 +32,6 @@ import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tune
@@ -119,11 +116,8 @@ fun TodayScreen(
         ).joinToString(" · "),
         contentPadding = contentPadding,
         onBack = onBack,
-        action = {
-            IconButton(onClick = onRefresh, enabled = !state.refreshing) {
-                Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-            }
-        },
+        refreshing = state.refreshing,
+        onRefresh = onRefresh,
     ) {
         if (state.offlineMode || state.pendingTodoMutations > 0) {
             FeedbackBanner(
@@ -232,10 +226,12 @@ fun NotificationCenterScreen(
         subtitle = "${state.alerts.count { !it.read }} 条未读 · 保留最近 200 条",
         contentPadding = contentPadding,
         onBack = onBack,
-        action = {
-            IconButton(onClick = { settingsOpen = true }) {
-                Icon(Icons.Outlined.Settings, contentDescription = "提醒设置")
-            }
+        actions = {
+            AppHeaderIconButton(
+                icon = Icons.Outlined.Settings,
+                contentDescription = "提醒设置",
+                onClick = { settingsOpen = true },
+            )
         },
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -350,11 +346,15 @@ fun ScenesScreen(
         subtitle = "组合多个真实继电器动作，一次完成",
         contentPadding = contentPadding,
         onBack = onBack,
-        action = {
-            Row {
-                IconButton(onClick = onRefresh, enabled = !state.refreshing) { Icon(Icons.Outlined.Refresh, "刷新") }
-                IconButton(onClick = { adding = true }, enabled = !state.offlineMode) { Icon(Icons.Outlined.Add, "新建场景") }
-            }
+        refreshing = state.refreshing,
+        onRefresh = onRefresh,
+        actions = {
+            AppHeaderIconButton(
+                icon = Icons.Outlined.Add,
+                contentDescription = "新建场景",
+                onClick = { adding = true },
+                enabled = !state.offlineMode,
+            )
         },
     ) {
         if (state.offlineMode) FeedbackBanner("离线时仅可查看场景，联网后才能执行或编辑。", error = false)
@@ -395,31 +395,26 @@ private fun WorkspacePage(
     subtitle: String,
     contentPadding: PaddingValues,
     onBack: () -> Unit,
-    action: @Composable (() -> Unit)? = null,
+    refreshing: Boolean = false,
+    onRefresh: (() -> Unit)? = null,
+    actions: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(
-                start = 16.dp,
-                end = 16.dp,
-                top = contentPadding.calculateTopPadding() + 8.dp,
-                bottom = contentPadding.calculateBottomPadding() + 18.dp,
-            ),
+            .padding(appPageContentPadding(contentPadding, bottomSpacing = 18.dp)),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
-                IconButton(onClick = onBack, modifier = Modifier.size(42.dp)) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
-            }
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            action?.invoke()
-        }
+        AppSecondaryHeader(
+            title = title,
+            subtitle = subtitle,
+            onBack = onBack,
+            refreshing = refreshing,
+            onRefresh = onRefresh,
+            actions = actions,
+        )
         content()
     }
 }

@@ -117,12 +117,7 @@ fun OverviewScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(
-                start = 16.dp,
-                end = 16.dp,
-                top = contentPadding.calculateTopPadding() + 8.dp,
-                bottom = contentPadding.calculateBottomPadding() + 16.dp,
-            ),
+            .padding(appPageContentPadding(contentPadding)),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item(key = "overview-header", contentType = "header") {

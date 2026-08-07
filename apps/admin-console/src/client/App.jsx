@@ -1525,7 +1525,10 @@ function BackupRecoveryView({ session }) {
         if (!result.job || result.job.id !== activeJob.id) return;
         setActiveJob(result.job);
         if (result.job.status !== 'running') {
-          if (result.job.status === 'succeeded') {
+          if (result.job.status === 'succeeded' && result.job.result?.offsite?.status === 'failed') {
+            setActionMessage('');
+            setActionError(`本地备份已完成，但远端同步失败：${result.job.result.offsite.error || '未知错误'}`);
+          } else if (result.job.status === 'succeeded') {
             setActionError('');
             setActionMessage('任务已完成');
           } else if (result.job.status === 'failed') {
@@ -1559,8 +1562,10 @@ function BackupRecoveryView({ session }) {
       setActiveJob(result.job);
       setActionMessage('备份任务已提交');
       await loadBackupStatus(true);
+      return { job: result.job };
     } catch (error) {
       setActionError(error.message);
+      return { error: error.message };
     }
   }
 
@@ -1934,6 +1939,9 @@ function BackupRecoveryView({ session }) {
       <BackupOffsitePanel
         session={session}
         localBackups={backups}
+        backupJob={activeJob}
+        canExecuteBackup={Boolean(capabilities.canBackup && !runningJob)}
+        onExecuteBackup={handleStartBackup}
         onImported={(backup) => {
           if (backup) setSelectedBackup(backup);
           loadBackupStatus(true);

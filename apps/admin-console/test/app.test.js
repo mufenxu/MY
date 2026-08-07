@@ -130,6 +130,27 @@ test('backup mutations require the console request header', async () => {
   });
 });
 
+test('backup schedule updates apply immediately and survive a reload', async () => {
+  const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
+  const app = createApp({ config });
+
+  await withServer(app, async (origin) => {
+    assert.equal((await fetch(`${origin}/api/backups/schedule`, { method: 'PUT' })).status, 403);
+
+    const response = await fetch(`${origin}/api/backups/schedule`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
+      body: JSON.stringify({ enabled: true, time: '03:15' }),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).schedule, { enabled: true, time: '03:15' });
+
+    const settingsResponse = await fetch(`${origin}/api/operations/settings`);
+    assert.equal(settingsResponse.status, 200);
+    assert.deepEqual((await settingsResponse.json()).settings.backupSchedule, { enabled: true, time: '03:15' });
+  });
+});
+
 test('release callbacks require the dedicated bearer token instead of a console session', async () => {
   const callbackToken = 'c'.repeat(32);
   let callbackPayload = null;

@@ -3975,6 +3975,18 @@ input:focus-visible {
   margin-bottom: 18px;
 }
 
+.offsite-schedule-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.offsite-schedule-actions .primary-button,
+.offsite-schedule-actions .secondary-action {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
 .offsite-config-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

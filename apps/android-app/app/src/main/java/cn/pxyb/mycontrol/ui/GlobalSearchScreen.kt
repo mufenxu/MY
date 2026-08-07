@@ -1,7 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,9 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Assignment
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Cloud
@@ -26,11 +23,9 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -68,29 +63,14 @@ fun GlobalSearchScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = contentPadding.calculateTopPadding() + 8.dp,
-            bottom = contentPadding.calculateBottomPadding() + 16.dp,
-        ),
+        contentPadding = appPageContentPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item(key = "search-header") {
-            ImmersiveHeader(
+            AppSecondaryHeader(
                 title = "全局搜索",
                 subtitle = "服务、事件、任务、设备与邮箱",
-                actions = {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = CircleShape,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    ) {
-                        IconButton(onClick = onBack, modifier = Modifier.size(42.dp)) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回首页")
-                        }
-                    }
-                },
+                onBack = onBack,
             )
         }
         item(key = "search-input") {

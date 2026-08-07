@@ -1,7 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,10 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.automirrored.outlined.FactCheck
@@ -25,9 +22,7 @@ import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -101,38 +96,16 @@ fun OperationsScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = contentPadding.calculateTopPadding() + 8.dp,
-            bottom = contentPadding.calculateBottomPadding() + 16.dp,
-        ),
+        contentPadding = appPageContentPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            ImmersiveHeader(
+            AppSecondaryHeader(
                 title = "高级工具",
                 subtitle = "任务、审批、发布与备份",
+                onBack = onBack,
                 refreshing = state.refreshing,
                 onRefresh = onRefresh,
-                actions = {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = CircleShape,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    ) {
-                        IconButton(
-                            onClick = onBack,
-                            modifier = Modifier.size(42.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                                contentDescription = "返回首页",
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    }
-                },
             )
         }
         state.sectionError?.let { message ->

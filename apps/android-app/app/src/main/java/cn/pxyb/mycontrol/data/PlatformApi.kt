@@ -244,7 +244,7 @@ class PlatformApi(
             val body = JSONObject()
                 .put("revision", revision)
                 .put("operations", JSONArray().apply { mutations.forEach { put(it.toJson()) } })
-            execute("/api/todos/mutations", "POST", body).json.toTodoSnapshotEnvelope()
+            execute("$TODOS_PATH/mutations", "POST", body).json.toTodoSnapshotEnvelope()
         }
 
     suspend fun campusTimetable(): CampusTimetable = withContext(Dispatchers.IO) {
@@ -781,7 +781,7 @@ class PlatformApi(
 
     private companion object {
         const val AUTH_STATUS_PATH = "/api/auth/status"
-        const val TODOS_PATH = "/api/todos"
+        const val TODOS_PATH = "/apps/core/api/todos"
         const val RESOURCE_EXPIRIES_PATH = "/apps/core/api/resources/expiry-summary"
         val CACHEABLE_PATHS = setOf(
             AUTH_STATUS_PATH,

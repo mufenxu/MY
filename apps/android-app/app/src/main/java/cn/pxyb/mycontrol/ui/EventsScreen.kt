@@ -130,12 +130,7 @@ fun EventsScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = contentPadding.calculateTopPadding() + 8.dp,
-            bottom = contentPadding.calculateBottomPadding() + 16.dp
-        ),
+        contentPadding = appPageContentPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {

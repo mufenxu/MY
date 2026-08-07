@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Fingerprint
@@ -98,39 +97,16 @@ fun AccountManagementScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = contentPadding.calculateTopPadding() + 8.dp,
-            bottom = contentPadding.calculateBottomPadding() + 16.dp
-        ),
+        contentPadding = appPageContentPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        // 与首页所有主页面统一的标准沉浸头
         item {
-            ImmersiveHeader(
+            AppSecondaryHeader(
                 title = "账号管理",
                 subtitle = "密码、安全与登录凭证设置",
+                onBack = onDismiss,
                 refreshing = state.refreshing,
                 onRefresh = onRefresh,
-                actions = {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = CircleShape,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    ) {
-                        IconButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                                contentDescription = "返回我的页面",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
             )
         }
         state.sectionError?.let { message ->

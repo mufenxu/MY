@@ -127,9 +127,12 @@ test('backup view manages scheduled and S3-compatible offsite backups without ex
 
   assert.match(app, /const BackupOffsitePanel = lazyNamed\(loadOperationsViews, 'BackupOffsitePanel'\)/);
   assert.match(app, /<BackupOffsitePanel/);
+  assert.match(app, /onExecuteBackup=\{handleStartBackup\}/);
+  assert.match(app, /backupJob=\{activeJob\}/);
   assert.match(app, /\/api\/backups\/\$\{encodeURIComponent\(backup\.name\)\}\/sync/);
   assert.match(operations, /export function BackupOffsitePanel/);
   for (const endpoint of [
+    '/api/backups/schedule',
     '/api/backups/offsite/config',
     '/api/backups/offsite/test',
     '/api/backups/offsite',
@@ -138,6 +141,8 @@ test('backup view manages scheduled and S3-compatible offsite backups without ex
   ]) {
     assert.match(operations, new RegExp(endpoint.replaceAll('/', '\\/')));
   }
+  assert.match(operations, /onClick=\{executeBackupNow\}/);
+  assert.match(operations, /\.result\?\.offsite\?\.status === 'failed'/);
   assert.match(operations, /type="password"[^>]+autoComplete="new-password"/);
   assert.match(operations, /accessKeyIdMasked/);
   assert.doesNotMatch(operations, /value=\{config\.(?:accessKeyId|secretAccessKey)\}/);

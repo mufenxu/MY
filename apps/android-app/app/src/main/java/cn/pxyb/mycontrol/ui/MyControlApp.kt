@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -83,6 +84,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.autofill.AutofillNode
 import androidx.compose.ui.autofill.AutofillType
 import androidx.compose.ui.draw.clip
@@ -165,6 +168,33 @@ private fun AppEntryUiState.requestedRoute(): String = when {
     googleAccountDeskOpen -> AppRoute.GoogleAccounts
     accountManagementOpen -> AppRoute.Account
     else -> selectedTab.route()
+}
+
+private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
+    AppRoute.Overview,
+    AppRoute.Search,
+    AppRoute.Today,
+    AppRoute.Notifications,
+    AppRoute.Insights,
+    AppRoute.Scenes -> MainTab.Overview
+    AppRoute.Events -> MainTab.Events
+    AppRoute.Operations -> MainTab.Operations
+    AppRoute.Tools -> MainTab.Tools
+    AppRoute.Profile,
+    AppRoute.Account -> MainTab.Profile
+    else -> null
+}
+
+internal fun parentTabForSubScreen(route: String?, previousRoute: String?): MainTab? = when (route) {
+    AppRoute.GoogleAccounts -> primaryTabForRoute(previousRoute) ?: MainTab.Profile
+    AppRoute.Account -> MainTab.Profile
+    AppRoute.Operations,
+    AppRoute.Search,
+    AppRoute.Today,
+    AppRoute.Notifications,
+    AppRoute.Insights,
+    AppRoute.Scenes -> MainTab.Overview
+    else -> null
 }
 
 @Composable
@@ -1112,16 +1142,24 @@ private fun AuthenticatedShell(
     val initialRoute = remember { state.requestedRoute() }
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route ?: initialRoute
-    val isSubScreen = currentRoute in setOf(
-        AppRoute.Operations,
-        AppRoute.Account,
-        AppRoute.GoogleAccounts,
-        AppRoute.Search,
-        AppRoute.Today,
-        AppRoute.Notifications,
-        AppRoute.Insights,
-        AppRoute.Scenes,
-    )
+    val isSubScreen = parentTabForSubScreen(currentRoute, null) != null
+    val navigateBackFromSubScreen: () -> Unit = {
+        val parentTab = parentTabForSubScreen(
+            route = currentRoute,
+            previousRoute = navController.previousBackStackEntry?.destination?.route,
+        )
+        if (parentTab != null) {
+            val parentRoute = parentTab.route()
+            viewModel.syncNavigationDestination(parentTab)
+            if (!navController.popBackStack(parentRoute, inclusive = false)) {
+                navController.navigate(parentRoute) {
+                    popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
+    }
+    BackHandler(enabled = isSubScreen, onBack = navigateBackFromSubScreen)
     val onRefresh = remember(viewModel) { { viewModel.refreshCurrentTab(true) } }
     LaunchedEffect(state.selectedTab, state.accountManagementOpen, state.googleAccountDeskOpen, state.globalSearchOpen, state.workspaceDestination) {
         val targetRoute = state.requestedRoute()
@@ -1169,20 +1207,41 @@ private fun AuthenticatedShell(
             viewModel.clearFeedback()
         }
     }
+    val layoutDirection = LocalLayoutDirection.current
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        contentWindowInsets = WindowInsets.safeDrawing,
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
+            val shellInsets = resolveAuthenticatedShellInsets(
+                safeTop = padding.calculateTopPadding(),
+                safeStart = if (layoutDirection == LayoutDirection.Ltr) {
+                    padding.calculateLeftPadding(layoutDirection)
+                } else {
+                    padding.calculateRightPadding(layoutDirection)
+                },
+                safeEnd = if (layoutDirection == LayoutDirection.Ltr) {
+                    padding.calculateRightPadding(layoutDirection)
+                } else {
+                    padding.calculateLeftPadding(layoutDirection)
+                },
+                safeBottom = padding.calculateBottomPadding(),
+                isSubScreen = isSubScreen,
+            )
             val contentPadding = PaddingValues(
-                top = padding.calculateTopPadding(),
-                bottom = if (isSubScreen) padding.calculateBottomPadding() + 16.dp else 90.dp,
+                bottom = shellInsets.contentBottom,
             )
             NavHost(
                 navController = navController,
                 startDestination = initialRoute,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        start = shellInsets.navigationStart,
+                        top = shellInsets.navigationTop,
+                        end = shellInsets.navigationEnd,
+                    ),
                 enterTransition = { fadeIn(animationSpec = tween(140)) },
                 exitTransition = { fadeOut(animationSpec = tween(110)) },
                 popEnterTransition = { fadeIn(animationSpec = tween(140)) },
@@ -1251,12 +1310,7 @@ private fun AuthenticatedShell(
                         focusTaskId = state.focusTaskId,
                         onFocusConsumed = viewModel::clearFocusTargets,
                         onRefresh = onRefresh,
-                        onBack = {
-                            viewModel.selectTab(MainTab.Overview)
-                            if (!navController.popBackStack()) {
-                                navController.navigate(AppRoute.Overview) { launchSingleTop = true }
-                            }
-                        },
+                        onBack = navigateBackFromSubScreen,
                     )
                 }
                 composable(AppRoute.Tools) {
@@ -1293,12 +1347,7 @@ private fun AuthenticatedShell(
                     AccountManagementScreen(
                         state = accountState,
                         contentPadding = contentPadding,
-                        onDismiss = {
-                            viewModel.closeAccountManagement()
-                            if (!navController.popBackStack()) {
-                                navController.navigate(AppRoute.Profile) { launchSingleTop = true }
-                            }
-                        },
+                        onDismiss = navigateBackFromSubScreen,
                         onRefresh = onRefresh,
                         onChangedPassword = viewModel::changePassword,
                         onBeginTotpEnrollment = viewModel::beginTotpEnrollment,
@@ -1318,12 +1367,7 @@ private fun AuthenticatedShell(
                     GoogleAccountDeskScreen(
                         state = googleAccountState,
                         contentPadding = contentPadding,
-                        onDismiss = {
-                            viewModel.closeGoogleAccountDesk()
-                            if (!navController.popBackStack()) {
-                                navController.navigate(AppRoute.Profile) { launchSingleTop = true }
-                            }
-                        },
+                        onDismiss = navigateBackFromSubScreen,
                         onAddAccount = viewModel::addGoogleAccount,
                         onImportAccounts = viewModel::importGoogleAccounts,
                         onUpdateAccount = viewModel::updateGoogleAccount,
@@ -1343,12 +1387,7 @@ private fun AuthenticatedShell(
                     GlobalSearchScreen(
                         state = searchState,
                         contentPadding = contentPadding,
-                        onBack = {
-                            viewModel.closeGlobalSearch()
-                            if (!navController.popBackStack()) {
-                                navController.navigate(AppRoute.Overview) { launchSingleTop = true }
-                            }
-                        },
+                        onBack = navigateBackFromSubScreen,
                         onSelect = viewModel::openGlobalSearchResult,
                     )
                 }
@@ -1357,10 +1396,7 @@ private fun AuthenticatedShell(
                     TodayScreen(
                         state = todayState,
                         contentPadding = contentPadding,
-                        onBack = {
-                            viewModel.closeWorkspace()
-                            if (!navController.popBackStack()) navController.navigate(AppRoute.Overview) { launchSingleTop = true }
-                        },
+                        onBack = navigateBackFromSubScreen,
                         onRefresh = { viewModel.refreshCurrentWorkspace() },
                         onSaveTodo = viewModel::saveTodo,
                         onToggleTodo = viewModel::toggleTodo,
@@ -1374,10 +1410,7 @@ private fun AuthenticatedShell(
                     NotificationCenterScreen(
                         state = notificationState,
                         contentPadding = contentPadding,
-                        onBack = {
-                            viewModel.closeWorkspace()
-                            if (!navController.popBackStack()) navController.navigate(AppRoute.Overview) { launchSingleTop = true }
-                        },
+                        onBack = navigateBackFromSubScreen,
                         onOpen = viewModel::openAlert,
                         onMarkRead = viewModel::markAlertRead,
                         onMarkAllRead = viewModel::markAllAlertsRead,
@@ -1391,10 +1424,7 @@ private fun AuthenticatedShell(
                     InsightsScreen(
                         state = insightsState,
                         contentPadding = contentPadding,
-                        onBack = {
-                            viewModel.closeWorkspace()
-                            if (!navController.popBackStack()) navController.navigate(AppRoute.Overview) { launchSingleTop = true }
-                        },
+                        onBack = navigateBackFromSubScreen,
                     )
                 }
                 composable(AppRoute.Scenes) {
@@ -1402,10 +1432,7 @@ private fun AuthenticatedShell(
                     ScenesScreen(
                         state = scenesState,
                         contentPadding = contentPadding,
-                        onBack = {
-                            viewModel.closeWorkspace()
-                            if (!navController.popBackStack()) navController.navigate(AppRoute.Overview) { launchSingleTop = true }
-                        },
+                        onBack = navigateBackFromSubScreen,
                         onRefresh = { viewModel.refreshCurrentWorkspace() },
                         onRun = { id -> viewModel.runIotScene(id, onSensitiveActionConfirmation) },
                         onSave = viewModel::saveIotScene,
@@ -1419,6 +1446,7 @@ private fun AuthenticatedShell(
                 enter = slideInVertically(animationSpec = tween(160, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeIn(animationSpec = tween(160)),
                 exit = slideOutVertically(animationSpec = tween(140, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeOut(animationSpec = tween(120)),
                 modifier = Modifier.align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
             ) {
                 AppBottomNavigation(
                     selected = state.selectedTab,

@@ -135,12 +135,7 @@ fun ToolsScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(
-                start = 16.dp,
-                end = 16.dp,
-                top = contentPadding.calculateTopPadding() + 4.dp,
-                bottom = contentPadding.calculateBottomPadding() + 16.dp,
-            ),
+            .padding(appPageContentPadding(contentPadding, topSpacing = 4.dp)),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         ImmersiveHeader(

@@ -2037,6 +2037,21 @@ export function createApp({
     }
   });
 
+  app.put('/api/backups/schedule', requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
+    try {
+      const enabled = req.body?.enabled;
+      const time = String(req.body?.time || '');
+      if (typeof enabled !== 'boolean' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+        return res.status(400).json({ error: '自动备份计划格式无效。', code: 'INVALID_BACKUP_SCHEDULE' });
+      }
+      const settings = await operations.updateSettings({ backupSchedule: { enabled, time } }, req.consoleUser.username);
+      return res.json({ schedule: settings.backupSchedule });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
   app.get('/api/backups/quality', async (req, res, next) => {
     try {
       res.json(await operations.getBackupQuality({ force: req.query.refresh === '1' }));

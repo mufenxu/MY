@@ -1603,7 +1603,7 @@ export function OverviewOperations({ summary, onOpenIncidents, onOpenAudit }) {
   );
 }
 
-export function BackupOffsitePanel({ session, localBackups = [], onImported }) {
+export function BackupOffsitePanel({ session, localBackups = [], backupJob = null, canExecuteBackup = false, onExecuteBackup, onImported }) {
   const [config, setConfig] = useState(null);
   const [draft, setDraft] = useState(EMPTY_BACKUP_STORAGE);
   const [schedule, setSchedule] = useState({ enabled: false, time: '02:30' });
@@ -1611,6 +1611,7 @@ export function BackupOffsitePanel({ session, localBackups = [], onImported }) {
   const [secrets, setSecrets] = useState({ accessKeyId: '', secretAccessKey: '', password: '', totp: '' });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
+  const [executedJobId, setExecutedJobId] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const canOperate = roleAtLeast(session.user?.role, 'operator');
@@ -1645,6 +1646,28 @@ export function BackupOffsitePanel({ session, localBackups = [], onImported }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!executedJobId || backupJob?.id !== executedJobId || backupJob.status === 'running') return;
+    const completedJob = backupJob;
+    void load().then(() => {
+      setBusy((current) => current === 'execute' ? '' : current);
+      setExecutedJobId('');
+      if (completedJob.status === 'failed') {
+        setMessage('');
+        setError(completedJob.error || '备份任务执行失败。');
+      } else if (completedJob.result?.offsite?.status === 'failed') {
+        setMessage('');
+        setError(`本地备份已完成，但远端同步失败：${completedJob.result.offsite.error || '未知错误'}`);
+      } else if (completedJob.result?.offsite?.status === 'succeeded') {
+        setError('');
+        setMessage('备份已完成并保存到远端。');
+      } else {
+        setMessage('');
+        setError('本地备份已完成，但没有收到远端同步成功结果。');
+      }
+    });
+  }, [backupJob, executedJobId, load]);
 
   function credentialsReady() {
     if (session.authDisabled) return true;
@@ -1712,15 +1735,36 @@ export function BackupOffsitePanel({ session, localBackups = [], onImported }) {
     setError('');
     setMessage('');
     try {
-      const result = await requestJson('/api/operations/settings', {
+      const result = await requestJson('/api/backups/schedule', {
         method: 'PUT',
-        body: JSON.stringify({ settings: { backupSchedule: schedule }, summary: '更新每日自动备份计划' }),
+        body: JSON.stringify(schedule),
       });
-      setMessage(`自动备份变更已提交（${result.change.id}）`);
+      setSchedule(result.schedule);
+      setMessage('自动备份计划已保存并生效。');
     } catch (requestError) {
       setError(requestError.message);
     } finally {
       setBusy('');
+    }
+  }
+
+  async function executeBackupNow() {
+    if (!onExecuteBackup) return;
+    setBusy('execute');
+    setError('');
+    setMessage('');
+    try {
+      const result = await onExecuteBackup();
+      if (!result?.job?.id) {
+        setBusy('');
+        setError(result?.error || '备份任务启动失败。');
+        return;
+      }
+      setExecutedJobId(result.job.id);
+      setMessage('备份任务已提交，完成后将自动同步到远端。');
+    } catch (requestError) {
+      setBusy('');
+      setError(requestError.message);
     }
   }
 
@@ -1764,7 +1808,10 @@ export function BackupOffsitePanel({ session, localBackups = [], onImported }) {
           <div className="offsite-schedule-controls">
             <label className="toggle-field"><span><strong>自动备份</strong><small>每日执行</small></span><input type="checkbox" checked={schedule.enabled} disabled={!canOperate || loading} onChange={(event) => setSchedule({ ...schedule, enabled: event.target.checked })} /></label>
             <label><span>执行时间</span><input type="time" value={schedule.time} disabled={!canOperate || loading} onChange={(event) => setSchedule({ ...schedule, time: event.target.value })} /></label>
-            <button className="secondary-action" type="button" disabled={!canOperate || loading || busy === 'schedule'} onClick={saveSchedule}>{busy === 'schedule' ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}保存计划</button>
+            <div className="offsite-schedule-actions">
+              <button className="secondary-action" type="button" disabled={!canOperate || loading || busy === 'schedule'} onClick={saveSchedule}>{busy === 'schedule' ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}保存计划</button>
+              <button className="primary-button" type="button" disabled={!canOperate || !canExecuteBackup || !config?.configured || !config?.enabled || loading || busy === 'execute'} onClick={executeBackupNow}>{busy === 'execute' || backupJob?.status === 'running' ? <LoaderCircle className="spin" size={16} /> : <Play size={16} />}{busy === 'execute' || backupJob?.status === 'running' ? '正在执行' : '立即执行'}</button>
+            </div>
           </div>
 
           <div className="offsite-subsection-head"><span>S3 兼容目标</span><DatabaseBackup size={18} /></div>
