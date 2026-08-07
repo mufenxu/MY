@@ -11,6 +11,7 @@ router.use('/auth', require('./authScanRoutes'));
 // Other Business Routes
 router.use('/users', require('./users'));
 router.use('/todos', require('./todos'));
+router.use('/google-accounts', require('./googleAccounts'));
 router.use('/settings', require('./settings'));
 router.use('/resources', require('./resources'));
 router.use('/notifications', require('./notifications'));

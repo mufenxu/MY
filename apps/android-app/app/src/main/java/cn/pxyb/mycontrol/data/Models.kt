@@ -257,6 +257,32 @@ data class PasskeyRegistrationChallenge(
     val optionsJson: String,
 )
 
+data class GoogleAccountRecord(
+    val id: String,
+    val primaryEmail: String,
+    val displayName: String = "",
+    val emailStatus: String = "unknown",
+    val note: String = "",
+    val lastCheckedAt: Long? = null,
+    val aliases: List<GoogleAliasRecord> = emptyList(),
+)
+
+data class GoogleAliasRecord(
+    val id: String,
+    val address: String,
+    val aliasType: String = "plus",
+    val aliasStatus: String = "candidate",
+    val openAiStatus: String = "unregistered",
+    val registeredAt: Long? = null,
+    val lastVerifiedAt: Long? = null,
+    val note: String = "",
+)
+
+data class GoogleAccountSnapshot(
+    val accounts: List<GoogleAccountRecord>,
+    val revision: Int,
+)
+
 class ApiException(
     message: String,
     val status: Int,

@@ -1084,7 +1084,7 @@ private fun AuthenticatedShell(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
             val tab = state.selectedTab
-            val isSubScreen = state.accountManagementOpen || state.selectedTab == MainTab.Operations
+            val isSubScreen = state.accountManagementOpen || state.googleAccountDeskOpen || state.selectedTab == MainTab.Operations
             val contentPadding = PaddingValues(
                 top = padding.calculateTopPadding(),
                 bottom = if (isSubScreen) padding.calculateBottomPadding() + 16.dp else 90.dp,
@@ -1105,7 +1105,7 @@ private fun AuthenticatedShell(
                         onRefresh = onRefresh,
                         onRunDiagnostics = viewModel::runDiagnostics,
                         onTriggerBackup = { viewModel.triggerBackup(onSensitiveActionConfirmation) },
-                        onOpenAccountManagement = viewModel::openAccountManagement,
+                        onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
                         onOpenOperations = { viewModel.selectTab(MainTab.Operations) },
                     )
                     MainTab.Events -> EventsScreen(
@@ -1165,7 +1165,7 @@ private fun AuthenticatedShell(
                     )
                     MainTab.Profile -> {
                         AnimatedContent(
-                            targetState = state.accountManagementOpen,
+                            targetState = state.accountManagementOpen || state.googleAccountDeskOpen,
                             transitionSpec = {
                                 if (targetState) {
                                     (slideInHorizontally(animationSpec = tween(180, easing = FastOutSlowInEasing)) { fullWidth -> fullWidth } +
@@ -1182,6 +1182,22 @@ private fun AuthenticatedShell(
                             label = "profile_subscreen_transition"
                         ) { isAccountOpen ->
                             if (isAccountOpen) {
+                                if (state.googleAccountDeskOpen) {
+                                    GoogleAccountDeskScreen(
+                                        state = state,
+                                        contentPadding = contentPadding,
+                                        onDismiss = viewModel::closeGoogleAccountDesk,
+                                        onAddAccount = viewModel::addGoogleAccount,
+                                        onImportAccounts = viewModel::importGoogleAccounts,
+                                        onUpdateAccount = viewModel::updateGoogleAccount,
+                                        onDeleteAccount = viewModel::deleteGoogleAccount,
+                                        onAddAlias = viewModel::addGoogleAlias,
+                                        onUpdateAlias = viewModel::updateGoogleAlias,
+                                        onDeleteAlias = viewModel::deleteGoogleAlias,
+                                        onUploadLocalAccounts = viewModel::uploadLocalGoogleAccounts,
+                                        onDiscardLocalAccounts = viewModel::discardLocalGoogleAccounts,
+                                    )
+                                } else {
                                 AccountManagementScreen(
                                     state = state,
                                     contentPadding = contentPadding,
@@ -1199,6 +1215,7 @@ private fun AuthenticatedShell(
                                     onRegisterPasskeyRequest = onPasskeyRegistrationRequest,
                                     onSetAppLockEnabled = viewModel::setAppLockEnabled,
                                 )
+                                }
                             } else {
                                 ProfileScreen(
                                     state = state,
@@ -1208,6 +1225,7 @@ private fun AuthenticatedShell(
                                     onLogout = viewModel::logout,
                                     onRefresh = onRefresh,
                                     onOpenAccountManagement = viewModel::openAccountManagement,
+                                    onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
                                     notificationsEnabled = notificationsEnabled,
                                     onRequestNotifications = onRequestNotifications,
                                 )

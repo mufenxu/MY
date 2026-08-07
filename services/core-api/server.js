@@ -23,6 +23,7 @@ const courseOrderSubmissionWorker = require('./services/courseOrderSubmissionWor
 const User = require('./models/User');
 const CourseOrder = require('./models/CourseOrder');
 const CourseOrderBatch = require('./models/CourseOrderBatch');
+const GoogleAccountLedger = require('./models/GoogleAccountLedger');
 const { boundedTimeout, closeHttpServer, withDeadline } = require('./services/httpShutdown');
 
 const app = express();
@@ -187,7 +188,8 @@ async function initializeCoreRuntime() {
         await Promise.all([
             User.init(),
             CourseOrder.init(),
-            CourseOrderBatch.init()
+            CourseOrderBatch.init(),
+            GoogleAccountLedger.init()
         ]);
         logger.info('Critical Core indexes ready');
         const retiredData = await cleanupRetiredFeatureData(mongoose.connection.db);

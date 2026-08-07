@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Hub
@@ -70,7 +71,7 @@ fun OverviewScreen(
     onRefresh: () -> Unit,
     onRunDiagnostics: () -> Unit,
     onTriggerBackup: () -> Unit,
-    onOpenAccountManagement: () -> Unit,
+    onOpenGoogleAccountDesk: () -> Unit,
     onOpenOperations: () -> Unit,
 ) {
     val overview = state.overview
@@ -207,8 +208,8 @@ fun OverviewScreen(
                         QuickAction(Icons.Outlined.Backup, "数据备份", Coral, CoralPale, Modifier.weight(1f)) {
                             onTriggerBackup()
                         }
-                        QuickAction(Icons.Outlined.Security, "账号安全", Ocean, OceanPale, Modifier.weight(1f)) {
-                            onOpenAccountManagement()
+                        QuickAction(Icons.Outlined.Email, "邮箱台账", Ocean, OceanPale, Modifier.weight(1f)) {
+                            onOpenGoogleAccountDesk()
                         }
                         QuickAction(Icons.Outlined.Settings, "高级工具", Amber, AmberPale, Modifier.weight(1f)) {
                             onOpenOperations()
