@@ -6,6 +6,7 @@ const STORE_NAMES = [
   'releaseStore',
   'configurationStore',
   'qrLoginStore',
+  'googleAccountStore',
 ];
 
 export async function closePortalStores(stores = {}) {
@@ -67,6 +68,7 @@ export async function createPersistentPortalStores({ config, factories } = {}) {
     ['releaseStore', factories.createMongoReleaseStore, { uri: config.mongoUri }],
     ['configurationStore', factories.createMongoConfigurationStore, { uri: config.mongoUri }],
     ['qrLoginStore', factories.createMongoQrLoginStore, { uri: config.mongoUri }],
+    ['googleAccountStore', factories.createMongoGoogleAccountStore, { uri: config.mongoUri }],
   ];
 
   try {

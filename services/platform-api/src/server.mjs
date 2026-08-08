@@ -43,6 +43,9 @@ const { createMongoConfigurationStore } = await import(
 const { createMongoQrLoginStore } = await import(
   pathToFileURL(paths.portalQrLoginStore).href
 );
+const { createMongoGoogleAccountStore } = await import(
+  pathToFileURL(paths.portalGoogleAccountStore).href
+);
 
 const portalConfig = loadPortalConfig();
 const portalStores = await createPersistentPortalStores({
@@ -55,6 +58,7 @@ const portalStores = await createPersistentPortalStores({
     createMongoReleaseStore,
     createMongoConfigurationStore,
     createMongoQrLoginStore,
+    createMongoGoogleAccountStore,
   },
 });
 const {
@@ -65,6 +69,7 @@ const {
   releaseStore,
   configurationStore,
   qrLoginStore,
+  googleAccountStore,
 } = portalStores;
 const readinessCheck = async () => {
   const [servicesReady, storesReady] = await Promise.all([
@@ -84,6 +89,7 @@ const portalApp = createPortalApp({
   releaseStore,
   configurationStore,
   qrLoginStore,
+  googleAccountStore,
   readinessCheck,
 });
 portalApp.locals.operationsCenter.start();
