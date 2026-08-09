@@ -21,6 +21,18 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
+internal fun localizedTaskTitle(task: PlatformTask): String {
+    val title = task.title.trim()
+    return when (task.source) {
+        "configuration" -> if (title.contains("rollback", ignoreCase = true) || title.contains("回滚")) "配置回滚提案" else "配置变更提案"
+        "release_build" -> "发布构建"
+        "release_deployment" -> "发布部署"
+        "backup" -> "数据备份"
+        "notification" -> "通知任务"
+        else -> title.ifBlank { "平台任务" }
+    }
+}
+
 class AlertNotifier(context: Context) {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -80,7 +92,7 @@ class AlertNotifier(context: Context) {
                             id = "task:${task.id}:${task.updatedAt.orEmpty()}",
                             type = "task",
                             sourceId = task.id,
-                            title = if (task.status == "failed") "任务失败：${task.title}" else "待处理：${task.title}",
+                            title = if (task.status == "failed") "任务失败：${localizedTaskTitle(task)}" else "待处理：${localizedTaskTitle(task)}",
                             body = listOf(sourceLabel(task.source), task.detail).filter(String::isNotBlank).joinToString(" · "),
                             createdAt = System.currentTimeMillis(),
                         ),
@@ -108,7 +120,7 @@ class AlertNotifier(context: Context) {
             newActionable.take(3).forEach { task ->
                 notify(
                     notificationId = TASK_BASE + task.id.hashCode(),
-                    title = if (task.status == "failed") "任务失败：${task.title}" else "待处理：${task.title}",
+                    title = if (task.status == "failed") "任务失败：${localizedTaskTitle(task)}" else "待处理：${localizedTaskTitle(task)}",
                     body = listOfNotNull(
                         sourceLabel(task.source),
                         task.detail.takeIf { it.isNotBlank() },

@@ -165,8 +165,8 @@ fun AppPanel(
 ) {
     Card(
         modifier = Modifier
-            .then(modifier)
             .clip(AppCardShape)
+            .then(modifier)
             .fillMaxWidth(),
         shape = AppCardShape,
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFCFCFA)),

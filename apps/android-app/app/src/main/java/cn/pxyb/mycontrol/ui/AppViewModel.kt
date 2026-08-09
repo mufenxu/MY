@@ -187,6 +187,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val refreshJobs = mutableMapOf<DataSection, Job>()
     private val lastRefreshElapsedMs = mutableMapOf<DataSection, Long>()
     private var alertsSeeded = false
+    private var initialIncidentsLoaded = false
+    private var initialTasksLoaded = false
 
     private fun <T> deriveState(transform: (AppUiState) -> T): StateFlow<T> = mutableState
         .map(transform)
@@ -286,6 +288,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         cancelRefreshes()
         clearRefreshCache()
         alertsSeeded = false
+        initialIncidentsLoaded = false
+        initialTasksLoaded = false
         alertNotifier.clear()
         personalStore.clearAccountData()
         sessionStore.clear()
@@ -390,6 +394,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } else {
                 alertsSeeded = false
+                initialIncidentsLoaded = false
+                initialTasksLoaded = false
                 alertNotifier.clear()
                 clearRefreshCache()
                 mutableState.update {
@@ -456,6 +462,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         loadGoogleAccounts()
         alertsSeeded = false
+        initialIncidentsLoaded = false
+        initialTasksLoaded = false
         startOperationalPolling()
         refreshInitialData()
         scanPendingQrLogin()
@@ -501,6 +509,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             mutableState.update { it.copy(busyAction = "logout", error = null) }
             api.logout()
             alertsSeeded = false
+            initialIncidentsLoaded = false
+            initialTasksLoaded = false
             alertNotifier.clear()
             personalStore.clearAccountData()
             mutableState.update {
@@ -1257,6 +1267,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun refreshIncidents(force: Boolean = false) = launchRefresh(DataSection.Incidents, force) {
         val incidents = api.incidents()
         mutableState.update { it.copy(incidents = incidents) }
+        initialIncidentsLoaded = true
         publishWidget()
         evaluateAlerts(incidents = incidents, tasks = mutableState.value.tasks)
         recordTrendSample()
@@ -1265,6 +1276,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun refreshTasks(force: Boolean = false) = launchRefresh(DataSection.Tasks, force) {
         val tasks = api.tasks().tasks
         mutableState.update { it.copy(tasks = tasks) }
+        initialTasksLoaded = true
         evaluateAlerts(incidents = mutableState.value.incidents, tasks = tasks)
         recordTrendSample()
     }
@@ -1759,9 +1771,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun evaluateAlerts(incidents: List<IncidentInfo>, tasks: List<PlatformTask>) {
-        val seedOnly = !alertsSeeded
+        val seedOnly = !alertsSeeded || !initialIncidentsLoaded || !initialTasksLoaded
         alertNotifier.evaluate(incidents = incidents, tasks = tasks, seedOnly = seedOnly)
-        alertsSeeded = true
+        if (initialIncidentsLoaded && initialTasksLoaded) alertsSeeded = true
         reloadPersonalState()
     }
 
