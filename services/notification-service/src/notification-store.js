@@ -343,6 +343,14 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
       recipient.updatedAt = now();
       return serializeAppNotification(appMessages.find((row) => row.id === notificationId), recipient, protector);
     },
+    async archiveAppNotification(recipientId, notificationId) {
+      prune();
+      const recipient = appRecipients.find((row) => row.recipientId === String(recipientId || '').trim() && row.messageId === notificationId);
+      if (!recipient || recipient.archivedAt) return null;
+      recipient.archivedAt = now();
+      recipient.updatedAt = now();
+      return { archived: true };
+    },
     async markAllAppNotificationsRead(recipientId) {
       prune();
       const timestamp = now();
@@ -1021,6 +1029,14 @@ async function createMongoNotificationStore({
       if (!recipient) return null;
       const message = await appMessages.findOne({ id: notificationId }, { projection: { _id: 0 } });
       return serializeAppNotification(message, recipient, protector);
+    },
+    async archiveAppNotification(recipientId, notificationId) {
+      const recipient = await appRecipients.findOneAndUpdate(
+        { recipientId: String(recipientId || '').trim(), messageId: notificationId, archivedAt: null },
+        { $set: { archivedAt: new Date(), updatedAt: new Date() } },
+        { returnDocument: 'before', projection: { _id: 0 } },
+      );
+      return recipient ? { archived: true } : null;
     },
     async markAllAppNotificationsRead(recipientId) {
       const result = await appRecipients.updateMany(

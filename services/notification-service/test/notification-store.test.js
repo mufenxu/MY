@@ -85,8 +85,11 @@ test('app inbox deduplicates messages and isolates recipient state', async () =>
   assert.equal((await store.listAppNotifications('alice', { unreadOnly: true })).total, 0);
   assert.equal((await store.listAppNotifications('bob', { unreadOnly: true })).total, 1);
 
-  assert.equal((await store.archiveReadAppNotifications('alice')).archived, 1);
+  assert.equal((await store.archiveAppNotification('alice', first.notification.id)).archived, true);
   assert.equal((await store.listAppNotifications('alice')).total, 0);
+  assert.equal((await store.archiveAppNotification('alice', first.notification.id)), null);
+
+  assert.equal((await store.archiveReadAppNotifications('alice')).archived, 0);
   assert.equal((await store.listAppNotifications('bob')).total, 1);
 });
 

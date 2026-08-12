@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -69,6 +71,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -77,11 +80,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AppAlertRecord
@@ -273,6 +278,7 @@ fun NotificationCenterScreen(
     onMarkRead: (String) -> Unit,
     onMarkAllRead: () -> Unit,
     onClearRead: () -> Unit,
+    onArchive: (String) -> Unit,
     onSnooze: (String) -> Unit,
     onUpdatePreferences: (AlertPreferences) -> Unit,
 ) {
@@ -329,6 +335,7 @@ fun NotificationCenterScreen(
                         }
                     },
                     onMarkRead = onMarkRead,
+                    onArchive = onArchive,
                     onSnooze = onSnooze,
                 )
             }
@@ -610,7 +617,12 @@ private fun NotificationWorkspacePage(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(appPageContentPadding(contentPadding, bottomSpacing = 18.dp)),
+                .padding(
+                    start = AppPageHorizontalPadding,
+                    end = AppPageHorizontalPadding,
+                    top = contentPadding.calculateTopPadding() + AppPageTopSpacing,
+                ),
+            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "header", contentType = "header") {
@@ -1580,9 +1592,40 @@ private fun NotificationCard(
     alert: AppAlertRecord,
     onOpen: (AppAlertRecord) -> Unit,
     onMarkRead: (String) -> Unit,
+    onArchive: (String) -> Unit,
     onSnooze: (String) -> Unit,
 ) {
-    AppPanel(Modifier.clickable { onOpen(alert) }) {
+    var offsetX by remember(alert.id) { mutableFloatStateOf(0f) }
+    val deleteThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() }
+    Box(contentAlignment = Alignment.CenterEnd) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(MaterialTheme.colorScheme.errorContainer, AppCardShape)
+                .padding(horizontal = 22.dp),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除通知", tint = MaterialTheme.colorScheme.onErrorContainer)
+        }
+        AppPanel(
+            Modifier
+                .offset { IntOffset(offsetX.roundToInt(), 0) }
+                .pointerInput(alert.id) {
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { change, dragAmount ->
+                            if (dragAmount < 0f || offsetX < 0f) {
+                                offsetX = (offsetX + dragAmount).coerceAtMost(0f)
+                            }
+                        },
+                        onDragEnd = {
+                            if (-offsetX >= deleteThresholdPx) onArchive(alert.id)
+                            offsetX = 0f
+                        },
+                        onDragCancel = { offsetX = 0f },
+                    )
+                },
+            onClick = { onOpen(alert) },
+        ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 IconTile(if (alert.read) Icons.Outlined.NotificationsOff else Icons.Outlined.Notifications, if (alert.read) Color(0xFF64748B) else Color(0xFF2563EB), if (alert.read) Color(0xFFE2E8F0) else Color(0xFFDBEAFE))
@@ -1597,6 +1640,7 @@ private fun NotificationCard(
                 TextButton(onClick = { onSnooze(alert.id) }) { Text("1 小时后提醒") }
             }
         }
+    }
     }
 }
 

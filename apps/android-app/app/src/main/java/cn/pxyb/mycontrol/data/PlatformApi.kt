@@ -293,6 +293,11 @@ class PlatformApi(
         Unit
     }
 
+    suspend fun archiveAppNotification(id: String) = withContext(Dispatchers.IO) {
+        execute("/api/app/notifications/${encodePath(id)}", "DELETE")
+        Unit
+    }
+
     suspend fun markAllAppNotificationsRead() = withContext(Dispatchers.IO) {
         execute("/api/app/notifications/read-all", "POST", JSONObject())
         Unit

@@ -1601,6 +1601,17 @@ class AppViewModel(
         }
     }
 
+    fun archiveAlert(id: String) {
+        val record = mutableState.value.alerts.firstOrNull { it.id == id } ?: return
+        updateAlerts { alerts -> alerts.filterNot { it.id == id } }
+        if (record.origin == "remote") {
+            viewModelScope.launch {
+                runCatching { api.archiveAppNotification(id) }
+                    .onFailure { syncRemoteNotifications() }
+            }
+        }
+    }
+
     fun snoozeAlert(id: String, durationMillis: Long = 60 * 60_000L) {
         val record = mutableState.value.alerts.firstOrNull { it.id == id }
         val snoozedUntil = System.currentTimeMillis() + durationMillis

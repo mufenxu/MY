@@ -543,6 +543,17 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
     }
   });
 
+  app.delete('/app/notifications/:id', checkAppAccess, async (req, res, next) => {
+    try {
+      const result = await store.archiveAppNotification(req.appUserId, String(req.params.id || ''));
+      if (!result) throw httpError(404, 'APP_NOTIFICATION_NOT_FOUND', '通知不存在。');
+      return res.json(result);
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
   app.post('/app/notifications/read-all', checkAppAccess, async (req, res, next) => {
     try {
       return res.json(await store.markAllAppNotificationsRead(req.appUserId));

@@ -171,6 +171,16 @@ test('canonical notification API creates an authenticated app inbox item', async
       });
       assert.equal(read.status, 200);
       assert.ok(read.body.notification.readAt);
+
+      const deletePath = `/app/notifications/${created.body.notificationId}`;
+      const deleted = await request(port, {
+        path: deletePath,
+        method: 'DELETE',
+        headers: appHeaders({ method: 'DELETE', path: deletePath }),
+      });
+      assert.equal(deleted.status, 200);
+      assert.equal(deleted.body.archived, true);
+      assert.equal((await request(port, { path: inboxPath, headers: appHeaders({ path: inboxPath }) })).body.total, 0);
     });
   } finally {
     if (previousPublicKey === undefined) delete process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY;

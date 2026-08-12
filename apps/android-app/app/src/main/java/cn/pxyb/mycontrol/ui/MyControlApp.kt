@@ -1421,6 +1421,7 @@ private fun AuthenticatedShell(
                         onMarkRead = viewModel::markAlertRead,
                         onMarkAllRead = viewModel::markAllAlertsRead,
                         onClearRead = viewModel::clearReadAlerts,
+                        onArchive = viewModel::archiveAlert,
                         onSnooze = { id -> viewModel.snoozeAlert(id) },
                         onUpdatePreferences = viewModel::updateAlertPreferences,
                     )
