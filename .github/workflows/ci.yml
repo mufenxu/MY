@@ -33,6 +33,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
 
+      - name: Ensure Gradle wrapper is executable
+        working-directory: apps/android-app
+        run: chmod +x ./gradlew
+
       - name: Run Android checks
         working-directory: apps/android-app
         run: ./gradlew :app:testDebugUnitTest :app:compileDebugKotlin :app:lintDebug :app:assembleDebug --console=plain --no-daemon
