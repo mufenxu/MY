@@ -6,8 +6,8 @@ import {
   CheckCircle2,
   CircleAlert,
   Clock3,
-  Database,
   FileText,
+  Inbox,
   LoaderCircle,
   RefreshCw,
   RotateCcw,
@@ -15,6 +15,7 @@ import {
   Send,
   ServerCog,
   ShieldCheck,
+  Smartphone,
   UserRound,
   X,
   XCircle,
@@ -43,6 +44,23 @@ const TYPE_OPTIONS = [
   { value: 'textcard', label: '文本卡片' },
   { value: 'news', label: '图文' },
 ];
+const TEST_CHANNEL_OPTIONS = [
+  { value: 'wecom', label: '企业微信' },
+  { value: 'app', label: 'Android App' },
+];
+const APP_PRIORITY_OPTIONS = [
+  { value: 'normal', label: '普通' },
+  { value: 'high', label: '重要' },
+  { value: 'critical', label: '紧急' },
+  { value: 'low', label: '低优先级' },
+];
+const EMPTY_APP_OVERVIEW = {
+  userId: '',
+  total: 0,
+  unread: 0,
+  devices: { total: 0, pollOnly: 0, pushReady: 0, lastSeenAt: null },
+  items: [],
+};
 
 function roleAtLeast(role, required) {
   return ({ viewer: 1, operator: 2, super_admin: 3 }[role] || 0) >= ({ viewer: 1, operator: 2, super_admin: 3 }[required] || 0);
@@ -67,6 +85,10 @@ function typeLabel(value) {
   return { text: '文本（兼容微信）', markdown: 'Markdown（仅企业微信）', textcard: '文本卡片', news: '图文' }[value] || value || '--';
 }
 
+function priorityLabel(value) {
+  return { low: '低优先级', normal: '普通', high: '重要', critical: '紧急' }[value] || value || '--';
+}
+
 function targetLabel(delivery) {
   const prefix = { user: '用户', party: '部门', tag: '标签', all: '全员' }[delivery.targetType] || '目标';
   return delivery.targetType === 'all' ? prefix : `${prefix} ${delivery.targetValue || '--'}`;
@@ -80,6 +102,15 @@ function DeliveryState({ value }) {
   }[value] || { label: value || '--', icon: CircleAlert };
   const Icon = meta.icon;
   return <span className={`notify-state notify-state-${value || 'unknown'}`}><Icon size={14} />{meta.label}</span>;
+}
+
+function AppReadState({ readAt }) {
+  const value = readAt ? 'success' : 'pending';
+  const meta = readAt
+    ? { label: '已读', icon: CheckCircle2 }
+    : { label: '未读', icon: CircleAlert };
+  const Icon = meta.icon;
+  return <span className={`notify-state notify-state-${value}`}><Icon size={14} />{meta.label}</span>;
 }
 
 function Feedback({ error, message }) {
@@ -106,7 +137,18 @@ export default function NotificationServiceView({ session }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [form, setForm] = useState({ msgType: 'text', touser: '', content: '' });
+  const [form, setForm] = useState({
+    channel: 'wecom',
+    msgType: 'text',
+    touser: '',
+    appUserId: '',
+    appTitle: 'Android App 通知测试',
+    appPriority: 'high',
+    content: '',
+  });
+  const [appFilter, setAppFilter] = useState('');
+  const [appOverviewUser, setAppOverviewUser] = useState('');
+  const [appOverview, setAppOverview] = useState(EMPTY_APP_OVERVIEW);
   const [templates, setTemplates] = useState([]);
   const [jobs, setJobs] = useState({ items: [], page: 1, pageSize: 20, total: 0 });
   const [templateForm, setTemplateForm] = useState({ key: '', name: '', description: '', msgType: 'text', content: '', enabled: true });
@@ -116,55 +158,98 @@ export default function NotificationServiceView({ session }) {
   const [submitting, setSubmitting] = useState(false);
   const canOperate = roleAtLeast(session.user?.role, 'operator');
 
-  const load = useCallback(async ({ quiet = false } = {}) => {
+  const load = useCallback(async ({ quiet = false, appUser = appOverviewUser } = {}) => {
     if (quiet) setRefreshing(true);
     else setLoading(true);
     setError('');
     try {
       const query = new URLSearchParams({ page: String(page), pageSize: '20' });
+      const appQuery = new URLSearchParams({ limit: '12' });
       for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value);
-      const [overviewResult, deliveryResult, templateResult, jobResult] = await Promise.all([
+      if (appUser) appQuery.set('userId', appUser);
+      const [overviewResult, deliveryResult, templateResult, jobResult, appResult] = await Promise.all([
         requestJson('/api/notifications/overview'),
         requestJson(`/api/notifications/deliveries?${query}`),
         requestJson('/api/notifications/templates'),
         requestJson('/api/notifications/jobs?page=1&pageSize=20'),
+        requestJson(`/api/notifications/app/overview?${appQuery}`),
       ]);
       setOverview(overviewResult);
       setDeliveries(deliveryResult);
       setTemplates(templateResult.items || []);
       setJobs(jobResult);
+      setAppOverview(appResult || EMPTY_APP_OVERVIEW);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filters, page]);
+  }, [appOverviewUser, filters, page]);
 
   useEffect(() => { load(); }, [load]);
 
   const totalPages = Math.max(1, Math.ceil(deliveries.total / deliveries.pageSize));
   const history = overview?.history || {};
   const recent = deliveries.items.slice(0, 5);
-  const contentLimit = form.msgType === 'markdown' ? 4096 : 2048;
-  const canSubmitTest = Boolean(canOperate && form.touser.trim() && form.touser.trim() !== '@all' && !form.touser.includes('|') && form.content.trim());
+  const isAppTest = form.channel === 'app';
+  const contentLimit = isAppTest ? 500 : form.msgType === 'markdown' ? 4096 : 2048;
+  const canSubmitTest = isAppTest
+    ? Boolean(canOperate && form.appUserId.trim() && form.appUserId.trim() !== '@all' && !form.appUserId.includes('|') && form.appTitle.trim() && form.content.trim())
+    : Boolean(canOperate && form.touser.trim() && form.touser.trim() !== '@all' && !form.touser.includes('|') && form.content.trim());
   const preview = useMemo(() => form.content.trim() || '消息预览', [form.content]);
+  const appDevices = appOverview?.devices || EMPTY_APP_OVERVIEW.devices;
+  const appItems = appOverview?.items || [];
+  const appScopeLabel = appOverviewUser ? `用户 ${appOverviewUser}` : '全部平台用户';
 
   function updateFilter(key, value) {
     setPage(1);
     setFilters((current) => ({ ...current, [key]: value }));
   }
 
+  function applyAppFilter() {
+    const normalized = appFilter.trim();
+    if (normalized === appOverviewUser) {
+      load({ quiet: true, appUser: normalized });
+      return;
+    }
+    setAppOverviewUser(normalized);
+  }
+
   async function confirmAction() {
     const action = pendingAction;
     if (!action) return;
+    const actionIsAppTest = action.type === 'test' && form.channel === 'app';
     setSubmitting(true);
     setError('');
     setMessage('');
+    let nextAppUser = null;
     try {
       if (action.type === 'test') {
-        await requestJson('/api/notifications/test', { method: 'POST', body: JSON.stringify(form) });
-        setMessage('测试通知已发送');
+        if (actionIsAppTest) {
+          const userId = form.appUserId.trim();
+          nextAppUser = userId;
+          await requestJson('/api/notifications/app/test', {
+            method: 'POST',
+            body: JSON.stringify({
+              userId,
+              title: form.appTitle.trim(),
+              summary: form.content.trim(),
+              priority: form.appPriority,
+            }),
+          });
+          const appQuery = new URLSearchParams({ userId, limit: '12' });
+          setAppFilter(userId);
+          setAppOverviewUser(userId);
+          setAppOverview(await requestJson(`/api/notifications/app/overview?${appQuery}`));
+          setMessage('Android App 测试通知已写入收件箱');
+        } else {
+          await requestJson('/api/notifications/test', {
+            method: 'POST',
+            body: JSON.stringify({ msgType: form.msgType, touser: form.touser.trim(), content: form.content.trim() }),
+          });
+          setMessage('企业微信测试通知已发送');
+        }
         setForm((current) => ({ ...current, content: '' }));
       } else if (action.type === 'retry') {
         await requestJson(`/api/notifications/deliveries/${encodeURIComponent(action.delivery.id)}/retry`, { method: 'POST' });
@@ -177,10 +262,11 @@ export default function NotificationServiceView({ session }) {
         setMessage('通知模板已删除');
       }
       setPendingAction(null);
-      if (action.type === 'test' || action.type === 'retry') setTab('records');
+      if (action.type === 'test') setTab(actionIsAppTest ? 'app' : 'records');
+      if (action.type === 'retry') setTab('records');
       if (action.type === 'cancel-job') setTab('jobs');
       if (action.type === 'delete-template') setTab('templates');
-      await load({ quiet: true });
+      await load({ quiet: true, ...(nextAppUser === null ? {} : { appUser: nextAppUser }) });
     } catch (requestError) {
       setPendingAction(null);
       setError(requestError.message);
@@ -257,9 +343,23 @@ export default function NotificationServiceView({ session }) {
     : ['jobs', 'templates'].includes(tab)
       ? `notify-primary-tab-jobs notify-orchestration-tab-${tab}`
       : `notify-primary-tab-${primaryTab}`;
+  const confirmTitle = pendingAction?.type === 'retry' ? '重试失败通知'
+    : pendingAction?.type === 'cancel-job' ? '取消计划任务'
+      : pendingAction?.type === 'delete-template' ? '删除通知模板'
+        : '发送测试通知';
+  const confirmDescription = pendingAction?.type === 'retry' ? '将使用原始加密载荷重新发送。'
+    : pendingAction?.type === 'cancel-job' ? '取消后该任务不会再自动发送。'
+      : pendingAction?.type === 'delete-template' ? '删除后不能再用此模板创建任务。'
+        : form.channel === 'app' ? '确认向指定 Android App 平台用户写入测试通知。' : '确认向指定企业微信用户发送此消息。';
+  const confirmDetail = pendingAction?.type === 'retry' ? targetLabel(pendingAction.delivery)
+    : pendingAction?.type === 'cancel-job' ? pendingAction.job?.id
+      : pendingAction?.type === 'delete-template' ? pendingAction.template?.name
+        : form.channel === 'app'
+          ? `${form.appUserId.trim()} · ${priorityLabel(form.appPriority)}`
+          : `${form.touser.trim()} · ${typeLabel(form.msgType)}`;
 
   return (
-    <section className="page-view notify-page" aria-label="企业微信通知通道">
+    <section className="page-view notify-page" aria-label="统一通知服务控制中心">
       <div className="notify-toolbar">
         <SegmentedTabs
           ariaLabel="通知服务视图"
@@ -268,6 +368,7 @@ export default function NotificationServiceView({ session }) {
           items={[
             { id: 'overview', label: '概览' },
             { id: 'records', label: '发送' },
+            { id: 'app', label: 'App 通知' },
             { id: 'jobs', label: '编排' },
             { id: 'preferences', label: '接收偏好' },
             { id: 'api', label: 'API 接入' },
@@ -298,6 +399,8 @@ export default function NotificationServiceView({ session }) {
                 <ConfigurationState ready={overview?.configured} label="通知服务" detail={overview?.configured ? '管理连接已建立' : '尚未配置管理连接'} />
                 <ConfigurationState ready={overview?.storageHealthy} label="发送台账" detail={overview?.storageHealthy ? `保留 ${overview.retentionDays} 天` : '存储连接异常'} />
                 <ConfigurationState ready={overview?.wecom?.corpIdConfigured && overview?.wecom?.secretConfigured} label="企业微信应用" detail={overview?.wecom?.agentId ? `AgentId ${overview.wecom.agentId}` : '应用凭据未配置'} />
+                <ConfigurationState ready={true} label="Android App 收件箱" detail={`${appOverview.total || 0} 条通知 · ${appOverview.unread || 0} 条未读`} />
+                <ConfigurationState ready={appDevices.total > 0} label="App 设备注册" detail={`${appDevices.total || 0} 台设备 · ${appDevices.pushReady || 0} 台可推送 · ${appDevices.pollOnly || 0} 台轮询`} />
                 <ConfigurationState ready={true} label="敏感数据" detail="服务端托管" />
               </div>
             </section>
@@ -312,6 +415,20 @@ export default function NotificationServiceView({ session }) {
                 )) : <div className="ops-empty compact">暂无发送记录</div>}
               </div>
             </section>
+          </div>
+          <div className="notify-channel-grid">
+            <button className="notify-channel-card" type="button" onClick={() => setTab('records')}>
+              <span><Send size={18} /></span>
+              <div><strong>企业微信通知</strong><small>{overview?.wecom?.agentId ? `AgentId ${overview.wecom.agentId}` : '应用凭据未配置'} · 查看发送台账</small></div>
+            </button>
+            <button className="notify-channel-card" type="button" onClick={() => setTab('app')}>
+              <span><Smartphone size={18} /></span>
+              <div><strong>Android App 通知</strong><small>{appDevices.total || 0} 台设备 · {appOverview.unread || 0} 条未读 · 打开收件箱</small></div>
+            </button>
+            <button className="notify-channel-card" type="button" onClick={() => setTab('preferences')}>
+              <span><UserRound size={18} /></span>
+              <div><strong>接收偏好</strong><small>平台用户免打扰与接收开关统一维护</small></div>
+            </button>
           </div>
         </>
       )}
@@ -346,18 +463,76 @@ export default function NotificationServiceView({ session }) {
         </section>
       )}
 
+      {tab === 'app' && (
+        <div className="notify-app-layout">
+          <section className="ops-panel notify-app-panel">
+            <header className="notify-records-header">
+              <div><span>Android App</span><h3>{appScopeLabel}收件箱</h3></div>
+              <div className="notify-app-filter">
+                <div className="notify-input-wrap"><UserRound size={17} /><input value={appFilter} maxLength={128} autoComplete="off" placeholder="平台用户 ID，可留空看全局" onChange={(event) => setAppFilter(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') applyAppFilter(); }} /></div>
+                <button className="secondary-action compact" type="button" disabled={refreshing} onClick={applyAppFilter}>读取</button>
+              </div>
+            </header>
+            <div className="ops-kpis notify-app-kpis">
+              <article><Inbox size={21} /><div><span>收件箱通知</span><strong>{appOverview.total || 0}</strong><small>{appScopeLabel}</small></div></article>
+              <article><BellRing size={21} /><div><span>未读通知</span><strong>{appOverview.unread || 0}</strong><small>App 内提醒</small></div></article>
+              <article><Smartphone size={21} /><div><span>注册设备</span><strong>{appDevices.total || 0}</strong><small>{appDevices.pushReady || 0} 台可推送</small></div></article>
+              <article><Clock3 size={21} /><div><span>最近在线</span><strong>{formatDateTime(appDevices.lastSeenAt).split(' ')[0]}</strong><small>{formatDateTime(appDevices.lastSeenAt)}</small></div></article>
+            </div>
+            <div className="notify-app-list">
+              {appItems.length ? appItems.map((item) => (
+                <article className="notify-app-row" key={`${item.recipientId || 'app'}-${item.id}`}>
+                  <AppReadState readAt={item.readAt} />
+                  <div className="notify-app-row-main">
+                    <strong>{item.title || item.category || item.id}</strong>
+                    <small>{item.summary || item.category || '无摘要'}</small>
+                  </div>
+                  <div className="notify-app-meta">
+                    <span>{item.recipientId || appOverview.userId || '--'}</span>
+                    <span>{priorityLabel(item.priority)} · {item.category || '--'} · {formatDateTime(item.createdAt)}</span>
+                  </div>
+                </article>
+              )) : <div className="ops-empty">当前范围没有 App 通知</div>}
+            </div>
+          </section>
+          <section className="ops-panel notify-app-side">
+            <header><div><span>设备能力</span><h3>App 通道状态</h3></div><Smartphone size={20} /></header>
+            <div className="notify-config-list">
+              <ConfigurationState ready={appDevices.total > 0} label="设备注册" detail={`${appDevices.total || 0} 台有效设备`} />
+              <ConfigurationState ready={appDevices.pushReady > 0} label="原生推送" detail={`${appDevices.pushReady || 0} 台设备具备推送令牌`} />
+              <ConfigurationState ready={appDevices.pollOnly > 0} label="轮询兜底" detail={`${appDevices.pollOnly || 0} 台设备使用 App 内收件箱轮询`} />
+            </div>
+            <button className="primary-button notify-send-button" type="button" onClick={() => { setForm((current) => ({ ...current, channel: 'app', appUserId: appOverviewUser || current.appUserId })); setTab('test'); }}><Send size={17} />发送 App 测试</button>
+          </section>
+        </div>
+      )}
+
       {tab === 'test' && (
         <div className="notify-test-layout">
           <section className="ops-panel notify-test-form">
             <header><div><span>单用户验证</span><h3>发送测试通知</h3></div><ShieldCheck size={20} /></header>
-            <label><span>消息类型</span><SelectControl ariaLabel="测试消息类型" value={form.msgType} onChange={(value) => setForm({ ...form, msgType: value, content: form.content.slice(0, value === 'markdown' ? 4096 : 2048) })} options={TYPE_OPTIONS.filter((option) => ['text', 'markdown'].includes(option.value))} /></label>
-            <label><span>企业微信用户 ID</span><div className="notify-input-wrap"><UserRound size={17} /><input value={form.touser} maxLength={64} autoComplete="off" placeholder="例如 zhangsan" onChange={(event) => setForm({ ...form, touser: event.target.value })} /></div></label>
+            <label><span>通知渠道</span><SelectControl ariaLabel="测试通知渠道" value={form.channel} onChange={(value) => setForm({ ...form, channel: value, content: form.content.slice(0, value === 'app' ? 500 : form.msgType === 'markdown' ? 4096 : 2048) })} options={TEST_CHANNEL_OPTIONS} /></label>
+            {!isAppTest && <label><span>消息类型</span><SelectControl ariaLabel="测试消息类型" value={form.msgType} onChange={(value) => setForm({ ...form, msgType: value, content: form.content.slice(0, value === 'markdown' ? 4096 : 2048) })} options={TYPE_OPTIONS.filter((option) => ['text', 'markdown'].includes(option.value))} /></label>}
+            {isAppTest
+              ? (
+                <>
+                  <label><span>平台用户 ID</span><div className="notify-input-wrap"><UserRound size={17} /><input value={form.appUserId} maxLength={128} autoComplete="off" placeholder="例如 xuyaobin" onChange={(event) => setForm({ ...form, appUserId: event.target.value })} /></div></label>
+                  <label><span>通知标题</span><input value={form.appTitle} maxLength={120} onChange={(event) => setForm({ ...form, appTitle: event.target.value })} /></label>
+                  <label><span>优先级</span><SelectControl ariaLabel="App 通知优先级" value={form.appPriority} onChange={(value) => setForm({ ...form, appPriority: value })} options={APP_PRIORITY_OPTIONS} /></label>
+                </>
+              )
+              : <label><span>企业微信用户 ID</span><div className="notify-input-wrap"><UserRound size={17} /><input value={form.touser} maxLength={64} autoComplete="off" placeholder="例如 zhangsan" onChange={(event) => setForm({ ...form, touser: event.target.value })} /></div></label>}
             <label><span>消息内容</span><textarea value={form.content} maxLength={contentLimit} rows={9} placeholder="输入测试消息" onChange={(event) => setForm({ ...form, content: event.target.value })} /><small>{form.content.length} / {contentLimit}</small></label>
             <button className="primary-button notify-send-button" type="button" disabled={!canSubmitTest} onClick={() => setPendingAction({ type: 'test' })}><Send size={17} />发送测试</button>
           </section>
           <section className="ops-panel notify-preview-panel">
-            <header><div><span>企业微信</span><h3>消息预览</h3></div><Send size={20} /></header>
-            <div className="notify-message-preview"><span>{form.msgType === 'markdown' ? 'Markdown（仅企业微信）' : '文本消息（兼容微信）'}</span><pre>{preview}</pre><small>发送给 {form.touser.trim() || '未选择用户'}</small></div>
+            <header><div><span>{isAppTest ? 'Android App' : '企业微信'}</span><h3>消息预览</h3></div>{isAppTest ? <Smartphone size={20} /> : <Send size={20} />}</header>
+            <div className="notify-message-preview">
+              <span>{isAppTest ? `${priorityLabel(form.appPriority)} · App 收件箱卡片` : form.msgType === 'markdown' ? 'Markdown（仅企业微信）' : '文本消息（兼容微信）'}</span>
+              {isAppTest && <strong>{form.appTitle.trim() || 'Android App 通知测试'}</strong>}
+              <pre>{preview}</pre>
+              <small>发送给 {isAppTest ? form.appUserId.trim() || '未选择平台用户' : form.touser.trim() || '未选择用户'}</small>
+            </div>
           </section>
         </div>
       )}
@@ -401,7 +576,7 @@ export default function NotificationServiceView({ session }) {
       {tab === 'preferences' && (
         <section className="ops-panel notify-preference-panel">
           <header><div><span>用户策略</span><h3>接收偏好与免打扰</h3></div><UserRound size={20} /></header>
-          <div className="notify-preference-form"><label><span>企业微信用户 ID</span><input value={preferenceForm.targetId} maxLength={64} onChange={(event) => setPreferenceForm({ ...preferenceForm, targetId: event.target.value })} /></label><button className="secondary-action" type="button" disabled={!canOperate || !preferenceForm.targetId.trim()} onClick={loadPreference}>读取</button><label className="notify-inline-check"><input type="checkbox" checked={preferenceForm.enabled} onChange={(event) => setPreferenceForm({ ...preferenceForm, enabled: event.target.checked })} /><span>允许接收</span></label><label><span>免打扰开始</span><input type="time" value={preferenceForm.quietStart} onChange={(event) => setPreferenceForm({ ...preferenceForm, quietStart: event.target.value })} /></label><label><span>免打扰结束</span><input type="time" value={preferenceForm.quietEnd} onChange={(event) => setPreferenceForm({ ...preferenceForm, quietEnd: event.target.value })} /></label><button className="primary-button" type="button" disabled={!canOperate || !preferenceForm.targetId.trim() || submitting} onClick={savePreference}><Save size={17} />保存偏好</button></div>
+          <div className="notify-preference-form"><label><span>平台用户 ID</span><input value={preferenceForm.targetId} maxLength={64} onChange={(event) => setPreferenceForm({ ...preferenceForm, targetId: event.target.value })} /></label><button className="secondary-action" type="button" disabled={!canOperate || !preferenceForm.targetId.trim()} onClick={loadPreference}>读取</button><label className="notify-inline-check"><input type="checkbox" checked={preferenceForm.enabled} onChange={(event) => setPreferenceForm({ ...preferenceForm, enabled: event.target.checked })} /><span>允许接收</span></label><label><span>免打扰开始</span><input type="time" value={preferenceForm.quietStart} onChange={(event) => setPreferenceForm({ ...preferenceForm, quietStart: event.target.value })} /></label><label><span>免打扰结束</span><input type="time" value={preferenceForm.quietEnd} onChange={(event) => setPreferenceForm({ ...preferenceForm, quietEnd: event.target.value })} /></label><button className="primary-button" type="button" disabled={!canOperate || !preferenceForm.targetId.trim() || submitting} onClick={savePreference}><Save size={17} />保存偏好</button></div>
         </section>
       )}
 
@@ -410,9 +585,9 @@ export default function NotificationServiceView({ session }) {
       </div>
       <ConfirmDialog
         open={Boolean(pendingAction)}
-        title={pendingAction?.type === 'retry' ? '重试失败通知' : pendingAction?.type === 'cancel-job' ? '取消计划任务' : pendingAction?.type === 'delete-template' ? '删除通知模板' : '发送测试通知'}
-        description={pendingAction?.type === 'retry' ? '将使用原始加密载荷重新发送。' : pendingAction?.type === 'cancel-job' ? '取消后该任务不会再自动发送。' : pendingAction?.type === 'delete-template' ? '删除后不能再用此模板创建任务。' : '确认向指定企业微信用户发送此消息。'}
-        detail={pendingAction?.type === 'retry' ? targetLabel(pendingAction.delivery) : pendingAction?.type === 'cancel-job' ? pendingAction.job?.id : pendingAction?.type === 'delete-template' ? pendingAction.template?.name : `${form.touser.trim()} · ${typeLabel(form.msgType)}`}
+        title={confirmTitle}
+        description={confirmDescription}
+        detail={confirmDetail}
         confirmLabel={pendingAction?.type === 'retry' ? '确认重试' : pendingAction?.type === 'cancel-job' ? '确认取消' : pendingAction?.type === 'delete-template' ? '确认删除' : '确认发送'}
         tone="primary"
         busy={submitting}

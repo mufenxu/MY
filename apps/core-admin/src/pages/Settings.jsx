@@ -3,10 +3,7 @@ import { Form, Input, Button, Switch, Card, Divider, Space, Row, Col, Select, Ty
 import { useNavigate } from 'react-router-dom';
 import { message } from '../utils/feedback';
 import {
-    MailOutlined,
     SaveOutlined,
-    SendOutlined,
-    WechatOutlined,
     UserOutlined,
     LockOutlined,
     ClockCircleOutlined,
@@ -34,7 +31,6 @@ const { Title, Text } = Typography;
 const BACKUP_REQUEST_TIMEOUT_MS = 120000;
 const RESTORE_REQUEST_TIMEOUT_MS = 300000;
 const MANUAL_TASK_TIMEOUT_MS = 120000;
-const NOTIFICATION_TEST_TIMEOUT_MS = 30000;
 const DEFAULT_CRON_SCHEDULE = '0 9 * * *';
 
 const CRON_PRESETS = [
@@ -411,9 +407,7 @@ const BackupRestoreSettings = () => {
 
 const Settings = () => {
     const navigate = useNavigate();
-    const [form] = Form.useForm();
     const [adminForm] = Form.useForm();
-    const [loading, setLoading] = useState(false);
     
     // 获取当前登录用户角色，用于决定是否展示数据管理
     const userStr = localStorage.getItem('user');
@@ -425,91 +419,6 @@ const Settings = () => {
     }
     const isSuperAdmin = currentUser?.role === 'super_admin';
     const [adminLoading, setAdminLoading] = useState(false);
-    const [testingEmail, setTestingEmail] = useState(false);
-    const [testingWecom, setTestingWecom] = useState(false);
-
-    const loadConfig = useCallback(async () => {
-        setLoading(true);
-        try {
-            const res = await api.get('/settings/notify');
-            if (res.data.success) {
-                const config = res.data.result || {};
-                config.emailEnabled = !!config.emailEnabled;
-                config.qywxEnabled = !!config.qywxEnabled;
-                form.setFieldsValue(config);
-            }
-        } catch {
-            message.error('加载配置失败');
-        } finally {
-            setLoading(false);
-        }
-    }, [form]);
-
-    const onFinish = async (values) => {
-        setLoading(true);
-        try {
-            const res = await api.post('/settings/notify', values);
-            if (res.data.success) {
-                message.success('配置已保存');
-            } else {
-                message.error(res.data.error || '保存失败');
-            }
-        } catch {
-            message.error('保存失败');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleTestEmail = async () => {
-        try {
-            const values = await form.validateFields();
-            if (!values.emailEnabled) {
-                message.warning('请先开启邮件通知');
-                return;
-            }
-            setTestingEmail(true);
-            const res = await api.post('/settings/test-notify', { config: values, testChannel: 'email' }, {
-                timeout: NOTIFICATION_TEST_TIMEOUT_MS,
-            });
-            if (res.data.success) {
-                message.success('测试邮件已发送');
-            } else {
-                message.error(res.data.error || '发送失败');
-            }
-        } catch {
-            message.error('发送失败，请检查配置');
-        } finally {
-            setTestingEmail(false);
-        }
-    };
-
-    const handleTestWecom = async () => {
-        try {
-            const values = await form.validateFields();
-            if (!values.qywxEnabled) {
-                message.warning('请先开启企业微信通知');
-                return;
-            }
-            if (!values.qywxApiKey) {
-                message.warning('请填写 API Key');
-                return;
-            }
-            setTestingWecom(true);
-            const res = await api.post('/settings/test-notify', { config: values, testChannel: 'wecom' }, {
-                timeout: NOTIFICATION_TEST_TIMEOUT_MS,
-            });
-            if (res.data.success) {
-                message.success('测试消息已发送');
-            } else {
-                message.error(res.data.error || '发送失败');
-            }
-        } catch {
-            message.error('发送失败，请检查配置');
-        } finally {
-            setTestingWecom(false);
-        }
-    };
 
     const loadAdminInfo = useCallback(async () => {
         try {
@@ -527,11 +436,10 @@ const Settings = () => {
     useEffect(() => {
         if (!isSuperAdmin) return;
         const timerId = window.setTimeout(() => {
-            loadConfig();
             loadAdminInfo();
         }, 0);
         return () => window.clearTimeout(timerId);
-    }, [isSuperAdmin, loadConfig, loadAdminInfo]);
+    }, [isSuperAdmin, loadAdminInfo]);
 
     const onAdminFinish = async (values) => {
         setAdminLoading(true);
@@ -605,135 +513,31 @@ const Settings = () => {
                 </span>
             ),
             children: (
-                <Form
-                    form={form}
-                    layout="vertical"
-                    onFinish={onFinish}
-                    initialValues={{
-                        emailEnabled: false,
-                        smtpHost: 'smtp.qq.com',
-                        smtpPort: '465',
-                        qywxEnabled: false
-                    }}
-                >
-                    <Row gutter={[24, 24]}>
-                        <Col xs={24} xl={12}>
-                            <Card 
-                                title={<span style={{ fontWeight: 700 }}><MailOutlined style={{ marginRight: 8, color: '#4A7CF7' }} /> 邮件通知</span>} 
-                                bordered={false} 
-                                style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', height: '100%' }}
-                            >
-                                <Form.Item name="emailEnabled" label={<Text strong>开启邮件通知</Text>} valuePropName="checked">
-                                    <Switch />
-                                </Form.Item>
-                                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.emailEnabled !== curr.emailEnabled}>
-                                    {({ getFieldValue }) => getFieldValue('emailEnabled') && (
-                                        <>
-                                            <Row gutter={16}>
-                                                <Col xs={24} sm={12}>
-                                                    <Form.Item name="smtpHost" label="SMTP服务器" rules={[{ required: true }]}>
-                                                        <Input placeholder="如: smtp.qq.com" />
-                                                    </Form.Item>
-                                                </Col>
-                                                <Col xs={24} sm={12}>
-                                                    <Form.Item name="smtpPort" label="端口" rules={[{ required: true }]}>
-                                                        <Input placeholder="如: 465" />
-                                                    </Form.Item>
-                                                </Col>
-                                            </Row>
-                                            <Row gutter={16}>
-                                                <Col xs={24} sm={12}>
-                                                    <Form.Item name="smtpUser" label="发件邮箱" rules={[{ required: true, type: 'email' }]}>
-                                                        <Input prefix={<MailOutlined style={{ color: '#A3AED0' }} />} placeholder="123456@qq.com" />
-                                                    </Form.Item>
-                                                </Col>
-                                                <Col xs={24} sm={12}>
-                                                    <Form.Item name="smtpPass" label="授权码/密码" rules={[{ required: true }]}>
-                                                        <Input.Password placeholder="请输入授权码" />
-                                                    </Form.Item>
-                                                </Col>
-                                            </Row>
-                                            <Form.Item name="toList" label="收件人列表 (逗号分隔)" rules={[{ required: true }]}>
-                                                <Input.TextArea rows={2} placeholder="a@ex.com, b@ex.com" />
-                                            </Form.Item>
-                                            <Form.Item style={{ marginBottom: 0 }}>
-                                                <Button 
-                                                    icon={<SendOutlined />} 
-                                                    onClick={handleTestEmail} 
-                                                    loading={testingEmail} 
-                                                    type="primary"
-                                                    style={{ 
-                                                        background: 'rgba(67, 24, 255, 0.08)', 
-                                                        color: '#4A7CF7', 
-                                                        border: '1px solid rgba(67, 24, 255, 0.2)',
-                                                        boxShadow: 'none'
-                                                    }}
-                                                >
-                                                    发送测试邮件
-                                                </Button>
-                                            </Form.Item>
-                                        </>
-                                    )}
-                                </Form.Item>
-                            </Card>
-                        </Col>
-
-                        <Col xs={24} xl={12}>
-                            <Card 
-                                title={<span style={{ fontWeight: 700 }}><WechatOutlined style={{ marginRight: 8, color: '#5CC9A7' }} /> 企业微信通知</span>} 
-                                bordered={false} 
-                                style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', height: '100%' }}
-                            >
-                                <Form.Item name="qywxEnabled" label={<Text strong>开启企业微信通知</Text>} valuePropName="checked">
-                                    <Switch />
-                                </Form.Item>
-                                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.qywxEnabled !== curr.qywxEnabled}>
-                                    {({ getFieldValue }) => getFieldValue('qywxEnabled') && (
-                                        <>
-                                            <Form.Item name="qywxApiKey" label="API Key (AgentSecret)" rules={[{ required: true }]}>
-                                                <Input.Password placeholder="请输入企业微信 API Key" />
-                                            </Form.Item>
-                                            <Row gutter={16}>
-                                                <Col xs={24} sm={12}>
-                                                    <Form.Item name="qywxToUser" label="接收成员ID">
-                                                        <Input placeholder="如: zhangsan|lisi" />
-                                                    </Form.Item>
-                                                </Col>
-                                                <Col xs={24} sm={12}>
-                                                    <Form.Item name="qywxToParty" label="接收部门ID">
-                                                        <Input placeholder="如: 1|2" />
-                                                    </Form.Item>
-                                                </Col>
-                                            </Row>
-                                            <Form.Item style={{ marginBottom: 0 }}>
-                                                <Button 
-                                                    icon={<WechatOutlined />} 
-                                                    onClick={handleTestWecom} 
-                                                    loading={testingWecom} 
-                                                    type="primary" 
-                                                    style={{ 
-                                                        background: 'rgba(1, 181, 116, 0.08)', 
-                                                        color: '#5CC9A7', 
-                                                        border: '1px solid rgba(1, 181, 116, 0.2)',
-                                                        boxShadow: 'none'
-                                                    }}
-                                                >
-                                                    发送测试消息
-                                                </Button>
-                                            </Form.Item>
-                                        </>
-                                    )}
-                                </Form.Item>
-                            </Card>
-                        </Col>
-                    </Row>
-
-                    <div style={{ marginTop: 40, display: 'flex', justifyContent: 'center' }}>
-                        <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} size="large" style={{ minWidth: 240, height: 50, borderRadius: 15, boxShadow: '0 10px 20px rgba(67, 24, 255, 0.2)' }}>
-                            保存通知配置
+                <Card bordered={false} style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)' }}>
+                    <Space direction="vertical" size={18} style={{ width: '100%' }}>
+                        <Space size={10} wrap>
+                            <Tag color="processing">已迁移</Tag>
+                            <Tag>企业微信</Tag>
+                            <Tag>Android App</Tag>
+                            <Tag>发送台账</Tag>
+                            <Tag>接收偏好</Tag>
+                        </Space>
+                        <div>
+                            <Title level={4} style={{ marginTop: 0 }}>通知服务已统一到控制台管理</Title>
+                            <Text type="secondary">
+                                这里不再保存邮件或企业微信配置，也不再直接发送测试消息。企业微信发送、Android App 收件箱、测试发送、模板编排、接收偏好和 API 接入现在都由统一通知控制中心集中操作。
+                            </Text>
+                        </div>
+                        <Button
+                            type="primary"
+                            icon={<ApiOutlined />}
+                            size="large"
+                            onClick={() => { window.location.href = '/console?view=notification'; }}
+                        >
+                            打开统一通知控制中心
                         </Button>
-                    </div>
-                </Form>
+                    </Space>
+                </Card>
             )
         },
         {

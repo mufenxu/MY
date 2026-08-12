@@ -218,6 +218,72 @@ body {
   cursor: pointer;
 }
 
+.notify-channel-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.notify-channel-card {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 13px 14px;
+  color: var(--text);
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  text-align: left;
+}
+
+.notify-channel-card > span {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: var(--blue);
+  background: var(--blue-soft);
+  border-radius: 8px;
+}
+
+.notify-channel-card:nth-child(2) > span {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.notify-channel-card:nth-child(3) > span {
+  color: var(--purple);
+  background: var(--purple-soft);
+}
+
+.notify-channel-card > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.notify-channel-card strong,
+.notify-channel-card small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notify-channel-card strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.notify-channel-card small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
 .notify-state {
   display: inline-flex;
   min-width: 72px;
@@ -243,10 +309,95 @@ body {
   overflow: hidden;
 }
 
-.notify-records-panel > .notify-records-header {
+.notify-records-panel > .notify-records-header,
+.notify-app-panel > .notify-records-header {
   margin: 0;
   padding: 16px 18px;
   border-bottom: 1px solid var(--line);
+}
+
+.notify-app-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.34fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.notify-app-panel {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.notify-app-side {
+  display: grid;
+  gap: 14px;
+}
+
+.notify-app-filter {
+  display: grid;
+  min-width: min(420px, 100%);
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 8px;
+}
+
+.notify-app-filter .notify-input-wrap {
+  height: 38px;
+}
+
+.notify-app-kpis {
+  padding: 14px 18px 0;
+}
+
+.notify-app-list {
+  display: grid;
+  padding: 14px 18px 18px;
+}
+
+.notify-app-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 78px minmax(220px, 1fr) minmax(180px, 0.72fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.notify-app-row:last-child {
+  border-bottom: 0;
+}
+
+.notify-app-row-main,
+.notify-app-meta {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.notify-app-row-main strong,
+.notify-app-row-main small,
+.notify-app-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notify-app-row-main strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.notify-app-row-main small,
+.notify-app-meta span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.notify-app-meta {
+  justify-items: end;
+  text-align: right;
 }
 
 .notify-filters {
@@ -604,6 +755,7 @@ body {
 }
 
 @media (max-width: 980px) {
+  .notify-app-layout,
   .notify-orchestration-layout,
   .notify-preference-form {
     grid-template-columns: 1fr;
@@ -644,6 +796,7 @@ body {
 }
 
 @media (max-width: 900px) {
+  .notify-channel-grid,
   .notify-overview-grid,
   .notify-test-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -657,6 +810,7 @@ body {
 
 @media (max-width: 620px) {
   .notify-toolbar,
+  .notify-app-panel > .notify-records-header,
   .notify-records-panel > .notify-records-header,
   .notify-pagination {
     align-items: stretch;
@@ -664,10 +818,21 @@ body {
   }
 
   .notify-toolbar .ops-segmented,
+  .notify-app-filter,
   .notify-refresh,
   .notify-filters,
   .notify-filters .select-control {
     width: 100%;
+  }
+
+  .notify-app-filter,
+  .notify-app-row {
+    grid-template-columns: 1fr;
+  }
+
+  .notify-app-meta {
+    justify-items: start;
+    text-align: left;
   }
 
   .notify-toolbar .ops-segmented button {

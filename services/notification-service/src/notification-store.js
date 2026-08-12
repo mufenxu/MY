@@ -48,6 +48,7 @@ function serializeAppNotification(row, recipient, protector) {
   const payload = protector.decrypt(row.encryptedPayload);
   return {
     id: row.id,
+    recipientId: recipient.recipientId,
     category: row.category,
     priority: row.priority,
     ...payload,
@@ -55,6 +56,21 @@ function serializeAppNotification(row, recipient, protector) {
     expiresAt: serializeDocument(row.expiresAt),
     readAt: serializeDocument(recipient.readAt),
     snoozedUntil: serializeDocument(recipient.snoozedUntil),
+  };
+}
+
+function appDeviceOverview(rows = []) {
+  const now = Date.now();
+  const active = rows.filter((row) => !row.expiresAt || new Date(row.expiresAt).getTime() > now);
+  const lastSeenAt = active
+    .map((row) => row.lastSeenAt)
+    .filter(Boolean)
+    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] || null;
+  return {
+    total: active.length,
+    pollOnly: active.filter((row) => row.provider === 'poll' || !row.encryptedToken).length,
+    pushReady: active.filter((row) => row.provider !== 'poll' && row.encryptedToken).length,
+    lastSeenAt: serializeDocument(lastSeenAt),
   };
 }
 
@@ -325,6 +341,24 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
         total: rowsForRecipient.length,
         unread: allActive.length,
         nextCursor: rowsForRecipient.length > limit ? encodeAppCursor(pageRows.at(-1)?.message) : null,
+      };
+    },
+    async getAppOverview(filters = {}) {
+      prune();
+      const normalizedRecipient = String(filters.userId || '').trim();
+      const limit = normalizePositiveInteger(filters.limit, 10, 50);
+      const activeRows = appRecipients
+        .filter((row) => !row.archivedAt && (!normalizedRecipient || row.recipientId === normalizedRecipient))
+        .map((recipient) => ({ recipient, message: appMessages.find((row) => row.id === recipient.messageId) }))
+        .filter(({ message }) => message)
+        .sort((left, right) => new Date(right.message.createdAt) - new Date(left.message.createdAt) || right.message.id.localeCompare(left.message.id));
+      const activeDevices = appDevices.filter((row) => !normalizedRecipient || row.recipientId === normalizedRecipient);
+      return {
+        userId: normalizedRecipient,
+        total: activeRows.length,
+        unread: activeRows.filter(({ recipient }) => !recipient.readAt).length,
+        devices: appDeviceOverview(activeDevices),
+        items: activeRows.slice(0, limit).map(({ message, recipient }) => serializeAppNotification(message, recipient, protector)),
       };
     },
     async markAppNotificationRead(recipientId, notificationId) {
@@ -1008,6 +1042,55 @@ async function createMongoNotificationStore({
         total,
         unread,
         nextCursor: hasMore ? encodeAppCursor(pageRows.at(-1)) : null,
+      };
+    },
+    async getAppOverview(filters = {}) {
+      const normalizedRecipient = String(filters.userId || '').trim();
+      const limit = normalizePositiveInteger(filters.limit, 10, 50);
+      const recipientQuery = {
+        archivedAt: null,
+        ...(normalizedRecipient ? { recipientId: normalizedRecipient } : {}),
+      };
+      const activeDeviceQuery = {
+        ...(normalizedRecipient ? { recipientId: normalizedRecipient } : {}),
+        $or: [
+          { expiresAt: null },
+          { expiresAt: { $exists: false } },
+          { expiresAt: { $gt: new Date() } },
+        ],
+      };
+      const [recipientRows, total, unread, totalDevices, pollOnly, pushReady, lastDevice] = await Promise.all([
+        appRecipients.find(recipientQuery, { projection: { _id: 0 } }).sort({ createdAt: -1, messageId: -1 }).limit(limit).toArray(),
+        appRecipients.countDocuments(recipientQuery),
+        appRecipients.countDocuments({ ...recipientQuery, readAt: null }),
+        appDevices.countDocuments(activeDeviceQuery),
+        appDevices.countDocuments({
+          ...activeDeviceQuery,
+          $or: [{ provider: 'poll' }, { encryptedToken: '' }, { encryptedToken: { $exists: false } }],
+        }),
+        appDevices.countDocuments({
+          ...activeDeviceQuery,
+          provider: { $ne: 'poll' },
+          encryptedToken: { $type: 'string', $ne: '' },
+        }),
+        appDevices.findOne(activeDeviceQuery, { projection: { _id: 0 }, sort: { lastSeenAt: -1 } }),
+      ]);
+      const messageIds = recipientRows.map((row) => row.messageId);
+      const messageRows = messageIds.length
+        ? await appMessages.find({ id: { $in: messageIds } }, { projection: { _id: 0 } }).toArray()
+        : [];
+      const messageMap = new Map(messageRows.map((row) => [row.id, row]));
+      return {
+        userId: normalizedRecipient,
+        total,
+        unread,
+        devices: {
+          total: totalDevices,
+          pollOnly,
+          pushReady,
+          lastSeenAt: serializeDocument(lastDevice?.lastSeenAt || null),
+        },
+        items: recipientRows.map((recipient) => serializeAppNotification(messageMap.get(recipient.messageId), recipient, protector)).filter(Boolean),
       };
     },
     async markAppNotificationRead(recipientId, notificationId) {

@@ -86,6 +86,15 @@ const testNotificationSchema = z.object({
   content: z.string().trim().min(1).max(4096),
 });
 
+const appTestNotificationSchema = z.object({
+  actor: z.string().trim().min(1).max(128),
+  userId: z.string().trim().min(1).max(128)
+    .refine((value) => value !== '@all' && !value.includes('|'), 'App 测试通知只能发送给一个明确平台用户'),
+  title: z.string().trim().min(1).max(120),
+  summary: z.string().trim().min(1).max(500),
+  priority: z.enum(['low', 'normal', 'high', 'critical']).default('high'),
+});
+
 function createApp({ config, wecomClient = null, notificationStore = null, appPushDispatcher = null } = {}) {
   if (!config) throw new Error('Notification service config is required.');
   const app = express();
@@ -917,6 +926,76 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
       };
       const { delivery } = await deliver(body, { caller: req.serviceCaller, actor: input.actor, requestId: req.id });
       return res.status(201).json({ delivered: true, delivery });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/management/app/overview', checkManagementAccess, async (req, res, next) => {
+    try {
+      const userId = String(req.query.userId || '').trim().slice(0, 128);
+      const limit = Number.parseInt(req.query.limit, 10) || 10;
+      return res.json(await store.getAppOverview({ userId, limit }));
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/management/app/test', managementSendLimiter, checkManagementAccess, async (req, res, next) => {
+    try {
+      const input = appTestNotificationSchema.parse(req.body);
+      const created = await store.createAppNotification({
+        caller: req.serviceCaller,
+        idempotencyKey: `management-app-test:${req.id}`,
+        recipients: [input.userId],
+        message: {
+          category: 'system.test',
+          priority: input.priority,
+          title: input.title,
+          summary: input.summary,
+          content: {
+            kind: 'card',
+            title: input.title,
+            summary: input.summary,
+            blocks: [{ type: 'text', text: input.summary }],
+          },
+          source: { service: req.serviceCaller, entityType: 'manual-test', entityId: req.id },
+          actions: [{ id: 'open-notifications', label: '打开通知中心', deepLink: 'mycontrol://open?destination=notifications' }],
+        },
+      });
+      const push = created.deduplicated
+        ? { attempted: 0, sent: 0, deferred: 0, failed: 0, suppressed: 0, results: [] }
+        : await safelyDispatchAppPush(req.id, {
+          store,
+          notification: { id: created.notification.id, category: 'system.test', priority: input.priority },
+          recipients: [input.userId],
+        });
+      const recipient = await store.getAppOverview({ userId: input.userId, limit: 5 });
+      return res.status(201).json({
+        created: !created.deduplicated,
+        deduplicated: created.deduplicated,
+        notification: {
+          id: created.notification.id,
+          title: input.title,
+          priority: input.priority,
+          category: 'system.test',
+        },
+        recipient: {
+          userId: input.userId,
+          total: recipient.total,
+          unread: recipient.unread,
+          devices: recipient.devices,
+        },
+        push: {
+          attempted: push.attempted,
+          sent: push.sent,
+          deferred: push.deferred,
+          failed: push.failed,
+          suppressed: push.suppressed,
+        },
+      });
     } catch (error) {
       next(error);
       return undefined;

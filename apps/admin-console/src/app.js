@@ -1408,6 +1408,39 @@ export function createApp({
     }
   });
 
+  app.get('/api/notifications/app/overview', requireRole('operator'), async (req, res, next) => {
+    try {
+      return res.json(await notificationManagement.getAppOverview({
+        userId: req.query.userId,
+        limit: req.query.limit,
+      }));
+    } catch (error) {
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
+  app.post('/api/notifications/app/test', notificationSendLimiter, requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
+    try {
+      const result = await notificationManagement.sendAppTest(req.body || {}, req.consoleUser.username);
+      await recordAudit(req, {
+        action: 'notification.app_test_send',
+        targetType: 'notification_app_recipient',
+        targetId: String(req.body?.userId || '').slice(0, 128),
+        details: { priority: String(req.body?.priority || 'high') },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      await recordAudit(req, {
+        action: 'notification.app_test_send',
+        outcome: 'failure',
+        targetType: 'notification_app_recipient',
+        targetId: String(req.body?.userId || '').slice(0, 128),
+        details: { code: String(error.code || 'UNKNOWN').slice(0, 80) },
+      });
+      try { return sendNotificationManagementError(res, error); } catch (unexpected) { next(unexpected); return undefined; }
+    }
+  });
+
   app.post('/api/notifications/deliveries/:id/retry', notificationSendLimiter, requireConsoleRequest, requireRole('operator'), async (req, res, next) => {
     try {
       const result = await notificationManagement.retryDelivery(req.params.id, req.consoleUser.username);

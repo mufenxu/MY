@@ -87,7 +87,13 @@ test('notification nested tabs keep the existing panel spacing and accessible la
 
   assert.match(source, /const panelLabelledBy = \['records', 'test'\]\.includes\(tab\)/);
   assert.match(source, /className="notify-view-panel"[^>]+aria-labelledby=\{panelLabelledBy\}/);
+  assert.match(source, /aria-label="统一通知服务控制中心"/);
+  assert.match(source, /id: 'app', label: 'App 通知'/);
+  assert.match(source, /\/api\/notifications\/app\/overview/);
+  assert.match(source, /\/api\/notifications\/app\/test/);
   assert.match(styles, /\.notify-view-panel\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*gap:\s*14px;/s);
+  assert.match(styles, /\.notify-channel-grid\s*\{/);
+  assert.match(styles, /\.notify-app-layout\s*\{/);
 });
 
 test('homepage dependency topology uses live service observations without decorative canvas data', () => {

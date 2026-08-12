@@ -37,7 +37,8 @@ test('other externally bound operations override the short request timeout', () 
   const publicQuery = readSource('src', 'pages', 'PublicQuery.jsx');
 
   assert.match(settings, /settings\/run-task[\s\S]*?timeout:\s*MANUAL_TASK_TIMEOUT_MS/);
-  assert.match(settings, /settings\/test-notify[\s\S]*?timeout:\s*NOTIFICATION_TEST_TIMEOUT_MS/);
+  assert.doesNotMatch(settings, /settings\/test-notify|NOTIFICATION_TEST_TIMEOUT_MS/);
+  assert.match(settings, /\/console\?view=notification/);
   assert.match(orders, /course-order\/admin\/refresh[\s\S]*?timeout:\s*ORDER_REFRESH_TIMEOUT_MS/);
   assert.match(publicQuery, /course-order\/public-refresh[\s\S]*?timeout:\s*PUBLIC_REFRESH_TIMEOUT_MS/);
 });
@@ -115,7 +116,7 @@ test('header icon tools and tabs remain keyboard and screen-reader accessible', 
   }
   assert.match(layout, /aria-label="打开导航菜单"/);
   assert.match(layout, /aria-label="刷新当前页"/);
-  assert.match(layout, /aria-label="打开通知管理"[\s\S]*?handleTabClick\('\/notifications'\)/);
+  assert.match(layout, /aria-label="打开统一通知控制中心"[\s\S]*?openNotificationConsole/);
   assert.match(layout, /<button className="soybean-header-avatar-trigger"[\s\S]*?aria-label="打开用户菜单"/);
   assert.match(styles, /\.soybean-tab-item:focus-visible/);
   assert.match(styles, /\.soybean-header-avatar-trigger:focus-visible/);
@@ -196,7 +197,7 @@ test('logout keeps the active UI session when the server cannot revoke cookies',
 test('operator settings hide super-admin security and secret surfaces', () => {
   const settings = readSource('src', 'pages', 'Settings.jsx');
 
-  assert.match(settings, /if \(!isSuperAdmin\) return;[\s\S]*loadConfig\(\);[\s\S]*loadAdminInfo\(\);/);
+  assert.match(settings, /if \(!isSuperAdmin\) return;[\s\S]*loadAdminInfo\(\);/);
   assert.match(settings, /filter\(\(item\) => isSuperAdmin \|\| !\['1', '2', '3', '4'\]\.includes\(item\.key\)\)/);
   assert.match(settings, /defaultActiveKey=\{isSuperAdmin \? '1' : '6'\}/);
 });

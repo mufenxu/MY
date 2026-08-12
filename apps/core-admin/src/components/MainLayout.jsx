@@ -39,7 +39,7 @@ const TAB_CONFIG = {
     '/dashboard': { label: '数据仪表盘', icon: <DashboardOutlined />, closable: false },
     '/air-energy': { label: '空气能监控', icon: <FireOutlined /> },
     '/users': { label: '用户与权限', icon: <UserOutlined /> },
-    '/notifications': { label: '通知管理', icon: <BellOutlined /> },
+    '/notifications': { label: '通知迁移', icon: <BellOutlined /> },
     '/audit-logs': { label: '审计日志', icon: <FileTextOutlined /> },
     '/course-orders': { label: '网课订单处理', icon: <FileTextOutlined /> },
     '/settings': { label: '系统设置', icon: <SettingOutlined /> },
@@ -62,7 +62,6 @@ const MENU_ITEMS = [
         children: [
             { key: '/course-orders', label: '网课订单处理' },
             { key: '/query', label: '记录查询入口' },
-            { key: '/notifications', label: '通知管理' },
         ]
     },
     {
@@ -81,7 +80,6 @@ const TABLE_HEAVY_ROUTES = new Set([
     '/dashboard',
     '/air-energy',
     '/users',
-    '/notifications',
     '/audit-logs',
     '/course-orders',
 ]);
@@ -374,6 +372,10 @@ const MainLayout = () => {
         window.location.assign('/console');
     }, []);
 
+    const openNotificationConsole = useCallback(() => {
+        window.location.assign('/console?view=notification');
+    }, []);
+
     const navigateSoftly = useCallback((path) => {
         startTransition(() => {
             navigate(path);
@@ -622,13 +624,13 @@ const MainLayout = () => {
                                 </Tooltip>
                             )}
                             {!isMobile && (
-                                <Tooltip title="打开通知管理">
+                                <Tooltip title="打开统一通知控制中心">
                                     <Button
                                         type="text"
                                         icon={<BellOutlined />}
                                         className="soybean-header-icon-btn"
-                                        aria-label="打开通知管理"
-                                        onClick={() => handleTabClick('/notifications')}
+                                        aria-label="打开统一通知控制中心"
+                                        onClick={openNotificationConsole}
                                     />
                                 </Tooltip>
                             )}

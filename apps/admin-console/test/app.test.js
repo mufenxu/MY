@@ -235,6 +235,11 @@ test('notification management routes enforce console mutations and preserve the 
       calls.push({ type: 'test', input, actor });
       return { delivered: true, delivery: { id: 'delivery-test' } };
     },
+    sendAppTest: async (input, actor) => {
+      calls.push({ type: 'app-test', input, actor });
+      return { created: true, notification: { id: 'app-notice' }, recipient: { userId: input.userId, unread: 1 } };
+    },
+    getAppOverview: async (filters) => ({ userId: filters.userId, total: 1, unread: 1, devices: { total: 0 }, items: [] }),
     retryDelivery: async (id, actor) => {
       calls.push({ type: 'retry', id, actor });
       return { delivered: true, delivery: { id: 'delivery-retry' } };
@@ -261,6 +266,16 @@ test('notification management routes enforce console mutations and preserve the 
       headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
       body,
     })).status, 201);
+    const appBody = JSON.stringify({ userId: 'alice', title: 'Android 通知测试', summary: 'hello' });
+    assert.equal((await fetch(`${origin}/api/notifications/app/overview?userId=alice`)).status, 200);
+    assert.equal((await fetch(`${origin}/api/notifications/app/test`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: appBody,
+    })).status, 403);
+    assert.equal((await fetch(`${origin}/api/notifications/app/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
+      body: appBody,
+    })).status, 201);
     assert.equal((await fetch(`${origin}/api/notifications/deliveries/delivery_123456/retry`, {
       method: 'POST', headers: { 'X-Platform-Request': 'console' },
     })).status, 201);
@@ -274,6 +289,7 @@ test('notification management routes enforce console mutations and preserve the 
   });
   assert.deepEqual(calls.map(({ type, actor }) => [type, actor]), [
     ['test', 'local-admin'],
+    ['app-test', 'local-admin'],
     ['retry', 'local-admin'],
     ['api-create', 'local-admin'],
   ]);

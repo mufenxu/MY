@@ -305,6 +305,42 @@ test('management test send requires one explicit user and records a sanitized de
   });
 });
 
+test('management app test creates an app inbox item and returns recipient status', async () => {
+  await withServer({}, async (port) => {
+    const rejectedPath = '/management/app/test';
+    const rejectedBody = { actor: 'operator', userId: 'alice|bob', title: 'Android 测试', summary: 'hello' };
+    const rejectedSerialized = JSON.stringify(rejectedBody);
+    const rejected = await request(port, {
+      path: rejectedPath,
+      body: rejectedBody,
+      headers: signedHeaders({ method: 'POST', path: rejectedPath, body: rejectedSerialized }),
+    });
+    assert.equal(rejected.status, 400);
+
+    const body = { actor: 'operator', userId: 'alice', title: 'Android 通知测试', summary: '统一控制台 App 通道联通。' };
+    const serialized = JSON.stringify(body);
+    const created = await request(port, {
+      path: rejectedPath,
+      body,
+      headers: signedHeaders({ method: 'POST', path: rejectedPath, body: serialized }),
+    });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.created, true);
+    assert.equal(created.body.notification.title, 'Android 通知测试');
+    assert.equal(created.body.recipient.userId, 'alice');
+    assert.equal(created.body.recipient.unread, 1);
+    assert.equal(created.body.push.deferred, 0);
+
+    const overviewPath = '/management/app/overview?userId=alice';
+    const overview = await request(port, { path: overviewPath, headers: signedHeaders({ path: overviewPath }) });
+    assert.equal(overview.status, 200);
+    assert.equal(overview.body.total, 1);
+    assert.equal(overview.body.unread, 1);
+    assert.equal(overview.body.devices.total, 0);
+    assert.equal(overview.body.items[0].title, 'Android 通知测试');
+  });
+});
+
 test('failed single-user deliveries can be retried without exposing stored payloads', async () => {
   let attempts = 0;
   const error = Object.assign(new Error('temporary WeCom failure'), { status: 502, code: 'WECOM_MESSAGE_ERROR', wecomCode: 45009 });

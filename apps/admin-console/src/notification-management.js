@@ -44,6 +44,26 @@ function validateTestInput(input = {}) {
   return { msgType, touser, content };
 }
 
+function validateAppTestInput(input = {}) {
+  const userId = String(input.userId || '').trim();
+  const title = String(input.title || 'Android App 通知测试').trim();
+  const summary = String(input.summary || '').trim();
+  const priority = String(input.priority || 'high');
+  if (!userId || userId === '@all' || userId.includes('|') || userId.length > 128) {
+    throw new NotificationManagementError('App 测试通知必须指定一个明确的平台用户。', { status: 400, code: 'INVALID_APP_TEST_RECIPIENT' });
+  }
+  if (!title || title.length > 120) {
+    throw new NotificationManagementError('App 测试标题必须为 1 至 120 个字符。', { status: 400, code: 'INVALID_APP_TEST_TITLE' });
+  }
+  if (!summary || summary.length > 500) {
+    throw new NotificationManagementError('App 测试内容必须为 1 至 500 个字符。', { status: 400, code: 'INVALID_APP_TEST_CONTENT' });
+  }
+  if (!['low', 'normal', 'high', 'critical'].includes(priority)) {
+    throw new NotificationManagementError('App 测试优先级无效。', { status: 400, code: 'INVALID_APP_TEST_PRIORITY' });
+  }
+  return { userId, title, summary, priority };
+}
+
 export function createNotificationManagementClient({
   serviceUrl,
   apiKey,
@@ -167,6 +187,16 @@ export function createNotificationManagementClient({
     async sendTest(input, actor) {
       return request('/management/test', { method: 'POST', body: { ...validateTestInput(input), actor: String(actor || '').slice(0, 128) } });
     },
+    async getAppOverview(filters = {}) {
+      if (!configured) return { userId: String(filters.userId || ''), total: 0, unread: 0, devices: { total: 0, pollOnly: 0, pushReady: 0, lastSeenAt: null }, items: [] };
+      const query = new URLSearchParams();
+      if (filters.userId) query.set('userId', String(filters.userId));
+      query.set('limit', String(boundedInteger(filters.limit, 10, 1, 50)));
+      return request(`/management/app/overview?${query}`);
+    },
+    async sendAppTest(input, actor) {
+      return request('/management/app/test', { method: 'POST', body: { ...validateAppTestInput(input), actor: String(actor || '').slice(0, 128) } });
+    },
     async retryDelivery(id, actor) {
       const deliveryId = String(id || '').trim();
       if (!/^[A-Za-z0-9_-]{8,128}$/.test(deliveryId)) {
@@ -220,4 +250,4 @@ export function createNotificationManagementClient({
   };
 }
 
-export { validateTestInput };
+export { validateAppTestInput, validateTestInput };
