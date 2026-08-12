@@ -42,6 +42,80 @@ test('notification overview calculates success rate and p95 duration', async () 
   assert.equal(percentile95([5, 10, 50]), 50);
 });
 
+test('app inbox deduplicates messages and isolates recipient state', async () => {
+  const store = createMemoryNotificationStore({ encryptionKey });
+  const input = {
+    caller: 'core-api',
+    idempotencyKey: 'incident:incident-1:opened',
+    recipients: ['alice', 'bob', 'alice'],
+    message: {
+      category: 'incident',
+      priority: 'critical',
+      title: '数据库连接异常',
+      summary: '生产环境数据库连接失败。',
+      content: {
+        kind: 'card',
+        blocks: [{ type: 'text', text: '请尽快确认数据库状态。' }],
+      },
+      source: { service: 'core', entityType: 'incident', entityId: 'incident-1' },
+      actions: [{ id: 'open-incident', label: '查看事件', deepLink: 'mycontrol://open?tab=events&incidentId=incident-1' }],
+    },
+  };
+
+  const first = await store.createAppNotification(input);
+  const duplicate = await store.createAppNotification(input);
+  assert.equal(first.deduplicated, false);
+  assert.equal(duplicate.deduplicated, true);
+  assert.equal(duplicate.notification.id, first.notification.id);
+
+  const alice = await store.listAppNotifications('alice', { limit: 20 });
+  const bob = await store.listAppNotifications('bob', { limit: 20 });
+  assert.equal(alice.total, 1);
+  assert.equal(alice.unread, 1);
+  assert.equal(alice.items[0].content.blocks[0].text, '请尽快确认数据库状态。');
+  assert.equal(bob.total, 1);
+  assert.equal((await store.listAppNotifications('charlie', { limit: 20 })).total, 0);
+
+  const snoozedUntil = new Date(Date.now() + 3600000);
+  const snoozed = await store.snoozeAppNotification('alice', first.notification.id, snoozedUntil);
+  assert.equal(snoozed.snoozedUntil, snoozedUntil.toISOString());
+
+  const read = await store.markAppNotificationRead('alice', first.notification.id);
+  assert.ok(read.readAt);
+  assert.equal((await store.listAppNotifications('alice', { unreadOnly: true })).total, 0);
+  assert.equal((await store.listAppNotifications('bob', { unreadOnly: true })).total, 1);
+
+  assert.equal((await store.archiveReadAppNotifications('alice')).archived, 1);
+  assert.equal((await store.listAppNotifications('alice')).total, 0);
+  assert.equal((await store.listAppNotifications('bob')).total, 1);
+});
+
+test('app device registration keeps push tokens out of public metadata', async () => {
+  const store = createMemoryNotificationStore({ encryptionKey });
+  const registered = await store.upsertAppDevice('alice', {
+    installationId: 'android-installation-1',
+    provider: 'fcm',
+    token: 'secret-device-token',
+    appVersion: '1.1.0',
+  });
+  assert.equal(registered.token, undefined);
+  assert.equal(registered.tokenHash, undefined);
+
+  await store.upsertAppDevice('alice', {
+    installationId: 'android-installation-1',
+    provider: 'fcm',
+    token: 'rotated-device-token',
+    appVersion: '1.1.1',
+  });
+  const deliveryDevices = await store.listAppDeliveryDevices('alice');
+  assert.equal(deliveryDevices.length, 1);
+  assert.equal(deliveryDevices[0].token, 'rotated-device-token');
+
+  assert.equal(await store.removeAppDevice('bob', 'android-installation-1'), false);
+  assert.equal(await store.removeAppDevice('alice', 'android-installation-1'), true);
+  assert.equal((await store.listAppDeliveryDevices('alice')).length, 0);
+});
+
 test('API clients keep tokens hashed and support rotation, audit and revocation', async () => {
   const store = createMemoryNotificationStore({ encryptionKey });
   const created = await store.createApiClient({

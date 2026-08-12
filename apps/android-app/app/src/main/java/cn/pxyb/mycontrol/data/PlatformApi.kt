@@ -2,8 +2,12 @@ package cn.pxyb.mycontrol.data
 
 import android.net.Uri
 import android.util.Base64
+import android.os.Build
 import cn.pxyb.mycontrol.BuildConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -13,6 +17,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 import java.time.Instant
+import java.time.YearMonth
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -20,6 +25,13 @@ class PlatformApi(
     private val sessionStore: SessionStore,
     private val snapshotStore: ResponseSnapshotStore,
 ) {
+    init {
+        snapshotStore.setAccount(sessionStore.readActiveUsername())
+    }
+
+    fun setAccount(username: String?) {
+        snapshotStore.setAccount(username)
+    }
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val platformOrigin = Uri.parse(BuildConfig.PLATFORM_BASE_URL).let { uri ->
         if (uri.scheme.isNullOrBlank() || uri.authority.isNullOrBlank()) {
@@ -100,6 +112,8 @@ class PlatformApi(
             result.sessionIdleMinutes,
         )
         sessionStore.writeLastUsername(result.user.username)
+        sessionStore.writeActiveUsername(result.user.username)
+        snapshotStore.setAccount(result.user.username)
     }
 
     suspend fun discardLogin(result: LoginResult): Unit = withContext(Dispatchers.IO) {
@@ -178,7 +192,7 @@ class PlatformApi(
                 sessionStore.clear()
                 null
             } else {
-                json.optJSONObject("user").toPlatformUser()
+                json.optJSONObject("user").toPlatformUser().also { snapshotStore.setAccount(it.username) }
             }
         } catch (error: ApiException) {
             if (error.status == 401 || error.status == 403) {
@@ -239,6 +253,94 @@ class PlatformApi(
         execute(TODOS_PATH).json.toTodoSnapshotEnvelope()
     }
 
+    suspend fun appNotifications(
+        limit: Int = 50,
+        cursor: String? = null,
+        unreadOnly: Boolean = false,
+    ): AppNotificationPage = withContext(Dispatchers.IO) {
+        val query = buildList {
+            add("limit=${limit.coerceIn(1, 100)}")
+            cursor?.takeIf(String::isNotBlank)?.let { add("cursor=${encodePath(it)}") }
+            if (unreadOnly) add("unreadOnly=true")
+        }.joinToString("&")
+        execute("/api/app/notifications?$query").json
+            .toAppNotificationPage()
+    }
+
+    suspend fun allAppNotifications(maxItems: Int = 200): List<AppAlertRecord> = withContext(Dispatchers.IO) {
+        val result = mutableListOf<AppAlertRecord>()
+        var cursor: String? = null
+        repeat(3) {
+            val page = appNotifications(limit = 100, cursor = cursor)
+            result += page.items
+            if (result.size >= maxItems || page.nextCursor == null) return@withContext result.take(maxItems)
+            cursor = page.nextCursor
+        }
+        result.take(maxItems)
+    }
+
+    suspend fun markAppNotificationRead(id: String) = withContext(Dispatchers.IO) {
+        execute("/api/app/notifications/${encodePath(id)}/read", "POST", JSONObject())
+        Unit
+    }
+
+    suspend fun snoozeAppNotification(id: String, snoozedUntilMillis: Long) = withContext(Dispatchers.IO) {
+        execute(
+            "/api/app/notifications/${encodePath(id)}/snooze",
+            "POST",
+            JSONObject().put("snoozedUntil", Instant.ofEpochMilli(snoozedUntilMillis).toString()),
+        )
+        Unit
+    }
+
+    suspend fun markAllAppNotificationsRead() = withContext(Dispatchers.IO) {
+        execute("/api/app/notifications/read-all", "POST", JSONObject())
+        Unit
+    }
+
+    suspend fun clearReadAppNotifications() = withContext(Dispatchers.IO) {
+        execute("/api/app/notifications/clear-read", "POST", JSONObject())
+        Unit
+    }
+
+    suspend fun appNotificationPreference(): AppNotificationPreference = withContext(Dispatchers.IO) {
+        execute("/api/app/preferences").json
+            .optJSONObject("preference")
+            ?.toAppNotificationPreference()
+            ?: AppNotificationPreference()
+    }
+
+    suspend fun saveAppNotificationPreference(preference: AppNotificationPreference) = withContext(Dispatchers.IO) {
+        execute(
+            "/api/app/preferences",
+            "PUT",
+            JSONObject()
+                .put("enabled", preference.enabled)
+                .put(
+                    "quietHours",
+                    JSONObject()
+                        .put("enabled", preference.quietHoursEnabled)
+                        .put("startHour", preference.quietStartHour)
+                        .put("endHour", preference.quietEndHour),
+                )
+                .put("timezoneOffsetMinutes", preference.timezoneOffsetMinutes),
+        )
+        Unit
+    }
+
+    suspend fun registerAppDevice(installationId: String) = withContext(Dispatchers.IO) {
+        execute(
+            "/api/app/devices",
+            "POST",
+            JSONObject()
+                .put("installationId", installationId)
+                .put("provider", "poll")
+                .put("appVersion", BuildConfig.VERSION_NAME)
+                .put("deviceModel", "${Build.MANUFACTURER} ${Build.MODEL}".trim()),
+        )
+        Unit
+    }
+
     suspend fun mutateTodos(revision: Int, mutations: List<TodoMutation>): TodoSnapshot =
         withContext(Dispatchers.IO) {
             val body = JSONObject()
@@ -276,6 +378,100 @@ class PlatformApi(
             },
         )
     }
+
+    suspend fun campusDashboard(): CampusDashboard = withContext(Dispatchers.IO) {
+        supervisorScope {
+            val timetable = async { campusTimetable() }
+            val gpa = async { campusRequestOrNull(::campusGpa) }
+            val freeClassrooms = async { campusRequestOrNull(::campusFreeClassrooms) }
+            val campus = async { campusRequestOrNull(::campusLife) }
+            val energy = async { campusRequestOrNull(::campusEnergy) }
+            val campusLife = campus.await()
+            val campusEnergy = energy.await()
+            CampusDashboard(
+                timetable = timetable.await(),
+                overview = CampusOverview(
+                    gpa = gpa.await(),
+                    freeClassrooms = freeClassrooms.await(),
+                    cardBalance = campusLife?.cardBalance,
+                    waterCode = campusLife?.waterCode,
+                    dormitory = campusLife?.dormitory,
+                    energyBalance = campusEnergy?.balance,
+                    energyRoom = campusEnergy?.room,
+                ),
+            )
+        }
+    }
+
+    private suspend fun campusGpa(): CampusGpa {
+        val data = campusData(CAMPUS_GPA_PATH)
+        val rows = data.optJSONArray("rows").objects()
+        fun value(type: String): String? = rows.firstOrNull { it.optString("type") == type }
+            ?.displayString("value")
+
+        return CampusGpa(
+            overall = data.optJSONObject("main")?.displayString("value") ?: value("GPA"),
+            core = value("核心课GPA"),
+            required = value("必修课GPA"),
+            degree = value("学位课GPA"),
+        )
+    }
+
+    private suspend fun campusFreeClassrooms(): CampusFreeClassrooms {
+        val data = campusData(CAMPUS_FREE_CLASSROOMS_PATH)
+        val stats = data.optJSONObject("stats") ?: JSONObject()
+        return CampusFreeClassrooms(
+            rooms = stats.optionalInt("rooms"),
+            seats = stats.optionalInt("seats"),
+            dayLabel = data.displayString("dayLabel"),
+        )
+    }
+
+    private suspend fun campusLife(): CampusLife {
+        val data = campusData(CAMPUS_SUMMARY_PATH)
+        return CampusLife(
+            cardBalance = data.optJSONObject("card")?.displayString("totalBalance"),
+            waterCode = data.optJSONObject("water")
+                ?.optJSONObject("waterCode")
+                ?.optJSONObject("data")
+                ?.displayString("ranCode"),
+            dormitory = data.optJSONObject("accommodation")
+                ?.optJSONObject("profile")
+                ?.displayString("dormitoryInfo"),
+        )
+    }
+
+    private suspend fun campusEnergy(): CampusEnergy {
+        val data = campusData("$CAMPUS_ENERGY_SUMMARY_PATH?time=${YearMonth.now()}")
+        val wallet = data.optJSONObject("wallet")
+        return CampusEnergy(
+            balance = wallet?.optJSONObject("account")?.displayString("remainingSum"),
+            room = wallet?.optJSONObject("account")?.displayString("roomName")
+                ?: wallet?.optJSONObject("view")?.displayString("roomName")
+                ?: data.optJSONObject("meters")?.optJSONObject("view")?.displayString("roomName"),
+        )
+    }
+
+    private suspend fun campusData(path: String): JSONObject {
+        val envelope = execute(path).json
+        return envelope.optJSONObject("data") ?: envelope
+    }
+
+    private suspend fun <T> campusRequestOrNull(request: suspend () -> T): T? = try {
+        request()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Throwable) {
+        null
+    }
+
+    private data class CampusLife(
+        val cardBalance: String?,
+        val waterCode: String?,
+        val dormitory: String?,
+    )
+
+    private data class CampusEnergy(val balance: String?, val room: String?)
 
     suspend fun resourceExpiries(): List<ResourceExpiry> = withContext(Dispatchers.IO) {
         execute(RESOURCE_EXPIRIES_PATH).json.optJSONArray("data").objects().map { item ->
@@ -991,6 +1187,17 @@ private fun JSONObject?.optStringOr(key: String, fallback: String): String = thi
 
 private fun JSONObject.nullableString(key: String): String? =
     takeIf { has(key) && !isNull(key) }?.optString(key)?.takeIf { it.isNotBlank() }
+
+private fun JSONObject.displayString(key: String): String? = opt(key)
+    ?.takeUnless { it == JSONObject.NULL }
+    ?.toString()
+    ?.trim()
+    ?.takeIf { it.isNotBlank() }
+
+private fun JSONObject.optionalInt(key: String): Int? = opt(key)
+    ?.takeUnless { it == JSONObject.NULL }
+    ?.toString()
+    ?.toIntOrNull()
 
 private fun JSONObject.optLongOrNull(key: String): Long? =
     takeIf { has(key) && !isNull(key) }?.optLong(key)?.takeIf { it != 0L }

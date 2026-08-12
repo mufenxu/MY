@@ -1,23 +1,31 @@
 package cn.pxyb.mycontrol.ui
 
-import androidx.compose.animation.Crossfade
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,6 +35,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -35,9 +44,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
@@ -56,20 +65,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -77,6 +96,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -86,6 +107,7 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 private val PlatformTimeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm")
     .withZone(ZoneId.systemDefault())
@@ -101,34 +123,55 @@ val AppCardShape = RoundedCornerShape(24.dp)
 val AppSearchFieldShape = RoundedCornerShape(24.dp)
 private val AppDialogShape = RoundedCornerShape(28.dp)
 
+/** 统一按压反馈：按下轻微缩放，松开时用柔和弹性恢复。 */
+@Composable
+fun Modifier.pressFeedback(
+    interactionSource: MutableInteractionSource,
+    pressedScale: Float = 0.97f,
+): Modifier {
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) pressedScale else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "press-scale",
+    )
+    return graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
+}
+
 @Composable
 fun statusStyle(status: String): StatusStyle = when (status.lowercase()) {
     "healthy", "operational", "succeeded", "success", "passed", "resolved", "connected", "online" ->
         StatusStyle(
             "正常",
-            Color(0xFF047857),
-            Color(0xFFD1FAE5),
+            MaterialTheme.colorScheme.secondary,
+            MaterialTheme.colorScheme.secondaryContainer,
             Icons.Outlined.CheckCircle,
         )
     "critical", "failed", "failure", "offline", "outage", "error", "breached" ->
         StatusStyle(
             "异常",
-            Color(0xFFB91C1C),
-            Color(0xFFFEE2E2),
+            MaterialTheme.colorScheme.error,
+            MaterialTheme.colorScheme.errorContainer,
             Icons.Outlined.ErrorOutline,
         )
     "warning", "degraded", "action_required", "overdue", "unhealthy" ->
         StatusStyle(
             "需关注",
-            Color(0xFFB45309),
-            Color(0xFFFEF3C7),
+            MaterialTheme.colorScheme.tertiary,
+            MaterialTheme.colorScheme.tertiaryContainer,
             Icons.Outlined.WarningAmber,
         )
     "running", "pending", "queued", "acknowledged", "in_progress" ->
         StatusStyle(
             "处理中",
-            Color(0xFF1D4ED8),
-            Color(0xFFEFF6FF),
+            MaterialTheme.colorScheme.primary,
+            MaterialTheme.colorScheme.primaryContainer,
             Icons.Outlined.Schedule,
         )
     else -> StatusStyle("未确认", MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant, Icons.Outlined.Schedule)
@@ -161,16 +204,31 @@ fun StatusBadge(status: String, label: String? = null, modifier: Modifier = Modi
 @Composable
 fun AppPanel(
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Card(
         modifier = Modifier
             .clip(AppCardShape)
             .then(modifier)
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .pressFeedback(interactionSource)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = LocalIndication.current,
+                            onClick = onClick,
+                        )
+                } else {
+                    Modifier
+                }
+            )
             .fillMaxWidth(),
         shape = AppCardShape,
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFCFCFA)),
-        border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         content()
@@ -329,8 +387,8 @@ fun AppDialog(
             }
         }
 
-        val sheetColor = if (dark) Color(0xFF1E293B) else Color(0xFFFFFBFE)
-        val sheetBorder = if (dark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
+        val sheetColor = MaterialTheme.colorScheme.surface
+        val sheetBorder = MaterialTheme.colorScheme.outlineVariant
         val headerWash = Brush.verticalGradient(
             colors = listOf(
                 iconBackground.copy(alpha = if (dark) 0.34f else 0.55f),
@@ -449,10 +507,6 @@ fun AppDialog(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(
-                                        if (dark) Color.White.copy(alpha = 0.04f)
-                                        else Color(0xFFF8FAFC).copy(alpha = 0.92f),
-                                    )
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
                             ) {
                                 Column(
@@ -480,9 +534,11 @@ fun AppDialogPrimaryButton(
     enabled: Boolean = true,
     busy: Boolean = false,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Button(
         onClick = onClick,
-        modifier = modifier.height(48.dp),
+        modifier = modifier.height(48.dp).pressFeedback(interactionSource),
+        interactionSource = interactionSource,
         enabled = enabled && !busy,
         shape = RoundedCornerShape(18.dp),
         elevation = ButtonDefaults.buttonElevation(
@@ -522,16 +578,18 @@ fun AppDialogSecondaryButton(
     busy: Boolean = false,
 ) {
     val dark = isSystemInDarkTheme()
+    val interactionSource = remember { MutableInteractionSource() }
     Button(
         onClick = onClick,
-        modifier = modifier.height(48.dp),
+        modifier = modifier.height(48.dp).pressFeedback(interactionSource),
+        interactionSource = interactionSource,
         enabled = enabled && !busy,
         shape = RoundedCornerShape(18.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9),
+            containerColor = if (dark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurface,
-            disabledContainerColor = if (dark) Color.White.copy(alpha = 0.04f) else Color(0xFFF8FAFC),
+            disabledContainerColor = if (dark) Color.White.copy(alpha = 0.04f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
             disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
         ),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -557,18 +615,19 @@ fun AppDialogDangerButton(
     enabled: Boolean = true,
     busy: Boolean = false,
 ) {
-    val dark = isSystemInDarkTheme()
+    val interactionSource = remember { MutableInteractionSource() }
     Button(
         onClick = onClick,
-        modifier = modifier.height(48.dp),
+        modifier = modifier.height(48.dp).pressFeedback(interactionSource),
+        interactionSource = interactionSource,
         enabled = enabled && !busy,
         shape = RoundedCornerShape(18.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (dark) Color(0xFF7F1D1D) else Color(0xFFFEE2E2),
-            contentColor = if (dark) Color(0xFFFECACA) else Color(0xFFB91C1C),
-            disabledContainerColor = if (dark) Color(0xFF7F1D1D).copy(alpha = 0.45f) else Color(0xFFFEE2E2).copy(alpha = 0.55f),
-            disabledContentColor = if (dark) Color(0xFFFECACA).copy(alpha = 0.55f) else Color(0xFFB91C1C).copy(alpha = 0.45f),
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.error,
+            disabledContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
+            disabledContentColor = MaterialTheme.colorScheme.error.copy(alpha = 0.45f),
         ),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
     ) {
@@ -576,7 +635,7 @@ fun AppDialogDangerButton(
             CircularProgressIndicator(
                 Modifier.size(18.dp),
                 strokeWidth = 2.dp,
-                color = if (dark) Color(0xFFFECACA) else Color(0xFFB91C1C),
+                color = MaterialTheme.colorScheme.error,
             )
         } else {
             Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
@@ -622,7 +681,7 @@ fun DialogTextField(
             disabledBorderColor = if (dark) Color.White.copy(alpha = 0.06f) else Color(0xFFE2E8F0),
             focusedContainerColor = if (dark) Color.White.copy(alpha = 0.06f) else Color(0xFFF8FAFC),
             unfocusedContainerColor = if (dark) Color.White.copy(alpha = 0.04f) else Color(0xFFF8FAFC),
-            disabledContainerColor = if (dark) Color.White.copy(alpha = 0.02f) else Color(0xFFF1F5F9),
+            disabledContainerColor = if (dark) Color.White.copy(alpha = 0.02f) else MaterialTheme.colorScheme.surfaceVariant,
             focusedLabelColor = MaterialTheme.colorScheme.primary,
             unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
             cursorColor = MaterialTheme.colorScheme.primary,
@@ -659,16 +718,8 @@ fun AppConfirmDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         modifier = modifier,
         icon = icon,
-        iconTint = if (danger) {
-            if (isSystemInDarkTheme()) Color(0xFFFCA5A5) else Color(0xFFDC2626)
-        } else {
-            MaterialTheme.colorScheme.primary
-        },
-        iconBackground = if (danger) {
-            if (isSystemInDarkTheme()) Color(0xFF7F1D1D).copy(alpha = 0.55f) else Color(0xFFFEE2E2)
-        } else {
-            MaterialTheme.colorScheme.primaryContainer
-        },
+        iconTint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+        iconBackground = if (danger) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
         title = title,
         content = {
             DialogInfoText(detail)
@@ -795,12 +846,174 @@ fun formatLastActive(value: Long?): String {
     return PlatformTimeFormatter.format(Instant.ofEpochMilli(normalized))
 }
 
+/** 下拉刷新容器：列表位于顶部时下拉，带动指示器与内容位移动画。 */
+@Composable
+fun PullToRefresh(
+    isRefreshing: Boolean,
+    onRefresh: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    atTop: () -> Boolean,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val density = LocalDensity.current
+    val thresholdPx = with(density) { 76.dp.toPx() }
+    val maxPullPx = with(density) { 150.dp.toPx() }
+    val indicatorSizePx = with(density) { 42.dp.toPx() }
+
+    var pullOffset by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    var triggered by remember { mutableStateOf(false) }
+    val currentIsRefreshing by rememberUpdatedState(isRefreshing)
+    val currentOnRefresh by rememberUpdatedState(onRefresh)
+    val currentAtTop by rememberUpdatedState(atTop)
+    val currentEnabled by rememberUpdatedState(enabled)
+
+    fun settlePull() {
+        dragging = false
+        when {
+            !currentEnabled -> pullOffset = 0f
+            currentIsRefreshing || triggered -> pullOffset = thresholdPx
+            pullOffset >= thresholdPx -> {
+                triggered = true
+                pullOffset = thresholdPx
+                currentOnRefresh?.invoke()
+            }
+            else -> pullOffset = 0f
+        }
+    }
+
+    LaunchedEffect(isRefreshing) {
+        if (isRefreshing) {
+            // 后台刷新（切页/自动刷新）不显示指示器；只有手动下拉触发后等待完成
+        } else if (triggered) {
+            triggered = false
+            pullOffset = 0f
+        }
+    }
+
+    val connection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val delta = available.y
+                if (currentEnabled && source == NestedScrollSource.Drag && delta > 0f && currentAtTop() && !currentIsRefreshing) {
+                    dragging = true
+                    pullOffset = (pullOffset + delta).coerceAtMost(maxPullPx)
+                    return Offset(0f, delta)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                val delta = available.y
+                if (currentEnabled && source == NestedScrollSource.Drag && delta > 0f && currentAtTop() && !currentIsRefreshing) {
+                    dragging = true
+                    pullOffset = (pullOffset + delta).coerceAtMost(maxPullPx)
+                    return Offset(0f, delta)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (pullOffset > 0f && !currentIsRefreshing) {
+                    if (available.y > 0f) {
+                        settlePull()
+                    } else {
+                        dragging = false
+                        pullOffset = 0f
+                    }
+                    return available
+                }
+                return Velocity.Zero
+            }
+        }
+    }
+
+    val visualOffset by animateFloatAsState(
+        targetValue = pullOffset,
+        animationSpec = if (dragging) snap() else spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "pull-offset",
+    )
+    val progress = (visualOffset / thresholdPx).coerceIn(0f, 1f)
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (isRefreshing) 180f else progress * 180f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "pull-arrow-rotation",
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .nestedScroll(connection)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var watching = true
+                    while (watching) {
+                        val event = awaitPointerEvent(PointerEventPass.Final)
+                        val change = event.changes.firstOrNull { it.id == down.id }
+                        if (change == null || !change.pressed) {
+                            if (pullOffset > 0f) settlePull()
+                            watching = false
+                        } else if (event.changes.any { it.isConsumed } && pullOffset <= 0f) {
+                            // 子容器正在正常滚动，不干预下拉刷新
+                            watching = false
+                        }
+                    }
+                }
+            }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { translationY = visualOffset }
+        ) {
+            content()
+        }
+        if (visualOffset > 0f || (triggered && isRefreshing)) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset { IntOffset(0, (visualOffset - indicatorSizePx).roundToInt()) }
+                    .size(42.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 6.dp,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    if (isRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.ArrowDownward,
+                            contentDescription = "下拉刷新",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .graphicsLayer { rotationZ = arrowRotation },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun ImmersiveHeader(
     title: String,
     subtitle: String = "生产环境 · 智控中心 LIVE",
-    refreshing: Boolean = false,
-    onRefresh: (() -> Unit)? = null,
     actions: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -844,25 +1057,6 @@ fun ImmersiveHeader(
             modifier = Modifier.padding(start = 12.dp)
         ) {
             actions?.invoke()
-
-            if (onRefresh != null) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = CircleShape,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                ) {
-                    androidx.compose.material3.IconButton(
-                        onClick = onRefresh,
-                        enabled = !refreshing,
-                        modifier = Modifier.size(42.dp)
-                    ) {
-                        Crossfade(targetState = refreshing, animationSpec = tween(160), label = "refresh") { busy ->
-                            if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
-                            else Icon(Icons.Outlined.Refresh, contentDescription = "刷新", tint = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                }
-            }
         }
     }
 }

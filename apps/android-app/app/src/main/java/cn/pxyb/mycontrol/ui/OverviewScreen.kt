@@ -1,12 +1,16 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -64,13 +68,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.AuditInfo
+import cn.pxyb.mycontrol.data.CampusCourse
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.ServiceInfo
 import cn.pxyb.mycontrol.ui.theme.Amber
@@ -95,6 +104,7 @@ fun OverviewScreen(
     onOpenGoogleAccountDesk: () -> Unit,
     onOpenOperations: () -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenQrLogin: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
     onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
 ) {
@@ -113,29 +123,38 @@ fun OverviewScreen(
         val average = services.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
         Triple(healthy, monitored, average)
     }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(appPageContentPadding(contentPadding)),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+    val scrollState = rememberScrollState()
+    PullToRefresh(
+        isRefreshing = state.refreshing,
+        onRefresh = onRefresh,
+        atTop = { scrollState.value == 0 },
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(appPageContentPadding(contentPadding)),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
         item(key = "overview-header", contentType = "header") {
             ImmersiveHeader(
                 title = "工作台",
                 subtitle = "系统状态与常用操作",
-                refreshing = state.refreshing,
-                onRefresh = onRefresh,
                 actions = {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = CircleShape,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    ) {
-                        IconButton(onClick = onOpenSearch, modifier = Modifier.size(42.dp)) {
-                            Icon(Icons.Outlined.Search, contentDescription = "全局搜索")
-                        }
-                    }
+                    AppHeaderIconButton(
+                        icon = ScanViewfinder,
+                        contentDescription = "网页端登录",
+                        onClick = onOpenQrLogin,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                    )
+                    AppHeaderIconButton(
+                        icon = Icons.Outlined.Search,
+                        contentDescription = "全局搜索",
+                        onClick = onOpenSearch,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                    )
                 },
             )
         }
@@ -159,13 +178,22 @@ fun OverviewScreen(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 1.dp,
-                border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    (if (stable) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.tertiaryContainer)
+                                        .copy(alpha = 0.55f),
+                                    Color.Transparent,
+                                ),
+                            )
+                        )
                         .padding(horizontal = 20.dp, vertical = 20.dp)
                 ) {
                     Column {
@@ -178,15 +206,15 @@ fun OverviewScreen(
                                 CircularProgressIndicator(
                                     progress = { progress },
                                     modifier = Modifier.size(64.dp),
-                                    color = if (stable) Color(0xFF10B981) else Color(0xFFF59E0B),
-                                    trackColor = Color(0xFFE2E8F0),
+                                    color = if (stable) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary,
+                                    trackColor = MaterialTheme.colorScheme.outlineVariant,
                                     strokeWidth = 6.dp,
                                     strokeCap = StrokeCap.Round,
                                 )
                                 Icon(
                                     if (stable) Icons.Outlined.CloudDone else Icons.Outlined.ErrorOutline,
                                     contentDescription = null,
-                                    tint = if (stable) Color(0xFF10B981) else Color(0xFFF59E0B),
+                                    tint = if (stable) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary,
                                     modifier = Modifier.size(28.dp),
                                 )
                             }
@@ -212,7 +240,7 @@ fun OverviewScreen(
                         }
                         HorizontalDivider(
                             modifier = Modifier.padding(top = 18.dp),
-                            color = Color(0xFFF1F5F9),
+                            color = MaterialTheme.colorScheme.outlineVariant,
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
@@ -228,20 +256,52 @@ fun OverviewScreen(
         }
 
         item {
-            SectionHeader("今天", "课程、待办与提醒集中查看")
+            SectionHeader("校园智览", "课程、成绩与校园生活")
         }
         item(key = "overview-today", contentType = "today") {
-            AppPanel(modifier = Modifier.clickable { onOpenWorkspace(WorkspaceDestination.Today) }) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconTile(Icons.Outlined.CalendarMonth, Ocean, OceanPale)
-                    MetricCell("今日课程", todayCourseCount(state).toString(), Modifier.weight(1f))
-                    MetricCell("未完成", state.todoSnapshot.tasks.count { !it.completed }.toString(), Modifier.weight(1f))
-                    MetricCell("未读提醒", state.unreadAlerts.toString(), Modifier.weight(1f))
-                    Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            AppPanel(onClick = { onOpenWorkspace(WorkspaceDestination.Today) }) {
+                val campus = state.campusOverview
+                val courseCount = state.timetable?.courses.orEmpty().map(CampusCourse::courseName).distinct().size
+                val campusDetails = listOfNotNull(
+                    campus?.freeClassrooms?.rooms?.let { "空教室 $it 间" },
+                    campus?.cardBalance?.let { "一卡通 ${formatCampusAmount(it)}" },
+                    campus?.energyBalance?.let { "能耗 ${formatCampusAmount(it)}" },
+                ).joinToString(" · ")
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        IconTile(Icons.Outlined.CalendarMonth, Ocean, OceanPale)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("校园工作台", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                state.timetable?.currentCalendarText?.takeIf(String::isNotBlank)
+                                    ?: "课表、成绩和校园生活信息",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Icon(Icons.Outlined.ChevronRight, contentDescription = "查看校园智览", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        MetricCell("今日课程", todayCourseCount(state).toString(), Modifier.weight(1f))
+                        MetricCell("本学期课程", if (courseCount > 0) "$courseCount 门" else "--", Modifier.weight(1f))
+                        MetricCell("GPA", campus?.gpa?.overall ?: "--", Modifier.weight(1f))
+                    }
+                    Text(
+                        campusDetails.ifBlank { "下拉同步后更新空教室、一卡通和宿舍能耗" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
@@ -258,34 +318,37 @@ fun OverviewScreen(
             )
         }
         item(key = "overview-quick-actions", contentType = "quick-actions") {
-            AppPanel {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    val visibleActions = state.homeQuickActionOrder.filterNot(state.hiddenHomeQuickActions::contains)
-                    visibleActions.chunked(3).forEach { rowActions ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            rowActions.forEach { action ->
-                                val spec = homeQuickActionSpec(
-                                    action = action,
-                                    onSelectTab = onSelectTab,
-                                    onRunDiagnostics = onRunDiagnostics,
-                                    onTriggerBackup = onTriggerBackup,
-                                    onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
-                                    onOpenOperations = onOpenOperations,
-                                    onOpenWorkspace = onOpenWorkspace,
-                                )
-                                QuickAction(
-                                    icon = spec.icon,
-                                    label = spec.label,
-                                    accent = spec.accent,
-                                    accentPale = spec.accentPale,
-                                    modifier = Modifier.weight(1f),
-                                    onClick = spec.onClick,
-                                )
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val columnCount = quickActionColumnCount(maxWidth, LocalDensity.current.fontScale)
+                AppPanel {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        val visibleActions = state.homeQuickActionOrder.filterNot(state.hiddenHomeQuickActions::contains)
+                        visibleActions.chunked(columnCount).forEach { rowActions ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                rowActions.forEach { action ->
+                                    val spec = homeQuickActionSpec(
+                                        action = action,
+                                        onSelectTab = onSelectTab,
+                                        onRunDiagnostics = onRunDiagnostics,
+                                        onTriggerBackup = onTriggerBackup,
+                                        onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
+                                        onOpenOperations = onOpenOperations,
+                                        onOpenWorkspace = onOpenWorkspace,
+                                    )
+                                    QuickAction(
+                                        icon = spec.icon,
+                                        label = spec.label,
+                                        accent = spec.accent,
+                                        accentPale = spec.accentPale,
+                                        modifier = Modifier.weight(1f),
+                                        onClick = spec.onClick,
+                                    )
+                                }
+                                repeat(columnCount - rowActions.size) { Spacer(Modifier.weight(1f)) }
                             }
-                            repeat(3 - rowActions.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                 }
@@ -343,6 +406,7 @@ fun OverviewScreen(
         }
         item(key = "overview-bottom-spacer", contentType = "spacer") { Spacer(Modifier.height(4.dp)) }
     }
+    }
 
     if (customizingQuickActions) {
         QuickActionsDialog(
@@ -356,6 +420,60 @@ fun OverviewScreen(
         )
     }
 }
+
+private var scanViewfinder: ImageVector? = null
+
+private val ScanViewfinder: ImageVector
+    get() {
+        scanViewfinder?.let { return it }
+        return ImageVector.Builder(
+            name = "ScanViewfinder",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f,
+        ).apply {
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(4f, 4f)
+                horizontalLineTo(10f)
+                verticalLineTo(6f)
+                horizontalLineTo(6f)
+                verticalLineTo(10f)
+                horizontalLineTo(4f)
+                close()
+
+                moveTo(14f, 4f)
+                horizontalLineTo(20f)
+                verticalLineTo(10f)
+                horizontalLineTo(18f)
+                verticalLineTo(6f)
+                horizontalLineTo(14f)
+                close()
+
+                moveTo(4f, 14f)
+                horizontalLineTo(6f)
+                verticalLineTo(18f)
+                horizontalLineTo(10f)
+                verticalLineTo(20f)
+                horizontalLineTo(4f)
+                close()
+
+                moveTo(18f, 14f)
+                horizontalLineTo(20f)
+                verticalLineTo(20f)
+                horizontalLineTo(14f)
+                verticalLineTo(18f)
+                horizontalLineTo(18f)
+                close()
+
+                moveTo(6.5f, 11f)
+                horizontalLineTo(17.5f)
+                verticalLineTo(13f)
+                horizontalLineTo(6.5f)
+                close()
+            }
+        }.build().also { scanViewfinder = it }
+    }
 
 private data class HomeQuickActionSpec(
     val icon: ImageVector,
@@ -492,6 +610,10 @@ private fun todayCourseCount(state: OverviewUiState): Int {
     }
 }
 
+private fun formatCampusAmount(value: String): String = value
+    .takeIf { it.startsWith("¥") || it.startsWith("￥") }
+    ?: "¥$value"
+
 @Composable
 private fun OfflineSnapshotNotice(cachedAtMillis: Long?) {
     val context = LocalContext.current
@@ -593,8 +715,8 @@ private fun HeroMetric(label: String, value: String, modifier: Modifier = Modifi
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
-        color = Color(0xFFFAF9F6),
-        border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.03f)),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Text(
@@ -625,13 +747,22 @@ private fun QuickAction(
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(16.dp)
+    val interactionSource = remember { MutableInteractionSource() }
     Surface(
         modifier = modifier
+            .pressFeedback(interactionSource)
             .clip(shape)
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                role = Role.Button,
+                onClickLabel = label,
+                onClick = onClick,
+            ),
         shape = shape,
-        color = Color.White,
-        border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 1.dp,
     ) {
         Column(
             modifier = Modifier

@@ -2,7 +2,6 @@ package cn.pxyb.mycontrol.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -57,7 +56,6 @@ import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -94,6 +92,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -110,6 +109,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -216,31 +216,29 @@ fun MyControlApp(
         state.user == null -> "login"
         else -> "app"
     }
-    Crossfade(targetState = destination, animationSpec = tween(180), label = "app-state") { screen ->
-        when (screen) {
-            "loading" -> FullScreenLoading()
-            "locked" -> LockScreen(onBiometricUnlock, viewModel::discardLockedSession, state.error)
-            "login" -> LoginScreen(
-                state = state,
-                onLogin = { username, password, factor, recovery ->
-                    viewModel.login(username, password, factor, recovery, onSessionProtection)
-                },
-                onPasskeyLogin = { username ->
-                    viewModel.loginWithPasskey(username, onPasskeyRequest, onSessionProtection)
-                },
-                onBackFromSecondFactor = viewModel::resetSecondFactor,
-            )
-            else -> AuthenticatedShell(
-                state,
-                viewModel,
-                onPasskeyRequest,
-                onPasskeyRegistrationRequest,
-                onBiometricConfirmation,
-                onSensitiveActionConfirmation,
-                notificationsEnabled,
-                onRequestNotifications,
-            )
-        }
+    when (destination) {
+        "loading" -> FullScreenLoading()
+        "locked" -> LockScreen(onBiometricUnlock, viewModel::discardLockedSession, state.error)
+        "login" -> LoginScreen(
+            state = state,
+            onLogin = { username, password, factor, recovery ->
+                viewModel.login(username, password, factor, recovery, onSessionProtection)
+            },
+            onPasskeyLogin = { username ->
+                viewModel.loginWithPasskey(username, onPasskeyRequest, onSessionProtection)
+            },
+            onBackFromSecondFactor = viewModel::resetSecondFactor,
+        )
+        else -> AuthenticatedShell(
+            state,
+            viewModel,
+            onPasskeyRequest,
+            onPasskeyRegistrationRequest,
+            onBiometricConfirmation,
+            onSensitiveActionConfirmation,
+            notificationsEnabled,
+            onRequestNotifications,
+        )
     }
 }
 
@@ -1026,8 +1024,11 @@ private fun PrimaryLoginButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1.0f,
-        animationSpec = tween(90),
+        targetValue = if (isPressed) 0.97f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
         label = "btn-scale"
     )
 
@@ -1035,14 +1036,14 @@ private fun PrimaryLoginButton(
     val buttonBrush = if (enabled || loading) {
         Brush.horizontalGradient(
             colors = listOf(
-                Color(0xFF2563EB),
-                Color(0xFF3B82F6),
+                primaryColor,
+                lerp(primaryColor, Color.White, 0.16f),
             )
         )
     } else {
         SolidColor(primaryColor.copy(alpha = 0.08f))
     }
-    val contentColor = if (enabled || loading) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    val contentColor = if (enabled || loading) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
     val buttonShape = RoundedCornerShape(16.dp)
 
     Box(
@@ -1057,8 +1058,8 @@ private fun PrimaryLoginButton(
                 elevation = if (enabled || loading) 4.dp else 0.dp,
                 shape = buttonShape,
                 clip = false,
-                ambientColor = Color(0xFF2563EB).copy(alpha = 0.35f),
-                spotColor = Color(0xFF2563EB).copy(alpha = 0.35f),
+                ambientColor = primaryColor.copy(alpha = 0.35f),
+                spotColor = primaryColor.copy(alpha = 0.35f),
             )
             .clip(buttonShape)
             .background(buttonBrush)
@@ -1236,16 +1237,18 @@ private fun AuthenticatedShell(
                 navController = navController,
                 startDestination = initialRoute,
                 modifier = Modifier
+                    .widthIn(max = 960.dp)
                     .fillMaxSize()
+                    .align(Alignment.TopCenter)
                     .padding(
                         start = shellInsets.navigationStart,
                         top = shellInsets.navigationTop,
                         end = shellInsets.navigationEnd,
                     ),
-                enterTransition = { fadeIn(animationSpec = tween(140)) },
-                exitTransition = { fadeOut(animationSpec = tween(110)) },
-                popEnterTransition = { fadeIn(animationSpec = tween(140)) },
-                popExitTransition = { fadeOut(animationSpec = tween(110)) },
+                enterTransition = { fadeIn(animationSpec = tween(120)) },
+                exitTransition = { fadeOut(animationSpec = tween(80)) },
+                popEnterTransition = { fadeIn(animationSpec = tween(120)) },
+                popExitTransition = { fadeOut(animationSpec = tween(80)) },
             ) {
                 composable(AppRoute.Overview) {
                     val overviewState by viewModel.overviewState.collectAsStateWithLifecycle()
@@ -1259,6 +1262,7 @@ private fun AuthenticatedShell(
                         onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
                         onOpenOperations = { viewModel.selectTab(MainTab.Operations) },
                         onOpenSearch = viewModel::openGlobalSearch,
+                        onOpenQrLogin = viewModel::openQrScanner,
                         onOpenWorkspace = viewModel::openWorkspace,
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
                     )
@@ -1278,6 +1282,7 @@ private fun AuthenticatedShell(
                         focusIncidentId = state.focusIncidentId,
                         onFocusConsumed = viewModel::clearFocusTargets,
                         onRefresh = onRefresh,
+                        onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
                     )
                 }
                 composable(AppRoute.Operations) {
@@ -1412,6 +1417,7 @@ private fun AuthenticatedShell(
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
                         onOpen = viewModel::openAlert,
+                        onAction = viewModel::openNotificationAction,
                         onMarkRead = viewModel::markAlertRead,
                         onMarkAllRead = viewModel::markAllAlertsRead,
                         onClearRead = viewModel::clearReadAlerts,
@@ -1507,24 +1513,36 @@ private fun AuthenticatedShell(
 }
 
 @Composable
-private fun AppHeader(tab: MainTab, refreshing: Boolean, onRefresh: () -> Unit) {
+private fun AppHeader(tab: MainTab) {
     val primaryColor = MaterialTheme.colorScheme.primary
     Surface(
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 1.dp,
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
     ) {
-        Row(
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            primaryColor.copy(alpha = 0.055f),
+                            Color.Transparent,
+                        ),
+                    )
+                )
+        ) {
+            Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .heightIn(min = 68.dp)
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-        ) {
+            ) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 2.dp,
                 border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
             ) {
@@ -1562,18 +1580,7 @@ private fun AppHeader(tab: MainTab, refreshing: Boolean, onRefresh: () -> Unit) 
                     )
                 }
             }
-            Surface(
-                color = primaryColor.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(0.5.dp, primaryColor.copy(alpha = 0.15f))
-            ) {
-                IconButton(onClick = onRefresh, enabled = !refreshing, modifier = Modifier.size(40.dp)) {
-                    Crossfade(targetState = refreshing, animationSpec = tween(160), label = "refresh") { busy ->
-                        if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = primaryColor)
-                        else Icon(Icons.Outlined.Refresh, contentDescription = "刷新", tint = primaryColor, modifier = Modifier.size(20.dp))
-                    }
-                }
-            }
+        }
         }
     }
 }
@@ -1590,10 +1597,10 @@ private fun AppBottomNavigation(
             .widthIn(max = 420.dp)
             .fillMaxWidth()
             .height(62.dp),
-        color = Color.White,
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(31.dp),
         shadowElevation = 10.dp,
-        border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.05f)),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(
             modifier = Modifier
@@ -1639,6 +1646,8 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onCl
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                role = Role.Tab,
+                onClickLabel = item.label,
                 onClick = onClick
             )
             .padding(vertical = 4.dp),

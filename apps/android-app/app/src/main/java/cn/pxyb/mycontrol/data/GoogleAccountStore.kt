@@ -15,9 +15,14 @@ import javax.crypto.spec.GCMParameterSpec
 
 class GoogleAccountStore(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+    @Volatile private var accountScope: String? = null
+
+    fun setAccount(username: String?) {
+        accountScope = accountStorageScope(username)
+    }
 
     fun read(): List<GoogleAccountRecord> {
-        val payload = preferences.getString(KEY_PAYLOAD, null) ?: return emptyList()
+        val payload = scopedKey(KEY_PAYLOAD)?.let { preferences.getString(it, null) } ?: return emptyList()
         val root = JSONObject(decrypt(payload))
         return root.optJSONArray(KEY_ACCOUNTS).toGoogleAccounts()
     }
@@ -28,13 +33,15 @@ class GoogleAccountStore(context: Context) {
             put(KEY_ACCOUNTS, JSONArray().apply { accounts.forEach { put(it.toJson()) } })
         }
         preferences.edit()
-            .putString(KEY_PAYLOAD, encrypt(root.toString()))
+            .putString(scopedKey(KEY_PAYLOAD) ?: return, encrypt(root.toString()))
             .apply()
     }
 
     fun clear() {
-        preferences.edit().remove(KEY_PAYLOAD).apply()
+        scopedKey(KEY_PAYLOAD)?.let { preferences.edit().remove(it).apply() }
     }
+
+    private fun scopedKey(base: String): String? = accountScope?.let { "account_${it}_$base" }
 
     private fun encrypt(value: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)

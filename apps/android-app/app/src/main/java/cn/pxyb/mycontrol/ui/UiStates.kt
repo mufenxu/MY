@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.ui
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AppAlertRecord
+import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
@@ -54,6 +55,7 @@ data class OverviewUiState(
     val hiddenHomeQuickActions: Set<HomeQuickAction>,
     val todoSnapshot: TodoSnapshot,
     val timetable: CampusTimetable?,
+    val campusOverview: CampusOverview?,
     val unreadAlerts: Int,
 )
 
@@ -64,6 +66,7 @@ data class EventsUiState(
     val user: PlatformUser?,
     val overview: OverviewData?,
     val incidents: List<IncidentInfo>,
+    val unreadNotifications: Int,
     val message: String?,
 ) {
     val activeIncidents: List<IncidentInfo>
@@ -149,6 +152,7 @@ data class TodayUiState(
     val todoSnapshot: TodoSnapshot,
     val pendingTodoMutations: Int,
     val timetable: CampusTimetable?,
+    val campusOverview: CampusOverview?,
     val incidents: List<IncidentInfo>,
     val tasks: List<PlatformTask>,
     val resourceExpiries: List<ResourceExpiry>,
@@ -191,8 +195,8 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
 )
 
 internal fun AppUiState.toOverviewUiState() = OverviewUiState(
-    refreshing = isRefreshing(DataSection.Overview, DataSection.Incidents, DataSection.Tasks),
-    sectionError = sectionError(DataSection.Overview, DataSection.Incidents, DataSection.Tasks),
+    refreshing = isRefreshing(DataSection.Overview, DataSection.Incidents, DataSection.Tasks, DataSection.Campus),
+    sectionError = sectionError(DataSection.Overview, DataSection.Incidents, DataSection.Tasks, DataSection.Campus),
     overview = overview,
     incidents = incidents,
     offlineMode = offlineMode,
@@ -201,6 +205,7 @@ internal fun AppUiState.toOverviewUiState() = OverviewUiState(
     hiddenHomeQuickActions = hiddenHomeQuickActions,
     todoSnapshot = todoSnapshot,
     timetable = campusTimetable,
+    campusOverview = campusOverview,
     unreadAlerts = alerts.count { !it.read },
 )
 
@@ -211,6 +216,7 @@ internal fun AppUiState.toEventsUiState() = EventsUiState(
     user = user,
     overview = overview,
     incidents = incidents,
+    unreadNotifications = alerts.count { !it.read },
     message = message,
 )
 
@@ -373,6 +379,7 @@ internal fun AppUiState.toTodayUiState() = TodayUiState(
     todoSnapshot = todoSnapshot,
     pendingTodoMutations = pendingTodoMutations,
     timetable = campusTimetable,
+    campusOverview = campusOverview,
     incidents = incidents,
     tasks = tasks,
     resourceExpiries = resourceExpiries,

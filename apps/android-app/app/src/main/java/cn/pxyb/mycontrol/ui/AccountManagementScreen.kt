@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -95,18 +96,23 @@ fun AccountManagementScreen(
     var showPasskeyRegisterDialog by remember { mutableStateOf(false) }
     var passkeyToDelete by remember { mutableStateOf<PlatformPasskey?>(null) }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = appPageContentPadding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+    val listState = rememberLazyListState()
+    PullToRefresh(
+        isRefreshing = state.refreshing,
+        onRefresh = onRefresh,
+        atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
     ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = appPageContentPadding(contentPadding),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
         item {
             AppSecondaryHeader(
                 title = "账号管理",
                 subtitle = "密码、安全与登录凭证设置",
                 onBack = onDismiss,
-                refreshing = state.refreshing,
-                onRefresh = onRefresh,
             )
         }
         state.sectionError?.let { message ->
@@ -309,6 +315,7 @@ fun AccountManagementScreen(
                 }
             }
         }
+    }
     }
 
     // 弹窗：修改登录密码

@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.ui
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,8 +23,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,8 +75,6 @@ fun AppSecondaryHeader(
     subtitle: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    refreshing: Boolean = false,
-    onRefresh: (() -> Unit)? = null,
     actions: (@Composable RowScope.() -> Unit)? = null,
 ) {
     Row(
@@ -109,15 +109,6 @@ fun AppSecondaryHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            if (onRefresh != null) {
-                AppHeaderIconButton(
-                    icon = Icons.Outlined.Refresh,
-                    contentDescription = "刷新",
-                    onClick = onRefresh,
-                    enabled = !refreshing,
-                    loading = refreshing,
-                )
-            }
             actions?.invoke(this)
         }
     }
@@ -131,17 +122,21 @@ fun AppHeaderIconButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     loading: Boolean = false,
+    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    containerColor: Color = MaterialTheme.colorScheme.surface,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Surface(
-        modifier = modifier,
+        modifier = modifier.pressFeedback(interactionSource),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = containerColor,
+        border = BorderStroke(1.dp, iconTint.copy(alpha = 0.18f)),
     ) {
         IconButton(
             onClick = onClick,
             enabled = enabled,
             modifier = Modifier.size(AppPageActionSize),
+            interactionSource = interactionSource,
         ) {
             Crossfade(targetState = loading, animationSpec = tween(160), label = "header-action") { busy ->
                 if (busy) {
@@ -151,7 +146,12 @@ fun AppHeaderIconButton(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 } else {
-                    Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(21.dp))
+                    Icon(
+                        icon,
+                        contentDescription = contentDescription,
+                        tint = iconTint,
+                        modifier = Modifier.size(21.dp),
+                    )
                 }
             }
         }

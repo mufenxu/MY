@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -94,18 +95,23 @@ fun OperationsScreen(
         pendingDecision = null
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = appPageContentPadding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+    val listState = rememberLazyListState()
+    PullToRefresh(
+        isRefreshing = state.refreshing,
+        onRefresh = onRefresh,
+        atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
     ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = appPageContentPadding(contentPadding),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
         item {
             AppSecondaryHeader(
                 title = "高级工具",
                 subtitle = "任务、审批、发布与备份",
                 onBack = onBack,
-                refreshing = state.refreshing,
-                onRefresh = onRefresh,
             )
         }
         state.sectionError?.let { message ->
@@ -244,6 +250,7 @@ fun OperationsScreen(
                 }
             }
         }
+    }
     }
 
     selected?.let { task ->

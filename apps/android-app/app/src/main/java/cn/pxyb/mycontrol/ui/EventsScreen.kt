@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -82,6 +83,7 @@ fun EventsScreen(
     focusIncidentId: String?,
     onFocusConsumed: () -> Unit,
     onRefresh: () -> Unit,
+    onOpenNotifications: () -> Unit,
 ) {
     var filter by remember { mutableStateOf("active") }
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -128,17 +130,22 @@ fun EventsScreen(
         if (state.message == "处理备注已记录。") note = ""
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = appPageContentPadding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    val listState = rememberLazyListState()
+    PullToRefresh(
+        isRefreshing = state.refreshing,
+        onRefresh = onRefresh,
+        atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
     ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = appPageContentPadding(contentPadding),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
         item {
             ImmersiveHeader(
                 title = "系统动态",
                 subtitle = "最近发生的异常与处理进度",
-                refreshing = state.refreshing,
-                onRefresh = onRefresh
             )
         }
         state.sectionError?.let { message ->
@@ -189,6 +196,27 @@ fun EventsScreen(
                 )
             }
         }
+        item {
+            AppPanel {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(Icons.Outlined.NotificationsActive, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column(Modifier.weight(1f)) {
+                        Text("通知中心", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        Text(
+                            if (state.unreadNotifications > 0) "${state.unreadNotifications} 条未读通知" else "暂无未读通知",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Button(onClick = onOpenNotifications) { Text("查看") }
+                }
+            }
+        }
+    }
     }
 
     selected?.let { incident ->
@@ -396,7 +424,7 @@ private fun EventFilter(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .background(Color(0xFFF1F5F9), RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
             .padding(3.dp)
     ) {
         BoxWithConstraints(
@@ -420,7 +448,7 @@ private fun EventFilter(
                 modifier = Modifier
                     .offset(x = indicatorOffset)
                     .size(width = segmentWidth, height = 38.dp)
-                    .background(Color.White, RoundedCornerShape(13.dp))
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(13.dp))
             )
 
             Row(
@@ -430,9 +458,9 @@ private fun EventFilter(
                 options.forEachIndexed { index, (value, label) ->
                     val active = selectedIndex == index
                     val textColor = when {
-                        active && value == "critical" -> Color(0xFFDC2626)
+                        active && value == "critical" -> MaterialTheme.colorScheme.error
                         active -> MaterialTheme.colorScheme.primary
-                        else -> Color(0xFF64748B)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
 
                     // 使用 indication = null 彻底禁用 Compose 点击时变暗的水波纹
@@ -466,8 +494,8 @@ private fun EventFilter(
                                         .padding(start = 4.dp)
                                         .background(
                                             color = if (active) {
-                                                if (value == "critical") Color(0xFFFEE2E2) else Color(0xFFEFF6FF)
-                                            } else Color(0xFFE2E8F0),
+                                                if (value == "critical") MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+                                            } else MaterialTheme.colorScheme.outlineVariant,
                                             shape = CircleShape
                                         )
                                         .padding(horizontal = 6.dp, vertical = 1.dp)
@@ -479,8 +507,8 @@ private fun EventFilter(
                                             fontSize = 10.sp
                                         ),
                                         color = if (active) {
-                                            if (value == "critical") Color(0xFFDC2626) else MaterialTheme.colorScheme.primary
-                                        } else Color(0xFF64748B)
+                                             if (value == "critical") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                         } else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -500,7 +528,7 @@ private fun IncidentCard(
     onOpen: () -> Unit,
     onAcknowledge: () -> Unit,
 ) {
-    AppPanel(modifier = Modifier.clickable(onClick = onOpen)) {
+    AppPanel(onClick = onOpen) {
         Column(modifier = Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
                     IconTile(
@@ -557,7 +585,7 @@ private fun IncidentCard(
                             shape = MaterialTheme.shapes.medium,
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
-                            if (busy) CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp, color = Color.White)
+                            if (busy) CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                             else Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                             Text("确认", modifier = Modifier.padding(start = 5.dp), fontSize = 13.sp)
                         }

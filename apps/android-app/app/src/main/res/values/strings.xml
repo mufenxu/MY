@@ -7,6 +7,8 @@
     <string name="widget_service_label">服务</string>
     <string name="widget_incident_label">严重事件</string>
     <string name="widget_device_label">在线设备</string>
+    <string name="widget_not_synced">尚未同步</string>
+    <string name="widget_placeholder" translatable="false">--</string>
     <string name="shortcut_today">今日</string>
     <string name="shortcut_today_long">打开今日工作台</string>
     <string name="shortcut_devices">设备</string>

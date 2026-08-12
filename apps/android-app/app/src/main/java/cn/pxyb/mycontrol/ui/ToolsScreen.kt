@@ -131,17 +131,21 @@ fun ToolsScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(appPageContentPadding(contentPadding, topSpacing = 4.dp)),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+    val scrollState = rememberScrollState()
+    PullToRefresh(
+        isRefreshing = state.refreshing,
+        onRefresh = onRefresh,
+        atTop = { scrollState.value == 0 },
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(appPageContentPadding(contentPadding, topSpacing = 4.dp)),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
         ImmersiveHeader(
             title = "设备与自动化",
-            refreshing = state.refreshing,
-            onRefresh = onRefresh,
         )
         state.sectionError?.let { message ->
             FeedbackBanner("设备数据暂不可用：$message", error = true)
@@ -179,8 +183,8 @@ fun ToolsScreen(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                color = Color(0xFFFCFCFA),
-                border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                 shadowElevation = 2.dp,
             ) {
                 Column {
@@ -193,7 +197,7 @@ fun ToolsScreen(
                             onRun = { confirmation = ToolConfirmation.Scene(scene) },
                         )
                         if (index < iot.scenes.lastIndex) {
-                            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
+                            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                         }
                     }
                 }
@@ -213,8 +217,8 @@ fun ToolsScreen(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
-            color = Color(0xFFFCFCFA),
-            border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
             shadowElevation = 2.dp,
         ) {
             Column {
@@ -241,12 +245,13 @@ fun ToolsScreen(
                             StatusBadge(service.state)
                         }
                         if (index < modules.lastIndex) {
-                            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
+                            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                         }
                     }
                 }
             }
         }
+    }
     }
 
     when (val pending = confirmation) {
@@ -315,8 +320,8 @@ private fun MqttStatusPanel(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        color = Color(0xFFFCFCFA),
-        border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
         shadowElevation = 2.dp,
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -399,8 +404,8 @@ private fun EnvironmentCard(device: DeviceInfo?) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        color = Color(0xFFFCFCFA),
-        border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
         shadowElevation = 2.dp,
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -542,8 +547,8 @@ private fun RelayCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        color = Color(0xFFFCFCFA),
-        border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
         shadowElevation = 2.dp,
     ) {
         Column(
@@ -688,8 +693,8 @@ private fun Ct8Panel(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        color = Color(0xFFFCFCFA),
-        border = BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.04f)),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
         shadowElevation = 2.dp,
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {

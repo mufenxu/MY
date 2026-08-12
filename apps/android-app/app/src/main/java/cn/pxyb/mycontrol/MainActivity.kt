@@ -19,6 +19,7 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.credentials.CreatePublicKeyCredentialRequest
 import androidx.credentials.CreatePublicKeyCredentialResponse
 import androidx.credentials.CredentialManager
@@ -27,6 +28,7 @@ import androidx.credentials.GetPublicKeyCredentialOption
 import androidx.credentials.PublicKeyCredential
 import androidx.credentials.exceptions.CreateCredentialException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import cn.pxyb.mycontrol.AlertNotifier
 import cn.pxyb.mycontrol.ui.AppViewModel
 import cn.pxyb.mycontrol.ui.MyControlApp
@@ -34,8 +36,10 @@ import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val appViewModel: AppViewModel by viewModels()
@@ -51,9 +55,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        alertNotifier.ensureChannel()
-        OperationalSyncScheduler.schedule(this)
-        notificationsEnabled.value = hasNotificationPermission()
         handleOpenIntent(intent)
         enableEdgeToEdge()
         setContent {
@@ -87,6 +88,10 @@ class MainActivity : ComponentActivity() {
                     onRequestNotifications = notificationPermissionRequest,
                 )
             }
+        }
+        lifecycleScope.launch(Dispatchers.Default) {
+            alertNotifier.ensureChannel()
+            OperationalSyncScheduler.schedule(this@MainActivity)
         }
     }
 
@@ -124,6 +129,8 @@ class MainActivity : ComponentActivity() {
             }
         } catch (error: TimeoutCancellationException) {
             throw IllegalStateException("系统 Passkey 窗口未响应，请确认域名已关联当前 App 签名后重试。", error)
+        } catch (error: NoCredentialException) {
+            throw IllegalStateException("设备中没有这个账号可用的 Passkey，请先在账号安全设置中绑定。", error)
         } catch (error: GetCredentialException) {
             throw IllegalStateException("Passkey 验证未完成，请确认设备已保存该账号的 Passkey。", error)
         }
@@ -187,15 +194,15 @@ class MainActivity : ComponentActivity() {
         subtitle: String,
         onResult: (Boolean) -> Unit,
     ): CancellationSignal? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            onResult(false)
-            return null
-        }
-        val manager = getSystemService(BiometricManager::class.java)
-        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.P && manager?.canAuthenticate() != BiometricManager.BIOMETRIC_SUCCESS) {
-            Toast.makeText(this, "设备未配置生物识别，请改用平台账号登录。", Toast.LENGTH_LONG).show()
-            onResult(false)
-            return null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val manager = getSystemService(BiometricManager::class.java)
+            @Suppress("DEPRECATION")
+            val biometricReady = manager?.canAuthenticate() == BiometricManager.BIOMETRIC_SUCCESS
+            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q && !biometricReady) {
+                Toast.makeText(this, "设备未配置生物识别，请改用平台账号登录。", Toast.LENGTH_LONG).show()
+                onResult(false)
+                return null
+            }
         }
         val executor = Executor { command -> runOnUiThread(command) }
         val promptBuilder = BiometricPrompt.Builder(this)

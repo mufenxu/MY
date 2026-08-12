@@ -96,6 +96,14 @@ class SessionStore(context: Context) {
         preferences.edit().putString("last_username", username.trim()).apply()
     }
 
+    fun readActiveUsername(): String? = preferences.getString(KEY_ACTIVE_USERNAME, null)
+        ?.trim()
+        ?.takeIf(String::isNotBlank)
+
+    fun writeActiveUsername(username: String) {
+        preferences.edit().putString(KEY_ACTIVE_USERNAME, username.trim()).apply()
+    }
+
     fun clear() {
         activeCookie = null
         clearSessionData()
@@ -110,6 +118,7 @@ class SessionStore(context: Context) {
             .remove(KEY_EXPIRES_AT)
             .remove(KEY_LAST_USED_AT)
             .remove(KEY_IDLE_TIMEOUT)
+            .remove(KEY_ACTIVE_USERNAME)
             .apply()
     }
 
@@ -239,5 +248,6 @@ class SessionStore(context: Context) {
         const val KEY_EXPIRES_AT = "expires_at"
         const val KEY_LAST_USED_AT = "last_used_at"
         const val KEY_IDLE_TIMEOUT = "idle_timeout"
+        const val KEY_ACTIVE_USERNAME = "active_username"
     }
 }

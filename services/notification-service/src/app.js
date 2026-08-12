@@ -3,13 +3,20 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const { verifyServiceRequest } = require('@my-platform/platform-auth');
+const { verifyPlatformSsoRequest, verifyServiceRequest } = require('@my-platform/platform-auth');
 const { z } = require('zod');
 
 const WeComClient = require('./wecom-client');
 const { notificationSchema, buildWeComPayload } = require('./notification-schema');
 const { createNotificationOrchestrator } = require('./notification-orchestrator');
 const { createMemoryNotificationStore } = require('./notification-store');
+const { createAppPushDispatcher } = require('./app-push');
+const {
+  appDeviceSchema,
+  appNotificationSchema,
+  appPreferenceSchema,
+  toWeComMessage,
+} = require('./app-notification-schema');
 const {
   API_CLIENT_SCOPES,
   apiClientCreateSchema,
@@ -79,7 +86,7 @@ const testNotificationSchema = z.object({
   content: z.string().trim().min(1).max(4096),
 });
 
-function createApp({ config, wecomClient = null, notificationStore = null } = {}) {
+function createApp({ config, wecomClient = null, notificationStore = null, appPushDispatcher = null } = {}) {
   if (!config) throw new Error('Notification service config is required.');
   const app = express();
   const client = wecomClient || new WeComClient({
@@ -91,6 +98,7 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
     encryptionKey: config.historyEncryptionKey,
     retentionDays: config.historyRetentionDays,
   });
+  const pushDispatcher = appPushDispatcher || createAppPushDispatcher();
   const guardAgainstReplay = createReplayGuard();
   const apiRateWindows = new Map();
 
@@ -138,6 +146,17 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
     const identity = verifySignedRequest(req, config.managementCallers || ['admin-console']);
     if (!identity) return res.status(401).json({ error: '管理请求签名无效。', code: 'MANAGEMENT_UNAUTHORIZED' });
     req.serviceCaller = identity.caller;
+    return next();
+  };
+
+  const checkAppAccess = (req, res, next) => {
+    const identity = verifyPlatformSsoRequest(req, { audience: 'notify' });
+    if (!identity) {
+      return res.status(401).json({ error: '统一登录会话已失效，请重新登录。', code: 'PLATFORM_SESSION_REQUIRED' });
+    }
+    req.appIdentity = identity;
+    req.appUserId = String(identity.sub);
+    res.setHeader('Cache-Control', 'no-store');
     return next();
   };
 
@@ -270,6 +289,63 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
     }
   }
 
+  async function createLegacyAppNotification(req) {
+    const appRecipients = String(req.body?.touser || '')
+      .split('|')
+      .map((value) => value.trim())
+      .filter((value) => value !== '@all' && /^[A-Za-z0-9._:@-]{1,128}$/.test(value));
+    if (appRecipients.length === 0) return null;
+    try {
+      const legacy = notificationSchema.parse(req.body);
+      const contentText = [
+        legacy.data?.content,
+        legacy.data?.title,
+        legacy.data?.description,
+      ].filter((value) => typeof value === 'string' && value.trim()).join('\n').trim();
+      const title = contentText.split(/\r?\n/, 1)[0].slice(0, 160) || '系统通知';
+      const contentKind = legacy.msg_type === 'markdown' ? 'markdown' : 'text';
+      const created = await store.createAppNotification({
+        caller: req.serviceCaller || 'legacy-wecom',
+        idempotencyKey: `legacy:${req.id}`,
+        recipients: appRecipients,
+        message: {
+          category: 'system',
+          priority: 'normal',
+          title,
+          summary: contentText.slice(0, 280),
+          content: {
+            kind: contentKind,
+            title,
+            summary: contentText.slice(0, 280),
+            blocks: [{ type: contentKind, [contentKind]: contentText }],
+          },
+          source: { service: req.serviceCaller || 'legacy-wecom', entityType: 'notification', entityId: req.id },
+          actions: [],
+        },
+      });
+      if (!created.deduplicated) {
+        await safelyDispatchAppPush(req.id, {
+          store,
+          notification: { id: created.notification.id, category: 'system', priority: 'normal' },
+          recipients: appRecipients,
+        });
+      }
+      return created.notification?.id || null;
+    } catch (error) {
+      console.error(`[${req.id}] app inbox compatibility write failed`, error);
+      return null;
+    }
+  }
+
+  async function safelyDispatchAppPush(requestId, input) {
+    try {
+      return await pushDispatcher.dispatch(input);
+    } catch (error) {
+      console.error(`[${requestId}] app push dispatch failed`, error);
+      return { attempted: 0, sent: 0, deferred: 0, failed: 1, suppressed: 0, results: [] };
+    }
+  }
+
   const orchestrator = createNotificationOrchestrator({
     store,
     deliver,
@@ -317,13 +393,14 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
   enforceManagedTarget('/notify', (body) => body),
   async (req, res, next) => {
     try {
+      const appNotificationId = await createLegacyAppNotification(req);
       const { result, delivery } = await deliver(req.body, {
         caller: req.serviceCaller,
         requestId: req.id,
         apiClient: req.apiClient,
       });
       await recordManagedApiRequest(req, { endpoint: '/notify', httpStatus: 200, deliveryId: delivery?.id || null, body: req.body });
-      return res.json({ errcode: 0, errmsg: 'ok', detail: result, deliveryId: delivery?.id || null });
+      return res.json({ errcode: 0, errmsg: 'ok', detail: result, deliveryId: delivery?.id || null, appNotificationId });
     } catch (error) {
       await recordManagedApiRequest(req, {
         endpoint: '/notify',
@@ -331,6 +408,194 @@ function createApp({ config, wecomClient = null, notificationStore = null } = {}
         errorCode: error.code || 'DELIVERY_FAILED',
         body: req.body,
       });
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/v1/notifications', rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+  }), checkNotifyAccess,
+  enforceClientRateLimit('/v1/notifications'),
+  async (req, res, next) => {
+    try {
+      const parsed = appNotificationSchema.parse(req.body);
+      if (req.apiClient?.managed && !hasScope(req.apiClient, 'notifications:app:send')) {
+        await recordManagedApiRequest(req, { endpoint: '/v1/notifications', httpStatus: 403, errorCode: 'API_SCOPE_REQUIRED', body: req.body });
+        return res.status(403).json({ errcode: 403, errmsg: '当前 API Key 缺少 App 通知发送权限', code: 'API_SCOPE_REQUIRED', requestId: req.id });
+      }
+      const isBroadcast = parsed.audience.users.length > 1 || requiresBroadcastScope(parsed.wecom || {});
+      if (req.apiClient?.managed && isBroadcast && !hasScope(req.apiClient, 'notifications:broadcast')) {
+        await recordManagedApiRequest(req, { endpoint: '/v1/notifications', httpStatus: 403, errorCode: 'BROADCAST_SCOPE_REQUIRED', body: req.body });
+        return res.status(403).json({ errcode: 403, errmsg: '多用户通知需要广播权限', code: 'BROADCAST_SCOPE_REQUIRED', requestId: req.id });
+      }
+      if (req.apiClient?.managed && parsed.channels.includes('wecom') && !hasScope(req.apiClient, 'notifications:send')) {
+        await recordManagedApiRequest(req, { endpoint: '/v1/notifications', httpStatus: 403, errorCode: 'API_SCOPE_REQUIRED', body: req.body });
+        return res.status(403).json({ errcode: 403, errmsg: '当前 API Key 缺少企业微信发送权限', code: 'API_SCOPE_REQUIRED', requestId: req.id });
+      }
+
+      const created = await store.createAppNotification({
+        caller: req.serviceCaller,
+        idempotencyKey: parsed.dedupeKey,
+        recipients: parsed.audience.users,
+        message: {
+          category: parsed.category,
+          priority: parsed.priority,
+          title: parsed.content.title,
+          summary: parsed.content.summary,
+          content: parsed.content,
+          source: parsed.source,
+          actions: parsed.actions,
+          expiresAt: parsed.expiresAt,
+        },
+      });
+      const push = created.deduplicated
+        ? { attempted: 0, sent: 0, deferred: 0, failed: 0, suppressed: 0, results: [] }
+        : await safelyDispatchAppPush(req.id, {
+          store,
+          notification: { id: created.notification.id, category: parsed.category, priority: parsed.priority },
+          recipients: parsed.audience.users,
+        });
+      let wecomDeliveryId = null;
+      let wecomStatus = parsed.channels.includes('wecom') ? 'deduplicated' : 'not-requested';
+      if (parsed.channels.includes('wecom') && !created.deduplicated) {
+        const delivered = await deliver(toWeComMessage(parsed), {
+          caller: req.serviceCaller,
+          requestId: req.id,
+          apiClient: req.apiClient,
+        });
+        wecomDeliveryId = delivered.delivery?.id || null;
+        wecomStatus = 'sent';
+      }
+      await recordManagedApiRequest(req, {
+        endpoint: '/v1/notifications',
+        httpStatus: 202,
+        deliveryId: wecomDeliveryId,
+        body: req.body,
+      });
+      return res.status(202).json({
+        notificationId: created.notification.id,
+        deduplicated: created.deduplicated,
+        channels: { app: created.deduplicated ? 'deduplicated' : 'accepted', wecom: wecomStatus },
+        push: {
+          attempted: push.attempted,
+          sent: push.sent,
+          deferred: push.deferred,
+          failed: push.failed,
+          suppressed: push.suppressed,
+        },
+        wecomDeliveryId,
+        requestId: req.id,
+      });
+    } catch (error) {
+      await recordManagedApiRequest(req, {
+        endpoint: '/v1/notifications',
+        httpStatus: Number(error.status) || 500,
+        errorCode: error.code || 'APP_NOTIFICATION_FAILED',
+        body: req.body,
+      });
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/app/notifications', checkAppAccess, async (req, res, next) => {
+    try {
+      const result = await store.listAppNotifications(req.appUserId, {
+        cursor: String(req.query.cursor || ''),
+        limit: Number.parseInt(req.query.limit, 10) || 20,
+        unreadOnly: ['true', '1'].includes(String(req.query.unreadOnly || '').toLowerCase()),
+      });
+      return res.json(result);
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/app/notifications/:id/read', checkAppAccess, async (req, res, next) => {
+    try {
+      const notification = await store.markAppNotificationRead(req.appUserId, String(req.params.id || ''));
+      if (!notification) throw httpError(404, 'APP_NOTIFICATION_NOT_FOUND', '通知不存在。');
+      return res.json({ notification });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/app/notifications/:id/snooze', checkAppAccess, async (req, res, next) => {
+    try {
+      const input = z.object({ snoozedUntil: z.string().datetime({ offset: true }) }).parse(req.body);
+      const notification = await store.snoozeAppNotification(
+        req.appUserId,
+        String(req.params.id || ''),
+        new Date(input.snoozedUntil),
+      );
+      if (!notification) throw httpError(404, 'APP_NOTIFICATION_NOT_FOUND', '通知不存在。');
+      return res.json({ notification });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/app/notifications/read-all', checkAppAccess, async (req, res, next) => {
+    try {
+      return res.json(await store.markAllAppNotificationsRead(req.appUserId));
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/app/notifications/clear-read', checkAppAccess, async (req, res, next) => {
+    try {
+      return res.json(await store.archiveReadAppNotifications(req.appUserId));
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/app/preferences', checkAppAccess, async (req, res, next) => {
+    try {
+      const preference = await store.getRecipientPreference(req.appUserId);
+      return res.json({ preference: preference || appPreferenceSchema.parse({}) });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.put('/app/preferences', checkAppAccess, async (req, res, next) => {
+    try {
+      const preference = await store.saveRecipientPreference(req.appUserId, appPreferenceSchema.parse(req.body));
+      return res.json({ preference });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/app/devices', checkAppAccess, async (req, res, next) => {
+    try {
+      const device = await store.upsertAppDevice(req.appUserId, appDeviceSchema.parse(req.body));
+      return res.status(201).json({ device });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.delete('/app/devices/:installationId', checkAppAccess, async (req, res, next) => {
+    try {
+      const removed = await store.removeAppDevice(req.appUserId, String(req.params.installationId || ''));
+      return res.status(removed ? 204 : 404).end();
+    } catch (error) {
       next(error);
       return undefined;
     }

@@ -62,6 +62,34 @@ data class CampusTimetable(
     val courses: List<CampusCourse> = emptyList(),
 )
 
+data class CampusGpa(
+    val overall: String? = null,
+    val core: String? = null,
+    val required: String? = null,
+    val degree: String? = null,
+)
+
+data class CampusFreeClassrooms(
+    val rooms: Int? = null,
+    val seats: Int? = null,
+    val dayLabel: String? = null,
+)
+
+data class CampusOverview(
+    val gpa: CampusGpa? = null,
+    val freeClassrooms: CampusFreeClassrooms? = null,
+    val cardBalance: String? = null,
+    val waterCode: String? = null,
+    val dormitory: String? = null,
+    val energyBalance: String? = null,
+    val energyRoom: String? = null,
+)
+
+data class CampusDashboard(
+    val timetable: CampusTimetable,
+    val overview: CampusOverview,
+)
+
 data class ResourceExpiry(
     val id: String,
     val type: String,
@@ -79,6 +107,11 @@ data class AppAlertRecord(
     val createdAt: Long,
     val read: Boolean = false,
     val snoozedUntil: Long? = null,
+    val origin: String = "local",
+    val priority: String = "normal",
+    val contentKind: String = "text",
+    val contentBlocks: List<AppNotificationBlock> = emptyList(),
+    val actions: List<AppNotificationAction> = emptyList(),
 )
 
 data class AlertPreferences(
@@ -99,39 +132,43 @@ data class TrendSample(
 
 class PersonalWorkspaceStore(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+    private val codec = EncryptedPreferenceCodec(preferences, KEY_ALIAS)
+    @Volatile private var accountScope: String? = null
 
-    fun readTodoSnapshot(): TodoSnapshot = preferences.getString(KEY_TODOS, null)
+    fun setAccount(username: String?) {
+        accountScope = accountStorageScope(username)
+    }
+
+    fun readTodoSnapshot(): TodoSnapshot = scopedKey(KEY_TODOS)?.let { key -> codec.read(key) }
         ?.let(::parseObject)
         ?.toTodoSnapshot()
         ?: TodoSnapshot()
 
     fun writeTodoSnapshot(snapshot: TodoSnapshot) {
-        preferences.edit().putString(KEY_TODOS, snapshot.toJson().toString()).apply()
+        scopedKey(KEY_TODOS)?.let { key -> codec.write(key, snapshot.toJson().toString()) }
     }
 
-    fun readPendingTodoMutations(): List<TodoMutation> = preferences.getString(KEY_TODO_QUEUE, null)
+    fun readPendingTodoMutations(): List<TodoMutation> = scopedKey(KEY_TODO_QUEUE)?.let { key -> codec.read(key) }
         ?.let(::parseArray)
         .objects()
         .mapNotNull(JSONObject::toTodoMutation)
 
     fun writePendingTodoMutations(mutations: List<TodoMutation>) {
-        preferences.edit().putString(
-            KEY_TODO_QUEUE,
-            JSONArray().apply { mutations.takeLast(MAX_PENDING_MUTATIONS).forEach { put(it.toJson()) } }.toString(),
-        ).apply()
+        scopedKey(KEY_TODO_QUEUE)?.let { key ->
+            codec.write(key, JSONArray().apply { mutations.takeLast(MAX_PENDING_MUTATIONS).forEach { put(it.toJson()) } }.toString())
+        }
     }
 
-    fun readAlerts(): List<AppAlertRecord> = preferences.getString(KEY_ALERTS, null)
+    fun readAlerts(): List<AppAlertRecord> = scopedKey(KEY_ALERTS)?.let { key -> codec.read(key) }
         ?.let(::parseArray)
         .objects()
         .mapNotNull(JSONObject::toAlertRecord)
         .sortedByDescending(AppAlertRecord::createdAt)
 
     fun writeAlerts(alerts: List<AppAlertRecord>) {
-        preferences.edit().putString(
-            KEY_ALERTS,
-            JSONArray().apply { alerts.sortedByDescending(AppAlertRecord::createdAt).take(MAX_ALERTS).forEach { put(it.toJson()) } }.toString(),
-        ).apply()
+        scopedKey(KEY_ALERTS)?.let { key ->
+            codec.write(key, JSONArray().apply { alerts.sortedByDescending(AppAlertRecord::createdAt).take(MAX_ALERTS).forEach { put(it.toJson()) } }.toString())
+        }
     }
 
     fun appendAlerts(alerts: List<AppAlertRecord>) {
@@ -142,20 +179,21 @@ class PersonalWorkspaceStore(context: Context) {
     }
 
     fun readAlertPreferences(): AlertPreferences = AlertPreferences(
-        quietHoursEnabled = preferences.getBoolean(KEY_QUIET_ENABLED, false),
-        quietStartHour = preferences.getInt(KEY_QUIET_START, 22).coerceIn(0, 23),
-        quietEndHour = preferences.getInt(KEY_QUIET_END, 7).coerceIn(0, 23),
+        quietHoursEnabled = scopedKey(KEY_QUIET_ENABLED)?.let { preferences.getBoolean(it, false) } ?: false,
+        quietStartHour = scopedKey(KEY_QUIET_START)?.let { preferences.getInt(it, 22) }?.coerceIn(0, 23) ?: 22,
+        quietEndHour = scopedKey(KEY_QUIET_END)?.let { preferences.getInt(it, 7) }?.coerceIn(0, 23) ?: 7,
     )
 
     fun writeAlertPreferences(value: AlertPreferences) {
-        preferences.edit()
-            .putBoolean(KEY_QUIET_ENABLED, value.quietHoursEnabled)
-            .putInt(KEY_QUIET_START, value.quietStartHour.coerceIn(0, 23))
-            .putInt(KEY_QUIET_END, value.quietEndHour.coerceIn(0, 23))
-            .apply()
+        val enabledKey = scopedKey(KEY_QUIET_ENABLED) ?: return
+        val startKey = scopedKey(KEY_QUIET_START) ?: return
+        val endKey = scopedKey(KEY_QUIET_END) ?: return
+        preferences.edit().putBoolean(enabledKey, value.quietHoursEnabled)
+            .putInt(startKey, value.quietStartHour.coerceIn(0, 23))
+            .putInt(endKey, value.quietEndHour.coerceIn(0, 23)).apply()
     }
 
-    fun readTrendSamples(): List<TrendSample> = preferences.getString(KEY_TRENDS, null)
+    fun readTrendSamples(): List<TrendSample> = scopedKey(KEY_TRENDS)?.let { key -> codec.read(key) }
         ?.let(::parseArray)
         .objects()
         .mapNotNull(JSONObject::toTrendSample)
@@ -165,18 +203,22 @@ class PersonalWorkspaceStore(context: Context) {
         val samples = readTrendSamples().associateBy(TrendSample::day).toMutableMap()
         samples[sample.day] = sample
         val normalized = samples.values.sortedBy(TrendSample::day).takeLast(MAX_TREND_DAYS)
-        preferences.edit().putString(
-            KEY_TRENDS,
-            JSONArray().apply { normalized.forEach { put(it.toJson()) } }.toString(),
-        ).apply()
+        scopedKey(KEY_TRENDS)?.let { key -> codec.write(key, JSONArray().apply { normalized.forEach { put(it.toJson()) } }.toString()) }
     }
 
     fun clearAccountData() {
-        preferences.edit().clear().apply()
+        val scope = accountScope ?: return
+        val prefix = "account_${scope}_"
+        preferences.edit().apply {
+            preferences.all.keys.filter { it.startsWith(prefix) }.forEach(::remove)
+        }.apply()
     }
+
+    private fun scopedKey(base: String): String? = accountScope?.let { "account_${it}_$base" }
 
     private companion object {
         const val PREFERENCES_NAME = "personal_workspace"
+        const val KEY_ALIAS = "my_control_personal_workspace_v1"
         const val KEY_TODOS = "todos"
         const val KEY_TODO_QUEUE = "todo_queue"
         const val KEY_ALERTS = "alerts"
@@ -247,6 +289,11 @@ private fun AppAlertRecord.toJson(): JSONObject = JSONObject()
     .put("createdAt", createdAt)
     .put("read", read)
     .put("snoozedUntil", snoozedUntil ?: JSONObject.NULL)
+    .put("origin", origin)
+    .put("priority", priority)
+    .put("contentKind", contentKind)
+    .put("contentBlocks", JSONArray().apply { contentBlocks.forEach { put(it.toJson()) } })
+    .put("actions", JSONArray().apply { actions.forEach { put(it.toJson()) } })
 
 private fun TrendSample.toJson(): JSONObject = JSONObject()
     .put("day", day)
@@ -306,7 +353,62 @@ private fun JSONObject.toAlertRecord(): AppAlertRecord? {
         createdAt = optLong("createdAt"),
         read = optBoolean("read"),
         snoozedUntil = nullableLong("snoozedUntil"),
+        origin = optString("origin", "local"),
+        priority = optString("priority", "normal"),
+        contentKind = optString("contentKind", "text"),
+        contentBlocks = optJSONArray("contentBlocks").objects().mapNotNull(JSONObject::toAppNotificationBlock),
+        actions = optJSONArray("actions").objects().mapNotNull(JSONObject::toAppNotificationAction),
     )
+}
+
+private fun AppNotificationBlock.toJson(): JSONObject = JSONObject()
+    .put("type", type)
+    .put("text", text)
+    .put("markdown", markdown)
+    .put("items", JSONArray().apply { items.forEach { put(JSONObject().put("key", it.key).put("value", it.value)) } })
+    .put("listItems", JSONArray().apply { listItems.forEach { put(JSONObject().put("title", it.title).put("description", it.description)) } })
+    .put("url", url)
+    .put("alt", alt)
+    .put("value", value ?: JSONObject.NULL)
+    .put("label", label)
+    .put("fileName", fileName)
+    .put("mediaType", mediaType)
+
+private fun AppNotificationAction.toJson(): JSONObject = JSONObject()
+    .put("id", id)
+    .put("label", label)
+    .put("deepLink", deepLink)
+
+private fun JSONObject.toAppNotificationBlock(): AppNotificationBlock? {
+    val type = optString("type").takeIf(String::isNotBlank) ?: return null
+    val items = optJSONArray("items").objects().mapNotNull { item ->
+        val key = item.optString("key").trim()
+        if (key.isBlank()) null else AppNotificationKeyValue(key, item.optString("value"))
+    }
+    val listItems = optJSONArray("listItems").objects().mapNotNull { item ->
+        val title = item.optString("title").trim()
+        if (title.isBlank()) null else AppNotificationListItem(title, item.optString("description"))
+    }
+    return AppNotificationBlock(
+        type = type,
+        text = optString("text"),
+        markdown = optString("markdown"),
+        items = items,
+        listItems = listItems,
+        url = optString("url"),
+        alt = optString("alt"),
+        value = if (has("value") && !isNull("value")) optInt("value") else null,
+        label = optString("label"),
+        fileName = optString("fileName"),
+        mediaType = optString("mediaType"),
+    )
+}
+
+private fun JSONObject.toAppNotificationAction(): AppNotificationAction? {
+    val id = optString("id").trim()
+    val label = optString("label").trim()
+    val deepLink = optString("deepLink").trim()
+    return if (id.isBlank() || label.isBlank() || deepLink.isBlank()) null else AppNotificationAction(id, label, deepLink)
 }
 
 private fun JSONObject.toTrendSample(): TrendSample? {

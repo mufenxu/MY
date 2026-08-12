@@ -3,6 +3,7 @@ const { z } = require('zod');
 
 const API_CLIENT_SCOPES = Object.freeze([
   'notifications:send',
+  'notifications:app:send',
   'notifications:enqueue',
   'notifications:status:read',
   'notifications:broadcast',
@@ -104,9 +105,43 @@ function buildOpenApiDocument({ serverUrl = 'https://pxyb.cn/api/notify' } = {})
             },
           },
         },
+        AppNotification: {
+          type: 'object',
+          required: ['idempotencyKey', 'audience', 'channels', 'category', 'content', 'source'],
+          properties: {
+            idempotencyKey: { type: 'string', maxLength: 200 },
+            audience: {
+              type: 'object',
+              required: ['users'],
+              properties: { users: { type: 'array', minItems: 1, maxItems: 500, items: { type: 'string' } } },
+            },
+            channels: { type: 'array', items: { enum: ['app', 'wecom'] } },
+            category: { type: 'string' },
+            priority: { enum: ['low', 'normal', 'high', 'critical'] },
+            content: { type: 'object' },
+            source: { type: 'object' },
+          },
+        },
       },
     },
     paths: {
+      '/v1/notifications': {
+        post: {
+          summary: '创建 App 通知，可选同步投递企业微信',
+          operationId: 'createAppNotification',
+          security: [{ ApiKey: [] }],
+          requestBody: {
+            required: true,
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/AppNotification' } } },
+          },
+          responses: {
+            202: { description: '通知已写入收件箱' },
+            400: { description: '通知格式或目标无效' },
+            401: { description: 'API Key 无效' },
+            403: { description: 'API Key 权限不足' },
+          },
+        },
+      },
       '/': {
         post: {
           summary: '立即发送通知',

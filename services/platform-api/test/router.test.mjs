@@ -75,6 +75,37 @@ test('host routing preserves legacy application URLs', async () => {
   });
 });
 
+test('app notification routes require a platform session and receive a notify identity', async () => {
+  const notifyApp = (req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      url: req.url,
+      identity: req.headers['x-my-platform-sso'] || '',
+    }));
+  };
+  const router = createPlatformRouter({
+    portalApp: echoApp('portal'),
+    notifyApp,
+    getPlatformSession: (req) => req.headers.cookie
+      ? { sub: 'alice', role: 'operator', nonce: 'alice-session', exp: Math.floor(Date.now() / 1000) + 60 }
+      : null,
+    internalAuthPrivateKey: TEST_PRIVATE_KEY,
+    platformPublicOrigin: 'https://admin.example.com',
+  });
+
+  await withServer(router, async (port) => {
+    const rejected = await request(port, '/api/app/notifications?limit=20');
+    assert.equal(rejected.status, 401);
+
+    const accepted = await request(port, '/api/app/notifications?limit=20', 'admin.example.com', {
+      Cookie: 'my_platform_session=test-session',
+    });
+    assert.equal(accepted.status, 200);
+    assert.equal(accepted.body.url, '/app/notifications?limit=20');
+    assert.ok(accepted.body.identity);
+  });
+});
+
 test('official website owns the root and an isolated asset namespace', async () => {
   const router = createPlatformRouter({
     portalApp: echoApp('portal'),

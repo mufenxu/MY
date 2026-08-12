@@ -439,6 +439,10 @@ export function createPlatformRouter({
       rewriteServicePrefix(req, '/api/exam', { apiByDefault: true });
       return dispatchApp(req, res, examApp, examTarget, 'exam');
     }
+    if (requestUrl.pathname === '/api/app' || requestUrl.pathname.startsWith('/api/app/')) {
+      if (!await authorizeManagedApp(req, res, 'notify', '/api')) return;
+      return dispatchApp(req, res, notifyApp, notifyTarget, 'notify');
+    }
     if (requestUrl.pathname === '/api/notify' || requestUrl.pathname.startsWith('/api/notify/')) {
       if (requestUrl.pathname === '/api/notify' || requestUrl.pathname === '/api/notify/') {
         req.url = pathWithQuery('/notify', requestUrl.search);

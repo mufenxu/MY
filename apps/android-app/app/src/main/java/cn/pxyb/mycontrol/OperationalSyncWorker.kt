@@ -13,6 +13,7 @@ import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.ResponseSnapshotStore
 import cn.pxyb.mycontrol.data.SessionStore
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
+import cn.pxyb.mycontrol.data.mergeRemoteAlerts
 import cn.pxyb.mycontrol.data.todayTrendSample
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
 import java.io.IOException
@@ -31,6 +32,10 @@ class OperationalSyncWorker(
         if (!sessionStore.hasSession() || sessionStore.isLockEnabled()) return Result.success()
 
         val api = PlatformApi(sessionStore, ResponseSnapshotStore(applicationContext))
+        val accountUsername = sessionStore.readActiveUsername()
+        val personalStore = PersonalWorkspaceStore(applicationContext).apply { setAccount(accountUsername) }
+        val alertNotifier = AlertNotifier(applicationContext).apply { setAccount(accountUsername) }
+        if (accountUsername.isNullOrBlank()) return Result.success()
         return try {
             val overview = api.overview()
             if (api.isOffline()) return Result.retry()
@@ -40,7 +45,6 @@ class OperationalSyncWorker(
             if (api.isOffline()) return Result.retry()
             val iot = api.iot()
             if (api.isOffline()) return Result.retry()
-            val personalStore = PersonalWorkspaceStore(applicationContext)
             val todo = api.todos()
             if (api.isOffline()) return Result.retry()
             val pending = personalStore.readPendingTodoMutations()
@@ -61,14 +65,26 @@ class OperationalSyncWorker(
             if (api.isOffline()) return Result.retry()
             val resources = api.resourceExpiries()
             if (api.isOffline()) return Result.retry()
+            val remoteNotifications = api.allAppNotifications()
+            val currentAlerts = personalStore.readAlerts()
+            val currentById = currentAlerts.associateBy { it.id }
+            remoteNotifications.forEach { remote ->
+                val local = currentById[remote.id] ?: return@forEach
+                if (local.read && !remote.read) runCatching { api.markAppNotificationRead(remote.id) }
+                val localSnooze = local.snoozedUntil
+                if (localSnooze != null && localSnooze != remote.snoozedUntil) {
+                    runCatching { api.snoozeAppNotification(remote.id, localSnooze) }
+                }
+            }
+            val mergedAlerts = mergeRemoteAlerts(currentAlerts, remoteNotifications)
+            personalStore.writeAlerts(mergedAlerts)
+            alertNotifier.evaluateRemote(mergedAlerts)
 
             val activeIncidents = incidents.filter { it.status != "resolved" }
             MyControlWidgetProvider.publish(applicationContext, overview, activeIncidents, iot)
-            AlertNotifier(applicationContext).apply {
-                evaluate(incidents = incidents, tasks = tasks)
-                evaluatePersonal(syncedTodo, timetable)
-                evaluateResourceExpiries(resources)
-            }
+            alertNotifier.evaluate(incidents = incidents, tasks = tasks)
+            alertNotifier.evaluatePersonal(syncedTodo, timetable)
+            alertNotifier.evaluateResourceExpiries(resources)
             todayTrendSample(overview, incidents, tasks, iot)?.let(personalStore::upsertTrendSample)
             Result.success()
         } catch (error: Throwable) {

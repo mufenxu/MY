@@ -1,5 +1,6 @@
 <resources>
     <color name="launcher_background">#F7FAFF</color>
+    <color name="splash_background">#F6F8FD</color>
     <color name="widget_background">#F8FAFC</color>
     <color name="widget_border">#DCE3EC</color>
     <color name="widget_text_primary">#172033</color>

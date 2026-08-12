@@ -4,7 +4,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import cn.pxyb.mycontrol.data.IncidentInfo
@@ -14,6 +13,8 @@ import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.PlatformTask
+import cn.pxyb.mycontrol.data.SessionStore
+import cn.pxyb.mycontrol.data.accountStorageScope
 import cn.pxyb.mycontrol.ui.MainTab
 import java.time.LocalTime
 import java.time.LocalDate
@@ -37,19 +38,38 @@ class AlertNotifier(context: Context) {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
     private val personalStore = PersonalWorkspaceStore(appContext)
+    @Volatile private var accountScope: String? = null
+
+    init {
+        setAccount(SessionStore(appContext).readActiveUsername())
+    }
+
+    fun setAccount(username: String?) {
+        accountScope = accountStorageScope(username)
+        personalStore.setAccount(username)
+    }
 
     fun ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = appContext.getSystemService(NotificationManager::class.java) ?: return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "运维告警",
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = "关键事件与待处理任务提醒"
-            enableVibration(true)
-        }
-        manager.createNotificationChannel(channel)
+        manager.createNotificationChannels(
+            listOf(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    "重要告警",
+                    NotificationManager.IMPORTANCE_HIGH,
+                ).apply {
+                    description = "关键事件与需要立即处理的任务"
+                    enableVibration(true)
+                },
+                NotificationChannel(
+                    MESSAGE_CHANNEL_ID,
+                    "一般通知",
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = "系统消息、进度更新与日常提醒"
+                },
+            ),
+        )
     }
 
     fun evaluate(
@@ -57,9 +77,10 @@ class AlertNotifier(context: Context) {
         tasks: List<PlatformTask>,
         seedOnly: Boolean = false,
     ) {
+        if (accountScope == null) return
         ensureChannel()
-        val seenIncidents = preferences.getStringSet(KEY_SEEN_INCIDENTS, emptySet()).orEmpty().toMutableSet()
-        val seenTasks = preferences.getStringSet(KEY_SEEN_TASKS, emptySet()).orEmpty().toMutableSet()
+        val seenIncidents = preferences.getStringSet(scopedKey(KEY_SEEN_INCIDENTS), emptySet()).orEmpty().toMutableSet()
+        val seenTasks = preferences.getStringSet(scopedKey(KEY_SEEN_TASKS), emptySet()).orEmpty().toMutableSet()
 
         val critical = incidents.filter {
             it.status != "resolved" && it.severity.equals("critical", ignoreCase = true)
@@ -139,15 +160,22 @@ class AlertNotifier(context: Context) {
         seenTasks.clear()
         seenTasks.addAll(actionable.map { it.id })
         preferences.edit()
-            .putStringSet(KEY_SEEN_INCIDENTS, seenIncidents)
-            .putStringSet(KEY_SEEN_TASKS, seenTasks)
+            .putStringSet(scopedKey(KEY_SEEN_INCIDENTS), seenIncidents)
+            .putStringSet(scopedKey(KEY_SEEN_TASKS), seenTasks)
             .apply()
     }
 
     fun clear() {
-        preferences.edit().clear().apply()
+        accountScope?.let { scope ->
+            val prefix = "account_${scope}_"
+            preferences.edit().apply {
+                preferences.all.keys.filter { it.startsWith(prefix) }.forEach(::remove)
+            }.apply()
+        }
         NotificationManagerCompat.from(appContext).cancelAll()
     }
+
+    private fun scopedKey(base: String): String = "account_${requireNotNull(accountScope)}_$base"
 
     fun evaluatePersonal(todos: TodoSnapshot, timetable: CampusTimetable?) {
         ensureChannel()
@@ -208,7 +236,18 @@ class AlertNotifier(context: Context) {
             "todo", "course", "resource" -> DeepLinks.openIntent(appContext, destination = "today")
             else -> DeepLinks.openIntent(appContext, destination = "notifications")
         }
-        notify(PERSONAL_BASE + alert.id.hashCode(), alert.title, alert.body, intent)
+        val channelId = if (alert.priority in setOf("high", "critical")) CHANNEL_ID else MESSAGE_CHANNEL_ID
+        notify(PERSONAL_BASE + alert.id.hashCode(), alert.title, alert.body, intent, channelId)
+    }
+
+    fun evaluateRemote(alerts: List<AppAlertRecord>) {
+        if (accountScope == null) return
+        ensureChannel()
+        val seen = preferences.getStringSet(scopedKey(KEY_SEEN_REMOTE), emptySet()).orEmpty().toMutableSet()
+        val unread = alerts.filter { it.origin == "remote" && !it.read && it.id !in seen }
+        if (!isQuietHours()) unread.take(3).forEach(::notifyRecord)
+        seen.addAll(alerts.filter { it.origin == "remote" }.map(AppAlertRecord::id))
+        preferences.edit().putStringSet(scopedKey(KEY_SEEN_REMOTE), seen.toList().takeLast(200).toSet()).apply()
     }
 
     fun evaluateResourceExpiries(resources: List<ResourceExpiry>) {
@@ -238,7 +277,13 @@ class AlertNotifier(context: Context) {
         generated.take(3).forEach(::notifyRecord)
     }
 
-    private fun notify(notificationId: Int, title: String, body: String, intent: android.content.Intent) {
+    private fun notify(
+        notificationId: Int,
+        title: String,
+        body: String,
+        intent: android.content.Intent,
+        channelId: String = CHANNEL_ID,
+    ) {
         if (!NotificationManagerCompat.from(appContext).areNotificationsEnabled()) return
         val pendingIntent = PendingIntent.getActivity(
             appContext,
@@ -246,12 +291,21 @@ class AlertNotifier(context: Context) {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
+        val publicContent = publicNotificationContent()
+        val publicNotification = NotificationCompat.Builder(appContext, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(publicContent.title)
+            .setContentText(publicContent.body)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
+        val notification = NotificationCompat.Builder(appContext, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(if (channelId == CHANNEL_ID) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicNotification)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .build()
@@ -299,10 +353,22 @@ class AlertNotifier(context: Context) {
         const val PREFERENCES = "my_control_alerts"
         const val KEY_SEEN_INCIDENTS = "seen_incidents"
         const val KEY_SEEN_TASKS = "seen_tasks"
+        const val KEY_SEEN_REMOTE = "seen_remote"
         const val CHANNEL_ID = "ops_alerts"
+        const val MESSAGE_CHANNEL_ID = "app_notifications"
         const val INCIDENT_BASE = 41000
         const val TASK_BASE = 42000
         const val PERSONAL_BASE = 43000
         const val COURSE_NOTICE_WINDOW_MS = 30 * 60_000L
     }
 }
+
+internal data class PublicNotificationContent(
+    val title: String,
+    val body: String,
+)
+
+internal fun publicNotificationContent(): PublicNotificationContent = PublicNotificationContent(
+        title = "MY 有新的提醒",
+        body = "解锁后查看详细内容",
+    )

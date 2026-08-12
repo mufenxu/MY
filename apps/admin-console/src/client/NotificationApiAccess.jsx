@@ -22,6 +22,7 @@ import { requestJson } from './api.js';
 import { ConfirmDialog, SegmentedTabs, SelectControl } from './UiControls.jsx';
 
 const SCOPE_DETAILS = {
+  'notifications:app:send': ['App', '允许向 MY Android 用户收件箱发送通知。'],
   'notifications:send': ['立即发送', '允许调用同步发送接口。'],
   'notifications:enqueue': ['任务编排', '允许创建即时或定时通知任务。'],
   'notifications:status:read': ['结果查询', '允许查询本应用产生的发送结果。'],

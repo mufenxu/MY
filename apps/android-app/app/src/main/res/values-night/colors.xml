@@ -1,4 +1,5 @@
 <resources>
+    <color name="splash_background">#0F172A</color>
     <color name="widget_background">#171B24</color>
     <color name="widget_border">#303846</color>
     <color name="widget_text_primary">#F2F4F7</color>

@@ -624,7 +624,7 @@ private fun GoogleAccountRow(
     bulkSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    AppPanel(modifier = Modifier.clickable(onClick = onClick)) {
+    AppPanel(onClick = onClick) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,

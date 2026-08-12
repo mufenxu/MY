@@ -46,6 +46,11 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+
+    lint {
+        // Compose 1.6.1 的检测器无法读取 Kotlin 2.0.21 metadata，会在分析前直接崩溃。
+        disable += "StateFlowValueCalledInComposition"
+    }
 }
 
 dependencies {

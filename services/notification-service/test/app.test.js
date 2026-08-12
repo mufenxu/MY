@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { issueServiceRequest } = require('@my-platform/platform-auth');
+const crypto = require('node:crypto');
+const { issueInternalIdentity, issueServiceRequest, PLATFORM_SSO_HEADER } = require('@my-platform/platform-auth');
 process.env.NOTIFY_API_KEY = 'module-test-key';
 process.env.WECOM_CORP_ID = 'module-test-corp';
 process.env.WECOM_AGENT_ID = '10001';
@@ -9,6 +10,9 @@ process.env.WECOM_SECRET = 'module-test-secret';
 const { createApp } = require('../src/app');
 
 const historyEncryptionKey = Buffer.alloc(32, 7).toString('base64url');
+const { privateKey: platformPrivateKey, publicKey: platformPublicKey } = crypto.generateKeyPairSync('ed25519');
+const platformPrivateKeyValue = platformPrivateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url');
+const platformPublicKeyValue = platformPublicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
 
 const config = {
   apiKey: 'test-api-key-value',
@@ -48,6 +52,23 @@ function signedHeaders({ caller = 'admin-console', method = 'GET', path, body = 
   return issueServiceRequest({ caller, secret: config.apiKey, method, pathname: path, body });
 }
 
+function appHeaders({ user = 'alice', method = 'GET', path }) {
+  return {
+    [PLATFORM_SSO_HEADER]: issueInternalIdentity({
+      audience: 'notify',
+      session: {
+        sub: user,
+        role: 'operator',
+        nonce: `${user}-session`,
+        exp: Math.floor(Date.now() / 1000) + 60,
+      },
+      privateKey: platformPrivateKeyValue,
+      method,
+      pathname: path,
+    }),
+  };
+}
+
 test('health endpoint is public', async () => withServer({}, async (port) => {
   assert.equal((await request(port, { path: '/healthz' })).status, 200);
   const openApi = await request(port, { path: '/openapi.json' });
@@ -85,6 +106,76 @@ test('notification endpoint accepts signed internal callers and rejects replay',
     assert.equal((await request(port, { body, headers })).status, 200);
     assert.equal((await request(port, { body, headers })).status, 401);
   });
+});
+
+test('canonical notification API creates an authenticated app inbox item', async () => {
+  const previousPublicKey = process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY;
+  process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY = platformPublicKeyValue;
+  const body = {
+    idempotencyKey: 'backup:backup-1:completed',
+    audience: { users: ['alice'] },
+    channels: ['app'],
+    priority: 'normal',
+    category: 'backup',
+    content: {
+      kind: 'card',
+      title: '备份完成',
+      summary: '生产环境备份已完成。',
+      blocks: [
+        { type: 'text', text: '备份文件已保存。' },
+        { type: 'keyValue', items: [{ key: '结果', value: '成功' }] },
+      ],
+    },
+    source: { service: 'core', entityType: 'backup', entityId: 'backup-1' },
+    actions: [{ id: 'open-backup', label: '查看备份', deepLink: 'mycontrol://open?tab=operations' }],
+  };
+  const path = '/v1/notifications';
+  const serialized = JSON.stringify(body);
+  const headers = issueServiceRequest({
+    caller: 'core-api',
+    secret: config.apiKey,
+    method: 'POST',
+    pathname: path,
+    body: serialized,
+  });
+
+  try {
+    await withServer({}, async (port) => {
+      const created = await request(port, { path, body, headers });
+      assert.equal(created.status, 202);
+      assert.equal(created.body.deduplicated, false);
+
+      assert.equal((await request(port, { path: '/app/notifications?limit=20' })).status, 401);
+      const inboxPath = '/app/notifications?limit=20';
+      const inbox = await request(port, { path: inboxPath, headers: appHeaders({ path: inboxPath }) });
+      assert.equal(inbox.status, 200);
+      assert.equal(inbox.body.unread, 1);
+      assert.equal(inbox.body.items[0].title, '备份完成');
+      assert.equal(inbox.body.items[0].content.blocks[1].items[0].value, '成功');
+
+      const snoozePath = `/app/notifications/${created.body.notificationId}/snooze`;
+      const snoozedUntil = '2026-08-12T18:00:00.000Z';
+      const snoozed = await request(port, {
+        path: snoozePath,
+        body: { snoozedUntil },
+        headers: appHeaders({ method: 'POST', path: snoozePath }),
+      });
+      assert.equal(snoozed.status, 200);
+      assert.equal(snoozed.body.notification.snoozedUntil, snoozedUntil);
+
+      const readPath = `/app/notifications/${created.body.notificationId}/read`;
+      const read = await request(port, {
+        path: readPath,
+        body: {},
+        headers: appHeaders({ method: 'POST', path: readPath }),
+      });
+      assert.equal(read.status, 200);
+      assert.ok(read.body.notification.readAt);
+    });
+  } finally {
+    if (previousPublicKey === undefined) delete process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY;
+    else process.env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY = previousPublicKey;
+  }
 });
 
 test('managed API clients enforce scopes, explicit targets and isolated delivery status', async () => {

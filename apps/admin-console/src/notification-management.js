@@ -120,7 +120,7 @@ export function createNotificationManagementClient({
           overview: { windowHours: 24, activeClients: 0, activeKeys: 0, totalRequests: 0, successRate: null, p95DurationMs: null },
           clients: [],
           requests: { items: [], page: 1, pageSize: 20, total: 0 },
-          supportedScopes: ['notifications:send', 'notifications:enqueue', 'notifications:status:read', 'notifications:broadcast'],
+          supportedScopes: ['notifications:send', 'notifications:app:send', 'notifications:enqueue', 'notifications:status:read', 'notifications:broadcast'],
           apiBasePath: '/api/notify',
           openApiPath: '/api/notify/openapi.json',
           legacyKeyConfigured: false,

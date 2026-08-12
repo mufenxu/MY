@@ -8,6 +8,56 @@ function normalizePositiveInteger(value, fallback, maximum) {
   return Math.min(Math.max(Number.isFinite(parsed) ? parsed : fallback, 1), maximum);
 }
 
+function appDedupeScopeKey(caller, idempotencyKey) {
+  return crypto.createHash('sha256')
+    .update(JSON.stringify([String(caller || ''), String(idempotencyKey || '')]))
+    .digest('hex');
+}
+
+function appCursor(value) {
+  if (!value) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(String(value), 'base64url').toString('utf8'));
+    if (!decoded || !decoded.createdAt || !decoded.id) return null;
+    return { createdAt: new Date(decoded.createdAt), id: String(decoded.id) };
+  } catch {
+    return null;
+  }
+}
+
+function encodeAppCursor(row) {
+  if (!row) return null;
+  return Buffer.from(JSON.stringify({ createdAt: new Date(row.createdAt).toISOString(), id: row.id }), 'utf8').toString('base64url');
+}
+
+function serializeAppDevice(row) {
+  if (!row) return null;
+  return {
+    installationId: row.installationId,
+    provider: row.provider,
+    appVersion: row.appVersion || '',
+    deviceModel: row.deviceModel || '',
+    createdAt: serializeDocument(row.createdAt),
+    updatedAt: serializeDocument(row.updatedAt),
+    lastSeenAt: serializeDocument(row.lastSeenAt),
+  };
+}
+
+function serializeAppNotification(row, recipient, protector) {
+  if (!row || !recipient) return null;
+  const payload = protector.decrypt(row.encryptedPayload);
+  return {
+    id: row.id,
+    category: row.category,
+    priority: row.priority,
+    ...payload,
+    createdAt: serializeDocument(row.createdAt),
+    expiresAt: serializeDocument(row.expiresAt),
+    readAt: serializeDocument(recipient.readAt),
+    snoozedUntil: serializeDocument(recipient.snoozedUntil),
+  };
+}
+
 function serializeDocument(value) {
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map(serializeDocument);
@@ -186,6 +236,9 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
   const apiKeys = [];
   const apiRequests = [];
   const dedupeReservations = new Map();
+  const appMessages = [];
+  const appRecipients = [];
+  const appDevices = [];
 
   function prune() {
     const cutoff = now().getTime() - retentionDays * 86400000;
@@ -199,6 +252,18 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
         dedupeReservations.delete(scopeKey);
       }
     }
+    for (let index = appMessages.length - 1; index >= 0; index -= 1) {
+      if (appMessages[index].expiresAt && new Date(appMessages[index].expiresAt) <= timestamp) {
+        const id = appMessages[index].id;
+        appMessages.splice(index, 1);
+        for (let recipientIndex = appRecipients.length - 1; recipientIndex >= 0; recipientIndex -= 1) {
+          if (appRecipients[recipientIndex].messageId === id) appRecipients.splice(recipientIndex, 1);
+        }
+      }
+    }
+    for (let index = appDevices.length - 1; index >= 0; index -= 1) {
+      if (appDevices[index].expiresAt && new Date(appDevices[index].expiresAt) <= timestamp) appDevices.splice(index, 1);
+    }
   }
 
   function releaseDedupeReservation(row) {
@@ -208,6 +273,152 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
   }
 
   return {
+    async createAppNotification(input) {
+      prune();
+      const timestamp = now();
+      const dedupeScopeKey = appDedupeScopeKey(input.caller, input.idempotencyKey);
+      const duplicate = appMessages.find((row) => row.dedupeScopeKey === dedupeScopeKey && (!row.expiresAt || new Date(row.expiresAt) > timestamp));
+      if (duplicate) return { notification: serializeDocument(duplicate), deduplicated: true };
+      const notification = {
+        id: crypto.randomUUID(),
+        caller: input.caller,
+        dedupeScopeKey,
+        category: input.message.category,
+        priority: input.message.priority,
+        createdAt: timestamp,
+        expiresAt: input.message.expiresAt || new Date(timestamp.getTime() + retentionDays * 86400000),
+        encryptedPayload: protector.encrypt(input.message),
+      };
+      appMessages.unshift(notification);
+      const recipients = [...new Set(input.recipients)].map((recipientId) => ({
+        id: crypto.randomUUID(),
+        messageId: notification.id,
+        recipientId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        readAt: null,
+        archivedAt: null,
+        snoozedUntil: null,
+        expiresAt: notification.expiresAt,
+      }));
+      appRecipients.push(...recipients);
+      return { notification: serializeDocument(notification), deduplicated: false };
+    },
+    async listAppNotifications(recipientId, filters = {}) {
+      prune();
+      const normalizedRecipient = String(recipientId || '').trim();
+      const limit = normalizePositiveInteger(filters.limit, 20, 100);
+      const cursor = appCursor(filters.cursor);
+      const rowsForRecipient = appRecipients
+        .filter((row) => row.recipientId === normalizedRecipient && !row.archivedAt)
+        .map((recipient) => ({ recipient, message: appMessages.find((row) => row.id === recipient.messageId) }))
+        .filter(({ message }) => message)
+        .filter(({ message, recipient }) => !cursor
+          || new Date(message.createdAt) < cursor.createdAt
+          || (new Date(message.createdAt).getTime() === cursor.createdAt.getTime() && message.id < cursor.id))
+        .filter(({ recipient }) => !filters.unreadOnly || !recipient.readAt)
+        .sort((left, right) => new Date(right.message.createdAt) - new Date(left.message.createdAt) || right.message.id.localeCompare(left.message.id));
+      const allActive = appRecipients.filter((row) => row.recipientId === normalizedRecipient && !row.archivedAt && !row.readAt);
+      const pageRows = rowsForRecipient.slice(0, limit);
+      return {
+        items: pageRows.map(({ message, recipient }) => serializeAppNotification(message, recipient, protector)),
+        total: rowsForRecipient.length,
+        unread: allActive.length,
+        nextCursor: rowsForRecipient.length > limit ? encodeAppCursor(pageRows.at(-1)?.message) : null,
+      };
+    },
+    async markAppNotificationRead(recipientId, notificationId) {
+      prune();
+      const recipient = appRecipients.find((row) => row.recipientId === String(recipientId || '').trim() && row.messageId === notificationId);
+      if (!recipient || recipient.archivedAt) return null;
+      recipient.readAt = recipient.readAt || now();
+      recipient.updatedAt = now();
+      return serializeAppNotification(appMessages.find((row) => row.id === notificationId), recipient, protector);
+    },
+    async snoozeAppNotification(recipientId, notificationId, snoozedUntil) {
+      prune();
+      const recipient = appRecipients.find((row) => row.recipientId === String(recipientId || '').trim() && row.messageId === notificationId);
+      if (!recipient || recipient.archivedAt) return null;
+      recipient.snoozedUntil = snoozedUntil;
+      recipient.updatedAt = now();
+      return serializeAppNotification(appMessages.find((row) => row.id === notificationId), recipient, protector);
+    },
+    async markAllAppNotificationsRead(recipientId) {
+      prune();
+      const timestamp = now();
+      let updated = 0;
+      for (const recipient of appRecipients) {
+        if (recipient.recipientId === String(recipientId || '').trim() && !recipient.archivedAt && !recipient.readAt) {
+          recipient.readAt = timestamp;
+          recipient.updatedAt = timestamp;
+          updated += 1;
+        }
+      }
+      return { updated };
+    },
+    async archiveReadAppNotifications(recipientId) {
+      prune();
+      const timestamp = now();
+      let archived = 0;
+      for (const recipient of appRecipients) {
+        if (recipient.recipientId === String(recipientId || '').trim() && recipient.readAt && !recipient.archivedAt) {
+          recipient.archivedAt = timestamp;
+          recipient.updatedAt = timestamp;
+          archived += 1;
+        }
+      }
+      return { archived };
+    },
+    async upsertAppDevice(recipientId, input) {
+      prune();
+      const owner = String(recipientId || '').trim();
+      const timestamp = now();
+      const existing = appDevices.find((row) => row.recipientId === owner && row.installationId === input.installationId);
+      const tokenHash = input.token ? crypto.createHash('sha256').update(input.token).digest('hex') : '';
+      for (const row of appDevices) {
+        if (tokenHash && row.tokenHash === tokenHash && row !== existing) row.expiresAt = timestamp;
+      }
+      if (existing) {
+        Object.assign(existing, {
+          provider: input.provider,
+          tokenHash,
+          encryptedToken: input.token ? protector.encrypt({ token: input.token }) : '',
+          appVersion: input.appVersion,
+          deviceModel: input.deviceModel,
+          updatedAt: timestamp,
+          lastSeenAt: timestamp,
+          expiresAt: null,
+        });
+      } else {
+        appDevices.push({
+          id: crypto.randomUUID(),
+          recipientId: owner,
+          installationId: input.installationId,
+          provider: input.provider,
+          tokenHash,
+          encryptedToken: input.token ? protector.encrypt({ token: input.token }) : '',
+          appVersion: input.appVersion,
+          deviceModel: input.deviceModel,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          lastSeenAt: timestamp,
+          expiresAt: null,
+        });
+      }
+      return serializeAppDevice(appDevices.find((row) => row.recipientId === owner && row.installationId === input.installationId));
+    },
+    async listAppDeliveryDevices(recipientId) {
+      prune();
+      return appDevices
+        .filter((row) => row.recipientId === String(recipientId || '').trim() && row.encryptedToken && !row.expiresAt)
+        .map((row) => ({ ...serializeAppDevice(row), token: protector.decrypt(row.encryptedToken).token }));
+    },
+    async removeAppDevice(recipientId, installationId) {
+      const index = appDevices.findIndex((row) => row.recipientId === String(recipientId || '').trim() && row.installationId === installationId);
+      if (index < 0) return false;
+      appDevices.splice(index, 1);
+      return true;
+    },
     async createDelivery(input) {
       prune();
       const startedAt = now();
@@ -548,6 +759,9 @@ async function createMongoNotificationStore({
   const apiKeys = db.collection('notification_api_keys');
   const apiRequests = db.collection('notification_api_requests');
   const dedupeReservations = db.collection('notification_job_dedupes');
+  const appMessages = db.collection('notification_app_messages');
+  const appRecipients = db.collection('notification_app_recipients');
+  const appDevices = db.collection('notification_app_devices');
   await Promise.all([
     deliveries.createIndex({ id: 1 }, { unique: true }),
     deliveries.createIndex({ startedAt: -1 }),
@@ -572,6 +786,16 @@ async function createMongoNotificationStore({
     apiRequests.createIndex({ startedAt: -1 }),
     apiRequests.createIndex({ clientId: 1, startedAt: -1 }),
     apiRequests.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    appMessages.createIndex({ id: 1 }, { unique: true }),
+    appMessages.createIndex({ dedupeScopeKey: 1 }, { unique: true, sparse: true }),
+    appMessages.createIndex({ createdAt: -1 }),
+    appMessages.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    appRecipients.createIndex({ recipientId: 1, createdAt: -1 }),
+    appRecipients.createIndex({ recipientId: 1, messageId: 1 }, { unique: true }),
+    appRecipients.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    appDevices.createIndex({ recipientId: 1, installationId: 1 }, { unique: true }),
+    appDevices.createIndex({ tokenHash: 1 }, { unique: true, sparse: true }),
+    appDevices.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   ]);
 
   const migrationTimestamp = new Date();
@@ -712,6 +936,146 @@ async function createMongoNotificationStore({
   }
 
   return {
+    async createAppNotification(input) {
+      const timestamp = new Date();
+      const dedupeScopeKey = appDedupeScopeKey(input.caller, input.idempotencyKey);
+      const notification = {
+        id: crypto.randomUUID(),
+        caller: input.caller,
+        dedupeScopeKey,
+        category: input.message.category,
+        priority: input.message.priority,
+        createdAt: timestamp,
+        expiresAt: input.message.expiresAt || new Date(timestamp.getTime() + retentionDays * 86400000),
+        encryptedPayload: protector.encrypt(input.message),
+      };
+      try {
+        await appMessages.insertOne(notification);
+      } catch (error) {
+        if (Number(error?.code) !== 11000) throw error;
+        const duplicate = await appMessages.findOne({ dedupeScopeKey }, { projection: { _id: 0 } });
+        if (duplicate) return { notification: serializeDocument(duplicate), deduplicated: true };
+        throw error;
+      }
+      const recipients = [...new Set(input.recipients)].map((recipientId) => ({
+        id: crypto.randomUUID(),
+        messageId: notification.id,
+        recipientId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        readAt: null,
+        archivedAt: null,
+        snoozedUntil: null,
+        expiresAt: notification.expiresAt,
+      }));
+      if (recipients.length) await appRecipients.insertMany(recipients, { ordered: false });
+      return { notification: serializeDocument(notification), deduplicated: false };
+    },
+    async listAppNotifications(recipientId, filters = {}) {
+      const normalizedRecipient = String(recipientId || '').trim();
+      const limit = normalizePositiveInteger(filters.limit, 20, 100);
+      const cursor = appCursor(filters.cursor);
+      const query = {
+        recipientId: normalizedRecipient,
+        archivedAt: null,
+        ...(filters.unreadOnly ? { readAt: null } : {}),
+        ...(cursor ? { $or: [
+          { createdAt: { $lt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, messageId: { $lt: cursor.id } },
+        ] } : {}),
+      };
+      const recipientRows = await appRecipients.find(query, { projection: { _id: 0 } })
+        .sort({ createdAt: -1, messageId: -1 }).limit(limit + 1).toArray();
+      const hasMore = recipientRows.length > limit;
+      const pageRows = recipientRows.slice(0, limit);
+      const messageIds = pageRows.map((row) => row.messageId);
+      const messages = await appMessages.find({ id: { $in: messageIds } }, { projection: { _id: 0 } }).toArray();
+      const messageMap = new Map(messages.map((row) => [row.id, row]));
+      const [total, unread] = await Promise.all([
+        appRecipients.countDocuments({ recipientId: normalizedRecipient, archivedAt: null, ...(filters.unreadOnly ? { readAt: null } : {}) }),
+        appRecipients.countDocuments({ recipientId: normalizedRecipient, archivedAt: null, readAt: null }),
+      ]);
+      return {
+        items: pageRows.map((recipient) => serializeAppNotification(messageMap.get(recipient.messageId), recipient, protector)).filter(Boolean),
+        total,
+        unread,
+        nextCursor: hasMore ? encodeAppCursor(pageRows.at(-1)) : null,
+      };
+    },
+    async markAppNotificationRead(recipientId, notificationId) {
+      const recipient = await appRecipients.findOneAndUpdate(
+        { recipientId: String(recipientId || '').trim(), messageId: notificationId, archivedAt: null },
+        { $set: { readAt: new Date(), updatedAt: new Date() } },
+        { returnDocument: 'after', projection: { _id: 0 } },
+      );
+      if (!recipient) return null;
+      const message = await appMessages.findOne({ id: notificationId }, { projection: { _id: 0 } });
+      return serializeAppNotification(message, recipient, protector);
+    },
+    async snoozeAppNotification(recipientId, notificationId, snoozedUntil) {
+      const recipient = await appRecipients.findOneAndUpdate(
+        { recipientId: String(recipientId || '').trim(), messageId: notificationId, archivedAt: null },
+        { $set: { snoozedUntil, updatedAt: new Date() } },
+        { returnDocument: 'after', projection: { _id: 0 } },
+      );
+      if (!recipient) return null;
+      const message = await appMessages.findOne({ id: notificationId }, { projection: { _id: 0 } });
+      return serializeAppNotification(message, recipient, protector);
+    },
+    async markAllAppNotificationsRead(recipientId) {
+      const result = await appRecipients.updateMany(
+        { recipientId: String(recipientId || '').trim(), archivedAt: null, readAt: null },
+        { $set: { readAt: new Date(), updatedAt: new Date() } },
+      );
+      return { updated: result.modifiedCount };
+    },
+    async archiveReadAppNotifications(recipientId) {
+      const result = await appRecipients.updateMany(
+        { recipientId: String(recipientId || '').trim(), archivedAt: null, readAt: { $ne: null } },
+        { $set: { archivedAt: new Date(), updatedAt: new Date() } },
+      );
+      return { archived: result.modifiedCount };
+    },
+    async upsertAppDevice(recipientId, input) {
+      const owner = String(recipientId || '').trim();
+      const timestamp = new Date();
+      const tokenHash = input.token ? crypto.createHash('sha256').update(input.token).digest('hex') : '';
+      if (tokenHash) await appDevices.deleteMany({ tokenHash, recipientId: { $ne: owner } });
+      const deviceFields = {
+        recipientId: owner,
+        installationId: input.installationId,
+        provider: input.provider,
+        encryptedToken: input.token ? protector.encrypt({ token: input.token }) : '',
+        appVersion: input.appVersion,
+        deviceModel: input.deviceModel,
+        updatedAt: timestamp,
+        lastSeenAt: timestamp,
+        expiresAt: null,
+        ...(tokenHash ? { tokenHash } : {}),
+      };
+      const row = await appDevices.findOneAndUpdate(
+        { recipientId: owner, installationId: input.installationId },
+        {
+          $set: deviceFields,
+          $setOnInsert: { id: crypto.randomUUID(), createdAt: timestamp },
+          ...(!tokenHash ? { $unset: { tokenHash: '' } } : {}),
+        },
+        { upsert: true, returnDocument: 'after', projection: { _id: 0 } },
+      );
+      return serializeAppDevice(row);
+    },
+    async listAppDeliveryDevices(recipientId) {
+      const rows = await appDevices.find({
+        recipientId: String(recipientId || '').trim(),
+        encryptedToken: { $type: 'string', $ne: '' },
+        expiresAt: null,
+      }, { projection: { _id: 0 } }).toArray();
+      return rows.map((row) => ({ ...serializeAppDevice(row), token: protector.decrypt(row.encryptedToken).token }));
+    },
+    async removeAppDevice(recipientId, installationId) {
+      const result = await appDevices.deleteOne({ recipientId: String(recipientId || '').trim(), installationId });
+      return result.deletedCount === 1;
+    },
     async createDelivery(input) {
       const startedAt = new Date();
       const row = {

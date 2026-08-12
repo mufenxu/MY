@@ -1,16 +1,21 @@
 package cn.pxyb.mycontrol.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -42,7 +47,7 @@ import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.QrCodeScanner
+import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -116,8 +121,10 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
     var cameraGranted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
+    var permissionRequested by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         cameraGranted = it
+        permissionRequested = true
     }
     LaunchedEffect(Unit) {
         if (!cameraGranted) permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -137,11 +144,30 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
                 modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Icon(Icons.Outlined.QrCodeScanner, contentDescription = null, tint = Color.White, modifier = Modifier.size(42.dp))
+                Icon(Icons.Outlined.CenterFocusWeak, contentDescription = null, tint = Color.White, modifier = Modifier.size(42.dp))
                 Text("需要相机权限", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 16.dp))
-                Text("授权后即可扫描网页登录二维码", color = Color.White.copy(alpha = 0.72f), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+                Text(
+                    if (permissionRequested) "相机权限未开启，请重新授权或前往系统设置。" else "授权后即可扫描网页登录二维码",
+                    color = Color.White.copy(alpha = 0.72f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
                 Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }, modifier = Modifier.padding(top = 20.dp)) {
-                    Text("授权相机")
+                    Text(if (permissionRequested) "再次授权" else "授权相机")
+                }
+                if (permissionRequested) {
+                    OutlinedButton(
+                        onClick = {
+                            context.startActivity(
+                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                },
+                            )
+                        },
+                        modifier = Modifier.padding(top = 10.dp),
+                    ) {
+                        Text("打开系统设置")
+                    }
                 }
             }
         }
@@ -173,6 +199,7 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
 }
 
 @Composable
+@OptIn(markerClass = [ExperimentalGetImage::class])
 private fun CameraPreview(onCodeDetected: (String) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -495,7 +522,7 @@ private fun QrErrorScreen(error: String, onRetry: () -> Unit, onClose: () -> Uni
             Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(44.dp))
             Text(error, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp))
             Button(onClick = onRetry, modifier = Modifier.fillMaxWidth().padding(top = 24.dp), shape = MaterialTheme.shapes.medium) {
-                Icon(Icons.Outlined.QrCodeScanner, contentDescription = null)
+                Icon(Icons.Outlined.CenterFocusWeak, contentDescription = null)
                 Text("重新扫码", modifier = Modifier.padding(start = 8.dp))
             }
         }

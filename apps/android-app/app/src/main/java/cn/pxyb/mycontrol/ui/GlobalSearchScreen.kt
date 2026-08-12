@@ -104,7 +104,7 @@ fun GlobalSearchScreen(
 
 @Composable
 private fun SearchResultRow(item: GlobalSearchItem, onClick: () -> Unit) {
-    AppPanel(modifier = Modifier.clickable(onClick = onClick)) {
+    AppPanel(onClick = onClick) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
