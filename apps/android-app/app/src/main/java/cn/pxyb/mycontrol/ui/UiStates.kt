@@ -38,7 +38,6 @@ data class AppEntryUiState(
     val googleAccountDeskOpen: Boolean,
     val globalSearchOpen: Boolean,
     val workspaceDestination: WorkspaceDestination?,
-    val focusIncidentId: String?,
     val focusTaskId: String?,
     val error: String?,
     val message: String?,
@@ -58,20 +57,6 @@ data class OverviewUiState(
     val campusOverview: CampusOverview?,
     val unreadAlerts: Int,
 )
-
-data class EventsUiState(
-    val refreshing: Boolean,
-    val sectionError: String?,
-    val busyAction: String?,
-    val user: PlatformUser?,
-    val overview: OverviewData?,
-    val incidents: List<IncidentInfo>,
-    val unreadNotifications: Int,
-    val message: String?,
-) {
-    val activeIncidents: List<IncidentInfo>
-        get() = incidents.filter { it.status != "resolved" }
-}
 
 data class OperationsUiState(
     val refreshing: Boolean,
@@ -132,7 +117,7 @@ data class QrLoginUiState(
     val qrLoginError: String?,
 )
 
-enum class SearchDestination { Overview, Events, Operations, Tools, GoogleAccounts, Today, Scenes }
+enum class SearchDestination { Overview, Notifications, Operations, Tools, GoogleAccounts, Today, Scenes }
 
 data class GlobalSearchItem(
     val id: String,
@@ -159,6 +144,7 @@ data class TodayUiState(
 )
 
 data class NotificationCenterUiState(
+    val refreshing: Boolean,
     val alerts: List<AppAlertRecord>,
     val preferences: AlertPreferences,
 )
@@ -188,7 +174,6 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     googleAccountDeskOpen = googleAccountDeskOpen,
     globalSearchOpen = globalSearchOpen,
     workspaceDestination = workspaceDestination,
-    focusIncidentId = focusIncidentId,
     focusTaskId = focusTaskId,
     error = error,
     message = message,
@@ -207,17 +192,6 @@ internal fun AppUiState.toOverviewUiState() = OverviewUiState(
     timetable = campusTimetable,
     campusOverview = campusOverview,
     unreadAlerts = alerts.count { !it.read },
-)
-
-internal fun AppUiState.toEventsUiState() = EventsUiState(
-    refreshing = isRefreshing(DataSection.Incidents),
-    sectionError = sectionError(DataSection.Incidents),
-    busyAction = busyAction,
-    user = user,
-    overview = overview,
-    incidents = incidents,
-    unreadNotifications = alerts.count { !it.read },
-    message = message,
 )
 
 internal fun AppUiState.toOperationsUiState() = OperationsUiState(
@@ -295,9 +269,8 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                     id = "incident:${incident.id}",
                     title = incident.title,
                     detail = listOf(incident.source, incident.description).filter(String::isNotBlank).joinToString(" · "),
-                    category = "事件",
-                    destination = SearchDestination.Events,
-                    focusId = incident.id,
+                    category = "系统通知",
+                    destination = SearchDestination.Notifications,
                 ),
             )
         }
@@ -386,6 +359,7 @@ internal fun AppUiState.toTodayUiState() = TodayUiState(
 )
 
 internal fun AppUiState.toNotificationCenterUiState() = NotificationCenterUiState(
+    refreshing = isRefreshing(DataSection.Incidents),
     alerts = alerts,
     preferences = alertPreferences,
 )

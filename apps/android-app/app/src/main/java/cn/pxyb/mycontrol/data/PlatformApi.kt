@@ -736,36 +736,6 @@ class PlatformApi(
         )
     }
 
-    suspend fun updateIncident(
-        id: String,
-        action: String,
-        note: String = "",
-        assignedTo: String = "",
-        muteMinutes: Int? = null,
-        stepId: String? = null,
-        completed: Boolean? = null,
-        postmortem: IncidentPostmortem? = null,
-    ): Unit = withContext(Dispatchers.IO) {
-        val body = JSONObject().put("action", action)
-        if (note.isNotBlank()) body.put("note", note.trim())
-        if (assignedTo.isNotBlank()) body.put("assignedTo", assignedTo.trim())
-        if (muteMinutes != null) body.put("muteMinutes", muteMinutes)
-        if (!stepId.isNullOrBlank()) body.put("stepId", stepId.trim())
-        if (completed != null) body.put("completed", completed)
-        if (postmortem != null) {
-            body.put(
-                "postmortem",
-                JSONObject()
-                    .put("summary", postmortem.summary.trim())
-                    .put("rootCause", postmortem.rootCause.trim())
-                    .put("impact", postmortem.impact.trim())
-                    .put("correctiveActions", postmortem.correctiveActions.trim()),
-            )
-        }
-        execute("/api/incidents/${encodePath(id)}/actions", "POST", body)
-        Unit
-    }
-
     suspend fun approveConfiguration(id: String, note: String = ""): Unit = withContext(Dispatchers.IO) {
         val body = JSONObject()
         if (note.isNotBlank()) body.put("note", note.trim())
@@ -1037,41 +1007,14 @@ private fun JSONObject.toServiceInfo() = ServiceInfo(
 
 private fun JSONObject.toIncidentInfo() = IncidentInfo(
     id = optString("id"),
-    title = optString("title", "运行事件"),
+    title = optString("title", "系统异常"),
     description = optString("description"),
     severity = optString("severity", "warning"),
     status = optString("status", "open"),
     source = optString("source", "platform"),
     serviceId = nullableString("serviceId"),
     openedAt = nullableString("openedAt"),
-    firstSeenAt = nullableString("firstSeenAt"),
-    lastSeenAt = nullableString("lastSeenAt"),
     updatedAt = nullableString("updatedAt") ?: nullableString("lastSeenAt"),
-    assignedTo = nullableString("assignedTo"),
-    timeline = optJSONArray("timeline").objects().map { item ->
-        IncidentTimelineEntry(
-            type = item.optString("type", "event"),
-            message = item.optString("message", "事件已更新"),
-            actor = item.optString("actor", "system"),
-            at = item.nullableString("at"),
-        )
-    },
-    runbookSteps = optJSONArray("runbookSteps").objects().map { item ->
-        IncidentRunbookStep(
-            id = item.optString("id"),
-            title = item.optString("title", item.optString("id", "处置步骤")),
-            completed = item.optBoolean("completed"),
-        )
-    },
-    postmortem = optJSONObject("postmortem")?.let { pm ->
-        IncidentPostmortem(
-            summary = pm.optString("summary"),
-            rootCause = pm.optString("rootCause"),
-            impact = pm.optString("impact"),
-            correctiveActions = pm.optString("correctiveActions"),
-            completedAt = pm.nullableString("completedAt"),
-        )
-    },
 )
 
 private fun JSONObject.toAuditInfo() = AuditInfo(

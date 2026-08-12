@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
@@ -39,7 +40,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -1060,3 +1065,190 @@ fun ImmersiveHeader(
         }
     }
 }
+
+/** 
+ * 高颜值极简现代纯 Icon 顶栏按钮 (搜索、扫码通用双子按钮)
+ */
+@Composable
+fun ModernHeaderIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconTint: Color = Color(0xFF2563EB),
+    containerColor: Color = Color(0xFFEFF6FF),
+    borderColor: Color = Color(0xFFDBEAFE),
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Surface(
+        onClick = onClick,
+        interactionSource = interactionSource,
+        modifier = modifier
+            .size(42.dp)
+            .pressFeedback(interactionSource),
+        shape = RoundedCornerShape(14.dp),
+        color = containerColor,
+        border = BorderStroke(1.dp, borderColor),
+        shadowElevation = 0.5.dp,
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = iconTint,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    }
+}
+
+/**
+ * 极其高颜值、流线极客风的现代化 App 启动 Splash 开屏动画
+ */
+@Composable
+fun ModernAnimatedSplashScreen(
+    onSplashFinished: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var startAnimation by remember { mutableStateOf(false) }
+
+    val logoScale by animateFloatAsState(
+        targetValue = if (startAnimation) 1.0f else 0.6f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow,
+        ),
+        label = "logoScale",
+    )
+
+    val logoAlpha by animateFloatAsState(
+        targetValue = if (startAnimation) 1.0f else 0f,
+        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        label = "logoAlpha",
+    )
+
+    val textOffset by animateFloatAsState(
+        targetValue = if (startAnimation) 0f else 24f,
+        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        label = "textOffset",
+    )
+
+    LaunchedEffect(Unit) {
+        startAnimation = true
+        kotlinx.coroutines.delay(1200)
+        onSplashFinished()
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center,
+    ) {
+        // 背景极光 Halo Aura 弥散光晕
+        Box(
+            modifier = Modifier
+                .size(240.dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF3B82F6).copy(alpha = 0.12f * logoAlpha),
+                            Color(0xFF10B981).copy(alpha = 0.06f * logoAlpha),
+                            Color.Transparent,
+                        )
+                    ),
+                    shape = CircleShape,
+                )
+        )
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            // 缩放层只处理动画；圆角表面独立裁剪背景、边框与图标。
+            val logoShape = RoundedCornerShape(26.dp)
+            Box(
+                modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = logoScale
+                        scaleY = logoScale
+                        alpha = logoAlpha
+                    }
+                    .size(84.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(logoShape)
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFEFF6FF), logoShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(cn.pxyb.mycontrol.R.drawable.platform_logo),
+                        contentDescription = "智控中心 Logo",
+                        modifier = Modifier.size(56.dp),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // 品牌文字与微光字样
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.graphicsLayer {
+                    translationY = textOffset
+                    alpha = logoAlpha
+                }
+            ) {
+                Text(
+                    text = "MY CONTROL",
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 28.sp,
+                        letterSpacing = 1.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .background(Color(0xFF10B981), CircleShape)
+                    )
+                    Text(
+                        text = "智控中心 · 统一控制平台",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                }
+
+                Spacer(Modifier.height(32.dp))
+
+                // 流线亮光 Indicator
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .width(72.dp)
+                        .height(3.dp)
+                        .clip(CircleShape),
+                    color = Color(0xFF2563EB),
+                    trackColor = Color(0xFFEFF6FF),
+                )
+            }
+        }
+    }
+}
+

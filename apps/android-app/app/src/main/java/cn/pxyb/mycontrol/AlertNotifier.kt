@@ -58,7 +58,7 @@ class AlertNotifier(context: Context) {
                     "重要告警",
                     NotificationManager.IMPORTANCE_HIGH,
                 ).apply {
-                    description = "关键事件与需要立即处理的任务"
+                    description = "系统异常与需要立即处理的任务"
                     enableVibration(true)
                 },
                 NotificationChannel(
@@ -98,7 +98,7 @@ class AlertNotifier(context: Context) {
                             id = "incident:${incident.id}:${incident.updatedAt.orEmpty()}",
                             type = "incident",
                             sourceId = incident.id,
-                            title = "严重事件：${incident.title}",
+                            title = "系统异常：${incident.title}",
                             body = listOfNotNull(
                                 incident.serviceId?.takeIf(String::isNotBlank),
                                 incident.description.takeIf(String::isNotBlank),
@@ -126,15 +126,14 @@ class AlertNotifier(context: Context) {
             newCritical.take(3).forEach { incident ->
                 notify(
                     notificationId = INCIDENT_BASE + incident.id.hashCode(),
-                    title = "严重事件：${incident.title}",
+                    title = "系统异常：${incident.title}",
                     body = listOfNotNull(
                         incident.serviceId?.takeIf { it.isNotBlank() },
                         incident.description.takeIf { it.isNotBlank() },
                     ).joinToString(" · ").ifBlank { "请尽快确认并处理" },
                     intent = DeepLinks.openIntent(
                         appContext,
-                        tab = MainTab.Events,
-                        incidentId = incident.id,
+                        destination = "notifications",
                     ),
                 )
             }
@@ -231,7 +230,7 @@ class AlertNotifier(context: Context) {
     fun notifyRecord(alert: AppAlertRecord) {
         if (isQuietHours()) return
         val intent = when (alert.type) {
-            "incident" -> DeepLinks.openIntent(appContext, tab = MainTab.Events, incidentId = alert.sourceId)
+            "incident" -> DeepLinks.openIntent(appContext, destination = "notifications")
             "task" -> DeepLinks.openIntent(appContext, tab = MainTab.Operations, taskId = alert.sourceId)
             "todo", "course", "resource" -> DeepLinks.openIntent(appContext, destination = "today")
             else -> DeepLinks.openIntent(appContext, destination = "notifications")
@@ -316,7 +315,7 @@ class AlertNotifier(context: Context) {
 
     private fun sourceLabel(source: String): String = when (source) {
         "configuration" -> "配置审批"
-        "incident" -> "告警事件"
+        "incident" -> "系统异常"
         "backup" -> "数据备份"
         "notification" -> "通知任务"
         "release_build" -> "发布构建"

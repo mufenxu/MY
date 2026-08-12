@@ -1,6 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,7 +56,8 @@ fun OperationsScreen(
     onTriggerBackup: () -> Unit,
     onApproveConfiguration: (String, String) -> Unit,
     onRejectConfiguration: (String, String) -> Unit,
-    onOpenIncident: (String) -> Unit,
+    onOpenNotifications: () -> Unit = {},
+    onOpenIncident: (String) -> Unit = {},
     focusTaskId: String?,
     onFocusConsumed: () -> Unit,
     onRefresh: () -> Unit,
@@ -118,10 +121,18 @@ fun OperationsScreen(
             item { FeedbackBanner("部分工具数据暂不可用：$message", error = true) }
         }
         item {
-            AppPanel {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                shadowElevation = 1.dp,
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     MetricCell("执行中", activeTasks.toString(), Modifier.weight(1f), Ocean)
                     MetricCell("失败", failedTasks.toString(), Modifier.weight(1f), if (failedTasks > 0) Coral else Forest)

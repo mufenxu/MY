@@ -146,14 +146,14 @@ private object AppRoute {
 
 private val tabs = listOf(
     TabItem(MainTab.Overview, "首页", Icons.Outlined.Home),
-    TabItem(MainTab.Events, "动态", Icons.Outlined.Notifications),
+    TabItem(MainTab.Notifications, "通知", Icons.Outlined.Notifications),
     TabItem(MainTab.Tools, "设备", Icons.Outlined.Hub),
     TabItem(MainTab.Profile, "我的", Icons.Outlined.Person),
 )
 
 private fun MainTab.route(): String = when (this) {
     MainTab.Overview -> AppRoute.Overview
-    MainTab.Events -> AppRoute.Events
+    MainTab.Notifications -> AppRoute.Notifications
     MainTab.Operations -> AppRoute.Operations
     MainTab.Tools -> AppRoute.Tools
     MainTab.Profile -> AppRoute.Profile
@@ -177,7 +177,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Notifications,
     AppRoute.Insights,
     AppRoute.Scenes -> MainTab.Overview
-    AppRoute.Events -> MainTab.Events
+    AppRoute.Notifications -> MainTab.Notifications
     AppRoute.Operations -> MainTab.Operations
     AppRoute.Tools -> MainTab.Tools
     AppRoute.Profile,
@@ -209,7 +209,16 @@ fun MyControlApp(
     notificationsEnabled: Boolean,
     onRequestNotifications: () -> Unit,
 ) {
+    var showSplash by remember { mutableStateOf(true) }
     val state by viewModel.entryState.collectAsStateWithLifecycle()
+
+    if (showSplash) {
+        ModernAnimatedSplashScreen(
+            onSplashFinished = { showSplash = false }
+        )
+        return
+    }
+
     val destination = when {
         state.booting -> "loading"
         state.locked -> "locked"
@@ -1178,7 +1187,7 @@ private fun AuthenticatedShell(
     LaunchedEffect(currentRoute) {
         when (currentRoute) {
             AppRoute.Overview -> viewModel.syncNavigationDestination(MainTab.Overview)
-            AppRoute.Events -> viewModel.syncNavigationDestination(MainTab.Events)
+            AppRoute.Notifications -> viewModel.syncNavigationDestination(MainTab.Notifications)
             AppRoute.Tools -> viewModel.syncNavigationDestination(MainTab.Tools)
             AppRoute.Profile -> viewModel.syncNavigationDestination(MainTab.Profile)
             AppRoute.Operations -> viewModel.syncNavigationDestination(MainTab.Operations)
@@ -1267,24 +1276,7 @@ private fun AuthenticatedShell(
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
                     )
                 }
-                composable(AppRoute.Events) {
-                    val eventsState by viewModel.eventsState.collectAsStateWithLifecycle()
-                    EventsScreen(
-                        state = eventsState,
-                        contentPadding = contentPadding,
-                        onAcknowledge = viewModel::acknowledgeIncident,
-                        onAssign = viewModel::assignIncident,
-                        onAddNote = viewModel::addIncidentNote,
-                        onMute = viewModel::muteIncident,
-                        onResolve = { id, note -> viewModel.resolveIncident(id, note, onSensitiveActionConfirmation) },
-                        onCompleteRunbookStep = viewModel::completeRunbookStep,
-                        onSavePostmortem = viewModel::savePostmortem,
-                        focusIncidentId = state.focusIncidentId,
-                        onFocusConsumed = viewModel::clearFocusTargets,
-                        onRefresh = onRefresh,
-                        onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
-                    )
-                }
+
                 composable(AppRoute.Operations) {
                     val operationsState by viewModel.operationsState.collectAsStateWithLifecycle()
                     OperationsScreen(
@@ -1306,11 +1298,8 @@ private fun AuthenticatedShell(
                                 confirmation = onSensitiveActionConfirmation,
                             )
                         },
-                        onOpenIncident = { incidentId ->
-                            viewModel.openOperationalTarget(
-                                tab = MainTab.Events,
-                                incidentId = incidentId,
-                            )
+                        onOpenNotifications = {
+                            viewModel.openWorkspace(WorkspaceDestination.Notifications)
                         },
                         focusTaskId = state.focusTaskId,
                         onFocusConsumed = viewModel::clearFocusTargets,
@@ -1406,7 +1395,7 @@ private fun AuthenticatedShell(
                         onSaveTodo = viewModel::saveTodo,
                         onToggleTodo = viewModel::toggleTodo,
                         onDeleteTodo = viewModel::deleteTodo,
-                        onOpenEvents = { viewModel.selectTab(MainTab.Events) },
+                        onOpenNotifications = { viewModel.selectTab(MainTab.Notifications) },
                         onOpenTasks = { viewModel.selectTab(MainTab.Operations) },
                     )
                 }
@@ -1415,7 +1404,8 @@ private fun AuthenticatedShell(
                     NotificationCenterScreen(
                         state = notificationState,
                         contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
+                        refreshing = notificationState.refreshing,
+                        onRefresh = { viewModel.refreshCurrentWorkspace(true) },
                         onOpen = viewModel::openAlert,
                         onAction = viewModel::openNotificationAction,
                         onMarkRead = viewModel::markAlertRead,
@@ -1710,7 +1700,7 @@ private fun BrandMark(compact: Boolean = false) {
 
 private fun tabTitle(tab: MainTab): String = when (tab) {
     MainTab.Overview -> "工作台"
-    MainTab.Events -> "系统动态"
+    MainTab.Notifications -> "通知中心"
     MainTab.Operations -> "高级工具"
     MainTab.Tools -> "设备与自动化"
     MainTab.Profile -> "账号与安全"

@@ -122,7 +122,7 @@ fun TodayScreen(
     onSaveTodo: (TodoTask) -> Unit,
     onToggleTodo: (String) -> Unit,
     onDeleteTodo: (String) -> Unit,
-    onOpenEvents: () -> Unit,
+    onOpenNotifications: () -> Unit,
     onOpenTasks: () -> Unit,
 ) {
     var editingTodo by remember { mutableStateOf<TodoTask?>(null) }
@@ -228,12 +228,12 @@ fun TodayScreen(
                     }
                 }
 
-                SectionHeader("需要处理", "系统事件与平台任务")
+                SectionHeader("需要处理", "系统提醒与平台任务")
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     AttentionCard(
-                        label = "活动事件",
+                        label = "系统通知",
                         value = state.incidents.count { it.status != "resolved" },
-                        onClick = onOpenEvents,
+                        onClick = onOpenNotifications,
                         modifier = Modifier.weight(1f),
                     )
                     AttentionCard(
@@ -272,7 +272,8 @@ fun TodayScreen(
 fun NotificationCenterScreen(
     state: NotificationCenterUiState,
     contentPadding: PaddingValues,
-    onBack: () -> Unit,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
     onOpen: (AppAlertRecord) -> Unit,
     onAction: (AppAlertRecord, AppNotificationAction) -> Unit,
     onMarkRead: (String) -> Unit,
@@ -293,7 +294,8 @@ fun NotificationCenterScreen(
         title = "通知中心",
         subtitle = "${state.alerts.count { !it.read }} 条未读 · 保留最近 200 条",
         contentPadding = contentPadding,
-        onBack = onBack,
+        refreshing = refreshing,
+        onRefresh = onRefresh,
         actions = {
             AppHeaderIconButton(
                 icon = Icons.Outlined.Settings,
@@ -320,7 +322,7 @@ fun NotificationCenterScreen(
         }
         if (visibleAlerts.isEmpty()) {
             item(key = "empty", contentType = "empty") {
-                EmptyBlock(if (unreadOnly) "没有未读通知" else "还没有通知", "新的关键事件、任务和提醒会集中显示在这里。")
+                EmptyBlock(if (unreadOnly) "没有未读通知" else "还没有通知", "新的系统异常、任务和提醒会集中显示在这里。")
             }
         } else {
             items(visibleAlerts, key = ::notificationItemKey, contentType = { "notification" }) { alert ->
@@ -455,8 +457,8 @@ fun InsightsScreen(
     val conclusion = when {
         samples.size < 2 -> "趋势记录刚开始积累。继续使用几天后，这里会给出可靠的变化结论。"
         latest == null || earlier == null -> "暂无足够数据。"
-        latest.activeIncidents < earlier.activeIncidents -> "活动事件比周期开始时减少，整体运行状态正在改善。"
-        latest.activeIncidents > earlier.activeIncidents -> "活动事件比周期开始时增加，建议优先查看未关闭事件。"
+        latest.activeIncidents < earlier.activeIncidents -> "系统异常比周期开始时减少，整体运行状态正在改善。"
+        latest.activeIncidents > earlier.activeIncidents -> "系统异常比周期开始时增加，建议优先查看通知中心。"
         latest.onlineDevices < earlier.onlineDevices -> "在线设备数有所下降，建议检查离线设备与网络连接。"
         else -> "本周期核心指标整体平稳，没有发现明显恶化趋势。"
     }
@@ -486,7 +488,7 @@ fun InsightsScreen(
             EmptyBlock("暂无趋势样本", "首页和后台同步成功后会每天记录一次关键指标。")
         } else {
             TrendChart("服务健康率", samples.map { if (it.serviceTotal == 0) 0 else (it.healthyServices * 100 / it.serviceTotal) }, "%")
-            TrendChart("活动事件", samples.map { it.activeIncidents }, "")
+            TrendChart("系统异常", samples.map { it.activeIncidents }, "")
             TrendChart("在线设备", samples.map { it.onlineDevices }, "")
             latest?.let {
                 AppPanel {
@@ -602,15 +604,15 @@ private fun NotificationWorkspacePage(
     title: String,
     subtitle: String,
     contentPadding: PaddingValues,
-    onBack: () -> Unit,
-    actions: (@Composable RowScope.() -> Unit)? = null,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+    actions: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
     val listState = rememberLazyListState()
     PullToRefresh(
-        isRefreshing = false,
-        onRefresh = null,
-        enabled = false,
+        isRefreshing = refreshing,
+        onRefresh = onRefresh,
         atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
     ) {
         LazyColumn(
@@ -626,7 +628,7 @@ private fun NotificationWorkspacePage(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "header", contentType = "header") {
-                AppSecondaryHeader(title = title, subtitle = subtitle, onBack = onBack, actions = actions)
+                ImmersiveHeader(title = title, subtitle = subtitle, actions = actions)
             }
             content()
         }

@@ -16,4 +16,9 @@ class NavigationStateTest {
         assertNull(restoredMainTab("missing"))
         assertNull(restoredWorkspaceDestination("missing"))
     }
+
+    @Test
+    fun migratesLegacyEventsTabToNotifications() {
+        assertEquals("Notifications", restoredMainTab("Events")?.name)
+    }
 }

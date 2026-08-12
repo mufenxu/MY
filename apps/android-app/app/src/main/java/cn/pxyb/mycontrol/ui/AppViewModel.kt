@@ -27,7 +27,6 @@ import cn.pxyb.mycontrol.data.GoogleAliasRecord
 import cn.pxyb.mycontrol.data.HomePreferences
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
-import cn.pxyb.mycontrol.data.IncidentPostmortem
 import cn.pxyb.mycontrol.data.IotData
 import cn.pxyb.mycontrol.data.IotSceneAction
 import cn.pxyb.mycontrol.data.OverviewData
@@ -71,7 +70,7 @@ import java.time.ZoneId
 import java.util.UUID
 import java.io.IOException
 
-enum class MainTab { Overview, Events, Operations, Tools, Profile }
+enum class MainTab { Overview, Notifications, Operations, Tools, Profile }
 
 enum class WorkspaceDestination { Today, Notifications, Insights, Scenes }
 
@@ -122,7 +121,6 @@ data class AppUiState(
     val totpEnrollment: TotpEnrollment? = null,
     val recoveryCodes: List<String> = emptyList(),
     val passkeys: List<PlatformPasskey> = emptyList(),
-    val focusIncidentId: String? = null,
     val focusTaskId: String? = null,
     val error: String? = null,
     val message: String? = null,
@@ -186,7 +184,6 @@ class AppViewModel(
     val state: StateFlow<AppUiState> = mutableState.asStateFlow()
     val entryState = deriveState(AppUiState::toEntryUiState)
     val overviewState = deriveState(AppUiState::toOverviewUiState)
-    val eventsState = deriveState(AppUiState::toEventsUiState)
     val operationsState = deriveState(AppUiState::toOperationsUiState)
     val toolsState = deriveState(AppUiState::toToolsUiState)
     val profileState = deriveState(AppUiState::toProfileUiState)
@@ -435,7 +432,6 @@ class AppViewModel(
                         googleAccountsRevision = 0,
                         googleAccountMigrationPending = false,
                         googleAccountsRemoteReady = false,
-                        focusIncidentId = null,
                         focusTaskId = null,
                     )
                 }
@@ -639,7 +635,6 @@ class AppViewModel(
             }
             openOperationalTarget(
                 tab = DeepLinks.parseTab(uri.getQueryParameter(DeepLinks.EXTRA_TAB)),
-                incidentId = uri.getQueryParameter(DeepLinks.EXTRA_INCIDENT_ID),
                 taskId = uri.getQueryParameter(DeepLinks.EXTRA_TASK_ID),
             )
             return
@@ -651,11 +646,9 @@ class AppViewModel(
 
     fun openOperationalTarget(
         tab: MainTab? = null,
-        incidentId: String? = null,
         taskId: String? = null,
     ) {
         val resolvedTab = tab ?: when {
-            !incidentId.isNullOrBlank() -> MainTab.Events
             !taskId.isNullOrBlank() -> MainTab.Operations
             else -> null
         }
@@ -666,7 +659,6 @@ class AppViewModel(
                 googleAccountDeskOpen = false,
                 globalSearchOpen = false,
                 workspaceDestination = null,
-                focusIncidentId = incidentId?.takeIf(String::isNotBlank),
                 focusTaskId = taskId?.takeIf(String::isNotBlank),
                 error = null,
                 message = null,
@@ -677,7 +669,7 @@ class AppViewModel(
     }
 
     fun clearFocusTargets() {
-        mutableState.update { it.copy(focusIncidentId = null, focusTaskId = null) }
+        mutableState.update { it.copy(focusTaskId = null) }
     }
 
     fun openQrScanner() {
@@ -687,6 +679,10 @@ class AppViewModel(
     }
 
     fun openWorkspace(destination: WorkspaceDestination) {
+        if (destination == WorkspaceDestination.Notifications) {
+            selectTab(MainTab.Notifications)
+            return
+        }
         mutableState.update {
             it.copy(
                 selectedTab = MainTab.Overview,
@@ -738,7 +734,7 @@ class AppViewModel(
         mutableState.update { it.copy(globalSearchOpen = false) }
         when (item.destination) {
             SearchDestination.Overview -> selectTab(MainTab.Overview)
-            SearchDestination.Events -> openOperationalTarget(MainTab.Events, incidentId = item.focusId)
+            SearchDestination.Notifications -> openWorkspace(WorkspaceDestination.Notifications)
             SearchDestination.Operations -> openOperationalTarget(MainTab.Operations, taskId = item.focusId)
             SearchDestination.Tools -> selectTab(MainTab.Tools)
             SearchDestination.GoogleAccounts -> openGoogleAccountDesk()
@@ -1317,7 +1313,7 @@ class AppViewModel(
     private fun refreshForTab(tab: MainTab, force: Boolean = false) {
         when (tab) {
             MainTab.Overview -> refreshInitialData(force)
-            MainTab.Events -> {
+            MainTab.Notifications -> {
                 refreshIncidents(force)
                 syncRemoteNotifications()
             }
@@ -1506,37 +1502,6 @@ class AppViewModel(
         }
     }
 
-    fun acknowledgeIncident(id: String) = updateIncident("事件已确认。") {
-        api.updateIncident(id, "acknowledge", note = "通过 MY Control Android 确认")
-    }
-
-    fun assignIncident(id: String, assignedTo: String) = updateIncident("事件负责人已更新。") {
-        api.updateIncident(id, "assign", assignedTo = assignedTo)
-    }
-
-    fun addIncidentNote(id: String, note: String) = updateIncident("处理备注已记录。") {
-        api.updateIncident(id, "note", note = note)
-    }
-
-    fun muteIncident(id: String, muteMinutes: Int) = updateIncident("事件已静默。") {
-        api.updateIncident(id, "mute", muteMinutes = muteMinutes)
-    }
-
-    fun resolveIncident(id: String, note: String, confirmation: suspend () -> Boolean) =
-        updateIncident("事件已关闭。", confirmation) {
-        api.updateIncident(id, "resolve", note = note)
-    }
-
-    fun completeRunbookStep(id: String, stepId: String, completed: Boolean) =
-        updateIncident(if (completed) "处置步骤已完成。" else "处置步骤已回退。") {
-            api.updateIncident(id, "runbook_step", stepId = stepId, completed = completed)
-        }
-
-    fun savePostmortem(id: String, postmortem: IncidentPostmortem) =
-        updateIncident("事故复盘已保存。") {
-            api.updateIncident(id, "postmortem", postmortem = postmortem)
-        }
-
     fun approveConfiguration(
         changeId: String,
         note: String = "通过 MY Control Android 审批",
@@ -1648,7 +1613,7 @@ class AppViewModel(
         markAlertRead(record.id)
         if (record.origin == "remote" && record.actions.firstOrNull()?.deepLink?.let(::openNotificationDeepLink) == true) return
         when (record.type) {
-            "incident" -> openOperationalTarget(MainTab.Events, incidentId = record.sourceId)
+            "incident" -> openWorkspace(WorkspaceDestination.Notifications)
             "task" -> openOperationalTarget(MainTab.Operations, taskId = record.sourceId)
             "todo", "course" -> openWorkspace(WorkspaceDestination.Today)
             else -> Unit
@@ -1880,18 +1845,6 @@ class AppViewModel(
     fun clearFeedback() {
         mutableState.update { it.copy(error = null, message = null) }
     }
-
-    private fun updateIncident(
-        successMessage: String,
-        confirmation: (suspend () -> Boolean)? = null,
-        action: suspend () -> Unit,
-    ) = runAction("incident", successMessage, confirmation) {
-            action()
-            val incidents = api.incidents()
-            mutableState.update { it.copy(incidents = incidents) }
-            publishWidget()
-            evaluateAlerts()
-        }
 
     private suspend fun publishWidget() {
         val current = mutableState.value
@@ -2165,7 +2118,7 @@ class AppViewModel(
             return true
         }
         uri.getQueryParameter("tab")?.let { tab ->
-            val target = runCatching { MainTab.valueOf(tab.replaceFirstChar(Char::uppercase)) }.getOrNull() ?: return false
+            val target = DeepLinks.parseTab(tab) ?: return false
             selectTab(target)
             return true
         }

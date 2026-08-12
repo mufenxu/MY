@@ -269,12 +269,10 @@ class MainActivity : ComponentActivity() {
             return
         }
         val tab = intent.getStringExtra(DeepLinks.EXTRA_TAB)
-        val incidentId = intent.getStringExtra(DeepLinks.EXTRA_INCIDENT_ID)
         val taskId = intent.getStringExtra(DeepLinks.EXTRA_TASK_ID)
-        if (!tab.isNullOrBlank() || !incidentId.isNullOrBlank() || !taskId.isNullOrBlank()) {
+        if (!tab.isNullOrBlank() || !taskId.isNullOrBlank()) {
             appViewModel.openOperationalTarget(
                 tab = DeepLinks.parseTab(tab),
-                incidentId = incidentId,
                 taskId = taskId,
             )
         }

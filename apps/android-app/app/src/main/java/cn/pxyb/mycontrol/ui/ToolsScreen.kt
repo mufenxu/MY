@@ -1,7 +1,16 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,7 +44,6 @@ import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,20 +59,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.DeviceInfo
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.IotScene
 import cn.pxyb.mycontrol.ui.theme.Amber
 import cn.pxyb.mycontrol.ui.theme.AmberPale
 import cn.pxyb.mycontrol.ui.theme.Coral
-import cn.pxyb.mycontrol.ui.theme.CoralPale
 import cn.pxyb.mycontrol.ui.theme.Forest
-import cn.pxyb.mycontrol.ui.theme.Mint
 import cn.pxyb.mycontrol.ui.theme.MintPale
 import cn.pxyb.mycontrol.ui.theme.Ocean
 import cn.pxyb.mycontrol.ui.theme.OceanPale
@@ -79,28 +89,28 @@ private data class RelayTarget(
     val name: String,
     val description: String,
     val icon: ImageVector,
-    val accent: Color,
-    val accentPale: Color,
+    val activeAccent: Color,
+    val activeBgGradient: Pair<Color, Color>,
 )
 
 private val relayTargets = listOf(
     RelayTarget(
         deviceId = "esp8266_living",
         relayId = "relay1",
-        name = "客厅灯光",
-        description = "客厅监控设备 · 通道 1",
+        name = "客厅主灯",
+        description = "客厅主控节点 · 通道 1",
         icon = Icons.Outlined.Lightbulb,
-        accent = Forest,
-        accentPale = MintPale,
+        activeAccent = Color(0xFFD97706), // 暖金暖光
+        activeBgGradient = Pair(Color(0xFFFFFBEB), Color(0xFFFEF3C7)),
     ),
     RelayTarget(
         deviceId = "relay_balcony",
         relayId = "relay2",
-        name = "阳台插座",
+        name = "阳台智能插座",
         description = "阳台继电器 · 通道 2",
         icon = Icons.Outlined.PowerSettingsNew,
-        accent = Coral,
-        accentPale = CoralPale,
+        activeAccent = Color(0xFF059669), // 极光绿
+        activeBgGradient = Pair(Color(0xFFECFDF5), Color(0xFFD1FAE5)),
     ),
 )
 
@@ -116,7 +126,6 @@ fun ToolsScreen(
 ) {
     var confirmation by remember { mutableStateOf<ToolConfirmation?>(null) }
 
-    // 切换底部页面时自动收起本页确认弹窗
     LaunchedEffect(currentTab) {
         confirmation = null
     }
@@ -142,116 +151,135 @@ fun ToolsScreen(
                 .fillMaxSize()
                 .verticalScroll(scrollState)
                 .padding(appPageContentPadding(contentPadding, topSpacing = 4.dp)),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-        ImmersiveHeader(
-            title = "设备与自动化",
-        )
-        state.sectionError?.let { message ->
-            FeedbackBanner("设备数据暂不可用：$message", error = true)
-        }
+            // 1. 全新通透极简顶部标题（无黑色包覆块，无刷新按钮）
+            LightweightHeaderBanner(
+                mqttConnected = iot?.mqttConnected == true,
+            )
 
-        ToolSectionHeader("IoT 实时状态", "设备与自动化场景", Ocean)
-        MqttStatusPanel(
-            mqttConnected = iot?.mqttConnected == true,
-            connectionState = iot?.connectionState ?: "等待 IoT 状态",
-            onlineDevices = iot?.devices?.count { it.online } ?: 0,
-            totalDevices = iot?.devices?.size ?: 0,
-            messagesReceived = iot?.messagesReceived ?: 0,
-        )
-
-        ToolSectionHeader("环境监测", "实时温湿度", Forest)
-        val sensorDevice = iot?.devices?.firstOrNull { it.temperature != null || it.humidity != null }
-        EnvironmentCard(sensorDevice)
-
-        ToolSectionHeader("继电器控制", "两路设备 · 实时开关", Coral)
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            relayTargets.forEach { target ->
-                RelayCard(
-                    target = target,
-                    device = iot?.devices?.firstOrNull { it.id == target.deviceId },
-                    mqttConnected = iot?.mqttConnected == true,
-                    canOperate = canOperate,
-                    busy = state.busyAction == "relay:${target.deviceId}:${target.relayId}",
-                    onControlRelay = onControlRelay,
-                )
+            state.sectionError?.let { message ->
+                FeedbackBanner("设备数据暂不可用：$message", error = true)
             }
-        }
 
-        if (!iot?.scenes.isNullOrEmpty()) {
-            ToolSectionHeader("快捷场景", "IoT 自动化", Color(0xFF7C3AED))
+            // 2. Bento Grid 核心 IoT 状态
+            ToolSectionTitle(title = "IoT 实时状态", subtitle = "智控节点与全网数据吞吐", accent = Color(0xFF2563EB))
+            ModernMqttStatusPanel(
+                mqttConnected = iot?.mqttConnected == true,
+                connectionState = iot?.connectionState ?: "等待 IoT 状态",
+                onlineDevices = iot?.devices?.count { it.online } ?: 0,
+                totalDevices = iot?.devices?.size ?: 0,
+                messagesReceived = iot?.messagesReceived ?: 0,
+            )
+
+            // 3. 智能环境监测
+            ToolSectionTitle(title = "环境感知", subtitle = "多维度室内环境指标", accent = Color(0xFF059669))
+            val sensorDevice = iot?.devices?.firstOrNull { it.temperature != null || it.humidity != null }
+            ModernEnvironmentCard(sensorDevice)
+
+            // 4. 智能继电器开关
+            ToolSectionTitle(title = "设备与开关", subtitle = "低延迟 MQTT 实时触控", accent = Color(0xFFD97706))
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                relayTargets.forEach { target ->
+                    ModernRelayCard(
+                        target = target,
+                        device = iot?.devices?.firstOrNull { it.id == target.deviceId },
+                        mqttConnected = iot?.mqttConnected == true,
+                        canOperate = canOperate,
+                        busy = state.busyAction == "relay:${target.deviceId}:${target.relayId}",
+                        onControlRelay = onControlRelay,
+                    )
+                }
+            }
+
+            // 5. 快捷场景
+            if (!iot?.scenes.isNullOrEmpty()) {
+                ToolSectionTitle(title = "快捷自动化", subtitle = "一键触发预设联动场景", accent = Color(0xFF7C3AED))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    shadowElevation = 1.dp,
+                ) {
+                    Column {
+                        iot!!.scenes.forEachIndexed { index, scene ->
+                            ModernSceneRow(
+                                scene = scene,
+                                canOperate = canOperate,
+                                busy = state.busyAction == "scene",
+                                enabled = state.busyAction == null,
+                                onRun = { confirmation = ToolConfirmation.Scene(scene) },
+                            )
+                            if (index < iot.scenes.lastIndex) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 6. CT8 自动化
+            ToolSectionTitle(title = "CT8 自动化执行", subtitle = "GitHub Actions 任务流水线", accent = Color(0xFF0284C7))
+            ModernCt8Panel(
+                ct8 = ct8,
+                canOperate = canOperate,
+                busy = state.busyAction == "ct8",
+                enabled = state.busyAction == null,
+                onTrigger = { confirmation = ToolConfirmation.Ct8 },
+            )
+
+            // 7. 统一平台服务监控
+            ToolSectionTitle(title = "平台服务可用性", subtitle = "核心微服务实时健康度监测", accent = Color(0xFF64748B))
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-                shadowElevation = 2.dp,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                shadowElevation = 1.dp,
             ) {
                 Column {
-                    iot!!.scenes.forEachIndexed { index, scene ->
-                        SceneRow(
-                            scene = scene,
-                            canOperate = canOperate,
-                            busy = state.busyAction == "scene",
-                            enabled = state.busyAction == null,
-                            onRun = { confirmation = ToolConfirmation.Scene(scene) },
-                        )
-                        if (index < iot.scenes.lastIndex) {
-                            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                        }
-                    }
-                }
-            }
-        }
-
-        ToolSectionHeader("CT8 自动化", "GitHub Actions 执行状态", Color(0xFF0EA5E9))
-        Ct8Panel(
-            ct8 = ct8,
-            canOperate = canOperate,
-            busy = state.busyAction == "ct8",
-            enabled = state.busyAction == null,
-            onTrigger = { confirmation = ToolConfirmation.Ct8 },
-        )
-
-        ToolSectionHeader("业务模块", "统一平台服务可用性", Color(0xFF64748B))
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-            shadowElevation = 2.dp,
-        ) {
-            Column {
-                if (modules.isEmpty()) {
-                    EmptyBlock("等待模块状态", "完成平台同步后显示")
-                } else {
-                    modules.forEachIndexed { index, service ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 13.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            IconTile(moduleIcon(service.id), Ocean, OceanPale)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(service.name, style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    service.latencyMs?.let { "响应 $it ms" } ?: "等待响应数据",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (modules.isEmpty()) {
+                        EmptyBlock("等待模块状态", "完成平台同步后显示")
+                    } else {
+                        modules.forEachIndexed { index, service ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            ) {
+                                IconTile(moduleIcon(service.id), Ocean, OceanPale)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        service.name,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    )
+                                    Text(
+                                        service.latencyMs?.let { "网络延时 $it ms" } ?: "等待响应数据",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                StatusBadge(service.state)
+                            }
+                            if (index < modules.lastIndex) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                                 )
                             }
-                            StatusBadge(service.state)
-                        }
-                        if (index < modules.lastIndex) {
-                            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                         }
                     }
                 }
             }
+
+            Spacer(Modifier.height(16.dp))
         }
-    }
     }
 
     when (val pending = confirmation) {
@@ -279,17 +307,89 @@ fun ToolsScreen(
     }
 }
 
+// ------------------------------------------------------------------------------------------------
+// 清新通透现代化组件
+// ------------------------------------------------------------------------------------------------
+
+/** 极简通透 Header Banner (根据用户反馈：无黑色卡片背景，无刷新按钮) */
 @Composable
-private fun ToolSectionHeader(title: String, subtitle: String, accent: Color) {
+private fun LightweightHeaderBanner(
+    mqttConnected: Boolean,
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val alphaPulse by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulse-alpha",
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        // 清爽小胶囊 Badge
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = if (mqttConnected) Color(0xFFECFDF5) else Color(0xFFFEF2F2),
+            border = BorderStroke(0.5.dp, if (mqttConnected) Color(0xFFA7F3D0) else Color(0xFFFECACA)),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .graphicsLayer { alpha = if (mqttConnected) alphaPulse else 1f }
+                        .background(
+                            color = if (mqttConnected) Color(0xFF10B981) else Color(0xFFEF4444),
+                            shape = CircleShape,
+                        )
+                )
+                Text(
+                    text = if (mqttConnected) "LIVE · 智控中心" else "OFFLINE · 离线模式",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                    ),
+                    color = if (mqttConnected) Color(0xFF047857) else Color(0xFFB91C1C),
+                )
+            }
+        }
+
+        // 清爽优雅大标题
+        Text(
+            text = "设备与自动化",
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onBackground,
+            ),
+        )
+    }
+}
+
+/** 分组标题 */
+@Composable
+private fun ToolSectionTitle(title: String, subtitle: String, accent: Color) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(8.dp)
-                .background(accent, CircleShape),
+                .width(4.dp)
+                .height(18.dp)
+                .background(accent, RoundedCornerShape(2.dp))
         )
         Column {
             Text(
@@ -306,34 +406,39 @@ private fun ToolSectionHeader(title: String, subtitle: String, accent: Color) {
     }
 }
 
+/** Bento Grid IoT 状态面板 (清爽马卡龙配色) */
 @Composable
-private fun MqttStatusPanel(
+private fun ModernMqttStatusPanel(
     mqttConnected: Boolean,
     connectionState: String,
     onlineDevices: Int,
     totalDevices: Int,
     messagesReceived: Long,
 ) {
-    val online = mqttConnected
-    val accent = if (online) Forest else Amber
-    val accentPale = if (online) MintPale else AmberPale
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        shadowElevation = 1.dp,
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            // 通道 Status Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 IconTile(
-                    if (online) Icons.Outlined.Router else Icons.Outlined.WifiOff,
-                    accent,
-                    accentPale,
+                    if (mqttConnected) Icons.Outlined.Router else Icons.Outlined.WifiOff,
+                    if (mqttConnected) Forest else Amber,
+                    if (mqttConnected) MintPale else AmberPale,
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        if (online) "MQTT 已连接" else "MQTT 状态异常",
+                        if (mqttConnected) "MQTT 消息总线 (已连接)" else "MQTT 异常断开",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     )
                     Text(
@@ -342,73 +447,120 @@ private fun MqttStatusPanel(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                StatusBadge(if (online) "healthy" else "degraded")
+                StatusBadge(if (mqttConnected) "healthy" else "degraded")
             }
+
+            // Bento 三格指标 (清爽极浅彩底 + 亮色加粗数字)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                MetricPanel(
+                LightBentoMetricCard(
                     label = "在线设备",
                     value = onlineDevices.toString(),
+                    subText = "正常运行",
+                    valueColor = Color(0xFF047857),
+                    bgColor = Color(0xFFECFDF5),
+                    borderColor = Color(0xFFA7F3D0),
                     modifier = Modifier.weight(1f),
-                    color = Color(0xFF10B981),
                 )
-                MetricPanel(
+                LightBentoMetricCard(
                     label = "设备总数",
                     value = totalDevices.toString(),
+                    subText = "全网注册",
+                    valueColor = Color(0xFF1D4ED8),
+                    bgColor = Color(0xFFEFF6FF),
+                    borderColor = Color(0xFFBFDBFE),
                     modifier = Modifier.weight(1f),
-                    color = Color(0xFF3B82F6),
                 )
-                MetricPanel(
+                LightBentoMetricCard(
                     label = "接收消息",
-                    value = messagesReceived.toString(),
+                    value = if (messagesReceived > 9999) "${messagesReceived / 1000}k" else messagesReceived.toString(),
+                    subText = "数据包",
+                    valueColor = Color(0xFF6D28D9),
+                    bgColor = Color(0xFFF5F3FF),
+                    borderColor = Color(0xFFDDD6FE),
                     modifier = Modifier.weight(1f),
-                    color = Color(0xFF8B5CF6),
                 )
             }
         }
     }
 }
 
+/** 清新 Light Bento 卡片 */
 @Composable
-private fun MetricPanel(
+private fun LightBentoMetricCard(
     label: String,
     value: String,
-    color: Color,
+    subText: String,
+    valueColor: Color,
+    bgColor: Color,
+    borderColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .background(color, RoundedCornerShape(18.dp))
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = bgColor,
+        border = BorderStroke(0.5.dp, borderColor),
     ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = Color.White.copy(alpha = 0.82f),
-        )
-        Text(
-            value,
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-            ),
-        )
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Medium,
+                ),
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    color = valueColor,
+                    fontSize = 22.sp,
+                ),
+            )
+            Text(
+                subText,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = valueColor.copy(alpha = 0.8f),
+                    fontSize = 10.sp,
+                ),
+            )
+        }
     }
 }
 
+/** 环境监测卡片 */
 @Composable
-private fun EnvironmentCard(device: DeviceInfo?) {
+private fun ModernEnvironmentCard(device: DeviceInfo?) {
     val online = device?.online == true
+    val temp = device?.temperature
+    val tempStr = temp?.let { "%.1f".format(it) } ?: "--"
+    val hum = device?.humidity
+    val humStr = hum?.let { "%.0f".format(it) } ?: "--"
+
+    val comfortLabel = when {
+        temp == null -> "温湿度传感器"
+        temp in 18.0..26.0 -> "环境宜人 · 舒适度极佳 🌿"
+        temp < 18.0 -> "环境偏冷 · 适度保暖 ❄️"
+        else -> "环境偏热 · 注意降温 ☀️"
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        shadowElevation = 1.dp,
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -420,38 +572,39 @@ private fun EnvironmentCard(device: DeviceInfo?) {
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "客厅环境",
+                        "客厅环境监测",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     )
                     Text(
-                        device?.name ?: "等待传感器数据",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        comfortLabel,
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = if (online) Forest else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 StatusBadge(
                     if (online) "online" else "unknown",
-                    if (online) "实时" else "等待数据",
+                    if (online) "实时连线" else "未同步",
                 )
             }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                SensorMetric(
-                    label = "温度",
-                    value = device?.temperature?.let { "${"%.1f".format(it)}°C" } ?: "--",
+                ModernSensorCell(
+                    label = "室内温度",
+                    value = if (tempStr != "--") "$tempStr°C" else "--",
                     icon = Icons.Outlined.Thermostat,
-                    tint = Ocean,
-                    background = OceanPale,
+                    accentColor = Color(0xFF0284C7),
+                    bgColor = Color(0xFFF0F9FF),
                     modifier = Modifier.weight(1f),
                 )
-                SensorMetric(
-                    label = "湿度",
-                    value = device?.humidity?.let { "${"%.0f".format(it)}%" } ?: "--",
+                ModernSensorCell(
+                    label = "相对湿度",
+                    value = if (humStr != "--") "$humStr%" else "--",
                     icon = Icons.Outlined.WaterDrop,
-                    tint = Forest,
-                    background = MintPale,
+                    accentColor = Color(0xFF059669),
+                    bgColor = Color(0xFFECFDF5),
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -460,34 +613,54 @@ private fun EnvironmentCard(device: DeviceInfo?) {
 }
 
 @Composable
-private fun SensorMetric(
+private fun ModernSensorCell(
     label: String,
     value: String,
     icon: ImageVector,
-    tint: Color,
-    background: Color,
+    accentColor: Color,
+    bgColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .background(background, RoundedCornerShape(18.dp))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = bgColor,
+        border = BorderStroke(0.5.dp, accentColor.copy(alpha = 0.2f)),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = tint)
-            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(accentColor.copy(alpha = 0.12f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
+            }
+            Column {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    value,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        color = accentColor,
+                    ),
+                )
+            }
         }
-        Text(
-            value,
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            color = tint,
-        )
     }
 }
 
+/** 继电器控制卡片 (清爽通透) */
 @Composable
-private fun RelayCard(
+private fun ModernRelayCard(
     target: RelayTarget,
     device: DeviceInfo?,
     mqttConnected: Boolean,
@@ -500,71 +673,60 @@ private fun RelayCard(
     val isOn = status == "ON"
     val available = device?.online == true && mqttConnected
     val switchEnabled = canOperate && available && isKnown && !busy
-    val statusType: String
-    val statusLabel: String
-    val stateLabel: String
-    val helper: String
 
-    when {
-        device == null -> {
-            statusType = "unknown"
-            statusLabel = "未发现"
-            stateLabel = "等待设备"
-            helper = "等待设备上线后同步状态"
-        }
-        !mqttConnected -> {
-            statusType = "degraded"
-            statusLabel = "连接异常"
-            stateLabel = "暂不可控"
-            helper = "MQTT 未连接，暂时无法发送指令"
-        }
-        !device.online -> {
-            statusType = "offline"
-            statusLabel = "离线"
-            stateLabel = "暂不可控"
-            helper = "设备离线，恢复在线后即可操作"
-        }
-        !isKnown -> {
-            statusType = "unknown"
-            statusLabel = "同步中"
-            stateLabel = "状态同步中"
-            helper = "正在等待继电器回报状态"
-        }
-        isOn -> {
-            statusType = "online"
-            statusLabel = "已开启"
-            stateLabel = "已开启"
-            helper = "通过 MQTT 实时控制"
-        }
-        else -> {
-            statusType = "healthy"
-            statusLabel = "已关闭"
-            stateLabel = "已关闭"
-            helper = "通过 MQTT 实时控制"
-        }
-    }
+    val interactionSource = remember { MutableInteractionSource() }
+
+    val targetBg = if (isOn) target.activeBgGradient.first else MaterialTheme.colorScheme.surface
+    val animatedBg by animateColorAsState(
+        targetValue = targetBg,
+        animationSpec = tween(300, easing = FastOutSlowInEasing),
+        label = "relay-bg",
+    )
+
+    val targetBorder = if (isOn) target.activeAccent.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    val animatedBorder by animateColorAsState(
+        targetValue = targetBorder,
+        animationSpec = tween(300, easing = FastOutSlowInEasing),
+        label = "relay-border",
+    )
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .pressFeedback(interactionSource)
+            .clickable(enabled = switchEnabled) {
+                onControlRelay(target.deviceId, target.relayId, !isOn)
+            },
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 2.dp,
+        color = animatedBg,
+        border = BorderStroke(1.dp, animatedBorder),
+        shadowElevation = if (isOn) 2.dp else 1.dp,
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.height(44.dp),
             ) {
-                IconTile(
-                    target.icon,
-                    if (isOn) target.accent else Ocean,
-                    if (isOn) target.accentPale else OceanPale,
-                )
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(
+                            color = if (isOn) target.activeAccent else MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(14.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = target.icon,
+                        contentDescription = null,
+                        tint = if (isOn) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         target.name,
@@ -576,70 +738,76 @@ private fun RelayCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+
                 Switch(
                     checked = isOn,
                     onCheckedChange = if (switchEnabled) {
                         { enabled -> onControlRelay(target.deviceId, target.relayId, enabled) }
-                    } else {
-                        null
-                    },
+                    } else null,
                     enabled = switchEnabled,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
-                        checkedTrackColor = target.accent,
+                        checkedTrackColor = target.activeAccent,
                     ),
                 )
             }
+
+            HorizontalDivider(color = animatedBorder.copy(alpha = 0.3f))
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.height(56.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        stateLabel,
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = if (isOn) target.accent else MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                    )
-                    Box(modifier = Modifier.height(22.dp)) {
-                        if (busy) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(12.dp),
-                                    strokeWidth = 2.dp,
-                                    color = target.accent,
-                                )
-                                Text(
-                                    "指令发送中",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = target.accent,
-                                    maxLines = 1,
-                                )
-                            }
-                        } else {
-                            Text(
-                                helper,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.fillMaxWidth(),
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .background(
+                                color = if (isOn) target.activeAccent else Color.Gray,
+                                shape = CircleShape,
                             )
-                        }
-                    }
+                    )
+                    Text(
+                        text = if (isOn) "已开启 (ON)" else "已关闭 (OFF)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = if (isOn) target.activeAccent else MaterialTheme.colorScheme.onSurface,
+                    )
                 }
-                StatusBadge(statusType, statusLabel)
+
+                if (busy) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = target.activeAccent,
+                        )
+                        Text(
+                            "发送中...",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = target.activeAccent,
+                        )
+                    }
+                } else {
+                    StatusBadge(
+                        status = if (isOn) "online" else "healthy",
+                        label = if (isOn) "工作中" else "待命",
+                    )
+                }
             }
         }
     }
 }
 
+/** 快捷场景行 */
 @Composable
-private fun SceneRow(
+private fun ModernSceneRow(
     scene: IotScene,
     canOperate: Boolean,
     busy: Boolean,
@@ -660,7 +828,7 @@ private fun SceneRow(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             )
             Text(
-                "${scene.actionCount} 个动作 · ${formatPlatformTime(scene.updatedAt)}",
+                "${scene.actionCount} 个设备动作联动 · ${formatPlatformTime(scene.updatedAt)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -676,14 +844,15 @@ private fun SceneRow(
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
             } else {
                 Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text("运行", modifier = Modifier.padding(start = 5.dp))
+                Text("触发场景", modifier = Modifier.padding(start = 5.dp), style = MaterialTheme.typography.labelLarge)
             }
         }
     }
 }
 
+/** CT8 自动化面板 */
 @Composable
-private fun Ct8Panel(
+private fun ModernCt8Panel(
     ct8: Ct8Data?,
     canOperate: Boolean,
     busy: Boolean,
@@ -694,15 +863,21 @@ private fun Ct8Panel(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        shadowElevation = 1.dp,
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                IconTile(Icons.Outlined.AutoMode, Color(0xFF0EA5E9), Color(0xFFE0F2FE))
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                IconTile(Icons.Outlined.AutoMode, Color(0xFF0284C7), Color(0xFFE0F2FE))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "最近任务 ${ct8?.latestRunId?.let { "#${it.takeLast(10)}" } ?: "--"}",
+                        "流水线 ${ct8?.latestRunId?.let { "#${it.takeLast(8)}" } ?: "--"}",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     )
                     Text(
@@ -713,26 +888,29 @@ private fun Ct8Panel(
                 }
                 StatusBadge(ct8?.activeStatus?.takeIf { it != "idle" } ?: ct8?.latestStatus ?: "unknown")
             }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                MetricCell("主机总数", ct8?.totalHosts?.toString() ?: "--", Modifier.weight(1f))
-                MetricCell("成功", ct8?.successHosts?.toString() ?: "--", Modifier.weight(1f), Forest)
-                MetricCell("失败", ct8?.failedHosts?.toString() ?: "--", Modifier.weight(1f), Amber)
+                MetricCell("目标主机", ct8?.totalHosts?.toString() ?: "--", Modifier.weight(1f))
+                MetricCell("成功节点", ct8?.successHosts?.toString() ?: "--", Modifier.weight(1f), Forest)
+                MetricCell("异常节点", ct8?.failedHosts?.toString() ?: "--", Modifier.weight(1f), Amber)
             }
+
             Button(
                 onClick = onTrigger,
                 enabled = canOperate && enabled && ct8?.activeStatus !in setOf("running", "queued", "in_progress"),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0EA5E9)),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                contentPadding = PaddingValues(vertical = 10.dp),
             ) {
                 if (busy) {
-                    CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp, color = Color.White)
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
                 } else {
                     Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(19.dp))
-                    Text("触发 CT8 任务", modifier = Modifier.padding(start = 8.dp))
+                    Text("立即触发 GitHub Actions 任务", modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.titleSmall)
                 }
             }
         }
@@ -764,3 +942,5 @@ private fun moduleIcon(id: String) = when (id) {
     "core" -> Icons.Outlined.Memory
     else -> Icons.Outlined.Devices
 }
+
+

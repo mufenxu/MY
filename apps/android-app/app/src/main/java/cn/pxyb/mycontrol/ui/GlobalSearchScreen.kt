@@ -69,7 +69,7 @@ fun GlobalSearchScreen(
         item(key = "search-header") {
             AppSecondaryHeader(
                 title = "全局搜索",
-                subtitle = "服务、事件、任务、设备与邮箱",
+                subtitle = "服务、通知、任务、设备与邮箱",
                 onBack = onBack,
             )
         }
@@ -133,7 +133,7 @@ private fun SearchResultRow(item: GlobalSearchItem, onClick: () -> Unit) {
 
 private fun searchResultIcon(destination: SearchDestination): ImageVector = when (destination) {
     SearchDestination.Overview -> Icons.Outlined.Cloud
-    SearchDestination.Events -> Icons.Outlined.Notifications
+    SearchDestination.Notifications -> Icons.Outlined.Notifications
     SearchDestination.Operations -> Icons.AutoMirrored.Outlined.Assignment
     SearchDestination.Tools -> Icons.Outlined.Devices
     SearchDestination.GoogleAccounts -> Icons.Outlined.Email

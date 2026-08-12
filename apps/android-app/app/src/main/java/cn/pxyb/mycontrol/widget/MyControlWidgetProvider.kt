@@ -120,14 +120,14 @@ class MyControlWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_root, openPendingIntent)
 
-            val eventsIntent = DeepLinks.openIntent(context, tab = MainTab.Events)
-            val eventsPendingIntent = PendingIntent.getActivity(
+            val notificationsIntent = DeepLinks.openIntent(context, tab = MainTab.Notifications)
+            val notificationsPendingIntent = PendingIntent.getActivity(
                 context,
                 1,
-                eventsIntent,
+                notificationsIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-            runCatching { views.setOnClickPendingIntent(R.id.widget_incident_value, eventsPendingIntent) }
+            runCatching { views.setOnClickPendingIntent(R.id.widget_incident_value, notificationsPendingIntent) }
 
             val overviewPendingIntent = PendingIntent.getActivity(
                 context,
