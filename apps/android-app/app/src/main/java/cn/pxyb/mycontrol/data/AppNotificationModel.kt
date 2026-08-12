@@ -24,6 +24,18 @@ data class AppNotificationAction(
     val deepLink: String,
 )
 
+internal fun mergeHydratedAlerts(
+    stored: List<AppAlertRecord>,
+    current: List<AppAlertRecord>,
+): List<AppAlertRecord> {
+    val currentRemote = current.filter { it.origin == "remote" }
+    val remote = currentRemote.ifEmpty { stored.filter { it.origin == "remote" } }
+    return (current.filterNot { it.origin == "remote" } + stored.filterNot { it.origin == "remote" } + remote)
+        .distinctBy(AppAlertRecord::id)
+        .sortedByDescending(AppAlertRecord::createdAt)
+        .take(200)
+}
+
 internal fun mergeRemoteAlerts(
     existing: List<AppAlertRecord>,
     remote: List<AppAlertRecord>,

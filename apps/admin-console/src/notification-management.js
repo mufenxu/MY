@@ -188,7 +188,7 @@ export function createNotificationManagementClient({
       return request('/management/test', { method: 'POST', body: { ...validateTestInput(input), actor: String(actor || '').slice(0, 128) } });
     },
     async getAppOverview(filters = {}) {
-      if (!configured) return { userId: String(filters.userId || ''), total: 0, unread: 0, devices: { total: 0, pollOnly: 0, pushReady: 0, lastSeenAt: null }, items: [] };
+      if (!configured) return { userId: String(filters.userId || ''), total: 0, unread: 0, devices: { total: 0, pollOnly: 0, pushReady: 0, lastSeenAt: null }, registeredUsers: [], items: [] };
       const query = new URLSearchParams();
       if (filters.userId) query.set('userId', String(filters.userId));
       query.set('limit', String(boundedInteger(filters.limit, 10, 1, 50)));

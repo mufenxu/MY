@@ -40,6 +40,7 @@ import { createRequestDiagnostics } from './request-diagnostics.js';
 import { createSloService } from './slo-service.js';
 import { createTaskCenter } from './task-center.js';
 import { createMemoryGoogleAccountStore } from './google-account-store.js';
+import { createEnvironmentDiagnostics } from './environment-diagnostics.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.resolve(__dirname, '..', 'dist');
@@ -204,6 +205,7 @@ export function createApp({
   operationalSearchManager = null,
   sloManager = null,
   changeCalendarManager = null,
+  environmentDiagnostics = null,
 } = {}) {
   const registry = loadServiceRegistry(config.registryPath);
   const monitor = createStatusMonitor(registry.services, {
@@ -292,6 +294,7 @@ export function createApp({
     operations,
     enforceTwoPerson: config.configurationTwoPersonApproval,
   });
+  const environment = environmentDiagnostics || createEnvironmentDiagnostics({ config, fetchImpl });
   const tasks = taskManager || createTaskCenter({
     backups,
     releases,
@@ -580,6 +583,7 @@ export function createApp({
   app.locals.notificationManagement = notificationManagement;
   app.locals.configurationStore = configurationData;
   app.locals.configurationManager = configurations;
+  app.locals.environmentDiagnostics = environment;
   app.locals.taskCenter = tasks;
   app.locals.operationalSearch = operationalSearch;
   app.locals.sloService = slos;
@@ -1535,9 +1539,22 @@ export function createApp({
   app.get('/api/operations/overview', async (req, res, next) => {
     try {
       if (req.query.refresh === '1') await operations.refresh(true);
-      res.json({ platformName: registry.platformName, ...(await operations.getOverview()) });
+      const [overview, environmentSummary] = await Promise.all([
+        operations.getOverview(),
+        environment.getSummary({ refresh: false }),
+      ]);
+      res.json({ platformName: registry.platformName, ...overview, environment: environmentSummary });
     } catch (error) {
       next(error);
+    }
+  });
+
+  app.get('/api/environment', requireRole('super_admin'), async (req, res, next) => {
+    try {
+      return res.json(await environment.getReport({ refresh: req.query.refresh === '1' }));
+    } catch (error) {
+      next(error);
+      return undefined;
     }
   });
 

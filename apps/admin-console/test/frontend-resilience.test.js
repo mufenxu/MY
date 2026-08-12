@@ -91,6 +91,9 @@ test('notification nested tabs keep the existing panel spacing and accessible la
   assert.match(source, /id: 'app', label: 'App 通知'/);
   assert.match(source, /\/api\/notifications\/app\/overview/);
   assert.match(source, /\/api\/notifications\/app\/test/);
+  assert.match(source, /appOverview\.registeredUsers/);
+  assert.match(source, /ariaLabel="App 通知接收用户"/);
+  assert.doesNotMatch(source, /<label><span>平台用户 ID<\/span><div className="notify-input-wrap">/);
   assert.match(styles, /\.notify-view-panel\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*gap:\s*14px;/s);
   assert.match(styles, /\.notify-channel-grid\s*\{/);
   assert.match(styles, /\.notify-app-layout\s*\{/);

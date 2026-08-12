@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationAction
 import cn.pxyb.mycontrol.data.AppNotificationBlock
+import cn.pxyb.mycontrol.data.mergeHydratedAlerts
 import cn.pxyb.mycontrol.data.mergeRemoteAlerts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -59,5 +60,19 @@ class AppNotificationModelTest {
         assertTrue(merged.read)
         assertEquals(snoozedUntil, merged.snoozedUntil)
         assertEquals("服务端内容", merged.body)
+    }
+    @Test
+    fun `late local hydration cannot replace newer remote notifications`() {
+        val stored = listOf(
+            AppAlertRecord("todo:1", "todo", "1", "Local reminder", "Todo", 10L),
+            AppAlertRecord("remote:old", "system", "", "Old", "Old", 9L, origin = "remote"),
+        )
+        val current = listOf(
+            AppAlertRecord("remote:new", "system", "", "New", "New", 20L, origin = "remote"),
+        )
+
+        val hydrated = mergeHydratedAlerts(stored, current)
+
+        assertEquals(listOf("remote:new", "todo:1"), hydrated.map(AppAlertRecord::id))
     }
 }

@@ -312,6 +312,11 @@ fun NotificationCenterScreen(
                 if (state.alerts.any { !it.read }) TextButton(onClick = onMarkAllRead) { Text("全部已读") }
             }
         }
+        state.syncError?.let { error ->
+            item(key = "sync-error", contentType = "banner") {
+                FeedbackBanner("通知收件箱同步失败：$error", error = true)
+            }
+        }
         if (state.preferences.quietHoursEnabled) {
             item(key = "quiet-hours", contentType = "banner") {
                 FeedbackBanner(

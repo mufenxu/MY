@@ -4,9 +4,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import cn.pxyb.mycontrol.data.IncidentInfo
+import cn.pxyb.mycontrol.data.EnvironmentSummary
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.CampusTimetable
@@ -164,6 +166,49 @@ class AlertNotifier(context: Context) {
             .apply()
     }
 
+    fun evaluateEnvironment(summary: EnvironmentSummary) {
+        if (accountScope == null) return
+        ensureChannel()
+        val fingerprint = listOf(
+            summary.available,
+            summary.state,
+            summary.missing,
+            summary.invalid,
+            summary.verificationFailed,
+            summary.restartRequired,
+        ).joinToString(":")
+        val key = scopedKey(KEY_ENVIRONMENT_FINGERPRINT)
+        if (!summary.available || summary.state == "healthy") {
+            preferences.edit().remove(key).apply()
+            return
+        }
+        if (preferences.getString(key, null) == fingerprint) return
+        preferences.edit().putString(key, fingerprint).apply()
+        val needsAttention = summary.missing + summary.invalid + summary.verificationFailed
+        val body = when {
+            needsAttention > 0 && summary.restartRequired > 0 -> "$needsAttention 项配置需要处理，${summary.restartRequired} 项配置等待服务重启，请打开高级工具查看诊断结果。"
+            needsAttention > 0 -> "$needsAttention 项配置需要处理，请打开高级工具查看诊断结果。"
+            else -> "${summary.restartRequired} 项配置等待服务重启，请打开高级工具查看诊断结果。"
+        }
+        val alert = AppAlertRecord(
+            id = "environment:$fingerprint",
+            type = "environment",
+            sourceId = "environment",
+            title = "环境配置需要处理",
+            body = body,
+            createdAt = System.currentTimeMillis(),
+        )
+        personalStore.appendAlerts(listOf(alert))
+        if (!isQuietHours()) {
+            notify(
+                notificationId = ENVIRONMENT_BASE,
+                title = alert.title,
+                body = body,
+                intent = DeepLinks.openIntent(appContext, tab = MainTab.Operations),
+            )
+        }
+    }
+
     fun clear() {
         accountScope?.let { scope ->
             val prefix = "account_${scope}_"
@@ -236,17 +281,18 @@ class AlertNotifier(context: Context) {
             else -> DeepLinks.openIntent(appContext, destination = "notifications")
         }
         val channelId = if (alert.priority in setOf("high", "critical")) CHANNEL_ID else MESSAGE_CHANNEL_ID
-        notify(PERSONAL_BASE + alert.id.hashCode(), alert.title, alert.body, intent, channelId)
+        val posted = notify(PERSONAL_BASE + alert.id.hashCode(), alert.title, alert.body, intent, channelId)
+        if (posted && alert.origin == "remote") {
+            markRemoteSeen(alert.id)
+        }
     }
 
     fun evaluateRemote(alerts: List<AppAlertRecord>) {
         if (accountScope == null) return
         ensureChannel()
-        val seen = preferences.getStringSet(scopedKey(KEY_SEEN_REMOTE), emptySet()).orEmpty().toMutableSet()
+        val seen = readRemoteSeenIds().toMutableSet()
         val unread = alerts.filter { it.origin == "remote" && !it.read && it.id !in seen }
         if (!isQuietHours()) unread.take(3).forEach(::notifyRecord)
-        seen.addAll(alerts.filter { it.origin == "remote" }.map(AppAlertRecord::id))
-        preferences.edit().putStringSet(scopedKey(KEY_SEEN_REMOTE), seen.toList().takeLast(200).toSet()).apply()
     }
 
     fun evaluateResourceExpiries(resources: List<ResourceExpiry>) {
@@ -282,8 +328,8 @@ class AlertNotifier(context: Context) {
         body: String,
         intent: android.content.Intent,
         channelId: String = CHANNEL_ID,
-    ) {
-        if (!NotificationManagerCompat.from(appContext).areNotificationsEnabled()) return
+    ): Boolean {
+        if (!canPostNotification(channelId)) return false
         val pendingIntent = PendingIntent.getActivity(
             appContext,
             notificationId,
@@ -308,9 +354,35 @@ class AlertNotifier(context: Context) {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .build()
-        runCatching {
+        return runCatching {
             NotificationManagerCompat.from(appContext).notify(notificationId, notification)
-        }
+        }.isSuccess
+    }
+
+    private fun markRemoteSeen(alertId: String) {
+        val legacySeen = preferences.getStringSet(scopedKey(KEY_SEEN_REMOTE), emptySet()).orEmpty().toMutableSet()
+        val postedSeen = preferences.getStringSet(scopedKey(KEY_SEEN_REMOTE_POSTED), emptySet()).orEmpty().toMutableSet()
+        val changed = legacySeen.add(alertId) or postedSeen.add(alertId)
+        if (!changed) return
+        preferences.edit()
+            .putStringSet(scopedKey(KEY_SEEN_REMOTE), legacySeen.toList().takeLast(200).toSet())
+            .putStringSet(scopedKey(KEY_SEEN_REMOTE_POSTED), postedSeen.toList().takeLast(200).toSet())
+            .apply()
+    }
+
+    private fun canPostNotification(channelId: String): Boolean {
+        val notificationManager = NotificationManagerCompat.from(appContext)
+        if (!notificationManager.areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+        val manager = appContext.getSystemService(NotificationManager::class.java) ?: return true
+        val channel = manager.getNotificationChannel(channelId) ?: return true
+        return channel.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
+    private fun readRemoteSeenIds(): Set<String> {
+        val legacySeen = preferences.getStringSet(scopedKey(KEY_SEEN_REMOTE), emptySet()).orEmpty()
+        val postedSeen = preferences.getStringSet(scopedKey(KEY_SEEN_REMOTE_POSTED), emptySet()).orEmpty()
+        return legacySeen + postedSeen
     }
 
     private fun sourceLabel(source: String): String = when (source) {
@@ -353,11 +425,14 @@ class AlertNotifier(context: Context) {
         const val KEY_SEEN_INCIDENTS = "seen_incidents"
         const val KEY_SEEN_TASKS = "seen_tasks"
         const val KEY_SEEN_REMOTE = "seen_remote"
+        const val KEY_SEEN_REMOTE_POSTED = "seen_remote_posted_v2"
+        const val KEY_ENVIRONMENT_FINGERPRINT = "environment_fingerprint_v1"
         const val CHANNEL_ID = "ops_alerts"
         const val MESSAGE_CHANNEL_ID = "app_notifications"
         const val INCIDENT_BASE = 41000
         const val TASK_BASE = 42000
         const val PERSONAL_BASE = 43000
+        const val ENVIRONMENT_BASE = 44000
         const val COURSE_NOTICE_WINDOW_MS = 30 * 60_000L
     }
 }

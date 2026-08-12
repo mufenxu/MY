@@ -21,6 +21,7 @@ import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
+import cn.pxyb.mycontrol.data.EnvironmentReport
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAccountStore
 import cn.pxyb.mycontrol.data.GoogleAliasRecord
@@ -48,6 +49,7 @@ import cn.pxyb.mycontrol.data.TodoTask
 import cn.pxyb.mycontrol.data.TrendSample
 import cn.pxyb.mycontrol.data.todayTrendSample
 import cn.pxyb.mycontrol.data.mergeRemoteAlerts
+import cn.pxyb.mycontrol.data.mergeHydratedAlerts
 import cn.pxyb.mycontrol.data.shouldInvalidatePlatformSession
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
 import kotlinx.coroutines.Job
@@ -74,7 +76,7 @@ enum class MainTab { Overview, Notifications, Operations, Tools, Profile }
 
 enum class WorkspaceDestination { Today, Notifications, Insights, Scenes }
 
-enum class DataSection { Overview, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, Resources }
+enum class DataSection { Overview, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, Resources, Notifications, Environment }
 
 data class SectionLoadState(
     val refreshing: Boolean = false,
@@ -97,6 +99,7 @@ data class AppUiState(
     val refreshing: Boolean = false,
     val busyAction: String? = null,
     val overview: OverviewData? = null,
+    val environment: EnvironmentReport? = null,
     val incidents: List<IncidentInfo> = emptyList(),
     val tasks: List<PlatformTask> = emptyList(),
     val releases: ReleaseData? = null,
@@ -112,6 +115,7 @@ data class AppUiState(
     val accountManagementOpen: Boolean = false,
     val googleAccountDeskOpen: Boolean = false,
     val globalSearchOpen: Boolean = false,
+    val environmentOpen: Boolean = false,
     val workspaceDestination: WorkspaceDestination? = null,
     val googleAccounts: List<GoogleAccountRecord> = emptyList(),
     val googleAccountsLoaded: Boolean = false,
@@ -195,6 +199,7 @@ class AppViewModel(
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
     val insightsState = deriveState(AppUiState::toInsightsUiState)
     val scenesState = deriveState(AppUiState::toScenesUiState)
+    val environmentState = deriveState(AppUiState::toEnvironmentUiState)
     private var pendingQrLogin: Pair<String, String>? = null
     private var pollJob: Job? = null
     private var appInForeground = false
@@ -221,8 +226,8 @@ class AppViewModel(
         if (hasSavedSession && !lockEnabled) unlockSession()
     }
 
-    private fun hydrateLocalState() {
-        viewModelScope.launch(Dispatchers.IO) {
+    private suspend fun hydrateLocalState() {
+        withContext(Dispatchers.IO) {
             val snapshot = personalStore.readTodoSnapshot()
             val pending = personalStore.readPendingTodoMutations()
             val alerts = personalStore.readAlerts()
@@ -235,7 +240,7 @@ class AppViewModel(
                     current.copy(
                         todoSnapshot = applyTodoMutations(snapshot, pending),
                         pendingTodoMutations = pending.size,
-                        alerts = alerts,
+                        alerts = mergeHydratedAlerts(alerts, current.alerts),
                         alertPreferences = alertPreferences,
                         trendSamples = trendSamples,
                     )
@@ -511,6 +516,10 @@ class AppViewModel(
         startOperationalPolling()
         refreshInitialData()
         scanPendingQrLogin()
+        viewModelScope.launch {
+            hydrateLocalState()
+            syncRemoteNotifications()
+        }
     }
 
     private fun setAccountScope(username: String?) {
@@ -608,6 +617,7 @@ class AppViewModel(
         accountManagementOpen: Boolean = false,
         googleAccountDeskOpen: Boolean = false,
         globalSearchOpen: Boolean = false,
+        environmentOpen: Boolean = false,
         workspaceDestination: WorkspaceDestination? = null,
     ) {
         val changedTab = mutableState.value.selectedTab != tab
@@ -617,11 +627,35 @@ class AppViewModel(
                 accountManagementOpen = accountManagementOpen,
                 googleAccountDeskOpen = googleAccountDeskOpen,
                 globalSearchOpen = globalSearchOpen,
+                environmentOpen = environmentOpen,
                 workspaceDestination = workspaceDestination,
             )
         }
         persistNavigationState()
         if (changedTab) refreshForTab(tab)
+    }
+
+    fun openEnvironment() {
+        if (mutableState.value.user?.role != "super_admin") return
+        mutableState.update {
+            it.copy(
+                selectedTab = MainTab.Operations,
+                accountManagementOpen = false,
+                googleAccountDeskOpen = false,
+                globalSearchOpen = false,
+                environmentOpen = true,
+                workspaceDestination = null,
+                error = null,
+                message = null,
+            )
+        }
+        persistNavigationState()
+        refreshEnvironment()
+    }
+
+    fun closeEnvironment() {
+        mutableState.update { it.copy(environmentOpen = false) }
+        persistNavigationState()
     }
 
     fun handleOpenIntent(uri: Uri?) {
@@ -659,6 +693,7 @@ class AppViewModel(
                 googleAccountDeskOpen = false,
                 globalSearchOpen = false,
                 workspaceDestination = null,
+                environmentOpen = false,
                 focusTaskId = taskId?.takeIf(String::isNotBlank),
                 error = null,
                 message = null,
@@ -1315,12 +1350,13 @@ class AppViewModel(
             MainTab.Overview -> refreshInitialData(force)
             MainTab.Notifications -> {
                 refreshIncidents(force)
-                syncRemoteNotifications()
+                syncRemoteNotifications(force)
             }
             MainTab.Operations -> {
                 refreshTasks(force)
                 refreshReleases(force)
                 refreshBackup(force)
+                if (mutableState.value.user?.role == "super_admin") refreshEnvironment(force)
             }
             MainTab.Tools -> {
                 refreshIot(force)
@@ -1333,6 +1369,7 @@ class AppViewModel(
     private fun refreshOverview(force: Boolean) = launchRefresh(DataSection.Overview, force) {
         val overview = api.overview(force)
         mutableState.update { it.copy(overview = overview) }
+        withContext(Dispatchers.IO) { alertNotifier.evaluateEnvironment(overview.environment) }
         publishWidget()
         recordTrendSample()
     }
@@ -1362,6 +1399,12 @@ class AppViewModel(
     private fun refreshBackup(force: Boolean = false) = launchRefresh(DataSection.Backup, force) {
         val backup = api.backupQuality()
         mutableState.update { it.copy(backup = backup) }
+    }
+
+    fun refreshEnvironment(force: Boolean = false) = launchRefresh(DataSection.Environment, force) {
+        val report = api.environment(force)
+        mutableState.update { it.copy(environment = report) }
+        withContext(Dispatchers.IO) { alertNotifier.evaluateEnvironment(report.summary) }
     }
 
     private fun refreshIot(force: Boolean = false) = launchRefresh(DataSection.Iot, force) {
@@ -1616,6 +1659,7 @@ class AppViewModel(
             "incident" -> openWorkspace(WorkspaceDestination.Notifications)
             "task" -> openOperationalTarget(MainTab.Operations, taskId = record.sourceId)
             "todo", "course" -> openWorkspace(WorkspaceDestination.Today)
+            "environment" -> openEnvironment()
             else -> Unit
         }
     }
@@ -2064,38 +2108,41 @@ class AppViewModel(
             val alerts = personalStore.readAlerts()
             val preferences = personalStore.readAlertPreferences()
             val trends = personalStore.readTrendSamples()
-            mutableState.update {
-                it.copy(alerts = alerts, alertPreferences = preferences, trendSamples = trends)
+            mutableState.update { current ->
+                current.copy(
+                    alerts = mergeHydratedAlerts(alerts, current.alerts),
+                    alertPreferences = preferences,
+                    trendSamples = trends,
+                )
             }
             syncRemoteNotifications()
         }
     }
 
-    private fun syncRemoteNotifications() {
-        if (mutableState.value.user == null) return
-        viewModelScope.launch {
-            if (!appDeviceRegistered) {
-                runCatching { api.registerAppDevice(appInstallationId) }
-                    .onSuccess { appDeviceRegistered = true }
-            }
-            runCatching { api.allAppNotifications() }
-                .onSuccess { remoteItems ->
-                    val currentAlerts = mutableState.value.alerts
-                    val currentById = currentAlerts.associateBy(AppAlertRecord::id)
-                    remoteItems.forEach { remote ->
-                        val local = currentById[remote.id] ?: return@forEach
-                        if (local.read && !remote.read) runCatching { api.markAppNotificationRead(remote.id) }
-                        val localSnooze = local.snoozedUntil
-                        if (localSnooze != null && localSnooze != remote.snoozedUntil) {
-                            runCatching { api.snoozeAppNotification(remote.id, localSnooze) }
-                        }
-                    }
-                    val merged = mergeRemoteAlerts(currentAlerts, remoteItems)
-                    withContext(Dispatchers.IO) { personalStore.writeAlerts(merged) }
-                    withContext(Dispatchers.IO) { alertNotifier.evaluateRemote(merged) }
-                    mutableState.update { it.copy(alerts = merged) }
-                }
+    private fun syncRemoteNotifications(force: Boolean = false) = launchRefresh(DataSection.Notifications, force) {
+        val registrationError = if (!appDeviceRegistered) {
+            runCatching { api.registerAppDevice(appInstallationId) }
+                .onSuccess { appDeviceRegistered = true }
+                .exceptionOrNull()
+        } else {
+            null
         }
+        val remoteItems = api.allAppNotifications()
+        val currentAlerts = mutableState.value.alerts
+        val currentById = currentAlerts.associateBy(AppAlertRecord::id)
+        remoteItems.forEach { remote ->
+            val local = currentById[remote.id] ?: return@forEach
+            if (local.read && !remote.read) runCatching { api.markAppNotificationRead(remote.id) }
+            val localSnooze = local.snoozedUntil
+            if (localSnooze != null && localSnooze != remote.snoozedUntil) {
+                runCatching { api.snoozeAppNotification(remote.id, localSnooze) }
+            }
+        }
+        val merged = mergeRemoteAlerts(currentAlerts, remoteItems)
+        withContext(Dispatchers.IO) { personalStore.writeAlerts(merged) }
+        withContext(Dispatchers.IO) { alertNotifier.evaluateRemote(merged) }
+        mutableState.update { it.copy(alerts = merged) }
+        registrationError?.let { throw it }
     }
 
     private fun openNotificationDeepLink(deepLink: String): Boolean {

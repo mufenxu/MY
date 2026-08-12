@@ -74,6 +74,20 @@ function appDeviceOverview(rows = []) {
   };
 }
 
+function registeredAppUsers(rows = []) {
+  const byUser = new Map();
+  for (const row of rows) {
+    const userId = String(row.recipientId || '').trim();
+    if (!userId) continue;
+    const devices = byUser.get(userId) || [];
+    devices.push(row);
+    byUser.set(userId, devices);
+  }
+  return [...byUser.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([userId, devices]) => ({ userId, ...appDeviceOverview(devices) }));
+}
+
 function serializeDocument(value) {
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map(serializeDocument);
@@ -358,6 +372,7 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
         total: activeRows.length,
         unread: activeRows.filter(({ recipient }) => !recipient.readAt).length,
         devices: appDeviceOverview(activeDevices),
+        registeredUsers: registeredAppUsers(appDevices),
         items: activeRows.slice(0, limit).map(({ message, recipient }) => serializeAppNotification(message, recipient, protector)),
       };
     },
@@ -1059,7 +1074,14 @@ async function createMongoNotificationStore({
           { expiresAt: { $gt: new Date() } },
         ],
       };
-      const [recipientRows, total, unread, totalDevices, pollOnly, pushReady, lastDevice] = await Promise.all([
+      const allActiveDeviceQuery = {
+        $or: [
+          { expiresAt: null },
+          { expiresAt: { $exists: false } },
+          { expiresAt: { $gt: new Date() } },
+        ],
+      };
+      const [recipientRows, total, unread, totalDevices, pollOnly, pushReady, lastDevice, registeredDeviceRows] = await Promise.all([
         appRecipients.find(recipientQuery, { projection: { _id: 0 } }).sort({ createdAt: -1, messageId: -1 }).limit(limit).toArray(),
         appRecipients.countDocuments(recipientQuery),
         appRecipients.countDocuments({ ...recipientQuery, readAt: null }),
@@ -1074,6 +1096,9 @@ async function createMongoNotificationStore({
           encryptedToken: { $type: 'string', $ne: '' },
         }),
         appDevices.findOne(activeDeviceQuery, { projection: { _id: 0 }, sort: { lastSeenAt: -1 } }),
+        appDevices.find(allActiveDeviceQuery, {
+          projection: { _id: 0, recipientId: 1, provider: 1, encryptedToken: 1, lastSeenAt: 1, expiresAt: 1 },
+        }).toArray(),
       ]);
       const messageIds = recipientRows.map((row) => row.messageId);
       const messageRows = messageIds.length
@@ -1090,6 +1115,7 @@ async function createMongoNotificationStore({
           pushReady,
           lastSeenAt: serializeDocument(lastDevice?.lastSeenAt || null),
         },
+        registeredUsers: registeredAppUsers(registeredDeviceRows),
         items: recipientRows.map((recipient) => serializeAppNotification(messageMap.get(recipient.messageId), recipient, protector)).filter(Boolean),
       };
     },

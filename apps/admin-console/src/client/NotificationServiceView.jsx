@@ -59,6 +59,7 @@ const EMPTY_APP_OVERVIEW = {
   total: 0,
   unread: 0,
   devices: { total: 0, pollOnly: 0, pushReady: 0, lastSeenAt: null },
+  registeredUsers: [],
   items: [],
 };
 
@@ -195,11 +196,24 @@ export default function NotificationServiceView({ session }) {
   const isAppTest = form.channel === 'app';
   const contentLimit = isAppTest ? 500 : form.msgType === 'markdown' ? 4096 : 2048;
   const canSubmitTest = isAppTest
-    ? Boolean(canOperate && form.appUserId.trim() && form.appUserId.trim() !== '@all' && !form.appUserId.includes('|') && form.appTitle.trim() && form.content.trim())
+    ? Boolean(canOperate && appOverview.registeredUsers?.some((user) => user.userId === form.appUserId.trim()) && form.appTitle.trim() && form.content.trim())
     : Boolean(canOperate && form.touser.trim() && form.touser.trim() !== '@all' && !form.touser.includes('|') && form.content.trim());
   const preview = useMemo(() => form.content.trim() || '消息预览', [form.content]);
   const appDevices = appOverview?.devices || EMPTY_APP_OVERVIEW.devices;
   const appItems = appOverview?.items || [];
+  const registeredAppUsers = appOverview.registeredUsers || [];
+  const appUserOptions = useMemo(() => [
+    { value: '', label: registeredAppUsers.length ? '选择已注册用户' : '暂无已注册用户', disabled: true },
+    ...registeredAppUsers.map((user) => ({
+      value: user.userId,
+      label: `${user.userId} · ${user.pushReady > 0 ? '原生推送' : '收件箱轮询'}`,
+    })),
+  ], [registeredAppUsers]);
+  const appFilterOptions = useMemo(() => [
+    { value: '', label: '全部平台用户' },
+    ...appUserOptions.slice(1),
+  ], [appUserOptions]);
+  const defaultAppUserId = appOverviewUser || registeredAppUsers[0]?.userId || '';
   const appScopeLabel = appOverviewUser ? `用户 ${appOverviewUser}` : '全部平台用户';
 
   function updateFilter(key, value) {
@@ -469,7 +483,7 @@ export default function NotificationServiceView({ session }) {
             <header className="notify-records-header">
               <div><span>Android App</span><h3>{appScopeLabel}收件箱</h3></div>
               <div className="notify-app-filter">
-                <div className="notify-input-wrap"><UserRound size={17} /><input value={appFilter} maxLength={128} autoComplete="off" placeholder="平台用户 ID，可留空看全局" onChange={(event) => setAppFilter(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') applyAppFilter(); }} /></div>
+                <SelectControl ariaLabel="App 通知查看用户" value={appFilter} options={appFilterOptions} onChange={setAppFilter} />
                 <button className="secondary-action compact" type="button" disabled={refreshing} onClick={applyAppFilter}>读取</button>
               </div>
             </header>
@@ -502,7 +516,7 @@ export default function NotificationServiceView({ session }) {
               <ConfigurationState ready={appDevices.pushReady > 0} label="原生推送" detail={`${appDevices.pushReady || 0} 台设备具备推送令牌`} />
               <ConfigurationState ready={appDevices.pollOnly > 0} label="轮询兜底" detail={`${appDevices.pollOnly || 0} 台设备使用 App 内收件箱轮询`} />
             </div>
-            <button className="primary-button notify-send-button" type="button" onClick={() => { setForm((current) => ({ ...current, channel: 'app', appUserId: appOverviewUser || current.appUserId })); setTab('test'); }}><Send size={17} />发送 App 测试</button>
+            <button className="primary-button notify-send-button" type="button" disabled={!defaultAppUserId} onClick={() => { setForm((current) => ({ ...current, channel: 'app', appUserId: defaultAppUserId })); setTab('test'); }}><Send size={17} />发送 App 测试</button>
           </section>
         </div>
       )}
@@ -516,7 +530,7 @@ export default function NotificationServiceView({ session }) {
             {isAppTest
               ? (
                 <>
-                  <label><span>平台用户 ID</span><div className="notify-input-wrap"><UserRound size={17} /><input value={form.appUserId} maxLength={128} autoComplete="off" placeholder="例如 xuyaobin" onChange={(event) => setForm({ ...form, appUserId: event.target.value })} /></div></label>
+                  <label><span>接收用户</span><SelectControl ariaLabel="App 通知接收用户" value={form.appUserId} options={appUserOptions} onChange={(value) => setForm({ ...form, appUserId: value })} /></label>
                   <label><span>通知标题</span><input value={form.appTitle} maxLength={120} onChange={(event) => setForm({ ...form, appTitle: event.target.value })} /></label>
                   <label><span>优先级</span><SelectControl ariaLabel="App 通知优先级" value={form.appPriority} onChange={(value) => setForm({ ...form, appPriority: value })} options={APP_PRIORITY_OPTIONS} /></label>
                 </>

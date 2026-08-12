@@ -80,11 +80,58 @@ data class OverviewData(
     val incidents: List<IncidentInfo>,
     val audits: List<AuditInfo>,
     val refreshedAt: String?,
+    val environment: EnvironmentSummary = EnvironmentSummary(),
 ) {
     val healthyCount: Int get() = services.count { it.state == "healthy" }
     val monitoredCount: Int get() = services.count { it.state != "unmonitored" }
     val averageLatencyMs: Long?
         get() = services.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
+}
+
+data class EnvironmentSummary(
+    val available: Boolean = false,
+    val state: String = "unavailable",
+    val total: Int = 0,
+    val healthy: Int = 0,
+    val missing: Int = 0,
+    val invalid: Int = 0,
+    val inactive: Int = 0,
+    val unused: Int = 0,
+    val restartRequired: Int = 0,
+    val verificationFailed: Int = 0,
+    val checkedAt: String? = null,
+    val issue: String? = null,
+)
+
+data class EnvironmentVariable(
+    val key: String,
+    val description: String,
+    val group: String,
+    val groupLabel: String,
+    val services: List<String>,
+    val sensitive: Boolean,
+    val required: Boolean,
+    val configured: Boolean,
+    val status: String,
+    val detail: String,
+    val runtimeStatus: String,
+    val verificationStatus: String,
+)
+
+data class EnvironmentReport(
+    val summary: EnvironmentSummary = EnvironmentSummary(),
+    val variables: List<EnvironmentVariable> = emptyList(),
+)
+
+fun environmentConclusion(summary: EnvironmentSummary): String = when {
+    !summary.available -> "环境诊断暂不可用"
+    summary.state == "attention" -> "${summary.missing + summary.invalid + summary.verificationFailed} 项配置需要处理"
+    summary.state == "restart_required" -> "${summary.restartRequired} 项配置等待服务重启"
+    else -> "环境配置正常"
+}
+
+fun attentionVariables(variables: List<EnvironmentVariable>): List<EnvironmentVariable> = variables.filter {
+    it.status in setOf("missing", "invalid") || it.verificationStatus == "failed" || it.runtimeStatus == "restart_required"
 }
 
 data class PlatformTask(

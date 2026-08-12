@@ -142,6 +142,7 @@ private object AppRoute {
     const val Notifications = "notifications"
     const val Insights = "insights"
     const val Scenes = "scenes"
+    const val Environment = "environment"
 }
 
 private val tabs = listOf(
@@ -164,6 +165,7 @@ private fun AppEntryUiState.requestedRoute(): String = when {
     workspaceDestination == WorkspaceDestination.Notifications -> AppRoute.Notifications
     workspaceDestination == WorkspaceDestination.Insights -> AppRoute.Insights
     workspaceDestination == WorkspaceDestination.Scenes -> AppRoute.Scenes
+    environmentOpen -> AppRoute.Environment
     globalSearchOpen -> AppRoute.Search
     googleAccountDeskOpen -> AppRoute.GoogleAccounts
     accountManagementOpen -> AppRoute.Account
@@ -174,7 +176,6 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Overview,
     AppRoute.Search,
     AppRoute.Today,
-    AppRoute.Notifications,
     AppRoute.Insights,
     AppRoute.Scenes -> MainTab.Overview
     AppRoute.Notifications -> MainTab.Notifications
@@ -188,10 +189,10 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
 internal fun parentTabForSubScreen(route: String?, previousRoute: String?): MainTab? = when (route) {
     AppRoute.GoogleAccounts -> primaryTabForRoute(previousRoute) ?: MainTab.Profile
     AppRoute.Account -> MainTab.Profile
+    AppRoute.Environment -> MainTab.Operations
     AppRoute.Operations,
     AppRoute.Search,
     AppRoute.Today,
-    AppRoute.Notifications,
     AppRoute.Insights,
     AppRoute.Scenes -> MainTab.Overview
     else -> null
@@ -1171,10 +1172,10 @@ private fun AuthenticatedShell(
     }
     BackHandler(enabled = isSubScreen, onBack = navigateBackFromSubScreen)
     val onRefresh = remember(viewModel) { { viewModel.refreshCurrentTab(true) } }
-    LaunchedEffect(state.selectedTab, state.accountManagementOpen, state.googleAccountDeskOpen, state.globalSearchOpen, state.workspaceDestination) {
+    LaunchedEffect(state.selectedTab, state.accountManagementOpen, state.googleAccountDeskOpen, state.globalSearchOpen, state.environmentOpen, state.workspaceDestination) {
         val targetRoute = state.requestedRoute()
         if (targetRoute == currentRoute) return@LaunchedEffect
-        if (targetRoute in setOf(AppRoute.Overview, AppRoute.Events, AppRoute.Tools, AppRoute.Profile)) {
+        if (targetRoute in setOf(AppRoute.Overview, AppRoute.Notifications, AppRoute.Tools, AppRoute.Profile)) {
             navController.navigate(targetRoute) {
                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                 launchSingleTop = true
@@ -1191,11 +1192,11 @@ private fun AuthenticatedShell(
             AppRoute.Tools -> viewModel.syncNavigationDestination(MainTab.Tools)
             AppRoute.Profile -> viewModel.syncNavigationDestination(MainTab.Profile)
             AppRoute.Operations -> viewModel.syncNavigationDestination(MainTab.Operations)
+            AppRoute.Environment -> viewModel.syncNavigationDestination(MainTab.Operations, environmentOpen = true)
             AppRoute.Account -> viewModel.syncNavigationDestination(MainTab.Profile, accountManagementOpen = true)
             AppRoute.GoogleAccounts -> viewModel.syncNavigationDestination(MainTab.Profile, googleAccountDeskOpen = true)
             AppRoute.Search -> viewModel.syncNavigationDestination(MainTab.Overview, globalSearchOpen = true)
             AppRoute.Today -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
-            AppRoute.Notifications -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Notifications)
             AppRoute.Insights -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Insights)
             AppRoute.Scenes -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Scenes)
         }
@@ -1304,6 +1305,16 @@ private fun AuthenticatedShell(
                         focusTaskId = state.focusTaskId,
                         onFocusConsumed = viewModel::clearFocusTargets,
                         onRefresh = onRefresh,
+                        onBack = navigateBackFromSubScreen,
+                        onOpenEnvironment = viewModel::openEnvironment,
+                    )
+                }
+                composable(AppRoute.Environment) {
+                    val environmentState by viewModel.environmentState.collectAsStateWithLifecycle()
+                    EnvironmentScreen(
+                        state = environmentState,
+                        contentPadding = contentPadding,
+                        onRefresh = { viewModel.refreshEnvironment(true) },
                         onBack = navigateBackFromSubScreen,
                     )
                 }

@@ -306,7 +306,7 @@ test('management test send requires one explicit user and records a sanitized de
 });
 
 test('management app test creates an app inbox item and returns recipient status', async () => {
-  await withServer({}, async (port) => {
+  await withServer({}, async (port, app) => {
     const rejectedPath = '/management/app/test';
     const rejectedBody = { actor: 'operator', userId: 'alice|bob', title: 'Android 测试', summary: 'hello' };
     const rejectedSerialized = JSON.stringify(rejectedBody);
@@ -317,6 +317,23 @@ test('management app test creates an app inbox item and returns recipient status
     });
     assert.equal(rejected.status, 400);
 
+    const unregisteredBody = { actor: 'operator', userId: 'unknown', title: 'Android 通知测试', summary: 'hello' };
+    const unregisteredSerialized = JSON.stringify(unregisteredBody);
+    const unregistered = await request(port, {
+      path: rejectedPath,
+      body: unregisteredBody,
+      headers: signedHeaders({ method: 'POST', path: rejectedPath, body: unregisteredSerialized }),
+    });
+    assert.equal(unregistered.status, 409);
+    assert.equal(unregistered.body.code, 'APP_DEVICE_NOT_REGISTERED');
+
+    await app.locals.notificationStore.upsertAppDevice('alice', {
+      installationId: 'android-installation-1',
+      provider: 'poll',
+      token: '',
+      appVersion: '1.0.0',
+      deviceModel: 'test-device',
+    });
     const body = { actor: 'operator', userId: 'alice', title: 'Android 通知测试', summary: '统一控制台 App 通道联通。' };
     const serialized = JSON.stringify(body);
     const created = await request(port, {
@@ -336,7 +353,7 @@ test('management app test creates an app inbox item and returns recipient status
     assert.equal(overview.status, 200);
     assert.equal(overview.body.total, 1);
     assert.equal(overview.body.unread, 1);
-    assert.equal(overview.body.devices.total, 0);
+    assert.equal(overview.body.devices.total, 1);
     assert.equal(overview.body.items[0].title, 'Android 通知测试');
   });
 });

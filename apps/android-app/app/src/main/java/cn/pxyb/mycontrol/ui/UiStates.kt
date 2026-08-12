@@ -7,6 +7,9 @@ import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
+import cn.pxyb.mycontrol.data.EnvironmentReport
+import cn.pxyb.mycontrol.data.EnvironmentSummary
+import cn.pxyb.mycontrol.data.EnvironmentVariable
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
@@ -37,6 +40,7 @@ data class AppEntryUiState(
     val accountManagementOpen: Boolean,
     val googleAccountDeskOpen: Boolean,
     val globalSearchOpen: Boolean,
+    val environmentOpen: Boolean,
     val workspaceDestination: WorkspaceDestination?,
     val focusTaskId: String?,
     val error: String?,
@@ -67,9 +71,26 @@ data class OperationsUiState(
     val releases: ReleaseData?,
     val backup: BackupQuality?,
     val diagnostics: DiagnosticData?,
+    val environment: EnvironmentReport?,
+    val environmentSummary: EnvironmentSummary?,
 ) {
     val actionRequiredTasks: List<PlatformTask>
         get() = tasks.filter { it.status in setOf("action_required", "failed") }
+}
+
+data class EnvironmentUiState(
+    val refreshing: Boolean,
+    val sectionError: String?,
+    val user: PlatformUser?,
+    val report: EnvironmentReport?,
+) {
+    val summary: EnvironmentSummary get() = report?.summary ?: EnvironmentSummary()
+    val attentionVariables: List<EnvironmentVariable>
+        get() = report?.variables.orEmpty().filter {
+            it.status in setOf("missing", "invalid") ||
+                it.verificationStatus == "failed" ||
+                it.runtimeStatus == "restart_required"
+        }
 }
 
 data class ToolsUiState(
@@ -147,6 +168,7 @@ data class NotificationCenterUiState(
     val refreshing: Boolean,
     val alerts: List<AppAlertRecord>,
     val preferences: AlertPreferences,
+    val syncError: String?,
 )
 
 data class InsightsUiState(val samples: List<TrendSample>)
@@ -173,6 +195,7 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     accountManagementOpen = accountManagementOpen,
     googleAccountDeskOpen = googleAccountDeskOpen,
     globalSearchOpen = globalSearchOpen,
+    environmentOpen = environmentOpen,
     workspaceDestination = workspaceDestination,
     focusTaskId = focusTaskId,
     error = error,
@@ -195,14 +218,16 @@ internal fun AppUiState.toOverviewUiState() = OverviewUiState(
 )
 
 internal fun AppUiState.toOperationsUiState() = OperationsUiState(
-    refreshing = isRefreshing(DataSection.Tasks, DataSection.Releases, DataSection.Backup),
-    sectionError = sectionError(DataSection.Tasks, DataSection.Releases, DataSection.Backup),
+    refreshing = isRefreshing(DataSection.Tasks, DataSection.Releases, DataSection.Backup, DataSection.Environment),
+    sectionError = sectionError(DataSection.Tasks, DataSection.Releases, DataSection.Backup, DataSection.Environment),
     busyAction = busyAction,
     user = user,
     tasks = tasks,
     releases = releases,
     backup = backup,
     diagnostics = diagnostics,
+    environment = environment,
+    environmentSummary = environment?.summary ?: overview?.environment,
 )
 
 internal fun AppUiState.toToolsUiState() = ToolsUiState(
@@ -359,9 +384,10 @@ internal fun AppUiState.toTodayUiState() = TodayUiState(
 )
 
 internal fun AppUiState.toNotificationCenterUiState() = NotificationCenterUiState(
-    refreshing = isRefreshing(DataSection.Incidents),
+    refreshing = isRefreshing(DataSection.Notifications),
     alerts = alerts,
     preferences = alertPreferences,
+    syncError = sectionLoadStates[DataSection.Notifications]?.error,
 )
 
 internal fun AppUiState.toInsightsUiState() = InsightsUiState(samples = trendSamples)
@@ -372,6 +398,13 @@ internal fun AppUiState.toScenesUiState() = ScenesUiState(
     busyAction = busyAction,
     offlineMode = offlineMode,
     iot = iot,
+)
+
+internal fun AppUiState.toEnvironmentUiState() = EnvironmentUiState(
+    refreshing = isRefreshing(DataSection.Environment),
+    sectionError = sectionError(DataSection.Environment),
+    user = user,
+    report = environment,
 )
 
 private fun AppUiState.isRefreshing(vararg sections: DataSection): Boolean =

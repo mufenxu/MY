@@ -121,6 +121,34 @@ test('deployment runner exposes only a minimal unauthenticated health endpoint',
   });
 });
 
+test('deployment runner protects and returns the redacted environment report', async () => {
+  const secret = 'runner-secret-that-must-never-be-returned';
+  const runner = createDeploymentRunner({
+    config: loadRunnerConfig({
+      DEPLOY_RUNNER_ENABLED: 'true',
+      DEPLOY_RUNNER_TOKEN: 't'.repeat(32),
+      DEPLOY_RUNNER_CALLBACK_TOKEN: 'c'.repeat(32),
+      DEPLOY_RUNNER_CALLBACK_URL: 'http://platform-api:22100/api/releases/callback',
+      DEPLOY_RUNNER_ALLOWED_IMAGE_REPOSITORY: 'registry.example.com/team/app',
+    }),
+    environmentReporter: async () => ({
+      checkedAt: '2026-08-13T00:00:00.000Z',
+      summary: { total: 1, state: 'healthy' },
+      variables: [{ key: 'PLATFORM_SESSION_SECRET', configured: true, displayValue: null }],
+    }),
+  });
+  await withServer(runner.createServer(), async (origin) => {
+    assert.equal((await fetch(`${origin}/environment`)).status, 401);
+    const response = await fetch(`${origin}/environment`, {
+      headers: { Authorization: `Bearer ${'t'.repeat(32)}` },
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.variables[0].displayValue, null);
+    assert.equal(JSON.stringify(body).includes(secret), false);
+  });
+});
+
 test('deployment Sidecar is backend-only and isolates the Docker socket from platform-api', async () => {
   const compose = await readFile(new URL('../infra/docker/compose.yml', import.meta.url), 'utf8');
   const dockerfile = await readFile(new URL('../deployment-runner.Dockerfile', import.meta.url), 'utf8');

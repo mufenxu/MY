@@ -946,6 +946,10 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
   app.post('/management/app/test', managementSendLimiter, checkManagementAccess, async (req, res, next) => {
     try {
       const input = appTestNotificationSchema.parse(req.body);
+      const registration = await store.getAppOverview({ userId: input.userId, limit: 1 });
+      if (registration.devices.total === 0) {
+        throw httpError(409, 'APP_DEVICE_NOT_REGISTERED', '该用户尚未注册 Android App 设备，请先登录 App 完成同步。');
+      }
       const created = await store.createAppNotification({
         caller: req.serviceCaller,
         idempotencyKey: `management-app-test:${req.id}`,

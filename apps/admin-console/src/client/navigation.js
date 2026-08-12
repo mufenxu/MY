@@ -33,6 +33,7 @@ export const NAV_GROUPS = Object.freeze([
       { id: 'tasks', label: '任务中心' },
       { id: 'releases', label: '发布管理' },
       { id: 'configuration', label: '配置变更' },
+      { id: 'environment', label: '环境变量' },
       { id: 'backup', label: '数据灾备' },
     ],
   },

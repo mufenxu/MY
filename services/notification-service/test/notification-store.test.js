@@ -110,6 +110,17 @@ test('app device registration keeps push tokens out of public metadata', async (
     token: 'rotated-device-token',
     appVersion: '1.1.1',
   });
+  await store.upsertAppDevice('bob', {
+    installationId: 'android-installation-2',
+    provider: 'poll',
+    token: '',
+    appVersion: '1.1.0',
+  });
+  const overview = await store.getAppOverview();
+  assert.deepEqual(overview.registeredUsers.map((user) => user.userId), ['alice', 'bob']);
+  assert.equal(overview.registeredUsers[0].pushReady, 1);
+  assert.equal(overview.registeredUsers[1].pollOnly, 1);
+
   const deliveryDevices = await store.listAppDeliveryDevices('alice');
   assert.equal(deliveryDevices.length, 1);
   assert.equal(deliveryDevices[0].token, 'rotated-device-token');

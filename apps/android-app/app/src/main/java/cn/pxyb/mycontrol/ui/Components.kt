@@ -5,8 +5,8 @@ import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -73,6 +73,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -108,6 +109,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -865,26 +868,46 @@ fun PullToRefresh(
     val thresholdPx = with(density) { 76.dp.toPx() }
     val maxPullPx = with(density) { 150.dp.toPx() }
     val indicatorSizePx = with(density) { 42.dp.toPx() }
+    val dragMultiplier = 0.5f
 
     var pullOffset by remember { mutableFloatStateOf(0f) }
-    var dragging by remember { mutableStateOf(false) }
+    var indicatorVisible by remember { mutableStateOf(false) }
     var triggered by remember { mutableStateOf(false) }
+    val settleJob = remember { mutableStateOf<Job?>(null) }
+    val coroutineScope = rememberCoroutineScope()
     val currentIsRefreshing by rememberUpdatedState(isRefreshing)
     val currentOnRefresh by rememberUpdatedState(onRefresh)
     val currentAtTop by rememberUpdatedState(atTop)
     val currentEnabled by rememberUpdatedState(enabled)
 
+    fun animatePullTo(target: Float) {
+        settleJob.value?.cancel()
+        settleJob.value = coroutineScope.launch {
+            animate(
+                initialValue = pullOffset,
+                targetValue = target,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium,
+                ),
+            ) { value, _ ->
+                pullOffset = value
+            }
+            pullOffset = target
+            if (target == 0f && !triggered) indicatorVisible = false
+        }
+    }
+
     fun settlePull() {
-        dragging = false
         when {
-            !currentEnabled -> pullOffset = 0f
-            currentIsRefreshing || triggered -> pullOffset = thresholdPx
+            !currentEnabled -> animatePullTo(0f)
+            currentIsRefreshing || triggered -> animatePullTo(thresholdPx)
             pullOffset >= thresholdPx -> {
                 triggered = true
-                pullOffset = thresholdPx
+                animatePullTo(thresholdPx)
                 currentOnRefresh?.invoke()
             }
-            else -> pullOffset = 0f
+            else -> animatePullTo(0f)
         }
     }
 
@@ -893,7 +916,7 @@ fun PullToRefresh(
             // 后台刷新（切页/自动刷新）不显示指示器；只有手动下拉触发后等待完成
         } else if (triggered) {
             triggered = false
-            pullOffset = 0f
+            animatePullTo(0f)
         }
     }
 
@@ -901,9 +924,18 @@ fun PullToRefresh(
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 val delta = available.y
-                if (currentEnabled && source == NestedScrollSource.Drag && delta > 0f && currentAtTop() && !currentIsRefreshing) {
-                    dragging = true
-                    pullOffset = (pullOffset + delta).coerceAtMost(maxPullPx)
+                if (source != NestedScrollSource.Drag || currentIsRefreshing) return Offset.Zero
+                if (delta < 0f && pullOffset > 0f) {
+                    settleJob.value?.cancel()
+                    val consumed = delta.coerceAtLeast(-pullOffset / dragMultiplier)
+                    pullOffset = (pullOffset + consumed * dragMultiplier).coerceAtLeast(0f)
+                    if (pullOffset == 0f && !triggered) indicatorVisible = false
+                    return Offset(0f, consumed)
+                }
+                if (currentEnabled && delta > 0f && currentAtTop()) {
+                    settleJob.value?.cancel()
+                    indicatorVisible = true
+                    pullOffset = (pullOffset + delta * dragMultiplier).coerceAtMost(maxPullPx)
                     return Offset(0f, delta)
                 }
                 return Offset.Zero
@@ -912,8 +944,9 @@ fun PullToRefresh(
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 val delta = available.y
                 if (currentEnabled && source == NestedScrollSource.Drag && delta > 0f && currentAtTop() && !currentIsRefreshing) {
-                    dragging = true
-                    pullOffset = (pullOffset + delta).coerceAtMost(maxPullPx)
+                    settleJob.value?.cancel()
+                    indicatorVisible = true
+                    pullOffset = (pullOffset + delta * dragMultiplier).coerceAtMost(maxPullPx)
                     return Offset(0f, delta)
                 }
                 return Offset.Zero
@@ -924,8 +957,7 @@ fun PullToRefresh(
                     if (available.y > 0f) {
                         settlePull()
                     } else {
-                        dragging = false
-                        pullOffset = 0f
+                        animatePullTo(0f)
                     }
                     return available
                 }
@@ -933,24 +965,6 @@ fun PullToRefresh(
             }
         }
     }
-
-    val visualOffset by animateFloatAsState(
-        targetValue = pullOffset,
-        animationSpec = if (dragging) snap() else spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
-        label = "pull-offset",
-    )
-    val progress = (visualOffset / thresholdPx).coerceIn(0f, 1f)
-    val arrowRotation by animateFloatAsState(
-        targetValue = if (isRefreshing) 180f else progress * 180f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
-        label = "pull-arrow-rotation",
-    )
 
     Box(
         modifier = modifier
@@ -977,15 +991,16 @@ fun PullToRefresh(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer { translationY = visualOffset }
+                // 高频位移只失效绘制层，避免拖动时重组整页内容。
+                .graphicsLayer { translationY = pullOffset }
         ) {
             content()
         }
-        if (visualOffset > 0f || (triggered && isRefreshing)) {
+        if (indicatorVisible || (triggered && isRefreshing)) {
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .offset { IntOffset(0, (visualOffset - indicatorSizePx).roundToInt()) }
+                    .offset { IntOffset(0, (pullOffset - indicatorSizePx).roundToInt()) }
                     .size(42.dp),
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surface,
@@ -1006,7 +1021,9 @@ fun PullToRefresh(
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier
                                 .size(20.dp)
-                                .graphicsLayer { rotationZ = arrowRotation },
+                                .graphicsLayer {
+                                    rotationZ = (pullOffset / thresholdPx).coerceIn(0f, 1f) * 180f
+                                },
                         )
                     }
                 }
@@ -1251,4 +1268,3 @@ fun ModernAnimatedSplashScreen(
         }
     }
 }
-
