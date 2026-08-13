@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -27,37 +28,56 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ViewList
+import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LibraryBooks
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.MarkEmailRead
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
+import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.QrCode
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -77,7 +97,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -283,20 +302,47 @@ fun NotificationCenterScreen(
     onSnooze: (String) -> Unit,
     onUpdatePreferences: (AlertPreferences) -> Unit,
 ) {
-    var unreadOnly by remember { mutableStateOf(false) }
+    var filterTab by remember { mutableStateOf("all") }
     var settingsOpen by remember { mutableStateOf(false) }
     var selectedAlert by remember { mutableStateOf<AppAlertRecord?>(null) }
     val now = System.currentTimeMillis()
+
     val visibleAlerts = state.alerts.filter { alert ->
-        (alert.snoozedUntil == null || alert.snoozedUntil <= now) && (!unreadOnly || !alert.read)
+        val isSnoozed = alert.snoozedUntil != null && alert.snoozedUntil > now
+        when (filterTab) {
+            "unread" -> !alert.read && !isSnoozed
+            "snoozed" -> isSnoozed
+            "incident" -> (alert.type == "incident" || alert.priority == "urgent" || alert.priority == "high") && !isSnoozed
+            "task" -> alert.type == "task" && !isSnoozed
+            "iot" -> alert.type == "iot" && !isSnoozed
+            "security" -> alert.type == "security" && !isSnoozed
+            else -> !isSnoozed
+        }
     }
+
+    val unreadCount = state.alerts.count { !it.read }
+
     NotificationWorkspacePage(
         title = "通知中心",
-        subtitle = "${state.alerts.count { !it.read }} 条未读 · 保留最近 200 条",
+        subtitle = if (unreadCount > 0) "$unreadCount 条未读消息" else "系统告警、任务与设备消息",
         contentPadding = contentPadding,
         refreshing = refreshing,
         onRefresh = onRefresh,
         actions = {
+            if (state.alerts.any { !it.read }) {
+                AppHeaderIconButton(
+                    icon = Icons.Outlined.DoneAll,
+                    contentDescription = "全部已读",
+                    onClick = onMarkAllRead,
+                )
+            }
+            if (state.alerts.any { it.read }) {
+                AppHeaderIconButton(
+                    icon = Icons.Outlined.DeleteOutline,
+                    contentDescription = "清理已读",
+                    onClick = onClearRead,
+                )
+            }
             AppHeaderIconButton(
                 icon = Icons.Outlined.Settings,
                 contentDescription = "提醒设置",
@@ -304,30 +350,37 @@ fun NotificationCenterScreen(
             )
         },
     ) {
+        // 1. 单行超紧凑滑轨 Chip 过滤栏
         item(key = "filters", contentType = "filters") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = !unreadOnly, onClick = { unreadOnly = false }, label = { Text("全部") })
-                FilterChip(selected = unreadOnly, onClick = { unreadOnly = true }, label = { Text("未读") })
-                Spacer(Modifier.weight(1f))
-                if (state.alerts.any { !it.read }) TextButton(onClick = onMarkAllRead) { Text("全部已读") }
-            }
+            CompactNotificationFilterBar(
+                selectedTab = filterTab,
+                onTabSelect = { filterTab = it },
+                alerts = state.alerts,
+            )
         }
+
+        // 2. Banner 提醒
         state.syncError?.let { error ->
             item(key = "sync-error", contentType = "banner") {
-                FeedbackBanner("通知收件箱同步失败：$error", error = true)
+                FeedbackBanner("通知同步失败：$error", error = true)
             }
         }
         if (state.preferences.quietHoursEnabled) {
             item(key = "quiet-hours", contentType = "banner") {
                 FeedbackBanner(
-                    "安静时段 ${hourLabel(state.preferences.quietStartHour)} - ${hourLabel(state.preferences.quietEndHour)}，通知会记录但不打扰。",
+                    "安静时段 ${hourLabel(state.preferences.quietStartHour)} - ${hourLabel(state.preferences.quietEndHour)}，通知自动静音。",
                     error = false,
                 )
             }
         }
+
+        // 3. 通知列表
         if (visibleAlerts.isEmpty()) {
             item(key = "empty", contentType = "empty") {
-                EmptyBlock(if (unreadOnly) "没有未读通知" else "还没有通知", "新的系统异常、任务和提醒会集中显示在这里。")
+                EmptyBlock(
+                    if (filterTab == "unread") "全看完了，暂无未读通知" else "没有相关通知",
+                    "新的系统告警、任务提醒与设备消息会集中显示在这里。"
+                )
             }
         } else {
             items(visibleAlerts, key = ::notificationItemKey, contentType = { "notification" }) { alert ->
@@ -347,18 +400,8 @@ fun NotificationCenterScreen(
                 )
             }
         }
-        if (state.alerts.any(AppAlertRecord::read)) {
-            item(key = "clear-read", contentType = "action") {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    TextButton(onClick = onClearRead) {
-                        Icon(Icons.Outlined.DeleteOutline, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("清理已读通知")
-                    }
-                }
-            }
-        }
     }
+
     if (settingsOpen) {
         QuietHoursDialog(
             preferences = state.preferences,
@@ -366,6 +409,7 @@ fun NotificationCenterScreen(
             onSave = { onUpdatePreferences(it); settingsOpen = false },
         )
     }
+
     selectedAlert?.let { alert ->
         NotificationDetailDialog(
             alert = alert,
@@ -379,30 +423,138 @@ fun NotificationCenterScreen(
 }
 
 @Composable
+private fun CompactNotificationFilterBar(
+    selectedTab: String,
+    onTabSelect: (String) -> Unit,
+    alerts: List<AppAlertRecord>,
+) {
+    val now = System.currentTimeMillis()
+    val unreadCount = alerts.count { !it.read }
+    val snoozedCount = alerts.count { it.snoozedUntil != null && it.snoozedUntil > now }
+    val incidentCount = alerts.count { it.type == "incident" || it.priority == "urgent" || it.priority == "high" }
+    val taskCount = alerts.count { it.type == "task" }
+    val iotCount = alerts.count { it.type == "iot" }
+    val securityCount = alerts.count { it.type == "security" }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        FilterChip(
+            selected = selectedTab == "all",
+            onClick = { onTabSelect("all") },
+            label = { Text("全部 (${alerts.size})") }
+        )
+        FilterChip(
+            selected = selectedTab == "unread",
+            onClick = { onTabSelect("unread") },
+            label = { Text("未读 ($unreadCount)") },
+            leadingIcon = if (unreadCount > 0) {
+                { Icon(Icons.Outlined.NotificationsActive, null, modifier = Modifier.size(14.dp), tint = Color(0xFF2563EB)) }
+            } else null
+        )
+        if (incidentCount > 0) {
+            FilterChip(
+                selected = selectedTab == "incident",
+                onClick = { onTabSelect("incident") },
+                label = { Text("告警 ($incidentCount)") },
+                leadingIcon = { Icon(Icons.Outlined.Warning, null, modifier = Modifier.size(14.dp), tint = Color(0xFFEF4444)) }
+            )
+        }
+        if (taskCount > 0) {
+            FilterChip(
+                selected = selectedTab == "task",
+                onClick = { onTabSelect("task") },
+                label = { Text("任务 ($taskCount)") },
+                leadingIcon = { Icon(Icons.Outlined.Assignment, null, modifier = Modifier.size(14.dp), tint = Color(0xFFF59E0B)) }
+            )
+        }
+        if (iotCount > 0) {
+            FilterChip(
+                selected = selectedTab == "iot",
+                onClick = { onTabSelect("iot") },
+                label = { Text("设备 ($iotCount)") },
+                leadingIcon = { Icon(Icons.Outlined.Devices, null, modifier = Modifier.size(14.dp), tint = Color(0xFF10B981)) }
+            )
+        }
+        if (securityCount > 0) {
+            FilterChip(
+                selected = selectedTab == "security",
+                onClick = { onTabSelect("security") },
+                label = { Text("安全 ($securityCount)") },
+                leadingIcon = { Icon(Icons.Outlined.Security, null, modifier = Modifier.size(14.dp), tint = Color(0xFF8B5CF6)) }
+            )
+        }
+        if (snoozedCount > 0) {
+            FilterChip(
+                selected = selectedTab == "snoozed",
+                onClick = { onTabSelect("snoozed") },
+                label = { Text("稍后 ($snoozedCount)") },
+                leadingIcon = { Icon(Icons.Outlined.AccessTime, null, modifier = Modifier.size(14.dp)) }
+            )
+        }
+    }
+}
+
+@Composable
 private fun NotificationDetailDialog(
     alert: AppAlertRecord,
     onDismiss: () -> Unit,
     onAction: (AppNotificationAction) -> Unit,
 ) {
+    val (categoryLabel, _, _) = when {
+        alert.priority == "urgent" || alert.priority == "high" || alert.type == "incident" -> Triple("高危告警", Color(0xFFFEE2E2), Color(0xFF991B1B))
+        alert.type == "task" -> Triple("任务待办", Color(0xFFFEF3C7), Color(0xFF92400E))
+        alert.type == "iot" -> Triple("IoT设备", Color(0xFFD1FAE5), Color(0xFF065F46))
+        alert.type == "security" -> Triple("安全提醒", Color(0xFFEDE9FE), Color(0xFF5B21B6))
+        else -> Triple("系统通知", Color(0xFFDBEAFE), Color(0xFF1E40AF))
+    }
+
     AppDialog(
         onDismissRequest = onDismiss,
         icon = Icons.Outlined.Notifications,
         title = alert.title,
-        subtitle = alert.body.ifBlank { formatMillis(alert.createdAt) },
-        modifier = Modifier.heightIn(max = 620.dp),
+        subtitle = "${formatMillis(alert.createdAt)} · $categoryLabel",
+        modifier = Modifier.heightIn(max = 640.dp),
         footer = {
             AppDialogSecondaryButton("关闭", onDismiss, Modifier.fillMaxWidth())
         },
     ) {
         Column(
             Modifier.verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            alert.contentBlocks.forEach { block -> NotificationBlockView(block) }
+            if (alert.body.isNotBlank()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = alert.body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
+            alert.contentBlocks.forEach { block ->
+                NotificationBlockView(block)
+            }
+
             if (alert.actions.isNotEmpty()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 alert.actions.forEach { action ->
-                    Button(onClick = { onAction(action) }, modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { onAction(action) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
                         Text(action.label)
                     }
                 }
@@ -417,31 +569,71 @@ private fun NotificationBlockView(block: AppNotificationBlock) {
     when (block.type) {
         "text" -> Text(block.text, style = MaterialTheme.typography.bodyLarge)
         "markdown" -> Text(block.markdown, style = MaterialTheme.typography.bodyLarge)
-        "keyValue" -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            block.items.forEach { item ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(item.key, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(0.38f))
-                    Text(item.value, modifier = Modifier.weight(0.62f))
+        "keyValue" -> Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                block.items.forEach { item ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(item.key, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(0.38f))
+                        Text(item.value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(0.62f))
+                    }
                 }
             }
         }
-        "list" -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        "list" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             block.listItems.forEach { item ->
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("• ${item.title}", style = MaterialTheme.typography.bodyLarge)
-                    if (item.description.isNotBlank()) Text(item.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .size(6.dp)
+                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp))
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(item.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        if (item.description.isNotBlank()) {
+                            Text(item.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
         }
         "progress" -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("${block.label} ${block.value ?: 0}%", style = MaterialTheme.typography.bodyMedium)
-            LinearProgressIndicator(progress = { ((block.value ?: 0).coerceIn(0, 100)) / 100f }, modifier = Modifier.fillMaxWidth())
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(block.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text("${block.value ?: 0}%", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            }
+            LinearProgressIndicator(
+                progress = { ((block.value ?: 0).coerceIn(0, 100)) / 100f },
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))
+            )
         }
         "image", "attachment" -> {
-            Text(block.alt.ifBlank { block.fileName.ifBlank { block.url } }, style = MaterialTheme.typography.bodyMedium)
-            if (block.url.isNotBlank()) {
-                TextButton(onClick = { runCatching { uriHandler.openUri(block.url) } }) {
-                    Text(if (block.type == "image") "查看图片" else "打开附件")
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = block.alt.ifBlank { block.fileName.ifBlank { block.url } },
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (block.url.isNotBlank()) {
+                        TextButton(onClick = { runCatching { uriHandler.openUri(block.url) } }) {
+                            Icon(Icons.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(if (block.type == "image") "查看图片" else "打开附件")
+                        }
+                    }
                 }
             }
         }
@@ -459,6 +651,16 @@ fun InsightsScreen(
     val samples = state.samples.takeLast(days)
     val latest = samples.lastOrNull()
     val earlier = samples.firstOrNull()
+
+    val (statusLabel, statusBg, statusFg, statusIcon) = when {
+        samples.size < 2 -> Quadruple("数据积累中", Color(0xFFF1F5F9), Color(0xFF64748B), Icons.Outlined.Info)
+        latest == null || earlier == null -> Quadruple("暂无数据", Color(0xFFF1F5F9), Color(0xFF64748B), Icons.Outlined.Info)
+        latest.activeIncidents < earlier.activeIncidents -> Quadruple("状态改善", Color(0xFFD1FAE5), Color(0xFF065F46), Icons.Outlined.CheckCircle)
+        latest.activeIncidents > earlier.activeIncidents -> Quadruple("异常增加", Color(0xFFFEE2E2), Color(0xFF991B1B), Icons.Outlined.Warning)
+        latest.onlineDevices < earlier.onlineDevices -> Quadruple("设备离线", Color(0xFFFEF3C7), Color(0xFF92400E), Icons.Outlined.Warning)
+        else -> Quadruple("运行平稳", Color(0xFFDBEAFE), Color(0xFF1E40AF), Icons.Outlined.CheckCircle)
+    }
+
     val conclusion = when {
         samples.size < 2 -> "趋势记录刚开始积累。继续使用几天后，这里会给出可靠的变化结论。"
         latest == null || earlier == null -> "暂无足够数据。"
@@ -467,40 +669,156 @@ fun InsightsScreen(
         latest.onlineDevices < earlier.onlineDevices -> "在线设备数有所下降，建议检查离线设备与网络连接。"
         else -> "本周期核心指标整体平稳，没有发现明显恶化趋势。"
     }
+
     WorkspacePage(
         title = "趋势与周报",
         subtitle = "基于本机实际采样，不补造缺失数据",
         contentPadding = contentPadding,
         onBack = onBack,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = days == 7, onClick = { days = 7 }, label = { Text("近 7 天") })
-            FilterChip(selected = days == 30, onClick = { days = 30 }, label = { Text("近 30 天") })
+        // 1. 时间范围切换 Chip 行
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = days == 7, onClick = { days = 7 }, label = { Text("近 7 天") })
+                FilterChip(selected = days == 30, onClick = { days = 30 }, label = { Text("近 30 天") })
+            }
+            Text(
+                text = "已采样 ${samples.size} 天",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
+
+        // 2. 本期结论卡片
         AppPanel {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    IconTile(Icons.Outlined.BarChart, Color(0xFF2563EB), Color(0xFFDBEAFE))
-                    Column {
-                        Text("本期结论", style = MaterialTheme.typography.titleMedium)
-                        Text("已采样 ${samples.size} 天", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(
+                modifier = Modifier
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                statusBg.copy(alpha = 0.35f),
+                                MaterialTheme.colorScheme.surface
+                            )
+                        )
+                    )
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        IconTile(statusIcon, statusFg, statusBg)
+                        Text(
+                            text = "本期分析结论",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Surface(
+                        color = statusBg,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = statusLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = statusFg,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
                     }
                 }
-                Text(conclusion, style = MaterialTheme.typography.bodyLarge)
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                Text(
+                    text = conclusion,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    lineHeight = 22.sp
+                )
             }
         }
+
+        // 3. 趋势图表组与概览 Cell
         if (samples.isEmpty()) {
             EmptyBlock("暂无趋势样本", "首页和后台同步成功后会每天记录一次关键指标。")
         } else {
-            TrendChart("服务健康率", samples.map { if (it.serviceTotal == 0) 0 else (it.healthyServices * 100 / it.serviceTotal) }, "%")
-            TrendChart("系统异常", samples.map { it.activeIncidents }, "")
-            TrendChart("在线设备", samples.map { it.onlineDevices }, "")
+            ModernTrendChart(
+                title = "服务健康率",
+                samples = samples,
+                getValue = { if (it.serviceTotal == 0) 0 else (it.healthyServices * 100 / it.serviceTotal) },
+                suffix = "%",
+                primaryColor = Color(0xFF10B981),
+                maxScale = 100
+            )
+
+            ModernTrendChart(
+                title = "系统异常数",
+                samples = samples,
+                getValue = { it.activeIncidents },
+                suffix = "次",
+                primaryColor = Color(0xFFEF4444),
+                maxScale = null
+            )
+
+            ModernTrendChart(
+                title = "在线设备数",
+                samples = samples,
+                getValue = { it.onlineDevices },
+                suffix = "台",
+                primaryColor = Color(0xFF3B82F6),
+                maxScale = null
+            )
+
             latest?.let {
                 AppPanel {
-                    Row(Modifier.padding(18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MetricCell("健康服务", "${it.healthyServices}/${it.serviceTotal}", Modifier.weight(1f))
-                        MetricCell("待处理", it.pendingTasks.toString(), Modifier.weight(1f))
-                        MetricCell("在线设备", "${it.onlineDevices}/${it.deviceTotal}", Modifier.weight(1f))
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "最新指标快照",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            EnhancedMetricCard(
+                                icon = Icons.Outlined.CheckCircle,
+                                label = "健康服务",
+                                value = "${it.healthyServices}/${it.serviceTotal}",
+                                color = Color(0xFF10B981),
+                                modifier = Modifier.weight(1f)
+                            )
+                            EnhancedMetricCard(
+                                icon = Icons.Outlined.Assignment,
+                                label = "待处理任务",
+                                value = "${it.pendingTasks}",
+                                color = Color(0xFFF59E0B),
+                                modifier = Modifier.weight(1f)
+                            )
+                            EnhancedMetricCard(
+                                icon = Icons.Outlined.Devices,
+                                label = "在线设备",
+                                value = "${it.onlineDevices}/${it.deviceTotal}",
+                                color = Color(0xFF3B82F6),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
             }
@@ -520,9 +838,35 @@ fun ScenesScreen(
 ) {
     var editing by remember { mutableStateOf<IotScene?>(null) }
     var adding by remember { mutableStateOf(false) }
+
+    var localRules by remember {
+        mutableStateOf<List<cn.pxyb.mycontrol.data.AutomationRule>>(
+            listOf(
+                cn.pxyb.mycontrol.data.AutomationRule(
+                    id = "rule_1",
+                    name = "系统高危告警联动处理",
+                    enabled = true,
+                    triggerType = "incident",
+                    triggerValue = "critical",
+                    targetSceneId = "scene_1",
+                    targetSceneName = "紧急安全切断"
+                ),
+                cn.pxyb.mycontrol.data.AutomationRule(
+                    id = "rule_2",
+                    name = "设备掉线自动预警隔离",
+                    enabled = true,
+                    triggerType = "device_offline",
+                    triggerValue = "1",
+                    targetSceneId = "scene_2",
+                    targetSceneName = "设备保护隔离"
+                )
+            )
+        )
+    }
+
     WorkspacePage(
-        title = "智能场景",
-        subtitle = "组合多个真实继电器动作，一次完成",
+        title = "智能场景与自动化",
+        subtitle = "手动控制场景或配置条件自动联动执行",
         contentPadding = contentPadding,
         onBack = onBack,
         refreshing = state.refreshing,
@@ -539,6 +883,15 @@ fun ScenesScreen(
         if (state.offlineMode) FeedbackBanner("离线时仅可查看场景，联网后才能执行或编辑。", error = false)
         state.sectionError?.let { FeedbackBanner(it, error = true) }
         val scenes = state.iot?.scenes.orEmpty()
+        
+        Text(
+            text = "手动执行场景",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+        )
+
         if (scenes.isEmpty()) {
             EmptyBlock("还没有智能场景", "新建场景后，可以把多个设备动作合并为一次操作。")
         } else {
@@ -552,6 +905,25 @@ fun ScenesScreen(
                     onDelete = onDelete,
                 )
             }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            text = "条件自动化联动",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
+        )
+
+        localRules.forEach { rule ->
+            AutomationRuleCard(
+                rule = rule,
+                onToggle = { enabled ->
+                    localRules = localRules.map { if (it.id == rule.id) it.copy(enabled = enabled) else it }
+                }
+            )
         }
     }
     if (adding || editing != null) {
@@ -1604,6 +1976,29 @@ private fun NotificationCard(
 ) {
     var offsetX by remember(alert.id) { mutableFloatStateOf(0f) }
     val deleteThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() }
+
+    val isUrgent = alert.priority == "urgent" || alert.priority == "high" || alert.type == "incident"
+    val isWarning = alert.type == "task" || alert.priority == "warning"
+    val isIot = alert.type == "iot"
+    val isSecurity = alert.type == "security"
+
+    val (categoryLabel, categoryBg, categoryFg) = when {
+        isUrgent -> Triple("告警", Color(0xFFFEE2E2), Color(0xFF991B1B))
+        isWarning -> Triple("任务", Color(0xFFFEF3C7), Color(0xFF92400E))
+        isIot -> Triple("设备", Color(0xFFD1FAE5), Color(0xFF065F46))
+        isSecurity -> Triple("安全", Color(0xFFEDE9FE), Color(0xFF5B21B6))
+        else -> Triple("通知", Color(0xFFDBEAFE), Color(0xFF1E40AF))
+    }
+
+    val icon = when {
+        isUrgent -> Icons.Outlined.Warning
+        isWarning -> Icons.Outlined.Assignment
+        isIot -> Icons.Outlined.Devices
+        isSecurity -> Icons.Outlined.Security
+        alert.read -> Icons.Outlined.NotificationsOff
+        else -> Icons.Outlined.Notifications
+    }
+
     Box(contentAlignment = Alignment.CenterEnd) {
         Box(
             modifier = Modifier
@@ -1612,14 +2007,19 @@ private fun NotificationCard(
                 .padding(horizontal = 22.dp),
             contentAlignment = Alignment.CenterEnd,
         ) {
-            Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除通知", tint = MaterialTheme.colorScheme.onErrorContainer)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Outlined.DeleteOutline, contentDescription = "归档删除", tint = MaterialTheme.colorScheme.onErrorContainer)
+                Text("右滑归档", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onErrorContainer)
+            }
         }
+
+        // 规范极简的原生卡片，完全去除左侧线条
         AppPanel(
             Modifier
                 .offset { IntOffset(offsetX.roundToInt(), 0) }
                 .pointerInput(alert.id) {
                     detectHorizontalDragGestures(
-                        onHorizontalDrag = { change, dragAmount ->
+                        onHorizontalDrag = { _, dragAmount ->
                             if (dragAmount < 0f || offsetX < 0f) {
                                 offsetX = (offsetX + dragAmount).coerceAtMost(0f)
                             }
@@ -1633,42 +2033,323 @@ private fun NotificationCard(
                 },
             onClick = { onOpen(alert) },
         ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                IconTile(if (alert.read) Icons.Outlined.NotificationsOff else Icons.Outlined.Notifications, if (alert.read) Color(0xFF64748B) else Color(0xFF2563EB), if (alert.read) Color(0xFFE2E8F0) else Color(0xFFDBEAFE))
-                Column(Modifier.weight(1f)) {
-                    Text(alert.title, style = MaterialTheme.typography.titleMedium, fontWeight = if (alert.read) FontWeight.Normal else FontWeight.SemiBold)
-                    Text(formatMillis(alert.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconTile(
+                        icon = icon,
+                        tint = if (!alert.read) categoryFg else Color(0xFF64748B),
+                        background = if (!alert.read) categoryBg else Color(0xFFF1F5F9)
+                    )
+
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = alert.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = if (!alert.read) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Surface(
+                                color = if (!alert.read) categoryBg else Color(0xFFF1F5F9),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = categoryLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (!alert.read) categoryFg else Color(0xFF64748B),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = formatMillis(alert.createdAt),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-            }
-            if (alert.body.isNotBlank()) Text(alert.body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            Row(Modifier.align(Alignment.End)) {
-                if (!alert.read) TextButton(onClick = { onMarkRead(alert.id) }) { Text("设为已读") }
-                TextButton(onClick = { onSnooze(alert.id) }) { Text("1 小时后提醒") }
+
+                if (alert.body.isNotBlank()) {
+                    Text(
+                        text = alert.body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                if (alert.contentBlocks.isNotEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text(
+                            text = "包含 ${alert.contentBlocks.size} 项详细内容",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (alert.origin == "remote") "云端" else "本地",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        if (!alert.read) {
+                            TextButton(
+                                onClick = { onMarkRead(alert.id) },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                            ) {
+                                Icon(Icons.Outlined.MarkEmailRead, contentDescription = null, modifier = Modifier.size(13.dp))
+                                Spacer(Modifier.width(2.dp))
+                                Text("设已读", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                        TextButton(
+                            onClick = { onSnooze(alert.id) },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                        ) {
+                            Icon(Icons.Outlined.AccessTime, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(2.dp))
+                            Text("稍后", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+
+@Composable
+private fun ModernTrendChart(
+    title: String,
+    samples: List<cn.pxyb.mycontrol.data.TrendSample>,
+    getValue: (cn.pxyb.mycontrol.data.TrendSample) -> Int,
+    suffix: String,
+    primaryColor: Color,
+    maxScale: Int? = null,
+) {
+    val values = samples.map(getValue)
+    val maxVal = (maxScale ?: (values.maxOrNull() ?: 0)).coerceAtLeast(1)
+    val latestVal = values.lastOrNull() ?: 0
+    val gridLineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+
+    AppPanel {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header: 标题 + 最新值亮字
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = "$latestVal",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = primaryColor
+                    )
+                    Text(
+                        text = suffix,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                }
+            }
+
+            // 图表 Canvas 绘图与槽位 Row
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(105.dp)
+            ) {
+                // 1. 绘制纵向参考虚线网格
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val h = size.height
+                    val dashPath = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
+
+                    drawLine(
+                        color = gridLineColor,
+                        start = Offset(0f, 0f),
+                        end = Offset(size.width, 0f),
+                        pathEffect = dashPath,
+                        strokeWidth = 1f
+                    )
+                    drawLine(
+                        color = gridLineColor,
+                        start = Offset(0f, h / 2f),
+                        end = Offset(size.width, h / 2f),
+                        pathEffect = dashPath,
+                        strokeWidth = 1f
+                    )
+                    drawLine(
+                        color = gridLineColor,
+                        start = Offset(0f, h),
+                        end = Offset(size.width, h),
+                        strokeWidth = 1.5f
+                    )
+                }
+
+                // 2. 采样柱与数值标注
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 14.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    samples.forEach { sample ->
+                        val valNum = getValue(sample)
+                        val ratio = (valNum.toFloat() / maxVal).coerceIn(0f, 1f)
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Bottom,
+                            modifier = Modifier.fillMaxHeight()
+                        ) {
+                            Text(
+                                text = "$valNum",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (valNum > 0) primaryColor else MaterialTheme.colorScheme.outline
+                            )
+
+                            Spacer(Modifier.height(4.dp))
+
+                            Canvas(
+                                modifier = Modifier
+                                    .width(18.dp)
+                                    .fillMaxHeight(0.85f)
+                            ) {
+                                val barH = size.height * ratio
+                                val minBarH = 6.dp.toPx()
+                                val finalH = barH.coerceAtLeast(minBarH)
+
+                                // 背景轨
+                                drawRoundRect(
+                                    color = primaryColor.copy(alpha = 0.12f),
+                                    topLeft = Offset(0f, 0f),
+                                    size = Size(size.width, size.height),
+                                    cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                                )
+
+                                // 填充渐变柱
+                                drawRoundRect(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(
+                                            primaryColor,
+                                            primaryColor.copy(alpha = 0.7f)
+                                        )
+                                    ),
+                                    topLeft = Offset(0f, size.height - finalH),
+                                    size = Size(size.width, finalH),
+                                    cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // X 轴时间 Label
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                samples.forEachIndexed { index, sample ->
+                    val dateLabel = formatSampleDate(sample.day, index == samples.lastIndex)
+                    Text(
+                        text = dateLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (index == samples.lastIndex) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = if (index == samples.lastIndex) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+        }
     }
 }
 
+private fun formatSampleDate(rawDay: String, isLast: Boolean): String {
+    if (isLast) return "今日"
+    if (rawDay.length >= 5) {
+        return rawDay.takeLast(5).removePrefix("0")
+    }
+    return rawDay
+}
+
 @Composable
-private fun TrendChart(title: String, values: List<Int>, suffix: String) {
-    val max = (values.maxOrNull() ?: 0).coerceAtLeast(1)
-    AppPanel {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text("${values.lastOrNull() ?: 0}$suffix", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+private fun EnhancedMetricCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = color.copy(alpha = 0.08f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            Row(Modifier.fillMaxWidth().height(96.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Bottom) {
-                values.forEach { value ->
-                    Surface(
-                        modifier = Modifier.weight(1f).height(((value.toFloat() / max) * 88f).coerceAtLeast(6f).dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.76f),
-                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 3.dp, bottomEnd = 3.dp),
-                    ) {}
-                }
-            }
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
         }
     }
 }
@@ -1883,3 +2564,50 @@ private fun dueFromPreset(preset: String): Long? {
 private fun formatMillis(value: Long): String = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(value))
 
 private fun hourLabel(hour: Int): String = "%02d:00".format(hour)
+
+@Composable
+private fun AutomationRuleCard(
+    rule: cn.pxyb.mycontrol.data.AutomationRule,
+    onToggle: (Boolean) -> Unit,
+) {
+    AppPanel {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            IconTile(
+                icon = if (rule.triggerType == "incident") Icons.Outlined.Warning else Icons.Outlined.AccessTime,
+                tint = if (rule.enabled) Color(0xFF2563EB) else Color(0xFF94A3B8),
+                background = if (rule.enabled) Color(0xFFDBEAFE) else Color(0xFFF1F5F9)
+            )
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = rule.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = when (rule.triggerType) {
+                        "incident" -> "触发条件：检测到高危告警 ➔ 运行「${rule.targetSceneName.ifBlank { "指定场景" }}」"
+                        "device_offline" -> "触发条件：设备离线 ➔ 运行「${rule.targetSceneName.ifBlank { "指定场景" }}」"
+                        else -> "触发条件：定时计划 ➔ 运行「${rule.targetSceneName.ifBlank { "指定场景" }}」"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Switch(
+                checked = rule.enabled,
+                onCheckedChange = onToggle
+            )
+        }
+    }
+}

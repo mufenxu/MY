@@ -74,7 +74,7 @@ import java.io.IOException
 
 enum class MainTab { Overview, Notifications, Operations, Tools, Profile }
 
-enum class WorkspaceDestination { Today, Notifications, Insights, Scenes }
+enum class WorkspaceDestination { Today, Notifications, AdminPortals, Insights, Scenes }
 
 enum class DataSection { Overview, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, Resources, Notifications, Environment }
 
@@ -733,6 +733,7 @@ class AppViewModel(
         when (destination) {
             WorkspaceDestination.Today -> refreshToday()
             WorkspaceDestination.Notifications -> reloadPersonalState()
+            WorkspaceDestination.AdminPortals -> Unit
             WorkspaceDestination.Insights -> reloadPersonalState()
             WorkspaceDestination.Scenes -> refreshIot()
         }
@@ -1239,8 +1240,14 @@ class AppViewModel(
                 }
                 .onFailure { error ->
                     mutableState.update { it.copy(qrLoginBusy = false, qrLoginError = qrErrorMessage(error)) }
-                }
+            }
         }
+    }
+
+    suspend fun createAdminPortalLoginUrl(redirectUrl: String): String {
+        val link = api.createWebLoginLink(redirectUrl)
+        return link.loginUrl.takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("服务端未返回自动登录链接。")
     }
 
     fun approveQrLogin(
@@ -1332,6 +1339,7 @@ class AppViewModel(
         when (mutableState.value.workspaceDestination) {
             WorkspaceDestination.Today -> refreshToday(force)
             WorkspaceDestination.Scenes -> refreshIot(force)
+            WorkspaceDestination.AdminPortals -> Unit
             WorkspaceDestination.Notifications, WorkspaceDestination.Insights -> reloadPersonalState()
             null -> refreshCurrentTab(force)
         }
@@ -2158,6 +2166,7 @@ class AppViewModel(
             when (destination) {
                 "today" -> openWorkspace(WorkspaceDestination.Today)
                 "notifications" -> openWorkspace(WorkspaceDestination.Notifications)
+                "admin", "admin-portals" -> openWorkspace(WorkspaceDestination.AdminPortals)
                 "insights" -> openWorkspace(WorkspaceDestination.Insights)
                 "scenes" -> openWorkspace(WorkspaceDestination.Scenes)
                 else -> return false

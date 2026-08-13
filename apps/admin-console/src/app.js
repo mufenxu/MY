@@ -34,6 +34,7 @@ import { OperationalIntelligenceError } from './operational-query.js';
 import { createOperationalSearch } from './operational-search.js';
 import { createPasskeyService } from './passkeys.js';
 import { QR_LOGIN_TTL_MS, createMemoryQrLoginStore } from './qr-login-store.js';
+import { createMemoryWebLoginTicketStore } from './web-login-ticket-store.js';
 import { ReleaseOperationError, createReleaseService } from './release-service.js';
 import { createMemoryReleaseStore } from './release-store.js';
 import { createRequestDiagnostics } from './request-diagnostics.js';
@@ -46,6 +47,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.resolve(__dirname, '..', 'dist');
 
 const ANDROID_APP_USER_AGENT_PREFIX = 'MY-Control-Android/';
+const WEB_LOGIN_ALLOWED_PATHS = ['/console', '/apps/core', '/apps/exam', '/apps/campus', '/apps/iot'];
+
+function isAndroidAppRequest(req) {
+  return String(req.get('user-agent') || '').startsWith(ANDROID_APP_USER_AGENT_PREFIX);
+}
 
 function sessionPolicyForRequest(req, config) {
   const androidApp = String(req.get('user-agent') || '').startsWith(ANDROID_APP_USER_AGENT_PREFIX);
@@ -117,6 +123,20 @@ function secureTokenEqual(actual, expected) {
   const left = Buffer.from(String(actual || ''));
   const right = Buffer.from(String(expected || ''));
   return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function normalizeWebLoginRedirect(value, publicUrl) {
+  const raw = String(value || '/console').trim();
+  let url;
+  try {
+    url = raw.startsWith('/') ? new URL(raw, publicUrl.origin) : new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.origin !== publicUrl.origin) return null;
+  const pathname = url.pathname.replace(/\/+$/, '') || '/';
+  const allowed = WEB_LOGIN_ALLOWED_PATHS.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  return allowed ? url.toString() : null;
 }
 
 function safeDownloadName(filename) {
@@ -197,6 +217,7 @@ export function createApp({
   authStore = null,
   authRiskStore = null,
   qrLoginStore = null,
+  webLoginTicketStore = null,
   googleAccountStore = null,
   configurationStore = null,
   configurationManager = null,
@@ -238,6 +259,7 @@ export function createApp({
     backoffMaxMs: config.loginBackoffMaxMs,
   });
   const qrLogins = qrLoginStore || createMemoryQrLoginStore();
+  const webLoginTickets = webLoginTicketStore || createMemoryWebLoginTicketStore();
   const googleAccounts = googleAccountStore || createMemoryGoogleAccountStore();
   const publicUrl = new URL(config.publicOrigin || 'http://127.0.0.1');
   const passkeyOrigins = [publicUrl.origin, ...(config.androidPasskeyOrigins || [])];
@@ -476,7 +498,7 @@ export function createApp({
     });
   }
 
-  async function issueAuthenticatedSession(req, res, account, authenticationMethod, extra = {}) {
+  async function issueSessionCookie(req, res, account, authenticationMethod) {
     const policy = sessionPolicyForRequest(req, config);
     const now = Date.now();
     const token = await sessions.issue({
@@ -504,6 +526,11 @@ export function createApp({
     if (loginIp.newIp) {
       notifier.sendSecurityAlert({ type: 'new_ip_login', username: account.username, ip: req.ip }).catch(() => {});
     }
+    return { now, policy };
+  }
+
+  async function issueAuthenticatedSession(req, res, account, authenticationMethod, extra = {}) {
+    const { now, policy } = await issueSessionCookie(req, res, account, authenticationMethod);
     return res.json({
       authenticated: true,
       authDisabled: false,
@@ -592,6 +619,7 @@ export function createApp({
   app.locals.authStore = accounts;
   app.locals.authRiskStore = risk;
   app.locals.qrLoginStore = qrLogins;
+  app.locals.webLoginTicketStore = webLoginTickets;
   app.locals.googleAccountStore = googleAccounts;
 
   app.disable('x-powered-by');
@@ -830,6 +858,13 @@ export function createApp({
     legacyHeaders: false,
     message: { error: '二维码创建过于频繁，请稍后再试。', code: 'QR_LOGIN_RATE_LIMITED' },
   });
+  const webLoginLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 20,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: 'Web login ticket requests are too frequent.', code: 'WEB_LOGIN_RATE_LIMITED' },
+  });
   const qrApprovalLimiter = rateLimit({
     windowMs: 60 * 1000,
     limit: 60,
@@ -1043,6 +1078,85 @@ export function createApp({
     const cancelled = await qrLogins.cancel(requestId, readQrBrowserVerifier(req, requestId));
     clearQrBrowserVerifier(res, requestId);
     return res.json({ cancelled: Boolean(cancelled) });
+  });
+
+  app.post('/api/auth/web-login-tickets', webLoginLimiter, requireConsoleRequest, async (req, res, next) => {
+    if (config.authDisabled) {
+      return res.status(400).json({ error: 'Web login tickets are disabled in local bypass mode.', code: 'WEB_LOGIN_DISABLED' });
+    }
+    if (!isAndroidAppRequest(req)) {
+      return res.status(403).json({ error: 'Web login tickets can only be created by the Android app.', code: 'WEB_LOGIN_ANDROID_REQUIRED' });
+    }
+    try {
+      const session = await readSession(req);
+      if (!session) return res.status(401).json({ error: 'Please sign in first.', code: 'UNAUTHORIZED' });
+      const account = await accounts.findAccount(session.sub);
+      if (!account?.active || (config.requireMfa && !strongFactorEnabled(account))) {
+        return res.status(403).json({ error: 'Current account cannot create web login tickets.', code: 'WEB_LOGIN_ACCOUNT_UNAVAILABLE' });
+      }
+      const redirect = normalizeWebLoginRedirect(req.body?.redirect, publicUrl);
+      if (!redirect) {
+        return res.status(400).json({ error: 'Web login redirect is invalid.', code: 'WEB_LOGIN_REDIRECT_INVALID' });
+      }
+      const created = await webLoginTickets.create({
+        username: account.username,
+        role: account.role,
+        redirect,
+        appSessionNonce: session.nonce,
+        appIp: req.ip,
+        appUserAgent: req.get('user-agent'),
+      });
+      const loginUrl = new URL('/console/app-login', publicUrl.origin);
+      loginUrl.searchParams.set('ticket', created.ticket);
+      loginUrl.searchParams.set('redirect', redirect);
+      await recordAudit(req, {
+        actor: account.username,
+        action: 'auth.web_login_ticket.create',
+        targetType: 'session',
+        targetId: session.nonce || '',
+        details: { redirect },
+      });
+      return res.status(201).json({
+        loginUrl: loginUrl.toString(),
+        redirect,
+        expiresAt: created.record.expiresAt,
+      });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/app-login', webLoginLimiter, async (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const ticket = String(req.query?.ticket || '');
+    const requestedRedirect = normalizeWebLoginRedirect(req.query?.redirect, publicUrl);
+    if (!ticket || !requestedRedirect) {
+      return res.status(400).send('Web login link is invalid.');
+    }
+    try {
+      const consumed = await webLoginTickets.consume(ticket);
+      if (!consumed) return res.status(410).send('Web login link has expired. Please return to the Android app and open it again.');
+      if (consumed.redirect !== requestedRedirect) {
+        return res.status(400).send('Web login redirect is invalid.');
+      }
+      const account = await accounts.findAccount(consumed.username);
+      if (!account?.active || (config.requireMfa && !strongFactorEnabled(account))) {
+        return res.status(403).send('Current account cannot sign in to the web console.');
+      }
+      await issueSessionCookie(req, res, account, 'android_web_ticket');
+      await recordAudit(req, {
+        actor: account.username,
+        action: 'auth.web_login_ticket.consume',
+        targetType: 'account',
+        targetId: account.username,
+        details: { redirect: consumed.redirect },
+      });
+      return res.redirect(303, consumed.redirect);
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
   });
 
   app.post('/api/auth/logout', requireConsoleRequest, async (req, res) => {

@@ -21,6 +21,7 @@ test('container layout resolves sibling services from the workspace root', () =>
   assert.equal(runtime.paths.portalReleaseStore, path.join(containerRoot, 'apps/admin-console/src/release-store.js'));
   assert.equal(runtime.paths.portalConfigurationStore, path.join(containerRoot, 'apps/admin-console/src/configuration-store.js'));
   assert.equal(runtime.paths.portalQrLoginStore, path.join(containerRoot, 'apps/admin-console/src/qr-login-store.js'));
+  assert.equal(runtime.paths.portalWebLoginTicketStore, path.join(containerRoot, 'apps/admin-console/src/web-login-ticket-store.js'));
   assert.equal(runtime.paths.portalGoogleAccountStore, path.join(containerRoot, 'apps/admin-console/src/google-account-store.js'));
   assert.doesNotMatch(runtime.paths.coreServer, /services[\\/]services/);
 });
@@ -43,5 +44,6 @@ test('external mode does not resolve local service runtime paths', () => {
   assert.ok(paths.portalReleaseStore);
   assert.ok(paths.portalConfigurationStore);
   assert.ok(paths.portalQrLoginStore);
+  assert.ok(paths.portalWebLoginTicketStore);
   assert.ok(paths.portalGoogleAccountStore);
 });

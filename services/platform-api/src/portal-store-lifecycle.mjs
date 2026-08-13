@@ -6,6 +6,7 @@ const STORE_NAMES = [
   'releaseStore',
   'configurationStore',
   'qrLoginStore',
+  'webLoginTicketStore',
   'googleAccountStore',
 ];
 
@@ -68,6 +69,7 @@ export async function createPersistentPortalStores({ config, factories } = {}) {
     ['releaseStore', factories.createMongoReleaseStore, { uri: config.mongoUri }],
     ['configurationStore', factories.createMongoConfigurationStore, { uri: config.mongoUri }],
     ['qrLoginStore', factories.createMongoQrLoginStore, { uri: config.mongoUri }],
+    ['webLoginTicketStore', factories.createMongoWebLoginTicketStore, { uri: config.mongoUri }],
     ['googleAccountStore', factories.createMongoGoogleAccountStore, { uri: config.mongoUri }],
   ];
 

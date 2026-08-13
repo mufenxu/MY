@@ -30,10 +30,11 @@ internal fun mergeHydratedAlerts(
 ): List<AppAlertRecord> {
     val currentRemote = current.filter { it.origin == "remote" }
     val remote = currentRemote.ifEmpty { stored.filter { it.origin == "remote" } }
-    return (current.filterNot { it.origin == "remote" } + stored.filterNot { it.origin == "remote" } + remote)
+    val rawList = (current.filterNot { it.origin == "remote" } + stored.filterNot { it.origin == "remote" } + remote)
         .distinctBy(AppAlertRecord::id)
         .sortedByDescending(AppAlertRecord::createdAt)
         .take(200)
+    return groupDuplicateAlerts(rawList)
 }
 
 internal fun mergeRemoteAlerts(
@@ -48,8 +49,58 @@ internal fun mergeRemoteAlerts(
             snoozedUntil = current.snoozedUntil ?: local?.snoozedUntil,
         )
     }
-    return (existing.filterNot { it.origin == "remote" } + reconciledRemote)
-    .distinctBy(AppAlertRecord::id)
-    .sortedByDescending(AppAlertRecord::createdAt)
-    .take(200)
+    val rawList = (existing.filterNot { it.origin == "remote" } + reconciledRemote)
+        .distinctBy(AppAlertRecord::id)
+        .sortedByDescending(AppAlertRecord::createdAt)
+        .take(200)
+    return groupDuplicateAlerts(rawList)
+}
+
+/**
+ * 智能告警频控与重复合并算法
+ * 对短时间内相同 sourceId/title 的告警进行频控去重与记录合并。
+ */
+internal fun groupDuplicateAlerts(
+    alerts: List<AppAlertRecord>,
+    windowMs: Long = 5 * 60_000L,
+): List<AppAlertRecord> {
+    if (alerts.size <= 1) return alerts
+
+    val result = mutableListOf<AppAlertRecord>()
+    val grouped = alerts.groupBy { "${it.sourceId}_${it.title}" }
+
+    for ((_, records) in grouped) {
+        if (records.size <= 1) {
+            result.addAll(records)
+            continue
+        }
+
+        val sorted = records.sortedByDescending { it.createdAt }
+        val latest = sorted.first()
+        val oldestTime = sorted.last().createdAt
+
+        if (latest.createdAt - oldestTime <= windowMs) {
+            val aggregatedBody = "【连续告警 ${records.size} 次】${latest.body}"
+            val extraBlock = AppNotificationBlock(
+                type = "list",
+                listItems = sorted.map { item ->
+                    AppNotificationListItem(
+                        title = "触发事件 (${item.id.takeLast(6)})",
+                        description = item.body.ifBlank { "无详细描述" }
+                    )
+                }
+            )
+
+            result.add(
+                latest.copy(
+                    body = aggregatedBody,
+                    contentBlocks = latest.contentBlocks + extraBlock
+                )
+            )
+        } else {
+            result.addAll(sorted)
+        }
+    }
+
+    return result.sortedByDescending { it.createdAt }
 }

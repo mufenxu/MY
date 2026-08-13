@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
@@ -621,6 +622,9 @@ private fun homeQuickActionSpec(
     HomeQuickAction.Notifications -> HomeQuickActionSpec(Icons.Outlined.Notifications, "通知中心", Coral, CoralPale) {
         onOpenWorkspace(WorkspaceDestination.Notifications)
     }
+    HomeQuickAction.AdminPortals -> HomeQuickActionSpec(Icons.Outlined.AdminPanelSettings, "管理后台", Ocean, OceanPale) {
+        onOpenWorkspace(WorkspaceDestination.AdminPortals)
+    }
     HomeQuickAction.Insights -> HomeQuickActionSpec(Icons.Outlined.BarChart, "趋势周报", Forest, MintPale) {
         onOpenWorkspace(WorkspaceDestination.Insights)
     }
@@ -711,6 +715,7 @@ private fun QuickActionsDialog(
 private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action) {
     HomeQuickAction.Today -> "今日工作台"
     HomeQuickAction.Notifications -> "通知中心"
+    HomeQuickAction.AdminPortals -> "管理后台"
     HomeQuickAction.Insights -> "趋势周报"
     HomeQuickAction.Scenes -> "智能场景"
     HomeQuickAction.Devices -> "设备控制"

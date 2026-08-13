@@ -43,6 +43,9 @@ const { createMongoConfigurationStore } = await import(
 const { createMongoQrLoginStore } = await import(
   pathToFileURL(paths.portalQrLoginStore).href
 );
+const { createMongoWebLoginTicketStore } = await import(
+  pathToFileURL(paths.portalWebLoginTicketStore).href
+);
 const { createMongoGoogleAccountStore } = await import(
   pathToFileURL(paths.portalGoogleAccountStore).href
 );
@@ -58,6 +61,7 @@ const portalStores = await createPersistentPortalStores({
     createMongoReleaseStore,
     createMongoConfigurationStore,
     createMongoQrLoginStore,
+    createMongoWebLoginTicketStore,
     createMongoGoogleAccountStore,
   },
 });
@@ -69,6 +73,7 @@ const {
   releaseStore,
   configurationStore,
   qrLoginStore,
+  webLoginTicketStore,
   googleAccountStore,
 } = portalStores;
 const readinessCheck = async () => {
@@ -89,6 +94,7 @@ const portalApp = createPortalApp({
   releaseStore,
   configurationStore,
   qrLoginStore,
+  webLoginTicketStore,
   googleAccountStore,
   readinessCheck,
 });

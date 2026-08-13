@@ -7,6 +7,7 @@ import { createMongoOperationsStore } from './operations-store.js';
 import { createMongoReleaseStore } from './release-store.js';
 import { createMongoConfigurationStore } from './configuration-store.js';
 import { createMongoQrLoginStore } from './qr-login-store.js';
+import { createMongoWebLoginTicketStore } from './web-login-ticket-store.js';
 import { createMemoryGoogleAccountStore, createMongoGoogleAccountStore } from './google-account-store.js';
 
 const config = loadConfig();
@@ -58,6 +59,9 @@ const configurationStore = config.mongoUri
 const qrLoginStore = config.mongoUri
   ? await createMongoQrLoginStore({ uri: config.mongoUri })
   : null;
+const webLoginTicketStore = config.mongoUri
+  ? await createMongoWebLoginTicketStore({ uri: config.mongoUri })
+  : null;
 const googleAccountStore = config.mongoUri
   ? await createMongoGoogleAccountStore({ uri: config.mongoUri })
   : createMemoryGoogleAccountStore();
@@ -70,9 +74,10 @@ const app = createApp({
   releaseStore,
   configurationStore,
   qrLoginStore,
+  webLoginTicketStore,
   googleAccountStore,
   readinessCheck: async () => {
-    const [authReady, riskReady, sessionsReady, operationsReady, releasesReady, configurationReady, qrLoginReady, googleAccountsReady] = await Promise.all([
+    const [authReady, riskReady, sessionsReady, operationsReady, releasesReady, configurationReady, qrLoginReady, webLoginReady, googleAccountsReady] = await Promise.all([
       authStore ? authStore.ping() : true,
       authRiskStore ? authRiskStore.ping() : true,
       sessionRegistry ? sessionRegistry.ping() : true,
@@ -80,9 +85,10 @@ const app = createApp({
       releaseStore ? releaseStore.ping() : true,
       configurationStore ? configurationStore.ping() : true,
       qrLoginStore ? qrLoginStore.ping() : true,
+      webLoginTicketStore ? webLoginTicketStore.ping() : true,
       googleAccountStore.ping(),
     ]);
-    return authReady && riskReady && sessionsReady && operationsReady && releasesReady && configurationReady && qrLoginReady && googleAccountsReady;
+    return authReady && riskReady && sessionsReady && operationsReady && releasesReady && configurationReady && qrLoginReady && webLoginReady && googleAccountsReady;
   },
 });
 app.locals.operationsCenter.start();
@@ -104,7 +110,7 @@ function shutdown(signal) {
       console.error(error);
       process.exitCode = 1;
     }
-    await Promise.allSettled([authStore?.close(), authRiskStore?.close(), sessionRegistry?.close(), qrLoginStore?.close(), googleAccountStore?.close()]);
+    await Promise.allSettled([authStore?.close(), authRiskStore?.close(), sessionRegistry?.close(), qrLoginStore?.close(), webLoginTicketStore?.close(), googleAccountStore?.close()]);
     app.locals.operationsCenter.stop();
     await operationsStore?.close();
     await releaseStore?.close();

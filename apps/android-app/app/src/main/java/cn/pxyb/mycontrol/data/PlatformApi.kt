@@ -184,6 +184,19 @@ class PlatformApi(
         Unit
     }
 
+    suspend fun createWebLoginLink(redirectUrl: String): WebLoginLink = withContext(Dispatchers.IO) {
+        val json = execute(
+            "/api/auth/web-login-tickets",
+            "POST",
+            JSONObject().put("redirect", redirectUrl),
+        ).json
+        WebLoginLink(
+            loginUrl = json.optString("loginUrl"),
+            redirect = json.optString("redirect", redirectUrl),
+            expiresAt = json.nullableString("expiresAt"),
+        )
+    }
+
     suspend fun authStatus(): PlatformUser? = withContext(Dispatchers.IO) {
         if (!sessionStore.hasSession()) return@withContext null
         try {

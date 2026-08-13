@@ -45,6 +45,12 @@ data class QrPasskeyChallenge(
     val optionsJson: String,
 )
 
+data class WebLoginLink(
+    val loginUrl: String,
+    val redirect: String,
+    val expiresAt: String?,
+)
+
 data class ServiceInfo(
     val id: String,
     val name: String,
@@ -210,6 +216,18 @@ data class IotSceneAction(
     val deviceId: String,
     val relayId: String,
     val status: String,
+)
+
+data class AutomationRule(
+    val id: String,
+    val name: String,
+    val enabled: Boolean = true,
+    val triggerType: String, // "incident", "device_offline", "schedule"
+    val triggerValue: String = "",
+    val targetSceneId: String,
+    val targetSceneName: String = "",
+    val notifyUser: Boolean = true,
+    val lastTriggeredAt: Long? = null,
 )
 
 data class IotData(

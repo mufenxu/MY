@@ -15,6 +15,7 @@ const runtimeFiles = {
   portalReleaseStore: ['PORTAL_RELEASE_STORE_PATH', 'apps/admin-console/src/release-store.js'],
   portalConfigurationStore: ['PORTAL_CONFIGURATION_STORE_PATH', 'apps/admin-console/src/configuration-store.js'],
   portalQrLoginStore: ['PORTAL_QR_LOGIN_STORE_PATH', 'apps/admin-console/src/qr-login-store.js'],
+  portalWebLoginTicketStore: ['PORTAL_WEB_LOGIN_TICKET_STORE_PATH', 'apps/admin-console/src/web-login-ticket-store.js'],
   portalGoogleAccountStore: ['PORTAL_GOOGLE_ACCOUNT_STORE_PATH', 'apps/admin-console/src/google-account-store.js'],
   officialWebsiteStatic: ['OFFICIAL_WEBSITE_STATIC_PATH', 'apps/official-website'],
 };
