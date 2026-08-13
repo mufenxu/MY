@@ -13,6 +13,7 @@ RUN apk add --no-cache nodejs \
 
 WORKDIR /app
 COPY scripts/deployment-runner.mjs ./scripts/deployment-runner.mjs
+COPY scripts/environment-diagnostics.mjs ./scripts/environment-diagnostics.mjs
 
 ENV NODE_ENV=production \
     DEPLOY_RUNNER_HOST=0.0.0.0 \

@@ -48,6 +48,7 @@ COPY --from=admin-console-build --chown=node:node /build/apps/admin-console/node
 COPY --from=admin-console-build --chown=node:node /build/apps/admin-console/dist ./apps/admin-console/dist
 COPY --from=official-website-build --chown=node:node /build/apps/official-website/dist ./apps/official-website/dist
 COPY --chown=node:node config/platform.services.docker.json ./config/platform.services.docker.json
+COPY --chown=node:node scripts/environment-diagnostics.mjs ./scripts/environment-diagnostics.mjs
 
 RUN chown -R node:node /app
 

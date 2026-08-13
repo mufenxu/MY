@@ -1,12 +1,15 @@
 package cn.pxyb.mycontrol
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.EnvironmentSummary
 import cn.pxyb.mycontrol.data.AppAlertRecord
@@ -329,6 +332,12 @@ class AlertNotifier(context: Context) {
         intent: android.content.Intent,
         channelId: String = CHANNEL_ID,
     ): Boolean {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
         if (!canPostNotification(channelId)) return false
         val pendingIntent = PendingIntent.getActivity(
             appContext,
@@ -354,9 +363,12 @@ class AlertNotifier(context: Context) {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .build()
-        return runCatching {
+        return try {
             NotificationManagerCompat.from(appContext).notify(notificationId, notification)
-        }.isSuccess
+            true
+        } catch (_: SecurityException) {
+            false
+        }
     }
 
     private fun markRemoteSeen(alertId: String) {

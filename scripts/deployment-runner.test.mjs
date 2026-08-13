@@ -163,6 +163,7 @@ test('deployment Sidecar is backend-only and isolates the Docker socket from pla
   assert.match(sidecar, /group_add:/);
   assert.match(sidecar, /DEPLOY_RUNNER_DOCKER_GID/);
   assert.doesNotMatch(sidecar, /:\/root\/\.docker/);
+  assert.match(dockerfile, /^COPY scripts\/environment-diagnostics\.mjs \.\/scripts\/environment-diagnostics\.mjs$/m);
   assert.match(dockerfile, /^USER runner$/m);
   assert.match(dockerfile, /^ENTRYPOINT \["node", "\/app\/scripts\/deployment-runner\.mjs"\]$/m);
   assert.match(sidecar, /- backend/);
