@@ -43,6 +43,7 @@ test('persistent portal store lifecycle wires every store and survives app resta
     createMongoReleaseStore: factory('releaseStore'),
     createMongoConfigurationStore: factory('configurationStore'),
     createMongoQrLoginStore: factory('qrLoginStore'),
+    createMongoWebLoginTicketStore: factory('webLoginTicketStore'),
     createMongoGoogleAccountStore: factory('googleAccountStore'),
   };
 
@@ -55,7 +56,7 @@ test('persistent portal store lifecycle wires every store and survives app resta
   const second = await createPersistentPortalStores({ config: testConfig(), factories });
   assert.deepEqual(await second.releaseStore.get('release-1'), { status: 'succeeded' });
   assert.equal(await second.configurationStore.get('version'), 4);
-  assert.deepEqual(calls.slice(0, 8).map(([name]) => name), [
+  assert.deepEqual(calls.slice(0, 9).map(([name]) => name), [
     'authStore',
     'authRiskStore',
     'sessionRegistry',
@@ -63,10 +64,11 @@ test('persistent portal store lifecycle wires every store and survives app resta
     'releaseStore',
     'configurationStore',
     'qrLoginStore',
+    'webLoginTicketStore',
     'googleAccountStore',
   ]);
   assert.equal(calls.find(([name]) => name === 'releaseStore')[1].uri, testConfig().mongoUri);
-  assert.equal(closed.length, 8);
+  assert.equal(closed.length, 9);
   await closePortalStores(second);
 });
 
@@ -84,6 +86,7 @@ test('partial initialization failure closes stores that were already connected',
     createMongoReleaseStore: ok('releaseStore'),
     createMongoConfigurationStore: ok('configurationStore'),
     createMongoQrLoginStore: ok('qrLoginStore'),
+    createMongoWebLoginTicketStore: ok('webLoginTicketStore'),
     createMongoGoogleAccountStore: ok('googleAccountStore'),
   };
 
