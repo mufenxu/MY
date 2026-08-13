@@ -290,6 +290,8 @@ jobs:
               --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
               --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
               --metadata-file "${metadata_file}" \
+              --provenance=false \
+              --sbom=false \
               --push \
               "${contexts[$target]}"
             digest="$(node scripts/buildx-metadata.mjs "${metadata_file}")"
@@ -369,7 +371,7 @@ jobs:
           node --env-file=.env.release-smoke scripts/verify-platform-smoke.mjs
 
       - name: Show exact-candidate logs on failure
-        if: failure() && steps.resolve.outputs.targets != ''
+        if: failure() && steps.resolve.outputs.targets != '' && hashFiles('.env.release-smoke') != ''
         run: |
           compose=(docker compose --env-file .env.release-smoke -f infra/docker/compose.yml -f infra/docker/compose.ci.yml)
           "${compose[@]}" ps --all
@@ -383,7 +385,7 @@ jobs:
           done
 
       - name: Stop exact-candidate smoke stack
-        if: always() && steps.resolve.outputs.targets != ''
+        if: always() && steps.resolve.outputs.targets != '' && hashFiles('.env.release-smoke') != ''
         run: docker compose --env-file .env.release-smoke -f infra/docker/compose.yml -f infra/docker/compose.ci.yml down -v || true
 
       - name: Promote verified candidates to deployment tags

@@ -54,11 +54,18 @@ test('ACR workflow consumes Buildx metadata without an immediate registry lookup
   assert.doesNotMatch(workflow, /imagetools inspect "\$\{candidate\}"/);
   assert.match(workflow, /\[runner\]="deployment-runner\.Dockerfile"/);
   assert.match(workflow, /if \[ "\$\{target\}" != "runner" \]; then/);
+  assert.match(workflow, /--provenance=false \\[\r\n]+\s+--sbom=false \\/);
   assert.match(workflow, /RELEASE_TARGETS: \$\{\{ steps\.resolve\.outputs\.release_targets \}\}/);
   assert.ok(releaseSmokeComposeLines.length >= 3);
   assert.ok(releaseSmokeComposeLines.every((line) => (
     line.includes('-f infra/docker/compose.yml -f infra/docker/compose.ci.yml')
   )));
+});
+
+test('ACR workflow does not run exact-candidate diagnostics before the smoke env exists', async () => {
+  const workflow = await readFile(new URL('../.github/workflows/aliyun-acr.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /if: failure\(\) && steps\.resolve\.outputs\.targets != '' && hashFiles\('\.env\.release-smoke'\) != ''/);
+  assert.match(workflow, /if: always\(\) && steps\.resolve\.outputs\.targets != '' && hashFiles\('\.env\.release-smoke'\) != ''/);
 });
 
 test('ACR exact-candidate smoke retries transient registry pull failures', async () => {
