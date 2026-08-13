@@ -5,6 +5,10 @@
 **/data
 **/logs
 **/uploads
+**/test
+**/__tests__
+**/*.test.*
+**/*.spec.*
 **/.env
 **/env
 **/*.local

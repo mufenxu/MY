@@ -115,42 +115,53 @@ jobs:
       - name: Analyze
         uses: github/codeql-action/analyze@7188fc363630916deb702c7fdcf4e481b751f97a # v4
 
+  image-targets:
+    name: Resolve affected container images
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve image build matrix
+        id: resolve
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            node scripts/resolve-image-targets.mjs --manual all --github-output resolved.env
+          elif [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD > changed-files.txt
+            node scripts/resolve-image-targets.mjs --files changed-files.txt --github-output resolved.env
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            node scripts/resolve-image-targets.mjs --manual all --github-output resolved.env
+          else
+            git diff --name-only "${{ github.event.before }}" "${GITHUB_SHA}" > changed-files.txt
+            node scripts/resolve-image-targets.mjs --files changed-files.txt --github-output resolved.env
+          fi
+          source resolved.env
+          matrix="$(TARGETS="${targets}" node -e "
+            const graph = JSON.parse(require('fs').readFileSync('config/image-build-targets.json', 'utf8'));
+            const include = (process.env.TARGETS || '').split(',').filter((t) => t && t !== 'mongodb' && graph.targets[t])
+              .map((t) => ({ image: graph.targets[t].aliases[0], context: graph.targets[t].context, file: graph.targets[t].dockerfile }));
+            console.log(JSON.stringify({ include }));
+          ")"
+          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
+
   container-images:
     name: Build ${{ matrix.image }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [quality, repository-security, codeql, docker-smoke]
+    needs: [quality, repository-security, codeql, docker-smoke, image-targets]
     permissions:
       contents: read
       packages: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - image: platform-api
-            context: .
-            file: Dockerfile
-          - image: core-api
-            context: .
-            file: core-api.Dockerfile
-          - image: exam-api
-            context: .
-            file: exam-api.Dockerfile
-          - image: notification-service
-            context: .
-            file: notification-service.Dockerfile
-          - image: backup-runner
-            context: .
-            file: backup-runner.Dockerfile
-          - image: deployment-runner
-            context: .
-            file: deployment-runner.Dockerfile
-          - image: campus-service
-            context: .
-            file: campus-service.Dockerfile
-          - image: iot-service
-            context: .
-            file: iot-service.Dockerfile
+      matrix: ${{ fromJSON(needs.image-targets.outputs.matrix) }}
 
     steps:
       - name: Checkout

@@ -286,6 +286,8 @@ jobs:
               --file "${dockerfiles[$target]}" \
               --build-arg "BUILD_REVISION=${GITHUB_SHA}" \
               --build-arg "BUILD_TIMESTAMP=${build_timestamp}" \
+              --cache-from "type=gha,scope=${target}" \
+              --cache-to "type=gha,mode=max,scope=${target}" \
               --tag "${candidate}" \
               --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
               --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
