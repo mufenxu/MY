@@ -100,6 +100,7 @@ import cn.pxyb.mycontrol.ui.theme.Forest
 import cn.pxyb.mycontrol.ui.theme.MintPale
 import cn.pxyb.mycontrol.ui.theme.Ocean
 import cn.pxyb.mycontrol.ui.theme.OceanPale
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Date
 import java.time.LocalDate
@@ -121,8 +122,9 @@ fun OverviewScreen(
     requestWebLoginUrl: suspend (String) -> String,
 ) {
     var customizingQuickActions by remember { mutableStateOf(false) }
-    var openingServiceId by remember { mutableStateOf<String?>(null) }
+    var launchingService by remember { mutableStateOf<ServiceInfo?>(null) }
     var serviceOpenError by remember { mutableStateOf<String?>(null) }
+    var serviceLaunchJob by remember { mutableStateOf<Job?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val overview = state.overview
@@ -140,19 +142,30 @@ fun OverviewScreen(
         Triple(healthy, monitored, average)
     }
     val scrollState = rememberScrollState()
+
+    fun dismissServiceLaunching() {
+        serviceLaunchJob?.cancel()
+        serviceLaunchJob = null
+        launchingService = null
+        serviceOpenError = null
+    }
+
     fun openServiceAdmin(service: ServiceInfo) {
         val adminUrl = service.adminUrl?.takeIf { it.isNotBlank() } ?: return
-        if (openingServiceId != null) return
-        scope.launch {
-            openingServiceId = service.id
-            serviceOpenError = null
+        serviceLaunchJob?.cancel()
+        launchingService = service
+        serviceOpenError = null
+        serviceLaunchJob = scope.launch {
             runCatching { requestWebLoginUrl(adminUrl) }
-                .onSuccess { loginUrl -> openPlatformWebLink(context, loginUrl) }
+                .onSuccess { loginUrl ->
+                    launchingService = null
+                    serviceOpenError = null
+                    openPlatformWebLink(context, loginUrl)
+                }
                 .onFailure { error ->
                     serviceOpenError = error.message?.takeIf { it.isNotBlank() }
                         ?: "自动登录链接生成失败，请稍后重试。"
                 }
-            openingServiceId = null
         }
     }
     PullToRefresh(
@@ -438,7 +451,7 @@ fun OverviewScreen(
                         sortedServices.forEachIndexed { index, service ->
                             ServiceRow(
                                 service = service,
-                                opening = openingServiceId == service.id,
+                                opening = launchingService?.id == service.id && serviceOpenError == null,
                                 onOpen = ::openServiceAdmin,
                             )
                             if (index < sortedServices.lastIndex) {
@@ -454,6 +467,15 @@ fun OverviewScreen(
 
             Spacer(Modifier.height(16.dp))
         }
+    }
+
+    launchingService?.let { service ->
+        ServiceLaunchingDialog(
+            service = service,
+            errorMessage = serviceOpenError,
+            onDismissRequest = ::dismissServiceLaunching,
+            onRetry = { openServiceAdmin(service) },
+        )
     }
 
     if (customizingQuickActions) {

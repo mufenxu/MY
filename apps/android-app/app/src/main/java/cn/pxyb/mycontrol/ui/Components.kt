@@ -4,17 +4,28 @@ import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.material.icons.outlined.CenterFocusWeak
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -105,11 +116,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
+import cn.pxyb.mycontrol.data.ServiceInfo
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -1268,3 +1283,346 @@ fun ModernAnimatedSplashScreen(
         }
     }
 }
+
+/**
+ * 首页服务监控跳转管理后台专用的现代加载过渡弹窗。
+ * 解决换取 Cookie 和打开 Web 管理后台期间的空白等待体验，
+ * 提供带有目标服务状态色、旋转渐变光弧、动态呼吸涟漪与多阶段状态说明的高级交互动效。
+ */
+@Composable
+fun ServiceLaunchingDialog(
+    service: ServiceInfo,
+    errorMessage: String? = null,
+    onDismissRequest: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    val isError = errorMessage != null
+    val style = statusStyle(service.state)
+    var stepIndex by remember(service.id, isError) { mutableStateOf(0) }
+
+    LaunchedEffect(service.id, isError) {
+        if (!isError) {
+            stepIndex = 0
+            delay(550)
+            stepIndex = 1
+            delay(850)
+            stepIndex = 2
+        }
+    }
+
+    val stepText = when (stepIndex) {
+        0 -> "正在建立安全会话通道..."
+        1 -> "正在换取免密访问凭据..."
+        else -> "正在启动管理后台，请稍候..."
+    }
+
+    AppDialog(
+        onDismissRequest = onDismissRequest,
+        modifier = Modifier.widthIn(max = 380.dp),
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 20.dp),
+        footer = {
+            if (isError) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    AppDialogSecondaryButton(
+                        text = "取消",
+                        onClick = onDismissRequest,
+                        modifier = Modifier.weight(1f),
+                    )
+                    AppDialogPrimaryButton(
+                        text = "重新尝试",
+                        onClick = onRetry,
+                        modifier = Modifier.weight(1.2f),
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    TextButton(
+                        onClick = onDismissRequest,
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text(
+                            "取消跳转",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        )
+                    }
+                }
+            }
+        },
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // 1. 核心动画与图标容器
+            Box(
+                modifier = Modifier
+                    .size(112.dp)
+                    .padding(4.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isError) {
+                    Box(
+                        modifier = Modifier
+                            .size(76.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f))
+                            .border(1.5.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f), CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ErrorOutline,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(38.dp),
+                        )
+                    }
+                } else {
+                    ServiceOrbitProgressAnimation(
+                        accentColor = style.foreground,
+                        backgroundColor = style.background,
+                    ) {
+                        val icon = if (service.category == "miniapp") Icons.Outlined.Hub else Icons.Outlined.Speed
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(style.background)
+                                .border(1.dp, style.foreground.copy(alpha = 0.25f), RoundedCornerShape(18.dp)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = style.foreground,
+                                modifier = Modifier.size(28.dp),
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            // 2. 服务信息与状态标签
+            Text(
+                text = service.name,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            Row(
+                modifier = Modifier.padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                val stateDesc = listOfNotNull(
+                    service.category.takeIf { it.isNotBlank() }?.let { if (it == "miniapp") "小程序应用" else "核心服务" },
+                    service.httpStatus?.let { "HTTP $it" },
+                    service.latencyMs?.let { "$it ms" },
+                ).joinToString(" · ").ifBlank { "在线微服务" }
+
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(style.foreground, CircleShape),
+                )
+                Text(
+                    text = stateDesc,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            // 3. 阶段状态提示 / 错误提示卡片
+            if (isError) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.ErrorOutline,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(
+                            text = errorMessage ?: "换取登录凭据失败，请重试。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            } else {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.OpenInNew,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Text(
+                                text = stepText,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 13.5.sp,
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+
+                        // 科技感流线 Progress Indicator
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth(0.85f)
+                                .height(3.5.dp)
+                                .clip(CircleShape),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 科技感旋转光弧与呼吸波纹动效容器
+ */
+@Composable
+private fun ServiceOrbitProgressAnimation(
+    accentColor: Color,
+    backgroundColor: Color,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val transition = rememberInfiniteTransition(label = "service-orbit")
+    val rotationFast by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "orbit-fast",
+    )
+    val rotationSlow by transition.animateFloat(
+        initialValue = 360f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "orbit-slow",
+    )
+    val pulseScale by transition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.18f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulse-scale",
+    )
+    val pulseAlpha by transition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulse-alpha",
+    )
+
+    Box(
+        modifier = modifier.size(104.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        // 1. 外部柔和呼吸扩散光环
+        Box(
+            modifier = Modifier
+                .size(86.dp)
+                .graphicsLayer {
+                    scaleX = pulseScale
+                    scaleY = pulseScale
+                    alpha = pulseAlpha
+                }
+                .background(accentColor.copy(alpha = 0.35f), CircleShape)
+        )
+
+        // 2. 外部双层旋转科技光弧
+        Canvas(modifier = Modifier.size(92.dp)) {
+            val strokeWidthOuter = 2.5.dp.toPx()
+            val strokeWidthInner = 1.8.dp.toPx()
+
+            // 外层顺时针光弧
+            drawArc(
+                color = accentColor,
+                startAngle = rotationFast,
+                sweepAngle = 100f,
+                useCenter = false,
+                style = Stroke(width = strokeWidthOuter, cap = StrokeCap.Round),
+            )
+            drawArc(
+                color = accentColor.copy(alpha = 0.3f),
+                startAngle = rotationFast + 180f,
+                sweepAngle = 60f,
+                useCenter = false,
+                style = Stroke(width = strokeWidthOuter, cap = StrokeCap.Round),
+            )
+
+            // 内层逆时针辅光弧
+            drawArc(
+                color = accentColor.copy(alpha = 0.6f),
+                startAngle = rotationSlow,
+                sweepAngle = 70f,
+                useCenter = false,
+                style = Stroke(width = strokeWidthInner, cap = StrokeCap.Round),
+            )
+        }
+
+        // 3. 中心内容（微服务图标）
+        content()
+    }
+}
+
