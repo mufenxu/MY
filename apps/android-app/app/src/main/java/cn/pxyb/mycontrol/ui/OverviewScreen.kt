@@ -7,6 +7,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -39,7 +46,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Hub
-import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
@@ -62,6 +68,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -71,6 +78,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.platform.LocalContext
@@ -92,6 +100,7 @@ import cn.pxyb.mycontrol.ui.theme.Forest
 import cn.pxyb.mycontrol.ui.theme.MintPale
 import cn.pxyb.mycontrol.ui.theme.Ocean
 import cn.pxyb.mycontrol.ui.theme.OceanPale
+import kotlinx.coroutines.launch
 import java.util.Date
 import java.time.LocalDate
 
@@ -109,8 +118,13 @@ fun OverviewScreen(
     onOpenQrLogin: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
     onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
+    requestWebLoginUrl: suspend (String) -> String,
 ) {
     var customizingQuickActions by remember { mutableStateOf(false) }
+    var openingServiceId by remember { mutableStateOf<String?>(null) }
+    var serviceOpenError by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val overview = state.overview
     val activeIncidents = remember(state.incidents) { state.incidents.filter { it.status != "resolved" } }
     val visibleIncidents = remember(activeIncidents) { activeIncidents.take(3) }
@@ -126,6 +140,21 @@ fun OverviewScreen(
         Triple(healthy, monitored, average)
     }
     val scrollState = rememberScrollState()
+    fun openServiceAdmin(service: ServiceInfo) {
+        val adminUrl = service.adminUrl?.takeIf { it.isNotBlank() } ?: return
+        if (openingServiceId != null) return
+        scope.launch {
+            openingServiceId = service.id
+            serviceOpenError = null
+            runCatching { requestWebLoginUrl(adminUrl) }
+                .onSuccess { loginUrl -> openPlatformWebLink(context, loginUrl) }
+                .onFailure { error ->
+                    serviceOpenError = error.message?.takeIf { it.isNotBlank() }
+                        ?: "自动登录链接生成失败，请稍后重试。"
+                }
+            openingServiceId = null
+        }
+    }
     PullToRefresh(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,
@@ -392,6 +421,9 @@ fun OverviewScreen(
 
             // 6. 服务可用性
             OverviewSectionTitle("服务监控", "核心微服务状态")
+            serviceOpenError?.let { message ->
+                FeedbackBanner(message, error = true)
+            }
             if (sortedServices.isEmpty()) {
                 EmptyBlock("暂无服务监测", "等待平台状态同步")
             } else {
@@ -404,7 +436,11 @@ fun OverviewScreen(
                 ) {
                     Column {
                         sortedServices.forEachIndexed { index, service ->
-                            ServiceRow(service)
+                            ServiceRow(
+                                service = service,
+                                opening = openingServiceId == service.id,
+                                onOpen = ::openServiceAdmin,
+                            )
                             if (index < sortedServices.lastIndex) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -622,9 +658,6 @@ private fun homeQuickActionSpec(
     HomeQuickAction.Notifications -> HomeQuickActionSpec(Icons.Outlined.Notifications, "通知中心", Coral, CoralPale) {
         onOpenWorkspace(WorkspaceDestination.Notifications)
     }
-    HomeQuickAction.AdminPortals -> HomeQuickActionSpec(Icons.Outlined.AdminPanelSettings, "管理后台", Ocean, OceanPale) {
-        onOpenWorkspace(WorkspaceDestination.AdminPortals)
-    }
     HomeQuickAction.Insights -> HomeQuickActionSpec(Icons.Outlined.BarChart, "趋势周报", Forest, MintPale) {
         onOpenWorkspace(WorkspaceDestination.Insights)
     }
@@ -715,7 +748,6 @@ private fun QuickActionsDialog(
 private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action) {
     HomeQuickAction.Today -> "今日工作台"
     HomeQuickAction.Notifications -> "通知中心"
-    HomeQuickAction.AdminPortals -> "管理后台"
     HomeQuickAction.Insights -> "趋势周报"
     HomeQuickAction.Scenes -> "智能场景"
     HomeQuickAction.Devices -> "设备控制"
@@ -906,10 +938,37 @@ private fun QuickAction(
 }
 
 @Composable
-private fun ServiceRow(service: ServiceInfo) {
+private fun ServiceRow(
+    service: ServiceInfo,
+    opening: Boolean,
+    onOpen: (ServiceInfo) -> Unit,
+) {
     val style = statusStyle(service.state)
+    val hasAdminUrl = !service.adminUrl.isNullOrBlank()
+    val shape = RoundedCornerShape(18.dp)
+    val interactionSource = remember(service.id) { MutableInteractionSource() }
+    val rowModifier = Modifier
+        .fillMaxWidth()
+        .let { base ->
+            if (hasAdminUrl) {
+                base
+                    .pressFeedback(interactionSource)
+                    .clip(shape)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = LocalIndication.current,
+                        enabled = !opening,
+                        role = Role.Button,
+                        onClickLabel = service.name,
+                        onClick = { onOpen(service) },
+                    )
+            } else {
+                base
+            }
+        }
+        .padding(horizontal = 14.dp, vertical = 12.dp)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = rowModifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(11.dp),
     ) {
@@ -926,7 +985,54 @@ private fun ServiceRow(service: ServiceInfo) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        StatusBadge(service.state)
+        if (opening) {
+            ServiceJumpIndicator()
+        } else {
+            StatusBadge(service.state)
+            if (hasAdminUrl) {
+                Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServiceJumpIndicator() {
+    val transition = rememberInfiniteTransition(label = "service-jump")
+    val arrowOffset by transition.animateFloat(
+        initialValue = -4f,
+        targetValue = 4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 620, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "service-jump-arrow",
+    )
+    Row(
+        modifier = Modifier.width(86.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End,
+    ) {
+        Text(
+            "正在进入",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+        )
+        Icon(
+            Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(start = 2.dp)
+                .size(18.dp)
+                .graphicsLayer { translationX = arrowOffset },
+        )
     }
 }
 

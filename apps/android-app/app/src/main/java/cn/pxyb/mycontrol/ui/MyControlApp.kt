@@ -140,7 +140,6 @@ private object AppRoute {
     const val Search = "search"
     const val Today = "today"
     const val Notifications = "notifications"
-    const val AdminPortals = "admin-portals"
     const val Insights = "insights"
     const val Scenes = "scenes"
     const val Environment = "environment"
@@ -164,7 +163,6 @@ private fun MainTab.route(): String = when (this) {
 private fun AppEntryUiState.requestedRoute(): String = when {
     workspaceDestination == WorkspaceDestination.Today -> AppRoute.Today
     workspaceDestination == WorkspaceDestination.Notifications -> AppRoute.Notifications
-    workspaceDestination == WorkspaceDestination.AdminPortals -> AppRoute.AdminPortals
     workspaceDestination == WorkspaceDestination.Insights -> AppRoute.Insights
     workspaceDestination == WorkspaceDestination.Scenes -> AppRoute.Scenes
     environmentOpen -> AppRoute.Environment
@@ -178,7 +176,6 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Overview,
     AppRoute.Search,
     AppRoute.Today,
-    AppRoute.AdminPortals,
     AppRoute.Insights,
     AppRoute.Scenes -> MainTab.Overview
     AppRoute.Notifications -> MainTab.Notifications
@@ -196,7 +193,6 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Operations,
     AppRoute.Search,
     AppRoute.Today,
-    AppRoute.AdminPortals,
     AppRoute.Insights,
     AppRoute.Scenes -> MainTab.Overview
     else -> null
@@ -1201,7 +1197,6 @@ private fun AuthenticatedShell(
             AppRoute.GoogleAccounts -> viewModel.syncNavigationDestination(MainTab.Profile, googleAccountDeskOpen = true)
             AppRoute.Search -> viewModel.syncNavigationDestination(MainTab.Overview, globalSearchOpen = true)
             AppRoute.Today -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
-            AppRoute.AdminPortals -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.AdminPortals)
             AppRoute.Insights -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Insights)
             AppRoute.Scenes -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Scenes)
         }
@@ -1280,6 +1275,7 @@ private fun AuthenticatedShell(
                         onOpenQrLogin = viewModel::openQrScanner,
                         onOpenWorkspace = viewModel::openWorkspace,
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
+                        requestWebLoginUrl = viewModel::createPlatformWebLoginUrl,
                     )
                 }
 
@@ -1430,13 +1426,6 @@ private fun AuthenticatedShell(
                         onArchive = viewModel::archiveAlert,
                         onSnooze = { id -> viewModel.snoozeAlert(id) },
                         onUpdatePreferences = viewModel::updateAlertPreferences,
-                    )
-                }
-                composable(AppRoute.AdminPortals) {
-                    AdminPortalScreen(
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        requestWebLoginUrl = viewModel::createAdminPortalLoginUrl,
                     )
                 }
                 composable(AppRoute.Insights) {
