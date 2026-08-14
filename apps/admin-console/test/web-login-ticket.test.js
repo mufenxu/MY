@@ -94,15 +94,21 @@ test('Android app can exchange its session for a one-time browser login ticket',
       redirect: 'manual',
       headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120.0.0.0' },
     });
-    assert.equal(consumeResponse.status, 303);
+    assert.equal(consumeResponse.status, 200);
     assert.equal(consumeResponse.headers.get('location'), 'https://pxyb.cn/apps/core/');
     assert.match(consumeResponse.headers.get('set-cookie'), /my_platform_session=/);
+    const html = await consumeResponse.text();
+    assert.match(html, /正在进入管理后台/);
+    assert.match(html, /身份凭据验证成功/);
+    assert.match(html, /https:\/\/pxyb\.cn\/apps\/core\//);
 
     const reusedResponse = await fetch(directAppLoginUrl(origin, created.loginUrl), {
       redirect: 'manual',
       headers: { 'User-Agent': 'Mozilla/5.0 Chrome/120.0.0.0' },
     });
     assert.equal(reusedResponse.status, 410);
+    const reusedHtml = await reusedResponse.text();
+    assert.match(reusedHtml, /登录凭据已过期/);
   });
 });
 

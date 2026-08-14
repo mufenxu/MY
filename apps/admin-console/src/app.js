@@ -1128,21 +1128,24 @@ export function createApp({
   });
 
   app.get('/app-login', webLoginLimiter, async (req, res, next) => {
-    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Content-Security-Policy', "default-src 'self' 'unsafe-inline' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'");
     const ticket = String(req.query?.ticket || '');
     const requestedRedirect = normalizeWebLoginRedirect(req.query?.redirect, publicUrl);
     if (!ticket || !requestedRedirect) {
-      return res.status(400).send('Web login link is invalid.');
+      return res.status(400).send(renderAppLoginErrorHtml('链接无效', '免密登录链接不完整或已失效。'));
     }
     try {
       const consumed = await webLoginTickets.consume(ticket);
-      if (!consumed) return res.status(410).send('Web login link has expired. Please return to the Android app and open it again.');
+      if (!consumed) {
+        return res.status(410).send(renderAppLoginErrorHtml('登录凭据已过期', '该免密登录凭据已过期或已被使用，请返回安卓 App 重新打开。'));
+      }
       if (consumed.redirect !== requestedRedirect) {
-        return res.status(400).send('Web login redirect is invalid.');
+        return res.status(400).send(renderAppLoginErrorHtml('跳转目标无效', '安全重定向目标校验失败。'));
       }
       const account = await accounts.findAccount(consumed.username);
       if (!account?.active || (config.requireMfa && !strongFactorEnabled(account))) {
-        return res.status(403).send('Current account cannot sign in to the web console.');
+        return res.status(403).send(renderAppLoginErrorHtml('无权访问', '当前账号已被禁用或尚未满足多因素认证要求。'));
       }
       await issueSessionCookie(req, res, account, 'android_web_ticket');
       await recordAudit(req, {
@@ -1152,7 +1155,11 @@ export function createApp({
         targetId: account.username,
         details: { redirect: consumed.redirect },
       });
-      return res.redirect(303, consumed.redirect);
+      if (req.query?.direct === '1' || req.get('x-direct-redirect') === '1') {
+        return res.redirect(303, consumed.redirect);
+      }
+      res.setHeader('Location', consumed.redirect);
+      return res.send(renderAppLoginTransitionHtml(consumed.redirect));
     } catch (error) {
       next(error);
       return undefined;
@@ -2528,4 +2535,258 @@ export function createApp({
   });
 
   return app;
+}
+
+function escapeHtmlAttribute(value) {
+  return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderAppLoginTransitionHtml(redirectUrl) {
+  const safeUrl = escapeHtmlAttribute(redirectUrl || '/');
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="refresh" content="1;url=${safeUrl}">
+  <title>正在进入管理后台...</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0b0f19;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      overflow: hidden;
+    }
+    .ambient-glow {
+      position: absolute;
+      width: 340px;
+      height: 340px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, rgba(99, 102, 241, 0.14) 45%, transparent 70%);
+      pointer-events: none;
+      animation: pulseGlow 3s ease-in-out infinite alternate;
+    }
+    @keyframes pulseGlow {
+      0% { transform: scale(0.85); opacity: 0.6; }
+      100% { transform: scale(1.15); opacity: 1; }
+    }
+    .card {
+      position: relative;
+      background: rgba(17, 24, 39, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 38px 28px 30px;
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    }
+    .anim-container {
+      position: relative;
+      width: 88px;
+      height: 88px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 22px;
+    }
+    .ring-outer {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      border-top-color: #38bdf8;
+      border-right-color: #6366f1;
+      animation: spin 1.2s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
+    }
+    .ring-inner {
+      position: absolute;
+      inset: 8px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-bottom-color: #34d399;
+      animation: spin 1.8s linear infinite reverse;
+    }
+    .core-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #1e3a8a, #0369a1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.4);
+      animation: iconFloat 2s ease-in-out infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes iconFloat {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-2px) scale(1.04); }
+    }
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 22px;
+      line-height: 1.5;
+    }
+    .progress-bar-wrapper {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 99px;
+      overflow: hidden;
+      margin-bottom: 14px;
+      position: relative;
+    }
+    .progress-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 40%;
+      background: linear-gradient(90deg, #38bdf8, #6366f1);
+      border-radius: 99px;
+      animation: progressMove 1.4s ease-in-out infinite;
+    }
+    @keyframes progressMove {
+      0% { left: -40%; width: 30%; }
+      50% { width: 60%; }
+      100% { left: 100%; width: 30%; }
+    }
+    .status-text {
+      font-size: 12px;
+      color: #38bdf8;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+    }
+    .direct-link {
+      margin-top: 18px;
+      font-size: 12px;
+      color: #64748b;
+      text-decoration: none;
+    }
+    .direct-link:hover { color: #94a3b8; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow"></div>
+  <div class="card">
+    <div class="anim-container">
+      <div class="ring-outer"></div>
+      <div class="ring-inner"></div>
+      <div class="core-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        </svg>
+      </div>
+    </div>
+    <div class="title">身份凭据验证成功</div>
+    <div class="subtitle">已建立安全管理会话<br>正在前往管理后台...</div>
+    <div class="progress-bar-wrapper">
+      <div class="progress-bar"></div>
+    </div>
+    <div class="status-text" id="statusDesc">正在连接管理控制台...</div>
+    <a class="direct-link" href="${safeUrl}" id="jumpLink">若未自动跳转，请点击此处</a>
+  </div>
+  <script>
+    (function() {
+      var target = ${JSON.stringify(redirectUrl)};
+      setTimeout(function() {
+        var status = document.getElementById('statusDesc');
+        if (status) status.textContent = '正在进入系统...';
+      }, 350);
+      setTimeout(function() {
+        window.location.replace(target);
+      }, 300);
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+function renderAppLoginErrorHtml(title, message) {
+  const safeTitle = escapeHtmlAttribute(title || '出错了');
+  const safeMessage = escapeHtmlAttribute(message || '操作无法完成');
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>${safeTitle}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0b0f19;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: rgba(17, 24, 39, 0.88);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: 24px;
+      padding: 36px 28px 30px;
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+    }
+    .icon-box {
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+    .title { font-size: 18px; font-weight: 700; color: #ef4444; margin-bottom: 8px; }
+    .message { font-size: 13.5px; color: #94a3b8; line-height: 1.5; margin-bottom: 20px; }
+    .hint { font-size: 12px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-box">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+    </div>
+    <div class="title">${safeTitle}</div>
+    <div class="message">${safeMessage}</div>
+    <div class="hint">请返回安卓 App 重新发起跳转</div>
+  </div>
+</body>
+</html>`;
 }
