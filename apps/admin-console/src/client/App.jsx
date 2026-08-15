@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { Turnstile } from '@marsidev/react-turnstile';
 import {
@@ -2389,8 +2389,14 @@ function Dashboard({ session, onLogout }) {
     };
   }, [notificationOpen]);
 
-  const services = data?.services || [];
-  const counts = data?.counts || {};
+  const allServices = data?.services || [];
+  const services = useMemo(() => allServices.filter((service) => service.id !== 'platform'), [allServices]);
+  const counts = useMemo(() => ({
+    healthy: services.filter((s) => s.state === 'healthy').length,
+    degraded: services.filter((s) => s.state === 'degraded').length,
+    offline: services.filter((s) => s.state === 'offline').length,
+    unmonitored: services.filter((s) => s.state === 'unmonitored').length,
+  }), [services]);
   const total = services.length;
   const attentionCount = (counts.degraded || 0) + (counts.offline || 0);
   const healthyRate = total > 0 ? Math.round(((counts.healthy || 0) / total) * 100) : 0;
