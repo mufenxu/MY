@@ -11,6 +11,8 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
@@ -142,7 +144,6 @@ private object AppRoute {
     const val Notifications = "notifications"
     const val Insights = "insights"
     const val Scenes = "scenes"
-    const val Environment = "environment"
 }
 
 private val tabs = listOf(
@@ -165,7 +166,6 @@ private fun AppEntryUiState.requestedRoute(): String = when {
     workspaceDestination == WorkspaceDestination.Notifications -> AppRoute.Notifications
     workspaceDestination == WorkspaceDestination.Insights -> AppRoute.Insights
     workspaceDestination == WorkspaceDestination.Scenes -> AppRoute.Scenes
-    environmentOpen -> AppRoute.Environment
     globalSearchOpen -> AppRoute.Search
     googleAccountDeskOpen -> AppRoute.GoogleAccounts
     accountManagementOpen -> AppRoute.Account
@@ -189,7 +189,6 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
 internal fun parentTabForSubScreen(route: String?, previousRoute: String?): MainTab? = when (route) {
     AppRoute.GoogleAccounts -> primaryTabForRoute(previousRoute) ?: MainTab.Profile
     AppRoute.Account -> MainTab.Profile
-    AppRoute.Environment -> MainTab.Operations
     AppRoute.Operations,
     AppRoute.Search,
     AppRoute.Today,
@@ -210,15 +209,29 @@ fun MyControlApp(
     notificationsEnabled: Boolean,
     onRequestNotifications: () -> Unit,
 ) {
-    var showSplash by remember { mutableStateOf(true) }
+    var splashVisible by remember { mutableStateOf(true) }
+    var splashExiting by remember { mutableStateOf(false) }
+    var prewarmContent by remember { mutableStateOf(false) }
     val state by viewModel.entryState.collectAsStateWithLifecycle()
 
-    if (showSplash) {
-        ModernAnimatedSplashScreen(
-            onSplashFinished = { showSplash = false }
-        )
-        return
+    // 在开屏动画展开平稳后的 400ms 再开启底层主界面挂载预热，确保冷启动前 400ms 黄金期 100% 满帧无卡顿
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(400)
+        prewarmContent = true
     }
+
+    // 主内容在开屏退场时的丝滑微缩放与淡入动效 (0.96f -> 1.0f, 0.85f -> 1.0f)
+    val mainContentAlpha by animateFloatAsState(
+        targetValue = if (splashExiting || !splashVisible) 1f else 0.85f,
+        animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
+        label = "mainContentAlpha",
+    )
+
+    val mainContentScale by animateFloatAsState(
+        targetValue = if (splashExiting || !splashVisible) 1f else 0.96f,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label = "mainContentScale",
+    )
 
     val destination = when {
         state.booting -> "loading"
@@ -226,29 +239,58 @@ fun MyControlApp(
         state.user == null -> "login"
         else -> "app"
     }
-    when (destination) {
-        "loading" -> FullScreenLoading()
-        "locked" -> LockScreen(onBiometricUnlock, viewModel::discardLockedSession, state.error)
-        "login" -> LoginScreen(
-            state = state,
-            onLogin = { username, password, factor, recovery ->
-                viewModel.login(username, password, factor, recovery, onSessionProtection)
-            },
-            onPasskeyLogin = { username ->
-                viewModel.loginWithPasskey(username, onPasskeyRequest, onSessionProtection)
-            },
-            onBackFromSecondFactor = viewModel::resetSecondFactor,
-        )
-        else -> AuthenticatedShell(
-            state,
-            viewModel,
-            onPasskeyRequest,
-            onPasskeyRegistrationRequest,
-            onBiometricConfirmation,
-            onSensitiveActionConfirmation,
-            notificationsEnabled,
-            onRequestNotifications,
-        )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // 底层：主应用内容层（在开屏平稳期后静默预热，退场时伴随细腻的弹性浮现）
+        if (prewarmContent || !splashVisible) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = mainContentAlpha
+                        scaleX = mainContentScale
+                        scaleY = mainContentScale
+                    }
+            ) {
+                when (destination) {
+                    "loading" -> FullScreenLoading()
+                    "locked" -> LockScreen(onBiometricUnlock, viewModel::discardLockedSession, state.error)
+                    "login" -> LoginScreen(
+                        state = state,
+                        onLogin = { username, password, factor, recovery ->
+                            viewModel.login(username, password, factor, recovery, onSessionProtection)
+                        },
+                        onPasskeyLogin = { username ->
+                            viewModel.loginWithPasskey(username, onPasskeyRequest, onSessionProtection)
+                        },
+                        onBackFromSecondFactor = viewModel::resetSecondFactor,
+                    )
+                    else -> AuthenticatedShell(
+                        state,
+                        viewModel,
+                        onPasskeyRequest,
+                        onPasskeyRegistrationRequest,
+                        onBiometricConfirmation,
+                        onSensitiveActionConfirmation,
+                        notificationsEnabled,
+                        onRequestNotifications,
+                    )
+                }
+            }
+        }
+
+        // 顶层：基于 Animatable 零重组、纯 GPU 渲染的超丝滑开屏过渡浮层
+        if (splashVisible) {
+            ModernAnimatedSplashScreen(
+                isExiting = splashExiting,
+                onSplashFinished = { splashExiting = true },
+                onSplashExitFinished = { splashVisible = false },
+            )
+        }
     }
 }
 
@@ -1171,20 +1213,33 @@ private fun AuthenticatedShell(
         }
     }
     BackHandler(enabled = isSubScreen, onBack = navigateBackFromSubScreen)
-    val onRefresh = remember(viewModel) { { viewModel.refreshCurrentTab(true) } }
-    LaunchedEffect(state.selectedTab, state.accountManagementOpen, state.googleAccountDeskOpen, state.globalSearchOpen, state.environmentOpen, state.workspaceDestination) {
-        val targetRoute = state.requestedRoute()
-        if (targetRoute == currentRoute) return@LaunchedEffect
-        if (targetRoute in setOf(AppRoute.Overview, AppRoute.Notifications, AppRoute.Tools, AppRoute.Profile)) {
-            navController.navigate(targetRoute) {
-                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                launchSingleTop = true
-                restoreState = true
+
+    // 0ms 纯瞬发导航分发：直接由 NavController 控制跳转，0 协程调度、0 阻塞 IO、0 竞态等待
+    val navigateToTab: (MainTab) -> Unit = remember(navController) {
+        { tab ->
+            val targetRoute = tab.route()
+            val current = navController.currentBackStackEntry?.destination?.route
+            if (current != targetRoute) {
+                navController.navigate(targetRoute) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
             }
-        } else {
+        }
+    }
+
+    val onRefresh = remember(viewModel) { { viewModel.refreshCurrentTab(true) } }
+
+    // 仅响应由外部或 ViewModel 显式打开的非 Tab 二级子界面（如全局搜索、Google 桌面等）
+    LaunchedEffect(state.accountManagementOpen, state.googleAccountDeskOpen, state.globalSearchOpen, state.workspaceDestination) {
+        val targetRoute = state.requestedRoute()
+        if (targetRoute != currentRoute && targetRoute !in setOf(AppRoute.Overview, AppRoute.Notifications, AppRoute.Tools, AppRoute.Profile)) {
             navController.navigate(targetRoute) { launchSingleTop = true }
         }
     }
+
+    // 路由同步至 ViewModel（记录状态并自动触发后台防抖静默拉取）
     LaunchedEffect(currentRoute) {
         when (currentRoute) {
             AppRoute.Overview -> viewModel.syncNavigationDestination(MainTab.Overview)
@@ -1192,7 +1247,6 @@ private fun AuthenticatedShell(
             AppRoute.Tools -> viewModel.syncNavigationDestination(MainTab.Tools)
             AppRoute.Profile -> viewModel.syncNavigationDestination(MainTab.Profile)
             AppRoute.Operations -> viewModel.syncNavigationDestination(MainTab.Operations)
-            AppRoute.Environment -> viewModel.syncNavigationDestination(MainTab.Operations, environmentOpen = true)
             AppRoute.Account -> viewModel.syncNavigationDestination(MainTab.Profile, accountManagementOpen = true)
             AppRoute.GoogleAccounts -> viewModel.syncNavigationDestination(MainTab.Profile, googleAccountDeskOpen = true)
             AppRoute.Search -> viewModel.syncNavigationDestination(MainTab.Overview, globalSearchOpen = true)
@@ -1255,22 +1309,32 @@ private fun AuthenticatedShell(
                         top = shellInsets.navigationTop,
                         end = shellInsets.navigationEnd,
                     ),
-                enterTransition = { fadeIn(animationSpec = tween(120)) },
-                exitTransition = { fadeOut(animationSpec = tween(80)) },
-                popEnterTransition = { fadeIn(animationSpec = tween(120)) },
-                popExitTransition = { fadeOut(animationSpec = tween(80)) },
+                enterTransition = {
+                    fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
+                    scaleIn(initialScale = 0.985f, animationSpec = tween(220, easing = FastOutSlowInEasing))
+                },
+                exitTransition = {
+                    fadeOut(animationSpec = tween(140, easing = FastOutSlowInEasing))
+                },
+                popEnterTransition = {
+                    fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
+                    scaleIn(initialScale = 0.985f, animationSpec = tween(220, easing = FastOutSlowInEasing))
+                },
+                popExitTransition = {
+                    fadeOut(animationSpec = tween(140, easing = FastOutSlowInEasing))
+                },
             ) {
                 composable(AppRoute.Overview) {
                     val overviewState by viewModel.overviewState.collectAsStateWithLifecycle()
                     OverviewScreen(
                         state = overviewState,
                         contentPadding = contentPadding,
-                        onSelectTab = viewModel::selectTab,
+                        onSelectTab = navigateToTab,
                         onRefresh = onRefresh,
                         onRunDiagnostics = viewModel::runDiagnostics,
                         onTriggerBackup = { viewModel.triggerBackup(onSensitiveActionConfirmation) },
                         onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
-                        onOpenOperations = { viewModel.selectTab(MainTab.Operations) },
+                        onOpenOperations = { navigateToTab(MainTab.Operations) },
                         onOpenSearch = viewModel::openGlobalSearch,
                         onOpenQrLogin = viewModel::openQrScanner,
                         onOpenWorkspace = viewModel::openWorkspace,
@@ -1307,16 +1371,23 @@ private fun AuthenticatedShell(
                         onFocusConsumed = viewModel::clearFocusTargets,
                         onRefresh = onRefresh,
                         onBack = navigateBackFromSubScreen,
-                        onOpenEnvironment = viewModel::openEnvironment,
                     )
                 }
-                composable(AppRoute.Environment) {
-                    val environmentState by viewModel.environmentState.collectAsStateWithLifecycle()
-                    EnvironmentScreen(
-                        state = environmentState,
+                composable(AppRoute.Notifications) {
+                    val notificationState by viewModel.notificationCenterState.collectAsStateWithLifecycle()
+                    NotificationCenterScreen(
+                        state = notificationState,
                         contentPadding = contentPadding,
-                        onRefresh = { viewModel.refreshEnvironment(true) },
-                        onBack = navigateBackFromSubScreen,
+                        refreshing = notificationState.refreshing,
+                        onRefresh = { viewModel.refreshCurrentWorkspace(true) },
+                        onOpen = viewModel::openAlert,
+                        onAction = viewModel::openNotificationAction,
+                        onMarkRead = viewModel::markAlertRead,
+                        onMarkAllRead = viewModel::markAllAlertsRead,
+                        onClearRead = viewModel::clearReadAlerts,
+                        onArchive = viewModel::archiveAlert,
+                        onSnooze = { id -> viewModel.snoozeAlert(id) },
+                        onUpdatePreferences = viewModel::updateAlertPreferences,
                     )
                 }
                 composable(AppRoute.Tools) {
@@ -1346,6 +1417,13 @@ private fun AuthenticatedShell(
                         onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
                         notificationsEnabled = notificationsEnabled,
                         onRequestNotifications = onRequestNotifications,
+                        onMeasureNetwork = viewModel::measureNetworkHealth,
+                        onClearCache = viewModel::clearLocalCache,
+                        onForceFullSync = viewModel::forceFullSync,
+                        onCreateDesktopMagicLink = viewModel::createDesktopMagicLink,
+                        onUpdateNotificationPreferences = viewModel::updateNotificationPreferences,
+                        onCheckUpdates = viewModel::checkAppUpdates,
+                        onGenerateDiagnosticReport = viewModel::generateDiagnosticReport,
                     )
                 }
                 composable(AppRoute.Account) {
@@ -1407,25 +1485,8 @@ private fun AuthenticatedShell(
                         onSaveTodo = viewModel::saveTodo,
                         onToggleTodo = viewModel::toggleTodo,
                         onDeleteTodo = viewModel::deleteTodo,
-                        onOpenNotifications = { viewModel.selectTab(MainTab.Notifications) },
-                        onOpenTasks = { viewModel.selectTab(MainTab.Operations) },
-                    )
-                }
-                composable(AppRoute.Notifications) {
-                    val notificationState by viewModel.notificationCenterState.collectAsStateWithLifecycle()
-                    NotificationCenterScreen(
-                        state = notificationState,
-                        contentPadding = contentPadding,
-                        refreshing = notificationState.refreshing,
-                        onRefresh = { viewModel.refreshCurrentWorkspace(true) },
-                        onOpen = viewModel::openAlert,
-                        onAction = viewModel::openNotificationAction,
-                        onMarkRead = viewModel::markAlertRead,
-                        onMarkAllRead = viewModel::markAllAlertsRead,
-                        onClearRead = viewModel::clearReadAlerts,
-                        onArchive = viewModel::archiveAlert,
-                        onSnooze = { id -> viewModel.snoozeAlert(id) },
-                        onUpdatePreferences = viewModel::updateAlertPreferences,
+                        onOpenNotifications = { navigateToTab(MainTab.Notifications) },
+                        onOpenTasks = { navigateToTab(MainTab.Operations) },
                     )
                 }
                 composable(AppRoute.Insights) {
@@ -1458,8 +1519,8 @@ private fun AuthenticatedShell(
                     .navigationBarsPadding()
             ) {
                 AppBottomNavigation(
-                    selected = state.selectedTab,
-                    onSelect = viewModel::selectTab,
+                    selected = primaryTabForRoute(currentRoute) ?: state.selectedTab,
+                    onSelect = navigateToTab,
                 )
             }
 
@@ -1620,24 +1681,32 @@ private fun AppBottomNavigation(
 private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onClick: () -> Unit) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val itemShape = RoundedCornerShape(22.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
 
     val foreground by animateColorAsState(
-        targetValue = if (selected) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        animationSpec = if (selected) tween(140, easing = FastOutSlowInEasing) else snap(),
+        targetValue = if (selected) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+        animationSpec = tween(180, easing = FastOutSlowInEasing),
         label = "nav-color",
     )
     val background by animateColorAsState(
         targetValue = if (selected) primaryColor.copy(alpha = 0.12f) else Color.Transparent,
-        animationSpec = if (selected) tween(140, easing = FastOutSlowInEasing) else snap(),
+        animationSpec = tween(180, easing = FastOutSlowInEasing),
         label = "nav-background",
     )
+
+    val targetScale = when {
+        isPressed -> 0.88f
+        selected -> 1.10f
+        else -> 1.0f
+    }
     val iconScale by animateFloatAsState(
-        targetValue = if (selected) 1.14f else 1.0f,
+        targetValue = targetScale,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
+            stiffness = Spring.StiffnessMedium,
         ),
-        label = "nav-icon-scale"
+        label = "nav-icon-scale",
     )
 
     Column(
@@ -1647,11 +1716,11 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onCl
             .clip(itemShape)
             .background(background)
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = interactionSource,
                 indication = null,
                 role = Role.Tab,
                 onClickLabel = item.label,
-                onClick = onClick
+                onClick = onClick,
             )
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1663,7 +1732,10 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onCl
             tint = foreground,
             modifier = Modifier
                 .size(21.dp)
-                .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
+                .graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
+                },
         )
         Text(
             item.label,

@@ -133,12 +133,6 @@ fun ToolsScreen(
     val canOperate = state.user?.role in setOf("operator", "super_admin")
     val iot = state.iot
     val ct8 = state.ct8
-    val modules = remember(state.overview?.services) {
-        state.overview?.services.orEmpty().filter { service ->
-            service.id in setOf("core", "exam", "campus", "mqtt", "notify") ||
-                service.name.lowercase() in setOf("core", "exam", "campus", "iot", "notification")
-        }
-    }
 
     val scrollState = rememberScrollState()
     PullToRefresh(
@@ -231,52 +225,6 @@ fun ToolsScreen(
                 enabled = state.busyAction == null,
                 onTrigger = { confirmation = ToolConfirmation.Ct8 },
             )
-
-            // 7. 统一平台服务监控
-            ToolSectionTitle(title = "平台服务可用性", subtitle = "核心微服务实时健康度监测", accent = Color(0xFF64748B))
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                shadowElevation = 1.dp,
-            ) {
-                Column {
-                    if (modules.isEmpty()) {
-                        EmptyBlock("等待模块状态", "完成平台同步后显示")
-                    } else {
-                        modules.forEachIndexed { index, service ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            ) {
-                                IconTile(moduleIcon(service.id), Ocean, OceanPale)
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        service.name,
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    )
-                                    Text(
-                                        service.latencyMs?.let { "网络延时 $it ms" } ?: "等待响应数据",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                StatusBadge(service.state)
-                            }
-                            if (index < modules.lastIndex) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
 
             Spacer(Modifier.height(16.dp))
         }
@@ -935,12 +883,5 @@ private fun ToolConfirmDialog(
     )
 }
 
-private fun moduleIcon(id: String) = when (id) {
-    "mqtt", "iot" -> Icons.Outlined.Router
-    "campus" -> Icons.Outlined.CloudQueue
-    "exam" -> Icons.Outlined.CheckCircle
-    "core" -> Icons.Outlined.Memory
-    else -> Icons.Outlined.Devices
-}
 
 

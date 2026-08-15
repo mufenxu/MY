@@ -231,30 +231,6 @@ class PlatformApi(
             incidents = json.optJSONArray("incidents").objects().map { it.toIncidentInfo() },
             audits = json.optJSONArray("audit").objects().map { it.toAuditInfo() },
             refreshedAt = json.nullableString("refreshedAt") ?: json.nullableString("generatedAt"),
-            environment = json.optJSONObject("environment").toEnvironmentSummary(),
-        )
-    }
-
-    suspend fun environment(refresh: Boolean = false): EnvironmentReport = withContext(Dispatchers.IO) {
-        val json = execute("/api/environment${if (refresh) "?refresh=1" else ""}").json
-        EnvironmentReport(
-            summary = json.toEnvironmentReportSummary(),
-            variables = json.optJSONArray("variables").objects().map { item ->
-                EnvironmentVariable(
-                    key = item.optString("key"),
-                    description = item.optString("description"),
-                    group = item.optString("group", "other"),
-                    groupLabel = item.optString("groupLabel", "其他配置"),
-                    services = item.optJSONArray("services").strings(),
-                    sensitive = item.optBoolean("sensitive"),
-                    required = item.optBoolean("required"),
-                    configured = item.optBoolean("configured"),
-                    status = item.optString("status", "unused"),
-                    detail = item.optString("detail"),
-                    runtimeStatus = item.optString("runtimeStatus", "not_observed"),
-                    verificationStatus = item.optString("verificationStatus", "unknown"),
-                )
-            },
         )
     }
 
@@ -1061,34 +1037,6 @@ private fun JSONObject.toAuditInfo() = AuditInfo(
     outcome = optString("outcome", "success"),
     occurredAt = nullableString("occurredAt") ?: nullableString("createdAt"),
 )
-
-private fun JSONObject?.toEnvironmentSummary(): EnvironmentSummary {
-    val json = this ?: return EnvironmentSummary()
-    return EnvironmentSummary(
-        available = json.optBoolean("available"),
-        state = json.optString("state", "unavailable"),
-        total = json.optInt("total"),
-        healthy = json.optInt("healthy"),
-        missing = json.optInt("missing"),
-        invalid = json.optInt("invalid"),
-        inactive = json.optInt("inactive"),
-        unused = json.optInt("unused"),
-        restartRequired = json.optInt("restartRequired"),
-        verificationFailed = json.optInt("verificationFailed"),
-        checkedAt = json.nullableString("checkedAt"),
-        issue = json.nullableString("issue"),
-    )
-}
-
-private fun JSONObject.toEnvironmentReportSummary(): EnvironmentSummary {
-    val nested = optJSONObject("summary")
-    val summary = nested.toEnvironmentSummary()
-    return summary.copy(
-        available = if (has("available")) optBoolean("available") else summary.available,
-        checkedAt = nullableString("checkedAt") ?: summary.checkedAt,
-        issue = nullableString("issue") ?: summary.issue,
-    )
-}
 
 private fun JSONObject.toGoogleAccountSnapshot(): GoogleAccountSnapshot {
     val data = optJSONArray("accounts") ?: optJSONArray("data") ?: JSONArray()

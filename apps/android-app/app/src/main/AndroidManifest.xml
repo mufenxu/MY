@@ -49,6 +49,12 @@
                     android:host="open" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".ui.PlatformWebActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.MYControl" />
         <service
             android:name=".DeviceControlTileService"
             android:exported="true"

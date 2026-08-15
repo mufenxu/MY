@@ -20,7 +20,6 @@ import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.automirrored.outlined.FactCheck
 import androidx.compose.material.icons.outlined.RocketLaunch
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -63,7 +62,6 @@ fun OperationsScreen(
     onFocusConsumed: () -> Unit,
     onRefresh: () -> Unit,
     onBack: () -> Unit,
-    onOpenEnvironment: () -> Unit = {},
 ) {
     BackHandler(enabled = true, onBack = onBack)
     var confirmBackup by remember { mutableStateOf(false) }
@@ -139,57 +137,6 @@ fun OperationsScreen(
                     MetricCell("执行中", activeTasks.toString(), Modifier.weight(1f), Ocean)
                     MetricCell("失败", failedTasks.toString(), Modifier.weight(1f), if (failedTasks > 0) Coral else Forest)
                     MetricCell("待处理", actionTasks.size.toString(), Modifier.weight(1f), if (actionTasks.isEmpty()) Forest else Amber)
-                }
-            }
-        }
-
-        item { SectionHeader("环境配置", "检查服务启动所需的配置是否完整、有效并已生效") }
-        item {
-            val environment = state.environment
-            val summary = state.environmentSummary
-            val isSuperAdmin = state.user?.role == "super_admin"
-            AppPanel {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        IconTile(
-                            Icons.Outlined.Settings,
-                            if (summary?.state == "healthy") Forest else Amber,
-                            if (summary?.state == "healthy") MintPale else AmberPale,
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                when {
-                                    summary == null -> "正在获取环境诊断"
-                                    !summary.available -> "环境诊断暂不可用"
-                                    summary.state == "healthy" -> "环境配置正常"
-                                    summary.state == "restart_required" -> "${summary.restartRequired} 项配置等待服务重启"
-                                    else -> "${summary.missing + summary.invalid + summary.verificationFailed} 项配置需要处理"
-                                },
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(
-                                summary?.let { "共 ${it.total} 项配置，已确认 ${it.healthy} 项" } ?: "运维页会显示最近一次诊断摘要",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        summary?.let {
-                            StatusBadge(
-                                when {
-                                    !it.available -> "unknown"
-                                    it.state == "healthy" -> "healthy"
-                                    else -> "warning"
-                                },
-                            )
-                        }
-                    }
-                    if (isSuperAdmin) {
-                        AppDialogSecondaryButton(
-                            text = "查看环境详情",
-                            onClick = onOpenEnvironment,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
                 }
             }
         }

@@ -118,6 +118,11 @@ data class AlertPreferences(
     val quietHoursEnabled: Boolean = false,
     val quietStartHour: Int = 22,
     val quietEndHour: Int = 7,
+    val severityFilter: String = "all",
+    val incidentAlerts: Boolean = true,
+    val iotAlerts: Boolean = true,
+    val campusAlerts: Boolean = true,
+    val backupAlerts: Boolean = true,
 )
 
 data class TrendSample(
@@ -182,15 +187,25 @@ class PersonalWorkspaceStore(context: Context) {
         quietHoursEnabled = scopedKey(KEY_QUIET_ENABLED)?.let { preferences.getBoolean(it, false) } ?: false,
         quietStartHour = scopedKey(KEY_QUIET_START)?.let { preferences.getInt(it, 22) }?.coerceIn(0, 23) ?: 22,
         quietEndHour = scopedKey(KEY_QUIET_END)?.let { preferences.getInt(it, 7) }?.coerceIn(0, 23) ?: 7,
+        severityFilter = scopedKey(KEY_SEVERITY_FILTER)?.let { preferences.getString(it, "all") } ?: "all",
+        incidentAlerts = scopedKey(KEY_INCIDENT_ALERTS)?.let { preferences.getBoolean(it, true) } ?: true,
+        iotAlerts = scopedKey(KEY_IOT_ALERTS)?.let { preferences.getBoolean(it, true) } ?: true,
+        campusAlerts = scopedKey(KEY_CAMPUS_ALERTS)?.let { preferences.getBoolean(it, true) } ?: true,
+        backupAlerts = scopedKey(KEY_BACKUP_ALERTS)?.let { preferences.getBoolean(it, true) } ?: true,
     )
 
     fun writeAlertPreferences(value: AlertPreferences) {
-        val enabledKey = scopedKey(KEY_QUIET_ENABLED) ?: return
-        val startKey = scopedKey(KEY_QUIET_START) ?: return
-        val endKey = scopedKey(KEY_QUIET_END) ?: return
-        preferences.edit().putBoolean(enabledKey, value.quietHoursEnabled)
-            .putInt(startKey, value.quietStartHour.coerceIn(0, 23))
-            .putInt(endKey, value.quietEndHour.coerceIn(0, 23)).apply()
+        val scope = accountScope ?: return
+        preferences.edit()
+            .putBoolean("account_${scope}_$KEY_QUIET_ENABLED", value.quietHoursEnabled)
+            .putInt("account_${scope}_$KEY_QUIET_START", value.quietStartHour.coerceIn(0, 23))
+            .putInt("account_${scope}_$KEY_QUIET_END", value.quietEndHour.coerceIn(0, 23))
+            .putString("account_${scope}_$KEY_SEVERITY_FILTER", value.severityFilter)
+            .putBoolean("account_${scope}_$KEY_INCIDENT_ALERTS", value.incidentAlerts)
+            .putBoolean("account_${scope}_$KEY_IOT_ALERTS", value.iotAlerts)
+            .putBoolean("account_${scope}_$KEY_CAMPUS_ALERTS", value.campusAlerts)
+            .putBoolean("account_${scope}_$KEY_BACKUP_ALERTS", value.backupAlerts)
+            .apply()
     }
 
     fun readTrendSamples(): List<TrendSample> = scopedKey(KEY_TRENDS)?.let { key -> codec.read(key) }
@@ -204,6 +219,22 @@ class PersonalWorkspaceStore(context: Context) {
         samples[sample.day] = sample
         val normalized = samples.values.sortedBy(TrendSample::day).takeLast(MAX_TREND_DAYS)
         scopedKey(KEY_TRENDS)?.let { key -> codec.write(key, JSONArray().apply { normalized.forEach { put(it.toJson()) } }.toString()) }
+    }
+
+    fun sizeInBytes(): Long {
+        val scope = accountScope ?: return 0L
+        val prefix = "account_${scope}_"
+        return preferences.all.entries
+            .filter { it.key.startsWith(prefix) }
+            .sumOf { (_, value) ->
+                when (value) {
+                    is String -> value.toByteArray(Charsets.UTF_8).size.toLong()
+                    is Int -> 4L
+                    is Long -> 8L
+                    is Boolean -> 1L
+                    else -> 16L
+                }
+            }
     }
 
     fun clearAccountData() {
@@ -225,6 +256,11 @@ class PersonalWorkspaceStore(context: Context) {
         const val KEY_QUIET_ENABLED = "quiet_enabled"
         const val KEY_QUIET_START = "quiet_start"
         const val KEY_QUIET_END = "quiet_end"
+        const val KEY_SEVERITY_FILTER = "severity_filter"
+        const val KEY_INCIDENT_ALERTS = "incident_alerts"
+        const val KEY_IOT_ALERTS = "iot_alerts"
+        const val KEY_CAMPUS_ALERTS = "campus_alerts"
+        const val KEY_BACKUP_ALERTS = "backup_alerts"
         const val KEY_TRENDS = "trends"
         const val MAX_PENDING_MUTATIONS = 100
         const val MAX_ALERTS = 200

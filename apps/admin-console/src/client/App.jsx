@@ -71,13 +71,11 @@ const loadAutomationView = () => import('./AutomationView.jsx');
 const loadNotificationView = () => import('./NotificationServiceView.jsx');
 const loadPlatformViews = () => import('./PlatformControlViews.jsx');
 const loadOperationsViews = () => import('./OperationsViews.jsx');
-const loadEnvironmentView = () => import('./EnvironmentView.jsx');
 const lazyNamed = (loader, exportName) => lazy(() => loader().then((module) => ({ default: module[exportName] })));
 
 const AutomationView = lazy(loadAutomationView);
 const NotificationServiceView = lazy(loadNotificationView);
 const ConfigurationView = lazyNamed(loadPlatformViews, 'ConfigurationView');
-const EnvironmentView = lazy(loadEnvironmentView);
 const DiagnosticsView = lazyNamed(loadPlatformViews, 'DiagnosticsView');
 const PublicStatusView = lazyNamed(loadPlatformViews, 'PublicStatusView');
 const TaskCenterView = lazyNamed(loadPlatformViews, 'TaskCenterView');
@@ -99,7 +97,6 @@ const VIEW_MODULE_LOADERS = {
   security: loadOperationsViews,
   tasks: loadPlatformViews,
   configuration: loadPlatformViews,
-  environment: loadEnvironmentView,
   diagnostics: loadPlatformViews,
 };
 
@@ -2425,7 +2422,6 @@ function Dashboard({ session, onLogout }) {
     releases: { title: '发布中心', subtitle: '版本、构建与部署保护' },
     tasks: { title: '统一任务中心', subtitle: '跨服务任务状态与处理入口' },
     configuration: { title: '配置中心', subtitle: '受控变更、审批与版本回滚' },
-    environment: { title: '环境变量', subtitle: '部署配置用途、有效性与生效状态' },
     diagnostics: { title: '链路诊断', subtitle: '公网网关与服务直连阶段追踪' },
     security: { title: '安全中心', subtitle: '会话安全与操作记录' },
   }[activeFilter];
@@ -2627,7 +2623,6 @@ function Dashboard({ session, onLogout }) {
           {activeFilter === 'releases' && <ReleasesView session={session} targetEntityId={activeEntity} />}
           {activeFilter === 'tasks' && <TaskCenterView onNavigate={navigateToView} targetEntityId={activeEntity} />}
           {activeFilter === 'configuration' && <><ConfigurationView session={session} targetEntityId={activeEntity} /><SettingsDiagnosticsView session={session} /></>}
-          {activeFilter === 'environment' && <EnvironmentView />}
           {activeFilter === 'diagnostics' && <DiagnosticsView services={services} session={session} targetEntityId={activeEntity} />}
           {activeFilter === 'security' && <SecurityAuditView session={session} onLogout={onLogout} />}
           </Suspense>

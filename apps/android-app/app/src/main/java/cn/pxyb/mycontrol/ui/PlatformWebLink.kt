@@ -1,30 +1,27 @@
 package cn.pxyb.mycontrol.ui
 
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
 
-internal fun openPlatformWebLink(context: Context, url: String) {
-    val uri = Uri.parse(url)
-    val intent = CustomTabsIntent.Builder()
-        .setShowTitle(true)
-        .build()
-        .intent
-        .apply {
-            setPackage(CHROME_PACKAGE)
-        }
+internal fun openPlatformWebLink(context: Context, url: String, title: String? = null) {
     try {
-        intent.data = uri
+        val intent = PlatformWebActivity.createIntent(context, url, title).apply {
+            if (context !is android.app.Activity) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
         context.startActivity(intent)
-    } catch (_: ActivityNotFoundException) {
+    } catch (_: Exception) {
+        val uri = Uri.parse(url)
         runCatching {
             context.startActivity(Intent(Intent.ACTION_VIEW, uri).apply {
                 addCategory(Intent.CATEGORY_BROWSABLE)
+                if (context !is android.app.Activity) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             })
         }
     }
 }
 
-private const val CHROME_PACKAGE = "com.android.chrome"

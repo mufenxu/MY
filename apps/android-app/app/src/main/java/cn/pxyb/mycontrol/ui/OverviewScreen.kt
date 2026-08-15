@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -122,9 +123,8 @@ fun OverviewScreen(
     requestWebLoginUrl: suspend (String) -> String,
 ) {
     var customizingQuickActions by remember { mutableStateOf(false) }
-    var launchingService by remember { mutableStateOf<ServiceInfo?>(null) }
+    var openingServiceId by remember { mutableStateOf<String?>(null) }
     var serviceOpenError by remember { mutableStateOf<String?>(null) }
-    var serviceLaunchJob by remember { mutableStateOf<Job?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val overview = state.overview
@@ -143,26 +143,19 @@ fun OverviewScreen(
     }
     val scrollState = rememberScrollState()
 
-    fun dismissServiceLaunching() {
-        serviceLaunchJob?.cancel()
-        serviceLaunchJob = null
-        launchingService = null
-        serviceOpenError = null
-    }
-
     fun openServiceAdmin(service: ServiceInfo) {
         val adminUrl = service.adminUrl?.takeIf { it.isNotBlank() } ?: return
-        serviceLaunchJob?.cancel()
-        launchingService = service
+        if (openingServiceId != null) return
+        openingServiceId = service.id
         serviceOpenError = null
-        serviceLaunchJob = scope.launch {
+        scope.launch {
             runCatching { requestWebLoginUrl(adminUrl) }
                 .onSuccess { loginUrl ->
-                    launchingService = null
-                    serviceOpenError = null
-                    openPlatformWebLink(context, loginUrl)
+                    openingServiceId = null
+                    openPlatformWebLink(context, loginUrl, service.name)
                 }
                 .onFailure { error ->
+                    openingServiceId = null
                     serviceOpenError = error.message?.takeIf { it.isNotBlank() }
                         ?: "自动登录链接生成失败，请稍后重试。"
                 }
@@ -305,11 +298,16 @@ fun OverviewScreen(
                 campus?.energyBalance?.let { "能耗 ${formatCampusAmount(it)}" },
             ).joinToString(" · ")
 
+            val campusCardShape = RoundedCornerShape(24.dp)
+            val campusInteractionSource = remember { MutableInteractionSource() }
             Surface(
+                onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
+                interactionSource = campusInteractionSource,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onOpenWorkspace(WorkspaceDestination.Today) },
-                shape = RoundedCornerShape(24.dp),
+                    .pressFeedback(campusInteractionSource)
+                    .clip(campusCardShape),
+                shape = campusCardShape,
                 color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                 shadowElevation = 1.dp,
@@ -404,11 +402,16 @@ fun OverviewScreen(
             if (activeIncidents.isNotEmpty()) {
                 OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知")
                 visibleIncidents.forEach { incident ->
+                    val incidentCardShape = RoundedCornerShape(20.dp)
+                    val incidentInteractionSource = remember(incident.id) { MutableInteractionSource() }
                     Surface(
+                        onClick = { onOpenWorkspace(WorkspaceDestination.Notifications) },
+                        interactionSource = incidentInteractionSource,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onOpenWorkspace(WorkspaceDestination.Notifications) },
-                        shape = RoundedCornerShape(20.dp),
+                            .pressFeedback(incidentInteractionSource)
+                            .clip(incidentCardShape),
+                        shape = incidentCardShape,
                         color = Color(0xFFFEF2F2),
                         border = BorderStroke(0.5.dp, Color(0xFFFECACA)),
                     ) {
@@ -451,7 +454,7 @@ fun OverviewScreen(
                         sortedServices.forEachIndexed { index, service ->
                             ServiceRow(
                                 service = service,
-                                opening = launchingService?.id == service.id && serviceOpenError == null,
+                                opening = openingServiceId == service.id,
                                 onOpen = ::openServiceAdmin,
                             )
                             if (index < sortedServices.lastIndex) {
@@ -467,15 +470,6 @@ fun OverviewScreen(
 
             Spacer(Modifier.height(16.dp))
         }
-    }
-
-    launchingService?.let { service ->
-        ServiceLaunchingDialog(
-            service = service,
-            errorMessage = serviceOpenError,
-            onDismissRequest = ::dismissServiceLaunching,
-            onRetry = { openServiceAdmin(service) },
-        )
     }
 
     if (customizingQuickActions) {

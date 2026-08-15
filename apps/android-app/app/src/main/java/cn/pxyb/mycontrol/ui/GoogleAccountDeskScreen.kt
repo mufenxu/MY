@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,19 +28,24 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AlternateEmail
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
-import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Email
-import androidx.compose.material.icons.outlined.Archive
-import androidx.compose.material.icons.outlined.Checklist
-import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Unarchive
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -62,7 +69,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -184,10 +193,19 @@ fun GoogleAccountDeskScreen(
     val context = LocalContext.current
     val selectedAccounts = accounts.filter { it.id in selectedAccountIds }
 
+    val filterCounts = remember(accounts) {
+        mapOf(
+            FILTER_ALL to accounts.size,
+            FILTER_UNREGISTERED to accounts.count { it.openAiStatus == OPENAI_UNREGISTERED },
+            FILTER_REGISTERED to accounts.count { it.openAiStatus == OPENAI_REGISTERED },
+            FILTER_ATTENTION to accounts.count { accountNeedsAttention(it) },
+        )
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = appPageContentPadding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             AppSecondaryHeader(
@@ -257,52 +275,27 @@ fun GoogleAccountDeskScreen(
         }
 
         item {
-            AppPanel {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        MetricCell("主邮箱", accounts.size.toString(), Modifier.weight(1f))
-                        MetricCell("别名", aliases.size.toString(), Modifier.weight(1f))
-                        MetricCell(
-                            "已注册",
-                            accounts.count { it.openAiStatus == OPENAI_REGISTERED }.toString(),
-                            Modifier.weight(1f),
-                            Color(0xFF047857),
-                        )
-                        MetricCell(
-                            "待处理",
-                            accounts.count { it.openAiStatus != OPENAI_REGISTERED }.toString(),
-                            Modifier.weight(1f),
-                            Color(0xFFB45309),
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("搜索邮箱或备注") },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                singleLine = true,
-                shape = AppSearchFieldShape,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Email),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f),
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                ),
+            DeskStatsDashboard(
+                accountsCount = accounts.size,
+                aliasesCount = aliases.size,
+                registeredCount = accounts.count { it.openAiStatus == OPENAI_REGISTERED },
+                pendingCount = accounts.count { it.openAiStatus != OPENAI_REGISTERED },
             )
         }
 
         item {
-            StatusFilterRow(selected = filter, onSelect = { filter = it })
+            ModernDeskSearchBar(
+                query = query,
+                onQueryChange = { query = it },
+            )
+        }
+
+        item {
+            StatusFilterRow(
+                selected = filter,
+                onSelect = { filter = it },
+                counts = filterCounts,
+            )
         }
 
         if (selectionMode) {
@@ -580,38 +573,328 @@ fun GoogleAccountDeskScreen(
 }
 
 @Composable
-private fun StatusFilterRow(selected: String, onSelect: (String) -> Unit) {
+private fun DeskStatsDashboard(
+    accountsCount: Int,
+    aliasesCount: Int,
+    registeredCount: Int,
+    pendingCount: Int,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        listOf(
-            FILTER_ALL to "全部",
-            FILTER_UNREGISTERED to "未注册",
-            FILTER_REGISTERED to "已注册",
-            FILTER_ATTENTION to "需处理",
-        ).forEach { (value, label) ->
-            Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onSelect(value) },
-                color = if (selected == value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(
-                    0.5.dp,
-                    if (selected == value) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                    else MaterialTheme.colorScheme.outlineVariant,
-                ),
+        DeskStatCard(
+            label = "主邮箱",
+            count = accountsCount,
+            accentColor = MaterialTheme.colorScheme.primary,
+            icon = Icons.Outlined.Email,
+            modifier = Modifier.weight(1f),
+        )
+        DeskStatCard(
+            label = "别名",
+            count = aliasesCount,
+            accentColor = Color(0xFF6366F1),
+            icon = Icons.Outlined.AlternateEmail,
+            modifier = Modifier.weight(1f),
+        )
+        DeskStatCard(
+            label = "已注册",
+            count = registeredCount,
+            accentColor = Color(0xFF059669),
+            icon = Icons.Outlined.CheckCircle,
+            modifier = Modifier.weight(1f),
+        )
+        DeskStatCard(
+            label = "待处理",
+            count = pendingCount,
+            accentColor = Color(0xFFD97706),
+            icon = Icons.Outlined.Schedule,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun DeskStatCard(
+    label: String,
+    count: Int,
+    accentColor: Color,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        shadowElevation = 0.5.dp,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            accentColor.copy(alpha = 0.08f),
+                            Color.Transparent,
+                        ),
+                    )
+                )
+                .padding(horizontal = 8.dp, vertical = 11.dp),
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.5.dp),
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.5.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                    )
+                }
                 Text(
-                    label,
-                    modifier = Modifier.padding(vertical = 9.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (selected == value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    count.toString(),
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 20.sp,
+                        letterSpacing = (-0.5).sp,
+                    ),
+                    color = accentColor,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ModernDeskSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    placeholder: String = "搜索邮箱或备注...",
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f)),
+        shadowElevation = 0.5.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Outlined.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                modifier = Modifier.size(19.dp),
+            )
+            Spacer(Modifier.size(8.dp))
+            androidx.compose.foundation.text.BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 12.dp),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 14.5.sp,
+                ),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                ),
+                decorationBox = { innerTextField ->
+                    if (query.isEmpty()) {
+                        Text(
+                            placeholder,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                fontSize = 14.sp,
+                            ),
+                        )
+                    }
+                    innerTextField()
+                },
+            )
+            if (query.isNotEmpty()) {
+                IconButton(
+                    onClick = { onQueryChange("") },
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = "清空搜索",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusFilterRow(
+    selected: String,
+    onSelect: (String) -> Unit,
+    counts: Map<String, Int>,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(3.5.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            listOf(
+                FILTER_ALL to "全部",
+                FILTER_UNREGISTERED to "未注册",
+                FILTER_REGISTERED to "已注册",
+                FILTER_ATTENTION to "需处理",
+            ).forEach { (value, label) ->
+                val isSelected = selected == value
+                val count = counts[value] ?: 0
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onSelect(value) },
+                    color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                    shape = RoundedCornerShape(12.dp),
+                    border = if (isSelected) BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)) else null,
+                    shadowElevation = if (isSelected) 1.5.dp else 0.dp,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 12.sp,
+                            ),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        )
+                        if (count > 0) {
+                            Text(
+                                " $count",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 10.5.sp,
+                                ),
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun avatarGradientForEmail(email: String): Brush {
+    val char = email.firstOrNull()?.uppercaseChar() ?: 'A'
+    val hash = kotlin.math.abs(char.code) % 5
+    return when (hash) {
+        0 -> Brush.linearGradient(listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)))
+        1 -> Brush.linearGradient(listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9)))
+        2 -> Brush.linearGradient(listOf(Color(0xFF10B981), Color(0xFF047857)))
+        3 -> Brush.linearGradient(listOf(Color(0xFFF59E0B), Color(0xFFD97706)))
+        else -> Brush.linearGradient(listOf(Color(0xFF06B6D4), Color(0xFF0891B2)))
+    }
+}
+
+@Composable
+private fun ModernOpenAiStatusBadge(status: String) {
+    val bg: Color
+    val fg: Color
+    val border: Color
+    val icon: ImageVector
+    val label: String
+
+    when (status) {
+        OPENAI_REGISTERED -> {
+            bg = Color(0xFFECFDF5)
+            fg = Color(0xFF047857)
+            border = Color(0xFFA7F3D0)
+            icon = Icons.Outlined.CheckCircle
+            label = "已注册"
+        }
+        OPENAI_VERIFICATION -> {
+            bg = Color(0xFFFFFBEB)
+            fg = Color(0xFFB45309)
+            border = Color(0xFFFDE68A)
+            icon = Icons.Outlined.Warning
+            label = "需验证"
+        }
+        OPENAI_ABNORMAL -> {
+            bg = Color(0xFFFEF2F2)
+            fg = Color(0xFFB91C1C)
+            border = Color(0xFFFECACA)
+            icon = Icons.Outlined.Warning
+            label = "异常"
+        }
+        OPENAI_DISABLED -> {
+            bg = Color(0xFFF1F5F9)
+            fg = Color(0xFF64748B)
+            border = Color(0xFFCBD5E1)
+            icon = Icons.Outlined.Close
+            label = "已停用"
+        }
+        else -> {
+            bg = Color(0xFFF0F9FF)
+            fg = Color(0xFF0284C7)
+            border = Color(0xFFBAE6FD)
+            icon = Icons.Outlined.Schedule
+            label = "未注册"
+        }
+    }
+
+    Surface(
+        color = bg,
+        contentColor = fg,
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(0.6.dp, border),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.5.dp),
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(12.dp), tint = fg)
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                ),
+            )
         }
     }
 }
@@ -624,44 +907,116 @@ private fun GoogleAccountRow(
     bulkSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    AppPanel(onClick = onClick) {
+    val avatarInitial = account.primaryEmail.firstOrNull()?.uppercaseChar()?.toString() ?: "G"
+    val avatarBrush = remember(account.primaryEmail) { avatarGradientForEmail(account.primaryEmail) }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            if (bulkSelected || selected) 1.2.dp else 0.6.dp,
+            if (bulkSelected || selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
+        ),
+        shadowElevation = 0.8.dp,
+    ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                shape = RoundedCornerShape(12.dp),
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(avatarBrush),
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    Icons.Outlined.Email,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(9.dp).size(21.dp),
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(account.primaryEmail, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    listOfNotNull(
-                        account.displayName.takeIf(String::isNotBlank),
-                        "${account.aliases.size} 个别名",
-                        account.tags.takeIf { it.isNotEmpty() }?.joinToString(" · "),
-                        account.nextReviewAt?.let { "检查 ${reviewLabel(it)}" },
-                    ).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    avatarInitial,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                    ),
                 )
             }
-            StatusBadge(
-                status = openAiStatusKey(account.openAiStatus),
-                label = openAiStatusLabel(account.openAiStatus),
-            )
-            if (selectionMode) {
-                Checkbox(checked = bulkSelected, onCheckedChange = { onClick() })
-            } else if (selected) {
-                Icon(Icons.Outlined.MoreVert, contentDescription = "已选中", tint = MaterialTheme.colorScheme.primary)
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    account.primaryEmail,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        letterSpacing = (-0.2).sp,
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (account.aliases.isNotEmpty()) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                            shape = RoundedCornerShape(6.dp),
+                        ) {
+                            Text(
+                                "${account.aliases.size} 个别名",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 11.sp,
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
+                            )
+                        }
+                    }
+
+                    if (account.displayName.isNotBlank()) {
+                        Text(
+                            account.displayName,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    } else if (account.tags.isNotEmpty()) {
+                        Text(
+                            account.tags.joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ModernOpenAiStatusBadge(account.openAiStatus)
+
+                if (selectionMode) {
+                    Checkbox(checked = bulkSelected, onCheckedChange = { onClick() })
+                } else {
+                    Icon(
+                        Icons.Outlined.ChevronRight,
+                        contentDescription = "查看详情",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
         }
     }
@@ -718,9 +1073,31 @@ private fun GoogleAccountDetail(
     ) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("邮箱详情", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text("邮箱详情", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
-                    Text(account.primaryEmail, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            account.primaryEmail,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        IconButton(
+                            onClick = { clipboard.setText(AnnotatedString(account.primaryEmail)) },
+                            modifier = Modifier.size(28.dp),
+                        ) {
+                            Icon(
+                                Icons.Outlined.ContentCopy,
+                                contentDescription = "复制主邮箱",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                     if (account.displayName.isNotBlank()) {
                         Text(account.displayName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

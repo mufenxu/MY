@@ -11,7 +11,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import cn.pxyb.mycontrol.data.IncidentInfo
-import cn.pxyb.mycontrol.data.EnvironmentSummary
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.CampusTimetable
@@ -167,49 +166,6 @@ class AlertNotifier(context: Context) {
             .putStringSet(scopedKey(KEY_SEEN_INCIDENTS), seenIncidents)
             .putStringSet(scopedKey(KEY_SEEN_TASKS), seenTasks)
             .apply()
-    }
-
-    fun evaluateEnvironment(summary: EnvironmentSummary) {
-        if (accountScope == null) return
-        ensureChannel()
-        val fingerprint = listOf(
-            summary.available,
-            summary.state,
-            summary.missing,
-            summary.invalid,
-            summary.verificationFailed,
-            summary.restartRequired,
-        ).joinToString(":")
-        val key = scopedKey(KEY_ENVIRONMENT_FINGERPRINT)
-        if (!summary.available || summary.state == "healthy") {
-            preferences.edit().remove(key).apply()
-            return
-        }
-        if (preferences.getString(key, null) == fingerprint) return
-        preferences.edit().putString(key, fingerprint).apply()
-        val needsAttention = summary.missing + summary.invalid + summary.verificationFailed
-        val body = when {
-            needsAttention > 0 && summary.restartRequired > 0 -> "$needsAttention 项配置需要处理，${summary.restartRequired} 项配置等待服务重启，请打开高级工具查看诊断结果。"
-            needsAttention > 0 -> "$needsAttention 项配置需要处理，请打开高级工具查看诊断结果。"
-            else -> "${summary.restartRequired} 项配置等待服务重启，请打开高级工具查看诊断结果。"
-        }
-        val alert = AppAlertRecord(
-            id = "environment:$fingerprint",
-            type = "environment",
-            sourceId = "environment",
-            title = "环境配置需要处理",
-            body = body,
-            createdAt = System.currentTimeMillis(),
-        )
-        personalStore.appendAlerts(listOf(alert))
-        if (!isQuietHours()) {
-            notify(
-                notificationId = ENVIRONMENT_BASE,
-                title = alert.title,
-                body = body,
-                intent = DeepLinks.openIntent(appContext, tab = MainTab.Operations),
-            )
-        }
     }
 
     fun clear() {
@@ -438,13 +394,11 @@ class AlertNotifier(context: Context) {
         const val KEY_SEEN_TASKS = "seen_tasks"
         const val KEY_SEEN_REMOTE = "seen_remote"
         const val KEY_SEEN_REMOTE_POSTED = "seen_remote_posted_v2"
-        const val KEY_ENVIRONMENT_FINGERPRINT = "environment_fingerprint_v1"
         const val CHANNEL_ID = "ops_alerts"
         const val MESSAGE_CHANNEL_ID = "app_notifications"
         const val INCIDENT_BASE = 41000
         const val TASK_BASE = 42000
         const val PERSONAL_BASE = 43000
-        const val ENVIRONMENT_BASE = 44000
         const val COURSE_NOTICE_WINDOW_MS = 30 * 60_000L
     }
 }

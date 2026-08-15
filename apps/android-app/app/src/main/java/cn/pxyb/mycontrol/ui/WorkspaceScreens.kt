@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
@@ -334,6 +335,8 @@ fun NotificationCenterScreen(
                     icon = Icons.Outlined.DoneAll,
                     contentDescription = "全部已读",
                     onClick = onMarkAllRead,
+                    iconTint = Color(0xFF059669),
+                    containerColor = Color(0xFFECFDF5),
                 )
             }
             if (state.alerts.any { it.read }) {
@@ -341,12 +344,16 @@ fun NotificationCenterScreen(
                     icon = Icons.Outlined.DeleteOutline,
                     contentDescription = "清理已读",
                     onClick = onClearRead,
+                    iconTint = Color(0xFFDC2626),
+                    containerColor = Color(0xFFFEF2F2),
                 )
             }
             AppHeaderIconButton(
                 icon = Icons.Outlined.Settings,
                 contentDescription = "提醒设置",
                 onClick = { settingsOpen = true },
+                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
             )
         },
     ) {
@@ -428,73 +435,161 @@ private fun CompactNotificationFilterBar(
     onTabSelect: (String) -> Unit,
     alerts: List<AppAlertRecord>,
 ) {
-    val now = System.currentTimeMillis()
-    val unreadCount = alerts.count { !it.read }
-    val snoozedCount = alerts.count { it.snoozedUntil != null && it.snoozedUntil > now }
-    val incidentCount = alerts.count { it.type == "incident" || it.priority == "urgent" || it.priority == "high" }
-    val taskCount = alerts.count { it.type == "task" }
-    val iotCount = alerts.count { it.type == "iot" }
-    val securityCount = alerts.count { it.type == "security" }
+    val unreadCount = remember(alerts) { alerts.count { !it.read } }
+    val snoozedCount = remember(alerts) {
+        val now = System.currentTimeMillis()
+        alerts.count { it.snoozedUntil != null && it.snoozedUntil > now }
+    }
+    val incidentCount = remember(alerts) {
+        val now = System.currentTimeMillis()
+        alerts.count { (it.type == "incident" || it.priority == "urgent" || it.priority == "high") && (it.snoozedUntil == null || it.snoozedUntil <= now) }
+    }
+    val taskCount = remember(alerts) {
+        val now = System.currentTimeMillis()
+        alerts.count { it.type == "task" && (it.snoozedUntil == null || it.snoozedUntil <= now) }
+    }
+    val iotCount = remember(alerts) {
+        val now = System.currentTimeMillis()
+        alerts.count { it.type == "iot" && (it.snoozedUntil == null || it.snoozedUntil <= now) }
+    }
+    val securityCount = remember(alerts) {
+        val now = System.currentTimeMillis()
+        alerts.count { it.type == "security" && (it.snoozedUntil == null || it.snoozedUntil <= now) }
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        FilterChip(
+        ModernNotificationFilterPill(
             selected = selectedTab == "all",
             onClick = { onTabSelect("all") },
-            label = { Text("全部 (${alerts.size})") }
+            label = "全部",
+            count = alerts.size,
+            activeColor = MaterialTheme.colorScheme.primary,
         )
-        FilterChip(
+        ModernNotificationFilterPill(
             selected = selectedTab == "unread",
             onClick = { onTabSelect("unread") },
-            label = { Text("未读 ($unreadCount)") },
-            leadingIcon = if (unreadCount > 0) {
-                { Icon(Icons.Outlined.NotificationsActive, null, modifier = Modifier.size(14.dp), tint = Color(0xFF2563EB)) }
-            } else null
+            label = "未读",
+            count = unreadCount,
+            activeColor = Color(0xFF2563EB),
+            icon = if (unreadCount > 0) Icons.Outlined.NotificationsActive else null,
         )
         if (incidentCount > 0) {
-            FilterChip(
+            ModernNotificationFilterPill(
                 selected = selectedTab == "incident",
                 onClick = { onTabSelect("incident") },
-                label = { Text("告警 ($incidentCount)") },
-                leadingIcon = { Icon(Icons.Outlined.Warning, null, modifier = Modifier.size(14.dp), tint = Color(0xFFEF4444)) }
+                label = "告警",
+                count = incidentCount,
+                activeColor = Color(0xFFDC2626),
+                icon = Icons.Outlined.Warning,
             )
         }
         if (taskCount > 0) {
-            FilterChip(
+            ModernNotificationFilterPill(
                 selected = selectedTab == "task",
                 onClick = { onTabSelect("task") },
-                label = { Text("任务 ($taskCount)") },
-                leadingIcon = { Icon(Icons.Outlined.Assignment, null, modifier = Modifier.size(14.dp), tint = Color(0xFFF59E0B)) }
+                label = "任务",
+                count = taskCount,
+                activeColor = Color(0xFFD97706),
+                icon = Icons.Outlined.Assignment,
             )
         }
         if (iotCount > 0) {
-            FilterChip(
+            ModernNotificationFilterPill(
                 selected = selectedTab == "iot",
                 onClick = { onTabSelect("iot") },
-                label = { Text("设备 ($iotCount)") },
-                leadingIcon = { Icon(Icons.Outlined.Devices, null, modifier = Modifier.size(14.dp), tint = Color(0xFF10B981)) }
+                label = "设备",
+                count = iotCount,
+                activeColor = Color(0xFF059669),
+                icon = Icons.Outlined.Devices,
             )
         }
         if (securityCount > 0) {
-            FilterChip(
+            ModernNotificationFilterPill(
                 selected = selectedTab == "security",
                 onClick = { onTabSelect("security") },
-                label = { Text("安全 ($securityCount)") },
-                leadingIcon = { Icon(Icons.Outlined.Security, null, modifier = Modifier.size(14.dp), tint = Color(0xFF8B5CF6)) }
+                label = "安全",
+                count = securityCount,
+                activeColor = Color(0xFF7C3AED),
+                icon = Icons.Outlined.Security,
             )
         }
         if (snoozedCount > 0) {
-            FilterChip(
+            ModernNotificationFilterPill(
                 selected = selectedTab == "snoozed",
                 onClick = { onTabSelect("snoozed") },
-                label = { Text("稍后 ($snoozedCount)") },
-                leadingIcon = { Icon(Icons.Outlined.AccessTime, null, modifier = Modifier.size(14.dp)) }
+                label = "稍后",
+                count = snoozedCount,
+                activeColor = Color(0xFF64748B),
+                icon = Icons.Outlined.AccessTime,
             )
+        }
+    }
+}
+
+@Composable
+private fun ModernNotificationFilterPill(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: String,
+    count: Int,
+    activeColor: Color,
+    icon: ImageVector? = null,
+) {
+    Surface(
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) activeColor.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            if (selected) 1.dp else 0.5.dp,
+            if (selected) activeColor.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+        ),
+        shadowElevation = if (selected) 0.5.dp else 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.5.dp),
+        ) {
+            if (icon != null) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(13.dp),
+                    tint = if (selected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = 12.5.sp,
+                ),
+                color = if (selected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+            )
+            if (count > 0) {
+                Surface(
+                    color = if (selected) activeColor else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(10.dp),
+                ) {
+                    Text(
+                        count.toString(),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                        ),
+                        color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -1102,11 +1197,14 @@ private fun TermTimetable(courses: List<CampusCourse>, currentCalendarText: Stri
                     shape = RoundedCornerShape(14.dp),
                 ) {
                     Row(modifier = Modifier.padding(3.dp)) {
+                        val gridShape = RoundedCornerShape(11.dp)
                         Surface(
-                            modifier = Modifier.clickable { displayMode = TimetableDisplayMode.Grid },
+                            modifier = Modifier
+                                .clip(gridShape)
+                                .clickable { displayMode = TimetableDisplayMode.Grid },
                             color = if (displayMode == TimetableDisplayMode.Grid) MaterialTheme.colorScheme.primary else Color.Transparent,
                             contentColor = if (displayMode == TimetableDisplayMode.Grid) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            shape = RoundedCornerShape(11.dp),
+                            shape = gridShape,
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -1117,11 +1215,14 @@ private fun TermTimetable(courses: List<CampusCourse>, currentCalendarText: Stri
                                 Text("矩阵", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                             }
                         }
+                        val listShape = RoundedCornerShape(11.dp)
                         Surface(
-                            modifier = Modifier.clickable { displayMode = TimetableDisplayMode.List },
+                            modifier = Modifier
+                                .clip(listShape)
+                                .clickable { displayMode = TimetableDisplayMode.List },
                             color = if (displayMode == TimetableDisplayMode.List) MaterialTheme.colorScheme.primary else Color.Transparent,
                             contentColor = if (displayMode == TimetableDisplayMode.List) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            shape = RoundedCornerShape(11.dp),
+                            shape = listShape,
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -1302,12 +1403,14 @@ private fun CourseGridMatrix(
                                     val textColor = if (isThisWeek) colorScheme.contentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                     val borderColor = if (isThisWeek) colorScheme.accentColor.copy(alpha = 0.35f) else Color.Transparent
 
+                                    val courseShape = RoundedCornerShape(10.dp)
                                     Surface(
                                         modifier = Modifier
                                             .fillMaxSize()
+                                            .clip(courseShape)
                                             .clickable { onCourseClick(matchingCourse) },
                                         color = bg,
-                                        shape = RoundedCornerShape(10.dp),
+                                        shape = courseShape,
                                         border = BorderStroke(0.5.dp, borderColor),
                                     ) {
                                         Column(
@@ -1966,6 +2069,8 @@ private fun ResourceExpiryCard(resource: ResourceExpiry, days: Int) {
     }
 }
 
+private data class Hexa<A, B, C, D, E, F>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E, val sixth: F)
+
 @Composable
 private fun NotificationCard(
     alert: AppAlertRecord,
@@ -1978,45 +2083,83 @@ private fun NotificationCard(
     val deleteThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() }
 
     val isUrgent = alert.priority == "urgent" || alert.priority == "high" || alert.type == "incident"
-    val isWarning = alert.type == "task" || alert.priority == "warning"
+    val isTask = alert.type == "task"
     val isIot = alert.type == "iot"
     val isSecurity = alert.type == "security"
 
-    val (categoryLabel, categoryBg, categoryFg) = when {
-        isUrgent -> Triple("告警", Color(0xFFFEE2E2), Color(0xFF991B1B))
-        isWarning -> Triple("任务", Color(0xFFFEF3C7), Color(0xFF92400E))
-        isIot -> Triple("设备", Color(0xFFD1FAE5), Color(0xFF065F46))
-        isSecurity -> Triple("安全", Color(0xFFEDE9FE), Color(0xFF5B21B6))
-        else -> Triple("通知", Color(0xFFDBEAFE), Color(0xFF1E40AF))
-    }
-
-    val icon = when {
-        isUrgent -> Icons.Outlined.Warning
-        isWarning -> Icons.Outlined.Assignment
-        isIot -> Icons.Outlined.Devices
-        isSecurity -> Icons.Outlined.Security
-        alert.read -> Icons.Outlined.NotificationsOff
-        else -> Icons.Outlined.Notifications
+    val (categoryLabel, categoryBg, categoryFg, categoryBorder, icon, gradientBrush) = remember(isUrgent, isTask, isIot, isSecurity) {
+        when {
+            isUrgent -> Hexa(
+                "告警",
+                Color(0xFFFEF2F2),
+                Color(0xFFDC2626),
+                Color(0xFFFECACA),
+                Icons.Outlined.Warning,
+                Brush.linearGradient(listOf(Color(0xFFEF4444), Color(0xFFDC2626))),
+            )
+            isTask -> Hexa(
+                "任务",
+                Color(0xFFFFFBEB),
+                Color(0xFFD97706),
+                Color(0xFFFDE68A),
+                Icons.Outlined.Assignment,
+                Brush.linearGradient(listOf(Color(0xFFF59E0B), Color(0xFFD97706))),
+            )
+            isIot -> Hexa(
+                "设备",
+                Color(0xFFECFDF5),
+                Color(0xFF059669),
+                Color(0xFFA7F3D0),
+                Icons.Outlined.Devices,
+                Brush.linearGradient(listOf(Color(0xFF10B981), Color(0xFF059669))),
+            )
+            isSecurity -> Hexa(
+                "安全",
+                Color(0xFFF5F3FF),
+                Color(0xFF7C3AED),
+                Color(0xFFDDD6FE),
+                Icons.Outlined.Security,
+                Brush.linearGradient(listOf(Color(0xFF8B5CF6), Color(0xFF7C3AED))),
+            )
+            else -> Hexa(
+                "通知",
+                Color(0xFFEFF6FF),
+                Color(0xFF2563EB),
+                Color(0xFFBFDBFE),
+                Icons.Outlined.Notifications,
+                Brush.linearGradient(listOf(Color(0xFF3B82F6), Color(0xFF2563EB))),
+            )
+        }
     }
 
     Box(contentAlignment = Alignment.CenterEnd) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(MaterialTheme.colorScheme.errorContainer, AppCardShape)
-                .padding(horizontal = 22.dp),
-            contentAlignment = Alignment.CenterEnd,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Outlined.DeleteOutline, contentDescription = "归档删除", tint = MaterialTheme.colorScheme.onErrorContainer)
-                Text("右滑归档", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onErrorContainer)
+        // 仅在用户滑动时才显示底层归档删除背景，彻底杜绝静态透光鬼影
+        if (offsetX < 0f) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(Color.Transparent, MaterialTheme.colorScheme.errorContainer),
+                        ),
+                        RoundedCornerShape(18.dp),
+                    )
+                    .padding(horizontal = 22.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Outlined.DeleteOutline, contentDescription = "归档", tint = MaterialTheme.colorScheme.onErrorContainer)
+                    Text("右滑归档", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onErrorContainer)
+                }
             }
         }
 
-        // 规范极简的原生卡片，完全去除左侧线条
-        AppPanel(
-            Modifier
+        // 纯净、通透、高质感的圆角卡片
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
                 .offset { IntOffset(offsetX.roundToInt(), 0) }
+                .clip(RoundedCornerShape(18.dp))
                 .pointerInput(alert.id) {
                     detectHorizontalDragGestures(
                         onHorizontalDrag = { _, dragAmount ->
@@ -2030,112 +2173,223 @@ private fun NotificationCard(
                         },
                         onDragCancel = { offsetX = 0f },
                     )
-                },
-            onClick = { onOpen(alert) },
+                }
+                .clickable { onOpen(alert) },
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(
+                if (!alert.read && isUrgent) 1.2.dp else 0.6.dp,
+                if (!alert.read && isUrgent) Color(0xFFF87171)
+                else if (!alert.read) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            ),
+            shadowElevation = if (!alert.read) 1.dp else 0.3.dp,
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                    .padding(horizontal = 15.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // 顶部行：左侧圆角徽章 + 中间标题/时间 + 右侧类型徽章 + 未读蓝点
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    IconTile(
-                        icon = icon,
-                        tint = if (!alert.read) categoryFg else Color(0xFF64748B),
-                        background = if (!alert.read) categoryBg else Color(0xFFF1F5F9)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (!alert.read) gradientBrush else Brush.linearGradient(listOf(Color(0xFF94A3B8), Color(0xFF64748B)))),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            icon,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
 
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
                                 text = alert.title,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = if (!alert.read) FontWeight.Bold else FontWeight.Normal,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = if (!alert.read) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 15.sp,
+                                    letterSpacing = (-0.2).sp,
+                                ),
+                                color = if (!alert.read) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
                             )
                             Spacer(Modifier.width(6.dp))
                             Surface(
-                                color = if (!alert.read) categoryBg else Color(0xFFF1F5F9),
-                                shape = RoundedCornerShape(8.dp)
+                                color = categoryBg,
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(0.5.dp, categoryBorder),
                             ) {
                                 Text(
                                     text = categoryLabel,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (!alert.read) categoryFg else Color(0xFF64748B),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.5.sp,
+                                    ),
+                                    color = categoryFg,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                            }
+                            if (!alert.read) {
+                                Spacer(Modifier.width(5.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .background(Color(0xFF2563EB), CircleShape),
                                 )
                             }
                         }
+
                         Text(
                             text = formatMillis(alert.createdAt),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                         )
                     }
                 }
 
+                // 描述正文：直接以纯净优雅的字体呈现，完全去除突兀的方块背景
                 if (alert.body.isNotBlank()) {
                     Text(
                         text = alert.body,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 13.5.sp,
+                            lineHeight = 19.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (!alert.read) 0.9f else 0.7f),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 2.dp),
                     )
                 }
 
+                // 结构化内容指示
                 if (alert.contentBlocks.isNotEmpty()) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 2.dp),
                     ) {
-                        Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            Icons.Outlined.Info,
+                            contentDescription = null,
+                            modifier = Modifier.size(13.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
                         Text(
-                            text = "包含 ${alert.contentBlocks.size} 项详细内容",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
+                            text = "包含 ${alert.contentBlocks.size} 项详细记录与操作 · 点击查看",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 11.5.sp,
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
 
+                // 底部操作行
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = if (alert.origin == "remote") "云端" else "本地",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(6.dp),
+                    ) {
+                        Text(
+                            text = if (alert.origin == "remote") "☁️ 云端同步" else "📱 本地提醒",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 10.5.sp,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         if (!alert.read) {
-                            TextButton(
-                                onClick = { onMarkRead(alert.id) },
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                            Surface(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { onMarkRead(alert.id) },
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFEFF6FF),
+                                border = BorderStroke(0.6.dp, Color(0xFFBFDBFE)),
                             ) {
-                                Icon(Icons.Outlined.MarkEmailRead, contentDescription = null, modifier = Modifier.size(13.dp))
-                                Spacer(Modifier.width(2.dp))
-                                Text("设已读", style = MaterialTheme.typography.labelSmall)
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.MarkEmailRead,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(13.dp),
+                                        tint = Color(0xFF2563EB),
+                                    )
+                                    Text(
+                                        "设已读",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.5.sp,
+                                        ),
+                                        color = Color(0xFF2563EB),
+                                    )
+                                }
                             }
                         }
-                        TextButton(
-                            onClick = { onSnooze(alert.id) },
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+
+                        Surface(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onSnooze(alert.id) },
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFFF1F5F9),
+                            border = BorderStroke(0.6.dp, Color(0xFFE2E8F0)),
                         ) {
-                            Icon(Icons.Outlined.AccessTime, contentDescription = null, modifier = Modifier.size(13.dp))
-                            Spacer(Modifier.width(2.dp))
-                            Text("稍后", style = MaterialTheme.typography.labelSmall)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            ) {
+                                Icon(
+                                    Icons.Outlined.AccessTime,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(13.dp),
+                                    tint = Color(0xFF475569),
+                                )
+                                Text(
+                                    "稍后",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 11.5.sp,
+                                    ),
+                                    color = Color(0xFF475569),
+                                )
+                            }
                         }
                     }
                 }
@@ -2455,7 +2709,19 @@ private fun QuietHoursDialog(preferences: AlertPreferences, onDismiss: () -> Uni
         footer = {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 AppDialogSecondaryButton("取消", onDismiss, Modifier.weight(1f))
-                AppDialogPrimaryButton("保存", { onSave(AlertPreferences(enabled, start.toIntOrNull()?.coerceIn(0, 23) ?: 22, end.toIntOrNull()?.coerceIn(0, 23) ?: 7)) }, Modifier.weight(1f))
+                AppDialogPrimaryButton(
+                    "保存",
+                    {
+                        onSave(
+                            preferences.copy(
+                                quietHoursEnabled = enabled,
+                                quietStartHour = start.toIntOrNull()?.coerceIn(0, 23) ?: 22,
+                                quietEndHour = end.toIntOrNull()?.coerceIn(0, 23) ?: 7,
+                            )
+                        )
+                    },
+                    Modifier.weight(1f),
+                )
             }
         },
     ) {

@@ -7,9 +7,6 @@ import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
-import cn.pxyb.mycontrol.data.EnvironmentReport
-import cn.pxyb.mycontrol.data.EnvironmentSummary
-import cn.pxyb.mycontrol.data.EnvironmentVariable
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
@@ -25,6 +22,7 @@ import cn.pxyb.mycontrol.data.SecurityData
 import cn.pxyb.mycontrol.data.TotpEnrollment
 import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.TrendSample
+import cn.pxyb.mycontrol.data.WebLoginLink
 
 data class AppEntryUiState(
     val booting: Boolean,
@@ -40,7 +38,6 @@ data class AppEntryUiState(
     val accountManagementOpen: Boolean,
     val googleAccountDeskOpen: Boolean,
     val globalSearchOpen: Boolean,
-    val environmentOpen: Boolean,
     val workspaceDestination: WorkspaceDestination?,
     val focusTaskId: String?,
     val error: String?,
@@ -71,26 +68,9 @@ data class OperationsUiState(
     val releases: ReleaseData?,
     val backup: BackupQuality?,
     val diagnostics: DiagnosticData?,
-    val environment: EnvironmentReport?,
-    val environmentSummary: EnvironmentSummary?,
 ) {
     val actionRequiredTasks: List<PlatformTask>
         get() = tasks.filter { it.status in setOf("action_required", "failed") }
-}
-
-data class EnvironmentUiState(
-    val refreshing: Boolean,
-    val sectionError: String?,
-    val user: PlatformUser?,
-    val report: EnvironmentReport?,
-) {
-    val summary: EnvironmentSummary get() = report?.summary ?: EnvironmentSummary()
-    val attentionVariables: List<EnvironmentVariable>
-        get() = report?.variables.orEmpty().filter {
-            it.status in setOf("missing", "invalid") ||
-                it.verificationStatus == "failed" ||
-                it.runtimeStatus == "restart_required"
-        }
 }
 
 data class ToolsUiState(
@@ -103,12 +83,34 @@ data class ToolsUiState(
     val ct8: Ct8Data?,
 )
 
+data class NetworkHealth(
+    val latencyMs: Long? = null,
+    val status: String = "unknown",
+    val gatewayUrl: String = "",
+    val checkedAtMillis: Long? = null,
+    val dnsOk: Boolean = true,
+    val apiOk: Boolean = true,
+    val message: String? = null,
+)
+
+data class CacheStorageInfo(
+    val snapshotSizeBytes: Long = 0L,
+    val workspaceSizeBytes: Long = 0L,
+    val totalFormatted: String = "0 B",
+    val lastCleanedAtMillis: Long? = null,
+)
+
 data class ProfileUiState(
     val refreshing: Boolean,
     val sectionError: String?,
     val busyAction: String?,
     val user: PlatformUser?,
     val security: SecurityData?,
+    val alertPreferences: AlertPreferences = AlertPreferences(),
+    val networkHealth: NetworkHealth = NetworkHealth(),
+    val cacheStorageInfo: CacheStorageInfo = CacheStorageInfo(),
+    val latestRelease: ReleaseData? = null,
+    val webLoginLink: WebLoginLink? = null,
 )
 
 data class AccountManagementUiState(
@@ -195,7 +197,6 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     accountManagementOpen = accountManagementOpen,
     googleAccountDeskOpen = googleAccountDeskOpen,
     globalSearchOpen = globalSearchOpen,
-    environmentOpen = environmentOpen,
     workspaceDestination = workspaceDestination,
     focusTaskId = focusTaskId,
     error = error,
@@ -218,16 +219,14 @@ internal fun AppUiState.toOverviewUiState() = OverviewUiState(
 )
 
 internal fun AppUiState.toOperationsUiState() = OperationsUiState(
-    refreshing = isRefreshing(DataSection.Tasks, DataSection.Releases, DataSection.Backup, DataSection.Environment),
-    sectionError = sectionError(DataSection.Tasks, DataSection.Releases, DataSection.Backup, DataSection.Environment),
+    refreshing = isRefreshing(DataSection.Tasks, DataSection.Releases, DataSection.Backup),
+    sectionError = sectionError(DataSection.Tasks, DataSection.Releases, DataSection.Backup),
     busyAction = busyAction,
     user = user,
     tasks = tasks,
     releases = releases,
     backup = backup,
     diagnostics = diagnostics,
-    environment = environment,
-    environmentSummary = environment?.summary ?: overview?.environment,
 )
 
 internal fun AppUiState.toToolsUiState() = ToolsUiState(
@@ -246,6 +245,11 @@ internal fun AppUiState.toProfileUiState() = ProfileUiState(
     busyAction = busyAction,
     user = user,
     security = security,
+    alertPreferences = alertPreferences,
+    networkHealth = networkHealth,
+    cacheStorageInfo = cacheStorageInfo,
+    latestRelease = releases,
+    webLoginLink = webLoginLink,
 )
 
 internal fun AppUiState.toAccountManagementUiState() = AccountManagementUiState(
@@ -398,13 +402,6 @@ internal fun AppUiState.toScenesUiState() = ScenesUiState(
     busyAction = busyAction,
     offlineMode = offlineMode,
     iot = iot,
-)
-
-internal fun AppUiState.toEnvironmentUiState() = EnvironmentUiState(
-    refreshing = isRefreshing(DataSection.Environment),
-    sectionError = sectionError(DataSection.Environment),
-    user = user,
-    report = environment,
 )
 
 private fun AppUiState.isRefreshing(vararg sections: DataSection): Boolean =

@@ -31,6 +31,21 @@ class ResponseSnapshotStore(context: Context) {
         preferences.edit().putLong("${key}_saved_at", savedAtMillis).apply()
     }
 
+    fun sizeInBytes(): Long {
+        val scope = accountScope ?: return 0L
+        val prefix = "account_${scope}_"
+        return preferences.all.entries
+            .filter { it.key.startsWith(prefix) }
+            .sumOf { (_, value) ->
+                when (value) {
+                    is String -> value.toByteArray(Charsets.UTF_8).size.toLong()
+                    is Long -> 8L
+                    is Int -> 4L
+                    else -> 16L
+                }
+            }
+    }
+
     fun clear() {
         val scope = accountScope ?: return
         val prefix = "account_${scope}_"

@@ -21,7 +21,6 @@ import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
-import cn.pxyb.mycontrol.data.EnvironmentReport
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAccountStore
 import cn.pxyb.mycontrol.data.GoogleAliasRecord
@@ -47,6 +46,7 @@ import cn.pxyb.mycontrol.data.TodoMutation
 import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.TodoTask
 import cn.pxyb.mycontrol.data.TrendSample
+import cn.pxyb.mycontrol.data.WebLoginLink
 import cn.pxyb.mycontrol.data.todayTrendSample
 import cn.pxyb.mycontrol.data.mergeRemoteAlerts
 import cn.pxyb.mycontrol.data.mergeHydratedAlerts
@@ -76,7 +76,7 @@ enum class MainTab { Overview, Notifications, Operations, Tools, Profile }
 
 enum class WorkspaceDestination { Today, Notifications, Insights, Scenes }
 
-enum class DataSection { Overview, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, Resources, Notifications, Environment }
+enum class DataSection { Overview, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, Resources, Notifications }
 
 data class SectionLoadState(
     val refreshing: Boolean = false,
@@ -99,7 +99,6 @@ data class AppUiState(
     val refreshing: Boolean = false,
     val busyAction: String? = null,
     val overview: OverviewData? = null,
-    val environment: EnvironmentReport? = null,
     val incidents: List<IncidentInfo> = emptyList(),
     val tasks: List<PlatformTask> = emptyList(),
     val releases: ReleaseData? = null,
@@ -115,7 +114,6 @@ data class AppUiState(
     val accountManagementOpen: Boolean = false,
     val googleAccountDeskOpen: Boolean = false,
     val globalSearchOpen: Boolean = false,
-    val environmentOpen: Boolean = false,
     val workspaceDestination: WorkspaceDestination? = null,
     val googleAccounts: List<GoogleAccountRecord> = emptyList(),
     val googleAccountsLoaded: Boolean = false,
@@ -141,6 +139,9 @@ data class AppUiState(
     val alerts: List<AppAlertRecord> = emptyList(),
     val alertPreferences: AlertPreferences = AlertPreferences(),
     val trendSamples: List<TrendSample> = emptyList(),
+    val networkHealth: NetworkHealth = NetworkHealth(),
+    val cacheStorageInfo: CacheStorageInfo = CacheStorageInfo(),
+    val webLoginLink: WebLoginLink? = null,
 ) {
     val activeIncidents: List<IncidentInfo>
         get() = incidents.filter { it.status != "resolved" }
@@ -156,7 +157,8 @@ class AppViewModel(
     private val googleAccountStore = GoogleAccountStore(application)
     private val homePreferences = HomePreferences(application)
     private val personalStore = PersonalWorkspaceStore(application)
-    private val api = PlatformApi(sessionStore, ResponseSnapshotStore(application))
+    private val snapshotStore = ResponseSnapshotStore(application)
+    private val api = PlatformApi(sessionStore, snapshotStore)
     private val alertNotifier = AlertNotifier(application)
     private val hasSavedSession = sessionStore.hasSession()
     private val lockEnabled = sessionStore.isLockEnabled()
@@ -199,7 +201,6 @@ class AppViewModel(
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
     val insightsState = deriveState(AppUiState::toInsightsUiState)
     val scenesState = deriveState(AppUiState::toScenesUiState)
-    val environmentState = deriveState(AppUiState::toEnvironmentUiState)
     private var pendingQrLogin: Pair<String, String>? = null
     private var pollJob: Job? = null
     private var appInForeground = false
@@ -469,7 +470,7 @@ class AppViewModel(
             stopOperationalPolling()
         } else if (mutableState.value.user != null && !mutableState.value.locked) {
             startOperationalPolling()
-            refreshForTab(mutableState.value.selectedTab)
+            refreshCurrentDestination(force = false)
         }
     }
 
@@ -526,6 +527,7 @@ class AppViewModel(
         appDeviceRegistered = false
         googleAccountStore.setAccount(username)
         personalStore.setAccount(username)
+        snapshotStore.setAccount(username)
         alertNotifier.setAccount(username)
         api.setAccount(username)
     }
@@ -533,6 +535,7 @@ class AppViewModel(
     private fun clearAccountScopedState() {
         alertNotifier.clear()
         personalStore.clearAccountData()
+        snapshotStore.clear()
         googleAccountStore.clear()
         setAccountScope(null)
     }
@@ -595,21 +598,7 @@ class AppViewModel(
     }
 
     fun selectTab(tab: MainTab) {
-        val changed = mutableState.value.selectedTab != tab
-        mutableState.update { current ->
-            if (current.selectedTab == tab && current.error == null && current.message == null) {
-                current
-            } else {
-                current.copy(
-                    selectedTab = tab,
-                    workspaceDestination = null,
-                    error = null,
-                    message = null,
-                )
-            }
-        }
-        persistNavigationState()
-        if (changed) refreshForTab(tab)
+        syncNavigationDestination(tab)
     }
 
     fun syncNavigationDestination(
@@ -617,45 +606,39 @@ class AppViewModel(
         accountManagementOpen: Boolean = false,
         googleAccountDeskOpen: Boolean = false,
         globalSearchOpen: Boolean = false,
-        environmentOpen: Boolean = false,
         workspaceDestination: WorkspaceDestination? = null,
+        autoRefresh: Boolean = true,
     ) {
-        val changedTab = mutableState.value.selectedTab != tab
+        val destinationChanged = mutableState.value.selectedTab != tab ||
+            mutableState.value.accountManagementOpen != accountManagementOpen ||
+            mutableState.value.googleAccountDeskOpen != googleAccountDeskOpen ||
+            mutableState.value.globalSearchOpen != globalSearchOpen ||
+            mutableState.value.workspaceDestination != workspaceDestination
+
         mutableState.update { current ->
-            current.copy(
-                selectedTab = tab,
+            if (!destinationChanged) {
+                current
+            } else {
+                current.copy(
+                    selectedTab = tab,
+                    accountManagementOpen = accountManagementOpen,
+                    googleAccountDeskOpen = googleAccountDeskOpen,
+                    globalSearchOpen = globalSearchOpen,
+                    workspaceDestination = workspaceDestination,
+                )
+            }
+        }
+        persistNavigationState()
+        if (autoRefresh) {
+            refreshDestination(
+                tab = tab,
                 accountManagementOpen = accountManagementOpen,
                 googleAccountDeskOpen = googleAccountDeskOpen,
                 globalSearchOpen = globalSearchOpen,
-                environmentOpen = environmentOpen,
                 workspaceDestination = workspaceDestination,
+                force = false,
             )
         }
-        persistNavigationState()
-        if (changedTab) refreshForTab(tab)
-    }
-
-    fun openEnvironment() {
-        if (mutableState.value.user?.role != "super_admin") return
-        mutableState.update {
-            it.copy(
-                selectedTab = MainTab.Operations,
-                accountManagementOpen = false,
-                googleAccountDeskOpen = false,
-                globalSearchOpen = false,
-                environmentOpen = true,
-                workspaceDestination = null,
-                error = null,
-                message = null,
-            )
-        }
-        persistNavigationState()
-        refreshEnvironment()
-    }
-
-    fun closeEnvironment() {
-        mutableState.update { it.copy(environmentOpen = false) }
-        persistNavigationState()
     }
 
     fun handleOpenIntent(uri: Uri?) {
@@ -693,7 +676,6 @@ class AppViewModel(
                 googleAccountDeskOpen = false,
                 globalSearchOpen = false,
                 workspaceDestination = null,
-                environmentOpen = false,
                 focusTaskId = taskId?.takeIf(String::isNotBlank),
                 error = null,
                 message = null,
@@ -1330,16 +1312,61 @@ class AppViewModel(
     }
 
     fun refreshCurrentTab(force: Boolean = true) {
-        mutableState.update { it.copy(error = null) }
-        refreshForTab(mutableState.value.selectedTab, force)
+        refreshCurrentDestination(force)
     }
 
     fun refreshCurrentWorkspace(force: Boolean = true) {
-        when (mutableState.value.workspaceDestination) {
-            WorkspaceDestination.Today -> refreshToday(force)
-            WorkspaceDestination.Scenes -> refreshIot(force)
-            WorkspaceDestination.Notifications, WorkspaceDestination.Insights -> reloadPersonalState()
-            null -> refreshCurrentTab(force)
+        refreshCurrentDestination(force)
+    }
+
+    fun refreshCurrentDestination(force: Boolean = true) {
+        mutableState.update { it.copy(error = null) }
+        val current = mutableState.value
+        refreshDestination(
+            tab = current.selectedTab,
+            accountManagementOpen = current.accountManagementOpen,
+            googleAccountDeskOpen = current.googleAccountDeskOpen,
+            globalSearchOpen = current.globalSearchOpen,
+            workspaceDestination = current.workspaceDestination,
+            force = force,
+        )
+    }
+
+    fun refreshDestination(
+        tab: MainTab,
+        accountManagementOpen: Boolean = false,
+        googleAccountDeskOpen: Boolean = false,
+        globalSearchOpen: Boolean = false,
+        workspaceDestination: WorkspaceDestination? = null,
+        force: Boolean = false,
+    ) {
+        if (mutableState.value.user == null || mutableState.value.locked) return
+        when {
+            workspaceDestination == WorkspaceDestination.Today -> refreshToday(force)
+            workspaceDestination == WorkspaceDestination.Scenes -> refreshIot(force)
+            workspaceDestination == WorkspaceDestination.Notifications -> {
+                refreshIncidents(force)
+                syncRemoteNotifications(force)
+                reloadPersonalState()
+            }
+            workspaceDestination == WorkspaceDestination.Insights -> {
+                refreshOverview(force)
+                reloadPersonalState()
+            }
+            googleAccountDeskOpen -> {
+                loadGoogleAccounts()
+            }
+            accountManagementOpen -> {
+                refreshSecurity(force)
+                refreshPasskeys()
+            }
+            globalSearchOpen -> {
+                refreshOverview(force)
+                refreshTasks(force)
+            }
+            else -> {
+                refreshForTab(tab, force)
+            }
         }
     }
 
@@ -1362,20 +1389,22 @@ class AppViewModel(
                 refreshTasks(force)
                 refreshReleases(force)
                 refreshBackup(force)
-                if (mutableState.value.user?.role == "super_admin") refreshEnvironment(force)
             }
             MainTab.Tools -> {
                 refreshIot(force)
                 refreshCt8(force)
             }
-            MainTab.Profile -> refreshSecurity(force)
+            MainTab.Profile -> {
+                refreshSecurity(force)
+                updateCacheStorageInfo()
+                measureNetworkHealth()
+            }
         }
     }
 
     private fun refreshOverview(force: Boolean) = launchRefresh(DataSection.Overview, force) {
         val overview = api.overview(force)
         mutableState.update { it.copy(overview = overview) }
-        withContext(Dispatchers.IO) { alertNotifier.evaluateEnvironment(overview.environment) }
         publishWidget()
         recordTrendSample()
     }
@@ -1405,12 +1434,6 @@ class AppViewModel(
     private fun refreshBackup(force: Boolean = false) = launchRefresh(DataSection.Backup, force) {
         val backup = api.backupQuality()
         mutableState.update { it.copy(backup = backup) }
-    }
-
-    fun refreshEnvironment(force: Boolean = false) = launchRefresh(DataSection.Environment, force) {
-        val report = api.environment(force)
-        mutableState.update { it.copy(environment = report) }
-        withContext(Dispatchers.IO) { alertNotifier.evaluateEnvironment(report.summary) }
     }
 
     private fun refreshIot(force: Boolean = false) = launchRefresh(DataSection.Iot, force) {
@@ -1471,6 +1494,7 @@ class AppViewModel(
     private fun refreshSecurity(force: Boolean = false) = launchRefresh(DataSection.Security, force) {
         val security = api.security()
         mutableState.update { it.copy(security = security) }
+        refreshPasskeysInternal()
     }
 
     private fun launchRefresh(section: DataSection, force: Boolean = false, block: suspend () -> Unit) {
@@ -1665,7 +1689,6 @@ class AppViewModel(
             "incident" -> openWorkspace(WorkspaceDestination.Notifications)
             "task" -> openOperationalTarget(MainTab.Operations, taskId = record.sourceId)
             "todo", "course" -> openWorkspace(WorkspaceDestination.Today)
-            "environment" -> openEnvironment()
             else -> Unit
         }
     }
@@ -2198,9 +2221,164 @@ class AppViewModel(
         reloadPersonalState()
     }
 
+    fun measureNetworkHealth() {
+        if (mutableState.value.user == null) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(networkHealth = it.networkHealth.copy(status = "measuring")) }
+            val startNs = System.nanoTime()
+            val result = runCatching { api.authStatus() }
+            val elapsedMs = (System.nanoTime() - startNs) / 1_000_000L
+            if (result.isSuccess) {
+                val status = when {
+                    elapsedMs < 150 -> "healthy"
+                    elapsedMs < 500 -> "warning"
+                    else -> "error"
+                }
+                mutableState.update {
+                    it.copy(
+                        networkHealth = NetworkHealth(
+                            latencyMs = elapsedMs,
+                            status = status,
+                            gatewayUrl = BuildConfig.PLATFORM_BASE_URL,
+                            checkedAtMillis = System.currentTimeMillis(),
+                            dnsOk = true,
+                            apiOk = true,
+                            message = "连接正常 · 响应延迟 ${elapsedMs}ms",
+                        )
+                    )
+                }
+            } else {
+                mutableState.update {
+                    it.copy(
+                        networkHealth = NetworkHealth(
+                            latencyMs = null,
+                            status = "error",
+                            gatewayUrl = BuildConfig.PLATFORM_BASE_URL,
+                            checkedAtMillis = System.currentTimeMillis(),
+                            dnsOk = false,
+                            apiOk = false,
+                            message = result.exceptionOrNull()?.message ?: "远程网关连接超时",
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    fun updateCacheStorageInfo() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val snapshotBytes = snapshotStore.sizeInBytes()
+            val workspaceBytes = personalStore.sizeInBytes()
+            val total = snapshotBytes + workspaceBytes
+            val formatted = formatBytes(total)
+            mutableState.update {
+                it.copy(
+                    cacheStorageInfo = CacheStorageInfo(
+                        snapshotSizeBytes = snapshotBytes,
+                        workspaceSizeBytes = workspaceBytes,
+                        totalFormatted = formatted,
+                        lastCleanedAtMillis = it.cacheStorageInfo.lastCleanedAtMillis,
+                    )
+                )
+            }
+        }
+    }
+
+    fun clearLocalCache() {
+        viewModelScope.launch(Dispatchers.IO) {
+            snapshotStore.clear()
+            val snapshotBytes = snapshotStore.sizeInBytes()
+            val workspaceBytes = personalStore.sizeInBytes()
+            val total = snapshotBytes + workspaceBytes
+            mutableState.update {
+                it.copy(
+                    cacheStorageInfo = CacheStorageInfo(
+                        snapshotSizeBytes = snapshotBytes,
+                        workspaceSizeBytes = workspaceBytes,
+                        totalFormatted = formatBytes(total),
+                        lastCleanedAtMillis = System.currentTimeMillis(),
+                    ),
+                    message = "本地临时快照已清理完毕",
+                )
+            }
+        }
+    }
+
+    fun forceFullSync() {
+        refreshCurrentTab(force = true)
+        updateCacheStorageInfo()
+        measureNetworkHealth()
+    }
+
+    fun createDesktopMagicLink(onResult: (String?, String?) -> Unit) {
+        viewModelScope.launch {
+            mutableState.update { it.copy(busyAction = "desktop-magic-link", error = null) }
+            runCatching {
+                api.createWebLoginLink("/console")
+            }.onSuccess { link ->
+                mutableState.update { it.copy(busyAction = null, webLoginLink = link) }
+                onResult(link.loginUrl, null)
+            }.onFailure { error ->
+                mutableState.update { it.copy(busyAction = null, error = error.message ?: "生成网页登录链接失败") }
+                onResult(null, error.message ?: "生成网页登录链接失败")
+            }
+        }
+    }
+
+    fun updateNotificationPreferences(preferences: AlertPreferences) {
+        viewModelScope.launch(Dispatchers.IO) {
+            personalStore.writeAlertPreferences(preferences)
+            mutableState.update { it.copy(alertPreferences = preferences) }
+            reloadPersonalState()
+        }
+    }
+
+    fun checkAppUpdates() {
+        viewModelScope.launch {
+            mutableState.update { it.copy(busyAction = "check-updates", error = null) }
+            runCatching {
+                api.releases()
+            }.onSuccess { releases ->
+                mutableState.update { it.copy(busyAction = null, releases = releases, message = "版本检查完成") }
+            }.onFailure { error ->
+                mutableState.update { it.copy(busyAction = null, error = error.message ?: "检查更新失败，请稍后重试") }
+            }
+        }
+    }
+
+    fun generateDiagnosticReport(): String {
+        val current = mutableState.value
+        val user = current.user
+        val timeStr = java.time.ZonedDateTime.now().toString()
+        return buildString {
+            appendLine("=== MY Control 客户端运行诊断报告 ===")
+            appendLine("生成时间: $timeStr")
+            appendLine("应用版本: v${BuildConfig.VERSION_NAME}")
+            appendLine("设备型号: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} (Android SDK ${android.os.Build.VERSION.SDK_INT})")
+            appendLine("登录账号: ${user?.username ?: "未登录"} (角色: ${user?.role ?: "未知"})")
+            appendLine("网关节点: ${BuildConfig.PLATFORM_BASE_URL}")
+            appendLine("网络延迟: ${current.networkHealth.latencyMs?.let { "${it}ms" } ?: "未测速"}")
+            appendLine("网络状态: ${if (current.offlineMode) "离线模式" else "在线就绪"}")
+            appendLine("安全保护: TOTP=${user?.totpEnabled == true}, Passkey=${user?.passkeyCount ?: 0}")
+            appendLine("会话保护: 应用锁=${current.appLockEnabled}")
+            appendLine("免打扰: ${if (current.alertPreferences.quietHoursEnabled) "开启 (${current.alertPreferences.quietStartHour}:00 - ${current.alertPreferences.quietEndHour}:00)" else "未开启"}")
+            appendLine("通知过滤: ${current.alertPreferences.severityFilter}")
+            appendLine("本地快照: ${current.cacheStorageInfo.totalFormatted}")
+            appendLine("活动会话数: ${current.security?.sessions?.size ?: 0}")
+            appendLine("=======================================")
+        }
+    }
+
     private companion object {
         const val REFRESH_CACHE_WINDOW_MS = 30_000L
     }
+}
+
+private fun formatBytes(bytes: Long): String = when {
+    bytes <= 0L -> "0 B"
+    bytes < 1024L -> "$bytes B"
+    bytes < 1024L * 1024L -> String.format(java.util.Locale.US, "%.1f KB", bytes.toDouble() / 1024.0)
+    else -> String.format(java.util.Locale.US, "%.2f MB", bytes.toDouble() / (1024.0 * 1024.0))
 }
 
 internal fun operationalAlertsReady(incidentsLoaded: Boolean, tasksLoaded: Boolean): Boolean =

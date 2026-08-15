@@ -4,7 +4,6 @@ import { createServer } from 'node:http';
 import { chmod, mkdir, open, readFile, rename, stat, statfs, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { buildEnvironmentReport } from './environment-diagnostics.mjs';
 
 const COMPONENTS = {
   platform: { service: 'platform-api', envKey: 'PLATFORM_API_IMAGE' },
@@ -261,7 +260,6 @@ export function createDeploymentRunner({
   spawnImpl = spawn,
   fetchImpl = fetch,
   now = () => new Date(),
-  environmentReporter = null,
 } = {}) {
   const jobs = new Map();
   const queue = [];
@@ -373,25 +371,6 @@ export function createDeploymentRunner({
       };
     });
     return { components, observedAt: now().toISOString() };
-  }
-
-  async function inspectEnvironment() {
-    if (environmentReporter) return environmentReporter();
-    const [envSource, templateSource, composeSource, envStats, runtime] = await Promise.all([
-      readFile(config.envFile, 'utf8'),
-      readFile(path.join(config.workspaceRoot, '.env.example'), 'utf8'),
-      readFile(config.composeFile, 'utf8'),
-      stat(config.envFile),
-      inspectRuntime(),
-    ]);
-    return buildEnvironmentReport({
-      envSource,
-      templateSource,
-      composeSource,
-      envUpdatedAt: envStats.mtime.toISOString(),
-      runtime,
-      checkedAt: now().toISOString(),
-    });
   }
 
   async function preflight({ components, action = 'deploy' }) {
@@ -716,9 +695,6 @@ export function createDeploymentRunner({
           jobs: [...jobs.values()].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)).slice(0, 20).map(publicJob),
         });
       }
-      if (req.method === 'GET' && url.pathname === '/environment') {
-        return sendJson(res, 200, await inspectEnvironment());
-      }
       if (req.method === 'POST' && url.pathname === '/preflight') {
         return sendJson(res, 200, await preflight(await readRequestBody(req)));
       }
@@ -747,7 +723,6 @@ export function createDeploymentRunner({
     config,
     handle,
     initialize,
-    inspectEnvironment,
     inspectRuntime,
     preflight,
     submit,
