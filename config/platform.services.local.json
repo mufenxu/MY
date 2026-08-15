@@ -73,6 +73,18 @@
       "adminUrl": null,
       "repositoryPath": "automation/ct8-automation",
       "capabilities": ["GitHub Actions", "SSH"]
+    },
+    {
+      "id": "platform",
+      "name": "统一服务控制台",
+      "shortName": "统一控制台",
+      "category": "service",
+      "description": "统一管理门户、聚合网关与安全中心",
+      "baseUrl": "https://pxyb.cn",
+      "healthPath": "/api/readyz",
+      "adminUrl": "/console/",
+      "repositoryPath": "apps/admin-console",
+      "capabilities": ["统一控制台", "网关", "监控", "安全"]
     }
   ]
 }

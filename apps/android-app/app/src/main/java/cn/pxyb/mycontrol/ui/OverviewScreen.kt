@@ -1049,7 +1049,7 @@ private fun ServiceRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(11.dp),
     ) {
-        val icon = if (service.category == "miniapp") Icons.Outlined.Hub else Icons.Outlined.Speed
+        val icon = serviceOverviewIcon(service)
         IconTile(icon, style.foreground, style.background, modifier = Modifier.size(38.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(service.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1224,4 +1224,12 @@ private fun servicePriority(state: String): Int = when (state) {
     "degraded" -> 1
     "healthy" -> 2
     else -> 3
+}
+
+private fun serviceOverviewIcon(service: ServiceInfo): ImageVector = when (service.id) {
+    "platform" -> Icons.Outlined.Security
+    "notify" -> Icons.Outlined.Notifications
+    "campus" -> Icons.Outlined.CalendarMonth
+    "mqtt" -> Icons.Outlined.Speed
+    else -> if (service.category == "miniapp") Icons.Outlined.Hub else Icons.Outlined.Speed
 }

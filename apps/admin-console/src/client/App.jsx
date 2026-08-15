@@ -125,6 +125,7 @@ const SERVICE_ICONS = {
   mqtt: Radio,
   notify: Bell,
   'ct8-automation': Bot,
+  platform: ShieldCheck,
 };
 
 const STATE_META = {
