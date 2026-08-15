@@ -4,8 +4,11 @@ import { createPasswordHash } from '../apps/admin-console/src/auth.js';
 
 const random = (bytes = 32) => crypto.randomBytes(bytes).toString('base64url');
 const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+const { privateKey: externalAuthPrivateKey, publicKey: externalAuthPublicKey } = crypto.generateKeyPairSync('ed25519');
 const privateValue = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url');
 const publicValue = publicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
+const externalAuthPrivateValue = externalAuthPrivateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url');
+const externalAuthPublicValue = externalAuthPublicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
 const adminPassword = `Aa1!${random(18)}`;
 const adminPasswordHash = await createPasswordHash(adminPassword);
 const dockerGid = process.platform === 'win32' ? 0 : (await stat('/var/run/docker.sock')).gid;
@@ -60,6 +63,10 @@ const values = {
   PLATFORM_AUTH_ENCRYPTION_KEY: random(),
   PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: privateValue,
   PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: publicValue,
+  PLATFORM_EXTERNAL_AUTH_PRIVATE_KEY: externalAuthPrivateValue,
+  PLATFORM_EXTERNAL_AUTH_PUBLIC_KEY: externalAuthPublicValue,
+  PLATFORM_EXTERNAL_AUTH_KEY_ID: 'external-auth-v1',
+  PLATFORM_EXTERNAL_AUTH_TOKEN_TTL_SECONDS: '300',
   PLATFORM_SESSION_TTL_HOURS: '12',
   PLATFORM_ANDROID_SESSION_TTL_HOURS: '720',
   PLATFORM_ANDROID_SESSION_IDLE_MINUTES: '1440',

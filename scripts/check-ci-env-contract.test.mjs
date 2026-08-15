@@ -14,3 +14,16 @@ test('CI environment contract reports a missing required variable', () => {
     'CI environment generator is missing required Compose variable PLATFORM_AUTH_ENCRYPTION_KEY',
   ]);
 });
+
+test('platform API receives the external authentication configuration', () => {
+  const { compose } = loadCiEnvContractInputs();
+
+  for (const key of [
+    'PLATFORM_EXTERNAL_AUTH_PRIVATE_KEY',
+    'PLATFORM_EXTERNAL_AUTH_PUBLIC_KEY',
+    'PLATFORM_EXTERNAL_AUTH_KEY_ID',
+    'PLATFORM_EXTERNAL_AUTH_TOKEN_TTL_SECONDS',
+  ]) {
+    assert.match(compose, new RegExp(`^\\s{6}${key}: \\$\\{${key}:[^}]+}`, 'm'));
+  }
+});
