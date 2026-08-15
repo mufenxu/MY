@@ -35,7 +35,9 @@ test('console navigation exposes six complete groups with stable legacy view ids
     'capabilities',
     'security',
   ]);
-  assert.equal(new Set(NAV_GROUPS.flatMap((group) => group.views.map((view) => view.id))).size, 14);
+  const viewIds = NAV_GROUPS.flatMap((group) => group.views.map((view) => view.id));
+  assert.equal(viewIds.length, 14);
+  assert.equal(new Set(viewIds).size, viewIds.length);
   assert.equal(getNavigationGroup('service').id, 'services');
   assert.equal(getNavigationGroup('external-apps').id, 'services');
   assert.equal(getNavigationGroup('diagnostics').id, 'observability');

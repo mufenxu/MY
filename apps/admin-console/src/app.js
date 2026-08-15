@@ -50,6 +50,7 @@ import {
   visibleExternalApplications,
 } from './external-application-service.js';
 import { createExternalIdentityService, oauthError, pkceChallenge, verifyPkceChallenge } from './external-identity.js';
+import { EXTERNAL_AUTH_GUIDE_CSS, buildExternalAuthGuideContract, renderExternalAuthGuideHtml } from './external-auth-guide.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.resolve(__dirname, '..', 'dist');
@@ -763,6 +764,29 @@ export function createApp({
   app.use('/api', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     next();
+  });
+
+  app.get('/external-auth-guide', (req, res) => res.redirect(308, '/docs/external-auth'));
+  app.get('/external-auth-guide.json', (req, res) => res.redirect(308, '/docs/external-auth.json'));
+  app.get('/docs/external-auth.css', (req, res) => {
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.type('text/css').send(EXTERNAL_AUTH_GUIDE_CSS);
+  });
+  app.get('/docs/external-auth', (req, res) => {
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('X-Robots-Tag', 'noindex');
+    return res.type('html').send(renderExternalAuthGuideHtml({
+      origin: publicUrl.origin,
+      tokenTtlSeconds: config.externalAuthTokenTtlSeconds,
+    }));
+  });
+  app.get('/docs/external-auth.json', (req, res) => {
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('X-Robots-Tag', 'noindex');
+    return res.json(buildExternalAuthGuideContract({
+      origin: publicUrl.origin,
+      tokenTtlSeconds: config.externalAuthTokenTtlSeconds,
+    }));
   });
 
   app.get('/.well-known/openid-configuration', (req, res) => {

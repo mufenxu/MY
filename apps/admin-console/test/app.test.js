@@ -316,6 +316,43 @@ test('public status is unauthenticated while operational task data remains prote
   });
 });
 
+test('external authentication guide is public and exposes a safe machine-readable contract', async () => {
+  const config = {
+    ...loadConfig({ NODE_ENV: 'development' }),
+    authDisabled: false,
+    publicOrigin: 'https://pxyb.cn',
+    externalAuthIssuer: 'https://pxyb.cn',
+    metricsToken: 'm'.repeat(32),
+  };
+  const app = createApp({ config });
+
+  await withServer(app, async (origin) => {
+    const pageResponse = await fetch(`${origin}/docs/external-auth`);
+    assert.equal(pageResponse.status, 200);
+    assert.match(pageResponse.headers.get('content-type'), /text\/html/);
+    const page = await pageResponse.text();
+    assert.match(page, /MY 外部项目接入文档/);
+    assert.match(page, /https:\/\/pxyb\.cn\/\.well-known\/openid-configuration/);
+    assert.match(page, /Authorization Code \+ PKCE/);
+    assert.match(page, /完成后请明确返回控制台需要填写的/);
+
+    const contractResponse = await fetch(`${origin}/docs/external-auth.json`);
+    assert.equal(contractResponse.status, 200);
+    const contract = await contractResponse.json();
+    assert.equal(contract.issuer, 'https://pxyb.cn');
+    assert.equal(contract.endpoints.authorization, 'https://pxyb.cn/oauth/authorize');
+    assert.equal(contract.protocol.pkceMethod, 'S256');
+    assert.deepEqual(contract.registration.requiredFields, ['name', 'launchUrl', 'redirectUris']);
+    assert.equal(contract.credentials.clientSecretServerOnly, true);
+    assert.deepEqual(contract.aiExpectedOutput.registrationFields, [
+      'name', 'launchUrl', 'redirectUris', 'healthUrl', 'requiredRole', 'openMode',
+    ]);
+    assert.equal('clientSecret' in contract.credentials, false);
+    assert.equal(JSON.stringify(contract).includes('PRIVATE_KEY'), false);
+    assert.equal((await fetch(`${origin}/external-auth-guide`, { redirect: 'manual' })).status, 308);
+  });
+});
+
 test('configuration, task, and trace routes preserve role and console-request boundaries', async () => {
   const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
   const calls = [];

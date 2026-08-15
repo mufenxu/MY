@@ -77,6 +77,8 @@ test('external applications use server-issued launch links and reveal client sec
   assert.match(view, /rotate-secret/);
   assert.match(view, /密钥只显示这一次/);
   assert.doesNotMatch(view, /clientSecretHash/);
+  assert.equal(view.match(/href="\/docs\/external-auth"/g)?.length, 2);
+  assert.match(view, /查看接入文档/);
 });
 
 test('console navigation and segmented tabs preserve browser and keyboard semantics', () => {

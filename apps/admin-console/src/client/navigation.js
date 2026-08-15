@@ -13,7 +13,6 @@ export const NAV_GROUPS = Object.freeze([
       { id: 'miniapp', label: '应用' },
       { id: 'service', label: '基础服务' },
       { id: 'external-apps', label: '外部应用' },
-      { id: 'external-apps', label: '外部应用' },
     ],
   },
   {

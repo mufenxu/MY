@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   AppWindow,
+  BookOpen,
   CheckCircle2,
   CircleAlert,
   CircleOff,
@@ -87,7 +88,7 @@ function ApplicationEditor({ application, busy, onClose, onSave }) {
       <section className="external-app-dialog" role="dialog" aria-modal="true" aria-label={application ? '编辑外部应用' : '接入外部应用'}>
         <header>
           <div><span><AppWindow size={20} /></span><div><h2>{application ? '编辑外部应用' : '接入外部应用'}</h2><p>配置项目自己的 OIDC 启动和回调地址</p></div></div>
-          <button type="button" aria-label="关闭弹窗" disabled={busy} onClick={onClose}><X size={19} /></button>
+          <div className="external-app-dialog-actions"><a href="/docs/external-auth" target="_blank" rel="noreferrer"><BookOpen size={16} />查看接入文档</a><button type="button" aria-label="关闭弹窗" disabled={busy} onClick={onClose}><X size={19} /></button></div>
         </header>
         <form onSubmit={submit}>
           <div className="external-app-form-grid">
@@ -229,6 +230,7 @@ export default function ExternalApplicationsView({ session }) {
       <header className="external-applications-header">
         <div><span>身份联邦</span><h2>外部应用</h2><p>独立部署，统一身份，一键进入</p></div>
         <div>
+          <a className="secondary-action external-doc-link" href="/docs/external-auth" target="_blank" rel="noreferrer"><BookOpen size={17} />接入文档</a>
           <button className="secondary-action" type="button" disabled={refreshing} onClick={() => load(true)}><RefreshCw className={refreshing ? 'spin' : ''} size={17} />刷新状态</button>
           {superAdmin && <button className="primary-button" type="button" onClick={() => setEditor(null)}><Plus size={17} />接入应用</button>}
         </div>

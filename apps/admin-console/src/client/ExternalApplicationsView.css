@@ -6,6 +6,7 @@
 .external-applications-header h2 { color: var(--ink); font-size: var(--type-title); }
 .external-applications-header p { color: var(--muted); font-size: var(--type-body); }
 .external-applications-header > div:last-child, .external-admin-actions, .external-app-card > footer { display: flex; align-items: center; gap: 8px; }
+.external-doc-link { text-decoration: none; }
 .external-app-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .external-app-card { display: flex; min-width: 0; flex-direction: column; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow-soft); }
 .external-app-card > header { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
@@ -36,7 +37,9 @@
 .external-app-dialog h2, .external-app-dialog p { margin: 0; }
 .external-app-dialog h2 { color: var(--ink); font-size: 18px; }
 .external-app-dialog p { color: var(--muted); font-size: var(--type-caption); }
-.external-app-dialog > header > button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.external-app-dialog-actions { display: flex; align-items: center; gap: 10px; }
+.external-app-dialog-actions > a { display: inline-flex; align-items: center; gap: 5px; color: var(--blue); font-size: var(--type-caption); font-weight: 700; text-decoration: none; }
+.external-app-dialog-actions > button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
 .external-app-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .external-app-form-grid label { display: flex; min-width: 0; flex-direction: column; gap: 6px; color: var(--ink); font-size: var(--type-caption); font-weight: 700; }
 .external-app-form-grid label.wide { grid-column: 1 / -1; }
