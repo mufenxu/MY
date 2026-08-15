@@ -6,6 +6,9 @@ import { loadConfig, parseTrustProxy } from '../src/config.js';
 const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
 const internalPrivateKey = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url');
 const internalPublicKey = publicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
+const externalPair = crypto.generateKeyPairSync('ed25519');
+const externalPrivateKey = externalPair.privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url');
+const externalPublicKey = externalPair.publicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
 const validPasswordHash = `scrypt$${Buffer.alloc(16, 1).toString('base64url')}$${Buffer.alloc(64, 2).toString('base64url')}`;
 const authEncryptionKey = Buffer.alloc(32, 3).toString('base64url');
 
@@ -18,6 +21,9 @@ test('development defaults to local auth bypass', () => {
   assert.equal(config.sessionIdleMinutes, 30);
   assert.equal(config.androidSessionTtlHours, 720);
   assert.equal(config.androidSessionIdleMinutes, 1440);
+  assert.equal(config.externalAuthIssuer, 'http://127.0.0.1:22100');
+  assert.notEqual(config.externalAuthPrivateKey, config.internalAuthPrivateKey);
+  assert.notEqual(config.externalAuthPublicKey, config.internalAuthPublicKey);
 });
 
 test('proxy trust is limited to an explicit hop count', () => {
@@ -43,6 +49,8 @@ test('production accepts a password hash and strong session secret', () => {
     PLATFORM_AUTH_ENCRYPTION_KEY: authEncryptionKey,
     PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: internalPrivateKey,
     PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: internalPublicKey,
+    PLATFORM_EXTERNAL_AUTH_PRIVATE_KEY: externalPrivateKey,
+    PLATFORM_EXTERNAL_AUTH_PUBLIC_KEY: externalPublicKey,
     PLATFORM_PUBLIC_ORIGIN: 'https://admin.example.com',
     PLATFORM_MONGODB_URI: 'mongodb://platform.example/platform_app',
     PLATFORM_METRICS_TOKEN: 'm'.repeat(32),
@@ -61,6 +69,8 @@ test('production rejects public template secrets', () => {
       PLATFORM_AUTH_ENCRYPTION_KEY: authEncryptionKey,
       PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: internalPrivateKey,
       PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: internalPublicKey,
+      PLATFORM_EXTERNAL_AUTH_PRIVATE_KEY: externalPrivateKey,
+      PLATFORM_EXTERNAL_AUTH_PUBLIC_KEY: externalPublicKey,
       PLATFORM_PUBLIC_ORIGIN: 'https://admin.example.com',
       PLATFORM_MONGODB_URI: 'mongodb://platform.example/platform_app',
       PLATFORM_METRICS_TOKEN: 'replace_with_at_least_32_random_characters',
@@ -79,6 +89,8 @@ test('production backup runner requires a strong shared token when enabled', () 
       PLATFORM_AUTH_ENCRYPTION_KEY: authEncryptionKey,
       PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: internalPrivateKey,
       PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: internalPublicKey,
+      PLATFORM_EXTERNAL_AUTH_PRIVATE_KEY: externalPrivateKey,
+      PLATFORM_EXTERNAL_AUTH_PUBLIC_KEY: externalPublicKey,
       PLATFORM_PUBLIC_ORIGIN: 'https://admin.example.com',
       PLATFORM_MONGODB_URI: 'mongodb://platform.example/platform_app',
       PLATFORM_METRICS_TOKEN: 'm'.repeat(32),
@@ -98,6 +110,8 @@ test('production release writes require callback and image allowlist controls', 
     PLATFORM_AUTH_ENCRYPTION_KEY: authEncryptionKey,
     PLATFORM_INTERNAL_AUTH_PRIVATE_KEY: internalPrivateKey,
     PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: internalPublicKey,
+    PLATFORM_EXTERNAL_AUTH_PRIVATE_KEY: externalPrivateKey,
+    PLATFORM_EXTERNAL_AUTH_PUBLIC_KEY: externalPublicKey,
     PLATFORM_PUBLIC_ORIGIN: 'https://admin.example.com',
     PLATFORM_MONGODB_URI: 'mongodb://platform.example/platform_app',
     PLATFORM_METRICS_TOKEN: 'm'.repeat(32),

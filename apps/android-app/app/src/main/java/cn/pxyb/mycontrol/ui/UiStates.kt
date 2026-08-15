@@ -7,6 +7,7 @@ import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
+import cn.pxyb.mycontrol.data.ExternalApplication
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
@@ -48,6 +49,7 @@ data class OverviewUiState(
     val refreshing: Boolean,
     val sectionError: String?,
     val overview: OverviewData?,
+    val externalApplications: List<ExternalApplication>,
     val incidents: List<IncidentInfo>,
     val offlineMode: Boolean,
     val cachedAtMillis: Long?,
@@ -204,9 +206,10 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
 )
 
 internal fun AppUiState.toOverviewUiState() = OverviewUiState(
-    refreshing = isRefreshing(DataSection.Overview, DataSection.Incidents, DataSection.Tasks, DataSection.Campus),
-    sectionError = sectionError(DataSection.Overview, DataSection.Incidents, DataSection.Tasks, DataSection.Campus),
+    refreshing = isRefreshing(DataSection.Overview, DataSection.ExternalApplications, DataSection.Incidents, DataSection.Tasks, DataSection.Campus),
+    sectionError = sectionError(DataSection.Overview, DataSection.ExternalApplications, DataSection.Incidents, DataSection.Tasks, DataSection.Campus),
     overview = overview,
+    externalApplications = externalApplications,
     incidents = incidents,
     offlineMode = offlineMode,
     cachedAtMillis = cachedAtMillis,

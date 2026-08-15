@@ -51,6 +51,32 @@ data class WebLoginLink(
     val expiresAt: String?,
 )
 
+data class ExternalApplicationHealth(
+    val state: String,
+    val httpStatus: Int?,
+    val latencyMs: Long?,
+    val checkedAt: String?,
+)
+
+data class ExternalApplication(
+    val id: String,
+    val name: String,
+    val description: String,
+    val launchUrl: String,
+    val healthUrl: String?,
+    val requiredRole: String,
+    val openMode: String,
+    val enabled: Boolean,
+    val canAccess: Boolean,
+    val health: ExternalApplicationHealth,
+)
+
+data class ExternalApplicationLaunch(
+    val loginUrl: String,
+    val openMode: String,
+    val expiresAt: String?,
+)
+
 data class ServiceInfo(
     val id: String,
     val name: String,

@@ -1340,6 +1340,7 @@ private fun AuthenticatedShell(
                         onOpenWorkspace = viewModel::openWorkspace,
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
                         requestWebLoginUrl = viewModel::createPlatformWebLoginUrl,
+                        requestExternalApplicationLaunch = viewModel::createExternalApplicationLaunch,
                     )
                 }
 

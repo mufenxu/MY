@@ -35,8 +35,9 @@ test('console navigation exposes six complete groups with stable legacy view ids
     'capabilities',
     'security',
   ]);
-  assert.equal(new Set(NAV_GROUPS.flatMap((group) => group.views.map((view) => view.id))).size, 13);
+  assert.equal(new Set(NAV_GROUPS.flatMap((group) => group.views.map((view) => view.id))).size, 14);
   assert.equal(getNavigationGroup('service').id, 'services');
+  assert.equal(getNavigationGroup('external-apps').id, 'services');
   assert.equal(getNavigationGroup('diagnostics').id, 'observability');
   assert.equal(getNavigationGroup('configuration').id, 'execution');
   assert.equal(getNavigationGroup('automation').id, 'capabilities');
@@ -45,6 +46,7 @@ test('console navigation exposes six complete groups with stable legacy view ids
 test('console view resolution preserves valid deep links and rejects unknown views', () => {
   assert.equal(resolveConsoleView('releases'), 'releases');
   assert.equal(resolveConsoleView('security'), 'security');
+  assert.equal(resolveConsoleView('external-apps'), 'external-apps');
   assert.equal(resolveConsoleView('environment'), 'all');
   assert.equal(resolveConsoleView('unknown'), 'all');
   assert.equal(resolveConsoleView(null), 'all');

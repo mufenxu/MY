@@ -10,10 +10,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(__dirname, '..', '..', '..');
 const defaultRegistryPath = path.resolve(__dirname, '..', '..', '..', 'config', 'platform.services.local.json');
 const localInternalKeyPair = crypto.generateKeyPairSync('ed25519');
+const localExternalAuthKeyPair = crypto.generateKeyPairSync('ed25519');
 const localAuthEncryptionKey = crypto.randomBytes(32).toString('base64url');
 const localInternalPrivateKey = localInternalKeyPair.privateKey
   .export({ format: 'der', type: 'pkcs8' }).toString('base64url');
 const localInternalPublicKey = localInternalKeyPair.publicKey
+  .export({ format: 'der', type: 'spki' }).toString('base64url');
+const localExternalAuthPrivateKey = localExternalAuthKeyPair.privateKey
+  .export({ format: 'der', type: 'pkcs8' }).toString('base64url');
+const localExternalAuthPublicKey = localExternalAuthKeyPair.publicKey
   .export({ format: 'der', type: 'spki' }).toString('base64url');
 
 function parseBoolean(value, fallback = false) {
@@ -151,6 +156,10 @@ export function loadConfig(env = process.env) {
     authEncryptionKey: env.PLATFORM_AUTH_ENCRYPTION_KEY || (isProduction ? '' : localAuthEncryptionKey),
     internalAuthPrivateKey: env.PLATFORM_INTERNAL_AUTH_PRIVATE_KEY || (isProduction ? '' : localInternalPrivateKey),
     internalAuthPublicKey: env.PLATFORM_INTERNAL_AUTH_PUBLIC_KEY || (isProduction ? '' : localInternalPublicKey),
+    externalAuthPrivateKey: env.PLATFORM_EXTERNAL_AUTH_PRIVATE_KEY || (isProduction ? '' : localExternalAuthPrivateKey),
+    externalAuthPublicKey: env.PLATFORM_EXTERNAL_AUTH_PUBLIC_KEY || (isProduction ? '' : localExternalAuthPublicKey),
+    externalAuthKeyId: String(env.PLATFORM_EXTERNAL_AUTH_KEY_ID || 'external-auth-v1').trim(),
+    externalAuthTokenTtlSeconds: parseInteger(env.PLATFORM_EXTERNAL_AUTH_TOKEN_TTL_SECONDS, 300, { min: 60, max: 3600 }),
     mongoUri: env.PLATFORM_MONGODB_URI || '',
     metricsToken: env.PLATFORM_METRICS_TOKEN || '',
     blackboxIngestToken: env.PLATFORM_BLACKBOX_INGEST_TOKEN || '',
@@ -230,6 +239,7 @@ export function loadConfig(env = process.env) {
       mongodb: env.MONGODB_IMAGE || '',
     },
   };
+  config.externalAuthIssuer = config.publicOrigin;
 
   if (!config.authDisabled) {
     const missing = [];
@@ -246,6 +256,13 @@ export function loadConfig(env = process.env) {
       && validEd25519Key(config.internalAuthPublicKey, 'public')
       && !matchingEd25519KeyPair(config.internalAuthPrivateKey, config.internalAuthPublicKey)
     ) missing.push('PLATFORM_INTERNAL_AUTH_KEY_PAIR_MISMATCH');
+    if (!validEd25519Key(config.externalAuthPrivateKey, 'private')) missing.push('PLATFORM_EXTERNAL_AUTH_PRIVATE_KEY');
+    if (!validEd25519Key(config.externalAuthPublicKey, 'public')) missing.push('PLATFORM_EXTERNAL_AUTH_PUBLIC_KEY');
+    if (
+      validEd25519Key(config.externalAuthPrivateKey, 'private')
+      && validEd25519Key(config.externalAuthPublicKey, 'public')
+      && !matchingEd25519KeyPair(config.externalAuthPrivateKey, config.externalAuthPublicKey)
+    ) missing.push('PLATFORM_EXTERNAL_AUTH_KEY_PAIR_MISMATCH');
     if (!config.publicOrigin) missing.push('PLATFORM_PUBLIC_ORIGIN');
     if (!config.mongoUri) missing.push('PLATFORM_MONGODB_URI');
     if (config.metricsToken.length < 32 || isTemplatePlaceholder(config.metricsToken)) missing.push('PLATFORM_METRICS_TOKEN');

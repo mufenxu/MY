@@ -41,12 +41,29 @@ import { createRequestDiagnostics } from './request-diagnostics.js';
 import { createSloService } from './slo-service.js';
 import { createTaskCenter } from './task-center.js';
 import { createMemoryGoogleAccountStore } from './google-account-store.js';
+import { createMemoryExternalApplicationStore } from './external-application-store.js';
+import {
+  checkExternalApplicationHealth,
+  normalizeExternalApplicationInput,
+  roleCanAccessExternalApplication,
+  sanitizeExternalApplication,
+  visibleExternalApplications,
+} from './external-application-service.js';
+import { createExternalIdentityService, oauthError, pkceChallenge, verifyPkceChallenge } from './external-identity.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.resolve(__dirname, '..', 'dist');
 
 const ANDROID_APP_USER_AGENT_PREFIX = 'MY-Control-Android/';
-const WEB_LOGIN_ALLOWED_PATHS = ['/console', '/apps/core', '/apps/exam', '/apps/campus', '/apps/iot'];
+const WEB_LOGIN_ALLOWED_PATHS = [
+  '/console',
+  '/apps/core',
+  '/apps/exam',
+  '/apps/campus',
+  '/apps/iot',
+  '/oauth/authorize',
+  '/oauth/external-launch',
+];
 
 function isAndroidAppRequest(req) {
   return String(req.get('user-agent') || '').startsWith(ANDROID_APP_USER_AGENT_PREFIX);
@@ -218,6 +235,7 @@ export function createApp({
   qrLoginStore = null,
   webLoginTicketStore = null,
   googleAccountStore = null,
+  externalApplicationStore = null,
   configurationStore = null,
   configurationManager = null,
   taskManager = null,
@@ -259,7 +277,15 @@ export function createApp({
   const qrLogins = qrLoginStore || createMemoryQrLoginStore();
   const webLoginTickets = webLoginTicketStore || createMemoryWebLoginTicketStore();
   const googleAccounts = googleAccountStore || createMemoryGoogleAccountStore();
+  const externalApplications = externalApplicationStore || createMemoryExternalApplicationStore();
   const publicUrl = new URL(config.publicOrigin || 'http://127.0.0.1');
+  const externalIdentity = createExternalIdentityService({
+    issuer: config.externalAuthIssuer || publicUrl.origin,
+    privateKey: config.externalAuthPrivateKey,
+    publicKey: config.externalAuthPublicKey,
+    keyId: config.externalAuthKeyId,
+    tokenTtlSeconds: config.externalAuthTokenTtlSeconds,
+  });
   const passkeyOrigins = [publicUrl.origin, ...(config.androidPasskeyOrigins || [])];
   const passkeys = createPasskeyService({
     authStore: accounts,
@@ -356,6 +382,41 @@ export function createApp({
 
   async function readSession(req) {
     return sessions.verify(readSessionToken(req));
+  }
+
+  async function readExternalPrincipal(req) {
+    if (config.authDisabled) {
+      return {
+        session: { sub: 'local-admin', role: 'super_admin', nonce: 'local-development-session' },
+        account: { username: 'local-admin', role: 'super_admin', active: true },
+      };
+    }
+    const session = await readSession(req);
+    const account = session ? await accounts.findAccount(session.sub) : null;
+    if (!session || !account?.active || (config.requireMfa && !strongFactorEnabled(account))) return null;
+    return { session, account };
+  }
+
+  function readOAuthClientCredentials(req) {
+    const authorization = String(req.get('authorization') || '');
+    if (authorization.startsWith('Basic ')) {
+      try {
+        const decoded = Buffer.from(authorization.slice(6), 'base64').toString('utf8');
+        const separator = decoded.indexOf(':');
+        if (separator > 0) {
+          return {
+            clientId: decodeURIComponent(decoded.slice(0, separator)),
+            clientSecret: decodeURIComponent(decoded.slice(separator + 1)),
+          };
+        }
+      } catch {
+        return { clientId: '', clientSecret: '' };
+      }
+    }
+    return {
+      clientId: String(req.body?.client_id || ''),
+      clientSecret: String(req.body?.client_secret || ''),
+    };
   }
 
   function readQrBrowserVerifier(req, requestId) {
@@ -617,6 +678,8 @@ export function createApp({
   app.locals.qrLoginStore = qrLogins;
   app.locals.webLoginTicketStore = webLoginTickets;
   app.locals.googleAccountStore = googleAccounts;
+  app.locals.externalApplicationStore = externalApplications;
+  app.locals.externalIdentity = externalIdentity;
 
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -700,6 +763,195 @@ export function createApp({
   app.use('/api', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     next();
+  });
+
+  app.get('/.well-known/openid-configuration', (req, res) => {
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.json(externalIdentity.discovery());
+  });
+
+  app.get('/oauth/jwks.json', (req, res) => {
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.json(externalIdentity.jwks());
+  });
+
+  app.get('/oauth/authorize', async (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const clientId = String(req.query?.client_id || '');
+    const redirectUri = String(req.query?.redirect_uri || '');
+    const responseType = String(req.query?.response_type || '');
+    const state = String(req.query?.state || '');
+    const nonce = String(req.query?.nonce || '');
+    const codeChallenge = String(req.query?.code_challenge || '');
+    const codeChallengeMethod = String(req.query?.code_challenge_method || '');
+    const requestedScopes = String(req.query?.scope || '').split(/\s+/).filter(Boolean);
+    try {
+      const application = await externalApplications.findApplicationByClientId(clientId);
+      if (!application?.enabled || !application.redirectUris.includes(redirectUri)) {
+        return res.status(400).send(renderAppLoginErrorHtml('授权请求无效', '客户端或回调地址未注册。'));
+      }
+      const allowedScopes = new Set(['openid', 'profile', 'roles']);
+      if (
+        responseType !== 'code'
+        || !state
+        || state.length > 512
+        || !nonce
+        || nonce.length > 256
+        || !requestedScopes.includes('openid')
+        || requestedScopes.some((scope) => !allowedScopes.has(scope))
+        || codeChallengeMethod !== 'S256'
+        || !/^[A-Za-z0-9_-]{43}$/.test(codeChallenge)
+      ) {
+        const callback = new URL(redirectUri);
+        callback.searchParams.set('error', 'invalid_request');
+        callback.searchParams.set('error_description', '授权参数无效。');
+        callback.searchParams.set('state', state);
+        return res.redirect(303, callback.toString());
+      }
+      const principal = await readExternalPrincipal(req);
+      if (!principal) {
+        const returnTo = `${req.path}?${new URLSearchParams(req.query).toString()}`;
+        return res.redirect(302, `/console?returnTo=${encodeURIComponent(returnTo)}`);
+      }
+      if (!roleCanAccessExternalApplication(principal.account.role, application)) {
+        await recordAudit(req, {
+          actor: principal.account.username,
+          action: 'external_auth.authorize',
+          outcome: 'failure',
+          targetType: 'external_application',
+          targetId: application.id,
+          details: { reason: 'insufficient_role', clientId },
+        });
+        const callback = new URL(redirectUri);
+        callback.searchParams.set('error', 'access_denied');
+        callback.searchParams.set('error_description', '当前账号无权访问该应用。');
+        callback.searchParams.set('state', state);
+        return res.redirect(303, callback.toString());
+      }
+      const issued = await externalApplications.createAuthorizationCode({
+        clientId,
+        redirectUri,
+        username: principal.account.username,
+        role: principal.account.role,
+        scope: requestedScopes.join(' '),
+        nonce,
+        codeChallenge,
+        sessionNonce: principal.session.nonce,
+      });
+      await recordAudit(req, {
+        actor: principal.account.username,
+        action: 'external_auth.authorize',
+        targetType: 'external_application',
+        targetId: application.id,
+        details: { clientId, scope: requestedScopes },
+      });
+      const callback = new URL(redirectUri);
+      callback.searchParams.set('code', issued.code);
+      callback.searchParams.set('state', state);
+      return res.redirect(303, callback.toString());
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/oauth/token', express.urlencoded({ extended: false, limit: '16kb' }), async (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const credentials = readOAuthClientCredentials(req);
+    try {
+      const application = await externalApplications.findApplicationByClientId(credentials.clientId);
+      const validClient = application?.enabled
+        && await externalApplications.verifyClientSecret(credentials.clientId, credentials.clientSecret);
+      if (!validClient) {
+        res.setHeader('WWW-Authenticate', 'Basic realm="MY External Identity"');
+        return res.status(401).json(oauthError('invalid_client', '客户端认证失败。'));
+      }
+      if (req.body?.grant_type !== 'authorization_code') {
+        return res.status(400).json(oauthError('unsupported_grant_type', '仅支持 authorization_code。'));
+      }
+      const codeVerifier = String(req.body?.code_verifier || '');
+      if (!/^[A-Za-z0-9._~-]{43,128}$/.test(codeVerifier)) {
+        return res.status(400).json(oauthError('invalid_grant', '授权码无效、已过期或 PKCE 校验失败。'));
+      }
+      const code = await externalApplications.consumeAuthorizationCode({
+        code: req.body?.code,
+        clientId: credentials.clientId,
+        redirectUri: req.body?.redirect_uri,
+        codeChallenge: pkceChallenge(codeVerifier),
+      });
+      if (!code || !verifyPkceChallenge(codeVerifier, code.codeChallenge)) {
+        await recordAudit(req, {
+          action: 'external_auth.token',
+          outcome: 'failure',
+          targetType: 'external_application',
+          targetId: application.id,
+          details: { reason: 'invalid_grant', clientId: credentials.clientId },
+        });
+        return res.status(400).json(oauthError('invalid_grant', '授权码无效、已过期或 PKCE 校验失败。'));
+      }
+      const tokens = externalIdentity.issueTokens({
+        clientId: credentials.clientId,
+        username: code.username,
+        role: code.role,
+        scope: code.scope,
+        nonce: code.nonce,
+      });
+      await recordAudit(req, {
+        actor: code.username,
+        action: 'external_auth.token',
+        targetType: 'external_application',
+        targetId: application.id,
+        details: { clientId: credentials.clientId, scope: code.scope },
+      });
+      return res.json(tokens);
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/oauth/userinfo', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const authorization = String(req.get('authorization') || '');
+    const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+    const claims = externalIdentity.verifyToken(token, { type: 'access' });
+    const application = claims ? await externalApplications.findApplicationByClientId(claims.aud) : null;
+    if (!claims || !application?.enabled) {
+      return res.status(401).json(oauthError('invalid_grant', '访问令牌无效或已过期。'));
+    }
+    return res.json({
+      sub: claims.sub,
+      preferred_username: claims.preferred_username,
+      role: claims.role,
+    });
+  });
+
+  app.get('/oauth/external-launch/:id', async (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+      const [application, principal] = await Promise.all([
+        externalApplications.getApplication(req.params.id),
+        readExternalPrincipal(req),
+      ]);
+      if (!principal) {
+        const returnTo = encodeURIComponent(`/oauth/external-launch/${encodeURIComponent(req.params.id)}`);
+        return res.redirect(302, `/console?returnTo=${returnTo}`);
+      }
+      if (!application?.enabled) return res.status(404).send(renderAppLoginErrorHtml('应用不可用', '外部应用不存在或已经停用。'));
+      if (!roleCanAccessExternalApplication(principal.account.role, application)) {
+        return res.status(403).send(renderAppLoginErrorHtml('无权访问', '当前账号没有进入该应用的权限。'));
+      }
+      await recordAudit(req, {
+        actor: principal.account.username,
+        action: 'external_application.launch',
+        targetType: 'external_application',
+        targetId: application.id,
+      });
+      return res.redirect(303, application.launchUrl);
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
   });
 
   app.post('/api/client-experience', clientExperienceLimiter, requireConsoleRequest, (req, res) => {
@@ -1228,6 +1480,136 @@ export function createApp({
     req.consoleUser = { username: account.username, role: account.role };
     req.consoleAccount = account;
     return next();
+  });
+
+  app.get('/api/external-apps', async (req, res, next) => {
+    try {
+      const applications = await externalApplications.listApplications();
+      const visible = visibleExternalApplications(applications, req.consoleUser.role);
+      const rows = await Promise.all(visible.map(async (application) => ({
+        ...sanitizeExternalApplication(application, {
+          role: req.consoleUser.role,
+          includeClient: req.consoleUser.role === 'super_admin',
+        }),
+        health: await checkExternalApplicationHealth(application, {
+          fetchImpl,
+          timeoutMs: config.serviceTimeoutMs,
+        }),
+      })));
+      return res.json({ applications: rows });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/api/external-apps', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      const input = normalizeExternalApplicationInput(req.body, { isProduction: config.isProduction });
+      const created = await externalApplications.createApplication({ ...input, actor: req.consoleUser.username });
+      await recordAudit(req, {
+        action: 'external_application.created',
+        targetType: 'external_application',
+        targetId: created.application.id,
+        details: { clientId: created.application.clientId },
+      });
+      return res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof TypeError) return res.status(400).json({ error: error.message, code: 'EXTERNAL_APPLICATION_INVALID' });
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.put('/api/external-apps/:id', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      const input = normalizeExternalApplicationInput(req.body, { isProduction: config.isProduction });
+      const application = await externalApplications.updateApplication(req.params.id, {
+        ...input,
+        actor: req.consoleUser.username,
+      });
+      if (!application) return res.status(404).json({ error: '外部应用不存在。', code: 'EXTERNAL_APPLICATION_NOT_FOUND' });
+      await recordAudit(req, {
+        action: 'external_application.updated',
+        targetType: 'external_application',
+        targetId: application.id,
+      });
+      return res.json({ application });
+    } catch (error) {
+      if (error instanceof TypeError) return res.status(400).json({ error: error.message, code: 'EXTERNAL_APPLICATION_INVALID' });
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/api/external-apps/:id/rotate-secret', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      const rotated = await externalApplications.rotateClientSecret(req.params.id, req.consoleUser.username);
+      if (!rotated) return res.status(404).json({ error: '外部应用不存在。', code: 'EXTERNAL_APPLICATION_NOT_FOUND' });
+      await recordAudit(req, {
+        action: 'external_application.secret_rotated',
+        targetType: 'external_application',
+        targetId: rotated.application.id,
+      });
+      return res.json(rotated);
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.delete('/api/external-apps/:id', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      const deleted = await externalApplications.deleteApplication(req.params.id);
+      if (!deleted) return res.status(404).json({ error: '外部应用不存在。', code: 'EXTERNAL_APPLICATION_NOT_FOUND' });
+      await recordAudit(req, {
+        action: 'external_application.deleted',
+        targetType: 'external_application',
+        targetId: req.params.id,
+      });
+      return res.json({ deleted: true });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/api/external-apps/:id/launch', requireConsoleRequest, async (req, res, next) => {
+    try {
+      const application = await externalApplications.getApplication(req.params.id);
+      if (!application?.enabled) return res.status(404).json({ error: '外部应用不存在或已经停用。', code: 'EXTERNAL_APPLICATION_NOT_FOUND' });
+      if (!roleCanAccessExternalApplication(req.consoleUser.role, application)) {
+        return res.status(403).json({ error: '当前账号没有进入该应用的权限。', code: 'INSUFFICIENT_ROLE' });
+      }
+      const redirect = new URL(`/oauth/external-launch/${encodeURIComponent(application.id)}`, publicUrl.origin).toString();
+      let loginUrl = redirect;
+      let expiresAt = null;
+      if (isAndroidAppRequest(req) && !config.authDisabled) {
+        const created = await webLoginTickets.create({
+          username: req.consoleUser.username,
+          role: req.consoleUser.role,
+          redirect,
+          appSessionNonce: req.consoleSession?.nonce,
+          appIp: req.ip,
+          appUserAgent: req.get('user-agent'),
+        });
+        const ticketUrl = new URL('/console/app-login', publicUrl.origin);
+        ticketUrl.searchParams.set('ticket', created.ticket);
+        ticketUrl.searchParams.set('redirect', redirect);
+        loginUrl = ticketUrl.toString();
+        expiresAt = created.record.expiresAt;
+      }
+      await recordAudit(req, {
+        action: 'external_application.launch_requested',
+        targetType: 'external_application',
+        targetId: application.id,
+        details: { android: isAndroidAppRequest(req), openMode: application.openMode },
+      });
+      return res.status(201).json({ loginUrl, openMode: application.openMode, expiresAt });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
   });
 
   app.get('/api/google-accounts', async (req, res, next) => {

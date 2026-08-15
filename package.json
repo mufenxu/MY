@@ -32,6 +32,7 @@
     "check": "npm run check:console && npm run check:website && npm run check:workspace-scripts && npm run check:packages && npm run check:release-runner && npm run check:backup-scripts && npm run check:mongodb-scripts && npm run check:supply-chain && npm run check:topology && npm run check:gateway && npm run check:admins && npm run check:core && npm run check:exam && npm run check:campus && npm run check:iot && npm run check:notification && npm run check:miniapps",
     "password": "npm --prefix apps/admin-console run password --",
     "keys:internal": "node scripts/generate-internal-auth-keys.mjs",
+    "keys:external-auth": "node scripts/generate-external-auth-keys.mjs",
     "secrets:rotate": "node scripts/rotate-deployment-secrets.mjs .env",
     "env:check": "node scripts/validate-deployment-env.mjs .env",
     "deps:normalize": "node scripts/normalize-lockfile-registries.mjs",

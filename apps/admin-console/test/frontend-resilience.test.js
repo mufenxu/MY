@@ -59,8 +59,24 @@ test('large operational views stay out of the entry bundle and preload while idl
   assert.match(app, /const loadNotificationView = \(\) => import\('\.\/NotificationServiceView\.jsx'\)/);
   assert.match(app, /const loadPlatformViews = \(\) => import\('\.\/PlatformControlViews\.jsx'\)/);
   assert.match(app, /const loadOperationsViews = \(\) => import\('\.\/OperationsViews\.jsx'\)/);
+  assert.match(app, /const loadExternalApplicationsView = \(\) => import\('\.\/ExternalApplicationsView\.jsx'\)/);
   assert.match(app, /window\.requestIdleCallback/);
   assert.match(app, /VIEW_MODULE_LOADERS/);
+});
+
+test('external applications use server-issued launch links and reveal client secrets only after creation or rotation', () => {
+  const app = readSource('src', 'client', 'App.jsx');
+  const view = readSource('src', 'client', 'ExternalApplicationsView.jsx');
+  const navigation = readSource('src', 'client', 'navigation.js');
+
+  assert.match(navigation, /id: 'external-apps', label: '外部应用'/);
+  assert.match(app, /activeFilter === 'external-apps'/);
+  assert.match(view, /requestJson\('\/api\/external-apps'/);
+  assert.match(view, /`\/api\/external-apps\/\$\{encodeURIComponent\(application\.id\)\}\/launch`/);
+  assert.match(view, /clientSecret/);
+  assert.match(view, /rotate-secret/);
+  assert.match(view, /密钥只显示这一次/);
+  assert.doesNotMatch(view, /clientSecretHash/);
 });
 
 test('console navigation and segmented tabs preserve browser and keyboard semantics', () => {

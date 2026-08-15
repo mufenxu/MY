@@ -21,6 +21,8 @@ import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
+import cn.pxyb.mycontrol.data.ExternalApplication
+import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAccountStore
 import cn.pxyb.mycontrol.data.GoogleAliasRecord
@@ -76,7 +78,7 @@ enum class MainTab { Overview, Notifications, Operations, Tools, Profile }
 
 enum class WorkspaceDestination { Today, Notifications, Insights, Scenes }
 
-enum class DataSection { Overview, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, Resources, Notifications }
+enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, Resources, Notifications }
 
 data class SectionLoadState(
     val refreshing: Boolean = false,
@@ -99,6 +101,7 @@ data class AppUiState(
     val refreshing: Boolean = false,
     val busyAction: String? = null,
     val overview: OverviewData? = null,
+    val externalApplications: List<ExternalApplication> = emptyList(),
     val incidents: List<IncidentInfo> = emptyList(),
     val tasks: List<PlatformTask> = emptyList(),
     val releases: ReleaseData? = null,
@@ -1231,6 +1234,12 @@ class AppViewModel(
             ?: throw IllegalStateException("服务端未返回自动登录链接。")
     }
 
+    suspend fun createExternalApplicationLaunch(applicationId: String): ExternalApplicationLaunch {
+        val launch = api.launchExternalApplication(applicationId)
+        if (launch.loginUrl.isBlank()) throw IllegalStateException("服务端未返回外部应用登录地址。")
+        return launch
+    }
+
     fun approveQrLogin(
         requestCredential: suspend (String) -> String,
         requestBiometric: suspend () -> Boolean,
@@ -1372,6 +1381,7 @@ class AppViewModel(
 
     private fun refreshInitialData(force: Boolean = false) {
         refreshOverview(force)
+        refreshExternalApplications(force)
         refreshIncidents(force)
         refreshTasks(force)
         refreshTodos(force)
@@ -1408,6 +1418,11 @@ class AppViewModel(
         publishWidget()
         recordTrendSample()
     }
+
+    private fun refreshExternalApplications(force: Boolean = false) =
+        launchRefresh(DataSection.ExternalApplications, force) {
+            mutableState.update { it.copy(externalApplications = api.externalApplications()) }
+        }
 
     private fun refreshIncidents(force: Boolean = false) = launchRefresh(DataSection.Incidents, force) {
         val incidents = api.incidents()

@@ -197,6 +197,20 @@ class PlatformApi(
         )
     }
 
+    suspend fun externalApplications(): List<ExternalApplication> = withContext(Dispatchers.IO) {
+        parseExternalApplications(execute(EXTERNAL_APPLICATIONS_PATH).json)
+    }
+
+    suspend fun launchExternalApplication(id: String): ExternalApplicationLaunch = withContext(Dispatchers.IO) {
+        parseExternalApplicationLaunch(
+            execute(
+                "$EXTERNAL_APPLICATIONS_PATH/${encodePath(id)}/launch",
+                "POST",
+                JSONObject(),
+            ).json,
+        )
+    }
+
     suspend fun authStatus(): PlatformUser? = withContext(Dispatchers.IO) {
         if (!sessionStore.hasSession()) return@withContext null
         try {
@@ -965,6 +979,7 @@ class PlatformApi(
 
     private companion object {
         const val AUTH_STATUS_PATH = "/api/auth/status"
+        const val EXTERNAL_APPLICATIONS_PATH = "/api/external-apps"
         const val TODOS_PATH = "/apps/core/api/todos"
         const val RESOURCE_EXPIRIES_PATH = "/apps/core/api/resources/expiry-summary"
         val CACHEABLE_PATHS = setOf(
@@ -972,6 +987,7 @@ class PlatformApi(
             "/api/operations/overview",
             "/api/incidents?limit=100",
             "/api/tasks?limit=100",
+            EXTERNAL_APPLICATIONS_PATH,
             TODOS_PATH,
             CAMPUS_TIMETABLE_PATH,
             RESOURCE_EXPIRIES_PATH,
@@ -981,6 +997,34 @@ class PlatformApi(
         )
     }
 }
+
+internal fun parseExternalApplications(json: JSONObject): List<ExternalApplication> =
+    json.optJSONArray("applications").objects().map { item ->
+        val health = item.optJSONObject("health") ?: JSONObject()
+        ExternalApplication(
+            id = item.optString("id"),
+            name = item.optString("name", "外部应用"),
+            description = item.optString("description"),
+            launchUrl = item.optString("launchUrl"),
+            healthUrl = item.nullableString("healthUrl"),
+            requiredRole = item.optString("requiredRole", "viewer"),
+            openMode = item.optString("openMode", "webview"),
+            enabled = item.optBoolean("enabled", true),
+            canAccess = item.optBoolean("canAccess", false),
+            health = ExternalApplicationHealth(
+                state = health.optString("state", "unmonitored"),
+                httpStatus = health.optIntOrNull("httpStatus"),
+                latencyMs = health.optLongOrNull("latencyMs"),
+                checkedAt = health.nullableString("checkedAt"),
+            ),
+        )
+    }
+
+internal fun parseExternalApplicationLaunch(json: JSONObject) = ExternalApplicationLaunch(
+    loginUrl = json.optString("loginUrl"),
+    openMode = json.optString("openMode", "webview"),
+    expiresAt = json.nullableString("expiresAt"),
+)
 
 private fun JSONObject?.toPlatformUser(): PlatformUser {
     val json = this ?: throw ApiException("登录响应缺少账号信息。", 500, "USER_MISSING")

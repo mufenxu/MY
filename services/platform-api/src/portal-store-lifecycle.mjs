@@ -8,6 +8,7 @@ const STORE_NAMES = [
   'qrLoginStore',
   'webLoginTicketStore',
   'googleAccountStore',
+  'externalApplicationStore',
 ];
 
 export async function closePortalStores(stores = {}) {
@@ -71,6 +72,7 @@ export async function createPersistentPortalStores({ config, factories } = {}) {
     ['qrLoginStore', factories.createMongoQrLoginStore, { uri: config.mongoUri }],
     ['webLoginTicketStore', factories.createMongoWebLoginTicketStore, { uri: config.mongoUri }],
     ['googleAccountStore', factories.createMongoGoogleAccountStore, { uri: config.mongoUri }],
+    ['externalApplicationStore', factories.createMongoExternalApplicationStore, { uri: config.mongoUri }],
   ];
 
   try {

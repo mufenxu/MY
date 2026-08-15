@@ -71,10 +71,12 @@ const loadAutomationView = () => import('./AutomationView.jsx');
 const loadNotificationView = () => import('./NotificationServiceView.jsx');
 const loadPlatformViews = () => import('./PlatformControlViews.jsx');
 const loadOperationsViews = () => import('./OperationsViews.jsx');
+const loadExternalApplicationsView = () => import('./ExternalApplicationsView.jsx');
 const lazyNamed = (loader, exportName) => lazy(() => loader().then((module) => ({ default: module[exportName] })));
 
 const AutomationView = lazy(loadAutomationView);
 const NotificationServiceView = lazy(loadNotificationView);
+const ExternalApplicationsView = lazy(loadExternalApplicationsView);
 const ConfigurationView = lazyNamed(loadPlatformViews, 'ConfigurationView');
 const DiagnosticsView = lazyNamed(loadPlatformViews, 'DiagnosticsView');
 const PublicStatusView = lazyNamed(loadPlatformViews, 'PublicStatusView');
@@ -98,6 +100,7 @@ const VIEW_MODULE_LOADERS = {
   tasks: loadPlatformViews,
   configuration: loadPlatformViews,
   diagnostics: loadPlatformViews,
+  'external-apps': loadExternalApplicationsView,
 };
 
 const NAVIGATION_ICONS = {
@@ -2414,6 +2417,7 @@ function Dashboard({ session, onLogout }) {
   const viewMeta = {
     miniapp: { title: '应用中心', subtitle: '应用入口与运行状态' },
     service: { title: '服务运维', subtitle: '基础服务健康监测' },
+    'external-apps': { title: '外部应用', subtitle: '独立项目统一身份接入' },
     notification: { title: '企业微信通知', subtitle: '通道状态与发送台账' },
     monitoring: { title: '监控分析', subtitle: '可用率与真实历史趋势' },
     incidents: { title: '告警事件', subtitle: '发现、确认与处置异常' },
@@ -2606,6 +2610,7 @@ function Dashboard({ session, onLogout }) {
           )}
           {activeFilter === 'miniapp' && <ApplicationsView services={services} loading={loading} onLaunch={launchService} />}
           {activeFilter === 'service' && <ServicesView services={services} loading={loading} onLaunch={launchService} targetEntityId={activeEntity} />}
+          {activeFilter === 'external-apps' && <ExternalApplicationsView session={session} />}
           {activeFilter === 'notification' && <NotificationServiceView session={session} />}
           {activeFilter === 'monitoring' && <MonitoringView services={services} onNavigate={navigateToView} />}
           {activeFilter === 'incidents' && <IncidentsView session={session} targetEntityId={activeEntity} onNavigate={navigateToView} />}
@@ -2642,7 +2647,7 @@ function AuthenticatedApp() {
   const finishAuthentication = useCallback((nextSession) => {
     setSession(nextSession);
     const returnTo = new URLSearchParams(window.location.search).get('returnTo') || '';
-    if (nextSession?.authenticated && /^\/apps\/(core|exam|campus|iot)(?:\/|$)/.test(returnTo)) {
+    if (nextSession?.authenticated && /^(?:\/apps\/(?:core|exam|campus|iot)(?:\/|$)|\/oauth\/(?:authorize|external-launch)(?:\/|\?|$))/.test(returnTo)) {
       window.location.replace(returnTo);
     }
   }, []);

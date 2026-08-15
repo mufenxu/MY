@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
@@ -48,6 +50,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Security
@@ -91,6 +94,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.AuditInfo
 import cn.pxyb.mycontrol.data.CampusCourse
+import cn.pxyb.mycontrol.data.ExternalApplication
+import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.ServiceInfo
 import cn.pxyb.mycontrol.ui.theme.Amber
@@ -121,10 +126,13 @@ fun OverviewScreen(
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
     onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
     requestWebLoginUrl: suspend (String) -> String,
+    requestExternalApplicationLaunch: suspend (String) -> ExternalApplicationLaunch,
 ) {
     var customizingQuickActions by remember { mutableStateOf(false) }
     var openingServiceId by remember { mutableStateOf<String?>(null) }
     var serviceOpenError by remember { mutableStateOf<String?>(null) }
+    var openingExternalApplicationId by remember { mutableStateOf<String?>(null) }
+    var externalApplicationOpenError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val overview = state.overview
@@ -158,6 +166,29 @@ fun OverviewScreen(
                     openingServiceId = null
                     serviceOpenError = error.message?.takeIf { it.isNotBlank() }
                         ?: "自动登录链接生成失败，请稍后重试。"
+                }
+        }
+    }
+
+    fun openExternalApplication(application: ExternalApplication) {
+        if (!application.canAccess || openingExternalApplicationId != null) return
+        openingExternalApplicationId = application.id
+        externalApplicationOpenError = null
+        scope.launch {
+            runCatching {
+                val launch = requestExternalApplicationLaunch(application.id)
+                when (launch.openMode) {
+                    "browser" -> openBrowserLink(context, launch.loginUrl)
+                    else -> openPlatformWebLink(context, launch.loginUrl, application.name)
+                }
+            }
+                .onSuccess {
+                    openingExternalApplicationId = null
+                }
+                .onFailure { error ->
+                    openingExternalApplicationId = null
+                    externalApplicationOpenError = error.message?.takeIf { it.isNotBlank() }
+                        ?: "外部应用登录地址生成失败，请稍后重试。"
                 }
         }
     }
@@ -430,6 +461,36 @@ fun OverviewScreen(
                                 )
                             }
                             Icon(Icons.Outlined.ChevronRight, contentDescription = "查看通知", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+
+            if (state.externalApplications.isNotEmpty()) {
+                OverviewSectionTitle("外部应用", "独立项目免密入口")
+                externalApplicationOpenError?.let { message ->
+                    FeedbackBanner(message, error = true)
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    shadowElevation = 1.dp,
+                ) {
+                    Column {
+                        state.externalApplications.forEachIndexed { index, application ->
+                            ExternalApplicationRow(
+                                application = application,
+                                opening = openingExternalApplicationId == application.id,
+                                onOpen = ::openExternalApplication,
+                            )
+                            if (index < state.externalApplications.lastIndex) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                )
+                            }
                         }
                     }
                 }
@@ -1014,6 +1075,87 @@ private fun ServiceRow(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ExternalApplicationRow(
+    application: ExternalApplication,
+    opening: Boolean,
+    onOpen: (ExternalApplication) -> Unit,
+) {
+    val style = statusStyle(application.health.state)
+    val shape = RoundedCornerShape(18.dp)
+    val interactionSource = remember(application.id) { MutableInteractionSource() }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pressFeedback(interactionSource)
+            .clip(shape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                enabled = application.canAccess && !opening,
+                role = Role.Button,
+                onClickLabel = "打开${application.name}",
+                onClick = { onOpen(application) },
+            )
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        IconTile(Icons.Outlined.Public, style.foreground, style.background, modifier = Modifier.size(38.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(application.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                externalApplicationDetail(application),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (opening) {
+            ServiceJumpIndicator()
+        } else {
+            StatusBadge(application.health.state)
+            if (application.canAccess) {
+                Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
+}
+
+private fun externalApplicationDetail(application: ExternalApplication): String = listOfNotNull(
+    application.description.takeIf(String::isNotBlank),
+    application.health.latencyMs?.let { "$it ms" },
+    "最低权限 ${externalRoleLabel(application.requiredRole)}",
+    if (application.canAccess) null else "当前账号无权访问",
+).joinToString(" · ").ifBlank {
+    if (application.health.state == "unmonitored") "未配置健康检查" else "等待健康状态"
+}
+
+private fun externalRoleLabel(role: String): String = when (role) {
+    "super_admin" -> "超级管理员"
+    "operator" -> "运维人员"
+    else -> "普通用户"
+}
+
+private fun openBrowserLink(context: android.content.Context, url: String) {
+    try {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                addCategory(Intent.CATEGORY_BROWSABLE)
+                if (context !is android.app.Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            },
+        )
+    } catch (error: Exception) {
+        throw IllegalStateException("系统未找到可用浏览器。", error)
     }
 }
 
