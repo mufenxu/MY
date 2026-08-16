@@ -190,7 +190,7 @@ export function OverviewView({
                 return (
                   <button
                     key={srv.id}
-                    className="service-status-row"
+                    className="launcher-card-item"
                     type="button"
                     title={`一键进入【${srv.name}】`}
                     onClick={open}

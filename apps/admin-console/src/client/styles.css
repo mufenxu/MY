@@ -10271,11 +10271,28 @@ input:focus-visible {
   transition: background 0.15s ease;
 }
 
+/* The merged launcher keeps the legacy class contract while using status-row layout. */
+.service-launcher-panel .launcher-card-item {
+  grid-template-columns: 30px minmax(0, 1fr) auto 16px;
+  gap: 9px;
+  min-height: 56px;
+  padding: 7px 8px;
+  font: inherit;
+}
+
 .service-status-row:hover {
   background: #f5f7fb;
 }
 
+.service-launcher-panel .launcher-card-item:hover {
+  background: #f5f7fb;
+}
+
 :root[data-theme='dark'] .service-status-row:hover {
+  background: rgba(34, 211, 238, 0.05);
+}
+
+:root[data-theme='dark'] .service-launcher-panel .launcher-card-item:hover {
   background: rgba(34, 211, 238, 0.05);
 }
 
@@ -10342,6 +10359,10 @@ input:focus-visible {
 }
 
 .service-status-row > svg {
+  color: #b2bdce;
+}
+
+.service-launcher-panel .launcher-card-item > svg {
   color: #b2bdce;
 }
 
