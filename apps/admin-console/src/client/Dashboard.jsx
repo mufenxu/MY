@@ -21,6 +21,7 @@ import { ApplicationsView } from './ApplicationsView.jsx';
 import { ServicesView } from './ServicesView.jsx';
 import { BackupRecoveryView } from './BackupRecoveryView.jsx';
 import { CommandPalette } from './CommandPalette.jsx';
+import { PLATFORM_BRAND_ICON } from './brand.js';
 
 const loadAutomationView = () => import('./AutomationView.jsx');
 const loadNotificationView = () => import('./NotificationServiceView.jsx');
@@ -356,6 +357,10 @@ export function Dashboard({ session, onLogout }) {
       />
 
       <aside ref={sidebarRef} id="management-sidebar" className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`} aria-hidden={commandOpen || undefined} inert={commandOpen || undefined}>
+        <div className="sidebar-brand" aria-hidden="true">
+          <span className="sidebar-brand-mark"><img src={PLATFORM_BRAND_ICON} alt="" /></span>
+          <span className="sidebar-brand-copy"><strong>MY 平台</strong><small>统一服务控制台</small></span>
+        </div>
         <nav className="main-nav" aria-label="管理模块">
           {NAV_GROUPS.map((group) => {
             const Icon = NAVIGATION_ICONS[group.id];
@@ -385,7 +390,7 @@ export function Dashboard({ session, onLogout }) {
         </nav>
 
         <div className="sidebar-footer">
-          <span className="environment-indicator" title={`当前环境：${environmentLabel}`}><i /></span>
+          <span className="environment-indicator" title={`当前环境：${environmentLabel}`}><i /><span>{environmentLabel}</span></span>
           <button type="button" onClick={handleLogout} title="退出登录" aria-label="退出登录">
             <LogOut size={18} />
             <span>退出登录</span>

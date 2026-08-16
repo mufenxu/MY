@@ -20,6 +20,16 @@ import {
 import { HolographicTopology } from './HolographicTopology.jsx';
 import { formatCheckedAt, SERVICE_ICONS, STATE_META, STATE_PRIORITY } from './shared.jsx';
 
+const LAUNCHER_TONES = {
+  core: 'blue',
+  exam: 'cyan',
+  campus: 'amber',
+  mqtt: 'purple',
+  notify: 'green',
+  'ct8-automation': 'slate',
+  platform: 'blue',
+};
+
 export function OperationsChart({ services, history = {} }) {
   const chartServices = services
     .filter((service) => Number.isFinite(service.latencyMs))
@@ -175,6 +185,7 @@ export function OverviewView({
             <div className="launcher-list-body">
               {sortedServices.map((srv) => {
                 const LauncherIcon = SERVICE_ICONS[srv.id] || AppWindow;
+                const launcherTone = LAUNCHER_TONES[srv.id] || 'blue';
                 const state = STATE_META[srv.state] || STATE_META.unmonitored;
                 return (
                   <button
@@ -190,7 +201,7 @@ export function OverviewView({
                       }
                     }}
                   >
-                    <span className="launcher-service-icon"><LauncherIcon size={15} /></span>
+                    <span className={`launcher-service-icon tone-${launcherTone}`}><LauncherIcon size={15} /></span>
                     <span className="launcher-info">
                       <strong className="launcher-name">{srv.name}</strong>
                       <span className={`launcher-state state-${srv.state}`}>

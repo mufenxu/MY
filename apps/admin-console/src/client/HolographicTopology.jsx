@@ -143,7 +143,7 @@ export function HolographicTopology({ services = [], monitoringEnabled = true, o
           {topologyServices.map((service) => {
             const left = service.side === 'left';
             const y = [55, 165, 275][service.row - 1];
-            const startX = left ? 196 : 804;
+            const startX = left ? 150 : 850;
             const endX = left ? 432 : 568;
             const endY = 151 + (service.row - 2) * 14;
             const controlX = left ? 345 : 655;
