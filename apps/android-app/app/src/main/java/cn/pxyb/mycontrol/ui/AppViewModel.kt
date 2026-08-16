@@ -706,10 +706,6 @@ class AppViewModel(
     }
 
     fun openWorkspace(destination: WorkspaceDestination) {
-        if (destination == WorkspaceDestination.Notifications) {
-            selectTab(MainTab.Notifications)
-            return
-        }
         mutableState.update {
             it.copy(
                 selectedTab = MainTab.Overview,

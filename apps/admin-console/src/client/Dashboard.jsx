@@ -320,20 +320,23 @@ export function Dashboard({ session, onLogout }) {
   }, [launchingService]);
 
   const activeNavigationGroup = getNavigationGroup(activeFilter);
+  const activeNavigationViews = activeNavigationGroup.visible === false
+    ? activeNavigationGroup.views.filter((view) => view.id === activeFilter)
+    : activeNavigationGroup.views;
   const viewMeta = {
-    miniapp: { title: '业务管理', subtitle: '综合、考试、校园与 IoT 统一入口' },
-    service: { title: '服务状态', subtitle: '基础服务健康监测与快速定位' },
-    'external-apps': { title: '外部应用', subtitle: '独立项目统一身份接入' },
-    notification: { title: '企业微信通知', subtitle: '通道状态与发送台账' },
-    monitoring: { title: '监控分析', subtitle: '可用率与真实历史趋势' },
-    incidents: { title: '告警事件', subtitle: '发现、确认与处置异常' },
-    automation: { title: '自动化中心', subtitle: '任务能力与观测链路' },
-    backup: { title: '数据灾备', subtitle: '备份恢复与灾难演练' },
-    releases: { title: '发布中心', subtitle: '版本、构建与部署保护' },
-    tasks: { title: '统一任务中心', subtitle: '跨服务任务状态与处理入口' },
-    configuration: { title: '配置中心', subtitle: '受控变更、审批与版本回滚' },
-    diagnostics: { title: '链路诊断', subtitle: '公网网关与服务直连阶段追踪' },
-    security: { title: '安全中心', subtitle: '会话安全与操作记录' },
+    miniapp: { title: '业务入口', subtitle: '打开综合、考试、校园与设备服务' },
+    service: { title: '服务状态', subtitle: '查看各服务是否正常' },
+    'external-apps': { title: '外部应用', subtitle: '其他项目的登录设置' },
+    notification: { title: '消息通知', subtitle: '企业微信消息发送情况' },
+    monitoring: { title: '运行趋势', subtitle: '查看服务最近的状态' },
+    incidents: { title: '问题处理', subtitle: '发现并处理运行异常' },
+    automation: { title: '自动任务', subtitle: '查看自动任务是否完成' },
+    backup: { title: '备份恢复', subtitle: '保存和恢复重要数据' },
+    releases: { title: '更新记录', subtitle: '查看版本更新情况' },
+    tasks: { title: '待办任务', subtitle: '查看需要处理的任务' },
+    configuration: { title: '运行设置', subtitle: '调整运行参数和版本' },
+    diagnostics: { title: '连接检查', subtitle: '检查服务连接是否正常' },
+    security: { title: '安全设置', subtitle: '登录方式和操作记录' },
   }[activeFilter];
 
   return (
@@ -362,7 +365,7 @@ export function Dashboard({ session, onLogout }) {
           <span className="sidebar-brand-copy"><strong>MY 平台</strong><small>统一服务控制台</small></span>
         </div>
         <nav className="main-nav" aria-label="管理模块">
-          {NAV_GROUPS.map((group) => {
+          {NAV_GROUPS.filter((group) => group.visible !== false).map((group) => {
             const Icon = NAVIGATION_ICONS[group.id];
             const active = activeNavigationGroup.id === group.id;
             return (
@@ -424,9 +427,9 @@ export function Dashboard({ session, onLogout }) {
           </div>
 
           <div className="topbar-actions">
-            <button className="command-trigger" type="button" onClick={() => setCommandOpen(true)} aria-label="打开全局检索">
+            <button className="command-trigger" type="button" onClick={() => setCommandOpen(true)} aria-label="打开功能搜索">
               <Search size={17} />
-              <span>全局检索</span>
+              <span>搜索功能</span>
             </button>
             <span className="environment-label"><i /> {environmentLabel}</span>
             <button
@@ -454,7 +457,7 @@ export function Dashboard({ session, onLogout }) {
                 <div className="notification-popover" role="status">
                   <strong>{operationsSummary?.incidents?.length > 0 ? `${operationsSummary.incidents.length} 项事件需要处理` : '系统运行平稳'}</strong>
                   {(operationsSummary?.incidents || []).slice(0, 3).map((incident) => <span key={incident.id}>{incident.title}</span>)}
-                  <button type="button" onClick={() => { setNotificationOpen(false); navigateToView('incidents'); }}>进入事件中心</button>
+                  <button type="button" onClick={() => { setNotificationOpen(false); navigateToView('incidents'); }}>查看问题</button>
                 </div>
               )}
             </div>
@@ -462,14 +465,14 @@ export function Dashboard({ session, onLogout }) {
         </header>
 
         <div className="workspace-content">
-          {activeNavigationGroup.views.length > 1 && (
+          {activeNavigationViews.length > 1 && (
             <div className="workspace-section-nav">
               <SegmentedTabs
                 className="workspace-tabs"
                 ariaLabel={`${activeNavigationGroup.label}功能`}
                 idPrefix="console-workspace-tab"
                 panelId="console-workspace-panel"
-                items={activeNavigationGroup.views.map((view) => ({ id: view.id, label: view.label }))}
+                items={activeNavigationViews.map((view) => ({ id: view.id, label: view.label }))}
                 value={activeFilter}
                 onChange={navigateToView}
               />
@@ -484,8 +487,8 @@ export function Dashboard({ session, onLogout }) {
           <div
             id="console-workspace-panel"
             role="tabpanel"
-            aria-labelledby={activeNavigationGroup.views.length > 1 ? `console-workspace-tab-${activeFilter}` : undefined}
-            aria-label={activeNavigationGroup.views.length === 1 ? activeNavigationGroup.label : undefined}
+            aria-labelledby={activeNavigationViews.length > 1 ? `console-workspace-tab-${activeFilter}` : undefined}
+            aria-label={activeNavigationViews.length === 1 ? activeNavigationGroup.label : undefined}
             aria-busy={loading || refreshing}
           >
           {error && (
@@ -512,9 +515,15 @@ export function Dashboard({ session, onLogout }) {
               launchService={launchService}
               refreshedAt={data?.refreshedAt}
               operationsSummary={operationsSummary}
+              refreshing={refreshing}
+              onRefresh={() => loadServices(true)}
               onOpenServices={() => navigateToView('miniapp')}
+              onOpenService={(service) => navigateToView(
+                service?.id === 'notify' ? 'notification' : service?.id === 'ct8-automation' ? 'automation' : 'service',
+                { entity: service?.id },
+              )}
               onOpenIncidents={() => navigateToView('incidents')}
-              onOpenAudit={() => navigateToView('security')}
+              onOpenBackup={() => navigateToView('backup')}
               onOpenConfiguration={() => navigateToView('configuration')}
             />
           )}

@@ -50,7 +50,7 @@ export const STATE_META = {
   healthy: { label: '运行正常', shortLabel: '在线', className: 'healthy', icon: CheckCircle2 },
   degraded: { label: '响应异常', shortLabel: '异常', className: 'degraded', icon: CircleAlert },
   offline: { label: '暂不可用', shortLabel: '离线', className: 'offline', icon: CircleOff },
-  unmonitored: { label: '未接入监测', shortLabel: '未监测', className: 'unmonitored', icon: Clock3 },
+  unmonitored: { label: '尚未检查', shortLabel: '未检查', className: 'unmonitored', icon: Clock3 },
 };
 
 export const STATE_PRIORITY = {

@@ -1,56 +1,59 @@
 export const NAV_GROUPS = Object.freeze([
   {
     id: 'overview',
-    label: '运行总览',
+    label: '首页',
     defaultView: 'all',
-    views: [{ id: 'all', label: '运行总览' }],
+    views: [{ id: 'all', label: '首页' }],
   },
   {
     id: 'services',
-    label: '业务与服务',
+    label: '服务',
     defaultView: 'miniapp',
     views: [
-      { id: 'miniapp', label: '业务后台' },
+      { id: 'miniapp', label: '业务入口' },
       { id: 'service', label: '服务状态' },
+      // 保留历史名称，避免外部应用深链和现有接入文档失效。
       { id: 'external-apps', label: '外部应用' },
     ],
   },
   {
     id: 'observability',
-    label: '可观测性',
+    label: '运行情况',
     defaultView: 'monitoring',
     views: [
-      { id: 'monitoring', label: '监控趋势' },
-      { id: 'incidents', label: '告警事件' },
-      { id: 'diagnostics', label: '链路诊断' },
+      { id: 'monitoring', label: '运行趋势' },
+      { id: 'incidents', label: '问题处理' },
+      { id: 'diagnostics', label: '连接检查' },
     ],
-    externalAction: { href: '/status', label: '公开状态页' },
   },
   {
     id: 'execution',
-    label: '执行中心',
+    // 保留旧入口，避免历史链接失效；单人日常不需要在侧栏展示审批/发布工具。
+    visible: false,
+    label: '工作工具',
     defaultView: 'tasks',
     views: [
-      { id: 'tasks', label: '任务中心' },
-      { id: 'releases', label: '发布管理' },
-      { id: 'configuration', label: '配置变更' },
-      { id: 'backup', label: '数据灾备' },
+      { id: 'tasks', label: '待办任务' },
+      { id: 'releases', label: '更新记录' },
+      { id: 'configuration', label: '运行设置' },
+      { id: 'backup', label: '备份恢复' },
     ],
   },
   {
     id: 'capabilities',
-    label: '平台能力',
+    label: '工具',
     defaultView: 'notification',
     views: [
-      { id: 'notification', label: '通知服务' },
-      { id: 'automation', label: '自动化' },
+      { id: 'notification', label: '消息通知' },
+      { id: 'automation', label: '自动任务' },
     ],
   },
   {
     id: 'security',
-    label: '安全中心',
+    // 单人也需要修改密码、管理 MFA 和撤销会话，因此保留一个清晰的设置入口。
+    label: '设置',
     defaultView: 'security',
-    views: [{ id: 'security', label: '安全中心' }],
+    views: [{ id: 'security', label: '账号安全' }],
   },
 ]);
 

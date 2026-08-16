@@ -3090,6 +3090,97 @@ input:focus-visible {
   color: var(--muted);
 }
 
+/* 单人控制台：把详细链路放到按需展开的区域，首页默认只显示能直接行动的状态。 */
+.overview-time-value {
+  font-size: 16px !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap;
+}
+
+.service-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+}
+
+.service-summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 54px;
+  gap: 8px;
+  padding: 10px 11px;
+  color: #526077;
+  background: #f7f9fc;
+  border-radius: 9px;
+}
+
+.service-summary-item span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.service-summary-item strong {
+  color: #1c2434;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.service-summary-item.degraded strong { color: #b45309; }
+.service-summary-item.offline strong { color: #dc2626; }
+.service-summary-item.unmonitored strong { color: #64748b; }
+
+:root[data-theme='dark'] .service-summary-item {
+  color: #9aa9c2;
+  background: rgba(20, 29, 54, 0.8);
+}
+
+:root[data-theme='dark'] .service-summary-item strong { color: #dbe4f2; }
+:root[data-theme='dark'] .service-summary-item.degraded strong { color: #fbbf24; }
+:root[data-theme='dark'] .service-summary-item.offline strong { color: #fb7185; }
+:root[data-theme='dark'] .service-summary-item.unmonitored strong { color: #9aa9c2; }
+
+.topology-details-panel {
+  min-height: 0;
+}
+
+.topology-details-panel > summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 50px;
+  padding: 0 16px;
+  color: #3d4759;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.topology-details-panel > summary::-webkit-details-marker { display: none; }
+.topology-details-panel > summary::after {
+  margin-left: auto;
+  content: '展开';
+  color: #8a93a6;
+  font-size: 11px;
+  font-weight: 600;
+}
+.topology-details-panel[open] > summary::after { content: '收起'; }
+.topology-details-panel > summary svg { color: #4f6ef7; }
+.topology-details-panel > summary small { color: #8a93a6; font-size: 11px; font-weight: 500; }
+.topology-details-content { border-top: 1px solid #eef1f6; }
+.topology-details-content .dependency-topology { min-height: 404px; }
+
+:root[data-theme='dark'] .topology-details-panel > summary { color: #dbe4f2; }
+:root[data-theme='dark'] .topology-details-panel > summary svg { color: #4fd8ec; }
+:root[data-theme='dark'] .topology-details-panel > summary small,
+:root[data-theme='dark'] .topology-details-panel > summary::after { color: #7d8ca6; }
+:root[data-theme='dark'] .topology-details-content { border-top-color: #1c2743; }
+
 .application-management {
   margin-top: 16px;
   padding-top: 14px;
@@ -10148,6 +10239,124 @@ input:focus-visible {
   overflow: hidden;
   position: relative;
   height: 404px;
+}
+
+/* 中栏：简明服务状态列表 */
+.service-status-panel {
+  min-height: 404px;
+}
+
+.service-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px 12px;
+}
+
+.service-status-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 56px;
+  padding: 7px 8px;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.15s ease;
+}
+
+.service-status-row:hover {
+  background: #f5f7fb;
+}
+
+:root[data-theme='dark'] .service-status-row:hover {
+  background: rgba(34, 211, 238, 0.05);
+}
+
+.service-status-row-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  color: #4f6ef7;
+  background: #eef1fe;
+  border-radius: 8px;
+}
+
+:root[data-theme='dark'] .service-status-row-icon {
+  color: #4fd8ec;
+  background: rgba(34, 211, 238, 0.1);
+}
+
+.service-status-row-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.service-status-row-copy strong {
+  overflow: hidden;
+  color: #1c2434;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root[data-theme='dark'] .service-status-row-copy strong {
+  color: #dbe4f2;
+}
+
+.service-status-row-copy small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  color: #8a93a6;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-status-row-copy .status-indicator {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+}
+
+.service-status-row-latency {
+  color: #5b6679;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+:root[data-theme='dark'] .service-status-row-latency {
+  color: #9aa9c2;
+}
+
+.service-status-row > svg {
+  color: #b2bdce;
+}
+
+.service-status-empty {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #7b8698;
+  font-size: 12px;
+}
+
+:root[data-theme='dark'] .service-status-empty {
+  color: #7d8ca6;
 }
 
 .topology-panel .dependency-topology {

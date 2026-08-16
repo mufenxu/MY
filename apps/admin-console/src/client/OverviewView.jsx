@@ -1,5 +1,6 @@
 import {
   Activity,
+  Archive,
   AppWindow,
   ArrowRight,
   ArrowUpRight,
@@ -7,14 +8,10 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleAlert,
-  Clock3,
   CloudCog,
-  Cpu,
-  ListTodo,
   LoaderCircle,
   Network,
-  ShieldCheck,
-  User,
+  RefreshCw,
   Zap,
 } from 'lucide-react';
 import { HolographicTopology } from './HolographicTopology.jsx';
@@ -116,10 +113,12 @@ export function OverviewView({
   launchService,
   refreshedAt,
   operationsSummary,
+  refreshing = false,
+  onRefresh = () => {},
   onOpenServices,
+  onOpenService = onOpenServices,
   onOpenIncidents,
-  onOpenAudit,
-  onOpenConfiguration,
+  onOpenBackup = () => {},
 }) {
   const sortedServices = [...services].sort((left, right) => (
     (STATE_PRIORITY[left.state] ?? 4) - (STATE_PRIORITY[right.state] ?? 4)
@@ -127,7 +126,7 @@ export function OverviewView({
   ));
 
   const latencies = services.map((s) => s.latencyMs).filter(Number.isFinite);
-  const avgLatency = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 45;
+  const avgLatency = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : null;
   const serviceTotal = total || services.length;
   const healthyCount = counts.healthy ?? 0;
   const incidentCount = operationsSummary?.incidents?.length ?? attentionCount;
@@ -135,8 +134,8 @@ export function OverviewView({
   const overviewState = loading
     ? '正在同步全网状态'
     : incidentCount > 0
-      ? '发现需关注运行事件'
-      : '全网运行稳定';
+      ? '有服务需要看看'
+      : '服务运行正常';
 
   return (
     <div className="overview-page modern-executive-cockpit">
@@ -151,22 +150,22 @@ export function OverviewView({
         <div className="cockpit-overview-metric">
           <span><i className="status-indicator" />服务可用</span>
           <strong>{healthyCount} / {serviceTotal}</strong>
-          <small>{healthyRate.toFixed(1)}% 当前可用率</small>
+          <small>{healthyRate.toFixed(1)}% 当前正常比例</small>
         </div>
         <div className="cockpit-overview-metric">
           <span><Activity size={13} />平均响应</span>
-          <strong>{avgLatency} ms</strong>
-          <small>基于 {latencies.length} 个已监测服务</small>
+          <strong>{avgLatency === null ? '--' : `${avgLatency} ms`}</strong>
+          <small>{latencies.length > 0 ? `已检查 ${latencies.length} 个服务` : '暂无响应数据'}</small>
         </div>
         <div className="cockpit-overview-metric">
-          <span><User size={13} />并发用户</span>
-          <strong>12,450</strong>
-          <small>实时流量估算</small>
-        </div>
-        <div className="cockpit-overview-metric">
-          <span><CircleAlert size={13} />待处置告警</span>
+          <span><CircleAlert size={13} />需要处理</span>
           <strong className={incidentCount > 0 ? 'has-attention' : ''}>{incidentCount}</strong>
-          <small>{incidentCount > 0 ? '请进入事件中心处理' : '当前无阻断性事件'}</small>
+          <small>{incidentCount > 0 ? '有问题需要处理' : '当前没有需要处理的问题'}</small>
+        </div>
+        <div className="cockpit-overview-metric">
+          <span><CheckCircle2 size={13} />最近检查</span>
+          <strong className="overview-time-value">{lastRefreshLabel}</strong>
+          <small>所有服务的同步时间</small>
         </div>
       </section>
 
@@ -176,10 +175,10 @@ export function OverviewView({
             <header className="panel-header space-between">
               <div className="header-title-group">
                 <Boxes size={16} />
-                <h3>快捷服务启动中心</h3>
+                <h3>常用服务</h3>
               </div>
-              <button className="icon-text-btn" type="button" onClick={onOpenServices} title="管理全量微服务">
-                全部 <ArrowRight size={13} />
+              <button className="icon-text-btn" type="button" onClick={onOpenServices} title="查看所有服务">
+                查看全部 <ArrowRight size={13} />
               </button>
             </header>
             <div className="launcher-list-body">
@@ -197,7 +196,7 @@ export function OverviewView({
                       if (srv.adminUrl) {
                         launchService(srv);
                       } else {
-                        onOpenServices();
+                        onOpenService?.(srv);
                       }
                     }}
                   >
@@ -221,22 +220,27 @@ export function OverviewView({
           <article className="cockpit-panel quick-ops-panel">
             <header className="panel-header">
               <Zap size={16} />
-              <h3>快捷运维动作中心</h3>
+              <h3>常用操作</h3>
             </header>
             <div className="quick-ops-actions">
+              <button className="quick-ops-btn" type="button" onClick={onRefresh} disabled={refreshing}>
+                <RefreshCw className={refreshing ? 'spin' : ''} size={14} />
+                <span>{refreshing ? '正在刷新服务' : '刷新服务状态'}</span>
+                <ChevronRight size={14} />
+              </button>
+              <button className="quick-ops-btn" type="button" onClick={onOpenServices}>
+                <AppWindow size={14} />
+                <span>打开业务入口</span>
+                <ChevronRight size={14} />
+              </button>
               <button className="quick-ops-btn" type="button" onClick={onOpenIncidents}>
                 <CircleAlert size={14} />
-                <span>告警事件处置 ({attentionCount})</span>
+                <span>{incidentCount > 0 ? `处理问题 (${incidentCount})` : '查看服务状态'}</span>
                 <ChevronRight size={14} />
               </button>
-              <button className="quick-ops-btn" type="button" onClick={onOpenAudit}>
-                <Clock3 size={14} />
-                <span>审计操作日志</span>
-                <ChevronRight size={14} />
-              </button>
-              <button className="quick-ops-btn" type="button" onClick={onOpenConfiguration}>
-                <ListTodo size={14} />
-                <span>配置变更审批</span>
+              <button className="quick-ops-btn" type="button" onClick={onOpenBackup}>
+                <Archive size={14} />
+                <span>备份重要数据</span>
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -244,23 +248,59 @@ export function OverviewView({
         </div>
 
         <div className="cockpit-center-col">
-          <article className="cockpit-panel topology-panel">
-            <HolographicTopology
-              services={services}
-              monitoringEnabled={monitoringEnabled}
-              onSelectService={launchService}
-            />
+          <article className="cockpit-panel service-status-panel">
+            <header className="panel-header space-between">
+              <div className="header-title-group">
+                <CheckCircle2 size={16} />
+                <h3>服务状态</h3>
+              </div>
+              <button className="icon-text-btn" type="button" onClick={onOpenServices} title="查看所有服务">
+                查看全部 <ArrowRight size={13} />
+              </button>
+            </header>
+            <div className="service-status-list">
+              {sortedServices.length > 0 ? sortedServices.slice(0, 6).map((srv) => {
+                const ServiceIcon = SERVICE_ICONS[srv.id] || AppWindow;
+                const state = STATE_META[srv.state] || STATE_META.unmonitored;
+                const stateLabel = srv.state === 'unmonitored' ? '未检查' : state.label;
+                const open = () => (srv.adminUrl ? launchService(srv) : onOpenService?.(srv));
+                return (
+                  <button className="service-status-row" type="button" key={srv.id} onClick={open}>
+                    <span className="service-status-row-icon"><ServiceIcon size={15} /></span>
+                    <span className="service-status-row-copy">
+                      <strong>{srv.shortName || srv.name}</strong>
+                      <small><i className={`status-indicator state-${srv.state}`} />{stateLabel} · {formatCheckedAt(srv.checkedAt)}</small>
+                    </span>
+                    <span className="service-status-row-latency">{Number.isFinite(srv.latencyMs) ? `${srv.latencyMs} ms` : '--'}</span>
+                    <ArrowUpRight size={14} />
+                  </button>
+                );
+              }) : (
+                <div className="service-status-empty"><LoaderCircle className="spin" size={18} />正在读取服务状态</div>
+              )}
+            </div>
           </article>
+
+          <details className="cockpit-panel topology-details-panel">
+            <summary><Network size={16} /><span>查看服务连接图</span><small>需要排查连接关系时再展开</small></summary>
+            <div className="topology-details-content">
+              <HolographicTopology
+                services={services}
+                monitoringEnabled={monitoringEnabled}
+                onSelectService={launchService}
+              />
+            </div>
+          </details>
 
           <article className="cockpit-panel trend-panel">
             <header className="panel-header space-between">
               <div className="header-title-group">
                 <Activity size={16} />
-                <h3>全网服务响应趋势</h3>
+                <h3>服务响应趋势</h3>
               </div>
               <div className="monitoring-control compact-control">
                 <CloudCog size={15} />
-                <span>自动轮询</span>
+                <span>自动刷新</span>
                 <button
                   className={`toggle-switch compact ${monitoringEnabled ? 'active' : ''}`}
                   type="button"
@@ -278,76 +318,28 @@ export function OverviewView({
         </div>
 
         <div className="cockpit-side-col right-col">
-          <article className="cockpit-panel sla-panel">
+          <article className="cockpit-panel service-summary-panel">
             <header className="panel-header">
-              <ShieldCheck size={16} />
-              <h3>SLA 运行可用性</h3>
+              <CheckCircle2 size={16} />
+              <h3>服务状态</h3>
             </header>
-            <div className="sla-body-row">
-              <div className="sla-ring-container">
-                <svg viewBox="0 0 100 100" className="sla-ring-svg">
-                  <circle cx="50" cy="50" r="40" className="ring-track" />
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="40"
-                    className="ring-value"
-                    style={{
-                      strokeDasharray: 251,
-                      strokeDashoffset: 251 - (251 * (healthyRate || 98.4)) / 100,
-                    }}
-                  />
-                </svg>
-                <div className="ring-center-val">
-                  <strong>{healthyRate ? healthyRate.toFixed(1) : '98.4'}%</strong>
-                  <small>当前可用率</small>
-                </div>
+            <div className="service-summary-grid">
+              <div className="service-summary-item healthy">
+                <span><i className="status-indicator" />正常</span>
+                <strong>{healthyCount}</strong>
               </div>
-              <div className="sla-kpi-info">
-                <div className="sla-pill healthy">
-                  <span>在线状态</span>
-                  <strong>{healthyCount} / {serviceTotal} 正常</strong>
-                </div>
-                <div className="sla-pill sub">
-                  <span>平均延迟</span>
-                  <strong>{avgLatency} ms</strong>
-                </div>
+              <div className="service-summary-item degraded">
+                <span><i className="status-indicator state-degraded" />响应慢</span>
+                <strong>{counts.degraded ?? 0}</strong>
               </div>
-            </div>
-          </article>
-
-          <article className="cockpit-panel resource-panel">
-            <header className="panel-header">
-              <Cpu size={16} />
-              <h3>系统核心资源使用</h3>
-            </header>
-            <div className="resource-progress-grid">
-              <div className="res-item">
-                <div className="res-meta"><span>CPU 利用率</span><strong>64%</strong></div>
-                <div className="res-bar-track"><div className="res-bar-fill cyan" style={{ width: '64%' }} /></div>
+              <div className="service-summary-item offline">
+                <span><i className="status-indicator state-offline" />不可用</span>
+                <strong>{counts.offline ?? 0}</strong>
               </div>
-              <div className="res-item">
-                <div className="res-meta"><span>内存占用</span><strong>58%</strong></div>
-                <div className="res-bar-track"><div className="res-bar-fill emerald" style={{ width: '58%' }} /></div>
+              <div className="service-summary-item unmonitored">
+                <span><i className="status-indicator state-unmonitored" />待检查</span>
+                <strong>{counts.unmonitored ?? 0}</strong>
               </div>
-              <div className="res-item">
-                <div className="res-meta"><span>网络带宽</span><strong>72%</strong></div>
-                <div className="res-bar-track"><div className="res-bar-fill blue" style={{ width: '72%' }} /></div>
-              </div>
-            </div>
-          </article>
-
-          <article className="cockpit-panel user-traffic-panel">
-            <header className="panel-header space-between">
-              <div className="header-title-group">
-                <User size={16} />
-                <h3>全网用户并发</h3>
-              </div>
-              <span className="panel-live-label">实时</span>
-            </header>
-            <div className="user-traffic-body">
-              <div><strong className="traffic-num">12,450</strong><span>↑ 3.2%</span></div>
-              <svg viewBox="0 0 240 30"><path d="M0 25 C40 5, 80 28, 120 10 S 200 28, 240 8" stroke="#0284c7" strokeWidth="2" fill="none" /></svg>
             </div>
           </article>
 
@@ -355,9 +347,9 @@ export function OverviewView({
             <header className="panel-header space-between">
               <div className="header-title-group">
                 <CircleAlert size={16} />
-                <h3>实时告警事件</h3>
+                <h3>需要处理</h3>
               </div>
-              <span className="alerts-badge">{incidentCount > 0 ? `${incidentCount} 项` : '无待办'}</span>
+              <span className="alerts-badge">{incidentCount > 0 ? `${incidentCount} 项` : '正常'}</span>
             </header>
             <div className="alerts-list-body">
               {(operationsSummary?.incidents || []).slice(0, 3).map((incident) => (
@@ -367,8 +359,11 @@ export function OverviewView({
                   <i className={`a-dot ${['critical', 'high', 'warning'].includes(incident.severity) ? 'warn' : 'ok'}`} />
                 </button>
               ))}
-              {incidentCount === 0 && (
-                <div className="alerts-empty"><CheckCircle2 size={18} />当前无待处置告警</div>
+              {(operationsSummary?.incidents || []).length === 0 && (
+                <div className="alerts-empty">
+                  {incidentCount > 0 ? <CircleAlert size={18} /> : <CheckCircle2 size={18} />}
+                  {incidentCount > 0 ? '有服务状态异常，请打开服务状态查看' : '当前没有需要处理的问题'}
+                </div>
               )}
             </div>
           </article>

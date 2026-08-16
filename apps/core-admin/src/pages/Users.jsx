@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Space, Card, Typography, Tooltip } from 'antd';
-import { EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Select, Space, Card, Tag, Typography, Tooltip, Tabs } from 'antd';
+import { EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, TeamOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { useUsers } from '../hooks/useUsers';
 import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
+import FeatureVisibilityConfig from '../components/FeatureVisibilityConfig';
 import UserAvatar from '../components/UserAvatar';
 import { message } from '../utils/feedback';
 
@@ -25,7 +26,9 @@ const Users = () => {
         setEditingUser(user);
         form.setFieldsValue({
             nickName: user.nickName,
+            role: user.role,
             status: user.status,
+            permissions: user.permissions || [],
         });
         setIsModalVisible(true);
     };
@@ -85,6 +88,31 @@ const Users = () => {
                     </div>
                 </Space>
             ),
+        },
+        {
+            title: '角色',
+            dataIndex: 'role',
+            key: 'role',
+            render: (role) => {
+                const roleLabels = {
+                    super_admin: '超级管理员',
+                    admin: '管理员',
+                    user: '普通用户',
+                };
+                const roleColors = {
+                    super_admin: '#4A7CF7',
+                    admin: '#0B3D91',
+                    user: '#5CC9A7',
+                };
+                return (
+                    <Tag
+                        color={roleColors[role] || '#A3AED0'}
+                        style={{ borderRadius: 20, padding: '4px 12px', border: 'none', fontWeight: 600 }}
+                    >
+                        {roleLabels[role] || '普通用户'}
+                    </Tag>
+                );
+            },
         },
         {
             title: '状态',
@@ -150,6 +178,12 @@ const Users = () => {
                         <div style={{ fontSize: 12, color: '#A3AED0' }}>编号：{user.userId || user._id}</div>
                     </div>
                 </Space>
+                <Tag
+                    color={user.role === 'super_admin' ? '#4A7CF7' : (user.role === 'admin' ? '#0B3D91' : '#5CC9A7')}
+                    style={{ borderRadius: 20, border: 'none', fontWeight: 600 }}
+                >
+                    {user.role === 'super_admin' ? '超级管理员' : (user.role === 'admin' ? '管理员' : '普通用户')}
+                </Tag>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: '1px solid #E0E5F2' }}>
@@ -265,12 +299,40 @@ const Users = () => {
         </div>
     );
 
+    const tabItems = [
+        {
+            key: '1',
+            label: (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
+                    <TeamOutlined />
+                    <span>用户列表</span>
+                </span>
+            ),
+            children: UserListTab,
+        },
+        {
+            key: '2',
+            label: (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
+                    <AppstoreOutlined />
+                    <span>功能开关</span>
+                </span>
+            ),
+            children: <FeatureVisibilityConfig />,
+        },
+    ];
+
     return (
         <div>
-            {UserListTab}
+            <Tabs
+                defaultActiveKey="1"
+                items={tabItems}
+                type="card"
+                style={{ marginBottom: 20 }}
+            />
 
             <Modal
-                title="修改用户"
+                title={editingUser ? '修改用户' : '添加用户'}
                 open={isModalVisible}
                 onOk={handleModalOk}
                 onCancel={() => {
@@ -285,6 +347,35 @@ const Users = () => {
                 <Form form={form} layout="vertical">
                     <Form.Item name="nickName" label="昵称" rules={[{ required: true }]}>
                         <Input style={{ borderRadius: 10 }} />
+                    </Form.Item>
+                    <Form.Item name="role" label="角色" rules={[{ required: true }]}>
+                        <Select style={{ borderRadius: 10 }}>
+                            <Option value="user">普通用户</Option>
+                            <Option value="admin">管理员</Option>
+                            <Option value="super_admin">超级管理员</Option>
+                        </Select>
+                    </Form.Item>
+                    <Form.Item
+                        name="permissions"
+                        label="单独开放的功能"
+                        extra="一般按角色使用；只有需要给某个用户额外能力时才修改。"
+                    >
+                        <Select mode="multiple" style={{ borderRadius: 10 }} placeholder="选择额外开放的功能">
+                            <Option value="resources">资源管理</Option>
+                            <Option value="bmi">BMI 计算</Option>
+                            <Option value="todo">待办清单</Option>
+                            <Option value="ct8">自动化查看</Option>
+                            <Option value="view_ct8">自动化查看（只读）</Option>
+                            <Option value="manage_ct8">自动化操作</Option>
+                            <Option value="smart_control">智能控制</Option>
+                            <Option value="view_smart_control">智能控制（只读）</Option>
+                            <Option value="manage_smart_control">智能控制操作</Option>
+                            <Option value="heat_pump">空气能</Option>
+                            <Option value="view_heat_pump">空气能（只读）</Option>
+                            <Option value="manage_heat_pump">空气能操作</Option>
+                            <Option value="daily_news">每日资讯</Option>
+                            <Option value="course_order">订单处理</Option>
+                        </Select>
                     </Form.Item>
                     <Form.Item name="status" label="状态" rules={[{ required: true }]}>
                         <Select style={{ borderRadius: 10 }}>

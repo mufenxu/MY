@@ -11,21 +11,27 @@ import { requestJson } from './api.js';
 
 const COMMAND_TYPE_LABELS = {
   service: '服务',
-  incident: '事件',
-  task: '任务',
-  release: '发布',
-  configuration: '配置',
+  incident: '问题',
+  task: '待办',
+  release: '更新',
+  configuration: '设置',
   navigation: '功能',
 };
 
-const COMMAND_SHORTCUTS = NAV_GROUPS.flatMap((group) => group.views.map((view) => ({
-  id: `navigation:${view.id}`,
-  entityId: '',
-  type: 'navigation',
-  title: view.label,
-  subtitle: group.label,
-  view: view.id,
-})));
+const COMMAND_SHORTCUTS = NAV_GROUPS
+  .filter((group) => group.visible !== false)
+  .flatMap((group) => group.views.map((view) => ({
+    id: `navigation:${view.id}`,
+    entityId: '',
+    type: 'navigation',
+    title: view.label,
+    subtitle: group.label,
+    view: view.id,
+  })));
+const DISCOVERABLE_VIEW_IDS = new Set([
+  ...COMMAND_SHORTCUTS.map((item) => item.view),
+  'backup',
+]);
 
 function commandTargetUrl(view, entityId) {
   const url = new URL(window.location.href);
@@ -48,7 +54,9 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   const requestRef = useRef(null);
 
   const normalizedQuery = query.trim();
-  const items = normalizedQuery.length >= 2 ? data?.results || [] : COMMAND_SHORTCUTS;
+  const items = normalizedQuery.length >= 2
+    ? (data?.results || []).filter((item) => !item.view || DISCOVERABLE_VIEW_IDS.has(item.view))
+    : COMMAND_SHORTCUTS;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -106,7 +114,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
     setMessage('');
     try {
       await navigator.clipboard.writeText(commandTargetUrl(item.view, item.entityId));
-      setMessage('对象链接已复制');
+      setMessage('链接已复制');
     } catch {
       setError('无法复制链接，请先授予浏览器剪贴板权限。');
     }
@@ -128,7 +136,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   const unavailableSources = (data?.sources || []).filter((source) => !source.available).length;
   return (
     <div className="command-palette-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="command-palette" role="dialog" aria-modal="true" aria-label="全局运营检索">
+      <section className="command-palette" role="dialog" aria-modal="true" aria-label="功能搜索">
         <header>
           <Search size={20} />
           <input
@@ -136,8 +144,8 @@ export function CommandPalette({ open, onClose, onNavigate }) {
             type="search"
             value={query}
             maxLength={80}
-            placeholder="搜索服务、事件、任务、发布或配置"
-            aria-label="搜索运营对象"
+            placeholder="搜索服务、问题或功能"
+            aria-label="搜索内容"
             aria-controls="command-palette-results"
             aria-activedescendant={items[activeIndex] ? `command-option-${activeIndex}` : undefined}
             onChange={(event) => { setQuery(event.target.value); setMessage(''); }}
@@ -148,10 +156,10 @@ export function CommandPalette({ open, onClose, onNavigate }) {
         </header>
         {(error || message || unavailableSources > 0) && (
           <div className={`command-palette-feedback ${error ? 'error' : ''}`} role={error ? 'alert' : 'status'}>
-            {error || message || `${unavailableSources} 个数据源暂不可用，已展示其余结果。`}
+            {error || message || '部分内容暂时无法查询，已显示可用结果。'}
           </div>
         )}
-        <div id="command-palette-results" className="command-palette-results" role="listbox" aria-label={normalizedQuery.length >= 2 ? '检索结果' : '常用功能'}>
+        <div id="command-palette-results" className="command-palette-results" role="listbox" aria-label={normalizedQuery.length >= 2 ? '搜索结果' : '常用功能'}>
           {items.map((item, index) => (
             <div
               id={`command-option-${index}`}
@@ -170,7 +178,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
               <button type="button" className="icon-action" onClick={() => copyItemLink(item)} aria-label={`复制${item.title}链接`} title="复制链接"><Copy size={16} /></button>
             </div>
           ))}
-          {!loading && normalizedQuery.length >= 2 && data && items.length === 0 && <div className="command-palette-empty">没有找到匹配的运营对象</div>}
+          {!loading && normalizedQuery.length >= 2 && data && items.length === 0 && <div className="command-palette-empty">没有找到匹配内容</div>}
         </div>
       </section>
     </div>

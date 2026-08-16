@@ -1342,10 +1342,10 @@ export function SecurityAuditView({ session, onLogout }) {
       const response = await startRegistration({ optionsJSON: generated.options });
       await requestJson('/api/security/passkeys/verify', {
         method: 'POST',
-        body: JSON.stringify({ challengeId: generated.challengeId, response, name: passkeyName || 'Passkey' }),
+        body: JSON.stringify({ challengeId: generated.challengeId, response, name: passkeyName || '快捷登录' }),
       });
       setPasskeyName('');
-      setMessage('Passkey 已注册');
+      setMessage('快捷登录已添加');
     });
   }
 
@@ -1411,18 +1411,16 @@ export function SecurityAuditView({ session, onLogout }) {
   }
 
   const totpEnabled = Boolean(sessionData?.security?.totpEnabled);
-  const canManageAccounts = roleAtLeast(session.user?.role, 'super_admin');
-
   const failures = events.filter((event) => event.outcome === 'failure').length;
   return (
-    <section className="page-view ops-page" aria-label="安全审计">
-      <div className="ops-toolbar"><SegmentedTabs ariaLabel="安全中心视图" idPrefix="security-view-tab" panelId="security-view-panel" items={[{ id: 'audit', label: '审计日志' }, { id: 'sessions', label: '登录会话' }, { id: 'authenticators', label: '认证方式' }, ...(canManageAccounts ? [{ id: 'accounts', label: '管理员' }] : [])]} value={tab} onChange={setTab} /><button className="secondary-action" type="button" onClick={load}><RefreshCw size={17} />刷新</button></div>
+    <section className="page-view ops-page" aria-label="账号与安全">
+      <div className="ops-toolbar"><SegmentedTabs ariaLabel="安全设置" idPrefix="security-view-tab" panelId="security-view-panel" items={[{ id: 'audit', label: '操作记录' }, { id: 'sessions', label: '登录设备' }, { id: 'authenticators', label: '登录保护' }]} value={tab} onChange={setTab} /><button className="secondary-action" type="button" onClick={load}><RefreshCw size={17} />刷新</button></div>
       <Feedback error={error} message={message} />
       <div className="ops-kpis">
-        <article><ShieldCheck size={20} /><div><span>当前角色</span><strong>{ROLE_LABELS[session.user?.role] || session.user?.role}</strong><small>最小权限控制</small></div></article>
-        <article><KeyRound size={20} /><div><span>动态验证</span><strong>{totpEnabled ? '已启用' : '未启用'}</strong><small>{totpEnabled ? `剩余 ${sessionData?.security?.recoveryCodesRemaining || 0} 个恢复码` : '等待绑定'}</small></div></article>
-        <article><UserRoundCheck size={20} /><div><span>有效会话</span><strong>{sessionData?.sessions?.length || 0}</strong><small>支持远程下线</small></div></article>
-        <article><XCircle size={20} /><div><span>失败事件</span><strong>{failures}</strong><small>最近 200 条审计</small></div></article>
+        <article><ShieldCheck size={20} /><div><span>当前账号</span><strong>{session.user?.username || 'admin'}</strong><small>个人管理员</small></div></article>
+        <article><KeyRound size={20} /><div><span>登录保护</span><strong>{totpEnabled ? '已开启' : '未开启'}</strong><small>{totpEnabled ? `剩余 ${sessionData?.security?.recoveryCodesRemaining || 0} 个恢复码` : '建议开启'}</small></div></article>
+        <article><UserRoundCheck size={20} /><div><span>登录设备</span><strong>{sessionData?.sessions?.length || 0}</strong><small>可让陌生设备退出</small></div></article>
+        <article><XCircle size={20} /><div><span>失败操作</span><strong>{failures}</strong><small>最近 200 条记录</small></div></article>
       </div>
       <div id="security-view-panel" role="tabpanel" aria-labelledby={`security-view-tab-${tab}`} aria-busy={loading}>
       {loading && !sessionData ? <LoadingBlock /> : tab === 'audit' ? (
@@ -1438,18 +1436,18 @@ export function SecurityAuditView({ session, onLogout }) {
         <div className="security-auth-layout">
           <section className="ops-panel security-auth-panel">
             <div className="ops-section-heading"><span><KeyRound size={18} /></span><div><strong>动态验证</strong><small>{totpEnabled ? '已启用' : '未启用'}</small></div></div>
-            {!enrollment && <div className="ops-inline-form"><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>当前动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || !credentials.password || (totpEnabled && credentials.totp.length !== 6)} onClick={beginTotpEnrollment}><KeyRound size={17} />{totpEnabled ? '重新绑定' : '绑定 TOTP'}</button></div>}
+            {!enrollment && <div className="ops-inline-form"><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>当前动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || !credentials.password || (totpEnabled && credentials.totp.length !== 6)} onClick={beginTotpEnrollment}><KeyRound size={17} />{totpEnabled ? '重新绑定' : '绑定动态验证码'}</button></div>}
             {enrollment && <div className="totp-enrollment"><img src={enrollment.qrDataUrl} alt="TOTP 二维码" /><code>{enrollment.secret}</code><div className="ops-inline-form"><label>动态验证码<input inputMode="numeric" maxLength={6} value={enrollmentCode} onChange={(event) => setEnrollmentCode(event.target.value.replace(/\D/g, ''))} /></label><button className="primary-button" type="button" disabled={submitting || enrollmentCode.length !== 6} onClick={confirmTotpEnrollment}><Check size={17} />确认绑定</button></div></div>}
             {recoveryCodes.length > 0 && <div className="recovery-code-grid">{recoveryCodes.map((code) => <code key={code}>{code}</code>)}</div>}
             {totpEnabled && !enrollment && <div className="security-auth-actions">
               <button className="secondary-action" type="button" disabled={submitting || !credentials.password || credentials.totp.length !== 6} onClick={regenerateRecoveryCodes}><RefreshCw size={16} />重置恢复码</button>
-              <button className="danger-action" type="button" disabled={submitting || !credentials.password || credentials.totp.length !== 6 || session.mfaRequired} onClick={disableTotp}><XCircle size={16} />停用 TOTP</button>
+              <button className="danger-action" type="button" disabled={submitting || !credentials.password || credentials.totp.length !== 6 || session.mfaRequired} onClick={disableTotp}><XCircle size={16} />停用动态验证码</button>
             </div>}
           </section>
           <section className="ops-panel security-auth-panel">
-            <div className="ops-section-heading"><span><Fingerprint size={18} /></span><div><strong>Passkey</strong><small>{passkeys.length} 个凭据</small></div></div>
-            <div className="ops-inline-form"><label>凭据名称<input value={passkeyName} maxLength={64} onChange={(event) => setPasskeyName(event.target.value)} /></label><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || !credentials.password || (totpEnabled && credentials.totp.length !== 6)} onClick={registerPasskey}><Fingerprint size={17} />注册 Passkey</button></div>
-            <div className="passkey-list">{passkeys.map((item) => <div className="session-row" key={item.id}><span><Fingerprint size={18} /></span><span><strong>{item.name || 'Passkey'}</strong><small>{item.deviceType || '设备凭据'} · {formatDateTime(item.createdAt)}</small></span><button type="button" onClick={() => runSensitive(async () => { await requestJson(`/api/security/passkeys/${encodeURIComponent(item.id)}`, { method: 'DELETE', body: sensitiveBody() }); setMessage('Passkey 已删除'); })}><XCircle size={16} />删除</button></div>)}</div>
+            <div className="ops-section-heading"><span><Fingerprint size={18} /></span><div><strong>设备快捷登录</strong><small>已添加 {passkeys.length} 个设备</small></div></div>
+            <div className="ops-inline-form"><label>设备名称<input value={passkeyName} maxLength={64} onChange={(event) => setPasskeyName(event.target.value)} /></label><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || !credentials.password || (totpEnabled && credentials.totp.length !== 6)} onClick={registerPasskey}><Fingerprint size={17} />添加快捷登录</button></div>
+            <div className="passkey-list">{passkeys.map((item) => <div className="session-row" key={item.id}><span><Fingerprint size={18} /></span><span><strong>{item.name || '快捷登录'}</strong><small>{item.deviceType || '登录设备'} · {formatDateTime(item.createdAt)}</small></span><button type="button" onClick={() => runSensitive(async () => { await requestJson(`/api/security/passkeys/${encodeURIComponent(item.id)}`, { method: 'DELETE', body: sensitiveBody() }); setMessage('快捷登录已删除'); })}><XCircle size={16} />删除</button></div>)}</div>
           </section>
           <section className="ops-panel security-auth-panel">
             <div className="ops-section-heading"><span><LockKeyhole size={18} /></span><div><strong>登录密码</strong><small>修改后所有会话下线</small></div></div>
