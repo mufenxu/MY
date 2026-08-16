@@ -258,7 +258,7 @@ fun OverviewScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(26.dp),
                 color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 1.dp,
+                shadowElevation = 0.dp,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
             ) {
                 Box(
@@ -368,7 +368,7 @@ fun OverviewScreen(
                 shape = campusCardShape,
                 color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                shadowElevation = 1.dp,
+                shadowElevation = 0.dp,
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Row(
@@ -425,7 +425,7 @@ fun OverviewScreen(
                     shape = RoundedCornerShape(24.dp),
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 1.dp,
+                    shadowElevation = 0.dp,
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
@@ -516,7 +516,7 @@ fun OverviewScreen(
                     shape = RoundedCornerShape(24.dp),
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 1.dp,
+                    shadowElevation = 0.dp,
                 ) {
                     Column {
                         state.externalApplications.forEachIndexed { index, application ->
@@ -553,7 +553,7 @@ fun OverviewScreen(
                     shape = RoundedCornerShape(24.dp),
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 1.dp,
+                    shadowElevation = 0.dp,
                 ) {
                     Column {
                         sortedServices.forEachIndexed { index, service ->
@@ -1024,7 +1024,7 @@ private fun QuickAction(
         shape = shape,
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 1.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier

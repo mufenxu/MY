@@ -38,7 +38,6 @@ import {
   TerminalSquare,
   Target,
   UserRoundCheck,
-  UserPlus,
   Wrench,
   XCircle,
 } from 'lucide-react';
@@ -68,13 +67,6 @@ const STATE_LABELS = {
   unmonitored: '未监测',
 };
 const INCIDENT_LABELS = { open: '待处理', acknowledged: '已确认', resolved: '已恢复' };
-const DEFAULT_INCIDENT_RUNBOOK = [
-  { id: 'scope', title: '确认影响范围与受影响服务', completed: false },
-  { id: 'diagnostics', title: '运行端到端诊断并记录请求 ID', completed: false },
-  { id: 'changes', title: '核对最近发布与配置变更', completed: false },
-  { id: 'recovery', title: '验证恢复结果并通知相关方', completed: false },
-];
-const EMPTY_POSTMORTEM = { summary: '', rootCause: '', impact: '', correctiveActions: '' };
 const ROLE_LABELS = { viewer: '只读管理员', operator: '运维管理员', super_admin: '超级管理员' };
 const BACKUP_STORAGE_PROVIDERS = [
   { value: 'r2', label: 'Cloudflare R2' },
@@ -657,23 +649,10 @@ function OperationalSearchPanel({ onNavigate }) {
   );
 }
 
-export function MonitoringView({ services, onNavigate }) {
-  const [view, setView] = useState('trend');
-  const tabs = [
-    { id: 'trend', label: '趋势' },
-    { id: 'slo', label: 'SLO' },
-    { id: 'calendar', label: '变更日历' },
-    { id: 'search', label: '运营检索' },
-  ];
+export function MonitoringView({ services }) {
   return (
-    <section className="page-view ops-page" aria-label="监控分析">
-      <div className="ops-toolbar"><SegmentedTabs items={tabs} value={view} onChange={setView} ariaLabel="监控分析视图" idPrefix="monitoring-view-tab" panelId="monitoring-view-panel" /></div>
-      <div className="ops-page" id="monitoring-view-panel" role="tabpanel" aria-labelledby={`monitoring-view-tab-${view}`}>
-        {view === 'trend' && <TrendMonitoringPanel services={services} />}
-        {view === 'slo' && <SloPanel services={services} />}
-        {view === 'calendar' && <ChangeCalendarPanel services={services} />}
-        {view === 'search' && <OperationalSearchPanel onNavigate={onNavigate} />}
-      </div>
+    <section className="page-view ops-page" aria-label="运行趋势">
+      <TrendMonitoringPanel services={services} />
     </section>
   );
 }
@@ -683,8 +662,6 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
   const [incidents, setIncidents] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [note, setNote] = useState('');
-  const [assignee, setAssignee] = useState('');
-  const [postmortem, setPostmortem] = useState(EMPTY_POSTMORTEM);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState('');
   const [error, setError] = useState('');
@@ -718,13 +695,6 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
   }, [targetEntityId]);
   const selected = incidents.find((incident) => incident.id === selectedId) || null;
 
-  useEffect(() => {
-    setAssignee(selected?.assignedTo || '');
-    setPostmortem(selected?.postmortem
-      ? { ...EMPTY_POSTMORTEM, ...selected.postmortem }
-      : EMPTY_POSTMORTEM);
-  }, [selected?.id, selected?.assignedTo, selected?.postmortem?.completedAt]);
-
   async function act(action, extra = {}) {
     if (!selected) return;
     setActing(action);
@@ -739,9 +709,7 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
       setMessage(action === 'acknowledge' ? '事件已确认'
         : action === 'resolve' ? '事件已关闭'
           : action === 'mute' ? '事件已静默'
-            : action === 'runbook_step' ? '处置步骤已更新'
-              : action === 'postmortem' ? '事故复盘已保存'
-                : '事件已更新');
+            : '事件已更新');
       await load();
     } catch (requestError) {
       setError(requestError.message);
@@ -785,7 +753,6 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
                 <div><dt>状态</dt><dd>{INCIDENT_LABELS[selected.status] || selected.status}</dd></div>
                 <div><dt>首次发生</dt><dd>{formatDateTime(selected.firstSeenAt)}</dd></div>
                 <div><dt>最近观测</dt><dd>{formatDateTime(selected.lastSeenAt)}</dd></div>
-                <div><dt>负责人</dt><dd>{selected.assignedTo || '未指派'}</dd></div>
               </dl>
               {onNavigate && (
                 <div className="incident-context-actions" aria-label="事件关联工具">
@@ -794,31 +761,11 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
                   <button type="button" onClick={() => onNavigate('configuration')}><Settings2 size={15} />检查配置</button>
                 </div>
               )}
-              <section className="incident-runbook" aria-label="事件处置运行手册">
-                <header><strong>处置运行手册</strong><small>{(selected.runbookSteps || DEFAULT_INCIDENT_RUNBOOK).filter((step) => step.completed).length}/{(selected.runbookSteps || DEFAULT_INCIDENT_RUNBOOK).length} 已完成</small></header>
-                <div>
-                  {(selected.runbookSteps?.length ? selected.runbookSteps : DEFAULT_INCIDENT_RUNBOOK).map((step) => (
-                    <label key={step.id}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(step.completed)}
-                        disabled={!canOperate || Boolean(acting)}
-                        onChange={(event) => act('runbook_step', { stepId: step.id, completed: event.target.checked })}
-                      />
-                      <span><strong>{step.title}</strong>{step.completedAt && <small>{step.completedBy || 'operator'} · {formatDateTime(step.completedAt)}</small>}</span>
-                    </label>
-                  ))}
-                </div>
-              </section>
               <div className="incident-timeline">
                 {(selected.timeline || []).slice(-8).reverse().map((event, index) => <div key={`${event.at}-${index}`}><i /><span><strong>{event.message}</strong><small>{event.actor} · {formatDateTime(event.at)}</small></span></div>)}
               </div>
               {canOperate && selected.status !== 'resolved' && (
                 <div className="incident-actions">
-                  <div className="incident-assignment">
-                    <label>负责人<input value={assignee} maxLength={100} onChange={(event) => setAssignee(event.target.value)} placeholder="管理员账号" /></label>
-                    <button type="button" onClick={() => act('assign', { assignedTo: assignee })} disabled={Boolean(acting) || !assignee}><UserRoundCheck size={16} />指派</button>
-                  </div>
                   <label>处理备注<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="记录判断和处理结果" /></label>
                   <div>
                     <button type="button" onClick={() => act('note')} disabled={Boolean(acting) || !note.trim()}><MessageSquareText size={16} />记录备注</button>
@@ -827,16 +774,6 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
                     <button className="primary-button" type="button" onClick={() => act('resolve')} disabled={Boolean(acting)}>{acting === 'resolve' ? <LoaderCircle className="spin" size={16} /> : <CheckCircle2 size={16} />}关闭事件</button>
                   </div>
                 </div>
-              )}
-              {selected.status === 'resolved' && (
-                <section className="incident-postmortem" aria-label="事故复盘">
-                  <header><strong>事故复盘</strong><small>{selected.postmortem?.completedAt ? `${selected.postmortem.completedBy} · ${formatDateTime(selected.postmortem.completedAt)}` : '恢复后补充根因与改进项'}</small></header>
-                  <label>摘要<textarea value={postmortem.summary} disabled={!canOperate} maxLength={1000} onChange={(event) => setPostmortem({ ...postmortem, summary: event.target.value })} /></label>
-                  <label>根因<textarea value={postmortem.rootCause} disabled={!canOperate} maxLength={2000} onChange={(event) => setPostmortem({ ...postmortem, rootCause: event.target.value })} /></label>
-                  <label>影响<textarea value={postmortem.impact} disabled={!canOperate} maxLength={2000} onChange={(event) => setPostmortem({ ...postmortem, impact: event.target.value })} /></label>
-                  <label>纠正与预防措施<textarea value={postmortem.correctiveActions} disabled={!canOperate} maxLength={3000} onChange={(event) => setPostmortem({ ...postmortem, correctiveActions: event.target.value })} /></label>
-                  {canOperate && <button className="primary-button" type="button" disabled={Boolean(acting) || !postmortem.summary.trim() || !postmortem.rootCause.trim()} onClick={() => act('postmortem', { postmortem })}>{acting === 'postmortem' ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}保存复盘</button>}
-                </section>
               )}
             </>
           ) : <div className="ops-empty">选择一个事件查看详情</div>}
@@ -1233,7 +1170,6 @@ export function SecurityAuditView({ session, onLogout }) {
   const [tab, setTab] = useState('audit');
   const [events, setEvents] = useState([]);
   const [sessionData, setSessionData] = useState(null);
-  const [accounts, setAccounts] = useState([]);
   const [passkeys, setPasskeys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -1243,33 +1179,27 @@ export function SecurityAuditView({ session, onLogout }) {
   const [enrollmentCode, setEnrollmentCode] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState([]);
   const [passkeyName, setPasskeyName] = useState('');
-  const [newAccount, setNewAccount] = useState({ username: '', password: '', role: 'viewer' });
   const [newPassword, setNewPassword] = useState('');
-  const [accountRoles, setAccountRoles] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const canManageAccounts = roleAtLeast(session.user?.role, 'super_admin');
-      const [auditResult, sessionsResult, passkeyResult, accountResult] = await Promise.all([
+      const [auditResult, sessionsResult, passkeyResult] = await Promise.all([
         requestJson('/api/audit?limit=200'),
         requestJson('/api/security/sessions'),
         requestJson('/api/security/passkeys'),
-        canManageAccounts ? requestJson('/api/security/accounts') : Promise.resolve({ accounts: [] }),
       ]);
       setEvents(auditResult.events || []);
       setSessionData(sessionsResult);
       setPasskeys(passkeyResult.passkeys || []);
-      setAccounts(accountResult.accounts || []);
-      setAccountRoles(Object.fromEntries((accountResult.accounts || []).map((account) => [account.username, account.role])));
     } catch (requestError) {
       setError(requestError.message);
     } finally {
       setLoading(false);
     }
-  }, [session.user?.role]);
+  }, []);
   useEffect(() => { load(); }, [load]);
 
   async function revoke(nonce) {
@@ -1349,17 +1279,6 @@ export function SecurityAuditView({ session, onLogout }) {
     });
   }
 
-  async function createAccount() {
-    await runSensitive(async () => {
-      await requestJson('/api/security/accounts', {
-        method: 'POST',
-        body: sensitiveBody({ username: newAccount.username, newPassword: newAccount.password, role: newAccount.role }),
-      });
-      setNewAccount({ username: '', password: '', role: 'viewer' });
-      setMessage('管理员账号已创建');
-    });
-  }
-
   async function regenerateRecoveryCodes() {
     await runSensitive(async () => {
       const result = await requestJson('/api/security/totp/recovery-codes', { method: 'POST', body: sensitiveBody() });
@@ -1376,21 +1295,6 @@ export function SecurityAuditView({ session, onLogout }) {
         return false;
       }
       setMessage('动态验证已停用');
-      return true;
-    });
-  }
-
-  async function updateAccount(account, patch) {
-    await runSensitive(async () => {
-      const result = await requestJson(`/api/security/accounts/${encodeURIComponent(account.username)}`, {
-        method: 'PATCH',
-        body: sensitiveBody({ role: accountRoles[account.username] || account.role, ...patch }),
-      });
-      if (result.currentSessionRevoked) {
-        onLogout();
-        return false;
-      }
-      setMessage('管理员账号已更新');
       return true;
     });
   }
@@ -1454,21 +1358,7 @@ export function SecurityAuditView({ session, onLogout }) {
             <div className="ops-inline-form"><label>新密码<input type="password" minLength={15} maxLength={256} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || newPassword.length < 15 || !credentials.password || (totpEnabled && credentials.totp.length !== 6)} onClick={changePassword}><Save size={17} />修改密码</button></div>
           </section>
         </div>
-      ) : (
-        <div className="security-auth-layout">
-          <section className="ops-panel security-auth-panel">
-            <div className="ops-section-heading"><span><UserPlus size={18} /></span><div><strong>创建管理员</strong><small>独立账号</small></div></div>
-            <div className="ops-inline-form"><label>账号<input value={newAccount.username} onChange={(event) => setNewAccount({ ...newAccount, username: event.target.value })} /></label><label>新密码<input type="password" minLength={15} maxLength={256} autoComplete="new-password" value={newAccount.password} onChange={(event) => setNewAccount({ ...newAccount, password: event.target.value })} /></label><label>角色<SelectControl ariaLabel="管理员角色" value={newAccount.role} options={Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))} onChange={(role) => setNewAccount({ ...newAccount, role })} /></label><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || !newAccount.username || newAccount.password.length < 15 || !credentials.password || (totpEnabled && credentials.totp.length !== 6)} onClick={createAccount}><UserPlus size={17} />创建账号</button></div>
-          </section>
-          <section className="ops-panel session-list account-list">{accounts.map((account) => <div className="session-row account-row" key={account.username}>
-            <span className={account.active ? 'current' : ''}><UserRoundCheck size={18} /></span>
-            <span><strong>{account.username}</strong><small>{account.active ? '正常' : '已停用'} · TOTP {account.totpEnabled ? '已启用' : '未启用'} · Passkey {account.passkeyCount}</small></span>
-            <SelectControl ariaLabel={`${account.username} 的角色`} value={accountRoles[account.username] || account.role} options={Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))} onChange={(role) => setAccountRoles((current) => ({ ...current, [account.username]: role }))} />
-            <button type="button" disabled={submitting || !credentials.password || (totpEnabled && credentials.totp.length !== 6) || accountRoles[account.username] === account.role} onClick={() => updateAccount(account, {})}><Save size={16} />保存角色</button>
-            <button type="button" disabled={submitting || !credentials.password || (totpEnabled && credentials.totp.length !== 6)} onClick={() => updateAccount(account, { active: !account.active })}>{account.active ? <XCircle size={16} /> : <Check size={16} />}{account.active ? '停用' : '启用'}</button>
-          </div>)}</section>
-        </div>
-      )}
+      ) : null}
       </div>
     </section>
   );

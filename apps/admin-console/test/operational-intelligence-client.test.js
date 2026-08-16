@@ -7,16 +7,20 @@ import { fileURLToPath } from 'node:url';
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const readSource = (...parts) => fs.readFileSync(path.join(appRoot, ...parts), 'utf8');
 
-test('monitoring view integrates operational intelligence without a new navigation surface', () => {
+test('monitoring view keeps advanced intelligence out of the single-person daily surface', () => {
   const source = readSource('src', 'client', 'OperationsViews.jsx');
   const app = readSource('src', 'client', 'Dashboard.jsx');
+  const monitoringView = source.slice(
+    source.indexOf('export function MonitoringView'),
+    source.indexOf('export function IncidentsView'),
+  );
 
-  for (const view of ['trend', 'slo', 'calendar', 'search']) {
-    assert.match(source, new RegExp(`id: '${view}'`));
-  }
-  assert.match(source, /idPrefix="monitoring-view-tab"/);
-  assert.match(source, /className="ops-page" id="monitoring-view-panel" role="tabpanel"/);
-  assert.match(app, /<MonitoringView services=\{services\} onNavigate=\{navigateToView\} \/>/);
+  assert.match(monitoringView, /<TrendMonitoringPanel services=\{services\} \/>/);
+  assert.doesNotMatch(monitoringView, /SloPanel|ChangeCalendarPanel|OperationalSearchPanel|SegmentedTabs/);
+  assert.match(source, /function SloPanel/);
+  assert.match(source, /function ChangeCalendarPanel/);
+  assert.match(source, /function OperationalSearchPanel/);
+  assert.match(app, /<MonitoringView services=\{services\} \/>/);
   assert.doesNotMatch(source, /command.palette|command-palette|CommandPalette/i);
 });
 

@@ -278,7 +278,7 @@ export function ConfigurationView({ session, targetEntityId = '' }) {
     <section className="platform-control-view configuration-view">
       <Feedback message={message} error={error} />
       <form className="configuration-editor" onSubmit={propose}>
-        <div className="section-bar"><div><h3>运行参数</h3><span>{overview?.twoPersonApproval ? '已启用双人审批，提案人不能自行批准' : '开发环境允许同一管理员完成审批'}</span></div><span className="version-badge"><History size={16} />当前 v{overview?.currentVersion || 1}</span></div>
+        <div className="section-bar"><div><h3>运行参数</h3><span>{overview?.twoPersonApproval ? '已启用双人审批，提案人不能自行批准' : '单人模式，可由当前管理员完成审批'}</span></div><span className="version-badge"><History size={16} />当前 v{overview?.currentVersion || 1}</span></div>
         <label className="configuration-toggle">
           <span><strong>启用告警</strong><small>关闭后仍保留监控数据，但不创建新告警。</small></span>
           <input type="checkbox" checked={Boolean(draft?.alertingEnabled)} disabled={!canPropose || busy} onChange={(event) => updateField('alertingEnabled', event.target.checked)} />

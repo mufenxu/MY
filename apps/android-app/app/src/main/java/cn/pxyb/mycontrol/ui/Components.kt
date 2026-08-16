@@ -1008,8 +1008,8 @@ fun PullToRefresh(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // 高频位移只失效绘制层，避免拖动时重组整页内容。
-                .graphicsLayer { translationY = pullOffset }
+                // 下拉时只做 placement 偏移，避免滚动页面常驻一个全屏绘制层。
+                .offset { IntOffset(0, pullOffset.roundToInt()) }
         ) {
             content()
         }
@@ -1328,4 +1328,3 @@ fun ModernAnimatedSplashScreen(
         }
     }
 }
-

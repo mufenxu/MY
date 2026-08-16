@@ -531,7 +531,7 @@ export function Dashboard({ session, onLogout }) {
           {activeFilter === 'service' && <ServicesView services={services} loading={loading} onLaunch={launchService} targetEntityId={activeEntity} />}
           {activeFilter === 'external-apps' && <ExternalApplicationsView session={session} />}
           {activeFilter === 'notification' && <NotificationServiceView session={session} />}
-          {activeFilter === 'monitoring' && <MonitoringView services={services} onNavigate={navigateToView} />}
+          {activeFilter === 'monitoring' && <MonitoringView services={services} />}
           {activeFilter === 'incidents' && <IncidentsView session={session} targetEntityId={activeEntity} onNavigate={navigateToView} />}
           {activeFilter === 'automation' && (
             <AutomationView
