@@ -145,6 +145,8 @@ const CronSettings = ({ title, type }) => {
             });
             if (res.data.success) {
                 const result = res.data.result;
+                const appChannel = result?.channels?.app;
+                const wecomChannel = result?.channels?.wecom;
                 if (type === 'ct8_task') {
                     message.success(result?.ok ? 'CT8签到任务已提交' : 'CT8签到任务已执行');
                 } else if (result && result.skipped) {
@@ -162,6 +164,10 @@ const CronSettings = ({ title, type }) => {
                     } else {
                         message.error('已命中到期资源，但通知渠道发送失败，请查看服务日志');
                     }
+                } else if (appChannel?.inboxAccepted > 0 && !appChannel.systemDelivered) {
+                    message.warning(wecomChannel?.reason === 'recipient_missing'
+                        ? '提醒已写入 App 收件箱，但企业微信未配置接收成员。'
+                        : '提醒已写入 App 收件箱，当前设备未配置系统推送，将在 App 打开或后台轮询时显示。');
                 } else if (result && result.sent) {
                     message.success('检查完成并已发送提醒');
                 } else {
@@ -226,6 +232,77 @@ const CronSettings = ({ title, type }) => {
                     <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading}>保存</Button>
                     <Button icon={<PlayCircleOutlined />} onClick={handleRunNow} loading={loading}>现在运行</Button>
                 </Space>
+            </Form>
+        </Card>
+    );
+};
+
+const ExpiryNotificationSettings = () => {
+    const [form] = Form.useForm();
+    const [loading, setLoading] = useState(false);
+
+    const loadConfig = useCallback(async () => {
+        try {
+            const response = await api.get('/settings/notify');
+            if (response.data.success) {
+                const config = response.data.result || {};
+                form.setFieldsValue({
+                    qywxEnabled: Boolean(config.qywxEnabled),
+                    qywxToUser: config.qywxToUser || '',
+                    qywxToParty: config.qywxToParty || '',
+                    qywxToTag: config.qywxToTag || '',
+                });
+            }
+        } catch (error) {
+            message.error(error.response?.data?.error || '到期提醒配置加载失败');
+        }
+    }, [form]);
+
+    useEffect(() => {
+        loadConfig();
+    }, [loadConfig]);
+
+    const onFinish = async (values) => {
+        const recipients = [values.qywxToUser, values.qywxToParty, values.qywxToTag]
+            .map((value) => String(value || '').trim())
+            .filter(Boolean);
+        if (values.qywxEnabled && recipients.length === 0) {
+            message.error('启用企业微信前请填写至少一个接收目标');
+            return;
+        }
+        setLoading(true);
+        try {
+            const response = await api.post('/settings/notify', {
+                qywxEnabled: values.qywxEnabled !== false,
+                qywxToUser: values.qywxToUser || '',
+                qywxToParty: values.qywxToParty || '',
+                qywxToTag: values.qywxToTag || '',
+            });
+            if (!response.data.success) throw new Error(response.data.error || '保存失败');
+            message.success('到期提醒接收目标已保存');
+        } catch (error) {
+            message.error(error.response?.data?.error || error.message || '保存失败');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Card title="到期提醒接收目标" bordered={false} style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', marginBottom: 24 }}>
+            <Form form={form} layout="vertical" onFinish={onFinish} initialValues={{ qywxEnabled: false }}>
+                <Form.Item name="qywxEnabled" label="企业微信通知" valuePropName="checked">
+                    <Switch checkedChildren="已开启" unCheckedChildren="已关闭" />
+                </Form.Item>
+                <Form.Item name="qywxToUser" label="成员 ID">
+                    <Input placeholder="例如：zhangsan" />
+                </Form.Item>
+                <Form.Item name="qywxToParty" label="部门 ID">
+                    <Input placeholder="例如：1" />
+                </Form.Item>
+                <Form.Item name="qywxToTag" label="标签 ID">
+                    <Input placeholder="例如：ops" />
+                </Form.Item>
+                <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading}>保存</Button>
             </Form>
         </Card>
     );
@@ -551,17 +628,24 @@ const Settings = () => {
                 </span>
             ),
             children: (
-                <Row gutter={[24, 24]}>
-                    <Col xs={24} sm={24} md={12} lg={8} xl={8}>
-                        <CronSettings title="CT8 自动签到" type="ct8_task" />
-                    </Col>
-                    <Col xs={24} sm={24} md={12} lg={8} xl={8}>
-                        <CronSettings title="到期提醒" type="due_reminder" />
-                    </Col>
-                    <Col xs={24} sm={24} md={12} lg={8} xl={8}>
-                        <CronSettings title="待办提醒" type="todo_reminder" />
-                    </Col>
-                </Row>
+                <>
+                    <Row gutter={[24, 24]}>
+                        <Col xs={24} sm={24} md={12} lg={8} xl={8}>
+                            <CronSettings title="CT8 自动签到" type="ct8_task" />
+                        </Col>
+                        <Col xs={24} sm={24} md={12} lg={8} xl={8}>
+                            <CronSettings title="到期提醒" type="due_reminder" />
+                        </Col>
+                        <Col xs={24} sm={24} md={12} lg={8} xl={8}>
+                            <CronSettings title="待办提醒" type="todo_reminder" />
+                        </Col>
+                    </Row>
+                    <Row gutter={[24, 24]}>
+                        <Col xs={24} sm={24} lg={8} xl={8}>
+                            <ExpiryNotificationSettings />
+                        </Col>
+                    </Row>
+                </>
             )
         },
         {

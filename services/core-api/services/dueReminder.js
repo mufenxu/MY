@@ -12,6 +12,7 @@ const nodemailer = require('nodemailer');
 const dayjs = require('dayjs');
 const {
     buildWecomPayload,
+    getRecipients,
     isWecomEnabled,
     isWecomResponseOk,
     sendWecomText,
@@ -190,9 +191,61 @@ async function dispatchWecom(cfg, text, extra = {}) {
     return sendWecomText(cfg, text, extra);
 }
 
-function buildAppNotificationPayload({ recipientId, ownerId, servers, domains, includeWecom, cfg }) {
+function createReminderDeliveryKey(force = false, now = new Date(), idFactory = crypto.randomUUID) {
+    return force ? `manual-${idFactory()}` : dayjs(now).format('YYYY-MM-DD');
+}
+
+function normalizeAppDeliveryResponse(recipientId, responseData = {}) {
+    const push = {
+        attempted: Number(responseData.push?.attempted) || 0,
+        sent: Number(responseData.push?.sent) || 0,
+        deferred: Number(responseData.push?.deferred) || 0,
+        failed: Number(responseData.push?.failed) || 0,
+        suppressed: Number(responseData.push?.suppressed) || 0,
+    };
+    const deduplicated = Boolean(responseData.deduplicated);
+    const inboxAccepted = deduplicated || responseData.channels?.app === 'accepted';
+    const systemDelivered = push.sent > 0;
+    const status = systemDelivered
+        ? 'pushed'
+        : deduplicated
+            ? 'deduplicated'
+            : push.failed > 0
+                ? 'push_failed'
+                : push.deferred > 0
+                    ? 'polling'
+                    : push.suppressed > 0
+                        ? 'suppressed'
+                        : inboxAccepted
+                            ? 'inbox_only'
+                            : 'failed';
+    return {
+        recipientId,
+        notificationId: responseData.notificationId || '',
+        inboxAccepted,
+        deduplicated,
+        systemDelivered,
+        status,
+        wecomStatus: responseData.channels?.wecom || 'not-requested',
+        push,
+    };
+}
+
+function resolveReminderOwner(configuredOwnerId, dueOwnerIds = []) {
+    const configured = String(configuredOwnerId || '').trim();
+    const owners = [...new Set(dueOwnerIds.map((value) => String(value || '').trim()).filter(Boolean))];
+    if (configured && owners.includes(configured)) return configured;
+    return owners.length === 1 ? owners[0] : '';
+}
+
+function shouldScanAllResourceOwners(appEnabled, wecomEnabled) {
+    return Boolean(appEnabled || wecomEnabled);
+}
+
+function buildAppNotificationPayload({ recipientId, ownerId, servers, domains, includeWecom, cfg, deliveryKey }) {
     const resources = [...servers, ...domains];
     const today = dayjs().format('YYYY-MM-DD');
+    const reminderKey = String(deliveryKey || today).trim() || today;
     const expiredCount = resources.filter((item) => dayjs(item.expiresAt).diff(dayjs().startOf('day'), 'day') < 0).length;
     const urgentCount = resources.filter((item) => {
         const days = dayjs(item.expiresAt).diff(dayjs().startOf('day'), 'day');
@@ -208,10 +261,10 @@ function buildAppNotificationPayload({ recipientId, ownerId, servers, domains, i
         .map((item) => `${item.name || item.host || ''}:${item.expiresAt || ''}`)
         .sort()
         .join('|');
-    const digest = crypto.createHash('sha256').update(`${ownerId}|${today}|${signature}`).digest('hex').slice(0, 24);
+    const digest = crypto.createHash('sha256').update(`${ownerId}|${reminderKey}|${signature}`).digest('hex').slice(0, 24);
     const payload = {
-        idempotencyKey: `resource-expiry:${today}:${digest}`,
-        dedupeKey: `resource-expiry:${today}:${digest}`,
+        idempotencyKey: `resource-expiry:${reminderKey}:${digest}`,
+        dedupeKey: `resource-expiry:${reminderKey}:${digest}`,
         audience: { users: [recipientId] },
         channels: includeWecom ? ['app', 'wecom'] : ['app'],
         priority: expiredCount > 0 || urgentCount > 0 ? 'high' : 'normal',
@@ -225,7 +278,7 @@ function buildAppNotificationPayload({ recipientId, ownerId, servers, domains, i
         source: {
             service: 'core-api',
             entityType: 'resource-expiry',
-            entityId: today,
+            entityId: `${today}:${reminderKey}`,
         },
         actions: [{ id: 'open-resources', label: '查看资源', deepLink: 'mycontrol://open?destination=today' }],
     };
@@ -366,6 +419,14 @@ async function checkAndNotify(force = false) {
         const ownerId = String(cfg.ownerId || '').trim();
         const emailEnabled = Boolean(cfg.emailEnabled && cfg.smtpUser && cfg.smtpPass && cfg.toList);
         const wecomEnabled = isWecomEnabled(cfg);
+        const wecomRecipients = getRecipients(cfg);
+        const wecomConfigReason = !cfg.qywxEnabled
+            ? 'disabled'
+            : !getNotificationApiKey(cfg.qywxApiKey)
+                ? 'api_key_missing'
+                : !Object.values(wecomRecipients).some(Boolean)
+                    ? 'recipient_missing'
+                    : '';
         const appEnabled = Boolean(getNotificationApiKey(cfg.qywxApiKey));
         if (!appEnabled && !emailEnabled && !wecomEnabled) {
             console.log('通知渠道未配置，跳过检查');
@@ -375,7 +436,7 @@ async function checkAndNotify(force = false) {
         // Fetch only fields that are safe to include in a reminder. Credentials,
         // contact details and arbitrary config never enter the notification path.
         // App 通知按资源所有者分别发送；邮件和企微仍只使用旧配置绑定的所有者。
-        const resourceFilter = appEnabled ? {} : { ownerId };
+        const resourceFilter = shouldScanAllResourceOwners(appEnabled, wecomEnabled) ? {} : { ownerId };
         const allResources = await ResourceConfig.find(resourceFilter)
             .select({
                 ownerId: 1,
@@ -418,6 +479,9 @@ async function checkAndNotify(force = false) {
             return { sent: false, servers: 0, domains: 0 };
         }
 
+        const deliveryOwnerId = resolveReminderOwner(ownerId, [...dueByOwner.keys()]);
+        const deliveryKey = createReminderDeliveryKey(force);
+
         const allDueServers = [...dueByOwner.values()].flatMap((group) => group.servers);
         const allDueDomains = [...dueByOwner.values()].flatMap((group) => group.domains);
         const totalCount = allDueServers.length + allDueDomains.length;
@@ -452,6 +516,18 @@ async function checkAndNotify(force = false) {
             domains: allDueDomains.length,
             owners: dueByOwner.size,
             channels: {},
+            ownerBinding: {
+                configuredOwnerId: ownerId,
+                deliveryOwnerId,
+                autoMatched: Boolean(deliveryOwnerId && deliveryOwnerId !== ownerId),
+            },
+        };
+
+        result.channels.wecom = {
+            enabled: wecomEnabled && Boolean(deliveryOwnerId),
+            status: wecomEnabled && deliveryOwnerId ? 'pending' : 'skipped',
+            ...(wecomConfigReason ? { reason: wecomConfigReason } : {}),
+            ...(!deliveryOwnerId && wecomEnabled ? { reason: 'owner_not_matched' } : {}),
         };
 
         if (appEnabled) {
@@ -460,10 +536,12 @@ async function checkAndNotify(force = false) {
             const appRecipients = new Map(users.map((user) => [String(user._id), String(user.userId || user._id)]));
             let sent = 0;
             let failed = 0;
+            const deliveries = [];
+            const push = { attempted: 0, sent: 0, deferred: 0, failed: 0, suppressed: 0 };
 
             for (const [resourceOwnerId, group] of dueByOwner.entries()) {
                 const recipientId = appRecipients.get(resourceOwnerId) || resourceOwnerId;
-                const includeWecom = wecomEnabled && resourceOwnerId === ownerId;
+                const includeWecom = wecomEnabled && resourceOwnerId === deliveryOwnerId;
                 try {
                     const response = await sendAppNotification(
                         buildAppNotificationPayload({
@@ -473,13 +551,17 @@ async function checkAndNotify(force = false) {
                             domains: group.domains,
                             includeWecom,
                             cfg,
+                            deliveryKey,
                         }),
                         { apiKey: cfg.qywxApiKey },
                     );
-                    sent += 1;
-                    result.sent = true;
+                    const delivery = normalizeAppDeliveryResponse(recipientId, response.data);
+                    deliveries.push(delivery);
+                    sent += delivery.inboxAccepted ? 1 : 0;
+                    result.sent = result.sent || delivery.inboxAccepted;
+                    Object.keys(push).forEach((key) => { push[key] += delivery.push[key]; });
                     if (includeWecom) {
-                        const wecomStatus = response.data?.channels?.wecom || 'unknown';
+                        const wecomStatus = delivery.wecomStatus;
                         result.channels.wecom = {
                             success: wecomStatus === 'sent' || wecomStatus === 'deduplicated',
                             status: wecomStatus,
@@ -500,10 +582,19 @@ async function checkAndNotify(force = false) {
                     }
                 }
             }
-            result.channels.app = { success: sent > 0 && failed === 0, sent, failed };
+            result.channels.app = {
+                success: sent > 0 && failed === 0,
+                sent,
+                failed,
+                deliveries,
+                notificationIds: deliveries.map((item) => item.notificationId).filter(Boolean),
+                inboxAccepted: deliveries.filter((item) => item.inboxAccepted).length,
+                systemDelivered: deliveries.some((item) => item.systemDelivered),
+                push,
+            };
         }
 
-        const configuredOwnerDue = dueByOwner.get(ownerId) || { servers: [], domains: [] };
+        const configuredOwnerDue = dueByOwner.get(deliveryOwnerId) || { servers: [], domains: [] };
 
         // 发送邮件通知
         if (emailEnabled && configuredOwnerDue.servers.length + configuredOwnerDue.domains.length > 0) {
@@ -548,6 +639,11 @@ module.exports = {
     buildItemsHtml,
     buildWecomText,
     buildWecomPayload,
-    isWecomEnabled
+    isWecomEnabled,
+    buildAppNotificationPayload,
+    createReminderDeliveryKey,
+    normalizeAppDeliveryResponse,
+    resolveReminderOwner,
+    shouldScanAllResourceOwners
 };
 

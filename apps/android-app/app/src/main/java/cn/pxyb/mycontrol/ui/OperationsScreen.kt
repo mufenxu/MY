@@ -79,11 +79,14 @@ fun OperationsScreen(
     val healthyServices = state.overview?.healthyCount ?: 0
     val onlineDevices = state.iot?.devices.orEmpty().count { it.online }
     val totalDevices = state.iot?.devices.orEmpty().size
-    val upcomingResources = state.resourceExpiries.mapNotNull { resource ->
-        val date = runCatching { LocalDate.parse(resource.expiresAt) }.getOrNull() ?: return@mapNotNull null
-        val days = ChronoUnit.DAYS.between(LocalDate.now(), date).toInt()
-        (resource to days).takeIf { days <= maxOf(60, resource.advanceNoticeDays) }
-    }.sortedBy { it.second }
+    val today = LocalDate.now()
+    val upcomingResources = remember(state.resourceExpiries, today) {
+        state.resourceExpiries.mapNotNull { resource ->
+            val date = runCatching { LocalDate.parse(resource.expiresAt) }.getOrNull() ?: return@mapNotNull null
+            val days = ChronoUnit.DAYS.between(today, date).toInt()
+            (resource to days).takeIf { days <= maxOf(60, resource.advanceNoticeDays) }
+        }.sortedBy { it.second }
+    }
     val filteredTasks = remember(filter, state.tasks) {
         val sorted = state.tasks.sortedWith(compareBy<PlatformTask> { taskPriority(it.status) }.thenByDescending { it.updatedAt.orEmpty() })
         when (filter) {
@@ -119,7 +122,7 @@ fun OperationsScreen(
             contentPadding = appPageContentPadding(contentPadding),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-        item {
+        item(key = "operations-header", contentType = "header") {
             ImmersiveHeader(
                 title = "系统",
                 subtitle = "巡检、任务、发布与备份",
@@ -128,8 +131,8 @@ fun OperationsScreen(
         state.sectionError?.let { message ->
             item(key = "section-error") { FeedbackBanner("部分工具数据暂不可用：$message", error = true) }
         }
-        item { SectionHeader("所有者巡检", "服务、告警、设备、备份与资源续期的一站式检查") }
-        item {
+        item(key = "diagnostics-title", contentType = "section") { SectionHeader("所有者巡检", "服务、告警、设备、备份与资源续期的一站式检查") }
+        item(key = "diagnostics", contentType = "card") {
             AppPanel {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
@@ -160,7 +163,7 @@ fun OperationsScreen(
                 }
             }
         }
-        item {
+        item(key = "task-metrics", contentType = "card") {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
@@ -181,11 +184,11 @@ fun OperationsScreen(
             }
         }
 
-        item { SectionHeader("资源与续期", "域名、证书和个人资源的到期提醒") }
+        item(key = "resources-title", contentType = "section") { SectionHeader("资源与续期", "域名、证书和个人资源的到期提醒") }
         if (upcomingResources.isEmpty()) {
-            item { EmptyBlock("近期没有资源到期", "已登记资源会按照各自提前提醒天数显示在这里。") }
+            item(key = "resources-empty", contentType = "empty") { EmptyBlock("近期没有资源到期", "已登记资源会按照各自提前提醒天数显示在这里。") }
         } else {
-            items(upcomingResources.take(6), key = { "resource:${it.first.id}" }) { (resource, days) ->
+            items(upcomingResources.take(6), key = { "resource:${it.first.id}" }, contentType = { "resource" }) { (resource, days) ->
                 AppPanel {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(14.dp),
@@ -211,8 +214,8 @@ fun OperationsScreen(
             }
         }
 
-        item { SectionHeader("平台任务", "失败任务、配置执行与运行记录") }
-        item {
+        item(key = "tasks-title", contentType = "section") { SectionHeader("平台任务", "失败任务、配置执行与运行记录") }
+        item(key = "task-filter", contentType = "filter") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(
                     "action" to "待处理",
@@ -229,7 +232,7 @@ fun OperationsScreen(
             }
         }
         if (filteredTasks.isEmpty()) {
-            item {
+            item(key = "tasks-empty", contentType = "empty") {
                 AppPanel {
                     EmptyBlock(
                         if (filter == "action") "暂无待处理任务" else "暂无任务",
@@ -252,8 +255,8 @@ fun OperationsScreen(
             }
         }
 
-        item { SectionHeader("发布摘要", "只读状态，正式发布请在桌面控制台执行") }
-        item {
+        item(key = "releases-title", contentType = "section") { SectionHeader("发布摘要", "只读状态，正式发布请在桌面控制台执行") }
+        item(key = "releases", contentType = "card") {
             AppPanel {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val latestBuild = state.releases?.builds?.firstOrNull()

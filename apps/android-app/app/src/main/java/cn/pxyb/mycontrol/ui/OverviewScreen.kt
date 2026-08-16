@@ -154,7 +154,8 @@ fun OverviewScreen(
     val courseCount = remember(state.timetable?.courses) {
         state.timetable?.courses.orEmpty().asSequence().map(CampusCourse::courseName).distinct().count()
     }
-    val todayCourseTotal = remember(state.timetable) { todayCourseCount(state) }
+    val currentDate = LocalDate.now()
+    val todayCourseTotal = remember(state.timetable, currentDate) { todayCourseCount(state) }
     val listState = rememberLazyListState()
 
     fun openServiceAdmin(service: ServiceInfo) {

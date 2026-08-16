@@ -8,7 +8,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -28,7 +27,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -65,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -143,7 +142,9 @@ fun ToolsScreen(
     val canOperate = state.user?.role in setOf("operator", "super_admin")
     val iot = state.iot
     val ct8 = state.ct8
-    val sensorDevices = iot?.devices.orEmpty().filter { it.temperature != null || it.humidity != null }
+    val sensorDevices = remember(iot?.devices) {
+        iot?.devices.orEmpty().filter { it.temperature != null || it.humidity != null }
+    }
     val sensorDeviceIds = remember(sensorDevices) { sensorDevices.map(DeviceInfo::id) }
     var selectedSensorId by remember { mutableStateOf<String?>(null) }
 
@@ -154,7 +155,9 @@ fun ToolsScreen(
     }
 
     val sensorDevice = sensorDevices.firstOrNull { it.id == selectedSensorId } ?: sensorDevices.firstOrNull()
-    val telemetryInsight = iot?.insights?.firstOrNull { it.deviceId == sensorDevice?.id }
+    val telemetryInsight = remember(iot?.insights, sensorDevice?.id) {
+        iot?.insights?.firstOrNull { it.deviceId == sensorDevice?.id }
+    }
     val listState = rememberLazyListState()
     PullToRefresh(
         isRefreshing = state.refreshing,
@@ -334,6 +337,12 @@ fun ToolsScreen(
 
 @Composable
 private fun TelemetryInsightPanel(insight: DeviceTelemetryInsight) {
+    val temperatureValues = remember(insight.series) {
+        insight.series.mapNotNull(TelemetrySeriesPoint::temperature)
+    }
+    val humidityValues = remember(insight.series) {
+        insight.series.mapNotNull(TelemetrySeriesPoint::humidity)
+    }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -367,16 +376,14 @@ private fun TelemetryInsightPanel(insight: DeviceTelemetryInsight) {
             TelemetryMetricChart(
                 label = "温度",
                 summary = insight.temperature,
-                points = insight.series,
-                value = TelemetrySeriesPoint::temperature,
+                values = temperatureValues,
                 suffix = "°C",
                 color = Color(0xFFF97316),
             )
             TelemetryMetricChart(
                 label = "湿度",
                 summary = insight.humidity,
-                points = insight.series,
-                value = TelemetrySeriesPoint::humidity,
+                values = humidityValues,
                 suffix = "%",
                 color = Color(0xFF0284C7),
             )
@@ -393,12 +400,10 @@ private fun TelemetryInsightPanel(insight: DeviceTelemetryInsight) {
 private fun TelemetryMetricChart(
     label: String,
     summary: TelemetryMetricSummary,
-    points: List<TelemetrySeriesPoint>,
-    value: (TelemetrySeriesPoint) -> Double?,
+    values: List<Double>,
     suffix: String,
     color: Color,
 ) {
-    val values = points.mapNotNull(value)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
@@ -426,25 +431,34 @@ private fun TelemetryMetricChart(
 @Composable
 private fun TelemetrySparkline(values: List<Double>, color: Color) {
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
-    Canvas(Modifier.fillMaxWidth().height(76.dp)) {
-        val minimum = values.min()
-        val maximum = values.max()
-        val span = (maximum - minimum).takeIf { it > 0.0001 } ?: 1.0
-        val step = size.width / (values.size - 1).coerceAtLeast(1)
-        val path = Path()
-        values.forEachIndexed { index, sample ->
-            val x = index * step
-            val y = size.height - ((sample - minimum) / span * size.height).toFloat()
-            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-        }
-        drawLine(
-            color = gridColor,
-            start = androidx.compose.ui.geometry.Offset(0f, size.height),
-            end = androidx.compose.ui.geometry.Offset(size.width, size.height),
-            strokeWidth = 1.dp.toPx(),
-        )
-        drawPath(path = path, color = color, style = Stroke(width = 2.5.dp.toPx()))
-    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(76.dp)
+            .drawWithCache {
+                val minimum = values.minOrNull() ?: 0.0
+                val maximum = values.maxOrNull() ?: minimum
+                val span = (maximum - minimum).takeIf { it > 0.0001 } ?: 1.0
+                val step = size.width / (values.size - 1).coerceAtLeast(1)
+                val path = Path()
+                values.forEachIndexed { index, sample ->
+                    val x = index * step
+                    val y = size.height - ((sample - minimum) / span * size.height).toFloat()
+                    if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                val strokeWidth = 2.5.dp.toPx()
+                val baselineWidth = 1.dp.toPx()
+                onDrawBehind {
+                    drawLine(
+                        color = gridColor,
+                        start = androidx.compose.ui.geometry.Offset(0f, size.height),
+                        end = androidx.compose.ui.geometry.Offset(size.width, size.height),
+                        strokeWidth = baselineWidth,
+                    )
+                    drawPath(path = path, color = color, style = Stroke(width = strokeWidth))
+                }
+            },
+    )
 }
 
 @Composable

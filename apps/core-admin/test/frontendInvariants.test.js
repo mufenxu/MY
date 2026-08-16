@@ -43,6 +43,15 @@ test('other externally bound operations override the short request timeout', () 
   assert.match(publicQuery, /course-order\/public-refresh[\s\S]*?timeout:\s*PUBLIC_REFRESH_TIMEOUT_MS/);
 });
 
+test('resource expiry task keeps its recipient target configurable', () => {
+  const settings = readSource('src', 'pages', 'Settings.jsx');
+
+  assert.match(settings, /settings\/notify/);
+  assert.match(settings, /qywxEnabled/);
+  assert.match(settings, /qywxToUser/);
+  assert.match(settings, /到期提醒接收目标/);
+});
+
 test('QR creation requests are cancelled when login surfaces are replaced', () => {
   for (const relativePath of [
     ['src', 'pages', 'Login.jsx'],

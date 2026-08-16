@@ -157,7 +157,8 @@ fun TodayScreen(
     val week = remember(state.timetable?.currentCalendarText) {
         Regex("第(\\d+)周").find(state.timetable?.currentCalendarText.orEmpty())?.groupValues?.getOrNull(1)?.toIntOrNull()
     }
-    val today = DayOfWeek.from(LocalDate.now()).value
+    val currentDate = LocalDate.now()
+    val today = DayOfWeek.from(currentDate).value
     val courses = remember(state.timetable, week, today) {
         state.timetable?.courses.orEmpty()
             .filter { it.day == today && (week == null || it.weeks.isEmpty() || week in it.weeks) }
@@ -166,10 +167,10 @@ fun TodayScreen(
     val activeTodos = remember(state.todoSnapshot.tasks) {
         state.todoSnapshot.tasks.filterNot(TodoTask::completed)
     }
-    val expiringResources = remember(state.resourceExpiries) {
+    val expiringResources = remember(state.resourceExpiries, currentDate) {
         state.resourceExpiries.mapNotNull { resource ->
             val date = runCatching { LocalDate.parse(resource.expiresAt) }.getOrNull() ?: return@mapNotNull null
-            val days = ChronoUnit.DAYS.between(LocalDate.now(), date).toInt()
+            val days = ChronoUnit.DAYS.between(currentDate, date).toInt()
             (resource to days).takeIf { days <= maxOf(60, resource.advanceNoticeDays) }
         }.sortedBy { it.second }
     }
@@ -362,8 +363,8 @@ fun NotificationCenterScreen(
     var filterTab by remember { mutableStateOf("all") }
     var settingsOpen by remember { mutableStateOf(false) }
     var selectedAlert by remember { mutableStateOf<AppAlertRecord?>(null) }
-    val now = System.currentTimeMillis()
 
+    val now = System.currentTimeMillis()
     val visibleAlerts = state.alerts.filter { alert ->
         val isSnoozed = alert.snoozedUntil != null && alert.snoozedUntil > now
         when (filterTab) {
@@ -376,8 +377,9 @@ fun NotificationCenterScreen(
             else -> !isSnoozed
         }
     }
-
-    val unreadCount = state.alerts.count { !it.read }
+    val unreadCount = remember(state.alerts) { state.alerts.count { !it.read } }
+    val hasUnreadAlerts = unreadCount > 0
+    val hasReadAlerts = remember(state.alerts) { state.alerts.any(AppAlertRecord::read) }
 
     NotificationWorkspacePage(
         title = "通知中心",
@@ -387,7 +389,7 @@ fun NotificationCenterScreen(
         onRefresh = onRefresh,
         onBack = onBack,
         actions = {
-            if (state.alerts.any { !it.read }) {
+            if (hasUnreadAlerts) {
                 AppHeaderIconButton(
                     icon = Icons.Outlined.DoneAll,
                     contentDescription = "全部已读",
@@ -396,7 +398,7 @@ fun NotificationCenterScreen(
                     containerColor = Color(0xFFECFDF5),
                 )
             }
-            if (state.alerts.any { it.read }) {
+            if (hasReadAlerts) {
                 AppHeaderIconButton(
                     icon = Icons.Outlined.DeleteOutline,
                     contentDescription = "清理已读",
@@ -800,7 +802,7 @@ fun InsightsScreen(
     onBack: () -> Unit,
 ) {
     var days by remember { mutableStateOf(7) }
-    val samples = state.samples.takeLast(days)
+    val samples = remember(days, state.samples) { state.samples.takeLast(days) }
     val latest = samples.lastOrNull()
     val earlier = samples.firstOrNull()
 
@@ -2388,7 +2390,7 @@ private fun NotificationCard(
                 else if (!alert.read) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
                 else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
             ),
-            shadowElevation = if (!alert.read) 1.dp else 0.3.dp,
+            shadowElevation = 0.dp,
         ) {
             Column(
                 modifier = Modifier
@@ -2614,7 +2616,7 @@ private fun ModernTrendChart(
     primaryColor: Color,
     maxScale: Int? = null,
 ) {
-    val values = samples.map(getValue)
+    val values = remember(samples) { samples.map(getValue) }
     val maxVal = (maxScale ?: (values.maxOrNull() ?: 0)).coerceAtLeast(1)
     val latestVal = values.lastOrNull() ?: 0
     val gridLineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
