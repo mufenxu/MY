@@ -534,7 +534,13 @@ export function Dashboard({ session, onLogout }) {
               session={session}
             />
           )}
-          {activeFilter === 'backup' && <BackupRecoveryView session={session} />}
+          {activeFilter === 'backup' && (
+            <BackupRecoveryView
+              session={session}
+              BackupQualityStrip={BackupQualityStrip}
+              BackupOffsitePanel={BackupOffsitePanel}
+            />
+          )}
           {activeFilter === 'releases' && <ReleasesView session={session} targetEntityId={activeEntity} />}
           {activeFilter === 'tasks' && <TaskCenterView onNavigate={navigateToView} targetEntityId={activeEntity} />}
           {activeFilter === 'configuration' && <><ConfigurationView session={session} targetEntityId={activeEntity} /><SettingsDiagnosticsView session={session} /></>}

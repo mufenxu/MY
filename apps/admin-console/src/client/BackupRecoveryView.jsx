@@ -18,7 +18,7 @@ import { requestJson } from './api.js';
 import { ConfirmDialog } from './UiControls.jsx';
 import { hasRole, formatDateTime, formatBytes } from './shared.jsx';
 
-export function BackupRecoveryView({ session }) {
+export function BackupRecoveryView({ session, BackupQualityStrip, BackupOffsitePanel }) {
   const [statusData, setStatusData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
