@@ -118,7 +118,7 @@ test('CI Mosquitto runs as its immutable non-root user with hardened privileges'
 });
 
 test('platform image and ACR workflow include the official website', () => {
-  const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');
+  const dockerfile = fs.readFileSync(path.join(root, 'infra', 'docker', 'platform-api.Dockerfile'), 'utf8');
   const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'aliyun-acr.yml'), 'utf8');
   const imageGraph = JSON.parse(fs.readFileSync(path.join(root, 'config', 'image-build-targets.json'), 'utf8'));
 

@@ -9,7 +9,7 @@ test('backup transfer limits stay aligned across application, runner, Compose, a
     readFile(new URL('./backup-runner.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../infra/docker/compose.yml', import.meta.url), 'utf8'),
     readFile(new URL('../infra/nginx/my-platform.conf.example', import.meta.url), 'utf8'),
-    readFile(new URL('../backup-runner.Dockerfile', import.meta.url), 'utf8'),
+    readFile(new URL('../infra/docker/backup-runner.Dockerfile', import.meta.url), 'utf8'),
     readFile(new URL('../.env.example', import.meta.url), 'utf8'),
     readFile(new URL('../config/image-build-targets.json', import.meta.url), 'utf8'),
   ]);
