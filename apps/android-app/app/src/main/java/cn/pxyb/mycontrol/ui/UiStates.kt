@@ -172,6 +172,7 @@ data class GlobalSearchUiState(val items: List<GlobalSearchItem>)
 @Immutable
 data class TodayUiState(
     val refreshing: Boolean,
+    val calendarSyncing: Boolean,
     val sectionError: String?,
     val offlineMode: Boolean,
     val todoSnapshot: TodoSnapshot,
@@ -397,6 +398,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
 
 internal fun AppUiState.toTodayUiState() = TodayUiState(
     refreshing = isRefreshing(DataSection.Todos, DataSection.Campus, DataSection.Resources, DataSection.Incidents, DataSection.Tasks),
+    calendarSyncing = busyAction == "calendar-sync",
     sectionError = sectionError(DataSection.Todos, DataSection.Campus, DataSection.Resources),
     offlineMode = offlineMode,
     todoSnapshot = todoSnapshot,

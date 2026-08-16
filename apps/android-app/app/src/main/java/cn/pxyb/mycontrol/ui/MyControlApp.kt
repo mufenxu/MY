@@ -1,6 +1,10 @@
 package cn.pxyb.mycontrol.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -85,6 +89,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.autofill.AutofillNode
 import androidx.compose.ui.autofill.AutofillType
@@ -118,6 +123,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -1478,6 +1484,19 @@ private fun AuthenticatedShell(
                 }
                 composable(AppRoute.Today) {
                     val todayState by viewModel.todayState.collectAsStateWithLifecycle()
+                    val context = LocalContext.current
+                    val calendarPermissions = remember {
+                        arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
+                    }
+                    val calendarPermissionLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestMultiplePermissions(),
+                    ) { result ->
+                        if (calendarPermissions.all { result[it] == true }) {
+                            viewModel.syncAndroidCalendar()
+                        } else {
+                            viewModel.reportCalendarPermissionDenied()
+                        }
+                    }
                     TodayScreen(
                         state = todayState,
                         contentPadding = contentPadding,
@@ -1486,6 +1505,16 @@ private fun AuthenticatedShell(
                         onSaveTodo = viewModel::saveTodo,
                         onToggleTodo = viewModel::toggleTodo,
                         onDeleteTodo = viewModel::deleteTodo,
+                        onSyncCalendar = {
+                            if (calendarPermissions.all { permission ->
+                                    ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                                }
+                            ) {
+                                viewModel.syncAndroidCalendar()
+                            } else {
+                                calendarPermissionLauncher.launch(calendarPermissions)
+                            }
+                        },
                         onOpenNotifications = { navigateToTab(MainTab.Notifications) },
                         onOpenTasks = { navigateToTab(MainTab.Operations) },
                     )

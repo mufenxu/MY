@@ -142,6 +142,7 @@ fun TodayScreen(
     onSaveTodo: (TodoTask) -> Unit,
     onToggleTodo: (String) -> Unit,
     onDeleteTodo: (String) -> Unit,
+    onSyncCalendar: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenTasks: () -> Unit,
 ) {
@@ -178,6 +179,15 @@ fun TodayScreen(
         onBack = onBack,
         refreshing = state.refreshing,
         onRefresh = onRefresh,
+        actions = {
+            AppHeaderIconButton(
+                icon = Icons.Outlined.CalendarMonth,
+                contentDescription = "同步到 Android 日历",
+                onClick = onSyncCalendar,
+                enabled = !state.calendarSyncing,
+                loading = state.calendarSyncing,
+            )
+        },
     ) {
         if (state.offlineMode || state.pendingTodoMutations > 0) {
             FeedbackBanner(

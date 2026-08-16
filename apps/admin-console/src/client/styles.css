@@ -3090,6 +3090,97 @@ input:focus-visible {
   color: var(--muted);
 }
 
+.application-management {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.application-management-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.application-management-heading strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.management-link-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.management-link {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 11px;
+  color: var(--text);
+  background: var(--panel-muted);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  text-decoration: none;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.management-link:hover {
+  background: var(--panel-solid);
+  border-color: var(--blue);
+  transform: translateY(-1px);
+}
+
+.management-link > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.management-link strong,
+.management-link small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.management-link strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.management-link small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.management-link > svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.management-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 2px 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.management-summary strong {
+  color: var(--ink);
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+}
+
 .application-tile > footer {
   display: flex;
   align-items: flex-end;

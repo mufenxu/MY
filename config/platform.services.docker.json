@@ -12,7 +12,15 @@
       "healthPath": "/health",
       "adminUrl": "/apps/core/",
       "repositoryPath": "services/core-api",
-      "capabilities": ["小程序", "订单", "IoT", "CT8"]
+      "capabilities": ["小程序", "订单", "IoT", "CT8"],
+      "managementAreas": [
+        { "id": "dashboard", "label": "业务概览", "description": "用户、订单与业务趋势总览", "url": "/apps/core/dashboard" },
+        { "id": "users", "label": "用户与权限", "description": "管理综合平台用户、角色与功能权限", "url": "/apps/core/users" },
+        { "id": "course-orders", "label": "网课订单", "description": "查询、创建、刷新与处置网课订单", "url": "/apps/core/course-orders" },
+        { "id": "air-energy", "label": "空气能设备", "description": "查看空气能设备状态、能耗与控制记录", "url": "/apps/core/air-energy" },
+        { "id": "audit-logs", "label": "业务审计", "description": "查询综合平台业务操作记录", "url": "/apps/core/audit-logs" },
+        { "id": "settings", "label": "业务配置", "description": "维护定时任务、业务密钥与网课配置", "url": "/apps/core/settings" }
+      ]
     },
     {
       "id": "exam",
@@ -24,7 +32,18 @@
       "healthPath": "/version",
       "adminUrl": "/apps/exam/",
       "repositoryPath": "services/exam-api",
-      "capabilities": ["小程序", "题库", "考试", "AI 解析"]
+      "capabilities": ["小程序", "题库", "考试", "AI 解析"],
+      "managementAreas": [
+        { "id": "dashboard", "label": "数据概览", "description": "查看题库、考试、用户与反馈趋势", "url": "/apps/exam/?menu=dashboard" },
+        { "id": "major-categories", "label": "题库管理", "description": "管理科目、分组、试卷与题库内容", "url": "/apps/exam/?menu=major-categories" },
+        { "id": "demo-manage", "label": "示例题库", "description": "维护演示与公开示例题库", "url": "/apps/exam/?menu=demo-manage" },
+        { "id": "exam-results", "label": "考试记录", "description": "检索、查看与维护考试结果", "url": "/apps/exam/?menu=exam-results" },
+        { "id": "users", "label": "考生管理", "description": "管理考生、题库分配与学习身份", "url": "/apps/exam/?menu=users" },
+        { "id": "learning-plans", "label": "学习运营", "description": "维护学习计划、班组与完成进度", "url": "/apps/exam/?menu=learning-plans" },
+        { "id": "personal-categories", "label": "个人题库监管", "description": "审查用户创建和接收的个人题库", "url": "/apps/exam/?menu=personal-categories" },
+        { "id": "question-quality", "label": "题库质量", "description": "分析题目质量、版本与异常问题", "url": "/apps/exam/?menu=question-quality" },
+        { "id": "feedbacks", "label": "反馈处理", "description": "查看、回复与关闭用户反馈", "url": "/apps/exam/?menu=feedbacks" }
+      ]
     },
     {
       "id": "campus",
@@ -36,7 +55,11 @@
       "healthPath": "/api/ready",
       "adminUrl": "/apps/campus/",
       "repositoryPath": "services/campus-service",
-      "capabilities": ["校园", "能耗", "教务"]
+      "capabilities": ["校园", "能耗", "教务"],
+      "managementAreas": [
+        { "id": "workspace", "label": "校园工作台", "description": "查看校园服务、教务与能耗运行情况", "url": "/apps/campus/#overview" },
+        { "id": "accounts", "label": "账号与邀请码", "description": "管理校园服务账号、角色与注册邀请码", "url": "/apps/campus/#admin" }
+      ]
     },
     {
       "id": "mqtt",
@@ -48,7 +71,15 @@
       "healthPath": "/api/ready",
       "adminUrl": "/apps/iot/",
       "repositoryPath": "services/iot-service",
-      "capabilities": ["MQTT", "设备", "WebSocket"]
+      "capabilities": ["MQTT", "设备", "WebSocket"],
+      "managementAreas": [
+        { "id": "devices", "label": "设备中心", "description": "监控设备、配置主题映射与维护资产", "url": "/apps/iot/?page=devices" },
+        { "id": "automation", "label": "设备自动化", "description": "维护场景、规则与执行记录", "url": "/apps/iot/?page=automation" },
+        { "id": "history", "label": "数据分析", "description": "查询遥测历史、趋势与明细", "url": "/apps/iot/?page=history" },
+        { "id": "keys", "label": "API 准入", "description": "创建、授权与吊销 IoT API 密钥", "url": "/apps/iot/?page=keys" },
+        { "id": "events", "label": "设备审计", "description": "查看设备控制、上报与连接事件", "url": "/apps/iot/?page=events" },
+        { "id": "config", "label": "系统运维", "description": "维护 Broker、Webhook、诊断与保留策略", "url": "/apps/iot/?page=config" }
+      ]
     },
     {
       "id": "notify",

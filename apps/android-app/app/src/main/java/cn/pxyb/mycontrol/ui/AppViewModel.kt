@@ -16,6 +16,7 @@ import cn.pxyb.mycontrol.SnoozedAlertScheduler
 import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
+import cn.pxyb.mycontrol.data.AndroidCalendarSync
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationPreference
 import cn.pxyb.mycontrol.data.AppNotificationAction
@@ -167,6 +168,7 @@ class AppViewModel(
     private val snapshotStore = ResponseSnapshotStore(application)
     private val api = PlatformApi(sessionStore, snapshotStore)
     private val alertNotifier = AlertNotifier(application)
+    private val androidCalendarSync = AndroidCalendarSync(application)
     private val hasSavedSession = sessionStore.hasSession()
     private val lockEnabled = sessionStore.isLockEnabled()
     private val savedHomePreferences = homePreferences.read()
@@ -1631,6 +1633,34 @@ class AppViewModel(
 
     fun deleteTodo(id: String) {
         enqueueTodoMutation(TodoMutation(type = "delete", id = id))
+    }
+
+    fun syncAndroidCalendar() {
+        if (mutableState.value.busyAction != null) return
+        val current = mutableState.value
+        viewModelScope.launch {
+            mutableState.update { it.copy(busyAction = "calendar-sync", error = null, message = null) }
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    androidCalendarSync.sync(
+                        accountUsername = current.user?.username ?: sessionStore.readActiveUsername(),
+                        timetable = current.campusTimetable,
+                        todos = current.todoSnapshot,
+                        resources = current.resourceExpiries,
+                    )
+                }
+            }.onSuccess { result ->
+                mutableState.update { it.copy(busyAction = null, message = result.message()) }
+            }.onFailure { error ->
+                mutableState.update {
+                    it.copy(busyAction = null, error = error.message ?: "日历同步失败，请稍后重试。")
+                }
+            }
+        }
+    }
+
+    fun reportCalendarPermissionDenied() {
+        mutableState.update { it.copy(error = "需要日历读写权限才能同步课程、待办和到期提醒。", message = null) }
     }
 
     fun markAlertRead(id: String) {

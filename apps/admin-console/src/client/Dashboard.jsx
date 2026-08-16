@@ -321,8 +321,8 @@ export function Dashboard({ session, onLogout }) {
 
   const activeNavigationGroup = getNavigationGroup(activeFilter);
   const viewMeta = {
-    miniapp: { title: '应用中心', subtitle: '应用入口与运行状态' },
-    service: { title: '服务运维', subtitle: '基础服务健康监测' },
+    miniapp: { title: '业务管理', subtitle: '综合、考试、校园与 IoT 统一入口' },
+    service: { title: '服务状态', subtitle: '基础服务健康监测与快速定位' },
     'external-apps': { title: '外部应用', subtitle: '独立项目统一身份接入' },
     notification: { title: '企业微信通知', subtitle: '通道状态与发送台账' },
     monitoring: { title: '监控分析', subtitle: '可用率与真实历史趋势' },

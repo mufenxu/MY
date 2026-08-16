@@ -7,11 +7,11 @@ export const NAV_GROUPS = Object.freeze([
   },
   {
     id: 'services',
-    label: '服务目录',
+    label: '业务与服务',
     defaultView: 'miniapp',
     views: [
-      { id: 'miniapp', label: '应用' },
-      { id: 'service', label: '基础服务' },
+      { id: 'miniapp', label: '业务后台' },
+      { id: 'service', label: '服务状态' },
       { id: 'external-apps', label: '外部应用' },
     ],
   },

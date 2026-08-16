@@ -20,6 +20,52 @@ function validateAdminUrl(value, serviceId) {
   return validateHttpUrl(normalized, 'adminUrl', serviceId);
 }
 
+function normalizeManagementAreas(value, serviceId, adminUrl) {
+  if (value === undefined) return Object.freeze([]);
+  if (!Array.isArray(value)) {
+    throw new Error(`${serviceId}.managementAreas 必须是数组。`);
+  }
+  if (value.length > 20) {
+    throw new Error(`${serviceId}.managementAreas 不能超过 20 项。`);
+  }
+  if (value.length > 0 && !String(adminUrl || '').startsWith('/')) {
+    throw new Error(`${serviceId}.managementAreas 需要同源 adminUrl。`);
+  }
+
+  const base = new URL('https://console.invalid');
+  const adminPath = adminUrl ? new URL(adminUrl, base).pathname : '';
+  const ids = new Set();
+  return Object.freeze(value.map((area) => {
+    if (!area || typeof area !== 'object') {
+      throw new Error(`${serviceId}.managementAreas 中存在无效项目。`);
+    }
+    const id = String(area.id || '').trim();
+    const label = String(area.label || '').trim();
+    const description = String(area.description || '').trim();
+    const rawUrl = String(area.url || '').trim();
+    if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id) || ids.has(id)) {
+      throw new Error(`${serviceId}.managementAreas 存在无效或重复 id：${id || '(empty)'}`);
+    }
+    if (!label || label.length > 40 || description.length > 120) {
+      throw new Error(`${serviceId}.managementAreas.${id} 的文案无效。`);
+    }
+    if (!rawUrl.startsWith('/') || rawUrl.startsWith('//') || /[\\\u0000-\u001f\u007f]/.test(rawUrl)) {
+      throw new Error(`${serviceId}.managementAreas.${id}.url 必须是安全的同源路径。`);
+    }
+    const parsed = new URL(rawUrl, base);
+    if (parsed.origin !== base.origin || !parsed.pathname.startsWith(adminPath)) {
+      throw new Error(`${serviceId}.managementAreas.${id}.url 必须位于 ${adminPath} 下。`);
+    }
+    ids.add(id);
+    return Object.freeze({
+      id,
+      label,
+      description,
+      url: `${parsed.pathname}${parsed.search}${parsed.hash}`,
+    });
+  }));
+}
+
 function normalizeService(input) {
   if (!input || typeof input !== 'object' || !input.id || !input.name) {
     throw new Error('服务清单中存在缺少 id 或 name 的项目。');
@@ -46,6 +92,7 @@ function normalizeService(input) {
     adminUrl,
     repositoryPath: String(input.repositoryPath || ''),
     capabilities: Array.isArray(input.capabilities) ? input.capabilities.map(String) : [],
+    managementAreas: normalizeManagementAreas(input.managementAreas, input.id, adminUrl),
   });
 }
 
