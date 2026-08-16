@@ -153,6 +153,7 @@ const nodes = {
   timetableWeekSelect: document.querySelector("#timetableWeekSelect"),
   timetableDaySelect: document.querySelector("#timetableDaySelect"),
   courseSearchInput: document.querySelector("#courseSearchInput"),
+  timetableAcademicCalendar: document.querySelector("#timetableAcademicCalendar"),
   timetableSummary: document.querySelector("#timetableSummary"),
   timetableGrid: document.querySelector("#timetableGrid"),
   courseListText: document.querySelector("#courseListText"),
@@ -3107,11 +3108,14 @@ function renderTimetable() {
   nodes.courseCountText.textContent = stats.courses ?? "--";
   nodes.sessionCountText.textContent = (stats.arrangedSessions ?? courses.length) || "--";
   nodes.locationCountText.textContent = stats.locations ?? "--";
-  const currentWeek = currentWeekFromText(timetable.currentCalendarText || timetable.termText);
-  nodes.academicCalendarText.textContent = currentWeek ? `第${currentWeek}周` : (timetable.currentCalendarText || "--");
+  const currentWeek = currentWeekFromTimetable(timetable);
+  nodes.academicCalendarText.textContent = timetable.schoolCalendar?.isHoliday
+    ? "假期"
+    : (currentWeek ? `第${currentWeek}周` : (timetable.currentCalendarText || "--"));
   nodes.timetableTermText.textContent = timetable.live === false && timetable.staleReason
     ? `${timetable.termText || sourceLabel} · 实时同步失败`
     : (timetable.termText || sourceLabel);
+  nodes.timetableAcademicCalendar.innerHTML = academicCalendarHtml(timetable.schoolCalendar);
   nodes.courseListText.textContent = filteredCourses.length ? `${filteredCourses.length} 条安排` : "--";
   nodes.timetableSummary.innerHTML = timetableSummaryHtml(timetable, filteredCourses, courses);
   nodes.timetableGrid.innerHTML = filteredCourses.length ? timetableGridHtml(timetable, filteredCourses) : empty("当前筛选下暂无课程安排");
@@ -3176,7 +3180,7 @@ function timetableGridHtml(timetable, displayCourses = null) {
     : ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"].map((name, index) => ({ day: index + 1, name }));
   const courses = Array.isArray(displayCourses) ? displayCourses : (timetable.courses || []);
   const todayDay = dayNumberFromDate(new Date());
-  const currentWeek = currentWeekFromText(timetable.currentCalendarText || timetable.termText);
+  const currentWeek = currentWeekFromTimetable(timetable);
   const visibleDays = state.timetableDay === "all"
     ? days
     : days.filter((day) => Number(day.day) === Number(state.timetableDay));
@@ -3290,10 +3294,12 @@ function semesterCourseCardHtml(course, options = {}) {
 function timetableSummaryHtml(timetable, filteredCourses, allCourses) {
   const todayDay = dayNumberFromDate(new Date());
   const sourceLabel = timetable.sourceLabel || (state.timetableSource === "selection" ? "选课结果" : "本学期课表");
-  const currentWeek = currentWeekFromText(timetable.currentCalendarText || timetable.termText);
-  const todayCourses = activeCoursesForCurrentWeek(allCourses
-    .filter((course) => Number(course.day) === todayDay)
-    .sort((a, b) => courseStartMinutes(a) - courseStartMinutes(b)), currentWeek);
+  const currentWeek = currentWeekFromTimetable(timetable);
+  const todayCourses = timetable.schoolCalendar?.isHoliday
+    ? []
+    : activeCoursesForCurrentWeek(allCourses
+      .filter((course) => Number(course.day) === todayDay)
+      .sort((a, b) => courseStartMinutes(a) - courseStartMinutes(b)), currentWeek);
   const currentCourse = todayCourses.find((course) => courseTemporalState(course) === "current");
   const nextCourse = todayCourses.find((course) => courseTemporalState(course) === "next");
   const focusCourse = currentCourse || nextCourse;
@@ -3333,7 +3339,7 @@ function timetableSummaryHtml(timetable, filteredCourses, allCourses) {
 
 function renderTimetableFilters(timetable, courses) {
   const maxWeek = maxWeekFromCourses(courses);
-  const currentWeek = currentWeekFromText(timetable.currentCalendarText);
+  const currentWeek = currentWeekFromTimetable(timetable);
   nodes.timetableWeekSelect.innerHTML = [
     `<option value="all">全部学期</option>`,
     ...Array.from({ length: maxWeek }, (_, index) => {
@@ -3414,6 +3420,49 @@ function maxWeekFromCourses(courses) {
 function currentWeekFromText(text) {
   const match = String(text || "").match(/第\s*(\d+)\s*周/);
   return match ? Number(match[1]) : null;
+}
+
+function currentWeekFromTimetable(timetable) {
+  const calendarWeek = Number(timetable?.schoolCalendar?.currentWeek);
+  return Number.isInteger(calendarWeek) && calendarWeek > 0
+    ? calendarWeek
+    : currentWeekFromText(timetable?.currentCalendarText || timetable?.termText);
+}
+
+function academicCalendarHtml(calendar) {
+  if (!calendar) return "";
+  const currentWeek = Number(calendar.currentWeek);
+  const statusText = calendar.isHoliday
+    ? (calendar.activeEvent?.label || "假期")
+    : (calendar.statusText || (currentWeek ? `第${currentWeek}教学周` : "校历"));
+  const eventRows = (Array.isArray(calendar.events) ? calendar.events : []).slice(0, 6).map((event) => `
+    <span class="timetable-calendar-event">
+      <strong>${escapeHtml(event.label || "校历安排")}</strong>
+      <small>${escapeHtml([event.startDate, event.endDate && event.endDate !== event.startDate ? `至 ${event.endDate}` : ""].filter(Boolean).join(" "))}</small>
+    </span>
+  `).join("");
+  return `
+    <div class="timetable-academic-calendar-main ${calendar.isHoliday ? "is-holiday" : "is-active"}">
+      <div>
+        <span class="timetable-calendar-kicker">学校校历</span>
+        <strong>${escapeHtml(calendar.termLabel || calendar.academicYear || "本学期")}</strong>
+        <small>${escapeHtml([calendar.termStartDate && `开学 ${calendar.termStartDate}`, calendar.termEndDate && `结束 ${calendar.termEndDate}`].filter(Boolean).join(" · ") || "日期待同步")}</small>
+      </div>
+      <div class="timetable-calendar-status">
+        <span>当前状态</span>
+        <strong>${escapeHtml(statusText)}</strong>
+      </div>
+      <div class="timetable-calendar-week">
+        <span>当前周次</span>
+        <strong>${currentWeek > 0 ? `第${currentWeek}周` : "假期"}</strong>
+      </div>
+      <div class="timetable-calendar-weeks">
+        <span>教学周数</span>
+        <strong>${escapeHtml(calendar.teachingWeeks ? `${calendar.teachingWeeks} 周` : "--")}</strong>
+      </div>
+    </div>
+    ${eventRows ? `<div class="timetable-calendar-events"><span>校历安排</span><div>${eventRows}</div></div>` : ""}
+  `;
 }
 
 function courseStartMinutes(course) {
@@ -3556,6 +3605,7 @@ function renderTimetableError(error) {
   nodes.locationCountText.textContent = "--";
   nodes.academicCalendarText.textContent = "--";
   nodes.timetableTermText.textContent = "--";
+  nodes.timetableAcademicCalendar.innerHTML = "";
   nodes.courseListText.textContent = "--";
   nodes.timetableSummary.innerHTML = "";
   nodes.timetableGrid.innerHTML = empty(error.message);
@@ -3677,6 +3727,7 @@ function clearTimetable() {
   nodes.locationCountText.textContent = "--";
   nodes.academicCalendarText.textContent = "--";
   nodes.timetableTermText.textContent = "--";
+  nodes.timetableAcademicCalendar.innerHTML = "";
   nodes.courseListText.textContent = "--";
   nodes.timetableSummary.innerHTML = "";
   nodes.timetableGrid.innerHTML = "";

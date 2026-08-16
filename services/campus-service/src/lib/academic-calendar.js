@@ -26,6 +26,16 @@ function inferredTermStartEpochDay(termInfo) {
   return null;
 }
 
+function timetableTermStartEpochDay(timetable) {
+  const direct = String(timetable?.schoolCalendar?.termStartDate || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!direct) return null;
+  return localEpochDay({
+    year: Number(direct[1]),
+    month: Number(direct[2]),
+    day: Number(direct[3])
+  });
+}
+
 function parseTime(value) {
   const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || "").trim());
   if (!match) return null;
@@ -63,7 +73,7 @@ function currentAcademicWeek(timetable, { now = new Date() } = {}) {
   const match = /第\s*(\d+)\s*周/.exec(text);
   if (match) return Number(match[1]);
 
-  const termStart = inferredTermStartEpochDay(timetable?.termInfo);
+  const termStart = timetableTermStartEpochDay(timetable) ?? inferredTermStartEpochDay(timetable?.termInfo);
   if (!Number.isFinite(termStart)) return 0;
   const currentEpochDay = localEpochDay(shanghaiDateParts(now));
   return Math.max(1, Math.floor((currentEpochDay - termStart) / 7) + 1);
@@ -100,8 +110,11 @@ export function buildCourseOccurrences(timetable, {
   if (!currentWeek) return [];
 
   const currentEpochDay = localEpochDay(shanghaiDateParts(now));
+  const termStart = timetableTermStartEpochDay(timetable);
   const utcDay = new Date(currentEpochDay * DAY_MS).getUTCDay();
-  const currentMonday = currentEpochDay - ((utcDay + 6) % 7);
+  const currentMonday = Number.isFinite(termStart)
+    ? termStart + ((currentWeek - 1) * 7)
+    : currentEpochDay - ((utcDay + 6) % 7);
   const sectionTimes = Array.isArray(timetable?.sectionTimes) ? timetable.sectionTimes : [];
   const courses = Array.isArray(timetable?.courses) ? timetable.courses : [];
   const occurrences = [];

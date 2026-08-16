@@ -39,6 +39,17 @@ private fun resolveAcademicCalendarAnchor(
     timetable: CampusTimetable,
     today: LocalDate = LocalDate.now(),
 ): AcademicCalendarAnchor? {
+    val schoolCalendar = timetable.schoolCalendar
+    val officialTermStart = schoolCalendar?.termStartDate
+        ?.takeIf(String::isNotBlank)
+        ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    if (officialTermStart != null) {
+        val elapsedDays = ChronoUnit.DAYS.between(officialTermStart, today)
+        val officialWeek = schoolCalendar?.currentWeek
+        val currentWeek = officialWeek ?: if (elapsedDays < 0) 1 else (elapsedDays / 7 + 1).toInt()
+        return AcademicCalendarAnchor(currentWeek = currentWeek, termStart = officialTermStart)
+    }
+
     val calendarText = "${timetable.currentCalendarText} ${timetable.termText}"
     val explicitWeek = Regex("第\\s*(\\d+)\\s*周")
         .find(calendarText)

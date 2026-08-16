@@ -61,9 +61,32 @@ data class CampusCourse(
 )
 
 @Immutable
+data class CampusCalendarEvent(
+    val startDate: String,
+    val endDate: String,
+    val label: String,
+)
+
+@Immutable
+data class CampusAcademicCalendar(
+    val academicYear: String = "",
+    val season: String = "",
+    val termLabel: String = "",
+    val termStartDate: String = "",
+    val termEndDate: String = "",
+    val teachingWeeks: Int? = null,
+    val weekFirst: Int = 1,
+    val currentWeek: Int? = null,
+    val isHoliday: Boolean = false,
+    val statusText: String = "",
+    val events: List<CampusCalendarEvent> = emptyList(),
+)
+
+@Immutable
 data class CampusTimetable(
     val currentCalendarText: String = "",
     val termText: String = "",
+    val schoolCalendar: CampusAcademicCalendar? = null,
     val generatedAt: String? = null,
     val live: Boolean = false,
     val staleReason: String? = null,

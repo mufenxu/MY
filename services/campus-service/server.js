@@ -61,6 +61,7 @@ const legacySessionPath = join(dataDir, "school-session.json");
 const legacyAcademicCachePath = join(dataDir, "academic-timetable-cache.json");
 const legacyAcademicCurrentCachePath = join(dataDir, "academic-timetable-current-cache.json");
 const userContextStorage = new AsyncLocalStorage();
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 loadDotEnv(join(__dirname, ".env"));
 
@@ -79,6 +80,8 @@ const JWXS_TIMETABLE_URL = `${JWXS_ORIGIN}/student/courseSelect/courseSelectResu
 const JWXS_CURRICULUM_URL = `${JWXS_ORIGIN}/student/courseSelect/thisSemesterCurriculum/callback`;
 const JWXS_CURRENT_TIMETABLE_URL = `${JWXS_ORIGIN}/student/courseSelect/thisSemesterCurriculum/index`;
 const JWXS_CURRENT_SCHEDULE_URL = `${JWXS_ORIGIN}/student/courseSelect/thisSemesterCurriculum/ajaxStudentSchedule/callback`;
+const JWXS_SCHOOL_CALENDAR_URL = `${JWXS_ORIGIN}/indexCalendar`;
+const JWXS_ACADEMIC_STATUS_URL = `${JWXS_ORIGIN}/main/checkSelectCourseStatus`;
 const JWXS_GPA_HOME_URL = `${JWXS_ORIGIN}/`;
 const JWXS_GPA_MORE_URL = `${JWXS_ORIGIN}/main/showMoreGPA`;
 const ACADEMIC_TIMETABLE_SOURCES = {
@@ -3361,6 +3364,68 @@ async function fetchAcademicCurriculumPayload(source = ACADEMIC_TIMETABLE_SOURCE
   throw new HttpError(502, "教务课程接口多次同步仍未完成 WebVPN 校验。");
 }
 
+async function fetchAcademicSchoolCalendarSnapshot() {
+  const jar = await readSessionJar();
+  let calendarPage = null;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    calendarPage = await requestAcademicHtmlWithSimpleRedirects(jar, JWXS_SCHOOL_CALENDAR_URL, {
+      referer: JWXS_GPA_HOME_URL
+    });
+    const verifyUrl = extractWebvpnVerifyUrl(calendarPage.html, calendarPage.finalUrl);
+    if (verifyUrl) {
+      await ensureWebvpnSession(jar);
+      await requestAcademicHtmlWithSimpleRedirects(jar, verifyUrl, { referer: calendarPage.finalUrl });
+      continue;
+    }
+    if (looksLikeAcademicLoginHtml(calendarPage.html, calendarPage.finalUrl)) {
+      await activateAcademicSession(jar);
+      continue;
+    }
+    if (!/var\s+xnxq\s*=|var\s+rq\s*=/.test(calendarPage.html)) {
+      throw new HttpError(502, "教务系统返回的校历页面结构不符合预期。", {
+        finalUrl: calendarPage.finalUrl,
+        sample: normalizeHtmlText(calendarPage.html).slice(0, 240)
+      });
+    }
+    break;
+  }
+
+  if (!calendarPage || looksLikeAcademicLoginHtml(calendarPage.html, calendarPage.finalUrl)) {
+    throw new HttpError(401, "教务系统会话已过期，请重新登录学校账号。");
+  }
+
+  let statusPayload = {};
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const page = await requestAcademicJsonOnce(jar, JWXS_ACADEMIC_STATUS_URL, { referer: JWXS_GPA_HOME_URL });
+    const verifyUrl = extractWebvpnVerifyUrl(page.text, page.finalUrl);
+    if (verifyUrl) {
+      await ensureWebvpnSession(jar);
+      await requestAcademicHtmlWithSimpleRedirects(jar, verifyUrl, { referer: page.finalUrl });
+      continue;
+    }
+    if (looksLikeAcademicLoginHtml(page.text, page.finalUrl)) {
+      await activateAcademicSession(jar);
+      continue;
+    }
+    if (page.response.status >= 400) {
+      throw new HttpError(page.response.status, `教务状态接口返回 HTTP ${page.response.status}`, {
+        sample: normalizeHtmlText(page.text).slice(0, 240)
+      });
+    }
+    try {
+      statusPayload = parseJsonLike(page.text);
+      break;
+    } catch {
+      throw new HttpError(502, "教务状态接口返回的 JSON 结构不符合预期。", {
+        sample: normalizeHtmlText(page.text).slice(0, 240)
+      });
+    }
+  }
+
+  await saveSessionJar(jar);
+  return parseAcademicSchoolCalendar(calendarPage.html, statusPayload);
+}
+
 async function requestAcademicHtml(jar, targetUrl, { referer = JWXS_ORIGIN } = {}) {
   const { response, url: finalUrl } = await followRedirectsWithJar(targetUrl, jar, {
     method: "GET",
@@ -4565,6 +4630,100 @@ function extractAcademicMeta($) {
   };
 }
 
+function shanghaiDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function compactAcademicDate(value) {
+  const match = String(value || "").match(/^(\d{4})(\d{2})(\d{2})$/);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : "";
+}
+
+function academicDateOffset(startDate, endDate) {
+  const epochDay = (value) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return Date.UTC(year, month - 1, day);
+  };
+  const start = epochDay(startDate);
+  const end = epochDay(endDate);
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.floor((end - start) / DAY_MS) : null;
+}
+
+function parseSchoolCalendarEvents(html) {
+  const match = String(html || "").match(/var\s+cal\s*=\s*'([\s\S]*?)';\s*var\s+obj/);
+  if (!match) return [];
+  let payload = match[1];
+  try {
+    payload = JSON.parse(payload);
+  } catch {
+    try {
+      payload = JSON.parse(payload.replaceAll("\\'", "'"));
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(payload)) return [];
+  return payload.map((item) => ({
+    startDate: compactAcademicDate(item?.ksrq) || String(item?.ksrq || "").slice(0, 10),
+    endDate: compactAcademicDate(item?.jsrq) || String(item?.jsrq || "").slice(0, 10),
+    label: normalizeHtmlText(item?.nr)
+  })).filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item.startDate)
+    && /^\d{4}-\d{2}-\d{2}$/.test(item.endDate)
+    && item.label);
+}
+
+function parseAcademicSchoolCalendar(html, statusPayload = {}, { now = new Date() } = {}) {
+  const source = String(html || "");
+  const yearMatch = source.match(/var\s+xnxq\s*=\s*["']([^"']+)["']/);
+  const seasonMatch = source.match(/var\s+xqm\s*=\s*["']([^"']+)["']/);
+  const startMatch = source.match(/var\s+rq\s*=\s*["'](\d{8})["']/);
+  const weeksMatch = source.match(/var\s+skzc\s*=\s*["'](\d+)["']/);
+  const weekFirstMatch = source.match(/var\s+weekFirst\s*=\s*["'](\d+)["']/);
+  if (!yearMatch || !startMatch) return null;
+
+  const academicYear = yearMatch[1];
+  const season = seasonMatch?.[1] || "";
+  const termStartDate = compactAcademicDate(startMatch[1]);
+  const teachingWeeks = Number(weeksMatch?.[1] || 0) || null;
+  const weekFirst = Number(weekFirstMatch?.[1] || 1) || 1;
+  const termEndDate = termStartDate && teachingWeeks
+    ? new Date(`${termStartDate}T00:00:00+08:00`).getTime() + (teachingWeeks * 7 - 1) * DAY_MS
+    : null;
+  const termEndKey = termEndDate ? shanghaiDateKey(new Date(termEndDate)) : "";
+  const today = shanghaiDateKey(now);
+  const offset = academicDateOffset(termStartDate, today);
+  const currentWeek = offset !== null && offset >= 0 && (!teachingWeeks || offset < teachingWeeks * 7)
+    ? Math.floor(offset / 7) + 1
+    : null;
+  const events = parseSchoolCalendarEvents(source);
+  const activeEvent = events.find((item) => item.startDate <= today && today <= item.endDate) || null;
+  const statusCode = String(statusPayload?.retString || "").trim();
+  const eventIsHoliday = Boolean(activeEvent && /假|节|休/.test(activeEvent.label) && !/补班/.test(activeEvent.label));
+  const isHoliday = statusCode === "0" || eventIsHoliday || currentWeek === null;
+  return {
+    academicYear,
+    season,
+    termLabel: `${academicYear}学年(${season || ""})`,
+    termStartDate,
+    termEndDate: termEndKey,
+    teachingWeeks,
+    weekFirst,
+    currentWeek,
+    isHoliday,
+    statusText: isHoliday ? "假期" : (currentWeek ? `第${currentWeek}教学周` : "校历"),
+    statusCode,
+    activeEvent,
+    events
+  };
+}
+
 function parseAcademicTimetable(html, finalUrl = JWXS_TIMETABLE_URL, sourceConfig = ACADEMIC_TIMETABLE_SOURCES.selection) {
   const $ = cheerio.load(html);
   const tableInfo = findCourseResultTableInfo($);
@@ -5050,8 +5209,31 @@ async function getAcademicTimetable(source = ACADEMIC_TIMETABLE_SOURCES.current)
       parsed = parseAcademicTimetable(page.html, page.finalUrl, source);
       if (!parsed.courses.length) throw jsonError;
     }
+    let schoolCalendar = null;
+    try {
+      schoolCalendar = await fetchAcademicSchoolCalendarSnapshot();
+    } catch (calendarError) {
+      logger.warn("academic_school_calendar_sync_failed", {
+        userId: currentUserId(),
+        error: calendarError
+      });
+    }
+    const schoolCalendarText = schoolCalendar
+      ? `${schoolCalendar.academicYear} ${schoolCalendar.season} ${schoolCalendar.currentWeek ? `第${schoolCalendar.currentWeek}周` : schoolCalendar.statusText}`
+      : parsed.currentCalendarText;
     parsed = {
       ...parsed,
+      currentCalendarText: schoolCalendarText,
+      schoolCalendar,
+      termInfo: parsed.termInfo && schoolCalendar
+        ? {
+          ...parsed.termInfo,
+          startDate: schoolCalendar.termStartDate,
+          endDate: schoolCalendar.termEndDate,
+          teachingWeeks: schoolCalendar.teachingWeeks,
+          weekFirst: schoolCalendar.weekFirst
+        }
+        : parsed.termInfo,
       live: true
     };
     await saveAcademicTimetableCache(parsed, source);

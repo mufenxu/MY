@@ -387,6 +387,27 @@ class PlatformApi(
         CampusTimetable(
             currentCalendarText = json.optString("currentCalendarText"),
             termText = json.optString("termText"),
+            schoolCalendar = json.optJSONObject("schoolCalendar")?.let { calendar ->
+                CampusAcademicCalendar(
+                    academicYear = calendar.optString("academicYear"),
+                    season = calendar.optString("season"),
+                    termLabel = calendar.optString("termLabel"),
+                    termStartDate = calendar.optString("termStartDate"),
+                    termEndDate = calendar.optString("termEndDate"),
+                    teachingWeeks = calendar.optIntOrNull("teachingWeeks"),
+                    weekFirst = calendar.optInt("weekFirst", 1),
+                    currentWeek = calendar.optIntOrNull("currentWeek"),
+                    isHoliday = calendar.optBoolean("isHoliday"),
+                    statusText = calendar.optString("statusText"),
+                    events = calendar.optJSONArray("events").objects().map { event ->
+                        CampusCalendarEvent(
+                            startDate = event.optString("startDate"),
+                            endDate = event.optString("endDate"),
+                            label = event.optString("label"),
+                        )
+                    },
+                )
+            },
             generatedAt = json.nullableString("generatedAt"),
             live = json.optBoolean("live"),
             staleReason = json.nullableString("staleReason"),

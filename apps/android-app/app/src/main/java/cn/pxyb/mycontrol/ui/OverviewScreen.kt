@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +33,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.BarChart
@@ -149,7 +151,11 @@ fun OverviewScreen(
         val average = services.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
         Triple(healthy, monitored, average)
     }
-    val scrollState = rememberScrollState()
+    val courseCount = remember(state.timetable?.courses) {
+        state.timetable?.courses.orEmpty().asSequence().map(CampusCourse::courseName).distinct().count()
+    }
+    val todayCourseTotal = remember(state.timetable) { todayCourseCount(state) }
+    val listState = rememberLazyListState()
 
     fun openServiceAdmin(service: ServiceInfo) {
         val adminUrl = service.adminUrl?.takeIf { it.isNotBlank() } ?: return
@@ -202,36 +208,52 @@ fun OverviewScreen(
     PullToRefresh(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,
-        atTop = { scrollState.value == 0 },
+        atTop = {
+            listState.firstVisibleItemIndex == 0 &&
+                listState.firstVisibleItemScrollOffset == 0
+        },
     ) {
-        Column(
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(appPageContentPadding(contentPadding, topSpacing = 4.dp)),
+                .padding(
+                    start = AppPageHorizontalPadding,
+                    end = AppPageHorizontalPadding,
+                    top = contentPadding.calculateTopPadding() + 4.dp,
+                ),
+            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // 1. 通透清爽顶栏
-            ModernOverviewHeader(
-                onOpenQrLogin = onOpenQrLogin,
-                onOpenSearch = onOpenSearch,
-            )
+            item(key = "overview-header", contentType = "header") {
+                ModernOverviewHeader(
+                    onOpenQrLogin = onOpenQrLogin,
+                    onOpenSearch = onOpenSearch,
+                )
+            }
 
             state.sectionError?.let { message ->
-                FeedbackBanner("部分数据暂不可用：$message", error = true)
+                item(key = "overview-error", contentType = "banner") {
+                    FeedbackBanner("部分数据暂不可用：$message", error = true)
+                }
             }
             if (state.offlineMode) {
-                OfflineSnapshotNotice(state.cachedAtMillis)
+                item(key = "offline-notice", contentType = "banner") {
+                    OfflineSnapshotNotice(state.cachedAtMillis)
+                }
             }
             if (overview == null) {
-                OverviewSyncPanel(refreshing = state.refreshing)
-                return@Column
-            }
+                item(key = "overview-sync", contentType = "sync") {
+                    OverviewSyncPanel(refreshing = state.refreshing)
+                }
+            } else {
 
             // 2. Bento Style 核心系统状态 Hero Card
-            val incidentCount = activeIncidents.size
-            val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
-            Surface(
+            item(key = "health-hero", contentType = "hero") {
+                val incidentCount = activeIncidents.size
+                val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
+                Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(26.dp),
                 color = MaterialTheme.colorScheme.surface,
@@ -324,21 +346,18 @@ fun OverviewScreen(
                         }
                     }
                 }
+                }
             }
 
             // 3. 校园智览卡片
-            OverviewSectionTitle("校园工作台", "课表、成绩与校园生活")
-            val campus = state.campusOverview
-            val courseCount = state.timetable?.courses.orEmpty().map(CampusCourse::courseName).distinct().size
-            val campusDetails = listOfNotNull(
-                campus?.freeClassrooms?.rooms?.let { "空教室 $it 间" },
-                campus?.cardBalance?.let { "一卡通 ${formatCampusAmount(it)}" },
-                campus?.energyBalance?.let { "能耗 ${formatCampusAmount(it)}" },
-            ).joinToString(" · ")
-
-            val campusCardShape = RoundedCornerShape(24.dp)
-            val campusInteractionSource = remember { MutableInteractionSource() }
-            Surface(
+            item(key = "campus-title", contentType = "section") {
+                OverviewSectionTitle("校园工作台", "课表、成绩与校园生活")
+            }
+            item(key = "campus-card", contentType = "card") {
+                val campus = state.campusOverview
+                val campusCardShape = RoundedCornerShape(24.dp)
+                val campusInteractionSource = remember { MutableInteractionSource() }
+                Surface(
                 onClick = openTodayWorkspace,
                 interactionSource = campusInteractionSource,
                 modifier = Modifier
@@ -376,25 +395,29 @@ fun OverviewScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        ModernOverviewMetric("今日课程", todayCourseCount(state).toString(), Color(0xFF2563EB), Color(0xFFEFF6FF), Modifier.weight(1f))
+                                ModernOverviewMetric("今日课程", todayCourseTotal.toString(), Color(0xFF2563EB), Color(0xFFEFF6FF), Modifier.weight(1f))
                         ModernOverviewMetric("本学期课程", if (courseCount > 0) "$courseCount 门" else "--", Color(0xFF059669), Color(0xFFECFDF5), Modifier.weight(1f))
                         ModernOverviewMetric("GPA", campus?.gpa?.overall ?: "--", Color(0xFF7C3AED), Color(0xFFF5F3FF), Modifier.weight(1f))
                     }
                 }
+                }
             }
 
             // 4. 快捷操作
-            OverviewSectionTitle(
-                title = "快捷功能",
-                subtitle = "常用常用工具一键直达",
-                trailing = {
-                    IconButton(onClick = startCustomizingQuickActions) {
-                        Icon(Icons.Outlined.Edit, contentDescription = "调整快捷操作", tint = MaterialTheme.colorScheme.primary)
-                    }
-                },
-            )
+            item(key = "quick-actions-title", contentType = "section") {
+                OverviewSectionTitle(
+                    title = "快捷功能",
+                    subtitle = "常用常用工具一键直达",
+                    trailing = {
+                        IconButton(onClick = startCustomizingQuickActions) {
+                            Icon(Icons.Outlined.Edit, contentDescription = "调整快捷操作", tint = MaterialTheme.colorScheme.primary)
+                        }
+                    },
+                )
+            }
 
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            item(key = "quick-actions", contentType = "card") {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val columnCount = quickActionColumnCount(maxWidth, LocalDensity.current.fontScale)
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -434,12 +457,19 @@ fun OverviewScreen(
                         }
                     }
                 }
+                }
             }
 
             // 5. 待处理事项
             if (activeIncidents.isNotEmpty()) {
-                OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知")
-                visibleIncidents.forEach { incident ->
+                item(key = "incident-title", contentType = "section") {
+                    OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知")
+                }
+                items(
+                    items = visibleIncidents,
+                    key = { "incident-${it.id}" },
+                    contentType = { "incident" },
+                ) { incident ->
                     val incidentCardShape = RoundedCornerShape(20.dp)
                     val incidentInteractionSource = remember(incident.id) { MutableInteractionSource() }
                     Surface(
@@ -474,11 +504,13 @@ fun OverviewScreen(
             }
 
             if (state.externalApplications.isNotEmpty()) {
-                OverviewSectionTitle("外部应用", "独立项目免密入口")
-                externalApplicationOpenError?.let { message ->
-                    FeedbackBanner(message, error = true)
-                }
-                Surface(
+                item(key = "external-apps", contentType = "card") {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        OverviewSectionTitle("外部应用", "独立项目免密入口")
+                        externalApplicationOpenError?.let { message ->
+                            FeedbackBanner(message, error = true)
+                        }
+                        Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(24.dp),
                     color = MaterialTheme.colorScheme.surface,
@@ -500,18 +532,22 @@ fun OverviewScreen(
                             }
                         }
                     }
+                        }
+                    }
                 }
             }
 
             // 6. 服务可用性
-            OverviewSectionTitle("服务监控", "核心微服务状态")
-            serviceOpenError?.let { message ->
-                FeedbackBanner(message, error = true)
-            }
-            if (sortedServices.isEmpty()) {
-                EmptyBlock("暂无服务监测", "等待平台状态同步")
-            } else {
-                Surface(
+            item(key = "services", contentType = "card") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OverviewSectionTitle("服务监控", "核心微服务状态")
+                    serviceOpenError?.let { message ->
+                        FeedbackBanner(message, error = true)
+                    }
+                    if (sortedServices.isEmpty()) {
+                        EmptyBlock("暂无服务监测", "等待平台状态同步")
+                    } else {
+                        Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(24.dp),
                     color = MaterialTheme.colorScheme.surface,
@@ -533,10 +569,15 @@ fun OverviewScreen(
                             }
                         }
                     }
+                        }
+                    }
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            item(key = "overview-bottom-spacer", contentType = "spacer") {
+                Spacer(Modifier.height(16.dp))
+            }
+            }
         }
     }
 
@@ -881,26 +922,6 @@ private fun OfflineSnapshotNotice(cachedAtMillis: Long?) {
             }
         }
     }
-}
-
-// The dashboard data is bounded; one scrollable column keeps flings as light as the device page.
-@Composable
-private fun ColumnScope.item(
-    key: Any? = null,
-    contentType: Any? = null,
-    content: @Composable () -> Unit,
-) {
-    content()
-}
-
-@Composable
-private fun <T> ColumnScope.items(
-    values: List<T>,
-    key: ((T) -> Any)? = null,
-    contentType: ((T) -> Any?)? = null,
-    content: @Composable (T) -> Unit,
-) {
-    values.forEach { value -> content(value) }
 }
 
 @Composable

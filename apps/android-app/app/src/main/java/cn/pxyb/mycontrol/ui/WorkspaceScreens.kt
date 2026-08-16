@@ -8,7 +8,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -116,6 +115,7 @@ import cn.pxyb.mycontrol.data.AutomationRun
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationBlock
 import cn.pxyb.mycontrol.data.AppNotificationAction
+import cn.pxyb.mycontrol.data.CampusAcademicCalendar
 import cn.pxyb.mycontrol.data.CampusCourse
 import cn.pxyb.mycontrol.data.CampusFreeClassrooms
 import cn.pxyb.mycontrol.data.CampusGpa
@@ -195,97 +195,137 @@ fun TodayScreen(
         },
     ) {
         if (state.offlineMode || state.pendingTodoMutations > 0) {
-            FeedbackBanner(
-                message = if (state.pendingTodoMutations > 0) {
-                    "${state.pendingTodoMutations} 项更改已保存在本机，联网后自动同步。"
-                } else {
-                    "当前展示离线快照，个人待办仍可编辑。"
-                },
-                error = false,
-            )
+            item(key = "today-offline", contentType = "banner") {
+                FeedbackBanner(
+                    message = if (state.pendingTodoMutations > 0) {
+                        "${state.pendingTodoMutations} 项更改已保存在本机，联网后自动同步。"
+                    } else {
+                        "当前展示离线快照，个人待办仍可编辑。"
+                    },
+                    error = false,
+                )
+            }
         }
-        state.sectionError?.let { FeedbackBanner("部分今日数据暂不可用：$it", error = true) }
+        state.sectionError?.let { message ->
+            item(key = "today-error", contentType = "banner") {
+                FeedbackBanner("部分今日数据暂不可用：$message", error = true)
+            }
+        }
 
-        SectionHeader("校园智览", state.timetable?.termText ?: "课表与校园生活信息")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = campusSection == CampusWorkspaceSection.Today,
-                onClick = { campusSection = CampusWorkspaceSection.Today },
-                label = { Text("今日课程") },
-            )
-            FilterChip(
-                selected = campusSection == CampusWorkspaceSection.Timetable,
-                onClick = { campusSection = CampusWorkspaceSection.Timetable },
-                label = { Text("本学期课表") },
-            )
-            FilterChip(
-                selected = campusSection == CampusWorkspaceSection.Campus,
-                onClick = { campusSection = CampusWorkspaceSection.Campus },
-                label = { Text("校园信息") },
-            )
+        item(key = "campus-title", contentType = "section") {
+            SectionHeader("校园智览", state.timetable?.termText ?: "课表与校园生活信息")
+        }
+        item(key = "campus-filter", contentType = "filter") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = campusSection == CampusWorkspaceSection.Today,
+                    onClick = { campusSection = CampusWorkspaceSection.Today },
+                    label = { Text("今日课程") },
+                )
+                FilterChip(
+                    selected = campusSection == CampusWorkspaceSection.Timetable,
+                    onClick = { campusSection = CampusWorkspaceSection.Timetable },
+                    label = { Text("本学期课表") },
+                )
+                FilterChip(
+                    selected = campusSection == CampusWorkspaceSection.Campus,
+                    onClick = { campusSection = CampusWorkspaceSection.Campus },
+                    label = { Text("校园信息") },
+                )
+            }
         }
 
         when (campusSection) {
             CampusWorkspaceSection.Today -> {
-                SectionHeader("今天的课程", state.timetable?.currentCalendarText)
+                item(key = "today-courses-title", contentType = "section") {
+                    SectionHeader("今天的课程", state.timetable?.currentCalendarText)
+                }
                 if (courses.isEmpty()) {
-                    EmptyBlock("今天没有课程", "可以把时间留给个人待办或需要处理的事项。")
+                    item(key = "today-courses-empty", contentType = "empty") {
+                        EmptyBlock("今天没有课程", "可以把时间留给个人待办或需要处理的事项。")
+                    }
                 } else {
-                    courses.forEach { course -> CourseCard(course) }
+                    items(courses, key = CampusCourse::id, contentType = { "course" }) { course ->
+                        CourseCard(course)
+                    }
                 }
 
-                SectionHeader(
-                    "个人待办",
-                    "${activeTodos.size} 项未完成",
-                    trailing = {
-                        IconButton(onClick = { addingTodo = true }) {
-                            Icon(Icons.Outlined.Add, contentDescription = "添加待办")
-                        }
-                    },
-                )
+                item(key = "todos-title", contentType = "section") {
+                    SectionHeader(
+                        "个人待办",
+                        "${activeTodos.size} 项未完成",
+                        trailing = {
+                            IconButton(onClick = { addingTodo = true }) {
+                                Icon(Icons.Outlined.Add, contentDescription = "添加待办")
+                            }
+                        },
+                    )
+                }
                 if (state.todoSnapshot.tasks.isEmpty()) {
-                    AppPanel(onClick = { addingTodo = true }) {
-                        Row(
-                            modifier = Modifier.padding(18.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            IconTile(Icons.Outlined.Add, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
-                            Column {
-                                Text("添加第一项待办", style = MaterialTheme.typography.titleMedium)
-                                Text("支持截止时间、优先级、重复和课程关联", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    item(key = "todos-empty", contentType = "empty") {
+                        AppPanel(onClick = { addingTodo = true }) {
+                            Row(
+                                modifier = Modifier.padding(18.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                IconTile(Icons.Outlined.Add, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
+                                Column {
+                                    Text("添加第一项待办", style = MaterialTheme.typography.titleMedium)
+                                    Text("支持截止时间、优先级、重复和课程关联", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
                         }
                     }
                 } else {
-                    state.todoSnapshot.tasks.forEach { task ->
+                    items(state.todoSnapshot.tasks, key = TodoTask::id, contentType = { "todo" }) { task ->
                         TodoCard(task, onToggleTodo, { editingTodo = task }, onDeleteTodo)
                     }
                 }
 
-                SectionHeader("需要处理", "系统提醒与平台任务")
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    AttentionCard(
-                        label = "系统通知",
-                        value = state.incidents.count { it.status != "resolved" },
-                        onClick = onOpenNotifications,
-                        modifier = Modifier.weight(1f),
-                    )
-                    AttentionCard(
-                        label = "待处理任务",
-                        value = state.tasks.count { it.status in setOf("action_required", "failed", "pending") },
-                        onClick = onOpenTasks,
-                        modifier = Modifier.weight(1f),
-                    )
+                item(key = "attention-title", contentType = "section") {
+                    SectionHeader("需要处理", "系统提醒与平台任务")
+                }
+                item(key = "attention-cards", contentType = "card") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        AttentionCard(
+                            label = "系统通知",
+                            value = state.incidents.count { it.status != "resolved" },
+                            onClick = onOpenNotifications,
+                            modifier = Modifier.weight(1f),
+                        )
+                        AttentionCard(
+                            label = "待处理任务",
+                            value = state.tasks.count { it.status in setOf("action_required", "failed", "pending") },
+                            onClick = onOpenTasks,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
 
                 if (expiringResources.isNotEmpty()) {
-                    SectionHeader("即将到期", "脱敏资源摘要，不包含密码或连接凭据")
-                    expiringResources.take(6).forEach { (resource, days) -> ResourceExpiryCard(resource, days) }
+                    item(key = "expiring-title", contentType = "section") {
+                        SectionHeader("即将到期", "脱敏资源摘要，不包含密码或连接凭据")
+                    }
+                    items(
+                        items = expiringResources.take(6),
+                        key = { it.first.id },
+                        contentType = { "resource-expiry" },
+                    ) { (resource, days) ->
+                        ResourceExpiryCard(resource, days)
+                    }
                 }
             }
-            CampusWorkspaceSection.Timetable -> TermTimetable(state.timetable?.courses.orEmpty(), state.timetable?.currentCalendarText)
-            CampusWorkspaceSection.Campus -> CampusOverviewSection(state.campusOverview)
+            CampusWorkspaceSection.Timetable -> item(key = "timetable", contentType = "workspace") {
+                TermTimetable(
+                    courses = state.timetable?.courses.orEmpty(),
+                    currentCalendarText = state.timetable?.currentCalendarText,
+                    schoolCalendar = state.timetable?.schoolCalendar,
+                )
+            }
+            CampusWorkspaceSection.Campus -> item(key = "campus-overview", contentType = "workspace") {
+                CampusOverviewSection(state.campusOverview)
+            }
         }
     }
 
@@ -789,37 +829,40 @@ fun InsightsScreen(
         onBack = onBack,
     ) {
         // 1. 时间范围切换 Chip 行
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = days == 7, onClick = { days = 7 }, label = { Text("近 7 天") })
-                FilterChip(selected = days == 30, onClick = { days = 30 }, label = { Text("近 30 天") })
+        item(key = "insights-range", contentType = "filter") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = days == 7, onClick = { days = 7 }, label = { Text("近 7 天") })
+                    FilterChip(selected = days == 30, onClick = { days = 30 }, label = { Text("近 30 天") })
+                }
+                Text(
+                    text = "已采样 ${samples.size} 天",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            Text(
-                text = "已采样 ${samples.size} 天",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
 
         // 2. 本期结论卡片
-        AppPanel {
-            Column(
-                modifier = Modifier
-                    .background(
-                        Brush.linearGradient(
-                            listOf(
-                                statusBg.copy(alpha = 0.35f),
-                                MaterialTheme.colorScheme.surface
+        item(key = "insights-conclusion", contentType = "card") {
+            AppPanel {
+                Column(
+                    modifier = Modifier
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    statusBg.copy(alpha = 0.35f),
+                                    MaterialTheme.colorScheme.surface
+                                )
                             )
                         )
-                    )
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -859,42 +902,52 @@ fun InsightsScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                     lineHeight = 22.sp
                 )
+                }
             }
         }
 
         // 3. 趋势图表组与概览 Cell
         if (samples.isEmpty()) {
-            EmptyBlock("暂无趋势样本", "首页和后台同步成功后会每天记录一次关键指标。")
+            item(key = "insights-empty", contentType = "empty") {
+                EmptyBlock("暂无趋势样本", "首页和后台同步成功后会每天记录一次关键指标。")
+            }
         } else {
-            ModernTrendChart(
-                title = "服务健康率",
-                samples = samples,
-                getValue = { if (it.serviceTotal == 0) 0 else (it.healthyServices * 100 / it.serviceTotal) },
-                suffix = "%",
-                primaryColor = Color(0xFF10B981),
-                maxScale = 100
-            )
+            item(key = "trend-health", contentType = "chart") {
+                ModernTrendChart(
+                    title = "服务健康率",
+                    samples = samples,
+                    getValue = { if (it.serviceTotal == 0) 0 else (it.healthyServices * 100 / it.serviceTotal) },
+                    suffix = "%",
+                    primaryColor = Color(0xFF10B981),
+                    maxScale = 100
+                )
+            }
 
-            ModernTrendChart(
-                title = "系统异常数",
-                samples = samples,
-                getValue = { it.activeIncidents },
-                suffix = "次",
-                primaryColor = Color(0xFFEF4444),
-                maxScale = null
-            )
+            item(key = "trend-incidents", contentType = "chart") {
+                ModernTrendChart(
+                    title = "系统异常数",
+                    samples = samples,
+                    getValue = { it.activeIncidents },
+                    suffix = "次",
+                    primaryColor = Color(0xFFEF4444),
+                    maxScale = null
+                )
+            }
 
-            ModernTrendChart(
-                title = "在线设备数",
-                samples = samples,
-                getValue = { it.onlineDevices },
-                suffix = "台",
-                primaryColor = Color(0xFF3B82F6),
-                maxScale = null
-            )
+            item(key = "trend-devices", contentType = "chart") {
+                ModernTrendChart(
+                    title = "在线设备数",
+                    samples = samples,
+                    getValue = { it.onlineDevices },
+                    suffix = "台",
+                    primaryColor = Color(0xFF3B82F6),
+                    maxScale = null
+                )
+            }
 
-            latest?.let {
-                AppPanel {
+            latest?.let { latestSample ->
+                item(key = "latest-metrics", contentType = "card") {
+                    AppPanel {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -912,25 +965,26 @@ fun InsightsScreen(
                             EnhancedMetricCard(
                                 icon = Icons.Outlined.CheckCircle,
                                 label = "健康服务",
-                                value = "${it.healthyServices}/${it.serviceTotal}",
+                                value = "${latestSample.healthyServices}/${latestSample.serviceTotal}",
                                 color = Color(0xFF10B981),
                                 modifier = Modifier.weight(1f)
                             )
                             EnhancedMetricCard(
                                 icon = Icons.Outlined.Assignment,
                                 label = "待处理任务",
-                                value = "${it.pendingTasks}",
+                                value = "${latestSample.pendingTasks}",
                                 color = Color(0xFFF59E0B),
                                 modifier = Modifier.weight(1f)
                             )
                             EnhancedMetricCard(
                                 icon = Icons.Outlined.Devices,
                                 label = "在线设备",
-                                value = "${it.onlineDevices}/${it.deviceTotal}",
+                                value = "${latestSample.onlineDevices}/${latestSample.deviceTotal}",
                                 color = Color(0xFF3B82F6),
                                 modifier = Modifier.weight(1f)
                             )
                         }
+                    }
                     }
                 }
             }
@@ -955,6 +1009,9 @@ fun ScenesScreen(
     var adding by remember { mutableStateOf(false) }
     var editingRule by remember { mutableStateOf<AutomationRule?>(null) }
     var addingRule by remember { mutableStateOf(false) }
+    val scenes = state.iot?.scenes.orEmpty()
+    val rules = state.iot?.rules.orEmpty()
+    val runs = state.iot?.runs.orEmpty()
 
     WorkspacePage(
         title = "智能场景与自动化",
@@ -972,22 +1029,33 @@ fun ScenesScreen(
             )
         },
     ) {
-        if (state.offlineMode) FeedbackBanner("离线时仅可查看场景，联网后才能执行或编辑。", error = false)
-        state.sectionError?.let { FeedbackBanner(it, error = true) }
-        val scenes = state.iot?.scenes.orEmpty()
-        
-        Text(
-            text = "手动执行场景",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
-        )
+        if (state.offlineMode) {
+            item(key = "scenes-offline", contentType = "banner") {
+                FeedbackBanner("离线时仅可查看场景，联网后才能执行或编辑。", error = false)
+            }
+        }
+        state.sectionError?.let { message ->
+            item(key = "scenes-error", contentType = "banner") {
+                FeedbackBanner(message, error = true)
+            }
+        }
+
+        item(key = "scenes-title", contentType = "section") {
+            Text(
+                text = "手动执行场景",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+            )
+        }
 
         if (scenes.isEmpty()) {
-            EmptyBlock("还没有智能场景", "新建场景后，可以把多个设备动作合并为一次操作。")
+            item(key = "scenes-empty", contentType = "empty") {
+                EmptyBlock("还没有智能场景", "新建场景后，可以把多个设备动作合并为一次操作。")
+            }
         } else {
-            scenes.forEach { scene ->
+            items(scenes, key = IotScene::id, contentType = { "scene" }) { scene ->
                 SceneCard(
                     scene = scene,
                     busy = state.busyAction != null,
@@ -999,26 +1067,31 @@ fun ScenesScreen(
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        item(key = "scenes-spacer", contentType = "spacer") {
+            Spacer(Modifier.height(8.dp))
+        }
 
-        SectionHeader(
-            title = "条件自动化",
-            subtitle = "${state.iot?.rules.orEmpty().size} 条真实规则，由 IoT 服务执行并审计",
-            trailing = {
-                IconButton(
-                    onClick = { addingRule = true },
-                    enabled = !state.offlineMode && state.iot?.devices.orEmpty().isNotEmpty() && state.iot?.scenes.orEmpty().isNotEmpty(),
-                ) {
-                    Icon(Icons.Outlined.Add, contentDescription = "新建自动化规则")
-                }
-            },
-        )
+        item(key = "rules-title", contentType = "section") {
+            SectionHeader(
+                title = "条件自动化",
+                subtitle = "${rules.size} 条真实规则，由 IoT 服务执行并审计",
+                trailing = {
+                    IconButton(
+                        onClick = { addingRule = true },
+                        enabled = !state.offlineMode && state.iot?.devices.orEmpty().isNotEmpty() && scenes.isNotEmpty(),
+                    ) {
+                        Icon(Icons.Outlined.Add, contentDescription = "新建自动化规则")
+                    }
+                },
+            )
+        }
 
-        val rules = state.iot?.rules.orEmpty()
         if (rules.isEmpty()) {
-            EmptyBlock("还没有自动化规则", "先创建场景，再按设备状态或环境指标配置自动执行条件。")
+            item(key = "rules-empty", contentType = "empty") {
+                EmptyBlock("还没有自动化规则", "先创建场景，再按设备状态或环境指标配置自动执行条件。")
+            }
         } else {
-            rules.forEach { rule ->
+            items(rules, key = AutomationRule::id, contentType = { "automation-rule" }) { rule ->
                 AutomationRuleCard(
                     rule = rule,
                     devices = state.iot?.devices.orEmpty(),
@@ -1030,12 +1103,17 @@ fun ScenesScreen(
             }
         }
 
-        SectionHeader("最近执行", "规则和场景的真实指令结果")
-        val runs = state.iot?.runs.orEmpty()
+        item(key = "runs-title", contentType = "section") {
+            SectionHeader("最近执行", "规则和场景的真实指令结果")
+        }
         if (runs.isEmpty()) {
-            EmptyBlock("暂无执行记录", "手动运行场景或规则触发后会在这里留下审计记录。")
+            item(key = "runs-empty", contentType = "empty") {
+                EmptyBlock("暂无执行记录", "手动运行场景或规则触发后会在这里留下审计记录。")
+            }
         } else {
-            runs.take(8).forEach { run -> AutomationRunCard(run) }
+            items(runs.take(8), key = AutomationRun::id, contentType = { "automation-run" }) { run ->
+                AutomationRunCard(run)
+            }
         }
     }
     if (adding || editing != null) {
@@ -1074,28 +1152,38 @@ private fun WorkspacePage(
     refreshing: Boolean = false,
     onRefresh: (() -> Unit)? = null,
     actions: (@Composable RowScope.() -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit,
+    content: LazyListScope.() -> Unit,
 ) {
-    val scrollState = rememberScrollState()
+    val listState = rememberLazyListState()
     PullToRefresh(
         isRefreshing = refreshing,
         onRefresh = onRefresh,
         enabled = onRefresh != null,
-        atTop = { scrollState.value == 0 },
+        atTop = {
+            listState.firstVisibleItemIndex == 0 &&
+                listState.firstVisibleItemScrollOffset == 0
+        },
     ) {
-        Column(
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(appPageContentPadding(contentPadding, bottomSpacing = 18.dp)),
+                .padding(
+                    start = AppPageHorizontalPadding,
+                    end = AppPageHorizontalPadding,
+                    top = contentPadding.calculateTopPadding() + AppPageTopSpacing,
+                ),
+            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            AppSecondaryHeader(
-                title = title,
-                subtitle = subtitle,
-                onBack = onBack,
-                actions = actions,
-            )
+            item(key = "workspace-header", contentType = "header") {
+                AppSecondaryHeader(
+                    title = title,
+                    subtitle = subtitle,
+                    onBack = onBack,
+                    actions = actions,
+                )
+            }
             content()
         }
     }
@@ -1169,18 +1257,99 @@ private fun getCourseColorScheme(courseName: String): CourseColorScheme {
 }
 
 @Composable
-private fun TermTimetable(courses: List<CampusCourse>, currentCalendarText: String? = null) {
+private fun AcademicCalendarSummary(calendar: CampusAcademicCalendar) {
+    AppPanel {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("学校校历", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        calendar.termLabel.ifBlank { "本学期" },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        listOfNotNull(
+                            calendar.termStartDate.takeIf(String::isNotBlank)?.let { "开学 $it" },
+                            calendar.termEndDate.takeIf(String::isNotBlank)?.let { "结束 $it" },
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("当前状态", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        calendar.statusText.ifBlank { if (calendar.isHoliday) "假期" else "校历" },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (calendar.isHoliday) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                CalendarFact(
+                    label = "当前周次",
+                    value = calendar.currentWeek?.let { "第${it}周" } ?: "假期",
+                    modifier = Modifier.weight(1f),
+                )
+                CalendarFact(
+                    label = "教学周数",
+                    value = calendar.teachingWeeks?.let { "$it 周" } ?: "--",
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (calendar.events.isNotEmpty()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                Text("校历安排", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                calendar.events.take(4).forEach { event ->
+                    Text(
+                        listOf(event.label, event.startDate.takeIf(String::isNotBlank), event.endDate.takeIf { it.isNotBlank() && it != event.startDate })
+                            .filterNotNull()
+                            .joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarFact(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun TermTimetable(
+    courses: List<CampusCourse>,
+    currentCalendarText: String? = null,
+    schoolCalendar: CampusAcademicCalendar? = null,
+) {
     val orderedCourses = remember(courses) {
         courses.sortedWith(compareBy(CampusCourse::day).thenBy(CampusCourse::startSection).thenBy(CampusCourse::courseName))
     }
+    schoolCalendar?.let { AcademicCalendarSummary(it) }
+
     if (orderedCourses.isEmpty()) {
         EmptyBlock("课表暂未同步", "连接学校账号后，下拉刷新即可查看本学期全部课程。")
         return
     }
 
-    val currentWeekNum = remember(currentCalendarText) {
-        Regex("第(\\d+)周").find(currentCalendarText.orEmpty())?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
+    val currentWeekNum = remember(currentCalendarText, schoolCalendar) {
+        schoolCalendar?.currentWeek
+            ?: Regex("第(\\d+)周").find(currentCalendarText.orEmpty())?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?: 1
     }
+    val officialCurrentWeek = schoolCalendar?.currentWeek
     var selectedWeek by remember(currentWeekNum) { mutableStateOf(currentWeekNum) }
     var displayMode by remember { mutableStateOf(TimetableDisplayMode.Grid) }
     var selectedCourseDetail by remember { mutableStateOf<CampusCourse?>(null) }
@@ -1206,7 +1375,7 @@ private fun TermTimetable(courses: List<CampusCourse>, currentCalendarText: Stri
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
-                        if (selectedWeek == currentWeekNum) {
+                        if (officialCurrentWeek != null && selectedWeek == officialCurrentWeek) {
                             Surface(
                                 color = MaterialTheme.colorScheme.primaryContainer,
                                 contentColor = MaterialTheme.colorScheme.primary,
@@ -1222,7 +1391,7 @@ private fun TermTimetable(courses: List<CampusCourse>, currentCalendarText: Stri
                         }
                     }
                     Text(
-                        "全学期 $totalCourseCount 门课程 · 本周 ${currentWeekCourses.size} 节安排",
+                        "全学期 $totalCourseCount 门课程 · ${if (schoolCalendar?.isHoliday == true) "假期" else "本周 ${currentWeekCourses.size} 节安排"}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1280,7 +1449,7 @@ private fun TermTimetable(courses: List<CampusCourse>, currentCalendarText: Stri
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 (1..20).forEach { week ->
-                    val isCurrent = week == currentWeekNum
+                    val isCurrent = officialCurrentWeek == week
                     val isSelected = week == selectedWeek
                     FilterChip(
                         selected = isSelected,
