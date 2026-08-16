@@ -3,6 +3,7 @@ import { Input, Button, Card, Progress, Empty, Tag, Typography, Spin } from 'ant
 import {
   CheckCircleOutlined,
   ClockCircleFilled,
+  ArrowLeftOutlined,
   FieldTimeOutlined,
   FileSearchOutlined,
   IdcardOutlined,
@@ -131,6 +132,15 @@ const PublicQuery = () => {
           <div className="brand-mark">
             <span className="brand-mark-icon"><SafetyCertificateOutlined /></span>
             <span>星轨记录工具</span>
+            <Button
+              type="text"
+              size="small"
+              icon={<ArrowLeftOutlined />}
+              onClick={() => { window.location.assign('/dashboard'); }}
+              style={{ marginLeft: 'auto' }}
+            >
+              返回管理台
+            </Button>
           </div>
 
           <Title id="record-query-title" level={1} className="record-title">

@@ -17,6 +17,7 @@ import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AndroidCalendarSync
+import cn.pxyb.mycontrol.data.AutomationCondition
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationPreference
 import cn.pxyb.mycontrol.data.AppNotificationAction
@@ -1402,9 +1403,13 @@ class AppViewModel(
                 syncRemoteNotifications(force)
             }
             MainTab.Operations -> {
+                refreshOverview(force)
+                refreshIncidents(force)
                 refreshTasks(force)
                 refreshReleases(force)
                 refreshBackup(force)
+                refreshIot(force)
+                refreshResourceExpiries(force)
             }
             MainTab.Tools -> {
                 refreshIot(force)
@@ -1764,9 +1769,60 @@ class AppViewModel(
             mutableState.update { it.copy(iot = api.iot()) }
         }
 
-    fun runDiagnostics() = runAction("diagnostics", "系统自检已完成。") {
+    fun saveIotRule(
+        id: String?,
+        name: String,
+        enabled: Boolean,
+        condition: AutomationCondition,
+        actions: List<IotSceneAction>,
+        cooldownSeconds: Int,
+        confirmation: suspend () -> Boolean,
+    ) {
+        if (name.isBlank() || condition.deviceId.isBlank() || actions.isEmpty()) {
+            mutableState.update { it.copy(error = "请填写规则名称、触发条件并选择执行场景。") }
+            return
+        }
+        runAction("rule-edit", if (id == null) "自动化规则已创建。" else "自动化规则已更新。", confirmation) {
+            if (id == null) {
+                api.createIotRule(name, condition, actions, cooldownSeconds)
+            } else {
+                api.updateIotRule(id, name, enabled, condition, actions, cooldownSeconds)
+            }
+            mutableState.update { it.copy(iot = api.iot()) }
+        }
+    }
+
+    fun setIotRuleEnabled(id: String, enabled: Boolean, confirmation: suspend () -> Boolean) =
+        runAction("rule-toggle", if (enabled) "自动化规则已启用。" else "自动化规则已停用。", confirmation) {
+            api.setIotRuleEnabled(id, enabled)
+            mutableState.update { it.copy(iot = api.iot()) }
+        }
+
+    fun deleteIotRule(id: String, confirmation: suspend () -> Boolean) =
+        runAction("rule-delete", "自动化规则已删除。", confirmation) {
+            api.deleteIotRule(id)
+            mutableState.update { it.copy(iot = api.iot()) }
+        }
+
+    fun runDiagnostics() = runAction("diagnostics", "所有者一键巡检已完成。") {
         val diagnostics = api.runDiagnostics()
-        mutableState.update { it.copy(diagnostics = diagnostics) }
+        val current = mutableState.value
+        val overview = runCatching { api.overview(force = true) }.getOrDefault(current.overview)
+        val incidents = runCatching { api.incidents() }.getOrDefault(current.incidents)
+        val backup = runCatching { api.backupQuality() }.getOrDefault(current.backup)
+        val iot = runCatching { api.iot() }.getOrDefault(current.iot)
+        val resources = runCatching { api.resourceExpiries() }.getOrDefault(current.resourceExpiries)
+        mutableState.update {
+            it.copy(
+                diagnostics = diagnostics,
+                overview = overview,
+                incidents = incidents,
+                backup = backup,
+                iot = iot,
+                resourceExpiries = resources,
+            )
+        }
+        publishWidget()
     }
 
     fun triggerBackup(confirmation: suspend () -> Boolean) =

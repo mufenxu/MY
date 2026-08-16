@@ -109,6 +109,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.AlertPreferences
+import cn.pxyb.mycontrol.data.AutomationCondition
+import cn.pxyb.mycontrol.data.AutomationEngine
+import cn.pxyb.mycontrol.data.AutomationRule
+import cn.pxyb.mycontrol.data.AutomationRun
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationBlock
 import cn.pxyb.mycontrol.data.AppNotificationAction
@@ -116,6 +120,7 @@ import cn.pxyb.mycontrol.data.CampusCourse
 import cn.pxyb.mycontrol.data.CampusFreeClassrooms
 import cn.pxyb.mycontrol.data.CampusGpa
 import cn.pxyb.mycontrol.data.CampusOverview
+import cn.pxyb.mycontrol.data.DeviceInfo
 import cn.pxyb.mycontrol.data.IotScene
 import cn.pxyb.mycontrol.data.IotSceneAction
 import cn.pxyb.mycontrol.data.ResourceExpiry
@@ -312,6 +317,7 @@ fun NotificationCenterScreen(
     onArchive: (String) -> Unit,
     onSnooze: (String) -> Unit,
     onUpdatePreferences: (AlertPreferences) -> Unit,
+    onBack: () -> Unit,
 ) {
     var filterTab by remember { mutableStateOf("all") }
     var settingsOpen by remember { mutableStateOf(false) }
@@ -339,6 +345,7 @@ fun NotificationCenterScreen(
         contentPadding = contentPadding,
         refreshing = refreshing,
         onRefresh = onRefresh,
+        onBack = onBack,
         actions = {
             if (state.alerts.any { !it.read }) {
                 AppHeaderIconButton(
@@ -940,34 +947,14 @@ fun ScenesScreen(
     onRun: (String) -> Unit,
     onSave: (String?, String, List<IotSceneAction>) -> Unit,
     onDelete: (String) -> Unit,
+    onSaveRule: (String?, String, Boolean, AutomationCondition, List<IotSceneAction>, Int) -> Unit,
+    onToggleRule: (String, Boolean) -> Unit,
+    onDeleteRule: (String) -> Unit,
 ) {
     var editing by remember { mutableStateOf<IotScene?>(null) }
     var adding by remember { mutableStateOf(false) }
-
-    var localRules by remember {
-        mutableStateOf<List<cn.pxyb.mycontrol.data.AutomationRule>>(
-            listOf(
-                cn.pxyb.mycontrol.data.AutomationRule(
-                    id = "rule_1",
-                    name = "系统高危告警联动处理",
-                    enabled = true,
-                    triggerType = "incident",
-                    triggerValue = "critical",
-                    targetSceneId = "scene_1",
-                    targetSceneName = "紧急安全切断"
-                ),
-                cn.pxyb.mycontrol.data.AutomationRule(
-                    id = "rule_2",
-                    name = "设备掉线自动预警隔离",
-                    enabled = true,
-                    triggerType = "device_offline",
-                    triggerValue = "1",
-                    targetSceneId = "scene_2",
-                    targetSceneName = "设备保护隔离"
-                )
-            )
-        )
-    }
+    var editingRule by remember { mutableStateOf<AutomationRule?>(null) }
+    var addingRule by remember { mutableStateOf(false) }
 
     WorkspacePage(
         title = "智能场景与自动化",
@@ -1014,21 +1001,41 @@ fun ScenesScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        Text(
-            text = "条件自动化联动",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
+        SectionHeader(
+            title = "条件自动化",
+            subtitle = "${state.iot?.rules.orEmpty().size} 条真实规则，由 IoT 服务执行并审计",
+            trailing = {
+                IconButton(
+                    onClick = { addingRule = true },
+                    enabled = !state.offlineMode && state.iot?.devices.orEmpty().isNotEmpty() && state.iot?.scenes.orEmpty().isNotEmpty(),
+                ) {
+                    Icon(Icons.Outlined.Add, contentDescription = "新建自动化规则")
+                }
+            },
         )
 
-        localRules.forEach { rule ->
-            AutomationRuleCard(
-                rule = rule,
-                onToggle = { enabled ->
-                    localRules = localRules.map { if (it.id == rule.id) it.copy(enabled = enabled) else it }
-                }
-            )
+        val rules = state.iot?.rules.orEmpty()
+        if (rules.isEmpty()) {
+            EmptyBlock("还没有自动化规则", "先创建场景，再按设备状态或环境指标配置自动执行条件。")
+        } else {
+            rules.forEach { rule ->
+                AutomationRuleCard(
+                    rule = rule,
+                    devices = state.iot?.devices.orEmpty(),
+                    busy = state.busyAction != null,
+                    onToggle = { enabled -> onToggleRule(rule.id, enabled) },
+                    onEdit = { editingRule = rule },
+                    onDelete = { onDeleteRule(rule.id) },
+                )
+            }
+        }
+
+        SectionHeader("最近执行", "规则和场景的真实指令结果")
+        val runs = state.iot?.runs.orEmpty()
+        if (runs.isEmpty()) {
+            EmptyBlock("暂无执行记录", "手动运行场景或规则触发后会在这里留下审计记录。")
+        } else {
+            runs.take(8).forEach { run -> AutomationRunCard(run) }
         }
     }
     if (adding || editing != null) {
@@ -1040,6 +1047,19 @@ fun ScenesScreen(
                 onSave(id, name, actions)
                 adding = false
                 editing = null
+            },
+        )
+    }
+    if (addingRule || editingRule != null) {
+        AutomationRuleEditorDialog(
+            rule = editingRule,
+            devices = state.iot?.devices.orEmpty(),
+            scenes = state.iot?.scenes.orEmpty(),
+            onDismiss = { addingRule = false; editingRule = null },
+            onSave = { id, name, enabled, condition, actions, cooldownSeconds ->
+                onSaveRule(id, name, enabled, condition, actions, cooldownSeconds)
+                addingRule = false
+                editingRule = null
             },
         )
     }
@@ -1088,7 +1108,8 @@ private fun NotificationWorkspacePage(
     contentPadding: PaddingValues,
     refreshing: Boolean,
     onRefresh: () -> Unit,
-    actions: (@Composable () -> Unit)? = null,
+    onBack: () -> Unit,
+    actions: (@Composable RowScope.() -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -1110,7 +1131,12 @@ private fun NotificationWorkspacePage(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "header", contentType = "header") {
-                ImmersiveHeader(title = title, subtitle = subtitle, actions = actions)
+                AppSecondaryHeader(
+                    title = title,
+                    subtitle = subtitle,
+                    onBack = onBack,
+                    actions = actions,
+                )
             }
             content()
         }
@@ -2843,47 +2869,239 @@ private fun hourLabel(hour: Int): String = "%02d:00".format(hour)
 
 @Composable
 private fun AutomationRuleCard(
-    rule: cn.pxyb.mycontrol.data.AutomationRule,
+    rule: AutomationRule,
+    devices: List<DeviceInfo>,
+    busy: Boolean,
     onToggle: (Boolean) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
 ) {
+    val matched = rule.enabled && AutomationEngine.matches(rule, devices)
     AppPanel {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            IconTile(
-                icon = if (rule.triggerType == "incident") Icons.Outlined.Warning else Icons.Outlined.AccessTime,
-                tint = if (rule.enabled) Color(0xFF2563EB) else Color(0xFF94A3B8),
-                background = if (rule.enabled) Color(0xFFDBEAFE) else Color(0xFFF1F5F9)
-            )
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                IconTile(
+                    icon = if (matched) Icons.Outlined.Bolt else Icons.Outlined.Tune,
+                    tint = if (rule.enabled) Color(0xFF2563EB) else Color(0xFF94A3B8),
+                    background = if (rule.enabled) Color(0xFFDBEAFE) else Color(0xFFF1F5F9),
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(rule.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        text = rule.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        automationConditionLabel(rule, devices),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = when (rule.triggerType) {
-                        "incident" -> "触发条件：检测到高危告警 ➔ 运行「${rule.targetSceneName.ifBlank { "指定场景" }}」"
-                        "device_offline" -> "触发条件：设备离线 ➔ 运行「${rule.targetSceneName.ifBlank { "指定场景" }}」"
-                        else -> "触发条件：定时计划 ➔ 运行「${rule.targetSceneName.ifBlank { "指定场景" }}」"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Switch(checked = rule.enabled, onCheckedChange = onToggle, enabled = !busy)
             }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatusBadge(
+                    status = if (!rule.enabled) "inactive" else if (matched) "warning" else "healthy",
+                    label = if (!rule.enabled) "已停用" else if (matched) "当前满足条件" else "监控中",
+                )
+                Text(
+                    "${rule.actions.size} 个动作 · 冷却 ${automationCooldownLabel(rule.cooldownSeconds)}",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                IconButton(onClick = onEdit, enabled = !busy) { Icon(Icons.Outlined.Edit, contentDescription = "编辑规则") }
+                IconButton(onClick = onDelete, enabled = !busy) { Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除规则") }
+            }
+        }
+    }
+}
 
-            Switch(
-                checked = rule.enabled,
-                onCheckedChange = onToggle
+@Composable
+private fun AutomationRunCard(run: AutomationRun) {
+    AppPanel {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                IconTile(Icons.Outlined.PlayArrow, Color(0xFF2563EB), Color(0xFFDBEAFE))
+                Column(Modifier.weight(1f)) {
+                    Text(run.sourceName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        listOfNotNull(
+                            if (run.sourceType == "rule") "规则触发" else "手动场景",
+                            run.createdAt?.let(::formatMillis),
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                StatusBadge(run.state, automationRunStateLabel(run.state))
+            }
+            Text(
+                if (run.deviceConfirmed) {
+                    "设备已确认执行 · ${run.results.size} 个动作"
+                } else {
+                    "指令已提交 · ${run.results.size} 个动作 · 等待设备级回执"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
+}
+
+@Composable
+private fun AutomationRuleEditorDialog(
+    rule: AutomationRule?,
+    devices: List<DeviceInfo>,
+    scenes: List<IotScene>,
+    onDismiss: () -> Unit,
+    onSave: (String?, String, Boolean, AutomationCondition, List<IotSceneAction>, Int) -> Unit,
+) {
+    val initialSceneId = remember(rule?.id, scenes) {
+        scenes.firstOrNull { it.actions == rule?.actions }?.id ?: if (rule == null) scenes.firstOrNull()?.id else null
+    }
+    var name by remember(rule?.id) { mutableStateOf(rule?.name.orEmpty()) }
+    var deviceId by remember(rule?.id, devices) { mutableStateOf(rule?.condition?.deviceId ?: devices.firstOrNull()?.id.orEmpty()) }
+    var metric by remember(rule?.id) { mutableStateOf(rule?.condition?.metric ?: "temperature") }
+    var operator by remember(rule?.id) { mutableStateOf(rule?.condition?.operator ?: "gte") }
+    var value by remember(rule?.id) { mutableStateOf(rule?.condition?.value ?: "30") }
+    var relayId by remember(rule?.id) { mutableStateOf(rule?.condition?.relayId) }
+    var sceneId by remember(rule?.id, initialSceneId) { mutableStateOf(initialSceneId) }
+    var cooldownSeconds by remember(rule?.id) { mutableStateOf(rule?.cooldownSeconds ?: 300) }
+    val selectedDevice = devices.firstOrNull { it.id == deviceId }
+    val selectedActions = scenes.firstOrNull { it.id == sceneId }?.actions ?: rule?.actions.orEmpty()
+    val stateMetric = metric in setOf("online", "relay")
+    val effectiveOperator = if (stateMetric) "eq" else operator
+    val effectiveRelayId = relayId?.takeIf { metric == "relay" && it in selectedDevice?.relays.orEmpty() }
+    val valid = name.isNotBlank() && selectedDevice != null && selectedActions.isNotEmpty() &&
+        (metric !in setOf("temperature", "humidity") || value.toDoubleOrNull() != null) &&
+        (metric != "relay" || effectiveRelayId != null)
+
+    AppDialog(
+        onDismissRequest = onDismiss,
+        icon = Icons.Outlined.AutoAwesome,
+        title = if (rule == null) "新建自动化规则" else "编辑自动化规则",
+        subtitle = "条件由 IoT 服务持续判断，命中后执行所选场景的动作快照",
+        modifier = Modifier.heightIn(max = 760.dp),
+        footer = {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                AppDialogSecondaryButton("取消", onDismiss, Modifier.weight(1f))
+                AppDialogPrimaryButton(
+                    "保存",
+                    {
+                        onSave(
+                            rule?.id,
+                            name.trim(),
+                            rule?.enabled ?: true,
+                            AutomationCondition(deviceId, metric, effectiveOperator, value, effectiveRelayId),
+                            selectedActions,
+                            cooldownSeconds,
+                        )
+                    },
+                    Modifier.weight(1f),
+                    enabled = valid,
+                )
+            }
+        },
+    ) {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            DialogTextField(name, { name = it }, "规则名称")
+            Text("监控设备", style = MaterialTheme.typography.labelLarge)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                devices.forEach { device ->
+                    FilterChip(
+                        selected = device.id == deviceId,
+                        onClick = {
+                            deviceId = device.id
+                            relayId = device.relays.keys.firstOrNull()
+                        },
+                        label = { Text(device.name, maxLines = 1) },
+                    )
+                }
+            }
+            ChoiceRow(
+                "监控指标",
+                listOf("temperature" to "温度", "humidity" to "湿度", "online" to "在线状态", "relay" to "继电器"),
+                metric,
+            ) { selected ->
+                metric = selected
+                when (selected) {
+                    "online" -> { operator = "eq"; value = "OFFLINE" }
+                    "relay" -> { operator = "eq"; value = "ON"; relayId = selectedDevice?.relays?.keys?.firstOrNull() }
+                    else -> { operator = "gte"; if (value.toDoubleOrNull() == null) value = "30" }
+                }
+            }
+            when (metric) {
+                "temperature", "humidity" -> {
+                    ChoiceRow(
+                        "比较方式",
+                        listOf("gt" to "大于", "gte" to "大于等于", "lt" to "小于", "lte" to "小于等于"),
+                        operator,
+                    ) { operator = it }
+                    DialogTextField(value, { value = it.filter { char -> char.isDigit() || char in ".-" } }, "阈值")
+                }
+                "online" -> ChoiceRow("目标状态", listOf("ONLINE" to "在线", "OFFLINE" to "离线"), value.uppercase()) { value = it }
+                "relay" -> {
+                    Text("监控继电器", style = MaterialTheme.typography.labelLarge)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        selectedDevice?.relays?.keys.orEmpty().sorted().forEach { id ->
+                            FilterChip(selected = relayId == id, onClick = { relayId = id }, label = { Text(id) })
+                        }
+                    }
+                    ChoiceRow("目标状态", listOf("ON" to "开启", "OFF" to "关闭"), value.uppercase()) { value = it }
+                }
+            }
+            Text("命中后执行", style = MaterialTheme.typography.labelLarge)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                scenes.forEach { scene ->
+                    FilterChip(selected = scene.id == sceneId, onClick = { sceneId = scene.id }, label = { Text(scene.name, maxLines = 1) })
+                }
+            }
+            if (sceneId == null && rule?.actions.orEmpty().isNotEmpty()) {
+                DialogInfoText("当前规则的动作与已有场景不完全一致；不重新选择场景时将保留现有动作。")
+            }
+            ChoiceRow(
+                "触发冷却",
+                listOf("60" to "1 分钟", "300" to "5 分钟", "900" to "15 分钟", "3600" to "1 小时"),
+                cooldownSeconds.toString(),
+            ) { cooldownSeconds = it.toInt() }
+        }
+    }
+}
+
+private fun automationConditionLabel(rule: AutomationRule, devices: List<DeviceInfo>): String {
+    val condition = rule.condition
+    val device = devices.firstOrNull { it.id == condition.deviceId }?.name ?: condition.deviceId
+    val metric = when (condition.metric) {
+        "temperature" -> "温度"
+        "humidity" -> "湿度"
+        "online" -> "在线状态"
+        "relay" -> "继电器 ${condition.relayId.orEmpty()}"
+        else -> condition.metric
+    }
+    val operator = when (condition.operator) {
+        "gt" -> ">"
+        "gte" -> "≥"
+        "lt" -> "<"
+        "lte" -> "≤"
+        "neq" -> "≠"
+        else -> "="
+    }
+    val value = when (condition.value.uppercase()) {
+        "ONLINE" -> "在线"
+        "OFFLINE" -> "离线"
+        "ON" -> "开启"
+        "OFF" -> "关闭"
+        else -> condition.value
+    }
+    return "$device · $metric $operator $value"
+}
+
+private fun automationCooldownLabel(seconds: Int): String = when {
+    seconds >= 3600 && seconds % 3600 == 0 -> "${seconds / 3600} 小时"
+    seconds >= 60 && seconds % 60 == 0 -> "${seconds / 60} 分钟"
+    else -> "$seconds 秒"
+}
+
+private fun automationRunStateLabel(state: String): String = when (state) {
+    "commands_queued" -> "已入队"
+    "partially_queued" -> "部分入队"
+    "failed" -> "失败"
+    else -> state.ifBlank { "未知" }
 }

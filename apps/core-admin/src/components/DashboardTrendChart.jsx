@@ -64,7 +64,7 @@ const DashboardTrendChart = ({ data }) => (
             <Tooltip content={<TrendTooltip />} cursor={{ stroke: '#4A7CF7', strokeWidth: 1 }} />
             <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 20 }} />
             <Area
-                name="新增用户"
+                name="新用户"
                 type="monotone"
                 dataKey="users"
                 stroke="#4A7CF7"
@@ -74,7 +74,7 @@ const DashboardTrendChart = ({ data }) => (
                 animationDuration={900}
             />
             <Area
-                name="新增订单"
+                name="新订单"
                 type="monotone"
                 dataKey="orders"
                 stroke="#5CC9A7"

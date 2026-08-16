@@ -63,6 +63,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
@@ -153,8 +154,8 @@ private object AppRoute {
 }
 
 private val tabs = listOf(
-    TabItem(MainTab.Overview, "首页", Icons.Outlined.Home),
-    TabItem(MainTab.Notifications, "通知", Icons.Outlined.Notifications),
+    TabItem(MainTab.Overview, "今日", Icons.Outlined.Home),
+    TabItem(MainTab.Operations, "系统", Icons.Outlined.Settings),
     TabItem(MainTab.Tools, "设备", Icons.Outlined.Hub),
     TabItem(MainTab.Profile, "我的", Icons.Outlined.Person),
 )
@@ -184,7 +185,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Today,
     AppRoute.Insights,
     AppRoute.Scenes -> MainTab.Overview
-    AppRoute.Notifications -> MainTab.Notifications
+    AppRoute.Notifications -> MainTab.Overview
     AppRoute.Operations -> MainTab.Operations
     AppRoute.Tools -> MainTab.Tools
     AppRoute.Profile,
@@ -195,7 +196,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
 internal fun parentTabForSubScreen(route: String?, previousRoute: String?): MainTab? = when (route) {
     AppRoute.GoogleAccounts -> primaryTabForRoute(previousRoute) ?: MainTab.Profile
     AppRoute.Account -> MainTab.Profile
-    AppRoute.Operations,
+    AppRoute.Notifications,
     AppRoute.Search,
     AppRoute.Today,
     AppRoute.Insights,
@@ -1240,7 +1241,7 @@ private fun AuthenticatedShell(
     // 仅响应由外部或 ViewModel 显式打开的非 Tab 二级子界面（如全局搜索、Google 桌面等）
     LaunchedEffect(state.accountManagementOpen, state.googleAccountDeskOpen, state.globalSearchOpen, state.workspaceDestination) {
         val targetRoute = state.requestedRoute()
-        if (targetRoute != currentRoute && targetRoute !in setOf(AppRoute.Overview, AppRoute.Notifications, AppRoute.Tools, AppRoute.Profile)) {
+        if (targetRoute != currentRoute && targetRoute !in setOf(AppRoute.Overview, AppRoute.Operations, AppRoute.Tools, AppRoute.Profile)) {
             navController.navigate(targetRoute) { launchSingleTop = true }
         }
     }
@@ -1249,7 +1250,10 @@ private fun AuthenticatedShell(
     LaunchedEffect(currentRoute) {
         when (currentRoute) {
             AppRoute.Overview -> viewModel.syncNavigationDestination(MainTab.Overview)
-            AppRoute.Notifications -> viewModel.syncNavigationDestination(MainTab.Notifications)
+            AppRoute.Notifications -> viewModel.syncNavigationDestination(
+                MainTab.Overview,
+                workspaceDestination = WorkspaceDestination.Notifications,
+            )
             AppRoute.Tools -> viewModel.syncNavigationDestination(MainTab.Tools)
             AppRoute.Profile -> viewModel.syncNavigationDestination(MainTab.Profile)
             AppRoute.Operations -> viewModel.syncNavigationDestination(MainTab.Operations)
@@ -1360,14 +1364,14 @@ private fun AuthenticatedShell(
                         onApproveConfiguration = { id, note ->
                             viewModel.approveConfiguration(
                                 changeId = id,
-                                note = note.ifBlank { "通过 MY Control Android 审批" },
+                                note = note.ifBlank { "所有者通过 MY Control Android 确认执行" },
                                 confirmation = onSensitiveActionConfirmation,
                             )
                         },
                         onRejectConfiguration = { id, note ->
                             viewModel.rejectConfiguration(
                                 changeId = id,
-                                note = note.ifBlank { "通过 MY Control Android 拒绝" },
+                                note = note.ifBlank { "所有者通过 MY Control Android 放弃变更" },
                                 confirmation = onSensitiveActionConfirmation,
                             )
                         },
@@ -1377,7 +1381,6 @@ private fun AuthenticatedShell(
                         focusTaskId = state.focusTaskId,
                         onFocusConsumed = viewModel::clearFocusTargets,
                         onRefresh = onRefresh,
-                        onBack = navigateBackFromSubScreen,
                     )
                 }
                 composable(AppRoute.Notifications) {
@@ -1395,6 +1398,7 @@ private fun AuthenticatedShell(
                         onArchive = viewModel::archiveAlert,
                         onSnooze = { id -> viewModel.snoozeAlert(id) },
                         onUpdatePreferences = viewModel::updateAlertPreferences,
+                        onBack = navigateBackFromSubScreen,
                     )
                 }
                 composable(AppRoute.Tools) {
@@ -1537,6 +1541,23 @@ private fun AuthenticatedShell(
                         onRun = { id -> viewModel.runIotScene(id, onSensitiveActionConfirmation) },
                         onSave = viewModel::saveIotScene,
                         onDelete = { id -> viewModel.deleteIotScene(id, onSensitiveActionConfirmation) },
+                        onSaveRule = { id, name, enabled, condition, actions, cooldownSeconds ->
+                            viewModel.saveIotRule(
+                                id,
+                                name,
+                                enabled,
+                                condition,
+                                actions,
+                                cooldownSeconds,
+                                onSensitiveActionConfirmation,
+                            )
+                        },
+                        onToggleRule = { id, enabled ->
+                            viewModel.setIotRuleEnabled(id, enabled, onSensitiveActionConfirmation)
+                        },
+                        onDeleteRule = { id ->
+                            viewModel.deleteIotRule(id, onSensitiveActionConfirmation)
+                        },
                     )
                 }
             }
@@ -1813,11 +1834,11 @@ private fun BrandMark(compact: Boolean = false) {
 }
 
 private fun tabTitle(tab: MainTab): String = when (tab) {
-    MainTab.Overview -> "工作台"
+    MainTab.Overview -> "今日"
     MainTab.Notifications -> "通知中心"
-    MainTab.Operations -> "高级工具"
-    MainTab.Tools -> "设备与自动化"
-    MainTab.Profile -> "账号与安全"
+    MainTab.Operations -> "系统"
+    MainTab.Tools -> "设备"
+    MainTab.Profile -> "我的"
 }
 
 fun screenPadding(contentPadding: PaddingValues): Modifier = Modifier

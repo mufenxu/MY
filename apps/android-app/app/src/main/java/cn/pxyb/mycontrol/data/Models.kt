@@ -224,16 +224,78 @@ data class IotSceneAction(
 )
 
 @Immutable
+data class AutomationCondition(
+    val deviceId: String,
+    val metric: String,
+    val operator: String,
+    val value: String,
+    val relayId: String? = null,
+)
+
+@Immutable
 data class AutomationRule(
     val id: String,
     val name: String,
     val enabled: Boolean = true,
-    val triggerType: String, // "incident", "device_offline", "schedule"
-    val triggerValue: String = "",
-    val targetSceneId: String,
-    val targetSceneName: String = "",
-    val notifyUser: Boolean = true,
+    val condition: AutomationCondition,
+    val actions: List<IotSceneAction>,
+    val cooldownSeconds: Int = 300,
+    val version: Int = 1,
+    val createdAt: Long? = null,
+    val updatedAt: Long? = null,
     val lastTriggeredAt: Long? = null,
+)
+
+@Immutable
+data class AutomationRunResult(
+    val deviceId: String,
+    val relayId: String,
+    val status: String,
+    val state: String,
+    val message: String = "",
+)
+
+@Immutable
+data class AutomationRun(
+    val id: String,
+    val sourceType: String,
+    val sourceId: String,
+    val sourceName: String,
+    val actor: String,
+    val state: String,
+    val deviceConfirmed: Boolean,
+    val results: List<AutomationRunResult>,
+    val createdAt: Long?,
+)
+
+@Immutable
+data class TelemetryMetricSummary(
+    val count: Int,
+    val minimum: Double?,
+    val maximum: Double?,
+    val average: Double?,
+)
+
+@Immutable
+data class TelemetrySeriesPoint(
+    val createdAt: Long,
+    val sampleCount: Int,
+    val temperature: Double?,
+    val humidity: Double?,
+)
+
+@Immutable
+data class DeviceTelemetryInsight(
+    val deviceId: String,
+    val deviceName: String,
+    val state: String,
+    val range: String,
+    val generatedAt: Long?,
+    val sampleCount: Int,
+    val temperature: TelemetryMetricSummary,
+    val humidity: TelemetryMetricSummary,
+    val anomalyCount: Int,
+    val series: List<TelemetrySeriesPoint>,
 )
 
 @Immutable
@@ -244,6 +306,9 @@ data class IotData(
     val messagesReceived: Long,
     val devices: List<DeviceInfo>,
     val scenes: List<IotScene>,
+    val rules: List<AutomationRule>,
+    val runs: List<AutomationRun>,
+    val insights: List<DeviceTelemetryInsight>,
 )
 
 @Immutable

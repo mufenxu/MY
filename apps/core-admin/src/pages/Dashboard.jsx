@@ -1,160 +1,116 @@
-import React, { lazy, Suspense, useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, List, Tag, Space, Spin, Typography, Button, Badge } from 'antd';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    UserOutlined,
-    TeamOutlined,
-    BellOutlined,
-    FileTextOutlined,
-    RiseOutlined,
-    SettingOutlined,
-    AppstoreOutlined,
-    ShoppingOutlined,
-    ThunderboltOutlined,
+    Button,
+    Card,
+    Checkbox,
+    Col,
+    Empty,
+    Input,
+    Popconfirm,
+    Row,
+    Space,
+    Spin,
+    Statistic,
+    Typography,
+} from 'antd';
+import {
     AreaChartOutlined,
-    HistoryOutlined,
-    FileSearchOutlined
+    DeleteOutlined,
+    FileSearchOutlined,
+    FireOutlined,
+    PlusOutlined,
+    SettingOutlined,
+    ShoppingOutlined,
+    TeamOutlined,
+    UserOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router';
 import api from '../utils/api';
-import UserAvatar from '../components/UserAvatar';
+import { message } from '../utils/feedback';
 import { useResponsive } from '../hooks/useIsMobile';
 
 const { Title, Text } = Typography;
 const DashboardTrendChart = lazy(() => import('../components/DashboardTrendChart'));
+const getTimestamp = () => Date.now();
 
-const StatCard = ({ title, value, icon, color, subText, loading }) => (
-    <Card
-        style={{
-            borderRadius: 24,
-            background: 'var(--component-bg)',
-            border: 'none',
-            boxShadow: 'var(--card-shadow)',
-            position: 'relative',
-            overflow: 'visible'
-        }}
-        bodyStyle={{ padding: '24px' }}
-    >
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            <div style={{ zIndex: 2 }}>
-                <Text style={{ color: '#A3AED0', fontSize: 14, fontWeight: 600 }}>{title}</Text>
-                <div style={{ marginTop: 8 }}>
-                    {loading ? (
-                        <Spin size="small" />
-                    ) : (
-                        <span style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', textShadow: '2px 2px 4px rgba(0,0,0,0.05)' }}>{value}</span>
-                    )}
-                </div>
-                {subText && (
-                    <Text style={{ color: '#A3AED0', fontSize: 12, marginTop: 4, display: 'block' }}>
-                        {subText}
-                    </Text>
-                )}
-            </div>
-            <div style={{
-                width: 60,
-                height: 60,
-                borderRadius: 20,
-                background: color,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: `
-                    0 15px 25px ${color}40,
-                    inset 3px 3px 6px rgba(255, 255, 255, 0.4),
-                    inset -3px -3px 6px rgba(0, 0, 0, 0.15)
-                `,
-                transform: 'translateZ(0)' // For smoother shadows
-            }}>
-                {React.cloneElement(icon, { style: { fontSize: 28, color: '#fff', filter: 'drop-shadow(2px 2px 2px rgba(0,0,0,0.2))' } })}
+const StatCard = ({ title, value, note, icon, color, loading }) => (
+    <Card bordered={false} style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', height: '100%' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+            <Statistic
+                title={title}
+                value={loading ? '--' : value}
+                valueStyle={{ color: 'var(--text-primary)', fontWeight: 700 }}
+            />
+            <div
+                style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 14,
+                    background: color,
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 21,
+                    flexShrink: 0,
+                }}
+            >
+                {icon}
             </div>
         </div>
+        <Text type="secondary" style={{ fontSize: 12 }}>{note}</Text>
     </Card>
-);
-
-const QuickAction = ({ icon, title, onClick, color }) => (
-    <button
-        type="button"
-        onClick={onClick}
-        style={{
-            cursor: 'pointer',
-            width: '100%',
-            minWidth: 0,
-            minHeight: 88,
-            padding: '12px 6px',
-            borderRadius: 16,
-            background: 'var(--component-bg)',
-            border: 'none',
-            font: 'inherit',
-            textAlign: 'center',
-            transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            boxShadow: 'var(--card-shadow)'
-        }}
-        onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-4px)';
-            e.currentTarget.style.boxShadow = 'var(--hover-shadow)';
-            const iconDiv = e.currentTarget.querySelector('.action-icon');
-            if (iconDiv) {
-                iconDiv.style.transform = 'scale(1.1)';
-            }
-        }}
-        onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = 'var(--card-shadow)';
-            const iconDiv = e.currentTarget.querySelector('.action-icon');
-            if (iconDiv) {
-                iconDiv.style.transform = 'scale(1)';
-            }
-        }}
-    >
-        <div 
-            className="action-icon"
-            style={{
-                width: 44,
-                height: 44,
-                borderRadius: 14,
-                background: color,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
-                boxShadow: `
-                    0 10px 15px ${color}30,
-                    inset 2px 2px 4px rgba(255, 255, 255, 0.4),
-                    inset -2px -2px 4px rgba(0, 0, 0, 0.15)
-                `
-            }}
-        >
-            {React.cloneElement(icon, { style: { fontSize: 22, color: '#fff', filter: 'drop-shadow(1px 1px 1px rgba(0,0,0,0.2))' } })}
-        </div>
-        <Text style={{ 
-            color: 'var(--text-primary)', 
-            fontWeight: 600, 
-            fontSize: 13, 
-            lineHeight: '18px',
-            whiteSpace: 'normal',
-            width: '100%',
-            minHeight: 18,
-            textShadow: '0 1px 1px rgba(0,0,0,0.1)'
-        }}>{title}</Text>
-    </button>
 );
 
 const Dashboard = () => {
     const [stats, setStats] = useState(null);
-    const [news, setNews] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [newsLoading, setNewsLoading] = useState(false);
-    const [showTrendChart, setShowTrendChart] = useState(false);
+    const [statsLoading, setStatsLoading] = useState(true);
     const [statsError, setStatsError] = useState(false);
+    const [showTrendChart, setShowTrendChart] = useState(false);
+    const [todos, setTodos] = useState([]);
+    const [todoRevision, setTodoRevision] = useState(0);
+    const [todoInput, setTodoInput] = useState('');
+    const [todoLoading, setTodoLoading] = useState(true);
+    const [todoSaving, setTodoSaving] = useState(false);
     const navigate = useNavigate();
     const { isMobile } = useResponsive();
+
+    const fetchStats = useCallback(async () => {
+        try {
+            setStatsLoading(true);
+            setStatsError(false);
+            const response = await api.get('/stats/dashboard');
+            if (response.data.success) setStats(response.data.data);
+            else setStatsError(true);
+        } catch (error) {
+            console.error('获取首页数据失败:', error);
+            setStatsError(true);
+        } finally {
+            setStatsLoading(false);
+        }
+    }, []);
+
+    const loadTodos = useCallback(async () => {
+        try {
+            setTodoLoading(true);
+            const response = await api.get('/todos');
+            setTodos(response.data.data || []);
+            setTodoRevision(response.data.revision || 0);
+        } catch (error) {
+            console.error('获取待办失败:', error);
+            message.error('待办加载失败');
+        } finally {
+            setTodoLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        const timerId = window.setTimeout(() => {
+            fetchStats();
+            loadTodos();
+        }, 0);
+        return () => window.clearTimeout(timerId);
+    }, [fetchStats, loadTodos]);
 
     useEffect(() => {
         const reveal = () => setShowTrendChart(true);
@@ -168,312 +124,232 @@ const Dashboard = () => {
         };
     }, []);
 
-    const fetchStats = async () => {
+    const saveTodoOperations = async (operations) => {
+        setTodoSaving(true);
         try {
-            setLoading(true);
-            setStatsError(false);
-            const response = await api.get('/stats/dashboard');
-            if (response.data.success) {
-                setStats(response.data.data);
+            const response = await api.post('/todos/mutations', {
+                revision: todoRevision,
+                operations,
+            });
+            setTodos(response.data.data || []);
+            setTodoRevision(response.data.revision || todoRevision + 1);
+            return true;
+        } catch (error) {
+            if (error.response?.status === 409) {
+                message.info('待办已在其他设备更新，已为你重新加载');
+                await loadTodos();
             } else {
-                setStatsError(true);
+                message.error('待办保存失败');
             }
-        } catch (error) {
-            console.error('获取统计数据失败:', error);
-            setStatsError(true);
+            return false;
         } finally {
-            setLoading(false);
+            setTodoSaving(false);
         }
     };
 
-    const fetchNews = async () => {
-        try {
-            setNewsLoading(true);
-            const response = await api.get('/news/daily');
-            setNews(response.data.data);
-        } catch (error) {
-            console.error('获取新闻失败:', error);
-        } finally {
-            setNewsLoading(false);
-        }
+    const addTodo = async () => {
+        const title = todoInput.trim();
+        if (!title || todoSaving) return;
+
+        const now = getTimestamp();
+        const id = globalThis.crypto?.randomUUID?.() || `todo-${now}-${Math.random().toString(16).slice(2)}`;
+        const saved = await saveTodoOperations([{
+            type: 'upsert',
+            task: {
+                id,
+                title,
+                completed: false,
+                priority: 'normal',
+                recurrence: 'none',
+                createdAt: now,
+                updatedAt: now,
+            },
+        }]);
+        if (saved) setTodoInput('');
     };
 
-    useEffect(() => {
-        const timerId = window.setTimeout(() => {
-            fetchStats();
-            fetchNews();
-        }, 0);
-        return () => window.clearTimeout(timerId);
-    }, []);
+    const toggleTodo = (todo, completed) => saveTodoOperations([{
+        type: 'upsert',
+        task: {
+            ...todo,
+            completed,
+            reminderStatus: completed ? 'dismissed' : 'pending',
+            updatedAt: getTimestamp(),
+        },
+    }]);
 
-    const formatDate = (dateStr) => {
-        const date = new Date(dateStr);
-        const now = new Date();
-        const diff = now - date;
-        const minutes = Math.floor(diff / 60000);
-        const hours = Math.floor(diff / 3600000);
-        const days = Math.floor(diff / 86400000);
+    const deleteTodo = (id) => saveTodoOperations([{ type: 'delete', id }]);
 
-        if (minutes < 1) return '刚刚';
-        if (minutes < 60) return `${minutes}分钟前`;
-        if (hours < 24) return `${hours}小时前`;
-        if (days < 7) return `${days}天前`;
-        return date.toLocaleDateString('zh-CN');
-    };
+    const sortedTodos = useMemo(() => [...todos].sort((left, right) => {
+        if (left.completed !== right.completed) return left.completed ? 1 : -1;
+        return (right.updatedAt || 0) - (left.updatedAt || 0);
+    }), [todos]);
 
     const quickActions = [
-        { icon: <UserOutlined />, title: '用户管理', path: '/users', color: '#4A7CF7' },
-        { icon: <ShoppingOutlined />, title: '网课订单', path: '/course-orders', color: '#5CC9A7' },
-        { icon: <FileSearchOutlined />, title: '记录查询', path: '/query', color: '#2563EB' },
-        { icon: <ThunderboltOutlined />, title: '空气能监控', path: '/air-energy', color: '#FFB547' },
-        { icon: <BellOutlined />, title: '通知管理', path: '/notifications', color: '#FF5B5B' },
-        { icon: <HistoryOutlined />, title: '审计日志', path: '/audit-logs', color: '#A3AED0' },
-        { icon: <SettingOutlined />, title: '系统设置', path: '/settings', color: 'var(--text-primary)' }
+        { label: '订单', path: '/course-orders', icon: <ShoppingOutlined /> },
+        { label: '查询', path: '/query', icon: <FileSearchOutlined /> },
+        { label: '空气能', path: '/air-energy', icon: <FireOutlined /> },
+        { label: '用户', path: '/users', icon: <UserOutlined /> },
+        { label: '设置', path: '/settings', icon: <SettingOutlined /> },
     ];
 
-    return (
-        <div style={{ maxWidth: 1600, margin: '0 auto', padding: '0 2px' }}>
-            {/* 顶层统计卡片 - 移动端2列，平板2列，电脑4列 */}
-            <Row gutter={[isMobile ? 10 : 20, isMobile ? 10 : 20]}>
-                <Col xs={12} sm={12} lg={8}>
-                    <StatCard
-                        title="用户总数"
-                        value={statsError ? '--' : (stats?.users?.total ?? 0)}
-                        icon={<TeamOutlined />}
-                        color="#4A7CF7"
-                        subText={statsError ? '数据暂不可用' : `活跃 ${stats?.users?.active ?? 0}`}
-                        loading={loading}
-                    />
-                </Col>
-                <Col xs={12} sm={12} lg={8}>
-                    <StatCard
-                        title="网课订单"
-                        value={statsError ? '--' : (stats?.orders?.total ?? 0)}
-                        icon={<ShoppingOutlined />}
-                        color="#5CC9A7"
-                        subText={statsError ? '数据暂不可用' : `待处理/进行中 ${stats?.orders?.active ?? 0}`}
-                        loading={loading}
-                    />
-                </Col>
-                <Col xs={24} sm={24} lg={8}>
-                    <StatCard
-                        title="系统日志"
-                        value={statsError ? '--' : (stats?.auditLogs?.total ?? 0)}
-                        icon={<FileTextOutlined />}
-                        color="#FFB547"
-                        subText={statsError ? '数据暂不可用' : `今日新增 ${stats?.auditLogs?.today ?? 0}`}
-                        loading={loading}
-                    />
-                </Col>
-            </Row>
+    const today = new Intl.DateTimeFormat('zh-CN', {
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long',
+    }).format(new Date());
 
-            {/* 中间核心区：趋势图 + 快捷入口 */}
-            <Row gutter={[isMobile ? 10 : 20, isMobile ? 10 : 20]} style={{ marginTop: isMobile ? 12 : 20 }}>
-                <Col xs={24} lg={16}>
-                    <Card
-                        style={{
-                            borderRadius: 24,
-                            background: 'var(--component-bg)',
-                            border: 'none',
-                            boxShadow: 'var(--card-shadow)',
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column'
-                        }}
-                        bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}
-                    >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                            <div>
-                                <Title level={5} style={{ margin: 0, color: 'var(--text-primary)' }}>业务增长趋势</Title>
-                                <Text type="secondary" style={{ fontSize: 13 }}>过去 7 天的新增用户与订单统计</Text>
-                            </div>
-                            <Tag color="blue" icon={<AreaChartOutlined />}>最近一周</Tag>
-                        </div>
-                        <div style={{ flex: 1, minHeight: 320, width: '100%', minWidth: 0 }}>
-                            {showTrendChart ? (
-                                <Suspense fallback={<Spin style={{ width: '100%', paddingTop: 120 }} />}>
-                                    <DashboardTrendChart data={stats?.trend || []} />
-                                </Suspense>
-                            ) : (
-                                <Spin style={{ width: '100%', paddingTop: 120 }} />
-                            )}
-                        </div>
-                    </Card>
+    return (
+        <div style={{ maxWidth: 1500, margin: '0 auto' }}>
+            <Card
+                bordered={false}
+                style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', marginBottom: isMobile ? 12 : 20 }}
+                bodyStyle={{ padding: isMobile ? 16 : 22 }}
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                    <div>
+                        <Title level={3} style={{ margin: 0, color: 'var(--text-primary)' }}>我的管理台</Title>
+                        <Text type="secondary">{today}，常用操作都在这里。</Text>
+                    </div>
+                    <Space wrap size={8}>
+                        {quickActions.map((action) => (
+                            <Button key={action.path} icon={action.icon} onClick={() => navigate(action.path)}>
+                                {action.label}
+                            </Button>
+                        ))}
+                    </Space>
+                </div>
+            </Card>
+
+            <Row gutter={[isMobile ? 10 : 18, isMobile ? 10 : 18]}>
+                <Col xs={12} lg={8}>
+                    <StatCard
+                        title="需要处理"
+                        value={statsError ? '--' : (stats?.orders?.active ?? 0)}
+                        note={statsError ? '暂时无法获取' : '待处理或进行中的订单'}
+                        icon={<ShoppingOutlined />}
+                        color="#F59E0B"
+                        loading={statsLoading}
+                    />
+                </Col>
+                <Col xs={12} lg={8}>
+                    <StatCard
+                        title="全部订单"
+                        value={statsError ? '--' : (stats?.orders?.total ?? 0)}
+                        note={statsError ? '暂时无法获取' : '当前保存的订单'}
+                        icon={<AreaChartOutlined />}
+                        color="#4A7CF7"
+                        loading={statsLoading}
+                    />
                 </Col>
                 <Col xs={24} lg={8}>
-                    <Card
-                        style={{
-                            borderRadius: 24,
-                            background: 'var(--component-bg)',
-                            border: 'none',
-                            boxShadow: 'var(--card-shadow)',
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column'
-                        }}
-                        bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}
-                    >
-                        <Title level={5} style={{ margin: '0 0 16px', color: 'var(--text-primary)' }}>快捷入口</Title>
-                        <Row gutter={[10, 10]}>
-                            {quickActions.map((action) => (
-                                <Col xs={8} sm={6} md={4} lg={8} key={action.path}>
-                                    <QuickAction
-                                        icon={action.icon}
-                                        title={action.title}
-                                        color={action.color}
-                                        onClick={() => navigate(action.path)}
-                                    />
-                                </Col>
-                            ))}
-                        </Row>
-                        <div style={{ marginTop: 16 }}>
-                            <div style={{ padding: 16, background: 'linear-gradient(135deg, #6B9BFF10 0%, #4A7CF710 100%)', borderRadius: 16 }}>
-                                <Text strong style={{ color: '#4A7CF7', display: 'block', marginBottom: 4 }}>高效管理</Text>
-                                <Text type="secondary" style={{ fontSize: 12 }}>点击上方图标可快速跳转至对应功能模块，提升操作效率。</Text>
-                            </div>
-                        </div>
-                    </Card>
+                    <StatCard
+                        title="用户"
+                        value={statsError ? '--' : (stats?.users?.total ?? 0)}
+                        note={statsError ? '暂时无法获取' : `正常使用 ${stats?.users?.active ?? 0}`}
+                        icon={<TeamOutlined />}
+                        color="#5CC9A7"
+                        loading={statsLoading}
+                    />
                 </Col>
             </Row>
 
-            {/* 底部详细区：每日简报、用户、日志 */}
-            <Row gutter={[isMobile ? 10 : 20, isMobile ? 10 : 20]} style={{ marginTop: isMobile ? 12 : 20 }}>
-                <Col xs={24} md={12} xl={8}>
+            <Row gutter={[isMobile ? 10 : 18, isMobile ? 10 : 18]} style={{ marginTop: isMobile ? 12 : 18 }}>
+                <Col xs={24} lg={14}>
                     <Card
-                        title={
-                            <Space>
-                                <RiseOutlined style={{ color: '#4A7CF7' }} />
-                                <Text strong style={{ color: 'var(--text-primary)' }}>每日简报</Text>
-                            </Space>
-                        }
-                        style={{
-                            borderRadius: 24,
-                            background: 'var(--component-bg)',
-                            border: 'none',
-                            boxShadow: 'var(--card-shadow)',
-                            height: '100%'
-                        }}
-                        bodyStyle={{ padding: '16px 24px' }}
-                        extra={<Text type="secondary" style={{ fontSize: 12 }}>{news?.date || ''}</Text>}
+                        title="最近 7 天"
+                        extra={<Text type="secondary" style={{ fontSize: 12 }}>新用户和新订单</Text>}
+                        bordered={false}
+                        style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', height: '100%' }}
+                        bodyStyle={{ height: 340, padding: isMobile ? '16px 8px' : 20 }}
                     >
-                        <Spin spinning={newsLoading}>
-                            <div style={{ maxHeight: 310, overflowY: 'auto', paddingRight: 8 }}>
-                                {news?.news ? (
-                                    <List
-                                        dataSource={news.news.slice(0, 10)}
-                                        split={false}
-                                        renderItem={(item, index) => (
-                                            <div key={index} style={{ marginBottom: 12, display: 'flex', gap: 10 }}>
-                                                <Badge status="processing" color="#4A7CF7" style={{ marginTop: 8 }} />
-                                                <Text style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{item}</Text>
-                                            </div>
-                                        )}
-                                    />
-                                ) : (
-                                    <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                                        <Text type="secondary">暂无资讯数据</Text>
+                        {showTrendChart ? (
+                            <Suspense fallback={<Spin style={{ width: '100%', paddingTop: 120 }} />}>
+                                <DashboardTrendChart data={stats?.trend || []} />
+                            </Suspense>
+                        ) : (
+                            <Spin style={{ width: '100%', paddingTop: 120 }} />
+                        )}
+                    </Card>
+                </Col>
+                <Col xs={24} lg={10}>
+                    <Card
+                        title="我的待办"
+                        extra={<Text type="secondary" style={{ fontSize: 12 }}>{todos.filter((todo) => !todo.completed).length} 件未完成</Text>}
+                        bordered={false}
+                        style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', height: '100%' }}
+                        bodyStyle={{ padding: isMobile ? 16 : 20 }}
+                    >
+                        <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
+                            <Input
+                                value={todoInput}
+                                onChange={(event) => setTodoInput(event.target.value)}
+                                onPressEnter={addTodo}
+                                placeholder="写下要做的事"
+                                maxLength={200}
+                                disabled={todoSaving}
+                            />
+                            <Button
+                                type="primary"
+                                icon={<PlusOutlined />}
+                                onClick={addTodo}
+                                loading={todoSaving}
+                                disabled={!todoInput.trim()}
+                            >
+                                添加
+                            </Button>
+                        </Space.Compact>
+
+                        <Spin spinning={todoLoading}>
+                            <div style={{ maxHeight: 260, overflowY: 'auto', paddingRight: 4 }}>
+                                {!todoLoading && sortedTodos.length === 0 ? (
+                                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有待办" />
+                                ) : sortedTodos.map((todo) => (
+                                    <div
+                                        key={todo.id}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 10,
+                                            minHeight: 42,
+                                            padding: '8px 2px',
+                                            borderBottom: '1px solid var(--border-color)',
+                                        }}
+                                    >
+                                        <Checkbox
+                                            checked={todo.completed}
+                                            disabled={todoSaving}
+                                            onChange={(event) => toggleTodo(todo, event.target.checked)}
+                                        />
+                                        <Text
+                                            style={{
+                                                flex: 1,
+                                                color: todo.completed ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                                                textDecoration: todo.completed ? 'line-through' : 'none',
+                                                wordBreak: 'break-word',
+                                            }}
+                                        >
+                                            {todo.title}
+                                        </Text>
+                                        <Popconfirm
+                                            title="删除这条待办？"
+                                            okText="删除"
+                                            cancelText="取消"
+                                            onConfirm={() => deleteTodo(todo.id)}
+                                        >
+                                            <Button
+                                                type="text"
+                                                danger
+                                                size="small"
+                                                icon={<DeleteOutlined />}
+                                                disabled={todoSaving}
+                                                aria-label={`删除待办：${todo.title}`}
+                                            />
+                                        </Popconfirm>
                                     </div>
-                                )}
+                                ))}
                             </div>
                         </Spin>
-                    </Card>
-                </Col>
-                <Col xs={24} md={12} xl={8}>
-                    <Card
-                        title={
-                            <Space>
-                                <UserOutlined style={{ color: '#5CC9A7' }} />
-                                <Text strong style={{ color: 'var(--text-primary)' }}>最近注册用户</Text>
-                            </Space>
-                        }
-                        style={{
-                            borderRadius: 24,
-                            background: 'var(--component-bg)',
-                            border: 'none',
-                            boxShadow: 'var(--card-shadow)',
-                            height: '100%'
-                        }}
-                        bodyStyle={{ padding: '16px 24px' }}
-                        extra={<Button type="link" onClick={() => navigate('/users')} style={{ padding: 0 }}>管理</Button>}
-                    >
-                        <List
-                            loading={loading}
-                            dataSource={stats?.recentUsers || []}
-                            renderItem={(user) => (
-                                <List.Item style={{ borderBottom: '1px solid #F5F7FB', padding: '10px 0' }}>
-                                    <List.Item.Meta
-                                        avatar={
-                                            <UserAvatar
-                                                seed={user.userId || user._id || user.deviceId}
-                                                label={user.nickName || user.userId}
-                                                avatarUrl={user.avatarUrl}
-                                                style={{ border: '1px solid var(--border-color)' }}
-                                                size={36}
-                                            />
-                                        }
-                                        title={
-                                            <Space>
-                                                <Text strong style={{ fontSize: 13 }}>{user.nickName || '未设置昵称'}</Text>
-                                                <Tag color={user.role === 'super_admin' ? 'purple' : user.role === 'admin' ? 'blue' : 'default'} style={{ fontSize: 10 }}>
-                                                    {user.role === 'super_admin' ? '超管' : user.role === 'admin' ? '管理' : '用户'}
-                                                </Tag>
-                                            </Space>
-                                        }
-                                        description={
-                                            <Text type="secondary" style={{ fontSize: 11 }}>
-                                                {formatDate(user.createdAt)}
-                                            </Text>
-                                        }
-                                    />
-                                </List.Item>
-                            )}
-                            locale={{ emptyText: '暂无数据' }}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={24} md={24} xl={8}>
-                    <Card
-                        title={
-                            <Space>
-                                <FileTextOutlined style={{ color: '#FFB547' }} />
-                                <Text strong style={{ color: 'var(--text-primary)' }}>最近操作日志</Text>
-                            </Space>
-                        }
-                        style={{
-                            borderRadius: 24,
-                            background: 'var(--component-bg)',
-                            border: 'none',
-                            boxShadow: 'var(--card-shadow)',
-                            height: '100%'
-                        }}
-                        bodyStyle={{ padding: '16px 24px' }}
-                        extra={
-                            <Button type="link" onClick={() => navigate('/audit-logs')} style={{ padding: 0 }}>
-                                查看更多
-                            </Button>
-                        }
-                    >
-                        <List
-                            loading={loading}
-                            dataSource={stats?.recentLogs || []}
-                            size="small"
-                            renderItem={(log) => (
-                                <List.Item style={{ borderBottom: '1px solid #F5F7FB', padding: '8px 0' }}>
-                                    <div style={{ width: '100%' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <Space>
-                                                <Tag color="blue" style={{ fontSize: 10 }}>{log.action}</Tag>
-                                                <Text style={{ fontSize: 12, color: '#A3AED0' }}>{log.actorOpenid?.slice(-6) || 'System'}</Text>
-                                            </Space>
-                                            <Text type="secondary" style={{ fontSize: 11 }}>
-                                                {formatDate(log.ts)}
-                                            </Text>
-                                        </div>
-                                    </div>
-                                </List.Item>
-                            )}
-                            locale={{ emptyText: '暂无日志' }}
-                        />
                     </Card>
                 </Col>
             </Row>

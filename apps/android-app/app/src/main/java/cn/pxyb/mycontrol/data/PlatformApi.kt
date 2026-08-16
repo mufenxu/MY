@@ -691,6 +691,8 @@ class PlatformApi(
         val status = execute("/apps/iot/api/status").json
         val devicesJson = execute("/apps/iot/api/devices").json
         val scenesJson = execute("/apps/iot/api/automations/scenes").jsonArray
+        val rulesJson = execute("/apps/iot/api/automations/rules").jsonArray
+        val runsJson = execute("/apps/iot/api/automations/runs?limit=20").jsonArray
         val now = System.currentTimeMillis()
         val devices = devicesJson.keys().asSequence().mapNotNull { id ->
             devicesJson.optJSONObject(id)?.let { item ->
@@ -719,6 +721,22 @@ class PlatformApi(
                 )
             }
         }.toList()
+        val insights = devices
+            .filter { it.temperature != null || it.humidity != null }
+            .mapNotNull { device ->
+                try {
+                    execute(
+                        "/apps/iot/api/devices/${encodePath(device.id)}/insights?range=24h",
+                    ).json.toDeviceTelemetryInsight(device)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: ApiException) {
+                    if (shouldInvalidatePlatformSession(error.status, error.code)) throw error
+                    null
+                } catch (_: IOException) {
+                    null
+                }
+            }
         IotData(
             mqttConnected = status.optBoolean("mqttConnected"),
             deviceOnline = status.optBoolean("deviceOnline"),
@@ -740,6 +758,55 @@ class PlatformApi(
                     },
                 )
             },
+            rules = rulesJson.objects().mapNotNull { item ->
+                val condition = item.optJSONObject("condition") ?: return@mapNotNull null
+                AutomationRule(
+                    id = item.optString("id"),
+                    name = item.optString("name", "未命名规则"),
+                    enabled = item.optBoolean("enabled", true),
+                    condition = AutomationCondition(
+                        deviceId = condition.optString("deviceId"),
+                        metric = condition.optString("metric"),
+                        operator = condition.optString("operator"),
+                        value = condition.opt("value")?.toString().orEmpty(),
+                        relayId = condition.nullableString("relayId"),
+                    ),
+                    actions = item.optJSONArray("actions").objects().map { action ->
+                        IotSceneAction(
+                            deviceId = action.optString("deviceId"),
+                            relayId = action.optString("relayId"),
+                            status = action.optString("status", "OFF").uppercase(),
+                        )
+                    },
+                    cooldownSeconds = item.optInt("cooldown_seconds", 300),
+                    version = item.optInt("version", 1),
+                    createdAt = item.optLongOrNull("created_at"),
+                    updatedAt = item.optLongOrNull("updated_at"),
+                    lastTriggeredAt = item.optLongOrNull("last_triggered_at"),
+                )
+            },
+            runs = runsJson.objects().map { item ->
+                AutomationRun(
+                    id = item.optString("id"),
+                    sourceType = item.optString("source_type"),
+                    sourceId = item.optString("source_id"),
+                    sourceName = item.optString("source_name", "自动化"),
+                    actor = item.optString("actor"),
+                    state = item.optString("state", "unknown"),
+                    deviceConfirmed = item.optBoolean("device_confirmed", false),
+                    results = item.optJSONArray("results").objects().map { result ->
+                        AutomationRunResult(
+                            deviceId = result.optString("deviceId"),
+                            relayId = result.optString("relayId"),
+                            status = result.optString("status"),
+                            state = result.optString("state", "unknown"),
+                            message = result.optString("message"),
+                        )
+                    },
+                    createdAt = item.optLongOrNull("created_at"),
+                )
+            },
+            insights = insights,
         )
     }
 
@@ -827,6 +894,50 @@ class PlatformApi(
         Unit
     }
 
+    suspend fun createIotRule(
+        name: String,
+        condition: AutomationCondition,
+        actions: List<IotSceneAction>,
+        cooldownSeconds: Int,
+    ): Unit = withContext(Dispatchers.IO) {
+        execute(
+            "/apps/iot/api/automations/rules",
+            "POST",
+            automationRuleBody(name, true, condition, actions, cooldownSeconds),
+        )
+        Unit
+    }
+
+    suspend fun updateIotRule(
+        id: String,
+        name: String,
+        enabled: Boolean,
+        condition: AutomationCondition,
+        actions: List<IotSceneAction>,
+        cooldownSeconds: Int,
+    ): Unit = withContext(Dispatchers.IO) {
+        execute(
+            "/apps/iot/api/automations/rules/${encodePath(id)}",
+            "PUT",
+            automationRuleBody(name, enabled, condition, actions, cooldownSeconds),
+        )
+        Unit
+    }
+
+    suspend fun setIotRuleEnabled(id: String, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
+        execute(
+            "/apps/iot/api/automations/rules/${encodePath(id)}",
+            "PUT",
+            JSONObject().put("enabled", enabled),
+        )
+        Unit
+    }
+
+    suspend fun deleteIotRule(id: String): Unit = withContext(Dispatchers.IO) {
+        execute("/apps/iot/api/automations/rules/${encodePath(id)}", "DELETE", JSONObject())
+        Unit
+    }
+
     suspend fun controlIotRelay(deviceId: String, relayId: String, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
         execute(
             "/apps/iot/api/devices/${encodePath(deviceId)}/relays/${encodePath(relayId)}/control",
@@ -878,7 +989,7 @@ class PlatformApi(
             .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
             .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
             .build()
-        val cacheable = method == "GET" && path in CACHEABLE_PATHS &&
+        val cacheable = method == "GET" && (path in CACHEABLE_PATHS || path.isIotInsightPath()) &&
             (path != AUTH_STATUS_PATH || authenticated)
         try {
             requestClient.newCall(requestBuilder.build()).execute().use { response ->
@@ -959,8 +1070,51 @@ class PlatformApi(
 
     private fun encodePath(value: String): String = java.net.URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
 
+    private fun String.isIotInsightPath(): Boolean =
+        startsWith("/apps/iot/api/devices/") && endsWith("/insights?range=24h")
+
     private fun sceneBody(name: String, actions: List<IotSceneAction>): JSONObject = JSONObject()
         .put("name", name.trim())
+        .put(
+            "actions",
+            JSONArray().apply {
+                actions.forEach { action ->
+                    put(
+                        JSONObject()
+                            .put("deviceId", action.deviceId)
+                            .put("relayId", action.relayId)
+                            .put("status", action.status.uppercase()),
+                    )
+                }
+            },
+        )
+
+    private fun automationRuleBody(
+        name: String,
+        enabled: Boolean,
+        condition: AutomationCondition,
+        actions: List<IotSceneAction>,
+        cooldownSeconds: Int,
+    ): JSONObject = JSONObject()
+        .put("name", name.trim())
+        .put("enabled", enabled)
+        .put(
+            "condition",
+            JSONObject()
+                .put("deviceId", condition.deviceId)
+                .put("metric", condition.metric)
+                .put("operator", condition.operator)
+                .put(
+                    "value",
+                    if (condition.metric in setOf("temperature", "humidity")) {
+                        condition.value.toDoubleOrNull() ?: condition.value
+                    } else {
+                        condition.value.uppercase()
+                    },
+                )
+                .apply { condition.relayId?.let { put("relayId", it) } },
+        )
+        .put("cooldownSeconds", cooldownSeconds.coerceIn(5, 86_400))
         .put(
             "actions",
             JSONArray().apply {
@@ -994,8 +1148,45 @@ class PlatformApi(
             "/apps/iot/api/status",
             "/apps/iot/api/devices",
             "/apps/iot/api/automations/scenes",
+            "/apps/iot/api/automations/rules",
+            "/apps/iot/api/automations/runs?limit=20",
         )
     }
+}
+
+private fun JSONObject.toDeviceTelemetryInsight(fallbackDevice: DeviceInfo): DeviceTelemetryInsight {
+    val device = optJSONObject("device") ?: JSONObject()
+    val summary = optJSONObject("summary") ?: JSONObject()
+    return DeviceTelemetryInsight(
+        deviceId = device.optString("id", fallbackDevice.id),
+        deviceName = device.optString("name", fallbackDevice.name),
+        state = device.optString("state", if (fallbackDevice.online) "healthy" else "offline"),
+        range = optString("range", "24h"),
+        generatedAt = optLongOrNull("generatedAt"),
+        sampleCount = summary.optInt("samples"),
+        temperature = summary.optJSONObject("temperature").toTelemetryMetricSummary(),
+        humidity = summary.optJSONObject("humidity").toTelemetryMetricSummary(),
+        anomalyCount = summary.optInt("anomalyCount"),
+        series = optJSONArray("series").objects().mapNotNull { item ->
+            val createdAt = item.optLongOrNull("created_at") ?: return@mapNotNull null
+            TelemetrySeriesPoint(
+                createdAt = createdAt,
+                sampleCount = item.optInt("sampleCount"),
+                temperature = item.optDoubleOrNull("temp"),
+                humidity = item.optDoubleOrNull("hum"),
+            )
+        },
+    )
+}
+
+private fun JSONObject?.toTelemetryMetricSummary(): TelemetryMetricSummary {
+    val json = this ?: JSONObject()
+    return TelemetryMetricSummary(
+        count = json.optInt("count"),
+        minimum = json.optDoubleOrNull("min"),
+        maximum = json.optDoubleOrNull("max"),
+        average = json.optDoubleOrNull("average"),
+    )
 }
 
 internal fun parseExternalApplications(json: JSONObject): List<ExternalApplication> =

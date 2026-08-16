@@ -11,7 +11,6 @@ import {
     AppstoreOutlined,
     FileTextOutlined,
     DashboardOutlined,
-    CloudOutlined,
     FireOutlined,
     FullscreenOutlined,
     FullscreenExitOutlined,
@@ -36,44 +35,22 @@ const InlineRouteFallback = () => (
 );
 
 const TAB_CONFIG = {
-    '/dashboard': { label: '数据仪表盘', icon: <DashboardOutlined />, closable: false },
-    '/air-energy': { label: '空气能监控', icon: <FireOutlined /> },
-    '/users': { label: '用户与权限', icon: <UserOutlined /> },
-    '/notifications': { label: '通知迁移', icon: <BellOutlined /> },
-    '/audit-logs': { label: '审计日志', icon: <FileTextOutlined /> },
-    '/course-orders': { label: '网课订单处理', icon: <FileTextOutlined /> },
-    '/settings': { label: '系统设置', icon: <SettingOutlined /> },
+    '/dashboard': { label: '首页', icon: <DashboardOutlined />, closable: false },
+    '/air-energy': { label: '空气能', icon: <FireOutlined /> },
+    '/users': { label: '用户', icon: <UserOutlined /> },
+    '/notifications': { label: '通知', icon: <BellOutlined /> },
+    '/audit-logs': { label: '操作记录', icon: <FileTextOutlined /> },
+    '/course-orders': { label: '订单', icon: <FileTextOutlined /> },
+    '/settings': { label: '设置', icon: <SettingOutlined /> },
 };
 
 const MENU_ITEMS = [
-    { key: '/dashboard', icon: <DashboardOutlined />, label: '数据仪表盘' },
-    {
-        key: 'group-monitor',
-        icon: <CloudOutlined />,
-        label: '设备与监控',
-        children: [
-            { key: '/air-energy', label: '空气能监控' },
-        ]
-    },
-    {
-        key: 'group-ops',
-        icon: <AppstoreOutlined />,
-        label: '业务与运营',
-        children: [
-            { key: '/course-orders', label: '网课订单处理' },
-            { key: '/query', label: '记录查询入口' },
-        ]
-    },
-    {
-        key: 'group-sys',
-        icon: <SettingOutlined />,
-        label: '系统与架构',
-        children: [
-            { key: '/users', label: '用户与权限' },
-            { key: '/audit-logs', label: '审计日志' },
-            { key: '/settings', label: '系统设置' },
-        ]
-    },
+    { key: '/dashboard', icon: <DashboardOutlined />, label: '首页' },
+    { key: '/course-orders', icon: <FileTextOutlined />, label: '订单' },
+    { key: '/query', icon: <AppstoreOutlined />, label: '查询' },
+    { key: '/air-energy', icon: <FireOutlined />, label: '空气能' },
+    { key: '/users', icon: <UserOutlined />, label: '用户' },
+    { key: '/settings', icon: <SettingOutlined />, label: '设置' },
 ];
 
 const TABLE_HEAVY_ROUTES = new Set([
@@ -97,8 +74,8 @@ const SidebarContent = ({
     isMobile = false
 }) => {
     const avatarSeed = currentUser.userId || currentUser._id || currentUser.nickName || 'admin';
-    const displayName = currentUser.nickName || 'Mufenxu';
-    const userMeta = currentUser.userId ? `ID · ${currentUser.userId}` : (currentUser.role || currentUser._id || '');
+    const displayName = currentUser.nickName || '我的后台';
+    const userMeta = '个人管理';
 
     if (isMobile) {
         return (
@@ -142,7 +119,7 @@ const SidebarContent = ({
                 </div>
 
                 <div className="main-sidebar-mobile-menu-wrap">
-                    <div className="main-sidebar-mobile-section-label">导航菜单</div>
+                    <div className="main-sidebar-mobile-section-label">功能</div>
                     <Menu
                         className="main-sidebar-menu-mobile"
                         mode="inline"
@@ -271,7 +248,7 @@ const MainLayout = () => {
 
     const currentPath = location.pathname;
     const isTableHeavyRoute = useMemo(() => TABLE_HEAVY_ROUTES.has(currentPath), [currentPath]);
-    const currentTabConfig = TAB_CONFIG[currentPath] || { label: '未知页面', icon: <HomeOutlined /> };
+    const currentTabConfig = TAB_CONFIG[currentPath] || { label: '页面', icon: <HomeOutlined /> };
     const pageTitle = currentTabConfig.label;
     const visibleTabs = useMemo(() => {
         if (TAB_CONFIG[currentPath] && !openTabs.includes(currentPath)) {
@@ -284,7 +261,7 @@ const MainLayout = () => {
     }, [viewportWidth]);
 
     const breadcrumbItems = [
-        { title: '管理面板' },
+        { title: '首页' },
         { title: pageTitle }
     ];
 

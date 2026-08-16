@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Space, Card, Tag, Typography, Tooltip, Tabs } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, TeamOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Select, Space, Card, Typography, Tooltip } from 'antd';
+import { EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useUsers } from '../hooks/useUsers';
 import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
-import FeatureVisibilityConfig from '../components/FeatureVisibilityConfig';
 import UserAvatar from '../components/UserAvatar';
 import { message } from '../utils/feedback';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { Option } = Select;
 
 const Users = () => {
@@ -26,9 +25,7 @@ const Users = () => {
         setEditingUser(user);
         form.setFieldsValue({
             nickName: user.nickName,
-            role: user.role,
             status: user.status,
-            permissions: user.permissions || []
         });
         setIsModalVisible(true);
     };
@@ -84,39 +81,10 @@ const Users = () => {
                     />
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <Text strong style={{ fontSize: 16, color: 'var(--text-primary)' }}>{text}</Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>UID: {record.userId || record._id}</Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>编号：{record.userId || record._id}</Text>
                     </div>
                 </Space>
             ),
-        },
-        {
-            title: '角色',
-            dataIndex: 'role',
-            key: 'role',
-            render: (role) => {
-                let color = '#5CC9A7';
-                let text = '用户';
-                if (role === 'super_admin') {
-                    color = '#4A7CF7';
-                    text = '超级管理员';
-                } else if (role === 'admin') {
-                    color = '#0B3D91';
-                    text = '管理员';
-                }
-                return (
-                    <Tag
-                        color={color}
-                        style={{
-                            borderRadius: 20,
-                            padding: '4px 12px',
-                            border: 'none',
-                            fontWeight: 600
-                        }}
-                    >
-                        {text}
-                    </Tag>
-                );
-            },
         },
         {
             title: '状态',
@@ -131,7 +99,7 @@ const Users = () => {
                         backgroundColor: status === 'active' ? '#5CC9A7' : '#E31A1A'
                     }} />
                     <Text style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
-                        {status === 'active' ? '正常' : '封禁'}
+                        {status === 'active' ? '可使用' : '已停用'}
                     </Text>
                 </Space>
             ),
@@ -141,7 +109,7 @@ const Users = () => {
             key: 'actions',
             render: (_, record) => (
                 <Space size="middle">
-                    <Tooltip title="编辑">
+                    <Tooltip title="修改">
                         <Button
                             type="text"
                             icon={<EditOutlined style={{ color: '#4A7CF7' }} />}
@@ -179,15 +147,9 @@ const Users = () => {
                     />
                     <div>
                         <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{user.nickName}</div>
-                        <div style={{ fontSize: 12, color: '#A3AED0' }}>UID: {user.userId || user._id}</div>
+                        <div style={{ fontSize: 12, color: '#A3AED0' }}>编号：{user.userId || user._id}</div>
                     </div>
                 </Space>
-                <Tag
-                    color={user.role === 'super_admin' ? '#4A7CF7' : (user.role === 'admin' ? '#0B3D91' : '#5CC9A7')}
-                    style={{ borderRadius: 20, border: 'none', fontWeight: 600 }}
-                >
-                    {user.role === 'super_admin' ? '超级管理员' : (user.role === 'admin' ? '管理员' : '用户')}
-                </Tag>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: '1px solid #E0E5F2' }}>
@@ -199,7 +161,7 @@ const Users = () => {
                         backgroundColor: user.status === 'active' ? '#5CC9A7' : '#E31A1A'
                     }} />
                     <Text style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
-                        {user.status === 'active' ? '正常' : '封禁'}
+                        {user.status === 'active' ? '可使用' : '已停用'}
                     </Text>
                 </Space>
                 <Space>
@@ -233,7 +195,7 @@ const Users = () => {
                 <div style={{ flex: isMobile ? 1 : '0 0 300px', minWidth: 0 }}>
                     <Input
                         prefix={<SearchOutlined style={{ color: '#A3AED0' }} />}
-                        placeholder="搜索UID/昵称..."
+                        placeholder="搜索昵称或编号"
                         style={{
                             width: '100%',
                             height: 42,
@@ -286,7 +248,7 @@ const Users = () => {
                                 setPage(p);
                                 setPageSize(ps);
                             },
-                            showTotal: (total) => `共 ${total} 条用户数据`,
+                            showTotal: (total) => `共 ${total} 位用户`,
                             style: { padding: '20px' }
                         }}
                     />
@@ -303,40 +265,12 @@ const Users = () => {
         </div>
     );
 
-    const tabItems = [
-        {
-            key: '1',
-            label: (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
-                    <TeamOutlined />
-                    <span>用户列表</span>
-                </span>
-            ),
-            children: UserListTab
-        },
-        {
-            key: '2',
-            label: (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
-                    <AppstoreOutlined />
-                    <span>首页功能管理</span>
-                </span>
-            ),
-            children: <FeatureVisibilityConfig />
-        }
-    ];
-
     return (
         <div>
-            <Tabs 
-                defaultActiveKey="1" 
-                items={tabItems} 
-                type="card"
-                style={{ marginBottom: 20 }}
-            />
+            {UserListTab}
 
             <Modal
-                title={editingUser ? "编辑用户权限" : "添加用户"}
+                title="修改用户"
                 open={isModalVisible}
                 onOk={handleModalOk}
                 onCancel={() => {
@@ -352,39 +286,10 @@ const Users = () => {
                     <Form.Item name="nickName" label="昵称" rules={[{ required: true }]}>
                         <Input style={{ borderRadius: 10 }} />
                     </Form.Item>
-                    <Form.Item name="role" label="角色" rules={[{ required: true }]}>
-                        <Select style={{ borderRadius: 10 }}>
-                            <Option value="user">用户</Option>
-                            <Option value="admin">管理员</Option>
-                            <Option value="super_admin">超级管理员</Option>
-                        </Select>
-                    </Form.Item>
-                    <Form.Item name="permissions" label="功能特权 (覆盖角色限制)">
-                        <Select mode="multiple" style={{ borderRadius: 10 }} placeholder="为该用户单独开启功能">
-                            <Option value="resources">资源管理</Option>
-                            <Option value="bmi">BMI计算器</Option>
-                            <Option value="todo">待办清单</Option>
-                            <Option value="ct8">CT8查看（兼容）</Option>
-                            <Option value="view_ct8">CT8查看</Option>
-                            <Option value="manage_ct8">CT8触发/密钥</Option>
-                            <Option value="smart_control">智能控制（完整）</Option>
-                            <Option value="view_smart_control">智能控制查看</Option>
-                            <Option value="manage_smart_control">智能控制操作</Option>
-                            <Option value="heat_pump">空气能（完整）</Option>
-                            <Option value="view_heat_pump">空气能查看</Option>
-                            <Option value="manage_heat_pump">空气能操作</Option>
-                            <Option value="daily_news">近日趣事</Option>
-
-                            <Option value="course_order">订单处理</Option>
-                        </Select>
-                        <Text type="secondary" style={{ fontSize: '11px' }}>
-                            view_* 仅开放查看，manage_* 允许执行控制或写入；不带前缀的旧权限保留兼容。
-                        </Text>
-                    </Form.Item>
                     <Form.Item name="status" label="状态" rules={[{ required: true }]}>
                         <Select style={{ borderRadius: 10 }}>
-                            <Option value="active">正常</Option>
-                            <Option value="banned">封禁</Option>
+                            <Option value="active">可使用</Option>
+                            <Option value="banned">停用</Option>
                         </Select>
                     </Form.Item>
                 </Form>

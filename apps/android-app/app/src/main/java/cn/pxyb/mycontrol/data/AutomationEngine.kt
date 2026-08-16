@@ -1,72 +1,25 @@
 package cn.pxyb.mycontrol.data
 
-import androidx.compose.runtime.Immutable
-
+/** 只用于展示规则当前是否命中；真正的执行和审计由 IoT 服务负责。 */
 object AutomationEngine {
-
-    /**
-     * 根据当前系统告警、离线设备与触发阈值，评估已启用的自动化联动规则。
-     */
-    fun evaluateRules(
-        rules: List<AutomationRule>,
-        activeIncidents: List<IncidentInfo>,
-        offlineDeviceCount: Int,
-        currentTimeMillis: Long = System.currentTimeMillis(),
-    ): List<AutomationTriggerResult> {
-        if (rules.isEmpty()) return emptyList()
-
-        val results = mutableListOf<AutomationTriggerResult>()
-
-        for (rule in rules) {
-            if (!rule.enabled) continue
-
-            var isMatched = false
-            var matchReason = ""
-
-            when (rule.triggerType) {
-                "incident" -> {
-                    val criticalCount = activeIncidents.count {
-                        rule.triggerValue.isBlank() || it.severity.equals(rule.triggerValue, ignoreCase = true)
-                    }
-                    if (criticalCount > 0) {
-                        isMatched = true
-                        matchReason = "检测到 $criticalCount 项满足条件的系统告警"
-                    }
-                }
-                "device_offline" -> {
-                    val minThreshold = rule.triggerValue.toIntOrNull() ?: 1
-                    if (offlineDeviceCount >= minThreshold) {
-                        isMatched = true
-                        matchReason = "检测到 $offlineDeviceCount 台设备离线"
-                    }
-                }
-                "schedule" -> {
-                    val lastTrigger = rule.lastTriggeredAt ?: 0L
-                    if (currentTimeMillis - lastTrigger >= 3600_000L) {
-                        isMatched = true
-                        matchReason = "计划任务周期触发"
-                    }
-                }
-            }
-
-            if (isMatched) {
-                results.add(
-                    AutomationTriggerResult(
-                        rule = rule,
-                        matchedReason = matchReason,
-                        triggeredAt = currentTimeMillis
-                    )
-                )
-            }
+    fun matches(rule: AutomationRule, devices: List<DeviceInfo>): Boolean {
+        val device = devices.firstOrNull { it.id == rule.condition.deviceId } ?: return false
+        val actual = when (rule.condition.metric) {
+            "temperature" -> device.temperature?.toString()
+            "humidity" -> device.humidity?.toString()
+            "online" -> if (device.online) "ONLINE" else "OFFLINE"
+            "relay" -> rule.condition.relayId?.let { device.relays[it]?.uppercase() }
+            else -> null
+        } ?: return false
+        val expected = rule.condition.value
+        return when (rule.condition.operator) {
+            "gt" -> actual.toDoubleOrNull()?.let { it > (expected.toDoubleOrNull() ?: return false) } ?: false
+            "gte" -> actual.toDoubleOrNull()?.let { it >= (expected.toDoubleOrNull() ?: return false) } ?: false
+            "lt" -> actual.toDoubleOrNull()?.let { it < (expected.toDoubleOrNull() ?: return false) } ?: false
+            "lte" -> actual.toDoubleOrNull()?.let { it <= (expected.toDoubleOrNull() ?: return false) } ?: false
+            "eq" -> actual.equals(expected, ignoreCase = true)
+            "neq" -> !actual.equals(expected, ignoreCase = true)
+            else -> false
         }
-
-        return results
     }
 }
-
-@Immutable
-data class AutomationTriggerResult(
-    val rule: AutomationRule,
-    val matchedReason: String,
-    val triggeredAt: Long,
-)

@@ -8,8 +8,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +46,7 @@ import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -62,14 +65,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.DeviceInfo
+import cn.pxyb.mycontrol.data.DeviceTelemetryInsight
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.IotScene
+import cn.pxyb.mycontrol.data.TelemetryMetricSummary
+import cn.pxyb.mycontrol.data.TelemetrySeriesPoint
 import cn.pxyb.mycontrol.ui.theme.Amber
 import cn.pxyb.mycontrol.ui.theme.AmberPale
 import cn.pxyb.mycontrol.ui.theme.Coral
@@ -133,6 +141,14 @@ fun ToolsScreen(
     val canOperate = state.user?.role in setOf("operator", "super_admin")
     val iot = state.iot
     val ct8 = state.ct8
+    val sensorDevices = iot?.devices.orEmpty().filter { it.temperature != null || it.humidity != null }
+    var selectedSensorId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(sensorDevices.map(DeviceInfo::id)) {
+        if (selectedSensorId !in sensorDevices.map(DeviceInfo::id)) {
+            selectedSensorId = sensorDevices.firstOrNull()?.id
+        }
+    }
 
     val scrollState = rememberScrollState()
     PullToRefresh(
@@ -168,8 +184,28 @@ fun ToolsScreen(
 
             // 3. 智能环境监测
             ToolSectionTitle(title = "环境感知", subtitle = "多维度室内环境指标", accent = Color(0xFF059669))
-            val sensorDevice = iot?.devices?.firstOrNull { it.temperature != null || it.humidity != null }
+            if (sensorDevices.size > 1) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    sensorDevices.forEach { device ->
+                        FilterChip(
+                            selected = selectedSensorId == device.id,
+                            onClick = { selectedSensorId = device.id },
+                            label = { Text(device.name, maxLines = 1) },
+                        )
+                    }
+                }
+            }
+            val sensorDevice = sensorDevices.firstOrNull { it.id == selectedSensorId } ?: sensorDevices.firstOrNull()
             ModernEnvironmentCard(sensorDevice)
+            val telemetryInsight = iot?.insights?.firstOrNull { it.deviceId == sensorDevice?.id }
+            if (telemetryInsight != null) {
+                TelemetryInsightPanel(telemetryInsight)
+            } else if (sensorDevice != null && !state.refreshing) {
+                TelemetryInsightUnavailable()
+            }
 
             // 4. 智能继电器开关
             ToolSectionTitle(title = "设备与开关", subtitle = "低延迟 MQTT 实时触控", accent = Color(0xFFD97706))
@@ -252,6 +288,137 @@ fun ToolsScreen(
             },
         )
         null -> Unit
+    }
+}
+
+@Composable
+private fun TelemetryInsightPanel(insight: DeviceTelemetryInsight) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        shadowElevation = 1.dp,
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("24 小时环境趋势", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "${insight.sampleCount} 个真实采样 · ${insight.series.size} 个聚合时段",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                StatusBadge(
+                    status = when (insight.state) {
+                        "healthy" -> "healthy"
+                        "degraded" -> "warning"
+                        else -> "offline"
+                    },
+                    label = when (insight.state) {
+                        "healthy" -> "运行健康"
+                        "degraded" -> "发现异常"
+                        else -> "设备离线"
+                    },
+                )
+            }
+            TelemetryMetricChart(
+                label = "温度",
+                summary = insight.temperature,
+                points = insight.series,
+                value = TelemetrySeriesPoint::temperature,
+                suffix = "°C",
+                color = Color(0xFFF97316),
+            )
+            TelemetryMetricChart(
+                label = "湿度",
+                summary = insight.humidity,
+                points = insight.series,
+                value = TelemetrySeriesPoint::humidity,
+                suffix = "%",
+                color = Color(0xFF0284C7),
+            )
+            Text(
+                if (insight.anomalyCount == 0) "当前范围未发现明显异常" else "检测到 ${insight.anomalyCount} 个异常采样，请结合设备状态检查。",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (insight.anomalyCount == 0) Forest else Amber,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TelemetryMetricChart(
+    label: String,
+    summary: TelemetryMetricSummary,
+    points: List<TelemetrySeriesPoint>,
+    value: (TelemetrySeriesPoint) -> Double?,
+    suffix: String,
+    color: Color,
+) {
+    val values = points.mapNotNull(value)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            Text(
+                summary.average?.let { "均值 %.1f%s".format(it, suffix) } ?: "暂无有效采样",
+                style = MaterialTheme.typography.labelMedium,
+                color = color,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        if (values.size < 2) {
+            Text("当前时段数据不足，暂时无法生成曲线。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            TelemetrySparkline(values, color)
+            Text(
+                "最低 %.1f%s · 最高 %.1f%s".format(summary.minimum ?: values.min(), suffix, summary.maximum ?: values.max(), suffix),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TelemetrySparkline(values: List<Double>, color: Color) {
+    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+    Canvas(Modifier.fillMaxWidth().height(76.dp)) {
+        val minimum = values.min()
+        val maximum = values.max()
+        val span = (maximum - minimum).takeIf { it > 0.0001 } ?: 1.0
+        val step = size.width / (values.size - 1).coerceAtLeast(1)
+        val path = Path()
+        values.forEachIndexed { index, sample ->
+            val x = index * step
+            val y = size.height - ((sample - minimum) / span * size.height).toFloat()
+            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        drawLine(
+            color = gridColor,
+            start = androidx.compose.ui.geometry.Offset(0f, size.height),
+            end = androidx.compose.ui.geometry.Offset(size.width, size.height),
+            strokeWidth = 1.dp.toPx(),
+        )
+        drawPath(path = path, color = color, style = Stroke(width = 2.5.dp.toPx()))
+    }
+}
+
+@Composable
+private fun TelemetryInsightUnavailable() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+    ) {
+        Text(
+            "历史趋势暂不可用；实时温湿度与设备控制不受影响。",
+            modifier = Modifier.padding(14.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -887,5 +1054,3 @@ private fun ToolConfirmDialog(
         icon = Icons.Outlined.AutoMode,
     )
 }
-
-

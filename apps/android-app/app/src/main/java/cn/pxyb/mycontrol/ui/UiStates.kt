@@ -72,6 +72,10 @@ data class OperationsUiState(
     val busyAction: String?,
     val user: PlatformUser?,
     val tasks: List<PlatformTask>,
+    val overview: OverviewData?,
+    val incidents: List<IncidentInfo>,
+    val iot: IotData?,
+    val resourceExpiries: List<ResourceExpiry>,
     val releases: ReleaseData?,
     val backup: BackupQuality?,
     val diagnostics: DiagnosticData?,
@@ -241,11 +245,15 @@ internal fun AppUiState.toOverviewUiState() = OverviewUiState(
 )
 
 internal fun AppUiState.toOperationsUiState() = OperationsUiState(
-    refreshing = isRefreshing(DataSection.Tasks, DataSection.Releases, DataSection.Backup),
-    sectionError = sectionError(DataSection.Tasks, DataSection.Releases, DataSection.Backup),
+    refreshing = isRefreshing(DataSection.Overview, DataSection.Incidents, DataSection.Tasks, DataSection.Releases, DataSection.Backup, DataSection.Iot, DataSection.Resources),
+    sectionError = sectionError(DataSection.Overview, DataSection.Incidents, DataSection.Tasks, DataSection.Releases, DataSection.Backup, DataSection.Iot, DataSection.Resources),
     busyAction = busyAction,
     user = user,
     tasks = tasks,
+    overview = overview,
+    incidents = incidents,
+    iot = iot,
+    resourceExpiries = resourceExpiries,
     releases = releases,
     backup = backup,
     diagnostics = diagnostics,

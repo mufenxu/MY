@@ -6,7 +6,6 @@ import {
     SaveOutlined,
     UserOutlined,
     LockOutlined,
-    ClockCircleOutlined,
     PlayCircleOutlined,
     SettingOutlined,
     SafetyCertificateOutlined,
@@ -14,6 +13,7 @@ import {
     KeyOutlined,
     ApiOutlined,
     AppstoreOutlined,
+    FileTextOutlined,
     DatabaseOutlined,
     DownloadOutlined,
     UploadOutlined,
@@ -98,7 +98,7 @@ const CronSettings = ({ title, type }) => {
                 applyConfig(res.data.result || {});
             }
         } catch {
-            message.error(`加载${title}配置失败`);
+            message.error(`${title}加载失败`);
         }
     }, [applyConfig, title, type]);
 
@@ -114,7 +114,7 @@ const CronSettings = ({ title, type }) => {
             if (schedule === 'custom') {
                 const customValue = customSchedule || customScheduleRef.current || form.getFieldValue('customSchedule') || values.customSchedule;
                 if (!customValue) {
-                    message.error('请输入自定义 Cron 表达式');
+                    message.error('请输入自定义时间规则');
                     setLoading(false);
                     return;
                 }
@@ -126,7 +126,7 @@ const CronSettings = ({ title, type }) => {
             if (res.data.success) {
                 const result = res.data.result || { schedule, enabled };
                 applyConfig(result);
-                message.success(`${title}配置已保存`);
+                message.success(`${title}已保存`);
             } else {
                 message.error(res.data.error || '保存失败');
             }
@@ -167,24 +167,17 @@ const CronSettings = ({ title, type }) => {
     return (
         <Card title={title} bordered={false} style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', marginBottom: 24 }}>
             <Form form={form} layout="vertical" onFinish={onFinish} initialValues={{ enabled: true, schedule: DEFAULT_CRON_SCHEDULE }}>
-                <Form.Item name="enabled" label="启用任务" valuePropName="checked">
-                    <Switch checkedChildren="已启用" unCheckedChildren="未开启" />
+                <Form.Item name="enabled" label="自动运行" valuePropName="checked">
+                    <Switch checkedChildren="已开启" unCheckedChildren="已暂停" />
                 </Form.Item>
                 {taskStatus && (
-                    <Space size={8} style={{ marginBottom: 16 }} wrap>
-                        <Tag color={taskStatus.enabled ? 'success' : 'default'}>
-                            {taskStatus.enabled ? '已启用' : '未开启'}
-                        </Tag>
-                        {typeof taskStatus.running === 'boolean' && (
-                            <Tag color={taskStatus.running ? 'processing' : 'default'}>
-                                {taskStatus.running ? '调度器已注册' : '调度器未运行'}
-                            </Tag>
-                        )}
-                    </Space>
+                    <Tag color={taskStatus.enabled ? 'success' : 'default'} style={{ marginBottom: 16 }}>
+                        {taskStatus.enabled ? '自动运行中' : '已暂停'}
+                    </Tag>
                 )}
                 {isTaskEnabled && (
                     <>
-                        <Form.Item label="执行时间" required>
+                        <Form.Item label="运行时间" required>
                             <Select
                                 value={selectedSchedule}
                                 onChange={(value) => {
@@ -203,10 +196,10 @@ const CronSettings = ({ title, type }) => {
                             </Select>
                         </Form.Item>
                         {selectedSchedule === 'custom' && (
-                            <Form.Item label="自定义 Cron 表达式" required>
+                            <Form.Item label="自定义时间规则" required>
                                 <Input
                                     value={customSchedule}
-                                    placeholder={`例如: ${DEFAULT_CRON_SCHEDULE}`}
+                                    placeholder={`高级用法，例如：${DEFAULT_CRON_SCHEDULE}`}
                                     onChange={(event) => {
                                         setCustomSchedule(event.target.value);
                                         customScheduleRef.current = event.target.value;
@@ -217,8 +210,8 @@ const CronSettings = ({ title, type }) => {
                     </>
                     )}
                 <Space style={{ marginTop: 24 }}>
-                    <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading}>保存配置</Button>
-                    <Button icon={<PlayCircleOutlined />} onClick={handleRunNow} loading={loading}>立即执行</Button>
+                    <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading}>保存</Button>
+                    <Button icon={<PlayCircleOutlined />} onClick={handleRunNow} loading={loading}>现在运行</Button>
                 </Space>
             </Form>
         </Card>
@@ -310,12 +303,12 @@ const BackupRestoreSettings = () => {
                     >
                         <div style={{ marginBottom: 20 }}>
                             <Typography.Text type="secondary">
-                                将当前数据库中所有的关键业务数据（包括网课通道、待办事项、系统配置和用户基本资料等）打包并以 <strong>gzip</strong> 压缩的 JSON 格式下载到本地。
+                                下载一份当前数据副本。换电脑或误操作时，可以用它恢复。
                             </Typography.Text>
                         </div>
                         <div style={{ padding: '12px 0', border: '1px dashed #e2e8f0', borderRadius: 12, textAlign: 'center', background: '#f7fafc', marginBottom: 24 }}>
                             <DatabaseOutlined style={{ fontSize: 32, color: '#a0aec0', marginBottom: 8 }} />
-                            <div><Typography.Text type="secondary" style={{ fontSize: 13 }}>备份文件不包含无业务价值的运行日志与审计日志</Typography.Text></div>
+                            <div><Typography.Text type="secondary" style={{ fontSize: 13 }}>不包含临时运行记录</Typography.Text></div>
                         </div>
                         <Button 
                             type="primary" 
@@ -324,7 +317,7 @@ const BackupRestoreSettings = () => {
                             onClick={handleExport}
                             size="large"
                         >
-                            生成备份并下载
+                            下载备份
                         </Button>
                     </Card>
                 </Col>
@@ -337,10 +330,10 @@ const BackupRestoreSettings = () => {
                     >
                         <div style={{ marginBottom: 20 }}>
                             <Typography.Text type="secondary">
-                                从本地选择之前下载的备份文件（<code>.json.gz</code> 格式），将其上传并完全覆写当前数据库中的所有内容。
+                                选择之前下载的备份文件，把数据恢复到备份时的状态。
                             </Typography.Text>
                             <div style={{ color: '#ff4d4f', fontWeight: 600, marginTop: 8 }}>
-                                ⚠️ 警告：恢复操作将清空现有数据库的全部内容，操作不可逆，请务必谨慎操作！
+                                恢复后，备份之后新增的数据会丢失。
                             </div>
                         </div>
 
@@ -355,7 +348,7 @@ const BackupRestoreSettings = () => {
                                 onRemove={() => setFileList([])}
                             >
                                 <Button icon={<UploadOutlined />} disabled={fileList.length > 0}>
-                                    选择备份文件 (.json.gz)
+                                    选择备份文件
                                 </Button>
                             </Upload>
                         </div>
@@ -367,14 +360,14 @@ const BackupRestoreSettings = () => {
                             onClick={() => setModalVisible(true)}
                             size="large"
                         >
-                            执行数据恢复
+                            恢复数据
                         </Button>
                     </Card>
                 </Col>
             </Row>
 
             <Modal
-                title="数据恢复二次验证"
+                title="确认恢复数据"
                 open={modalVisible}
                 onOk={handleRestoreSubmit}
                 confirmLoading={restoreLoading}
@@ -388,11 +381,11 @@ const BackupRestoreSettings = () => {
             >
                 <div style={{ marginBottom: 16 }}>
                     <Typography.Text type="danger" strong>
-                        警告：数据恢复会清空当前数据库所有的表并覆盖为备份中的数据，这可能导致近期新增数据永久丢失！
+                        当前数据会被备份文件覆盖，请确认你选对了文件。
                     </Typography.Text>
                 </div>
                 <div style={{ marginBottom: 8 }}>
-                    <Typography.Text>请输入您当前登录账户的管理员密码以验证身份：</Typography.Text>
+                    <Typography.Text>请输入当前登录密码：</Typography.Text>
                 </div>
                 <Input.Password
                     prefix={<LockOutlined style={{ color: '#A3AED0' }} />}
@@ -509,33 +502,29 @@ const Settings = () => {
             label: (
                 <span className="settings-tab-label">
                     <SettingOutlined />
-                    通知设置
+                    常用
                 </span>
             ),
             children: (
                 <Card bordered={false} style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)' }}>
                     <Space direction="vertical" size={18} style={{ width: '100%' }}>
-                        <Space size={10} wrap>
-                            <Tag color="processing">已迁移</Tag>
-                            <Tag>企业微信</Tag>
-                            <Tag>Android App</Tag>
-                            <Tag>发送台账</Tag>
-                            <Tag>接收偏好</Tag>
-                        </Space>
                         <div>
-                            <Title level={4} style={{ marginTop: 0 }}>通知服务已统一到控制台管理</Title>
+                            <Title level={4} style={{ marginTop: 0 }}>常用操作</Title>
                             <Text type="secondary">
-                                这里不再保存邮件或企业微信配置，也不再直接发送测试消息。企业微信发送、Android App 收件箱、测试发送、模板编排、接收偏好和 API 接入现在都由统一通知控制中心集中操作。
+                                这里放最常用的入口，其他设置需要时再打开。
                             </Text>
                         </div>
-                        <Button
-                            type="primary"
-                            icon={<ApiOutlined />}
-                            size="large"
-                            onClick={() => { window.location.href = '/console?view=notification'; }}
-                        >
-                            打开统一通知控制中心
-                        </Button>
+                        <Space wrap>
+                            <Button type="primary" icon={<FileTextOutlined />} onClick={() => { window.location.href = '/course-orders'; }}>
+                                查看订单
+                            </Button>
+                            <Button icon={<AppstoreOutlined />} onClick={() => { window.location.href = '/query'; }}>
+                                查询记录
+                            </Button>
+                            <Button icon={<ApiOutlined />} onClick={() => { window.location.href = '/console?view=notification'; }}>
+                                打开通知
+                            </Button>
+                        </Space>
                     </Space>
                 </Card>
             )
@@ -545,19 +534,19 @@ const Settings = () => {
             label: (
                 <span className="settings-tab-label">
                     <ScheduleOutlined />
-                    定时任务
+                    自动任务
                 </span>
             ),
             children: (
                 <Row gutter={[24, 24]}>
                     <Col xs={24} sm={24} md={12} lg={8} xl={8}>
-                        <CronSettings title="CT8节点签到" type="ct8_task" />
+                        <CronSettings title="CT8 自动签到" type="ct8_task" />
                     </Col>
                     <Col xs={24} sm={24} md={12} lg={8} xl={8}>
-                        <CronSettings title="资源到期提醒" type="due_reminder" />
+                        <CronSettings title="到期提醒" type="due_reminder" />
                     </Col>
                     <Col xs={24} sm={24} md={12} lg={8} xl={8}>
-                        <CronSettings title="待办事项提醒" type="todo_reminder" />
+                        <CronSettings title="待办提醒" type="todo_reminder" />
                     </Col>
                 </Row>
             )
@@ -567,7 +556,7 @@ const Settings = () => {
             label: (
                 <span className="settings-tab-label">
                     <SafetyCertificateOutlined />
-                    安全设置
+                    登录安全
                 </span>
             ),
             children: (
@@ -575,17 +564,17 @@ const Settings = () => {
                     <Row gutter={[24, 24]}>
                         <Col xs={24} xl={12}>
                             <Card 
-                                title={<span style={{ fontWeight: 700 }}><UserOutlined style={{ marginRight: 8, color: '#4A7CF7' }} /> 管理员账户安全</span>}
+                                title={<span style={{ fontWeight: 700 }}><UserOutlined style={{ marginRight: 8, color: '#4A7CF7' }} /> 登录账号</span>}
                                 bordered={false} 
                                 style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', height: '100%' }}
                             >
                                 <Form form={adminForm} layout="vertical" onFinish={onAdminFinish}>
-                                    <Form.Item name="username" label={<Text strong>管理员用户名</Text>} rules={[{ required: true, min: 3 }]}>
-                                        <Input prefix={<UserOutlined style={{ color: '#A3AED0' }} />} placeholder="请输入管理员用户名" />
+                                    <Form.Item name="username" label={<Text strong>用户名</Text>} rules={[{ required: true, min: 3 }]}>
+                                        <Input prefix={<UserOutlined style={{ color: '#A3AED0' }} />} placeholder="请输入用户名" />
                                     </Form.Item>
 
                                     <Divider plain style={{ margin: '32px 0 24px' }}>
-                                        <Space><LockOutlined style={{ color: '#707EAE' }} /><Text type="secondary" style={{ fontSize: 13, fontWeight: 500 }}>修改登录密码 (可选)</Text></Space>
+                                        <Space><LockOutlined style={{ color: '#707EAE' }} /><Text type="secondary" style={{ fontSize: 13, fontWeight: 500 }}>修改密码（可选）</Text></Space>
                                     </Divider>
                                     
                                     <Form.Item name="currentPassword" label={<Text strong>验证当前密码</Text>}>
@@ -614,7 +603,7 @@ const Settings = () => {
 
                                     <div style={{ marginTop: 12 }}>
                                         <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={adminLoading} size="large">
-                                            更新管理员资料
+                                            保存账号
                                         </Button>
                                     </div>
                                 </Form>
@@ -633,7 +622,7 @@ const Settings = () => {
             label: (
                 <span className="settings-tab-label">
                     <KeyOutlined />
-                    系统密钥与配置
+                    连接信息
                 </span>
             ),
             children: (
@@ -647,7 +636,7 @@ const Settings = () => {
             label: (
                 <span className="settings-tab-label settings-tab-label-compact">
                     <ApiOutlined />
-                    网课通道配置
+                    网课平台
                 </span>
             ),
             children: <CourseConfig />,
@@ -657,7 +646,7 @@ const Settings = () => {
             label: (
                 <span className="settings-tab-label settings-tab-label-compact">
                     <AppstoreOutlined />
-                    网课分类配置
+                    课程分类
                 </span>
             ),
             children: <CourseCategoryConfig />,
@@ -670,15 +659,21 @@ const Settings = () => {
             label: (
                 <span className="settings-tab-label settings-tab-label-compact">
                     <DatabaseOutlined />
-                    数据管理
+                    备份与恢复
                 </span>
             ),
             children: <BackupRestoreSettings />
         });
     }
 
+    const settingsOrder = ['1', '6', '7', '2', '3', '8', '4'];
+    items.sort((left, right) => settingsOrder.indexOf(left.key) - settingsOrder.indexOf(right.key));
+
     return (
         <div>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 14 }}>
+                常用设置排在前面，连接信息和数据恢复平时不用修改。
+            </Text>
             <Tabs className="settings-tabs" defaultActiveKey={isSuperAdmin ? '1' : '6'} items={items} type="card" />
         </div>
     );

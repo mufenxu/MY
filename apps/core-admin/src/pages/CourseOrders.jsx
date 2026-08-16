@@ -55,7 +55,7 @@ const CourseOrders = () => {
                 setTotal(res.data.data.total);
             }
         } catch {
-            message.error('获取网课订单失败');
+            message.error('订单加载失败');
         } finally {
             setLoading(false);
         }
@@ -97,7 +97,7 @@ const CourseOrders = () => {
     const handleRefreshStatus = async (keys = selectedRowKeys) => {
         const refreshableKeys = keys.filter((key) => orders.find((order) => order.tradeNo === key)?.status !== 'Submitting');
         if (!refreshableKeys.length) {
-            message.warning('请先选择要刷新进度的订单');
+            message.warning('请先选择要刷新的订单');
             return;
         }
         setRefreshing(true);
@@ -115,7 +115,7 @@ const CourseOrders = () => {
                 message.error(res.data.message || '刷新失败');
             }
         } catch {
-            message.error('刷新异常');
+            message.error('刷新失败');
         } finally {
             setRefreshing(false);
         }
@@ -227,19 +227,23 @@ const CourseOrders = () => {
             'Submitting': { color: 'processing', label: '提交中' },
             'Processing': { color: 'processing', label: '进行中' },
             'Completed': { color: 'success', label: '已完成' },
-            'Failed': { color: 'error', label: '异常/失败' },
+            'Failed': { color: 'error', label: '失败' },
             'Cancelled': { color: 'default', label: '已取消' },
-            'Refushing': { color: 'magenta', label: '补刷中' },
+            'Refushing': { color: 'magenta', label: '重新处理' },
             'ReconcilePending': { color: 'warning', label: '待人工核对' },
             'Unknown': { color: 'default', label: '结果未知' }
         };
+        const friendlyLabels = {
+            ReconcilePending: '需要确认',
+            Unknown: '状态未知',
+        };
         const st = statusMap[status] || { color: 'default', label: '未知状态' };
-        return <Tag color={st.color}>{text || st.label}</Tag>;
+        return <Tag color={st.color}>{friendlyLabels[status] || text || st.label}</Tag>;
     };
 
     const columns = [
         {
-            title: '订单参考',
+            title: '订单',
             dataIndex: 'tradeNo',
             width: 140,
             render: (text, record) => (
@@ -258,7 +262,7 @@ const CourseOrders = () => {
             )
         },
         {
-            title: '下单人',
+            title: '用户',
             dataIndex: ['userId', 'nickName'],
             width: 100,
             render: (text) => (
@@ -266,19 +270,19 @@ const CourseOrders = () => {
             )
         },
         {
-            title: '授权账号',
+            title: '账号',
             dataIndex: 'account',
             width: 160,
             render: (text, record) => (
                 <div>
                     <div>{record.school && <Tag color="blue">{record.school}</Tag>}</div>
                     <div style={{ marginTop: 4 }}><b>{text}</b></div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{record.password}</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>密码已保存</div>
                 </div>
             )
         },
         {
-            title: '代刷课程',
+            title: '课程',
             dataIndex: 'courseName',
             width: 260,
             render: (text, record) => (
@@ -287,7 +291,7 @@ const CourseOrders = () => {
                         {text || (record.isManual ? '待刷新同步...' : '未知课程')}
                     </div>
                     <Space size={4} wrap>
-                        <Tag color="purple" style={{ margin: 0 }}>平台: {record.platformName || record.platformCode}</Tag>
+                        <Tag color="purple" style={{ margin: 0 }}>{record.platformName || record.platformCode}</Tag>
                         {record.isManual && <Tag color="cyan" style={{ margin: 0 }}>手动录入</Tag>}
                         {record.isHidden && <Tag color="red" style={{ margin: 0 }} icon={<EyeInvisibleOutlined />}>已隐藏</Tag>}
                     </Space>
@@ -295,25 +299,13 @@ const CourseOrders = () => {
             )
         },
         {
-            title: '远程单号',
-            key: 'remoteIds',
-            width: 200,
-            render: (_, record) => (
-                <div style={{ fontSize: 12 }}>
-                    {record.remoteOid && <div style={{ marginBottom: 2 }}><span style={{ color: 'var(--text-tertiary)' }}>oid: </span><Text copyable style={{ fontSize: 12 }}>{record.remoteOid}</Text></div>}
-                    {record.remoteOrderId && <div><span style={{ color: 'var(--text-tertiary)' }}>yid: </span><Text copyable style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{record.remoteOrderId}</Text></div>}
-                    {!record.remoteOid && !record.remoteOrderId && <span style={{ color: '#ccc' }}>无</span>}
-                </div>
-            )
-        },
-        {
-            title: '当前进度',
+            title: '进度',
             dataIndex: 'progress',
             width: 100,
             render: (text) => <b style={{ color: '#52c41a', fontSize: 14 }}>{text}</b>
         },
         {
-            title: '状态 / 节点',
+            title: '状态',
             key: 'status',
             width: 160,
             render: (_, record) => (
@@ -339,7 +331,7 @@ const CourseOrders = () => {
                             onClick={() => handleRefreshStatus([record.tradeNo])}
                             disabled={record.status === 'Submitting'}
                         >
-                            进度
+                            刷新
                         </Button>
                     </Tooltip>
                     <Tooltip title={record.isHidden ? "显示在小程序订单列表" : "隐藏此订单"}>
@@ -379,7 +371,7 @@ const CourseOrders = () => {
             title={
                 <Space>
                     <FileTextOutlined style={{ color: '#4A7CF7' }}/>
-                    <span style={{ fontWeight: 'bold' }}>网课订单大厅</span>
+                        <span style={{ fontWeight: 'bold' }}>订单</span>
                 </Space>
             } 
             bordered={false} 
@@ -388,7 +380,7 @@ const CourseOrders = () => {
         >
             <div style={{ marginBottom: 20, display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <Input 
-                    placeholder="按学号或账号搜索" 
+                    placeholder="搜索账号或学号"
                     prefix={<SearchOutlined style={{ color: '#A3AED0', marginRight: 8 }} />}
                     onChange={(e) => handleSearch(e.target.value, 'account')}
                     style={{ 
@@ -402,7 +394,7 @@ const CourseOrders = () => {
                     allowClear
                 />
                 <Input 
-                    placeholder="按内部订单号搜索" 
+                    placeholder="搜索订单号"
                     prefix={<SearchOutlined style={{ color: '#A3AED0', marginRight: 8 }} />}
                     onChange={(e) => handleSearch(e.target.value, 'tradeNo')}
                     style={{ 
@@ -416,7 +408,7 @@ const CourseOrders = () => {
                     allowClear
                 />
                 <Select
-                    placeholder="所有状态"
+                    placeholder="全部状态"
                     style={{ flex: '1 1 120px', maxWidth: isMobile ? 'calc(50% - 6px)' : 140 }}
                     allowClear
                     onChange={(val) => handleSearch(val || '', 'status')}
@@ -425,10 +417,10 @@ const CourseOrders = () => {
                     <Option value="Submitting">提交中</Option>
                     <Option value="Processing">进行中</Option>
                     <Option value="Completed">已完成</Option>
-                    <Option value="Failed">异常/失败</Option>
-                    <Option value="Refushing">补刷中</Option>
-                    <Option value="ReconcilePending">待人工核对</Option>
-                    <Option value="Unknown">结果未知</Option>
+                    <Option value="Failed">失败</Option>
+                    <Option value="Refushing">重新处理</Option>
+                    <Option value="ReconcilePending">需要确认</Option>
+                    <Option value="Unknown">状态未知</Option>
                 </Select>
                 
                 <Button 
@@ -439,7 +431,7 @@ const CourseOrders = () => {
                     disabled={selectedRowKeys.length === 0}
                     style={{ flex: isMobile ? '1 1 calc(50% - 6px)' : 'none' }}
                 >
-                    批量刷新 ({selectedRowKeys.length})
+                    刷新进度 ({selectedRowKeys.length})
                 </Button>
 
                 <Button
@@ -449,7 +441,7 @@ const CourseOrders = () => {
                     block={isMobile}
                     style={{ background: '#722ED1', borderColor: '#722ED1', flex: isMobile ? '1 1 100%' : 'none' }}
                 >
-                    手动录入订单
+                    添加订单
                 </Button>
             </div>
 
@@ -567,14 +559,14 @@ const CourseOrders = () => {
                 title={
                     <Space style={{ fontSize: 16, fontWeight: 700 }}>
                         {editingOrder ? <EditOutlined style={{ color: '#4A7CF7' }} /> : <PlusOutlined style={{ color: '#722ED1' }} />}
-                        <span>{editingOrder ? '编辑网课订单' : '手动录入外部订单'}</span>
+                        <span>{editingOrder ? '修改订单' : '添加订单'}</span>
                     </Space>
                 }
                 open={createModalOpen}
                 onCancel={() => { setCreateModalOpen(false); setEditingOrder(null); }}
                 onOk={handleSubmitOrder}
                 confirmLoading={createLoading}
-                okText={editingOrder ? '保存修改' : '确认录入'}
+                okText={editingOrder ? '保存' : '添加'}
                 cancelText="取消"
                 width={isMobile ? '94%' : 680}
                 style={{ top: isMobile ? 12 : 50, borderRadius: 20 }}
@@ -584,7 +576,7 @@ const CourseOrders = () => {
                 <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
                     {editingOrder 
                         ? `正在编辑订单：${editingOrder.tradeNo}。修改完成后点击保存立即生效。` 
-                        : '将非小程序支付提交的网课订单手动导入到数据库中，以便集中监控和同步进度。'
+                        : '把其他渠道的订单添加进来，方便统一查看和刷新进度。'
                     }
                     {!editingOrder && (
                         <div style={{
@@ -598,19 +590,19 @@ const CourseOrders = () => {
                             fontSize: 12,
                             lineHeight: 1.5
                         }}>
-                            <span style={{ fontWeight: 700 }}>💡 进度同步小技巧：</span> 
-                            只要填入真实的<b>登录账号</b>与<b>上游内部订单号 (oid)</b>，保存后在列表点击“进度刷新”，系统将全自动提取上游网课名称、学校及进度。
+                            <span style={{ fontWeight: 700 }}>提示：</span>
+                            填好登录账号和平台订单号后，保存并点击“刷新”，系统会自动更新课程和进度。
                         </div>
                     )}
                 </div>
                 <Form form={createForm} layout="vertical" requiredMark="optional">
-                    <Divider orientation="left" plain style={{ fontSize: 12, color: '#722ED1', fontWeight: 600 }}>必填核心信息</Divider>
+                    <Divider orientation="left" plain style={{ fontSize: 12, color: '#722ED1', fontWeight: 600 }}>需要填写</Divider>
                     
                     <Row gutter={16}>
                         <Col xs={24} sm={12}>
                             <Form.Item 
                                 name="account" 
-                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>授权账号（学号/手机号）</span>} 
+                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>登录账号（学号或手机号）</span>}
                                 rules={[{ required: true, message: '请输入账号' }]}
                             >
                                 <Input placeholder="请输入登录账号" style={{ borderRadius: 8 }} />
@@ -632,11 +624,11 @@ const CourseOrders = () => {
                         <Col xs={24} sm={12}>
                             <Form.Item 
                                 name="categoryId" 
-                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>所属平台分类</span>} 
+                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>平台</span>}
                                 rules={[{ required: true, message: '请选择平台分类' }]}
                             >
                                 <Select 
-                                    placeholder="请选择平台分类" 
+                                    placeholder="请选择平台"
                                     showSearch
                                     optionFilterProp="children"
                                     style={{ width: '100%' }}
@@ -654,81 +646,81 @@ const CourseOrders = () => {
                         <Col xs={24} sm={12}>
                             <Form.Item 
                                 name="remoteOid" 
-                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>平台内部订单号 (oid)</span>} 
-                                tooltip="MX/上游平台的内部订单ID，进度自动同步的关键标识（如 578050）"
+                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>平台订单号</span>}
+                                tooltip="用于自动刷新进度的平台订单编号"
                             >
                                 <Input placeholder="例如: 578050" style={{ borderRadius: 8 }} />
                             </Form.Item>
                         </Col>
                     </Row>
 
-                    <Divider orientation="left" plain style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 600 }}>选填辅助信息</Divider>
+                    <Divider orientation="left" plain style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 600 }}>其他信息（一般不用填）</Divider>
 
                     <Row gutter={16}>
                         <Col xs={24} sm={12}>
                             <Form.Item 
                                 name="remoteOrderId" 
-                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>上游系统订单号 (yid)</span>} 
-                                tooltip="上游接口系统生成的 yid 订单流水号"
+                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>平台流水号</span>}
+                                tooltip="平台返回的另一种订单编号，可不填"
                             >
-                                <Input placeholder="请输入上游 yid 订单号" style={{ borderRadius: 8 }} />
+                                <Input placeholder="可不填" style={{ borderRadius: 8 }} />
                             </Form.Item>
                         </Col>
 
                         <Col xs={24} sm={12}>
                             <Form.Item 
                                 name="courseId" 
-                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>上游课程 ID</span>}
+                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>课程编号</span>}
                             >
-                                <Input placeholder="请输入课程 ID（选填）" style={{ borderRadius: 8 }} />
+                                <Input placeholder="可不填" style={{ borderRadius: 8 }} />
                             </Form.Item>
                         </Col>
                     </Row>
                     
                     <Row gutter={16}>
                         <Col xs={24} sm={12}>
-                            <Form.Item name="courseName" label={<span style={{ fontWeight: 600, fontSize: 12 }}>网课课程名称</span>}>
-                                <Input placeholder="例如: 大学英语 (不填则自动刷新同步)" style={{ borderRadius: 8 }} />
+                            <Form.Item name="courseName" label={<span style={{ fontWeight: 600, fontSize: 12 }}>课程名称</span>}>
+                                <Input placeholder="不填会自动获取" style={{ borderRadius: 8 }} />
                             </Form.Item>
                         </Col>
 
                         <Col xs={24} sm={12}>
-                            <Form.Item name="school" label={<span style={{ fontWeight: 600, fontSize: 12 }}>就读学校</span>}>
-                                <Input placeholder="例如: XX大学 (不填则自动刷新同步)" style={{ borderRadius: 8 }} />
+                            <Form.Item name="school" label={<span style={{ fontWeight: 600, fontSize: 12 }}>学校</span>}>
+                                <Input placeholder="不填会自动获取" style={{ borderRadius: 8 }} />
                             </Form.Item>
                         </Col>
                     </Row>
 
                     <Row gutter={16}>
                         <Col xs={24} sm={12}>
-                            <Form.Item name="userId" label={<span style={{ fontWeight: 600, fontSize: 12 }}>关联小程序用户 ID</span>}>
-                                <Input placeholder="挂载的小程序用户 OpenID/_id (不填默认挂载到管理员)" style={{ borderRadius: 8 }} />
+                            <Form.Item name="userId" label={<span style={{ fontWeight: 600, fontSize: 12 }}>关联用户</span>}>
+                                <Input placeholder="不填则归到当前账号" style={{ borderRadius: 8 }} />
                             </Form.Item>
                         </Col>
 
                         <Col xs={24} sm={12}>
-                            <Form.Item name="status" label={<span style={{ fontWeight: 600, fontSize: 12 }}>初始处理状态</span>} initialValue="Processing">
+                            <Form.Item name="status" label={<span style={{ fontWeight: 600, fontSize: 12 }}>订单状态</span>} initialValue="Processing">
                                 <Select dropdownStyle={{ borderRadius: 12 }}>
-                                    <Option value="Pending" disabled>待处理 (Pending)</Option>
-                                    <Option value="Submitting" disabled>提交中 (Submitting)</Option>
+                                    <Option value="Pending" disabled>待处理</Option>
+                                    <Option value="Submitting" disabled>提交中</Option>
                                     <Option value="Processing">进行中 (Processing)</Option>
                                     <Option value="Completed">已完成 (Completed)</Option>
-                                    <Option value="Failed">异常/失败 (Failed)</Option>
-                                    <Option value="ReconcilePending" disabled>待人工核对 (ReconcilePending)</Option>
-                                    <Option value="Unknown" disabled>结果未知 (Unknown)</Option>
+                                    <Option value="Failed">失败</Option>
+                                    <Option value="ReconcilePending" disabled>需要确认</Option>
+                                    <Option value="Unknown" disabled>状态未知</Option>
                                 </Select>
                             </Form.Item>
                         </Col>
                     </Row>
 
-                    <Form.Item name="remarks" label={<span style={{ fontWeight: 600, fontSize: 12 }}>系统备注</span>}>
-                        <Input.TextArea rows={2} placeholder="填写该笔订单的手动录入说明，如：XX平台迁移数据" style={{ borderRadius: 8 }} />
+                    <Form.Item name="remarks" label={<span style={{ fontWeight: 600, fontSize: 12 }}>备注</span>}>
+                        <Input.TextArea rows={2} placeholder="可不填" style={{ borderRadius: 8 }} />
                     </Form.Item>
 
                     <Form.Item name="isHidden" valuePropName="checked" style={{ marginBottom: 0 }}>
                         <Space style={{ display: 'flex', width: '100%', padding: '10px 12px', background: 'var(--bg-color)', borderRadius: 10 }}>
                             <Switch size="small" /> 
-                            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>在小程序端隐藏此订单（该订单将不展示在小程序用户的订单列表中）</span>
+                            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>不在用户端显示这笔订单</span>
                         </Space>
                     </Form.Item>
                 </Form>
@@ -782,16 +774,16 @@ const CourseOrders = () => {
                         textAlign: 'left'
                     }}>
                         <div style={{ color: '#ff4d4f', fontWeight: 700, fontSize: 12, marginBottom: 4 }}>
-                            ⚠️ 极其危险的操作：
+                            ⚠️ 删除后不能恢复
                         </div>
                         <div style={{ color: '#ff4d4f', fontSize: 11, lineHeight: 1.5 }}>
-                            物理擦除该用户的历史订单记录，导致用户在微信端无法查询，此操作不可逆！
+                            这笔订单记录会被删除，用户端也无法再查询。
                         </div>
                     </div>
 
                     {/* 建议 */}
                     <Typography.Text type="secondary" style={{ fontSize: 11, lineHeight: 1.5, marginBottom: 24, display: 'block', padding: '0 4px' }}>
-                        如果是发生退单情况，建议在列表点击编辑把状态修改为“已取消”，以便在系统中保留账目。
+                        如果只是退单，建议把状态改为“已取消”，这样还能保留记录。
                     </Typography.Text>
 
                     {/* 完美对称的按钮 */}

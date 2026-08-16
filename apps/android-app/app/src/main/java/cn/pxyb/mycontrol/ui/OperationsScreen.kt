@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +46,8 @@ import cn.pxyb.mycontrol.ui.theme.Forest
 import cn.pxyb.mycontrol.ui.theme.MintPale
 import cn.pxyb.mycontrol.ui.theme.Ocean
 import cn.pxyb.mycontrol.ui.theme.OceanPale
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 @Composable
 fun OperationsScreen(
@@ -61,9 +62,7 @@ fun OperationsScreen(
     focusTaskId: String?,
     onFocusConsumed: () -> Unit,
     onRefresh: () -> Unit,
-    onBack: () -> Unit,
 ) {
-    BackHandler(enabled = true, onBack = onBack)
     var confirmBackup by remember { mutableStateOf(false) }
     var filter by remember { mutableStateOf("action") }
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -75,6 +74,16 @@ fun OperationsScreen(
     val activeTasks = state.tasks.count { it.status in setOf("pending", "running", "action_required") }
     val failedTasks = state.tasks.count { it.status == "failed" }
     val actionTasks = state.actionRequiredTasks
+    val activeIncidents = state.incidents.count { it.status != "resolved" }
+    val monitoredServices = state.overview?.monitoredCount ?: 0
+    val healthyServices = state.overview?.healthyCount ?: 0
+    val onlineDevices = state.iot?.devices.orEmpty().count { it.online }
+    val totalDevices = state.iot?.devices.orEmpty().size
+    val upcomingResources = state.resourceExpiries.mapNotNull { resource ->
+        val date = runCatching { LocalDate.parse(resource.expiresAt) }.getOrNull() ?: return@mapNotNull null
+        val days = ChronoUnit.DAYS.between(LocalDate.now(), date).toInt()
+        (resource to days).takeIf { days <= maxOf(60, resource.advanceNoticeDays) }
+    }.sortedBy { it.second }
     val filteredTasks = remember(filter, state.tasks) {
         val sorted = state.tasks.sortedWith(compareBy<PlatformTask> { taskPriority(it.status) }.thenByDescending { it.updatedAt.orEmpty() })
         when (filter) {
@@ -111,14 +120,44 @@ fun OperationsScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
         item {
-            AppSecondaryHeader(
-                title = "高级工具",
-                subtitle = "任务、审批、发布与备份",
-                onBack = onBack,
+            ImmersiveHeader(
+                title = "系统",
+                subtitle = "巡检、任务、发布与备份",
             )
         }
         state.sectionError?.let { message ->
             item(key = "section-error") { FeedbackBanner("部分工具数据暂不可用：$message", error = true) }
+        }
+        item { SectionHeader("所有者巡检", "服务、告警、设备、备份与资源续期的一站式检查") }
+        item {
+            AppPanel {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        MetricCell("健康服务", "$healthyServices/$monitoredServices", Modifier.weight(1f), if (state.overview != null && healthyServices == monitoredServices) Forest else Amber)
+                        MetricCell("活动告警", activeIncidents.toString(), Modifier.weight(1f), if (activeIncidents == 0) Forest else Coral)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        MetricCell("在线设备", "$onlineDevices/$totalDevices", Modifier.weight(1f), if (state.iot != null && onlineDevices == totalDevices) Forest else Amber)
+                        MetricCell("即将到期", upcomingResources.size.toString(), Modifier.weight(1f), if (upcomingResources.isEmpty()) Forest else Amber)
+                    }
+                    AppDialogPrimaryButton(
+                        text = if (state.busyAction == "diagnostics") "巡检进行中..." else "立即运行一键巡检",
+                        onClick = onRunDiagnostics,
+                        enabled = state.busyAction == null,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    state.diagnostics?.checks.orEmpty().take(4).forEach { check ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(check.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            StatusBadge(check.status)
+                        }
+                    }
+                }
+            }
         }
         item {
             Surface(
@@ -141,7 +180,37 @@ fun OperationsScreen(
             }
         }
 
-        item { SectionHeader("平台任务", "任务执行状态与变更审批") }
+        item { SectionHeader("资源与续期", "域名、证书和个人资源的到期提醒") }
+        if (upcomingResources.isEmpty()) {
+            item { EmptyBlock("近期没有资源到期", "已登记资源会按照各自提前提醒天数显示在这里。") }
+        } else {
+            items(upcomingResources.take(6), key = { "resource:${it.first.id}" }) { (resource, days) ->
+                AppPanel {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        IconTile(Icons.Outlined.ErrorOutline, if (days <= 7) Coral else Amber, if (days <= 7) CoralPale else AmberPale)
+                        Column(Modifier.weight(1f)) {
+                            Text(resource.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text(resource.type, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text(
+                            when {
+                                days < 0 -> "已过期 ${-days} 天"
+                                days == 0 -> "今天到期"
+                                else -> "$days 天后"
+                            },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (days <= 7) Coral else Amber,
+                        )
+                    }
+                }
+            }
+        }
+
+        item { SectionHeader("平台任务", "失败任务、配置执行与运行记录") }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(
@@ -238,29 +307,6 @@ fun OperationsScreen(
             }
         }
 
-        item { SectionHeader("系统自检", "快速验证关键链路") }
-        item {
-            AppPanel {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    AppDialogSecondaryButton(
-                        text = if (state.busyAction == "diagnostics") "自检进行中..." else "运行系统自检",
-                        onClick = onRunDiagnostics,
-                        enabled = state.busyAction == null,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    state.diagnostics?.checks.orEmpty().take(4).forEach { check ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(check.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                            StatusBadge(check.status)
-                        }
-                    }
-                }
-            }
-        }
     }
     }
 
@@ -279,7 +325,7 @@ fun OperationsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     StatusBadge(task.status, taskStatusLabel(task.status))
                     Text(
-                        listOf(taskSourceLabel(task.source), task.requestedBy, formatPlatformTime(task.updatedAt))
+                        listOf(taskSourceLabel(task.source), formatPlatformTime(task.updatedAt))
                             .joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -302,25 +348,25 @@ fun OperationsScreen(
                         DialogTextField(
                             value = decisionNote,
                             onValueChange = { decisionNote = it.take(200) },
-                            label = "审批备注（可选）",
+                            label = "执行备注（可选）",
                             minLines = 2,
                             maxLines = 3,
                         )
                         AppDialogPrimaryButton(
-                            text = if (state.busyAction == "config-approve") "审批中..." else "批准并生效",
+                            text = if (state.busyAction == "config-approve") "执行中..." else "确认变更并生效",
                             onClick = { pendingDecision = "approve" },
                             enabled = state.busyAction == null,
                             modifier = Modifier.fillMaxWidth(),
                         )
                         AppDialogDangerButton(
-                            text = if (state.busyAction == "config-reject") "拒绝中..." else "拒绝提案",
+                            text = if (state.busyAction == "config-reject") "处理中..." else "放弃此次变更",
                             onClick = { pendingDecision = "reject" },
                             enabled = state.busyAction == null,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     } else if (task.source == "configuration" && task.status == "action_required") {
                         Text(
-                            "配置审批需要超级管理员角色。",
+                            "配置生效需要所有者的超级管理员身份。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -344,9 +390,9 @@ fun OperationsScreen(
 
         when (pendingDecision) {
             "approve" -> AppConfirmDialog(
-                title = "批准配置变更？",
-                detail = "批准后将立即生成新配置版本并应用到运行参数。\n${task.detail}",
-                confirmLabel = "确认批准",
+                title = "确认应用配置变更？",
+                detail = "确认后将立即生成新配置版本并应用到运行参数，操作会写入审计记录。\n${task.detail}",
+                confirmLabel = "确认并生效",
                 onDismiss = { pendingDecision = null },
                 onConfirm = {
                     pendingDecision = null
@@ -356,9 +402,9 @@ fun OperationsScreen(
                 icon = Icons.AutoMirrored.Outlined.FactCheck,
             )
             "reject" -> AppConfirmDialog(
-                title = "拒绝配置提案？",
-                detail = "拒绝后当前运行配置保持不变。\n${task.detail}",
-                confirmLabel = "确认拒绝",
+                title = "放弃此次配置变更？",
+                detail = "放弃后当前运行配置保持不变，提案将结束。\n${task.detail}",
+                confirmLabel = "确认放弃",
                 onDismiss = { pendingDecision = null },
                 onConfirm = {
                     pendingDecision = null

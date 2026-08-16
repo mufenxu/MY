@@ -349,7 +349,7 @@ const AirEnergyMonitor = () => {
                             <Tag color={data.powerOn ? 'blue' : 'default'} style={{ padding: '4px 12px', borderRadius: 8 }}>
                                 {data.powerOn ? '正在运行' : '待机中'}
                             </Tag>
-                            <Text type="secondary">上次更新: {formatTime(data.lastUpdated)}</Text>
+                            <Text type="secondary">更新时间：{formatTime(data.lastUpdated)}</Text>
                         </Space>
                     </Col>
                     <Col>
@@ -373,7 +373,7 @@ const AirEnergyMonitor = () => {
                     <DataCard title="室外温度" value={data.outdoorTemp} unit="℃" icon={<GlobalOutlined />} color="#5CC9A7" loading={loading} />
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                    <DataCard title="实时功率" value={data.realtimePower} unit="" icon={<ThunderboltOutlined />} color="#FFB547" loading={loading} subText={`COP 估算: ${data.copScore}`} />
+                    <DataCard title="当前功率" value={data.realtimePower} unit="" icon={<ThunderboltOutlined />} color="#FFB547" loading={loading} subText={`能效估算：${data.copScore}`} />
                 </Col>
             </Row>
 
@@ -381,7 +381,7 @@ const AirEnergyMonitor = () => {
             <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
                 {/* Control Panel */}
                 <Col xs={24} lg={10}>
-                    <Card title={<Space><ToolOutlined /> 设备控制</Space>} style={{ borderRadius: 20, height: '100%' }}>
+                    <Card title={<Space><ToolOutlined /> 控制</Space>} style={{ borderRadius: 20, height: '100%' }}>
                         <div style={{ padding: '10px 0' }}>
                             <Row align="middle" justify="space-between">
                                 <Col><Text strong>主电源</Text></Col>
@@ -389,7 +389,7 @@ const AirEnergyMonitor = () => {
                             </Row>
                             <Divider />
                             <div style={{ marginBottom: 16 }}>
-                                <Text strong>工作模式</Text>
+                                <Text strong>运行方式</Text>
                                 <div style={{ marginTop: 12 }}>
                                     <Radio.Group value={data.mode} disabled={!data.powerOn} buttonStyle="solid">
                                         <Radio.Button value="heating">加热</Radio.Button>
@@ -401,7 +401,7 @@ const AirEnergyMonitor = () => {
                             <Divider />
                             <div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <Text strong>温度设定</Text>
+                                    <Text strong>目标温度</Text>
                                     <Text type="primary" strong>{data.targetTemp}℃</Text>
                                 </div>
                                 <Slider
@@ -417,7 +417,7 @@ const AirEnergyMonitor = () => {
 
                 {/* Diagnostics Panel */}
                 <Col xs={24} lg={14}>
-                    <Card title={<Space><DashboardOutlined /> 运行诊断</Space>} style={{ borderRadius: 20, height: '100%' }}>
+                    <Card title={<Space><DashboardOutlined /> 详细数据</Space>} style={{ borderRadius: 20, height: '100%' }}>
                         <Row gutter={[16, 16]}>
                             <Col xs={12} sm={8}>
                                 <Statistic title="运行频率" value={data.runFreq} suffix="Hz" />
@@ -440,12 +440,12 @@ const AirEnergyMonitor = () => {
                         </Row>
                         <Divider />
                         <div>
-                            <Text type="secondary" style={{ fontSize: 12 }}>系统保护与警报</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>提醒</Text>
                             <div style={{ marginTop: 10 }}>
                                 {data.online ? (
                                     <Tag color="success">系统健康</Tag>
                                 ) : (
-                                    <Tag color="error">设备通信异常</Tag>
+                                    <Tag color="error">设备连接异常</Tag>
                                 )}
                                 {parseFloat(data.currentTemp) > 55 && <Tag color="warning">水温过高</Tag>}
                             </div>
@@ -456,7 +456,7 @@ const AirEnergyMonitor = () => {
 
             {/* History Trends */}
             <Card
-                title={<Space><HistoryOutlined /> 24小时运行趋势</Space>}
+                title={<Space><HistoryOutlined /> 今天的变化</Space>}
                 style={{ borderRadius: 20, marginTop: 24 }}
                 extra={<Text type="secondary" style={{ fontSize: 12 }}><span style={{ color: '#FF5252', marginRight: 10 }}>● 温度</span> <span style={{ color: '#4A7CF7' }}>● 功率</span></Text>}
             >

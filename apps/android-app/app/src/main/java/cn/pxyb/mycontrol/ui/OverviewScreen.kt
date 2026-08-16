@@ -751,7 +751,7 @@ private fun homeQuickActionSpec(
     HomeQuickAction.Devices -> HomeQuickActionSpec(Icons.Outlined.Hub, "设备控制", Forest, MintPale) {
         onSelectTab(MainTab.Tools)
     }
-    HomeQuickAction.Diagnostics -> HomeQuickActionSpec(Icons.Outlined.Speed, "系统自检", Amber, AmberPale, onRunDiagnostics)
+    HomeQuickAction.Diagnostics -> HomeQuickActionSpec(Icons.Outlined.Speed, "一键巡检", Amber, AmberPale, onRunDiagnostics)
     HomeQuickAction.Backup -> HomeQuickActionSpec(Icons.Outlined.Backup, "数据备份", Coral, CoralPale, onTriggerBackup)
     HomeQuickAction.GoogleAccounts -> HomeQuickActionSpec(Icons.Outlined.Email, "邮箱台账", Ocean, OceanPale, onOpenGoogleAccountDesk)
     HomeQuickAction.Operations -> HomeQuickActionSpec(Icons.Outlined.Settings, "高级工具", Amber, AmberPale, onOpenOperations)

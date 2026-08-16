@@ -54,14 +54,15 @@ const AuditLogs = () => {
             render: (ts) => dayjs(ts).format('YYYY-MM-DD HH:mm:ss'),
         },
         {
-            title: '操作人 (OpenID)',
+            title: '操作人',
             dataIndex: 'actorOpenid',
             key: 'actorOpenid',
-            width: 250,
+            width: 120,
             ellipsis: true,
+            render: () => '我',
         },
         {
-            title: '动作',
+            title: '操作',
             dataIndex: 'action',
             key: 'action',
             width: 150,
@@ -81,14 +82,15 @@ const AuditLogs = () => {
             },
         },
         {
-            title: '目标对象 ID',
+            title: '对象',
             dataIndex: 'targetId',
             key: 'targetId',
-            width: 200,
+            width: 140,
             ellipsis: true,
+            render: (targetId) => targetId || '—',
         },
         {
-            title: '详情',
+            title: '内容',
             dataIndex: 'payload',
             key: 'payload',
             ellipsis: true,
@@ -131,8 +133,7 @@ const AuditLogs = () => {
                             <Typography.Text type="secondary" style={{ fontSize: 12 }}>{dayjs(item.ts).format('MM-DD HH:mm:ss')}</Typography.Text>
                         </div>
                         <div style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 8, width: '100%' }}>
-                            <div style={{ marginBottom: 4 }}>操作人: {item.actorOpenid}</div>
-                            <div style={{ wordBreak: 'break-all' }}>目标ID: {item.targetId || '无'}</div>
+                            <div style={{ marginBottom: 4 }}>对象：{item.targetId || '—'}</div>
                         </div>
                         <div style={{ width: '100%', background: 'var(--bg-color)', padding: 8, borderRadius: 6, overflowX: 'auto' }}>
                             <pre style={{ margin: 0, fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
@@ -147,6 +148,9 @@ const AuditLogs = () => {
 
     return (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <Typography.Text type="secondary">
+                这里记录最近的修改，只有需要排查问题时再查看。
+            </Typography.Text>
             <Card bordered={false} style={{ borderRadius: 20, border: 'none', boxShadow: 'var(--card-shadow)' }} bodyStyle={isMobile ? { padding: '16px 12px' } : undefined}>
                 {isMobile ? mobileView : (
                     <Table
