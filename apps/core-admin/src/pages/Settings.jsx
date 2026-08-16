@@ -148,7 +148,20 @@ const CronSettings = ({ title, type }) => {
                 if (type === 'ct8_task') {
                     message.success(result?.ok ? 'CT8签到任务已提交' : 'CT8签到任务已执行');
                 } else if (result && result.skipped) {
-                    message.info('无需要提醒的资源或配置未完成');
+                    const reasonText = {
+                        no_config: '旧通知配置不存在',
+                        owner_not_configured: '通知配置未绑定资源所有者',
+                        no_channel: 'App、邮件和企业微信通知渠道均未配置',
+                    }[result.reason] || result.reason || '配置未完成';
+                    message.warning(`提醒任务已跳过：${reasonText}`);
+                } else if (result?.error) {
+                    message.error('提醒任务执行失败，请查看服务日志');
+                } else if (result?.channels && Object.values(result.channels).some(channel => channel?.success === false)) {
+                    if (result.sent) {
+                        message.warning('提醒已发送，但部分通知渠道失败，请查看服务日志');
+                    } else {
+                        message.error('已命中到期资源，但通知渠道发送失败，请查看服务日志');
+                    }
                 } else if (result && result.sent) {
                     message.success('检查完成并已发送提醒');
                 } else {

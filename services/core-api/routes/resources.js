@@ -1,11 +1,17 @@
 const express = require('express');
+const dayjs = require('dayjs');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { userResourceSchema } = require('../schemas/resourceSchemas');
 
 const ResourceConfig = require('../models/ResourceConfig');
+const NotifyConfig = require('../models/NotifyConfig');
+const CronConfig = require('../models/CronConfig');
 const { prepareResourceList, revealResourcePasswords } = require('../utils/resourceSecrets');
+const { getNotificationApiKey } = require('../services/notificationClient');
+const { isWecomEnabled } = require('../services/wecomNotification');
+const { getStatus, TASKS } = require('../services/cronScheduler');
 
 function buildDocId(ownerId) {
     const safe = (ownerId || 'anonymous').replace(/[^a-zA-Z0-9_:\-]/g, '_');
@@ -53,6 +59,55 @@ function toExpirySummary(type, item, index) {
         advanceNoticeDays: Math.max(0, Number.parseInt(item.advanceNoticeDays, 10) || 0)
     };
 }
+
+function parseAdvanceDays(value, fallback = 7) {
+    const match = String(value ?? '').trim().match(/^\d+$/);
+    return match ? Number.parseInt(match[0], 10) : fallback;
+}
+
+function isResourceDue(item, fallbackAdvanceDays) {
+    if (!item?.expiresAt) return false;
+    const expiresAt = dayjs(String(item.expiresAt));
+    if (!expiresAt.isValid()) return false;
+    const advanceDays = parseAdvanceDays(item.advanceNoticeDays, fallbackAdvanceDays);
+    return expiresAt.diff(dayjs().startOf('day'), 'day') <= advanceDays;
+}
+
+router.get('/reminder-status', auth, async (req, res) => {
+    setNoStoreHeaders(res);
+    try {
+        const [resource, notifyConfig, cronConfig] = await Promise.all([
+            ResourceConfig.findById(buildDocId(req.user._id)).lean(),
+            NotifyConfig.findById('default'),
+            CronConfig.findById('due_reminder').lean(),
+        ]);
+        const cfg = notifyConfig ? notifyConfig.toObject() : {};
+        const ownerMatched = String(cfg.ownerId || '') === String(req.user._id);
+        const defaultAdvanceDays = parseAdvanceDays(cfg.advanceDays, 7);
+        const dueCount = [
+            ...(resource?.servers || []),
+            ...(resource?.domains || []),
+        ].filter((item) => isResourceDue(item, defaultAdvanceDays)).length;
+        const runtime = getStatus('due_reminder');
+        return res.json({
+            success: true,
+            result: {
+                enabled: cronConfig?.enabled !== false,
+                running: runtime.running,
+                schedule: cronConfig?.schedule || TASKS.due_reminder.defaultSchedule,
+                dueCount,
+                channels: {
+                    app: Boolean(req.user.userId && getNotificationApiKey(cfg.qywxApiKey)),
+                    email: Boolean(ownerMatched && cfg.emailEnabled !== false && cfg.smtpUser && cfg.smtpPass && cfg.toList),
+                    wecom: Boolean(ownerMatched && isWecomEnabled(cfg)),
+                },
+                ownerMatched,
+            },
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 // Passwords and connection details are intentionally excluded from this mobile-safe summary.
 router.get('/expiry-summary', auth, async (req, res) => {

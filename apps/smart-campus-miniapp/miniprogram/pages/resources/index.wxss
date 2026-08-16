@@ -7,6 +7,57 @@
 .section {
   margin-bottom: 16px;
 }
+.reminder-summary,
+.empty-state {
+  background: #ffffff;
+  border-radius: 18px;
+  box-sizing: border-box;
+  margin: 0 16px 16px;
+  padding: 16px;
+  box-shadow: 0 6px 18px rgba(31, 41, 55, 0.08);
+}
+.reminder-summary-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.reminder-summary-title,
+.empty-title {
+  color: #1f2937;
+  font-size: 16px;
+  font-weight: 600;
+}
+.reminder-summary-state {
+  color: #2563eb;
+  font-size: 13px;
+  text-align: right;
+}
+.reminder-summary-description,
+.reminder-summary-warning,
+.empty-description {
+  color: #6b7280;
+  display: block;
+  font-size: 13px;
+  line-height: 20px;
+  margin-top: 8px;
+}
+.reminder-summary-warning {
+  color: #b45309;
+}
+.empty-state {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+.empty-state.compact {
+  box-shadow: none;
+  margin-top: 24px;
+}
+.empty-state .pill-btn {
+  margin-top: 14px;
+}
 .title {
   font-size: 18px;
   font-weight: 700;

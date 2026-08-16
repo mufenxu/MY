@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleAlert,
-  CloudCog,
   LoaderCircle,
   Network,
   RefreshCw,
@@ -181,39 +180,33 @@ export function OverviewView({
                 查看全部 <ArrowRight size={13} />
               </button>
             </header>
-            <div className="launcher-list-body">
-              {sortedServices.map((srv) => {
-                const LauncherIcon = SERVICE_ICONS[srv.id] || AppWindow;
+            <div className="service-status-list combined-service-status-list">
+              {sortedServices.length > 0 ? sortedServices.map((srv) => {
+                const ServiceIcon = SERVICE_ICONS[srv.id] || AppWindow;
                 const launcherTone = LAUNCHER_TONES[srv.id] || 'blue';
                 const state = STATE_META[srv.state] || STATE_META.unmonitored;
+                const stateLabel = srv.state === 'unmonitored' ? '未检查' : state.label;
+                const open = () => (srv.adminUrl ? launchService(srv) : onOpenService?.(srv));
                 return (
                   <button
                     key={srv.id}
-                    className="launcher-card-item"
+                    className="service-status-row"
                     type="button"
                     title={`一键进入【${srv.name}】`}
-                    onClick={() => {
-                      if (srv.adminUrl) {
-                        launchService(srv);
-                      } else {
-                        onOpenService?.(srv);
-                      }
-                    }}
+                    onClick={open}
                   >
-                    <span className={`launcher-service-icon tone-${launcherTone}`}><LauncherIcon size={15} /></span>
-                    <span className="launcher-info">
-                      <strong className="launcher-name">{srv.name}</strong>
-                      <span className={`launcher-state state-${srv.state}`}>
-                        <i className={`status-indicator state-${srv.state}`} />
-                        {state.label}
-                      </span>
+                    <span className={`service-status-row-icon launcher-service-icon tone-${launcherTone}`}><ServiceIcon size={15} /></span>
+                    <span className="service-status-row-copy">
+                      <strong>{srv.shortName || srv.name}</strong>
+                      <small><i className={`status-indicator state-${srv.state}`} />{stateLabel} · {formatCheckedAt(srv.checkedAt)}</small>
                     </span>
-                    <span className="launcher-action-badge">
-                      直达 <ArrowUpRight size={12} />
-                    </span>
+                    <span className="service-status-row-latency">{Number.isFinite(srv.latencyMs) ? `${srv.latencyMs} ms` : '--'}</span>
+                    <ArrowUpRight size={14} />
                   </button>
                 );
-              })}
+              }) : (
+                <div className="service-status-empty"><LoaderCircle className="spin" size={18} />正在读取服务状态</div>
+              )}
             </div>
           </article>
 
@@ -248,72 +241,13 @@ export function OverviewView({
         </div>
 
         <div className="cockpit-center-col">
-          <article className="cockpit-panel service-status-panel">
-            <header className="panel-header space-between">
-              <div className="header-title-group">
-                <CheckCircle2 size={16} />
-                <h3>服务状态</h3>
-              </div>
-              <button className="icon-text-btn" type="button" onClick={onOpenServices} title="查看所有服务">
-                查看全部 <ArrowRight size={13} />
-              </button>
-            </header>
-            <div className="service-status-list">
-              {sortedServices.length > 0 ? sortedServices.slice(0, 6).map((srv) => {
-                const ServiceIcon = SERVICE_ICONS[srv.id] || AppWindow;
-                const state = STATE_META[srv.state] || STATE_META.unmonitored;
-                const stateLabel = srv.state === 'unmonitored' ? '未检查' : state.label;
-                const open = () => (srv.adminUrl ? launchService(srv) : onOpenService?.(srv));
-                return (
-                  <button className="service-status-row" type="button" key={srv.id} onClick={open}>
-                    <span className="service-status-row-icon"><ServiceIcon size={15} /></span>
-                    <span className="service-status-row-copy">
-                      <strong>{srv.shortName || srv.name}</strong>
-                      <small><i className={`status-indicator state-${srv.state}`} />{stateLabel} · {formatCheckedAt(srv.checkedAt)}</small>
-                    </span>
-                    <span className="service-status-row-latency">{Number.isFinite(srv.latencyMs) ? `${srv.latencyMs} ms` : '--'}</span>
-                    <ArrowUpRight size={14} />
-                  </button>
-                );
-              }) : (
-                <div className="service-status-empty"><LoaderCircle className="spin" size={18} />正在读取服务状态</div>
-              )}
-            </div>
-          </article>
-
-          <details className="cockpit-panel topology-details-panel">
-            <summary><Network size={16} /><span>查看服务连接图</span><small>需要排查连接关系时再展开</small></summary>
-            <div className="topology-details-content">
-              <HolographicTopology
-                services={services}
-                monitoringEnabled={monitoringEnabled}
-                onSelectService={launchService}
-              />
-            </div>
-          </details>
-
-          <article className="cockpit-panel trend-panel">
-            <header className="panel-header space-between">
-              <div className="header-title-group">
-                <Activity size={16} />
-                <h3>服务响应趋势</h3>
-              </div>
-              <div className="monitoring-control compact-control">
-                <CloudCog size={15} />
-                <span>自动刷新</span>
-                <button
-                  className={`toggle-switch compact ${monitoringEnabled ? 'active' : ''}`}
-                  type="button"
-                  role="switch"
-                  aria-checked={monitoringEnabled}
-                  aria-label="自动刷新服务状态"
-                  onClick={() => setMonitoringEnabled((enabled) => !enabled)}
-                >
-                  <span />
-                </button>
-              </div>
-            </header>
-            <OperationsChart services={services} history={operationsSummary?.history} />
+          <article className="cockpit-panel topology-panel">
+            <HolographicTopology
+              services={services}
+              monitoringEnabled={monitoringEnabled}
+              onToggleMonitoring={() => setMonitoringEnabled((enabled) => !enabled)}
+              onSelectService={launchService}
+            />
           </article>
         </div>
 

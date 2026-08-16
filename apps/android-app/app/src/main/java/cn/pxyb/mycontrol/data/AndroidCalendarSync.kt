@@ -12,6 +12,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 
 data class CalendarSyncResult(
@@ -29,6 +30,44 @@ data class CalendarSyncResult(
     }
 }
 
+private data class AcademicCalendarAnchor(
+    val currentWeek: Int,
+    val termStart: LocalDate,
+)
+
+private fun resolveAcademicCalendarAnchor(
+    timetable: CampusTimetable,
+    today: LocalDate = LocalDate.now(),
+): AcademicCalendarAnchor? {
+    val calendarText = "${timetable.currentCalendarText} ${timetable.termText}"
+    val explicitWeek = Regex("第\\s*(\\d+)\\s*周")
+        .find(calendarText)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.toIntOrNull()
+        ?.takeIf { it > 0 }
+    if (explicitWeek != null) {
+        val currentMonday = today.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+        return AcademicCalendarAnchor(
+            currentWeek = explicitWeek,
+            termStart = currentMonday.minusWeeks((explicitWeek - 1).toLong()),
+        )
+    }
+
+    val termMatch = Regex("(\\d{4})\\s*-\\s*(\\d{4}).*?([春秋])").find(calendarText) ?: return null
+    val startYear = termMatch.groupValues[1].toIntOrNull() ?: return null
+    val endYear = termMatch.groupValues[2].toIntOrNull() ?: return null
+    val termStartCandidate = when (termMatch.groupValues[3]) {
+        "秋" -> LocalDate.of(startYear, 9, 1)
+        "春" -> LocalDate.of(endYear, 2, 20)
+        else -> return null
+    }
+    val termStart = termStartCandidate.with(TemporalAdjusters.nextOrSame(java.time.DayOfWeek.MONDAY))
+    val elapsedDays = ChronoUnit.DAYS.between(termStart, today)
+    val currentWeek = if (elapsedDays < 0) 1 else (elapsedDays / 7 + 1).toInt()
+    return AcademicCalendarAnchor(currentWeek = currentWeek, termStart = termStart)
+}
+
 class AndroidCalendarSync(context: Context) {
     private val appContext = context.applicationContext
     private val resolver = appContext.contentResolver
@@ -44,11 +83,11 @@ class AndroidCalendarSync(context: Context) {
         val loadedTimetable = requireNotNull(timetable)
         val accountScope = accountStorageScope(accountUsername)
             ?: error("当前登录账号不可用，请重新登录后再试。")
-        val courseDrafts = buildCourseDrafts(loadedTimetable)
-        check(!(loadedTimetable.courses.isNotEmpty() &&
-            Regex("第(\\d+)周").find(loadedTimetable.currentCalendarText) == null)) {
+        val academicAnchor = resolveAcademicCalendarAnchor(loadedTimetable)
+        check(loadedTimetable.courses.isEmpty() || academicAnchor != null) {
             "课表当前周次无法识别，请刷新课表后再试。"
         }
+        val courseDrafts = buildCourseDrafts(loadedTimetable, academicAnchor)
         val todoDrafts = buildTodoDrafts(todos)
         val resourceDrafts = buildResourceDrafts(resources)
         val calendarId = findCalendarId(accountScope) ?: createCalendar(accountScope)
@@ -140,29 +179,29 @@ class AndroidCalendarSync(context: Context) {
 
     private data class CourseDrafts(val events: List<CalendarEventDraft>, val skipped: Int)
 
-    private fun buildCourseDrafts(timetable: CampusTimetable?): CourseDrafts {
-        val currentWeek = Regex("第(\\d+)周")
-            .find(timetable?.currentCalendarText.orEmpty())
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.toIntOrNull()
-        if (timetable == null || currentWeek == null) {
-            return CourseDrafts(emptyList(), timetable?.courses?.size ?: 0)
+    private fun buildCourseDrafts(
+        timetable: CampusTimetable,
+        academicAnchor: AcademicCalendarAnchor?,
+    ): CourseDrafts {
+        if (academicAnchor == null) {
+            return CourseDrafts(emptyList(), timetable.courses.size)
         }
 
-        val today = LocalDate.now()
-        val currentMonday = today.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
         var skipped = 0
         val events = buildList {
             for (course in timetable.courses) {
-                val weeks = course.weeks.ifEmpty { listOf(currentWeek) }.filter { it >= currentWeek }
+                val weeks = course.weeks
+                    .ifEmpty { listOf(academicAnchor.currentWeek) }
+                    .filter { it >= academicAnchor.currentWeek }
                 if (weeks.isEmpty() || course.day !in 1..7) {
                     skipped += 1
                     continue
                 }
                 var courseAdded = false
                 for (week in weeks) {
-                    val date = currentMonday.plusWeeks((week - currentWeek).toLong()).plusDays((course.day - 1).toLong())
+                    val date = academicAnchor.termStart
+                        .plusWeeks((week - 1).toLong())
+                        .plusDays((course.day - 1).toLong())
                     val times = parseCourseTimes(date, course.timeRange) ?: continue
                     if (times.second <= System.currentTimeMillis()) continue
                     add(

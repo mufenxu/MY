@@ -8,11 +8,28 @@
             <button bindtap="onOpenCreateMenu" class="pill-btn success">新增</button>
         </view>
     </view>
+    <view class="empty-state" wx:if="{{loginRequired}}">
+        <text class="empty-title">登录后管理资源</text>
+        <text class="empty-description">资源和到期提醒按账号隔离，请先登录后查看。</text>
+        <button bindtap="onGoLogin" class="pill-btn success">去登录</button>
+    </view>
+    <view class="reminder-summary" wx:elif="{{reminderStatus}}">
+        <view class="reminder-summary-row">
+            <text class="reminder-summary-title">自动到期提醒</text>
+            <text class="reminder-summary-state">{{reminderStatus.stateText}}</text>
+        </view>
+        <text class="reminder-summary-description">通知渠道：{{reminderStatus.channelText}} · 计划：{{reminderStatus.schedule}}</text>
+        <text class="reminder-summary-warning" wx:if="{{!reminderStatus.ownerMatched && (reminderStatus.channels.email || reminderStatus.channels.wecom)}}">邮件或企业微信配置未绑定当前资源账号，将仅发送 App 通知。</text>
+    </view>
     <view class="cache-preview-tip" wx:if="{{cachePreview}}">
         当前为本地安全缓存预览，刷新成功后可编辑
     </view>
-    <view class="section">
+    <view class="section" wx:if="{{!loginRequired}}">
         <block wx:if="{{activeTab==='servers'}}">
+            <view class="empty-state compact" wx:if="{{!loading && serverGroups.length===0}}">
+                <text class="empty-title">还没有服务器</text>
+                <text class="empty-description">点击“新增”登记服务器及到期时间。</text>
+            </view>
             <block wx:for="{{serverGroups}}" wx:key="group">
                 <view bindtap="onToggleGroup" class="group-header {{item.collapsed ? 'collapsed' : ''}}" data-group="{{item.group}}" data-list="servers">
                     <view class="group-accent"></view>
@@ -50,8 +67,12 @@
             </block>
         </block>
     </view>
-    <view class="section" style="margin-top:24px;">
+    <view class="section" style="margin-top:24px;" wx:if="{{!loginRequired}}">
         <block wx:if="{{activeTab==='domains'}}">
+            <view class="empty-state compact" wx:if="{{!loading && domainGroups.length===0}}">
+                <text class="empty-title">还没有域名</text>
+                <text class="empty-description">点击“新增”登记域名及到期时间。</text>
+            </view>
             <block wx:for="{{domainGroups}}" wx:key="group">
                 <view bindtap="onToggleGroup" class="group-header {{item.collapsed ? 'collapsed' : ''}}" data-group="{{item.group}}" data-list="domains">
                     <view class="group-accent"></view>

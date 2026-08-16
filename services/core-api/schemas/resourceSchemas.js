@@ -9,7 +9,7 @@ const dateText = Joi.string()
 
 const noticeDays = Joi.alternatives().try(
     Joi.number().integer().min(0).max(3650),
-    Joi.string().allow('', null).max(20)
+    Joi.string().allow('', null).pattern(/^\d{1,4}$/)
 );
 
 const resourceItemSchema = Joi.object({

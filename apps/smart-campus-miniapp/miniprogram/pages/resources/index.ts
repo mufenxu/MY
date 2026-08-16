@@ -10,6 +10,7 @@ interface DomainItem { host?: string; pointsTo?: string; note?: string; registra
 
 interface GroupItem<T> { data: T; index: number; display: Record<string, string> }
 interface Group<T> { group: string; items: Array<GroupItem<T>>; collapsed: boolean }
+interface ReminderStatus { enabled: boolean; running: boolean; schedule: string; dueCount: number; channelText: string; stateText: string; ownerMatched: boolean }
 
 // 说明性：数据结构见 data 定义
 const RESOURCE_CACHE_KEY = 'resource_config_cache'
@@ -49,9 +50,18 @@ Page({
     registrarOptions: [],
     lastLoadedAt: 0,
     cachePreview: false,
+    loginRequired: false,
+    reminderStatus: null as ReminderStatus | null,
   },
 
+  _hasShown: false,
+
   onLoad() {
+    if (!getSessionSnapshot().loggedIn) {
+      this.setData({ loginRequired: true })
+      this.initOwnerAndLoad()
+      return
+    }
     const cache = this.readResourceCache()
     if (cache && Date.now() - cache.timestamp < RESOURCE_CACHE_TTL) {
       const servers = cache.servers
@@ -66,6 +76,14 @@ Page({
       } as any)
     }
     this.initOwnerAndLoad()
+  },
+
+  onShow() {
+    if (!this._hasShown) {
+      this._hasShown = true
+      return
+    }
+    if (getSessionSnapshot().loggedIn) this.loadFromCloud(true)
   },
 
   readResourceCache(): { servers: ServerItem[]; domains: DomainItem[]; timestamp: number } | null {
@@ -147,6 +165,10 @@ Page({
   },
 
   async loadFromCloud(force?: boolean) {
+    if (!getSessionSnapshot().loggedIn) {
+      this.setData({ loading: false, loginRequired: true, reminderStatus: null })
+      return
+    }
     const now = Date.now()
     const last = this.data.lastLoadedAt || 0
     if (!force && now - last < 180000) {
@@ -169,14 +191,17 @@ Page({
           registrarOptions: this.rebuildRegistrarOptions(servers, domains),
           lastLoadedAt: now,
           cachePreview: false,
+          loginRequired: false,
         } as any)
         this.writeResourceCache(servers, domains, now)
       } else {
         this.setData({
           servers: [], domains: [], serverGroups: [], domainGroups: [], serverCollapsed: {}, domainCollapsed: {}, registrarOptions: [], lastLoadedAt: now,
           cachePreview: false,
+          loginRequired: false,
         } as any)
       }
+      await this.loadReminderStatus()
     } catch (err) {
       logger.error('加载失败', err, 'Resources')
       wx.showToast({ icon: 'none', title: '加载失败' })
@@ -201,6 +226,30 @@ Page({
 
   onPullDownRefresh() {
     this.loadFromCloud(true).finally(() => wx.stopPullDownRefresh())
+  },
+
+  onGoLogin() {
+    wx.navigateTo({ url: '/pages/login/index' })
+  },
+
+  async loadReminderStatus() {
+    try {
+      const ret: any = await request('/resources/reminder-status')
+      const status = ret && ret.result
+      if (!status) return
+      const channels = status.channels || {}
+      const channelText = [channels.app && 'Android App', channels.email && '邮件', channels.wecom && '企业微信'].filter(Boolean).join('、') || '未配置'
+      const stateText = !status.enabled
+        ? '自动检查已暂停'
+        : !status.running
+          ? '定时任务未运行'
+          : status.dueCount > 0
+            ? `当前 ${status.dueCount} 项已进入提醒期`
+            : '当前没有资源进入提醒期'
+      this.setData({ reminderStatus: { ...status, channelText, stateText } })
+    } catch (err) {
+      logger.warn('读取到期提醒状态失败', err, 'Resources')
+    }
   },
 
   onInputChange(e: WechatMiniprogram.Input) {
@@ -252,17 +301,19 @@ Page({
       const num = parseFloat(m[0])
       let addMonths = 0
       let addDays = 0
-      if (s.includes('年') || s.includes('year') || s.includes('y')) addMonths = Math.round(12 * num)
-      else if (s.includes('月') || s.includes('mon') || s === 'm') addMonths = Math.round(num)
-      else if (s.includes('周') || s.includes('week') || s.includes('w')) addDays = Math.round(7 * num)
-      else if (s.includes('天') || s.includes('日') || s.includes('day') || s.includes('d')) addDays = Math.round(num)
+      if (/(天|日|days?)/.test(s) || /d$/.test(s)) addDays = Math.round(num)
+      else if (/(周|weeks?)/.test(s) || /w$/.test(s)) addDays = Math.round(7 * num)
+      else if (/(月|months?|mons?)/.test(s) || /m$/.test(s)) addMonths = Math.round(num)
+      else if (/(年|years?|yrs?)/.test(s) || /y$/.test(s)) addMonths = Math.round(12 * num)
       else addMonths = Math.round(num)
       const y = base.getFullYear(); const mon = base.getMonth(); const d = base.getDate()
       const tmp = new Date(y, mon + addMonths, d)
       return new Date(tmp.getTime() + addDays * 24 * 60 * 60 * 1000)
     }
 
-    const next = parsePeriod(now, item.renewPeriod)
+    const recordedExpiry = item.expiresAt ? new Date(`${item.expiresAt}T00:00:00`) : null
+    const renewalBase = recordedExpiry && !Number.isNaN(recordedExpiry.getTime()) && recordedExpiry > now ? recordedExpiry : now
+    const next = parsePeriod(renewalBase, item.renewPeriod)
     if (!next) { wx.showToast({ icon: 'none', title: '请先填写有效的续期周期' }); return }
     const y = next.getFullYear(); const m = String(next.getMonth() + 1).padStart(2, '0'); const d = String(next.getDate()).padStart(2, '0')
     item.expiresAt = `${y}-${m}-${d}`
@@ -312,6 +363,7 @@ Page({
     if (!ret.success) {
       throw new Error(ret.error || 'Save failed')
     }
+    await this.loadReminderStatus()
   },
 
   buildGroups<T extends { registrar?: string }>(list: T[], collapsed: Record<string, boolean>): Array<Group<T>> {
@@ -395,14 +447,14 @@ Page({
 
   onOpenAddServer() {
     if (!this.ensureFreshResourceData()) return
-    this.setData({ showModal: true, modalTitle: '新增服务器', modalType: 'server', modalIndex: -1, modalData: { name: '', ip: '', region: '' } })
+    this.setData({ showModal: true, modalTitle: '新增服务器', modalType: 'server', modalIndex: -1, modalData: { name: '', ip: '', region: '', advanceNoticeDays: '7', renewPeriod: '12个月' } })
   },
   onOpenCreateMenu() {
     if (!this.ensureFreshResourceData()) return
     wx.showActionSheet({ itemList: ['新增服务器', '新增域名'], success: (r) => { if (r.tapIndex === 0) this.onOpenAddServer(); if (r.tapIndex === 1) this.onOpenAddDomain() } })
   },
   onSwitchTab(e: WechatMiniprogram.TouchEvent) { this.setData({ activeTab: (e.currentTarget.dataset as any).tab }) },
-  onOpenAddDomain() { if (!this.ensureFreshResourceData()) return; this.setData({ showModal: true, modalTitle: '新增域名', modalType: 'domain', modalIndex: -1, modalData: { host: '', pointsTo: '', note: '' } }) },
+  onOpenAddDomain() { if (!this.ensureFreshResourceData()) return; this.setData({ showModal: true, modalTitle: '新增域名', modalType: 'domain', modalIndex: -1, modalData: { host: '', pointsTo: '', note: '', advanceNoticeDays: '7', renewPeriod: '12个月' } }) },
   onEditServer(e: WechatMiniprogram.TouchEvent) { if (!this.ensureFreshResourceData()) return; const i = (e.currentTarget.dataset as any).index; const base = (((this.data.servers as any)[i]) || {}); this.setData({ showModal: true, modalTitle: '编辑服务器', modalType: 'server', modalIndex: i, modalData: { ...base } as any }) },
   onEditDomain(e: WechatMiniprogram.TouchEvent) { if (!this.ensureFreshResourceData()) return; const i = (e.currentTarget.dataset as any).index; const base = (((this.data.domains as any)[i]) || {}); this.setData({ showModal: true, modalTitle: '编辑域名', modalType: 'domain', modalIndex: i, modalData: { ...base } as any }) },
   onModalInput(e: WechatMiniprogram.Input) { const f = (e.currentTarget.dataset as any).field; const v = e.detail.value; this.setData({ modalData: { ...(this.data.modalData || {}), [f]: v } as any }) },
@@ -413,6 +465,11 @@ Page({
   async onModalSave() {
     if (!this.ensureFreshResourceData()) return
     const { modalType, modalIndex, modalData } = this.data
+    const noticeDays = String((modalData as any).advanceNoticeDays || '').trim()
+    if (noticeDays && !/^\d+$/.test(noticeDays)) {
+      wx.showToast({ icon: 'none', title: '提前通知天数须为非负整数' })
+      return
+    }
     if (modalType === 'server') {
       const list: any[] = (this.data.servers.slice() as any[])
       if (modalIndex > -1) list[modalIndex] = modalData

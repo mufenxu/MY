@@ -96,7 +96,7 @@ function ServiceNode({ service, onSelectService }) {
   );
 }
 
-export function HolographicTopology({ services = [], monitoringEnabled = true, onSelectService }) {
+export function HolographicTopology({ services = [], monitoringEnabled = true, onToggleMonitoring, onSelectService }) {
   const topologyServices = buildTopologyServices(services);
   const total = topologyServices.length;
   const healthyCount = topologyServices.filter((service) => service.state === 'healthy').length;
@@ -125,10 +125,16 @@ export function HolographicTopology({ services = [], monitoringEnabled = true, o
           </div>
         </div>
         <div className="dependency-summary" aria-label="服务链路摘要">
-          <span className={`dependency-refresh-state ${monitoringEnabled ? 'is-active' : ''}`}>
+          <button
+            className={`dependency-refresh-state ${monitoringEnabled ? 'is-active' : ''}`}
+            type="button"
+            aria-pressed={monitoringEnabled}
+            title={monitoringEnabled ? '暂停自动轮询' : '开启自动轮询'}
+            onClick={onToggleMonitoring}
+          >
             <i />
             {monitoringEnabled ? '自动轮询' : '轮询暂停'}
-          </span>
+          </button>
         </div>
       </header>
 

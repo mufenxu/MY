@@ -43,12 +43,14 @@ class AlertNotifier(context: Context) {
     private val preferences = appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
     private val personalStore = PersonalWorkspaceStore(appContext)
     @Volatile private var accountScope: String? = null
+    @Volatile private var accountUsername: String? = null
 
     init {
         setAccount(SessionStore(appContext).readActiveUsername())
     }
 
     fun setAccount(username: String?) {
+        accountUsername = username?.trim()?.takeIf(String::isNotEmpty)
         accountScope = accountStorageScope(username)
         personalStore.setAccount(username)
     }
@@ -169,6 +171,7 @@ class AlertNotifier(context: Context) {
     }
 
     fun clear() {
+        ResourceExpiryReminderScheduler.cancel(appContext, accountUsername)
         accountScope?.let { scope ->
             val prefix = "account_${scope}_"
             preferences.edit().apply {
@@ -231,8 +234,8 @@ class AlertNotifier(context: Context) {
         }
     }
 
-    fun notifyRecord(alert: AppAlertRecord) {
-        if (isQuietHours()) return
+    fun notifyRecord(alert: AppAlertRecord): Boolean {
+        if (isQuietHours()) return false
         val intent = when (alert.type) {
             "incident" -> DeepLinks.openIntent(appContext, destination = "notifications")
             "task" -> DeepLinks.openIntent(appContext, tab = MainTab.Operations, taskId = alert.sourceId)
@@ -244,6 +247,7 @@ class AlertNotifier(context: Context) {
         if (posted && alert.origin == "remote") {
             markRemoteSeen(alert.id)
         }
+        return posted
     }
 
     fun evaluateRemote(alerts: List<AppAlertRecord>) {
@@ -255,30 +259,39 @@ class AlertNotifier(context: Context) {
     }
 
     fun evaluateResourceExpiries(resources: List<ResourceExpiry>) {
+        resources.forEach(::notifyResourceExpiry)
+        ResourceExpiryReminderScheduler.schedule(appContext, accountUsername, resources)
+    }
+
+    fun notifyResourceExpiry(resource: ResourceExpiry): Boolean {
+        if (accountScope == null) return false
         ensureChannel()
-        val today = LocalDate.now()
+        val expiresAt = runCatching { LocalDate.parse(resource.expiresAt) }.getOrNull() ?: return true
+        val days = ChronoUnit.DAYS.between(LocalDate.now(), expiresAt).toInt()
+        if (days > resource.advanceNoticeDays.coerceAtLeast(0)) return true
+        val id = "resource:${resource.id}:${resource.expiresAt}"
+        val alert = AppAlertRecord(
+            id = id,
+            type = "resource",
+            sourceId = resource.id,
+            title = if (days < 0) "资源已过期：${resource.name}" else "资源即将到期：${resource.name}",
+            body = when {
+                days < 0 -> "已过期 ${-days} 天"
+                days == 0 -> "今天到期"
+                else -> "$days 天后到期"
+            },
+            createdAt = System.currentTimeMillis(),
+        )
         val existingIds = personalStore.readAlerts().mapTo(mutableSetOf(), AppAlertRecord::id)
-        val generated = resources.mapNotNull { resource ->
-            val expiresAt = runCatching { LocalDate.parse(resource.expiresAt) }.getOrNull() ?: return@mapNotNull null
-            val days = ChronoUnit.DAYS.between(today, expiresAt).toInt()
-            if (days > maxOf(30, resource.advanceNoticeDays)) return@mapNotNull null
-            val id = "resource:${resource.id}:${resource.expiresAt}"
-            if (id in existingIds) return@mapNotNull null
-            AppAlertRecord(
-                id = id,
-                type = "resource",
-                sourceId = resource.id,
-                title = if (days < 0) "资源已过期：${resource.name}" else "资源即将到期：${resource.name}",
-                body = when {
-                    days < 0 -> "已过期 ${-days} 天"
-                    days == 0 -> "今天到期"
-                    else -> "$days 天后到期"
-                },
-                createdAt = System.currentTimeMillis(),
-            )
-        }
-        personalStore.appendAlerts(generated)
-        generated.take(3).forEach(::notifyRecord)
+        if (id !in existingIds) personalStore.appendAlerts(listOf(alert))
+        val postedIds = preferences.getStringSet(scopedKey(KEY_POSTED_RESOURCES), emptySet()).orEmpty().toMutableSet()
+        if (id in postedIds) return true
+        if (!notifyRecord(alert)) return false
+        postedIds.add(id)
+        preferences.edit()
+            .putStringSet(scopedKey(KEY_POSTED_RESOURCES), postedIds.toList().takeLast(200).toSet())
+            .apply()
+        return true
     }
 
     private fun notify(
@@ -394,6 +407,7 @@ class AlertNotifier(context: Context) {
         const val KEY_SEEN_TASKS = "seen_tasks"
         const val KEY_SEEN_REMOTE = "seen_remote"
         const val KEY_SEEN_REMOTE_POSTED = "seen_remote_posted_v2"
+        const val KEY_POSTED_RESOURCES = "posted_resources_v1"
         const val CHANNEL_ID = "ops_alerts"
         const val MESSAGE_CHANNEL_ID = "app_notifications"
         const val INCIDENT_BASE = 41000

@@ -7,6 +7,7 @@
   依赖：nodemailer, dayjs (已在 package.json 中)
 */
 
+const crypto = require('node:crypto');
 const nodemailer = require('nodemailer');
 const dayjs = require('dayjs');
 const {
@@ -18,6 +19,8 @@ const {
 
 const ResourceConfig = require('../models/ResourceConfig');
 const NotifyConfig = require('../models/NotifyConfig');
+const User = require('../models/User');
+const { getNotificationApiKey, sendAppNotification } = require('./notificationClient');
 
 function buildTransport(cfg) {
     return nodemailer.createTransport({
@@ -187,6 +190,55 @@ async function dispatchWecom(cfg, text, extra = {}) {
     return sendWecomText(cfg, text, extra);
 }
 
+function buildAppNotificationPayload({ recipientId, ownerId, servers, domains, includeWecom, cfg }) {
+    const resources = [...servers, ...domains];
+    const today = dayjs().format('YYYY-MM-DD');
+    const expiredCount = resources.filter((item) => dayjs(item.expiresAt).diff(dayjs().startOf('day'), 'day') < 0).length;
+    const urgentCount = resources.filter((item) => {
+        const days = dayjs(item.expiresAt).diff(dayjs().startOf('day'), 'day');
+        return days >= 0 && days <= 7;
+    }).length;
+    const title = expiredCount > 0
+        ? `${expiredCount} 项资源已过期`
+        : urgentCount > 0
+            ? `${urgentCount} 项资源即将到期`
+            : `${resources.length} 项资源进入提醒期`;
+    const summary = `服务器 ${servers.length} 项，域名 ${domains.length} 项，请及时检查续期状态。`;
+    const signature = resources
+        .map((item) => `${item.name || item.host || ''}:${item.expiresAt || ''}`)
+        .sort()
+        .join('|');
+    const digest = crypto.createHash('sha256').update(`${ownerId}|${today}|${signature}`).digest('hex').slice(0, 24);
+    const payload = {
+        idempotencyKey: `resource-expiry:${today}:${digest}`,
+        dedupeKey: `resource-expiry:${today}:${digest}`,
+        audience: { users: [recipientId] },
+        channels: includeWecom ? ['app', 'wecom'] : ['app'],
+        priority: expiredCount > 0 || urgentCount > 0 ? 'high' : 'normal',
+        category: 'resource.expiry',
+        content: {
+            kind: 'text',
+            title,
+            summary,
+            blocks: [{ type: 'text', text: buildWecomText(servers, domains).slice(0, 12000) }],
+        },
+        source: {
+            service: 'core-api',
+            entityType: 'resource-expiry',
+            entityId: today,
+        },
+        actions: [{ id: 'open-resources', label: '查看资源', deepLink: 'mycontrol://open?destination=today' }],
+    };
+    if (includeWecom) {
+        payload.wecom = {
+            ...(cfg.qywxToUser ? { touser: String(cfg.qywxToUser).trim() } : {}),
+            ...(cfg.qywxToParty ? { toparty: String(cfg.qywxToParty).trim() } : {}),
+            ...(cfg.qywxToTag ? { totag: String(cfg.qywxToTag).trim() } : {}),
+        };
+    }
+    return payload;
+}
+
 function buildItemsHtml(items, title) {
     if (!items.length) return '';
 
@@ -303,40 +355,28 @@ async function checkAndNotify(force = false) {
         console.log(`[${new Date().toISOString()}] 资源到期检查任务被触发 (来源: ${force ? '手动' : '定时'})`);
         console.log('=================================================');
 
-        // 读取通知配置
+        // App 通知不依赖旧版邮件/企微配置；旧配置仅作为附加投递渠道。
         const notifyConfig = await NotifyConfig.findById('default');
-        if (!notifyConfig) {
-            console.log('未找到通知配置，跳过检查');
-            return { skipped: true, reason: 'no_config' };
-        }
-
-        // [修改] 移除“今天已发送”的检查逻辑
-        // 只要资源满足到期条件，每次检查都会发送通知
-
         const cfg = {
             smtpHost: 'smtp.qq.com',
             smtpPort: '465',
-            ...notifyConfig.toObject(),
-            emailEnabled: notifyConfig.emailEnabled !== false,
+            ...(notifyConfig ? notifyConfig.toObject() : {}),
+            emailEnabled: notifyConfig ? notifyConfig.emailEnabled !== false : false,
         };
-
         const ownerId = String(cfg.ownerId || '').trim();
-        if (!ownerId) {
-            console.log('通知配置未绑定所有者，跳过检查');
-            return { skipped: true, reason: 'owner_not_configured' };
-        }
-
         const emailEnabled = Boolean(cfg.emailEnabled && cfg.smtpUser && cfg.smtpPass && cfg.toList);
         const wecomEnabled = isWecomEnabled(cfg);
-
-        if (!emailEnabled && !wecomEnabled) {
+        const appEnabled = Boolean(getNotificationApiKey(cfg.qywxApiKey));
+        if (!appEnabled && !emailEnabled && !wecomEnabled) {
             console.log('通知渠道未配置，跳过检查');
             return { skipped: true, reason: 'no_channel' };
         }
 
         // Fetch only fields that are safe to include in a reminder. Credentials,
         // contact details and arbitrary config never enter the notification path.
-        const allResources = await ResourceConfig.find({ ownerId })
+        // App 通知按资源所有者分别发送；邮件和企微仍只使用旧配置绑定的所有者。
+        const resourceFilter = appEnabled ? {} : { ownerId };
+        const allResources = await ResourceConfig.find(resourceFilter)
             .select({
                 ownerId: 1,
                 'servers.name': 1,
@@ -357,45 +397,31 @@ async function checkAndNotify(force = false) {
                 'domains.renewPeriod': 1
             })
             .lean();
-        let allServers = [];
-        let allDomains = [];
-
-        allResources.forEach(resource => {
-            if (resource.servers && Array.isArray(resource.servers)) {
-                allServers = allServers.concat(resource.servers.map(safeReminderItem));
-            }
-            if (resource.domains && Array.isArray(resource.domains)) {
-                allDomains = allDomains.concat(resource.domains.map(safeReminderItem));
+        const defaultAdvanceDays = parseAdvanceDays(cfg.advanceDays, 7);
+        const dueByOwner = new Map();
+        allResources.forEach((resource) => {
+            const resourceOwnerId = String(resource.ownerId || '').trim();
+            if (!resourceOwnerId) return;
+            const dueServers = (Array.isArray(resource.servers) ? resource.servers : [])
+                .map(safeReminderItem)
+                .filter((item) => isDue(item.expiresAt, parseAdvanceDays(item.advanceNoticeDays, defaultAdvanceDays)));
+            const dueDomains = (Array.isArray(resource.domains) ? resource.domains : [])
+                .map(safeReminderItem)
+                .filter((item) => isDue(item.expiresAt, parseAdvanceDays(item.advanceNoticeDays, defaultAdvanceDays)));
+            if (dueServers.length || dueDomains.length) {
+                dueByOwner.set(resourceOwnerId, { servers: dueServers, domains: dueDomains });
             }
         });
 
-        const defaultAdvanceDays = parseAdvanceDays(cfg.advanceDays, 7);
-
-        // 检查到期的服务器
-        const dueServers = [];
-        for (const s of allServers) {
-            const adv = parseAdvanceDays(s.advanceNoticeDays, defaultAdvanceDays);
-            if (isDue(s.expiresAt, adv)) {
-                dueServers.push(s);
-            }
-        }
-
-        // 检查到期的域名
-        const dueDomains = [];
-        for (const d of allDomains) {
-            const adv = parseAdvanceDays(d.advanceNoticeDays, defaultAdvanceDays);
-            if (isDue(d.expiresAt, adv)) {
-                dueDomains.push(d);
-            }
-        }
-
-        if (dueServers.length === 0 && dueDomains.length === 0) {
+        if (dueByOwner.size === 0) {
             console.log('无需要提醒的资源');
             return { sent: false, servers: 0, domains: 0 };
         }
 
-        const totalCount = dueServers.length + dueDomains.length;
-        const expiredCount = [...dueServers, ...dueDomains].filter((item) => {
+        const allDueServers = [...dueByOwner.values()].flatMap((group) => group.servers);
+        const allDueDomains = [...dueByOwner.values()].flatMap((group) => group.domains);
+        const totalCount = allDueServers.length + allDueDomains.length;
+        const expiredCount = [...allDueServers, ...allDueDomains].filter((item) => {
             if (!item.expiresAt) return false;
             const today = dayjs().startOf('day');
             const expireDate = dayjs(item.expiresAt);
@@ -406,7 +432,7 @@ async function checkAndNotify(force = false) {
         if (expiredCount > 0) {
             subject = `⚠️ 紧急：${expiredCount}个资源已过期，${totalCount - expiredCount}个即将到期`;
         } else if (totalCount > 0) {
-            const urgentCount = [...dueServers, ...dueDomains].filter((item) => {
+            const urgentCount = [...allDueServers, ...allDueDomains].filter((item) => {
                 if (!item.expiresAt) return false;
                 const today = dayjs().startOf('day');
                 const expireDate = dayjs(item.expiresAt);
@@ -422,20 +448,72 @@ async function checkAndNotify(force = false) {
 
         const result = {
             sent: false,
-            servers: dueServers.length,
-            domains: dueDomains.length,
+            servers: allDueServers.length,
+            domains: allDueDomains.length,
+            owners: dueByOwner.size,
             channels: {},
         };
 
+        if (appEnabled) {
+            const ownerIds = [...dueByOwner.keys()];
+            const users = await User.find({ _id: { $in: ownerIds } }).select('_id userId').lean();
+            const appRecipients = new Map(users.map((user) => [String(user._id), String(user.userId || user._id)]));
+            let sent = 0;
+            let failed = 0;
+
+            for (const [resourceOwnerId, group] of dueByOwner.entries()) {
+                const recipientId = appRecipients.get(resourceOwnerId) || resourceOwnerId;
+                const includeWecom = wecomEnabled && resourceOwnerId === ownerId;
+                try {
+                    const response = await sendAppNotification(
+                        buildAppNotificationPayload({
+                            recipientId,
+                            ownerId: resourceOwnerId,
+                            servers: group.servers,
+                            domains: group.domains,
+                            includeWecom,
+                            cfg,
+                        }),
+                        { apiKey: cfg.qywxApiKey },
+                    );
+                    sent += 1;
+                    result.sent = true;
+                    if (includeWecom) {
+                        const wecomStatus = response.data?.channels?.wecom || 'unknown';
+                        result.channels.wecom = {
+                            success: wecomStatus === 'sent' || wecomStatus === 'deduplicated',
+                            status: wecomStatus,
+                        };
+                    }
+                } catch (error) {
+                    failed += 1;
+                    console.error(`发送资源 App 通知失败 (owner=${resourceOwnerId}):`, error.message || error);
+                    if (includeWecom) {
+                        try {
+                            const resp = await dispatchWecom(cfg, buildWecomText(group.servers, group.domains));
+                            const ok = isWecomResponseOk(resp);
+                            result.channels.wecom = { success: ok, error: ok ? undefined : (resp?.errmsg || '发送失败') };
+                            if (ok) result.sent = true;
+                        } catch (wecomError) {
+                            result.channels.wecom = { success: false, error: wecomError.message || '发送失败' };
+                        }
+                    }
+                }
+            }
+            result.channels.app = { success: sent > 0 && failed === 0, sent, failed };
+        }
+
+        const configuredOwnerDue = dueByOwner.get(ownerId) || { servers: [], domains: [] };
+
         // 发送邮件通知
-        if (emailEnabled) {
+        if (emailEnabled && configuredOwnerDue.servers.length + configuredOwnerDue.domains.length > 0) {
             try {
                 const transporter = buildTransport(cfg);
                 const to = (cfg.toList || '')
                     .split(',')
                     .map((x) => x.trim())
                     .filter(Boolean);
-                const html = htmlEmail(dueServers, dueDomains);
+                const html = htmlEmail(configuredOwnerDue.servers, configuredOwnerDue.domains);
 
                 await transporter.sendMail({
                     from: cfg.smtpUser,
@@ -453,30 +531,6 @@ async function checkAndNotify(force = false) {
             }
         }
 
-        // 发送企业微信通知
-        if (wecomEnabled) {
-            try {
-                const resp = await dispatchWecom(cfg, buildWecomText(dueServers, dueDomains));
-                const ok = isWecomResponseOk(resp);
-                result.channels.wecom = {
-                    success: ok,
-                    response: resp,
-                };
-                if (ok) {
-                    result.sent = true;
-                    console.log('企业微信通知已发送');
-                } else {
-                    result.channels.wecom.error =
-                        (resp && (resp.errmsg || resp.detail?.errmsg)) || '发送失败';
-                    console.error('企业微信通知发送失败:', result.channels.wecom.error);
-                }
-            } catch (error) {
-                console.error('发送企业微信通知失败:', error);
-                result.channels.wecom = { success: false, error: error.message || '发送失败' };
-            }
-        }
-
-        // [修改] 不再更新 lastSentAt，因为我们希望每次检查都发送
         console.log(`[${new Date().toISOString()}] 到期检查任务完成:`, result);
         return result;
 

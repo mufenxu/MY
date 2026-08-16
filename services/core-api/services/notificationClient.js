@@ -76,9 +76,54 @@ async function sendNotification(payload, {
     throw new Error('Notification service request failed');
 }
 
+async function sendAppNotification(payload, options = {}) {
+    const {
+        apiKey = '',
+        timeoutMs = 8_000,
+        maxAttempts = process.env.CORE_NOTIFICATION_MAX_ATTEMPTS,
+        axiosImpl = axios,
+        requestId = crypto.randomUUID(),
+        sleep = delay,
+    } = options;
+    const secret = getNotificationApiKey(apiKey);
+    if (!secret) throw new Error('Notification service API key is not configured');
+    const body = JSON.stringify(payload);
+    const pathname = '/v1/notifications';
+    const url = `${getNotificationServiceUrl()}${pathname}`;
+    const attempts = boundedInteger(maxAttempts, 2, 1, 3);
+    const timeout = boundedInteger(timeoutMs, 8_000, 1_000, 30_000);
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+            const serviceHeaders = issueServiceRequest({
+                caller: 'core-api',
+                secret,
+                method: 'POST',
+                pathname,
+                body,
+            });
+            return await axiosImpl.post(url, body, {
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Request-Id': requestId,
+                    ...serviceHeaders,
+                },
+                timeout,
+                transformRequest: [(data) => data],
+            });
+        } catch (error) {
+            if (attempt >= attempts || !isTransientNotificationError(error)) throw error;
+            await sleep(100 * attempt);
+        }
+    }
+    throw new Error('Notification service request failed');
+}
+
 module.exports = {
     getNotificationApiKey,
     getNotificationServiceUrl,
     isTransientNotificationError,
+    sendAppNotification,
     sendNotification,
 };
