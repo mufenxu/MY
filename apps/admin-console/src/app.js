@@ -782,6 +782,8 @@ export function createApp({
   });
   app.get('/docs/external-auth.json', (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('X-Robots-Tag', 'noindex');
     return res.json(buildExternalAuthGuideContract({
       origin: publicUrl.origin,
@@ -791,11 +793,15 @@ export function createApp({
 
   app.get('/.well-known/openid-configuration', (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.json(externalIdentity.discovery());
   });
 
   app.get('/oauth/jwks.json', (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.json(externalIdentity.jwks());
   });
 

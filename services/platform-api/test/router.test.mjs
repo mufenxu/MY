@@ -115,6 +115,10 @@ test('official website owns the root and an isolated asset namespace', async () 
   await withServer(router, async (port) => {
     assert.equal((await request(port, '/')).body.name, 'website');
     assert.equal((await request(port, '/console')).body.name, 'portal');
+    assert.deepEqual((await request(port, '/.well-known/openid-configuration')).body, {
+      name: 'portal',
+      url: '/.well-known/openid-configuration',
+    });
     assert.equal((await request(port, '/website-assets/index-12345678.js')).body.name, 'website');
     assert.equal((await request(port, '/assets/console-12345678.js')).body.name, 'portal');
   });

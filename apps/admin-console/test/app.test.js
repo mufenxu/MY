@@ -334,16 +334,31 @@ test('external authentication guide is public and exposes a safe machine-readabl
     assert.match(page, /MY 外部项目接入文档/);
     assert.match(page, /https:\/\/pxyb\.cn\/\.well-known\/openid-configuration/);
     assert.match(page, /Authorization Code \+ PKCE/);
-    assert.match(page, /完成后请明确返回控制台需要填写的/);
+    assert.match(page, /client_id=&lt;MY_CLIENT_ID&gt;/);
+    assert.match(page, /grant_type=authorization_code/);
+    assert.match(page, /token_use=id/);
+    assert.match(page, /当前不支持跨项目统一退出/);
+    assert.match(page, /完成后明确给出控制台要填写的/);
 
     const contractResponse = await fetch(`${origin}/docs/external-auth.json`);
     assert.equal(contractResponse.status, 200);
+    assert.equal(contractResponse.headers.get('access-control-allow-origin'), '*');
+    assert.equal(contractResponse.headers.get('cross-origin-resource-policy'), 'cross-origin');
     const contract = await contractResponse.json();
     assert.equal(contract.issuer, 'https://pxyb.cn');
     assert.equal(contract.endpoints.authorization, 'https://pxyb.cn/oauth/authorize');
     assert.equal(contract.protocol.pkceMethod, 'S256');
+    assert.equal(contract.protocol.discovery.requiredAtRuntime, true);
+    assert.ok(contract.protocol.authorizationRequest.requiredParameters.includes('client_id'));
+    assert.ok(contract.protocol.authorizationRequest.requiredParameters.includes('redirect_uri'));
+    assert.deepEqual(contract.protocol.tokenRequest.requiredParameters, [
+      'grant_type', 'code', 'redirect_uri', 'code_verifier',
+    ]);
+    assert.ok(contract.protocol.idTokenValidation.requiredChecks.includes('nonce'));
     assert.deepEqual(contract.registration.requiredFields, ['name', 'launchUrl', 'redirectUris']);
     assert.equal(contract.credentials.clientSecretServerOnly, true);
+    assert.equal(contract.session.singleLogoutSupported, false);
+    assert.equal(contract.errorHandling.neverRetryAuthorizationCode, true);
     assert.deepEqual(contract.aiExpectedOutput.registrationFields, [
       'name', 'launchUrl', 'redirectUris', 'healthUrl', 'requiredRole', 'openMode',
     ]);

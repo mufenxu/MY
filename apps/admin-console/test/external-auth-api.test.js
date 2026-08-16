@@ -14,9 +14,22 @@ test('external application OIDC flow registers, launches, exchanges, and rejects
   await withFetchServer(app, async (origin) => {
     const discoveryResponse = await fetch(`${origin}/.well-known/openid-configuration`);
     assert.equal(discoveryResponse.status, 200);
+    assert.equal(discoveryResponse.headers.get('access-control-allow-origin'), '*');
+    assert.equal(discoveryResponse.headers.get('cross-origin-resource-policy'), 'cross-origin');
     const discovery = await discoveryResponse.json();
     assert.equal(discovery.issuer, config.publicOrigin);
     assert.equal(discovery.authorization_endpoint, `${config.publicOrigin}/oauth/authorize`);
+    assert.equal(discovery.token_endpoint, `${config.publicOrigin}/oauth/token`);
+    assert.equal(discovery.jwks_uri, `${config.publicOrigin}/oauth/jwks.json`);
+    assert.deepEqual(discovery.code_challenge_methods_supported, ['S256']);
+
+    const jwksResponse = await fetch(`${origin}${new URL(discovery.jwks_uri).pathname}`);
+    assert.equal(jwksResponse.status, 200);
+    assert.equal(jwksResponse.headers.get('access-control-allow-origin'), '*');
+    assert.equal(jwksResponse.headers.get('cross-origin-resource-policy'), 'cross-origin');
+    const jwks = await jwksResponse.json();
+    assert.equal(jwks.keys.length, 1);
+    assert.equal(jwks.keys[0].alg, 'EdDSA');
 
     const createdResponse = await fetch(`${origin}/api/external-apps`, {
       method: 'POST',
