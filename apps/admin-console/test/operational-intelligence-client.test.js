@@ -9,7 +9,7 @@ const readSource = (...parts) => fs.readFileSync(path.join(appRoot, ...parts), '
 
 test('monitoring view integrates operational intelligence without a new navigation surface', () => {
   const source = readSource('src', 'client', 'OperationsViews.jsx');
-  const app = readSource('src', 'client', 'App.jsx');
+  const app = readSource('src', 'client', 'Dashboard.jsx');
 
   for (const view of ['trend', 'slo', 'calendar', 'search']) {
     assert.match(source, new RegExp(`id: '${view}'`));

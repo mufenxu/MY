@@ -189,9 +189,16 @@ fun OverviewScreen(
                     openingExternalApplicationId = null
                     externalApplicationOpenError = error.message?.takeIf { it.isNotBlank() }
                         ?: "外部应用登录地址生成失败，请稍后重试。"
-                }
+            }
         }
     }
+    val stableOpenServiceAdmin: (ServiceInfo) -> Unit = remember { { service -> openServiceAdmin(service) } }
+    val stableOpenExternalApplication: (ExternalApplication) -> Unit = remember {
+        { application -> openExternalApplication(application) }
+    }
+    val openTodayWorkspace = remember { { onOpenWorkspace(WorkspaceDestination.Today) } }
+    val openNotificationsWorkspace = remember { { onOpenWorkspace(WorkspaceDestination.Notifications) } }
+    val startCustomizingQuickActions = remember { { customizingQuickActions = true } }
     PullToRefresh(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,
@@ -332,7 +339,7 @@ fun OverviewScreen(
             val campusCardShape = RoundedCornerShape(24.dp)
             val campusInteractionSource = remember { MutableInteractionSource() }
             Surface(
-                onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
+                onClick = openTodayWorkspace,
                 interactionSource = campusInteractionSource,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -381,7 +388,7 @@ fun OverviewScreen(
                 title = "快捷功能",
                 subtitle = "常用常用工具一键直达",
                 trailing = {
-                    IconButton(onClick = { customizingQuickActions = true }) {
+                    IconButton(onClick = startCustomizingQuickActions) {
                         Icon(Icons.Outlined.Edit, contentDescription = "调整快捷操作", tint = MaterialTheme.colorScheme.primary)
                     }
                 },
@@ -404,7 +411,7 @@ fun OverviewScreen(
                         visibleActions.chunked(columnCount).forEach { rowActions ->
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 rowActions.forEach { action ->
-                                    val spec = homeQuickActionSpec(
+                                    val spec = remember(action) { homeQuickActionSpec(
                                         action = action,
                                         onSelectTab = onSelectTab,
                                         onRunDiagnostics = onRunDiagnostics,
@@ -412,7 +419,7 @@ fun OverviewScreen(
                                         onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
                                         onOpenOperations = onOpenOperations,
                                         onOpenWorkspace = onOpenWorkspace,
-                                    )
+                                    ) }
                                     QuickAction(
                                         icon = spec.icon,
                                         label = spec.label,
@@ -436,7 +443,7 @@ fun OverviewScreen(
                     val incidentCardShape = RoundedCornerShape(20.dp)
                     val incidentInteractionSource = remember(incident.id) { MutableInteractionSource() }
                     Surface(
-                        onClick = { onOpenWorkspace(WorkspaceDestination.Notifications) },
+                        onClick = openNotificationsWorkspace,
                         interactionSource = incidentInteractionSource,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -483,7 +490,7 @@ fun OverviewScreen(
                             ExternalApplicationRow(
                                 application = application,
                                 opening = openingExternalApplicationId == application.id,
-                                onOpen = ::openExternalApplication,
+                                onOpen = stableOpenExternalApplication,
                             )
                             if (index < state.externalApplications.lastIndex) {
                                 HorizontalDivider(
@@ -516,7 +523,7 @@ fun OverviewScreen(
                             ServiceRow(
                                 service = service,
                                 opening = openingServiceId == service.id,
-                                onOpen = ::openServiceAdmin,
+                                onOpen = stableOpenServiceAdmin,
                             )
                             if (index < sortedServices.lastIndex) {
                                 HorizontalDivider(

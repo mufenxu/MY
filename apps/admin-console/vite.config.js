@@ -10,5 +10,13 @@ export default defineConfig({
   },
   build: {
     sourcemap: process.env.SOURCE_MAPS === 'hidden' ? 'hidden' : false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'console-vendor': ['lucide-react', '@marsidev/react-turnstile', '@simplewebauthn/browser'],
+        },
+      },
+    },
   },
 });

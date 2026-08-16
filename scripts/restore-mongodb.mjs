@@ -1,3 +1,7 @@
+// Host-side restore entrypoint (`npm run restore <dir> --confirm-drop`).
+// Stops application containers, restores via `docker compose exec`, then
+// restarts services. In-container counterpart: restore-mongodb-container.mjs.
+//
 import { createReadStream } from 'node:fs';
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';

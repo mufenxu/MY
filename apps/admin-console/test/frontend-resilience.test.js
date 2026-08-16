@@ -6,9 +6,20 @@ import { fileURLToPath } from 'node:url';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const readSource = (...parts) => fs.readFileSync(path.join(appRoot, ...parts), 'utf8');
+const readConsoleSource = () => [
+  'App.jsx',
+  'Dashboard.jsx',
+  'shared.jsx',
+  'Login.jsx',
+  'OverviewView.jsx',
+  'ApplicationsView.jsx',
+  'ServicesView.jsx',
+  'BackupRecoveryView.jsx',
+  'CommandPalette.jsx',
+].map((name) => readSource('src', 'client', name)).join('\n');
 
 test('service monitoring is sequential and pauses while hidden or offline', () => {
-  const source = readSource('src', 'client', 'App.jsx');
+  const source = readConsoleSource();
 
   assert.match(source, /loadRequestRef\.current/);
   assert.match(source, /document\.visibilityState === 'visible'/);
@@ -19,7 +30,7 @@ test('service monitoring is sequential and pauses while hidden or offline', () =
 });
 
 test('session connectivity failures render a retry state instead of the login form', () => {
-  const source = readSource('src', 'client', 'App.jsx');
+  const source = readConsoleSource();
 
   assert.match(source, /error\.status === 401/);
   assert.match(source, /setSessionError\(error\)/);
@@ -39,7 +50,7 @@ test('client files never rely on an undeclared React namespace', () => {
 });
 
 test('CT8 automation has one canonical client and API namespace', () => {
-  const app = readSource('src', 'client', 'App.jsx');
+  const app = readConsoleSource();
   const automation = readSource('src', 'client', 'AutomationView.jsx');
 
   assert.match(app, /const loadAutomationView = \(\) => import\('\.\/AutomationView\.jsx'\)/);
@@ -54,7 +65,7 @@ test('CT8 automation has one canonical client and API namespace', () => {
 });
 
 test('large operational views stay out of the entry bundle and preload while idle', () => {
-  const app = readSource('src', 'client', 'App.jsx');
+  const app = readConsoleSource();
 
   assert.match(app, /const loadNotificationView = \(\) => import\('\.\/NotificationServiceView\.jsx'\)/);
   assert.match(app, /const loadPlatformViews = \(\) => import\('\.\/PlatformControlViews\.jsx'\)/);
@@ -65,7 +76,7 @@ test('large operational views stay out of the entry bundle and preload while idl
 });
 
 test('external applications use server-issued launch links and reveal client secrets only after creation or rotation', () => {
-  const app = readSource('src', 'client', 'App.jsx');
+  const app = readConsoleSource();
   const view = readSource('src', 'client', 'ExternalApplicationsView.jsx');
   const navigation = readSource('src', 'client', 'navigation.js');
 
@@ -82,7 +93,7 @@ test('external applications use server-issued launch links and reveal client sec
 });
 
 test('console navigation and segmented tabs preserve browser and keyboard semantics', () => {
-  const app = readSource('src', 'client', 'App.jsx');
+  const app = readConsoleSource();
   const controls = readSource('src', 'client', 'UiControls.jsx');
   const styles = readSource('src', 'client', 'styles.css');
 
@@ -119,7 +130,7 @@ test('notification nested tabs keep the existing panel spacing and accessible la
 
 test('homepage dependency topology uses live service observations without decorative canvas data', () => {
   const topology = readSource('src', 'client', 'HolographicTopology.jsx');
-  const app = readSource('src', 'client', 'App.jsx');
+  const app = readConsoleSource();
 
   for (const serviceId of ['core', 'exam', 'campus', 'mqtt', 'notify', 'ct8-automation']) {
     assert.match(topology, new RegExp(`id: '${serviceId}'`));
@@ -133,7 +144,7 @@ test('homepage dependency topology uses live service observations without decora
 });
 
 test('homepage formal cockpit keeps summary and alert content tied to live observations', () => {
-  const app = readSource('src', 'client', 'App.jsx');
+  const app = readConsoleSource();
   const styles = readSource('src', 'client', 'styles.css');
 
   assert.match(app, /className="cockpit-overview-strip" aria-label="全网运行摘要"/);
@@ -148,7 +159,7 @@ test('homepage formal cockpit keeps summary and alert content tied to live obser
 });
 
 test('backup view manages scheduled and S3-compatible offsite backups without exposing saved secrets', () => {
-  const app = readSource('src', 'client', 'App.jsx');
+  const app = readConsoleSource();
   const operations = readSource('src', 'client', 'OperationsViews.jsx');
   const styles = readSource('src', 'client', 'styles.css');
 

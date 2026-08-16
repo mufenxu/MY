@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.data
 
+import androidx.compose.runtime.Immutable
+
 object AutomationEngine {
 
     /**
@@ -62,6 +64,7 @@ object AutomationEngine {
     }
 }
 
+@Immutable
 data class AutomationTriggerResult(
     val rule: AutomationRule,
     val matchedReason: String,

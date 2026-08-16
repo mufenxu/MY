@@ -161,7 +161,7 @@ fun ProfileScreen(
             }
 
             state.sectionError?.let { message ->
-                item { FeedbackBanner("账号数据暂不可用：$message", error = true) }
+                item(key = "section-error") { FeedbackBanner("账号数据暂不可用：$message", error = true) }
             }
 
             // 2. 个人资料卡片 (含快捷桌面登录)
@@ -185,7 +185,7 @@ fun ProfileScreen(
 
             // 3. 系统通知权限引导 (未开启时提示)
             if (!notificationsEnabled) {
-                item {
+                item(key = "notification-permission") {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(24.dp),

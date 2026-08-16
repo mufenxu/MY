@@ -118,7 +118,7 @@ fun OperationsScreen(
             )
         }
         state.sectionError?.let { message ->
-            item { FeedbackBanner("部分工具数据暂不可用：$message", error = true) }
+            item(key = "section-error") { FeedbackBanner("部分工具数据暂不可用：$message", error = true) }
         }
         item {
             Surface(

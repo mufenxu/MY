@@ -116,7 +116,7 @@ fun AccountManagementScreen(
             )
         }
         state.sectionError?.let { message ->
-            item { FeedbackBanner("安全数据暂不可用：$message", error = true) }
+            item(key = "section-error") { FeedbackBanner("安全数据暂不可用：$message", error = true) }
         }
 
         // 1. 个人资料概览卡片

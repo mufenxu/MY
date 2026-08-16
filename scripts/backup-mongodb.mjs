@@ -1,3 +1,7 @@
+// Host-side backup entrypoint (`npm run backup`). Runs mongodump via
+// `docker compose exec`, copies core uploads, writes a manifest, and prunes
+// old backups on the host. In-container counterpart: backup-mongodb-container.mjs.
+//
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';

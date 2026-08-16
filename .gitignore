@@ -5,6 +5,10 @@
 **/output/
 **/*.log
 
+# Local agent and Codex logs
+.agents/
+.codex-logs/
+
 # Runtime data
 **/data/
 **/uploads/

@@ -21,7 +21,7 @@ import {
     SunOutlined,
     MoonOutlined
 } from '@ant-design/icons';
-import { useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router';
 import UserAvatar from './UserAvatar';
 import { IS_PLATFORM_SSO, logoutPlatformSession } from '../utils/runtime';
 import { message } from '../utils/feedback';

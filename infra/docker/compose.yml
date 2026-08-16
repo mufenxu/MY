@@ -75,7 +75,7 @@ services:
     image: ${DEPLOYMENT_RUNNER_IMAGE:-my-platform/deployment-runner:local}
     build:
       context: ../..
-      dockerfile: deployment-runner.Dockerfile
+      dockerfile: infra/docker/deployment-runner.Dockerfile
     restart: unless-stopped
     init: true
     environment:
@@ -124,7 +124,7 @@ services:
     image: ${PLATFORM_API_IMAGE:-my-platform/platform-api:local}
     build:
       context: ../..
-      dockerfile: Dockerfile
+      dockerfile: infra/docker/platform-api.Dockerfile
     restart: unless-stopped
     init: true
     depends_on:
@@ -135,9 +135,9 @@ services:
       exam-api:
         condition: service_healthy
       campus-service:
-        condition: service_started
+        condition: service_healthy
       iot-service:
-        condition: service_started
+        condition: service_healthy
       notification-service:
         condition: service_healthy
     ports:
@@ -263,14 +263,14 @@ services:
     image: ${CORE_API_IMAGE:-my-platform/core-api:local}
     build:
       context: ../..
-      dockerfile: core-api.Dockerfile
+      dockerfile: infra/docker/core-api.Dockerfile
     restart: unless-stopped
     init: true
     depends_on:
       mongodb-init:
         condition: service_completed_successfully
       iot-service:
-        condition: service_started
+        condition: service_healthy
     environment:
       NODE_ENV: production
       TZ: ${TZ:-Asia/Shanghai}
@@ -334,7 +334,7 @@ services:
     image: ${EXAM_API_IMAGE:-my-platform/exam-api:local}
     build:
       context: ../..
-      dockerfile: exam-api.Dockerfile
+      dockerfile: infra/docker/exam-api.Dockerfile
     restart: unless-stopped
     init: true
     depends_on:
@@ -382,7 +382,7 @@ services:
     image: ${NOTIFICATION_SERVICE_IMAGE:-my-platform/notification-service:local}
     build:
       context: ../..
-      dockerfile: notification-service.Dockerfile
+      dockerfile: infra/docker/notification-service.Dockerfile
     restart: unless-stopped
     init: true
     depends_on:
@@ -428,7 +428,7 @@ services:
     image: ${BACKUP_RUNNER_IMAGE:-my-platform/backup-runner:local}
     build:
       context: ../..
-      dockerfile: backup-runner.Dockerfile
+      dockerfile: infra/docker/backup-runner.Dockerfile
     restart: unless-stopped
     init: true
     depends_on:
@@ -482,7 +482,7 @@ services:
     image: ${CAMPUS_SERVICE_IMAGE:-my-platform/campus-service:local}
     build:
       context: ../..
-      dockerfile: campus-service.Dockerfile
+      dockerfile: infra/docker/campus-service.Dockerfile
     restart: unless-stopped
     init: true
     depends_on:
@@ -535,7 +535,7 @@ services:
     image: ${IOT_SERVICE_IMAGE:-my-platform/iot-service:local}
     build:
       context: ../..
-      dockerfile: iot-service.Dockerfile
+      dockerfile: infra/docker/iot-service.Dockerfile
     restart: unless-stopped
     init: true
     depends_on:

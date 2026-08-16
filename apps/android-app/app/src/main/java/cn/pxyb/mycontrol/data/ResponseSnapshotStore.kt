@@ -1,8 +1,11 @@
 package cn.pxyb.mycontrol.data
 
+import androidx.compose.runtime.Immutable
+
 import android.content.Context
 import android.util.Base64
 
+@Immutable
 data class ResponseSnapshot(
     val body: String,
     val savedAtMillis: Long,

@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.data
 
+import androidx.compose.runtime.Immutable
+
+@Immutable
 data class PlatformUser(
     val username: String,
     val role: String,
@@ -7,6 +10,7 @@ data class PlatformUser(
     val passkeyCount: Int,
 )
 
+@Immutable
 data class LoginResult(
     val user: PlatformUser,
     val sessionCookie: String,
@@ -15,22 +19,26 @@ data class LoginResult(
     val recoveryCodes: List<String> = emptyList(),
 )
 
+@Immutable
 data class LoginCapabilities(
     val androidPasskeySupported: Boolean,
 )
 
+@Immutable
 data class PasskeyChallenge(
     val username: String,
     val challengeId: String,
     val optionsJson: String,
 )
 
+@Immutable
 data class QrLoginBrowser(
     val label: String,
     val ip: String,
     val userAgent: String,
 )
 
+@Immutable
 data class QrLoginTarget(
     val requestId: String,
     val status: String,
@@ -40,17 +48,20 @@ data class QrLoginTarget(
     val confirmationMethod: String,
 )
 
+@Immutable
 data class QrPasskeyChallenge(
     val challengeId: String,
     val optionsJson: String,
 )
 
+@Immutable
 data class WebLoginLink(
     val loginUrl: String,
     val redirect: String,
     val expiresAt: String?,
 )
 
+@Immutable
 data class ExternalApplicationHealth(
     val state: String,
     val httpStatus: Int?,
@@ -58,6 +69,7 @@ data class ExternalApplicationHealth(
     val checkedAt: String?,
 )
 
+@Immutable
 data class ExternalApplication(
     val id: String,
     val name: String,
@@ -71,12 +83,14 @@ data class ExternalApplication(
     val health: ExternalApplicationHealth,
 )
 
+@Immutable
 data class ExternalApplicationLaunch(
     val loginUrl: String,
     val openMode: String,
     val expiresAt: String?,
 )
 
+@Immutable
 data class ServiceInfo(
     val id: String,
     val name: String,
@@ -87,6 +101,7 @@ data class ServiceInfo(
     val adminUrl: String?,
 )
 
+@Immutable
 data class IncidentInfo(
     val id: String,
     val title: String,
@@ -99,6 +114,7 @@ data class IncidentInfo(
     val updatedAt: String?,
 )
 
+@Immutable
 data class AuditInfo(
     val id: String,
     val action: String,
@@ -107,6 +123,7 @@ data class AuditInfo(
     val occurredAt: String?,
 )
 
+@Immutable
 data class OverviewData(
     val services: List<ServiceInfo>,
     val incidents: List<IncidentInfo>,
@@ -119,6 +136,7 @@ data class OverviewData(
         get() = services.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
 }
 
+@Immutable
 data class PlatformTask(
     val id: String,
     val title: String,
@@ -130,11 +148,13 @@ data class PlatformTask(
     val updatedAt: String?,
 )
 
+@Immutable
 data class TaskData(
     val tasks: List<PlatformTask>,
     val generatedAt: String?,
 )
 
+@Immutable
 data class ReleaseBuild(
     val id: String,
     val status: String,
@@ -144,6 +164,7 @@ data class ReleaseBuild(
     val components: List<String>,
 )
 
+@Immutable
 data class ReleaseDeployment(
     val id: String,
     val status: String,
@@ -153,6 +174,7 @@ data class ReleaseDeployment(
     val components: List<String>,
 )
 
+@Immutable
 data class ReleaseData(
     val builds: List<ReleaseBuild>,
     val deployments: List<ReleaseDeployment>,
@@ -160,6 +182,7 @@ data class ReleaseData(
     val runnerConnected: Boolean,
 )
 
+@Immutable
 data class BackupQuality(
     val latestName: String?,
     val latestAt: String?,
@@ -173,6 +196,7 @@ data class BackupQuality(
     val checkedAt: String?,
 )
 
+@Immutable
 data class DeviceInfo(
     val id: String,
     val name: String,
@@ -183,6 +207,7 @@ data class DeviceInfo(
     val relays: Map<String, String?> = emptyMap(),
 )
 
+@Immutable
 data class IotScene(
     val id: String,
     val name: String,
@@ -191,12 +216,14 @@ data class IotScene(
     val actions: List<IotSceneAction> = emptyList(),
 )
 
+@Immutable
 data class IotSceneAction(
     val deviceId: String,
     val relayId: String,
     val status: String,
 )
 
+@Immutable
 data class AutomationRule(
     val id: String,
     val name: String,
@@ -209,6 +236,7 @@ data class AutomationRule(
     val lastTriggeredAt: Long? = null,
 )
 
+@Immutable
 data class IotData(
     val mqttConnected: Boolean,
     val deviceOnline: Boolean,
@@ -218,6 +246,7 @@ data class IotData(
     val scenes: List<IotScene>,
 )
 
+@Immutable
 data class Ct8Data(
     val totalHosts: Int?,
     val successHosts: Int?,
@@ -228,6 +257,7 @@ data class Ct8Data(
     val lastRunAt: String?,
 )
 
+@Immutable
 data class DiagnosticCheck(
     val id: String,
     val label: String,
@@ -235,11 +265,13 @@ data class DiagnosticCheck(
     val message: String,
 )
 
+@Immutable
 data class DiagnosticData(
     val checks: List<DiagnosticCheck>,
     val checkedAt: String?,
 )
 
+@Immutable
 data class SecuritySession(
     val nonce: String,
     val subject: String,
@@ -252,6 +284,7 @@ data class SecuritySession(
     val current: Boolean,
 )
 
+@Immutable
 data class SecurityData(
     val sessions: List<SecuritySession>,
     val totpEnabled: Boolean,
@@ -261,6 +294,7 @@ data class SecurityData(
     val sessionIdleMinutes: Int,
 )
 
+@Immutable
 data class PlatformPasskey(
     val id: String,
     val name: String,
@@ -269,6 +303,7 @@ data class PlatformPasskey(
     val lastUsedAt: String?,
 )
 
+@Immutable
 data class TotpEnrollment(
     val secret: String,
     val uri: String,
@@ -276,11 +311,13 @@ data class TotpEnrollment(
     val expiresAt: String?,
 )
 
+@Immutable
 data class PasskeyRegistrationChallenge(
     val challengeId: String,
     val optionsJson: String,
 )
 
+@Immutable
 data class GoogleAccountRecord(
     val id: String,
     val primaryEmail: String,
@@ -295,6 +332,7 @@ data class GoogleAccountRecord(
     val aliases: List<GoogleAliasRecord> = emptyList(),
 )
 
+@Immutable
 data class GoogleAliasRecord(
     val id: String,
     val address: String,
@@ -306,6 +344,7 @@ data class GoogleAliasRecord(
     val note: String = "",
 )
 
+@Immutable
 data class GoogleAccountSnapshot(
     val accounts: List<GoogleAccountRecord>,
     val revision: Int,

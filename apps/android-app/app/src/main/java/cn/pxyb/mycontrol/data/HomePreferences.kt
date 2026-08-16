@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.data
 
+import androidx.compose.runtime.Immutable
+
 import android.content.Context
 
 enum class HomeQuickAction {
@@ -14,6 +16,7 @@ enum class HomeQuickAction {
     Operations,
 }
 
+@Immutable
 data class HomeQuickActionPreferences(
     val order: List<HomeQuickAction>,
     val hidden: Set<HomeQuickAction>,

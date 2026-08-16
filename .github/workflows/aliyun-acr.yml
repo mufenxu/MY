@@ -4,14 +4,14 @@ on:
   push:
     branches: [main]
     paths:
-      - Dockerfile
-      - backup-runner.Dockerfile
-      - deployment-runner.Dockerfile
-      - core-api.Dockerfile
-      - exam-api.Dockerfile
-      - notification-service.Dockerfile
-      - campus-service.Dockerfile
-      - iot-service.Dockerfile
+      - infra/docker/platform-api.Dockerfile
+      - infra/docker/backup-runner.Dockerfile
+      - infra/docker/deployment-runner.Dockerfile
+      - infra/docker/core-api.Dockerfile
+      - infra/docker/exam-api.Dockerfile
+      - infra/docker/notification-service.Dockerfile
+      - infra/docker/campus-service.Dockerfile
+      - infra/docker/iot-service.Dockerfile
       - apps/admin-console/**
       - apps/official-website/**
       - apps/core-admin/**
@@ -188,14 +188,14 @@ jobs:
           fi
 
           declare -A dockerfiles=(
-            [platform]="Dockerfile"
-            [core]="core-api.Dockerfile"
-            [exam]="exam-api.Dockerfile"
-            [notification]="notification-service.Dockerfile"
-            [backup]="backup-runner.Dockerfile"
-            [runner]="deployment-runner.Dockerfile"
-            [campus]="campus-service.Dockerfile"
-            [iot]="iot-service.Dockerfile"
+            [platform]="infra/docker/platform-api.Dockerfile"
+            [core]="infra/docker/core-api.Dockerfile"
+            [exam]="infra/docker/exam-api.Dockerfile"
+            [notification]="infra/docker/notification-service.Dockerfile"
+            [backup]="infra/docker/backup-runner.Dockerfile"
+            [runner]="infra/docker/deployment-runner.Dockerfile"
+            [campus]="infra/docker/campus-service.Dockerfile"
+            [iot]="infra/docker/iot-service.Dockerfile"
             [mongodb]="infra/docker/mongodb.Dockerfile"
           )
           declare -A contexts=(

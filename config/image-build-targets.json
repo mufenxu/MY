@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "targets": {
-    "platform": { "aliases": ["platform-api"], "dockerfile": "Dockerfile", "context": ".", "tag": "platform-api-latest", "envKey": "PLATFORM_API_IMAGE" },
-    "core": { "aliases": ["core-api"], "dockerfile": "core-api.Dockerfile", "context": ".", "tag": "core-api-latest", "envKey": "CORE_API_IMAGE" },
-    "exam": { "aliases": ["exam-api"], "dockerfile": "exam-api.Dockerfile", "context": ".", "tag": "exam-api-latest", "envKey": "EXAM_API_IMAGE" },
-    "notification": { "aliases": ["notification-service"], "dockerfile": "notification-service.Dockerfile", "context": ".", "tag": "notification-service-latest", "envKey": "NOTIFICATION_SERVICE_IMAGE" },
-    "backup": { "aliases": ["backup-runner"], "dockerfile": "backup-runner.Dockerfile", "context": ".", "tag": "backup-runner-latest", "envKey": "BACKUP_RUNNER_IMAGE" },
-    "runner": { "aliases": ["deployment-runner"], "dockerfile": "deployment-runner.Dockerfile", "context": ".", "tag": "deployment-runner-latest", "envKey": "DEPLOYMENT_RUNNER_IMAGE", "releaseArtifact": false },
-    "campus": { "aliases": ["campus-service"], "dockerfile": "campus-service.Dockerfile", "context": ".", "tag": "campus-service-latest", "envKey": "CAMPUS_SERVICE_IMAGE" },
-    "iot": { "aliases": ["iot-service"], "dockerfile": "iot-service.Dockerfile", "context": ".", "tag": "iot-service-latest", "envKey": "IOT_SERVICE_IMAGE" },
+    "platform": { "aliases": ["platform-api"], "dockerfile": "infra/docker/platform-api.Dockerfile", "context": ".", "tag": "platform-api-latest", "envKey": "PLATFORM_API_IMAGE" },
+    "core": { "aliases": ["core-api"], "dockerfile": "infra/docker/core-api.Dockerfile", "context": ".", "tag": "core-api-latest", "envKey": "CORE_API_IMAGE" },
+    "exam": { "aliases": ["exam-api"], "dockerfile": "infra/docker/exam-api.Dockerfile", "context": ".", "tag": "exam-api-latest", "envKey": "EXAM_API_IMAGE" },
+    "notification": { "aliases": ["notification-service"], "dockerfile": "infra/docker/notification-service.Dockerfile", "context": ".", "tag": "notification-service-latest", "envKey": "NOTIFICATION_SERVICE_IMAGE" },
+    "backup": { "aliases": ["backup-runner"], "dockerfile": "infra/docker/backup-runner.Dockerfile", "context": ".", "tag": "backup-runner-latest", "envKey": "BACKUP_RUNNER_IMAGE" },
+    "runner": { "aliases": ["deployment-runner"], "dockerfile": "infra/docker/deployment-runner.Dockerfile", "context": ".", "tag": "deployment-runner-latest", "envKey": "DEPLOYMENT_RUNNER_IMAGE", "releaseArtifact": false },
+    "campus": { "aliases": ["campus-service"], "dockerfile": "infra/docker/campus-service.Dockerfile", "context": ".", "tag": "campus-service-latest", "envKey": "CAMPUS_SERVICE_IMAGE" },
+    "iot": { "aliases": ["iot-service"], "dockerfile": "infra/docker/iot-service.Dockerfile", "context": ".", "tag": "iot-service-latest", "envKey": "IOT_SERVICE_IMAGE" },
     "mongodb": { "aliases": ["mongo"], "dockerfile": "infra/docker/mongodb.Dockerfile", "context": "infra/docker", "tag": "mongodb-7.0", "envKey": "MONGODB_IMAGE" }
   },
   "rules": [
@@ -17,15 +17,15 @@
       "targets": ["*"]
     },
     {
-      "paths": ["Dockerfile", "apps/admin-console/**", "apps/official-website/**", "config/platform.services.docker.json", "services/platform-api/**"],
+      "paths": ["infra/docker/platform-api.Dockerfile", "apps/admin-console/**", "apps/official-website/**", "config/platform.services.docker.json", "services/platform-api/**"],
       "targets": ["platform"]
     },
     {
-      "paths": ["backup-runner.Dockerfile", "scripts/backup-runner.mjs", "scripts/backup-mongodb-container.mjs", "scripts/restore-mongodb-container.mjs", "apps/admin-console/package.json", "apps/admin-console/package-lock.json", "apps/admin-console/src/backups.js", "apps/admin-console/src/backupArchives.js", "apps/admin-console/src/backupStorage.js"],
+      "paths": ["infra/docker/backup-runner.Dockerfile", "scripts/backup-runner.mjs", "scripts/backup-mongodb-container.mjs", "scripts/restore-mongodb-container.mjs", "apps/admin-console/package.json", "apps/admin-console/package-lock.json", "apps/admin-console/src/backups.js", "apps/admin-console/src/backupArchives.js", "apps/admin-console/src/backupStorage.js"],
       "targets": ["backup"]
     },
     {
-      "paths": ["deployment-runner.Dockerfile", "scripts/deployment-runner.mjs", "scripts/configure-deployment-sidecar.mjs"],
+      "paths": ["infra/docker/deployment-runner.Dockerfile", "scripts/deployment-runner.mjs", "scripts/configure-deployment-sidecar.mjs"],
       "targets": ["runner"]
     },
     {
@@ -33,23 +33,23 @@
       "targets": ["platform", "runner"]
     },
     {
-      "paths": ["core-api.Dockerfile", "apps/core-admin/**", "services/core-api/**"],
+      "paths": ["infra/docker/core-api.Dockerfile", "apps/core-admin/**", "services/core-api/**"],
       "targets": ["core"]
     },
     {
-      "paths": ["exam-api.Dockerfile", "apps/exam-admin/**", "services/exam-api/**"],
+      "paths": ["infra/docker/exam-api.Dockerfile", "apps/exam-admin/**", "services/exam-api/**"],
       "targets": ["exam"]
     },
     {
-      "paths": ["notification-service.Dockerfile", "services/notification-service/**"],
+      "paths": ["infra/docker/notification-service.Dockerfile", "services/notification-service/**"],
       "targets": ["notification"]
     },
     {
-      "paths": ["campus-service.Dockerfile", "services/campus-service/**"],
+      "paths": ["infra/docker/campus-service.Dockerfile", "services/campus-service/**"],
       "targets": ["campus"]
     },
     {
-      "paths": ["iot-service.Dockerfile", "services/iot-service/**"],
+      "paths": ["infra/docker/iot-service.Dockerfile", "services/iot-service/**"],
       "targets": ["iot"]
     },
     {

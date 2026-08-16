@@ -1,16 +1,20 @@
 package cn.pxyb.mycontrol.data
 
+import androidx.compose.runtime.Immutable
+
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
 import java.util.UUID
 
+@Immutable
 data class TodoCourseRef(
     val id: String,
     val name: String,
 )
 
+@Immutable
 data class TodoTask(
     val id: String,
     val title: String,
@@ -26,17 +30,20 @@ data class TodoTask(
     val updatedAt: Long = System.currentTimeMillis(),
 )
 
+@Immutable
 data class TodoSnapshot(
     val tasks: List<TodoTask> = emptyList(),
     val revision: Int = 0,
 )
 
+@Immutable
 data class TodoMutation(
     val type: String,
     val task: TodoTask? = null,
     val id: String? = null,
 )
 
+@Immutable
 data class CampusCourse(
     val id: String,
     val courseCode: String,
@@ -53,6 +60,7 @@ data class CampusCourse(
     val location: String,
 )
 
+@Immutable
 data class CampusTimetable(
     val currentCalendarText: String = "",
     val termText: String = "",
@@ -62,6 +70,7 @@ data class CampusTimetable(
     val courses: List<CampusCourse> = emptyList(),
 )
 
+@Immutable
 data class CampusGpa(
     val overall: String? = null,
     val core: String? = null,
@@ -69,12 +78,14 @@ data class CampusGpa(
     val degree: String? = null,
 )
 
+@Immutable
 data class CampusFreeClassrooms(
     val rooms: Int? = null,
     val seats: Int? = null,
     val dayLabel: String? = null,
 )
 
+@Immutable
 data class CampusOverview(
     val gpa: CampusGpa? = null,
     val freeClassrooms: CampusFreeClassrooms? = null,
@@ -85,11 +96,13 @@ data class CampusOverview(
     val energyRoom: String? = null,
 )
 
+@Immutable
 data class CampusDashboard(
     val timetable: CampusTimetable,
     val overview: CampusOverview,
 )
 
+@Immutable
 data class ResourceExpiry(
     val id: String,
     val type: String,
@@ -98,6 +111,7 @@ data class ResourceExpiry(
     val advanceNoticeDays: Int,
 )
 
+@Immutable
 data class AppAlertRecord(
     val id: String,
     val type: String,
@@ -114,6 +128,7 @@ data class AppAlertRecord(
     val actions: List<AppNotificationAction> = emptyList(),
 )
 
+@Immutable
 data class AlertPreferences(
     val quietHoursEnabled: Boolean = false,
     val quietStartHour: Int = 22,
@@ -125,6 +140,7 @@ data class AlertPreferences(
     val backupAlerts: Boolean = true,
 )
 
+@Immutable
 data class TrendSample(
     val day: String,
     val serviceTotal: Int,

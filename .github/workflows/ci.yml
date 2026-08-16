@@ -155,7 +155,7 @@ jobs:
     name: Build ${{ matrix.image }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [quality, repository-security, codeql, docker-smoke, image-targets]
+    needs: [quality, repository-security, codeql, image-targets]
     permissions:
       contents: read
       packages: write
@@ -200,7 +200,7 @@ jobs:
     name: Docker smoke test
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [quality, repository-security, codeql]
+    needs: [quality, repository-security, codeql, container-images]
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7

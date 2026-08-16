@@ -1,3 +1,7 @@
+// Runs inside the backup-runner container (PLATFORM_RESTORE_COMMAND).
+// Executes mongorestore against the replica set. Host-side entrypoint:
+// restore-mongodb.mjs.
+//
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { access, cp, mkdir, readFile, readdir, rm } from 'node:fs/promises';

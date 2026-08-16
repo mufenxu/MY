@@ -22,7 +22,45 @@ services:
     networks:
       - backend
 
+  platform-api:
+    build:
+      cache_from:
+        - type=gha,scope=platform-api
+
+  core-api:
+    build:
+      cache_from:
+        - type=gha,scope=core-api
+
+  exam-api:
+    build:
+      cache_from:
+        - type=gha,scope=exam-api
+
+  notification-service:
+    build:
+      cache_from:
+        - type=gha,scope=notification-service
+
+  backup-runner:
+    build:
+      cache_from:
+        - type=gha,scope=backup-runner
+
+  deployment-runner:
+    build:
+      cache_from:
+        - type=gha,scope=deployment-runner
+
+  campus-service:
+    build:
+      cache_from:
+        - type=gha,scope=campus-service
+
   iot-service:
+    build:
+      cache_from:
+        - type=gha,scope=iot-service
     depends_on:
       mqtt-ci:
         condition: service_healthy

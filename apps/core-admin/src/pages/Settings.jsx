@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Form, Input, Button, Switch, Card, Divider, Space, Row, Col, Select, Typography, Tabs, Modal, Tag, Upload } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { message } from '../utils/feedback';
 import {
     SaveOutlined,

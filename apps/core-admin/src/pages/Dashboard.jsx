@@ -14,7 +14,7 @@ import {
     HistoryOutlined,
     FileSearchOutlined
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import api from '../utils/api';
 import UserAvatar from '../components/UserAvatar';
 import { useResponsive } from '../hooks/useIsMobile';

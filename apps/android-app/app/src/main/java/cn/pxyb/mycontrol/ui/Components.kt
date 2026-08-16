@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.compose.runtime.Immutable
+
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
@@ -138,6 +140,7 @@ import kotlin.math.roundToInt
 private val PlatformTimeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm")
     .withZone(ZoneId.systemDefault())
 
+@Immutable
 data class StatusStyle(
     val label: String,
     val foreground: Color,

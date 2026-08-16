@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.data
 
+import androidx.compose.runtime.Immutable
+
+@Immutable
 data class AppNotificationBlock(
     val type: String,
     val text: String = "",
@@ -14,10 +17,13 @@ data class AppNotificationBlock(
     val mediaType: String = "",
 )
 
+@Immutable
 data class AppNotificationKeyValue(val key: String, val value: String)
 
+@Immutable
 data class AppNotificationListItem(val title: String, val description: String = "")
 
+@Immutable
 data class AppNotificationAction(
     val id: String,
     val label: String,

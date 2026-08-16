@@ -26,14 +26,14 @@ Pushes to `main` automatically build and push only the images affected by the ch
 The automatic trigger watches these paths:
 
 ```text
-Dockerfile
-backup-runner.Dockerfile
-deployment-runner.Dockerfile
-core-api.Dockerfile
-exam-api.Dockerfile
-notification-service.Dockerfile
-campus-service.Dockerfile
-iot-service.Dockerfile
+infra/docker/platform-api.Dockerfile
+infra/docker/backup-runner.Dockerfile
+infra/docker/deployment-runner.Dockerfile
+infra/docker/core-api.Dockerfile
+infra/docker/exam-api.Dockerfile
+infra/docker/notification-service.Dockerfile
+infra/docker/campus-service.Dockerfile
+infra/docker/iot-service.Dockerfile
 apps/admin-console/**
 apps/core-admin/**
 apps/exam-admin/**
@@ -61,15 +61,15 @@ Automatic target selection:
 
 | Changed path | Built target |
 | --- | --- |
-| `Dockerfile`, `apps/admin-console/**`, `config/platform.services.docker.json`, `services/platform-api/**` | `platform` |
-| `backup-runner.Dockerfile`, `apps/admin-console/src/backups.js`, backup runner scripts | `backup` |
-| `deployment-runner.Dockerfile`, deployment runner/configuration scripts | `runner` |
+| `infra/docker/platform-api.Dockerfile`, `apps/admin-console/**`, `config/platform.services.docker.json`, `services/platform-api/**` | `platform` |
+| `infra/docker/backup-runner.Dockerfile`, `apps/admin-console/src/backups.js`, backup runner scripts | `backup` |
+| `infra/docker/deployment-runner.Dockerfile`, deployment runner/configuration scripts | `runner` |
 | `infra/docker/compose.yml` | `platform`, `runner` |
-| `core-api.Dockerfile`, `apps/core-admin/**`, `services/core-api/**` | `core` |
-| `exam-api.Dockerfile`, `apps/exam-admin/**`, `services/exam-api/**` | `exam` |
-| `notification-service.Dockerfile`, `services/notification-service/**` | `notification` |
-| `campus-service.Dockerfile`, `services/campus-service/**` | `campus` |
-| `iot-service.Dockerfile`, `services/iot-service/**` | `iot` |
+| `infra/docker/core-api.Dockerfile`, `apps/core-admin/**`, `services/core-api/**` | `core` |
+| `infra/docker/exam-api.Dockerfile`, `apps/exam-admin/**`, `services/exam-api/**` | `exam` |
+| `infra/docker/notification-service.Dockerfile`, `services/notification-service/**` | `notification` |
+| `infra/docker/campus-service.Dockerfile`, `services/campus-service/**` | `campus` |
+| `infra/docker/iot-service.Dockerfile`, `services/iot-service/**` | `iot` |
 | `infra/docker/mongodb.Dockerfile`, MongoDB entrypoint/init/user scripts | `mongodb` |
 | `packages/platform-auth/**` | `platform`, `core`, `exam`, `campus`, `iot` |
 
@@ -79,15 +79,15 @@ Use the `targets` input to select the images to build:
 
 | Target | Dockerfile | Image tag | Compose service |
 | --- | --- | --- | --- |
-| `platform` | `Dockerfile` | `platform-api-latest` | `platform-api` |
-| `core` | `core-api.Dockerfile` | `core-api-latest` | `core-api` |
-| `exam` | `exam-api.Dockerfile` | `exam-api-latest` | `exam-api` |
-| `notification` | `notification-service.Dockerfile` | `notification-service-latest` | `notification-service` |
-| `backup` | `backup-runner.Dockerfile` | `backup-runner-latest` | `backup-runner` |
-| `campus` | `campus-service.Dockerfile` | `campus-service-latest` | `campus-service` |
-| `iot` | `iot-service.Dockerfile` | `iot-service-latest` | `iot-service` |
+| `platform` | `infra/docker/platform-api.Dockerfile` | `platform-api-latest` | `platform-api` |
+| `core` | `infra/docker/core-api.Dockerfile` | `core-api-latest` | `core-api` |
+| `exam` | `infra/docker/exam-api.Dockerfile` | `exam-api-latest` | `exam-api` |
+| `notification` | `infra/docker/notification-service.Dockerfile` | `notification-service-latest` | `notification-service` |
+| `backup` | `infra/docker/backup-runner.Dockerfile` | `backup-runner-latest` | `backup-runner` |
+| `campus` | `infra/docker/campus-service.Dockerfile` | `campus-service-latest` | `campus-service` |
+| `iot` | `infra/docker/iot-service.Dockerfile` | `iot-service-latest` | `iot-service` |
 | `mongodb` | `infra/docker/mongodb.Dockerfile` | `mongodb-7.0` | `mongodb` |
-| `runner` | `deployment-runner.Dockerfile` | `deployment-runner-latest` | `deployment-runner` |
+| `runner` | `infra/docker/deployment-runner.Dockerfile` | `deployment-runner-latest` | `deployment-runner` |
 | `all` | all Dockerfiles | all image tags | all services |
 
 Examples:

@@ -264,16 +264,21 @@ fun ToolsScreen(
 private fun LightweightHeaderBanner(
     mqttConnected: Boolean,
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val alphaPulse by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "pulse-alpha",
-    )
+    val dotAlpha = if (mqttConnected) {
+        val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+        val alphaPulse by infiniteTransition.animateFloat(
+            initialValue = 0.4f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "pulse-alpha",
+        )
+        alphaPulse
+    } else {
+        1f
+    }
 
     Column(
         modifier = Modifier
@@ -295,7 +300,7 @@ private fun LightweightHeaderBanner(
                 Box(
                     modifier = Modifier
                         .size(7.dp)
-                        .graphicsLayer { alpha = if (mqttConnected) alphaPulse else 1f }
+                        .graphicsLayer { alpha = dotAlpha }
                         .background(
                             color = if (mqttConnected) Color(0xFF10B981) else Color(0xFFEF4444),
                             shape = CircleShape,
@@ -882,6 +887,5 @@ private fun ToolConfirmDialog(
         icon = Icons.Outlined.AutoMode,
     )
 }
-
 
 

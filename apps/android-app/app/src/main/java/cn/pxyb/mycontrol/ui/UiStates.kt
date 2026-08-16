@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.compose.runtime.Immutable
+
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AppAlertRecord
@@ -25,6 +27,7 @@ import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.TrendSample
 import cn.pxyb.mycontrol.data.WebLoginLink
 
+@Immutable
 data class AppEntryUiState(
     val booting: Boolean,
     val locked: Boolean,
@@ -45,6 +48,7 @@ data class AppEntryUiState(
     val message: String?,
 )
 
+@Immutable
 data class OverviewUiState(
     val refreshing: Boolean,
     val sectionError: String?,
@@ -61,6 +65,7 @@ data class OverviewUiState(
     val unreadAlerts: Int,
 )
 
+@Immutable
 data class OperationsUiState(
     val refreshing: Boolean,
     val sectionError: String?,
@@ -75,6 +80,7 @@ data class OperationsUiState(
         get() = tasks.filter { it.status in setOf("action_required", "failed") }
 }
 
+@Immutable
 data class ToolsUiState(
     val refreshing: Boolean,
     val sectionError: String?,
@@ -85,6 +91,7 @@ data class ToolsUiState(
     val ct8: Ct8Data?,
 )
 
+@Immutable
 data class NetworkHealth(
     val latencyMs: Long? = null,
     val status: String = "unknown",
@@ -95,6 +102,7 @@ data class NetworkHealth(
     val message: String? = null,
 )
 
+@Immutable
 data class CacheStorageInfo(
     val snapshotSizeBytes: Long = 0L,
     val workspaceSizeBytes: Long = 0L,
@@ -102,6 +110,7 @@ data class CacheStorageInfo(
     val lastCleanedAtMillis: Long? = null,
 )
 
+@Immutable
 data class ProfileUiState(
     val refreshing: Boolean,
     val sectionError: String?,
@@ -115,6 +124,7 @@ data class ProfileUiState(
     val webLoginLink: WebLoginLink? = null,
 )
 
+@Immutable
 data class AccountManagementUiState(
     val refreshing: Boolean,
     val sectionError: String?,
@@ -130,12 +140,14 @@ data class AccountManagementUiState(
     val message: String?,
 )
 
+@Immutable
 data class GoogleAccountDeskUiState(
     val busyAction: String?,
     val googleAccounts: List<GoogleAccountRecord>,
     val googleAccountMigrationPending: Boolean,
 )
 
+@Immutable
 data class QrLoginUiState(
     val qrLoginBusy: Boolean,
     val qrLoginTarget: QrLoginTarget?,
@@ -144,6 +156,7 @@ data class QrLoginUiState(
 
 enum class SearchDestination { Overview, Notifications, Operations, Tools, GoogleAccounts, Today, Scenes }
 
+@Immutable
 data class GlobalSearchItem(
     val id: String,
     val title: String,
@@ -153,8 +166,10 @@ data class GlobalSearchItem(
     val focusId: String? = null,
 )
 
+@Immutable
 data class GlobalSearchUiState(val items: List<GlobalSearchItem>)
 
+@Immutable
 data class TodayUiState(
     val refreshing: Boolean,
     val sectionError: String?,
@@ -168,6 +183,7 @@ data class TodayUiState(
     val resourceExpiries: List<ResourceExpiry>,
 )
 
+@Immutable
 data class NotificationCenterUiState(
     val refreshing: Boolean,
     val alerts: List<AppAlertRecord>,
@@ -175,8 +191,10 @@ data class NotificationCenterUiState(
     val syncError: String?,
 )
 
+@Immutable
 data class InsightsUiState(val samples: List<TrendSample>)
 
+@Immutable
 data class ScenesUiState(
     val refreshing: Boolean,
     val sectionError: String?,

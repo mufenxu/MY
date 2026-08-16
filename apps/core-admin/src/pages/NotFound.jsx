@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Space, Tag, Typography } from 'antd';
 import { HomeOutlined, ReloadOutlined, RocketOutlined, SmileOutlined } from '@ant-design/icons';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import './NotFound.css';
 
 const { Paragraph, Text } = Typography;

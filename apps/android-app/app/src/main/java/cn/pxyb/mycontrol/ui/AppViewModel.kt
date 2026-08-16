@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.compose.runtime.Immutable
+
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
@@ -80,6 +82,7 @@ enum class WorkspaceDestination { Today, Notifications, Insights, Scenes }
 
 enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, Resources, Notifications }
 
+@Immutable
 data class SectionLoadState(
     val refreshing: Boolean = false,
     val error: String? = null,
@@ -87,6 +90,7 @@ data class SectionLoadState(
     val fromCache: Boolean = false,
 )
 
+@Immutable
 data class AppUiState(
     val booting: Boolean = true,
     val locked: Boolean = false,
@@ -2149,9 +2153,13 @@ class AppViewModel(
 
     private fun reloadPersonalState() {
         viewModelScope.launch {
-            val alerts = personalStore.readAlerts()
-            val preferences = personalStore.readAlertPreferences()
-            val trends = personalStore.readTrendSamples()
+            val (alerts, preferences, trends) = withContext(Dispatchers.IO) {
+                Triple(
+                    personalStore.readAlerts(),
+                    personalStore.readAlertPreferences(),
+                    personalStore.readTrendSamples(),
+                )
+            }
             mutableState.update { current ->
                 current.copy(
                     alerts = mergeHydratedAlerts(alerts, current.alerts),

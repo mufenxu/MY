@@ -1,3 +1,7 @@
+// Runs inside the backup-runner container (PLATFORM_BACKUP_COMMAND).
+// Executes mongodump directly and writes the archive to the shared backup
+// volume. Host-side entrypoint: backup-mongodb.mjs.
+//
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { access, cp, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';

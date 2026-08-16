@@ -4,9 +4,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import smCrypto from "sm-crypto";
-import CryptoJS from "crypto-js";
 import * as cheerio from "cheerio";
 import QRCode from "qrcode";
 import bwipjs from "bwip-js";
@@ -2194,7 +2193,8 @@ async function easytongAuthedRequest(jar, path, dataFactory = {}, options = {}) 
 }
 
 function uwcMd5Base64(text) {
-  return CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(CryptoJS.MD5(text).toString()));
+  const hex = createHash("md5").update(text, "utf8").digest("hex");
+  return Buffer.from(hex, "utf8").toString("base64");
 }
 
 function uwcSign(input = {}) {
@@ -2207,23 +2207,13 @@ function uwcSign(input = {}) {
 }
 
 function uwcEncrypt(text) {
-  const key = CryptoJS.enc.Utf8.parse(UWC_3DES_KEY);
-  const iv = CryptoJS.enc.Utf8.parse(UWC_3DES_IV);
-  return CryptoJS.TripleDES.encrypt(text, key, {
-    iv,
-    mode: CryptoJS.mode.CBC,
-    padding: CryptoJS.pad.Pkcs7
-  }).toString();
+  const cipher = createCipheriv("des-ede3-cbc", Buffer.from(UWC_3DES_KEY, "utf8"), Buffer.from(UWC_3DES_IV, "utf8"));
+  return Buffer.concat([cipher.update(text, "utf8"), cipher.final()]).toString("base64");
 }
 
 function uwcDecryptWithKey(text, keyText) {
-  const key = CryptoJS.enc.Utf8.parse(keyText);
-  const iv = CryptoJS.enc.Utf8.parse(UWC_3DES_IV);
-  return CryptoJS.TripleDES.decrypt(text, key, {
-    iv,
-    mode: CryptoJS.mode.CBC,
-    padding: CryptoJS.pad.Pkcs7
-  }).toString(CryptoJS.enc.Utf8);
+  const decipher = createDecipheriv("des-ede3-cbc", Buffer.from(keyText, "utf8"), Buffer.from(UWC_3DES_IV, "utf8"));
+  return Buffer.concat([decipher.update(Buffer.from(text, "base64")), decipher.final()]).toString("utf8");
 }
 
 function uwcDecrypt(text) {
@@ -2368,10 +2358,10 @@ function appdmHashParams(finalUrl) {
 
 function decryptAppdmSqCode(sqcode, aesKey) {
   const normalized = decodeURIComponent(String(sqcode || "")).replace(/\s/g, "+");
-  const decrypted = CryptoJS.AES.decrypt(normalized, CryptoJS.enc.Utf8.parse(aesKey), {
-    mode: CryptoJS.mode.ECB,
-    padding: CryptoJS.pad.Pkcs7
-  }).toString(CryptoJS.enc.Utf8);
+  const key = Buffer.from(aesKey, "utf8");
+  const algorithm = key.length === 24 ? "aes-192-ecb" : key.length === 32 ? "aes-256-ecb" : "aes-128-ecb";
+  const decipher = createDecipheriv(algorithm, key, null);
+  const decrypted = Buffer.concat([decipher.update(Buffer.from(normalized, "base64")), decipher.final()]).toString("utf8");
   if (!decrypted) throw new HttpError(401, "公寓系统授权解析失败，请重新登录学校账号。");
   return decrypted;
 }

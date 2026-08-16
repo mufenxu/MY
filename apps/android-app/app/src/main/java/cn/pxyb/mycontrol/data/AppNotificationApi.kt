@@ -1,9 +1,12 @@
 package cn.pxyb.mycontrol.data
 
+import androidx.compose.runtime.Immutable
+
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 
+@Immutable
 data class AppNotificationPage(
     val items: List<AppAlertRecord>,
     val total: Int,
@@ -11,6 +14,7 @@ data class AppNotificationPage(
     val nextCursor: String?,
 )
 
+@Immutable
 data class AppNotificationPreference(
     val enabled: Boolean = true,
     val quietHoursEnabled: Boolean = false,

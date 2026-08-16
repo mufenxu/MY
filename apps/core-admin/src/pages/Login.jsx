@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Form, Input, Button, Card, Typography, Tabs, QRCode, Spin } from 'antd';
 import { UserOutlined, LockOutlined, ReloadOutlined, ScanOutlined, CheckCircleOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import api from '../utils/api';
 import { createSequentialPoller } from '../utils/sequentialPoller';
 import { Turnstile } from '@marsidev/react-turnstile';
