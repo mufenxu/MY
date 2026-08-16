@@ -36,6 +36,8 @@ export function BackupRecoveryView({ session }) {
   const [confirmation, setConfirmation] = useState(null);
   const [confirmationBusy, setConfirmationBusy] = useState(false);
   const uploadInputRef = useRef(null);
+  const backupListCardRef = useRef(null);
+  const restoreCardRef = useRef(null);
 
   const loadBackupStatus = useCallback(async (force = false, options = {}) => {
     const preserveMissingRunningJob = options.preserveMissingRunningJob !== false;
@@ -86,6 +88,27 @@ export function BackupRecoveryView({ session }) {
       return backups.find((backup) => backup.restorable) || backups[0];
     });
   }, [backups]);
+
+  useEffect(() => {
+    const listCard = backupListCardRef.current;
+    const restoreCard = restoreCardRef.current;
+    if (!listCard || !restoreCard) return undefined;
+    const wideLayout = window.matchMedia('(min-width: 1281px)');
+    const syncHeight = () => {
+      listCard.style.maxHeight = wideLayout.matches ? `${restoreCard.offsetHeight}px` : '';
+    };
+    syncHeight();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncHeight) : null;
+    observer?.observe(restoreCard);
+    const onWideLayoutChange = () => syncHeight();
+    if (wideLayout.addEventListener) wideLayout.addEventListener('change', onWideLayoutChange);
+    else if (wideLayout.addListener) wideLayout.addListener(onWideLayoutChange);
+    return () => {
+      observer?.disconnect();
+      if (wideLayout.removeEventListener) wideLayout.removeEventListener('change', onWideLayoutChange);
+      else if (wideLayout.removeListener) wideLayout.removeListener(onWideLayoutChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeJob || activeJob.status !== 'running') return undefined;
@@ -366,7 +389,7 @@ export function BackupRecoveryView({ session }) {
           </button>
         </section>
 
-        <section className="view-card backup-list-card" aria-label="备份清单">
+        <section className="view-card backup-list-card" aria-label="备份清单" ref={backupListCardRef}>
           <div className="backup-table-head">
             <span>备份</span><span>时间</span><span>大小</span><span>状态</span><span>操作</span>
           </div>
@@ -434,7 +457,7 @@ export function BackupRecoveryView({ session }) {
           </div>
         </section>
 
-        <aside className="view-card restore-card">
+        <aside className="view-card restore-card" ref={restoreCardRef}>
           <header>
             <div><span className="view-eyebrow">恢复</span><h3>高危恢复</h3></div>
             <CircleAlert size={21} />

@@ -33,7 +33,7 @@ function decodeEncryptionKey(value) {
 
 function clampDays(value, fallback) {
   const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? Math.min(3650, Math.max(1, parsed)) : fallback;
+  return Number.isFinite(parsed) ? Math.min(14, Math.max(1, parsed)) : fallback;
 }
 
 function normalizePrefix(value) {
@@ -101,8 +101,8 @@ function normalizeConfig(input, current = null) {
       : Boolean(input.forcePathStyle),
     accessKeyId,
     secretAccessKey,
-    localRetentionDays: clampDays(input.localRetentionDays, current?.localRetentionDays || 30),
-    remoteRetentionDays: clampDays(input.remoteRetentionDays, current?.remoteRetentionDays || 90),
+    localRetentionDays: clampDays(input.localRetentionDays, current?.localRetentionDays || 14),
+    remoteRetentionDays: clampDays(input.remoteRetentionDays, current?.remoteRetentionDays || 14),
   };
 }
 
@@ -120,8 +120,8 @@ function publicConfig(config, status = {}) {
       enabled: false,
       provider: 'r2',
       prefix: DEFAULT_PREFIX,
-      localRetentionDays: 30,
-      remoteRetentionDays: 90,
+      localRetentionDays: 14,
+      remoteRetentionDays: 14,
       healthy: null,
       encryptionReady: true,
     };
@@ -138,8 +138,8 @@ function publicConfig(config, status = {}) {
     forcePathStyle: Boolean(config.forcePathStyle),
     accessKeyIdMasked: maskSecret(config.accessKeyId),
     secretConfigured: Boolean(config.secretAccessKey),
-    localRetentionDays: config.localRetentionDays,
-    remoteRetentionDays: config.remoteRetentionDays,
+    localRetentionDays: clampDays(config.localRetentionDays, 14),
+    remoteRetentionDays: clampDays(config.remoteRetentionDays, 14),
     healthy: status.healthy ?? null,
     lastCheckedAt: status.lastCheckedAt || null,
     lastBackupAt: status.lastBackupAt || null,
@@ -253,7 +253,8 @@ export function createBackupStorageService({
   }
 
   async function cleanupExpired(config, client) {
-    const cutoff = now().getTime() - config.remoteRetentionDays * 86400000;
+    const retentionDays = clampDays(config.remoteRetentionDays, 14);
+    const cutoff = now().getTime() - retentionDays * 86400000;
     const objects = await listObjects(config, client);
     const expired = objects.filter((object) => {
       const modifiedAt = new Date(object.LastModified || 0).getTime();
@@ -289,8 +290,8 @@ export function createBackupStorageService({
     async getRetentionPolicy() {
       const config = (await readState()).config;
       return {
-        localRetentionDays: config?.localRetentionDays || 30,
-        remoteRetentionDays: config?.remoteRetentionDays || 90,
+        localRetentionDays: clampDays(config?.localRetentionDays, 14),
+        remoteRetentionDays: clampDays(config?.remoteRetentionDays, 14),
       };
     },
     async testConnection() {

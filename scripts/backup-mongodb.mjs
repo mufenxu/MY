@@ -119,7 +119,7 @@ try {
   if (!completed) await rm(workDirectory, { recursive: true, force: true });
 }
 
-const retentionDays = Math.max(1, Number.parseInt(process.env.BACKUP_RETENTION_DAYS || '30', 10));
+const retentionDays = Math.min(14, Math.max(1, Number.parseInt(process.env.BACKUP_RETENTION_DAYS || '14', 10)));
 const cutoff = Date.now() - retentionDays * 86400000;
 for (const entry of await readdir(backupRoot, { withFileTypes: true })) {
   if (!entry.isDirectory() || entry.name === stamp) continue;

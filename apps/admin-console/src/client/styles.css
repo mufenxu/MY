@@ -4257,6 +4257,13 @@ input:focus-visible {
   padding: 16px;
 }
 
+.backup-list-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .backup-action-copy {
   display: grid;
   gap: 8px;
@@ -4293,6 +4300,7 @@ input:focus-visible {
 }
 
 .backup-table-head {
+  flex: none;
   min-height: 36px;
   padding: 0 10px;
   color: var(--muted);
@@ -4304,6 +4312,8 @@ input:focus-visible {
 
 .backup-table-body {
   margin-top: 6px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .backup-row {

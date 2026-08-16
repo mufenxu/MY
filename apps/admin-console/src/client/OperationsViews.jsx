@@ -91,8 +91,8 @@ const EMPTY_BACKUP_STORAGE = {
   bucket: '',
   prefix: 'my-platform/backups',
   forcePathStyle: false,
-  localRetentionDays: 30,
-  remoteRetentionDays: 90,
+  localRetentionDays: 14,
+  remoteRetentionDays: 14,
 };
 const ACTION_LABELS = {
   'auth.login': '管理员登录',
@@ -1823,8 +1823,8 @@ export function BackupOffsitePanel({ session, localBackups = [], backupJob = nul
             <label><span>Region</span><input value={draft.region} disabled={!canManage || draft.provider === 'r2'} onChange={(event) => setDraft({ ...draft, region: event.target.value })} /></label>
             <label><span>Bucket</span><input value={draft.bucket} disabled={!canManage} onChange={(event) => setDraft({ ...draft, bucket: event.target.value })} /></label>
             <label><span>对象前缀</span><input value={draft.prefix} disabled={!canManage} onChange={(event) => setDraft({ ...draft, prefix: event.target.value })} /></label>
-            <label><span>本地保留天数</span><input type="number" min="1" max="3650" value={draft.localRetentionDays} disabled={!canManage} onChange={(event) => setDraft({ ...draft, localRetentionDays: Number(event.target.value) })} /></label>
-            <label><span>远端保留天数</span><input type="number" min="1" max="3650" value={draft.remoteRetentionDays} disabled={!canManage} onChange={(event) => setDraft({ ...draft, remoteRetentionDays: Number(event.target.value) })} /></label>
+            <label><span>本地保留天数</span><input type="number" min="1" max="14" value={draft.localRetentionDays} disabled={!canManage} onChange={(event) => setDraft({ ...draft, localRetentionDays: Number(event.target.value) })} /></label>
+            <label><span>远端保留天数</span><input type="number" min="1" max="14" value={draft.remoteRetentionDays} disabled={!canManage} onChange={(event) => setDraft({ ...draft, remoteRetentionDays: Number(event.target.value) })} /></label>
             <label className="toggle-field"><span><strong>Path Style</strong><small>MinIO 常用</small></span><input type="checkbox" checked={draft.forcePathStyle} disabled={!canManage} onChange={(event) => setDraft({ ...draft, forcePathStyle: event.target.checked })} /></label>
             <label><span>Access Key ID</span><input type="password" autoComplete="new-password" value={secrets.accessKeyId} disabled={!canManage} placeholder={config?.accessKeyIdMasked || 'Access Key ID'} onChange={(event) => setSecrets({ ...secrets, accessKeyId: event.target.value })} /></label>
             <label><span>Secret Access Key</span><input type="password" autoComplete="new-password" value={secrets.secretAccessKey} disabled={!canManage} placeholder={config?.secretConfigured ? '已保存，留空则不修改' : 'Secret Access Key'} onChange={(event) => setSecrets({ ...secrets, secretAccessKey: event.target.value })} /></label>
