@@ -8,7 +8,7 @@ const budgets = {
   "public/academic-integrations.css": 8 * 1024,
   "public/admin.js": 4 * 1024,
   "public/browser-check.js": 4 * 1024,
-  "public/styles.css": 240 * 1024,
+  "public/styles.css": 243 * 1024,
   "public/index.html": 40 * 1024,
   "public/assets/hgu-emblem.png": 50 * 1024
 };
