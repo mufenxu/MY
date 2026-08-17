@@ -2944,14 +2944,62 @@ function renderAppLoginTransitionHtml(redirectUrl) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="refresh" content="1;url=${safeUrl}">
   <title>正在进入管理后台...</title>
   <style>
+    :root {
+      color-scheme: light dark;
+      --page-background: #f6f8fd;
+      --page-pattern: linear-gradient(rgba(37, 99, 235, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(37, 99, 235, 0.035) 1px, transparent 1px);
+      --ambient-glow: radial-gradient(circle, rgba(37, 99, 235, 0.16) 0%, rgba(6, 182, 212, 0.09) 42%, transparent 72%);
+      --ambient-size: min(520px, 96vw);
+      --card-background: rgba(255, 255, 255, 0.92);
+      --card-border: rgba(37, 99, 235, 0.14);
+      --card-shadow: 0 24px 64px -32px rgba(15, 23, 42, 0.34), 0 0 0 1px rgba(255, 255, 255, 0.88) inset;
+      --title-color: #0f172a;
+      --subtitle-color: #64748b;
+      --ring-primary: #2563eb;
+      --ring-secondary: #06b6d4;
+      --ring-accent: #10b981;
+      --core-start: #2563eb;
+      --core-end: #0891b2;
+      --core-shadow: 0 10px 28px rgba(37, 99, 235, 0.28);
+      --progress-track: #e2e8f0;
+      --status-color: #2563eb;
+      --link-color: #64748b;
+      --link-hover: #2563eb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page-background: #0b0f19;
+        --page-pattern: none;
+        --ambient-glow: radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, rgba(99, 102, 241, 0.14) 45%, transparent 70%);
+        --ambient-size: 340px;
+        --card-background: rgba(17, 24, 39, 0.88);
+        --card-border: rgba(255, 255, 255, 0.1);
+        --card-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+        --title-color: #ffffff;
+        --subtitle-color: #94a3b8;
+        --ring-primary: #38bdf8;
+        --ring-secondary: #6366f1;
+        --ring-accent: #34d399;
+        --core-start: #1e3a8a;
+        --core-end: #0369a1;
+        --core-shadow: 0 0 24px rgba(56, 189, 248, 0.4);
+        --progress-track: rgba(255, 255, 255, 0.08);
+        --status-color: #38bdf8;
+        --link-color: #64748b;
+        --link-hover: #94a3b8;
+      }
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: #0b0f19;
-      color: #f1f5f9;
+      background-color: var(--page-background);
+      background-image: var(--page-pattern);
+      background-size: 24px 24px;
+      color: var(--title-color);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
       min-height: 100vh;
       display: flex;
@@ -2963,10 +3011,10 @@ function renderAppLoginTransitionHtml(redirectUrl) {
     }
     .ambient-glow {
       position: absolute;
-      width: 340px;
-      height: 340px;
+      width: var(--ambient-size);
+      height: var(--ambient-size);
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, rgba(99, 102, 241, 0.14) 45%, transparent 70%);
+      background: var(--ambient-glow);
       pointer-events: none;
       animation: pulseGlow 3s ease-in-out infinite alternate;
     }
@@ -2976,10 +3024,10 @@ function renderAppLoginTransitionHtml(redirectUrl) {
     }
     .card {
       position: relative;
-      background: rgba(17, 24, 39, 0.88);
+      background: var(--card-background);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--card-border);
       border-radius: 24px;
       padding: 38px 28px 30px;
       width: 100%;
@@ -2988,7 +3036,7 @@ function renderAppLoginTransitionHtml(redirectUrl) {
       flex-direction: column;
       align-items: center;
       text-align: center;
-      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      box-shadow: var(--card-shadow);
     }
     .anim-container {
       position: relative;
@@ -3004,8 +3052,8 @@ function renderAppLoginTransitionHtml(redirectUrl) {
       inset: 0;
       border-radius: 50%;
       border: 3px solid transparent;
-      border-top-color: #38bdf8;
-      border-right-color: #6366f1;
+      border-top-color: var(--ring-primary);
+      border-right-color: var(--ring-secondary);
       animation: spin 1.2s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
     }
     .ring-inner {
@@ -3013,18 +3061,18 @@ function renderAppLoginTransitionHtml(redirectUrl) {
       inset: 8px;
       border-radius: 50%;
       border: 2px solid transparent;
-      border-bottom-color: #34d399;
+      border-bottom-color: var(--ring-accent);
       animation: spin 1.8s linear infinite reverse;
     }
     .core-icon {
       width: 44px;
       height: 44px;
       border-radius: 14px;
-      background: linear-gradient(135deg, #1e3a8a, #0369a1);
+      background: linear-gradient(135deg, var(--core-start), var(--core-end));
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 24px rgba(56, 189, 248, 0.4);
+      box-shadow: var(--core-shadow);
       animation: iconFloat 2s ease-in-out infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -3036,19 +3084,19 @@ function renderAppLoginTransitionHtml(redirectUrl) {
       font-size: 18px;
       font-weight: 700;
       letter-spacing: 0.3px;
-      color: #ffffff;
+      color: var(--title-color);
       margin-bottom: 6px;
     }
     .subtitle {
       font-size: 13px;
-      color: #94a3b8;
+      color: var(--subtitle-color);
       margin-bottom: 22px;
       line-height: 1.5;
     }
     .progress-bar-wrapper {
       width: 100%;
       height: 4px;
-      background: rgba(255, 255, 255, 0.08);
+      background: var(--progress-track);
       border-radius: 99px;
       overflow: hidden;
       margin-bottom: 14px;
@@ -3060,7 +3108,7 @@ function renderAppLoginTransitionHtml(redirectUrl) {
       left: 0;
       bottom: 0;
       width: 40%;
-      background: linear-gradient(90deg, #38bdf8, #6366f1);
+      background: linear-gradient(90deg, var(--ring-primary), var(--ring-secondary));
       border-radius: 99px;
       animation: progressMove 1.4s ease-in-out infinite;
     }
@@ -3071,17 +3119,17 @@ function renderAppLoginTransitionHtml(redirectUrl) {
     }
     .status-text {
       font-size: 12px;
-      color: #38bdf8;
+      color: var(--status-color);
       font-weight: 500;
       letter-spacing: 0.2px;
     }
     .direct-link {
       margin-top: 18px;
       font-size: 12px;
-      color: #64748b;
+      color: var(--link-color);
       text-decoration: none;
     }
-    .direct-link:hover { color: #94a3b8; text-decoration: underline; }
+    .direct-link:hover { color: var(--link-hover); text-decoration: underline; }
   </style>
 </head>
 <body>
