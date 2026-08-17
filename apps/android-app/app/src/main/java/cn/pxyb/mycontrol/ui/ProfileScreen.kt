@@ -2,7 +2,6 @@ package cn.pxyb.mycontrol.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -23,26 +22,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
-import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.CleaningServices
-import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Email
-import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.Laptop
 import androidx.compose.material.icons.outlined.ManageAccounts
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Security
-import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.SystemUpdate
-import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -77,7 +69,6 @@ import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.SecuritySession
-import cn.pxyb.mycontrol.data.WebLoginLink
 
 @Composable
 fun ProfileScreen(
@@ -91,22 +82,16 @@ fun ProfileScreen(
     onOpenGoogleAccountDesk: () -> Unit,
     notificationsEnabled: Boolean,
     onRequestNotifications: () -> Unit,
-    onMeasureNetwork: () -> Unit,
-    onClearCache: () -> Unit,
-    onForceFullSync: () -> Unit,
     onCreateDesktopMagicLink: ((String?, String?) -> Unit) -> Unit,
     onUpdateNotificationPreferences: (AlertPreferences) -> Unit,
     onCheckUpdates: () -> Unit,
-    onGenerateDiagnosticReport: () -> String,
 ) {
     var revokeTarget by remember { mutableStateOf<SecuritySession?>(null) }
     var confirmLogout by remember { mutableStateOf(false) }
-    var confirmClearCache by remember { mutableStateOf(false) }
     var showSessions by remember { mutableStateOf(false) }
     var showNotificationDialog by remember { mutableStateOf(false) }
     var showMagicLinkDialog by remember { mutableStateOf<String?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
-    var showDiagnosticDialog by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -154,9 +139,6 @@ fun ProfileScreen(
             item {
                 ModernProfileHeader(
                     onOpenQrLogin = onOpenQrLogin,
-                    latencyMs = state.networkHealth.latencyMs,
-                    latencyStatus = state.networkHealth.status,
-                    onMeasureNetwork = onMeasureNetwork,
                 )
             }
 
@@ -164,22 +146,12 @@ fun ProfileScreen(
                 item(key = "section-error") { FeedbackBanner("账号数据暂不可用：$message", error = true) }
             }
 
-            // 2. 个人资料卡片 (含快捷桌面登录)
+            // 2. 个人资料卡片
             item {
                 ModernProfileCard(
                     username = user.username,
                     role = user.role,
                     versionStr = BuildConfig.VERSION_NAME,
-                    busyAction = state.busyAction,
-                    onCreateMagicLink = {
-                        onCreateDesktopMagicLink { url, error ->
-                            if (url != null) {
-                                showMagicLinkDialog = url
-                            } else if (error != null) {
-                                Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    },
                 )
             }
 
@@ -234,111 +206,36 @@ fun ProfileScreen(
                             },
                             onClick = { showNotificationDialog = true },
                             trailing = {
-                                Surface(
-                                    color = if (state.alertPreferences.quietHoursEnabled) Color(0xFFF3E8FF) else Color(0xFFECFDF5),
-                                    shape = RoundedCornerShape(8.dp),
-                                    border = BorderStroke(0.5.dp, if (state.alertPreferences.quietHoursEnabled) Color(0xFFDDD6FE) else Color(0xFFA7F3D0)),
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 ) {
-                                    Text(
-                                        text = if (state.alertPreferences.quietHoursEnabled) "夜间免打扰" else "全天提醒",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = if (state.alertPreferences.quietHoursEnabled) Color(0xFF7C3AED) else Color(0xFF047857),
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    Surface(
+                                        color = if (state.alertPreferences.quietHoursEnabled) Color(0xFFF3E8FF) else Color(0xFFECFDF5),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(0.5.dp, if (state.alertPreferences.quietHoursEnabled) Color(0xFFDDD6FE) else Color(0xFFA7F3D0)),
+                                    ) {
+                                        Text(
+                                            text = if (state.alertPreferences.quietHoursEnabled) "夜间免打扰" else "全天提醒",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = if (state.alertPreferences.quietHoursEnabled) Color(0xFF7C3AED) else Color(0xFF047857),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.Outlined.ChevronRight,
+                                        contentDescription = "打开通知偏好",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(19.dp),
                                     )
                                 }
                             },
                         )
-                        ProfileDivider()
-                        ProfileActionRow(
-                            icon = Icons.Outlined.Tune,
-                            iconTint = Color(0xFFEA580C),
-                            iconBackground = Color(0xFFFFF7ED),
-                            title = "偏好配置与静音频道",
-                            subtitle = "设置夜间免打扰时段、严重级别过滤与业务订阅",
-                            onClick = { showNotificationDialog = true },
-                        )
                     }
                 }
             }
 
-            // 5. 远程网络与节点连通性自检卡片 (全新)
-            item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 1.dp,
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        ProfileCardHeader(
-                            icon = Icons.Outlined.Wifi,
-                            iconTint = Color(0xFF0284C7),
-                            iconBackground = Color(0xFFE0F2FE),
-                            title = "远程服务器连通性",
-                            subtitle = BuildConfig.PLATFORM_BASE_URL,
-                            trailing = {
-                                NetworkStatusBadge(
-                                    status = state.networkHealth.status,
-                                    latencyMs = state.networkHealth.latencyMs,
-                                )
-                            },
-                        )
-                        ProfileDivider()
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            LightInfoCell(
-                                label = "网络延迟 (RTT)",
-                                value = state.networkHealth.latencyMs?.let { "${it} ms" } ?: "未测速",
-                                statusColor = when (state.networkHealth.status) {
-                                    "healthy" -> Color(0xFF047857)
-                                    "warning" -> Color(0xFFB45309)
-                                    "error" -> Color(0xFFDC2626)
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                modifier = Modifier.weight(1f),
-                            )
-                            LightInfoCell(
-                                label = "网关状态",
-                                value = if (state.networkHealth.apiOk) "正常响应" else "连接受阻",
-                                statusColor = if (state.networkHealth.apiOk) Color(0xFF047857) else Color(0xFFDC2626),
-                                modifier = Modifier.weight(1f),
-                            )
-                            LightInfoCell(
-                                label = "链路协议",
-                                value = if (BuildConfig.PLATFORM_BASE_URL.startsWith("https")) "HTTPS 加密" else "HTTP",
-                                statusColor = Color(0xFF2563EB),
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-
-                        ProfileDivider()
-                        ProfileActionRow(
-                            icon = Icons.Outlined.Lan,
-                            iconTint = Color(0xFF0284C7),
-                            iconBackground = Color(0xFFE0F2FE),
-                            title = "一键连通性自检",
-                            subtitle = state.networkHealth.message ?: "测量 DNS 解析与 API 响应延迟",
-                            busy = state.networkHealth.status == "measuring",
-                            onClick = onMeasureNetwork,
-                            trailing = {
-                                Text(
-                                    if (state.networkHealth.status == "measuring") "测速中..." else "立即测速",
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFF0284C7),
-                                )
-                            },
-                        )
-                    }
-                }
-            }
-
-            // 6. 账号安全卡片 (Bento Grid 极简三格)
+            // 5. 账号安全
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -397,70 +294,7 @@ fun ProfileScreen(
                 }
             }
 
-            // 7. 本地存储与离线缓存管理 (全新)
-            item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 1.dp,
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        ProfileCardHeader(
-                            icon = Icons.Outlined.Storage,
-                            iconTint = Color(0xFF059669),
-                            iconBackground = Color(0xFFECFDF5),
-                            title = "本地存储与离线缓存",
-                            subtitle = "离线快照与待办数据 · 已占用 ${state.cacheStorageInfo.totalFormatted}",
-                            trailing = {
-                                Text(
-                                    state.cacheStorageInfo.totalFormatted,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFF059669),
-                                )
-                            },
-                        )
-                        ProfileDivider()
-                        ProfileActionRow(
-                            icon = Icons.Outlined.CleaningServices,
-                            iconTint = Color(0xFF059669),
-                            iconBackground = Color(0xFFECFDF5),
-                            title = "清理临时快照缓存",
-                            subtitle = "清理过期离线缓存以释放存储（保留登录状态）",
-                            onClick = { confirmClearCache = true },
-                            trailing = {
-                                Text(
-                                    "清理",
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFF059669),
-                                )
-                            },
-                        )
-                        ProfileDivider()
-                        ProfileActionRow(
-                            icon = Icons.Outlined.CloudSync,
-                            iconTint = Color(0xFF0284C7),
-                            iconBackground = Color(0xFFE0F2FE),
-                            title = "强制全量重新同步",
-                            subtitle = "从远程服务器重新拉取全部模块最新数据",
-                            onClick = {
-                                onForceFullSync()
-                                Toast.makeText(context, "正在全量重新同步数据...", Toast.LENGTH_SHORT).show()
-                            },
-                            trailing = {
-                                Text(
-                                    "同步",
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFF0284C7),
-                                )
-                            },
-                        )
-                    }
-                }
-            }
-
-            // 8. 服务台账与工具卡片
+            // 6. 服务台账
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -482,7 +316,7 @@ fun ProfileScreen(
                 }
             }
 
-            // 9. 设备与会话管理
+            // 7. 设备与会话管理
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -513,6 +347,24 @@ fun ProfileScreen(
                                 }
                             },
                         )
+                        ProfileDivider()
+                        ProfileActionRow(
+                            icon = Icons.Outlined.Laptop,
+                            iconTint = Color(0xFF2563EB),
+                            iconBackground = Color(0xFFEFF6FF),
+                            title = "电脑端快捷免密登录",
+                            subtitle = "生成单次使用、5 分钟内有效的登录链接",
+                            busy = state.busyAction == "desktop-magic-link",
+                            onClick = {
+                                onCreateDesktopMagicLink { url, error ->
+                                    if (url != null) {
+                                        showMagicLinkDialog = url
+                                    } else if (error != null) {
+                                        Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                        )
                         if (showSessions) {
                             ProfileDivider()
                             when {
@@ -537,7 +389,7 @@ fun ProfileScreen(
                 }
             }
 
-            // 10. 系统维护与更新检查 (全新)
+            // 8. 关于应用
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -551,8 +403,8 @@ fun ProfileScreen(
                             icon = Icons.Outlined.SystemUpdate,
                             iconTint = Color(0xFF2563EB),
                             iconBackground = Color(0xFFEFF6FF),
-                            title = "检查新版本",
-                            subtitle = "当前版本 v${BuildConfig.VERSION_NAME} · 检查远程发布",
+                            title = "关于 MY Control",
+                            subtitle = "当前版本 v${BuildConfig.VERSION_NAME} · 查看版本与更新",
                             busy = state.busyAction == "check-updates",
                             onClick = {
                                 onCheckUpdates()
@@ -560,28 +412,9 @@ fun ProfileScreen(
                             },
                             trailing = {
                                 Text(
-                                    "检查",
+                                    "查看",
                                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                                     color = Color(0xFF2563EB),
-                                )
-                            },
-                        )
-                        ProfileDivider()
-                        ProfileActionRow(
-                            icon = Icons.Outlined.Assessment,
-                            iconTint = Color(0xFF475569),
-                            iconBackground = Color(0xFFF1F5F9),
-                            title = "导出客户端运行诊断",
-                            subtitle = "生成设备环境、网络状态与会话诊断摘要",
-                            onClick = {
-                                val report = onGenerateDiagnosticReport()
-                                showDiagnosticDialog = report
-                            },
-                            trailing = {
-                                Text(
-                                    "导出",
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFF475569),
                                 )
                             },
                         )
@@ -589,7 +422,7 @@ fun ProfileScreen(
                 }
             }
 
-            // 11. 退出当前账号按钮
+            // 9. 退出当前账号
             item {
                 val interactionSource = remember { MutableInteractionSource() }
                 Surface(
@@ -730,23 +563,7 @@ fun ProfileScreen(
         )
     }
 
-    // 3. 清理缓存确认弹窗
-    if (confirmClearCache) {
-        AppConfirmDialog(
-            title = "清理本地临时缓存？",
-            detail = "将清理离线响应快照与临时缓存，释放存储空间。您的登录凭据与账号配置不受影响。",
-            confirmLabel = "立即清理",
-            onDismiss = { confirmClearCache = false },
-            onConfirm = {
-                confirmClearCache = false
-                onClearCache()
-                Toast.makeText(context, "本地快照缓存已清理", Toast.LENGTH_SHORT).show()
-            },
-            icon = Icons.Outlined.CleaningServices,
-        )
-    }
-
-    // 4. 版本检查弹窗
+    // 3. 关于应用与版本检查
     if (showUpdateDialog) {
         Dialog(
             onDismissRequest = { showUpdateDialog = false },
@@ -765,7 +582,7 @@ fun ProfileScreen(
                         IconTile(Icons.Outlined.SystemUpdate, Color(0xFF2563EB), Color(0xFFEFF6FF), modifier = Modifier.size(44.dp))
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("应用版本检查", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+                            Text("关于 MY Control", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
                             Text("当前本地版本: v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -812,76 +629,6 @@ fun ProfileScreen(
         }
     }
 
-    // 5. 诊断报告导出弹窗
-    showDiagnosticDialog?.let { report ->
-        Dialog(
-            onDismissRequest = { showDiagnosticDialog = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .padding(16.dp),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 6.dp,
-            ) {
-                Column(modifier = Modifier.padding(22.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconTile(Icons.Outlined.Assessment, Color(0xFF475569), Color(0xFFF1F5F9), modifier = Modifier.size(44.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("客户端运行诊断报告", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
-                            Text("已脱敏运行摘要", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = report,
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(12.dp),
-                            maxLines = 12,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-
-                    Spacer(Modifier.height(18.dp))
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(
-                            onClick = { showDiagnosticDialog = null },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(14.dp),
-                        ) {
-                            Text("关闭")
-                        }
-                        Button(
-                            onClick = {
-                                clipboardManager.setText(AnnotatedString(report))
-                                Toast.makeText(context, "诊断报告已复制到剪贴板", Toast.LENGTH_SHORT).show()
-                                showDiagnosticDialog = null
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(14.dp),
-                        ) {
-                            Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("复制报告")
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     // 撤销会话与退出登录
     revokeTarget?.let { session ->
         AppConfirmDialog(
@@ -915,9 +662,6 @@ fun ProfileScreen(
 @Composable
 private fun ModernProfileHeader(
     onOpenQrLogin: () -> Unit,
-    latencyMs: Long?,
-    latencyStatus: String,
-    onMeasureNetwork: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -934,55 +678,7 @@ private fun ModernProfileHeader(
             ),
         )
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // 实时延迟轻量指示微标
-            Surface(
-                onClick = onMeasureNetwork,
-                shape = RoundedCornerShape(12.dp),
-                color = when (latencyStatus) {
-                    "healthy" -> Color(0xFFECFDF5)
-                    "warning" -> Color(0xFFFFFBEB)
-                    "error" -> Color(0xFFFEF2F2)
-                    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                },
-                border = BorderStroke(0.5.dp, when (latencyStatus) {
-                    "healthy" -> Color(0xFFA7F3D0)
-                    "warning" -> Color(0xFFFDE68A)
-                    "error" -> Color(0xFFFECACA)
-                    else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                }),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .background(
-                                when (latencyStatus) {
-                                    "healthy" -> Color(0xFF10B981)
-                                    "warning" -> Color(0xFFF59E0B)
-                                    "error" -> Color(0xFFEF4444)
-                                    else -> Color(0xFF94A3B8)
-                                },
-                                CircleShape
-                            )
-                    )
-                    Text(
-                        text = latencyMs?.let { "${it}ms" } ?: "测速",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
-                        color = when (latencyStatus) {
-                            "healthy" -> Color(0xFF047857)
-                            "warning" -> Color(0xFFB45309)
-                            "error" -> Color(0xFFDC2626)
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-            }
-
+        Row(verticalAlignment = Alignment.CenterVertically) {
             ModernHeaderIconButton(
                 icon = Icons.Outlined.CenterFocusWeak,
                 contentDescription = "扫码登录",
@@ -992,14 +688,12 @@ private fun ModernProfileHeader(
     }
 }
 
-/** 个人资料 Card (含快捷桌面登录) */
+/** 个人资料 Card */
 @Composable
 private fun ModernProfileCard(
     username: String,
     role: String,
     versionStr: String,
-    busyAction: String?,
-    onCreateMagicLink: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -1077,40 +771,6 @@ private fun ModernProfileCard(
                 StatusBadge("healthy", "已登录")
             }
 
-            Spacer(Modifier.height(14.dp))
-
-            // 快捷桌面端免密登录按钮
-            Surface(
-                onClick = onCreateMagicLink,
-                shape = RoundedCornerShape(14.dp),
-                color = Color(0xFFF8FAFC),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Outlined.Laptop, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(18.dp))
-                        Text(
-                            "电脑端快捷免密登录",
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                            color = Color(0xFF1E293B),
-                        )
-                    }
-                    if (busyAction == "desktop-magic-link") {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color(0xFF2563EB))
-                    } else {
-                        Text(
-                            "生成链接",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = Color(0xFF2563EB),
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -1153,68 +813,6 @@ private fun LightSecurityCell(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-    }
-}
-
-@Composable
-private fun LightInfoCell(
-    label: String,
-    value: String,
-    statusColor: Color,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                value,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = statusColor,
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-private data class NetworkStatusStyle(val bgColor: Color, val borderColor: Color, val textColor: Color, val text: String)
-
-@Composable
-private fun NetworkStatusBadge(status: String, latencyMs: Long?) {
-    val style = when (status) {
-        "healthy" -> NetworkStatusStyle(Color(0xFFECFDF5), Color(0xFFA7F3D0), Color(0xFF047857), "${latencyMs ?: 0}ms · 畅通")
-        "warning" -> NetworkStatusStyle(Color(0xFFFFFBEB), Color(0xFFFDE68A), Color(0xFFB45309), "${latencyMs ?: 0}ms · 稍慢")
-        "error" -> NetworkStatusStyle(Color(0xFFFEF2F2), Color(0xFFFECACA), Color(0xFFDC2626), "连接异常")
-        "measuring" -> NetworkStatusStyle(Color(0xFFEFF6FF), Color(0xFFBFDBFE), Color(0xFF2563EB), "测速中")
-        else -> NetworkStatusStyle(Color(0xFFF1F5F9), Color(0xFFE2E8F0), Color(0xFF475569), "未测速")
-    }
-
-    Surface(
-        color = style.bgColor,
-        shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(0.5.dp, style.borderColor),
-    ) {
-        Text(
-            text = style.text,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-            color = style.textColor,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-        )
     }
 }
 

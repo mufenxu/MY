@@ -159,7 +159,7 @@ fun Modifier.pressFeedback(
     pressedScale: Float = 0.97f,
 ): Modifier {
     val pressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
+    val scale = animateFloatAsState(
         targetValue = if (pressed) pressedScale else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
@@ -167,9 +167,10 @@ fun Modifier.pressFeedback(
         ),
         label = "press-scale",
     )
-    return graphicsLayer {
-        scaleX = scale
-        scaleY = scale
+    return this.graphicsLayer {
+        val currentScale = scale.value
+        scaleX = currentScale
+        scaleY = currentScale
     }
 }
 
@@ -983,27 +984,30 @@ fun PullToRefresh(
         }
     }
 
+    val dragReleaseModifier = if (pullOffset > 0f) {
+        Modifier.pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                var watching = true
+                while (watching) {
+                    val event = awaitPointerEvent(PointerEventPass.Final)
+                    val change = event.changes.firstOrNull { it.id == down.id }
+                    if (change == null || !change.pressed) {
+                        if (pullOffset > 0f) settlePull()
+                        watching = false
+                    }
+                }
+            }
+        }
+    } else {
+        Modifier
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .nestedScroll(connection)
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    var watching = true
-                    while (watching) {
-                        val event = awaitPointerEvent(PointerEventPass.Final)
-                        val change = event.changes.firstOrNull { it.id == down.id }
-                        if (change == null || !change.pressed) {
-                            if (pullOffset > 0f) settlePull()
-                            watching = false
-                        } else if (event.changes.any { it.isConsumed } && pullOffset <= 0f) {
-                            // 子容器正在正常滚动，不干预下拉刷新
-                            watching = false
-                        }
-                    }
-                }
-            }
+            .then(dragReleaseModifier)
     ) {
         Box(
             modifier = Modifier

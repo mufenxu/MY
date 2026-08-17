@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,14 +17,21 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.Assessment
+import androidx.compose.material.icons.outlined.CleaningServices
+import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.automirrored.outlined.FactCheck
 import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.material.icons.outlined.TaskAlt
+import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,9 +42,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.PlatformTask
 import cn.pxyb.mycontrol.ui.theme.Amber
 import cn.pxyb.mycontrol.ui.theme.AmberPale
@@ -59,6 +73,10 @@ fun OperationsScreen(
     onRejectConfiguration: (String, String) -> Unit,
     onOpenNotifications: () -> Unit = {},
     onOpenIncident: (String) -> Unit = {},
+    onMeasureNetwork: () -> Unit = {},
+    onClearCache: () -> Unit = {},
+    onForceFullSync: () -> Unit = {},
+    onGenerateDiagnosticReport: () -> String = { "" },
     focusTaskId: String?,
     onFocusConsumed: () -> Unit,
     onRefresh: () -> Unit,
@@ -68,6 +86,10 @@ fun OperationsScreen(
     var selectedId by remember { mutableStateOf<String?>(null) }
     var decisionNote by remember { mutableStateOf("") }
     var pendingDecision by remember { mutableStateOf<String?>(null) }
+    var confirmClearCache by remember { mutableStateOf(false) }
+    var showDiagnosticDialog by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
 
     val canOperate = state.user?.role in setOf("operator", "super_admin")
     val canApproveConfig = state.user?.role == "super_admin"
@@ -130,6 +152,59 @@ fun OperationsScreen(
         }
         state.sectionError?.let { message ->
             item(key = "section-error") { FeedbackBanner("部分工具数据暂不可用：$message", error = true) }
+        }
+        item(key = "maintenance-title", contentType = "section") {
+            SectionHeader("客户端维护", "网络连通性、本地缓存、全量同步与运行诊断")
+        }
+        item(key = "maintenance", contentType = "card") {
+            AppPanel {
+                Column {
+                    OperationsMaintenanceRow(
+                        icon = Icons.Outlined.Wifi,
+                        iconTint = Color(0xFF0284C7),
+                        iconBackground = Color(0xFFE0F2FE),
+                        title = "远程服务器连通性",
+                        subtitle = state.networkHealth.message
+                            ?: state.networkHealth.gatewayUrl.ifBlank { "测量 DNS 解析与 API 响应延迟" },
+                        busy = state.networkHealth.status == "measuring",
+                        onClick = onMeasureNetwork,
+                        trailing = networkStatusLabel(state.networkHealth.status),
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                    OperationsMaintenanceRow(
+                        icon = Icons.Outlined.CleaningServices,
+                        iconTint = Color(0xFF059669),
+                        iconBackground = Color(0xFFECFDF5),
+                        title = "清理临时快照缓存",
+                        subtitle = "已占用 ${state.cacheStorageInfo.totalFormatted} · 保留登录状态",
+                        onClick = { confirmClearCache = true },
+                        trailing = "清理",
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                    OperationsMaintenanceRow(
+                        icon = Icons.Outlined.CloudSync,
+                        iconTint = Color(0xFF0284C7),
+                        iconBackground = Color(0xFFE0F2FE),
+                        title = "强制全量重新同步",
+                        subtitle = "从远程服务器重新拉取全部模块最新数据",
+                        onClick = {
+                            onForceFullSync()
+                            Toast.makeText(context, "正在全量重新同步数据...", Toast.LENGTH_SHORT).show()
+                        },
+                        trailing = "同步",
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                    OperationsMaintenanceRow(
+                        icon = Icons.Outlined.Assessment,
+                        iconTint = Color(0xFF475569),
+                        iconBackground = Color(0xFFF1F5F9),
+                        title = "导出客户端运行诊断",
+                        subtitle = "生成已脱敏的设备、网络与会话摘要",
+                        onClick = { showDiagnosticDialog = onGenerateDiagnosticReport() },
+                        trailing = "导出",
+                    )
+                }
+            }
         }
         item(key = "diagnostics-title", contentType = "section") { SectionHeader("所有者巡检", "服务、告警、设备、备份与资源续期的一站式检查") }
         item(key = "diagnostics", contentType = "card") {
@@ -433,6 +508,119 @@ fun OperationsScreen(
             icon = Icons.Outlined.Backup,
         )
     }
+
+    if (confirmClearCache) {
+        AppConfirmDialog(
+            title = "清理本地临时缓存？",
+            detail = "将清理离线响应快照与临时缓存，释放存储空间。登录凭据与账号配置不受影响。",
+            confirmLabel = "立即清理",
+            onDismiss = { confirmClearCache = false },
+            onConfirm = {
+                confirmClearCache = false
+                onClearCache()
+                Toast.makeText(context, "本地快照缓存已清理", Toast.LENGTH_SHORT).show()
+            },
+            icon = Icons.Outlined.CleaningServices,
+        )
+    }
+
+    showDiagnosticDialog?.let { report ->
+        AppDialog(
+            onDismissRequest = { showDiagnosticDialog = null },
+            icon = Icons.Outlined.Assessment,
+            iconTint = Color(0xFF475569),
+            iconBackground = Color(0xFFF1F5F9),
+            title = "客户端运行诊断报告",
+            subtitle = "已脱敏运行摘要",
+            content = {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = report,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(12.dp),
+                        maxLines = 12,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            },
+            footer = {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(
+                        onClick = { showDiagnosticDialog = null },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                    ) { Text("关闭") }
+                    Button(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(report))
+                            Toast.makeText(context, "诊断报告已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                            showDiagnosticDialog = null
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Text("复制报告", modifier = Modifier.padding(start = 6.dp))
+                    }
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun OperationsMaintenanceRow(
+    icon: ImageVector,
+    iconTint: Color,
+    iconBackground: Color,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    trailing: String,
+    busy: Boolean = false,
+) {
+    Surface(
+        onClick = onClick,
+        enabled = !busy,
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(11.dp),
+        ) {
+            IconTile(icon, iconTint, iconBackground, modifier = Modifier.size(38.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (busy) {
+                androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = iconTint)
+            } else {
+                Text(trailing, style = MaterialTheme.typography.labelLarge, color = iconTint, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+private fun networkStatusLabel(status: String): String = when (status) {
+    "healthy" -> "畅通"
+    "warning" -> "稍慢"
+    "error" -> "异常"
+    "measuring" -> "测速中"
+    else -> "未测速"
 }
 
 @Composable

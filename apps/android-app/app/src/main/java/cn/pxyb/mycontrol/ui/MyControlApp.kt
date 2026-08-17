@@ -1378,6 +1378,10 @@ private fun AuthenticatedShell(
                         onOpenNotifications = {
                             viewModel.openWorkspace(WorkspaceDestination.Notifications)
                         },
+                        onMeasureNetwork = viewModel::measureNetworkHealth,
+                        onClearCache = viewModel::clearLocalCache,
+                        onForceFullSync = viewModel::forceFullSync,
+                        onGenerateDiagnosticReport = viewModel::generateDiagnosticReport,
                         focusTaskId = state.focusTaskId,
                         onFocusConsumed = viewModel::clearFocusTargets,
                         onRefresh = onRefresh,
@@ -1428,13 +1432,9 @@ private fun AuthenticatedShell(
                         onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
                         notificationsEnabled = notificationsEnabled,
                         onRequestNotifications = onRequestNotifications,
-                        onMeasureNetwork = viewModel::measureNetworkHealth,
-                        onClearCache = viewModel::clearLocalCache,
-                        onForceFullSync = viewModel::forceFullSync,
                         onCreateDesktopMagicLink = viewModel::createDesktopMagicLink,
                         onUpdateNotificationPreferences = viewModel::updateNotificationPreferences,
                         onCheckUpdates = viewModel::checkAppUpdates,
-                        onGenerateDiagnosticReport = viewModel::generateDiagnosticReport,
                     )
                 }
                 composable(AppRoute.Account) {

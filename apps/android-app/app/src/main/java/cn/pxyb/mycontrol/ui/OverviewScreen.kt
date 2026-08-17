@@ -7,9 +7,11 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -37,9 +39,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.FactCheck
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CenterFocusWeak
@@ -87,6 +92,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -359,72 +365,101 @@ fun OverviewScreen(
                 val campusCardShape = RoundedCornerShape(24.dp)
                 val campusInteractionSource = remember { MutableInteractionSource() }
                 Surface(
-                onClick = openTodayWorkspace,
-                interactionSource = campusInteractionSource,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pressFeedback(campusInteractionSource)
-                    .clip(campusCardShape),
-                shape = campusCardShape,
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                shadowElevation = 0.dp,
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        IconTile(Icons.Outlined.CalendarMonth, Ocean, OceanPale)
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("校园日常概览", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                            Text(
-                                state.timetable?.currentCalendarText?.takeIf(String::isNotBlank)
-                                    ?: "课表、成绩和校园生活信息",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                    onClick = openTodayWorkspace,
+                    interactionSource = campusInteractionSource,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pressFeedback(campusInteractionSource),
+                    shape = campusCardShape,
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    shadowElevation = 0.dp,
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            IconTile(Icons.Outlined.CalendarMonth, Ocean, OceanPale)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("校园日常概览", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                                Text(
+                                    state.timetable?.currentCalendarText?.takeIf(String::isNotBlank)
+                                        ?: "课表、成绩和校园生活信息",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Icon(Icons.Outlined.ChevronRight, contentDescription = "查看校园智览", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                         }
-                        Icon(Icons.Outlined.ChevronRight, contentDescription = "查看校园智览", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                    }
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                                ModernOverviewMetric("今日课程", todayCourseTotal.toString(), Color(0xFF2563EB), Color(0xFFEFF6FF), Modifier.weight(1f))
-                        ModernOverviewMetric("本学期课程", if (courseCount > 0) "$courseCount 门" else "--", Color(0xFF059669), Color(0xFFECFDF5), Modifier.weight(1f))
-                        ModernOverviewMetric("GPA", campus?.gpa?.overall ?: "--", Color(0xFF7C3AED), Color(0xFFF5F3FF), Modifier.weight(1f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            ModernOverviewMetric("今日课程", todayCourseTotal.toString(), Color(0xFF2563EB), Color(0xFFEFF6FF), Modifier.weight(1f))
+                            ModernOverviewMetric("本学期课程", if (courseCount > 0) "$courseCount 门" else "--", Color(0xFF059669), Color(0xFFECFDF5), Modifier.weight(1f))
+                            ModernOverviewMetric("GPA", campus?.gpa?.overall ?: "--", Color(0xFF7C3AED), Color(0xFFF5F3FF), Modifier.weight(1f))
+                        }
                     }
-                }
                 }
             }
 
             // 4. 快捷操作
             item(key = "quick-actions-title", contentType = "section") {
                 OverviewSectionTitle(
-                    title = "快捷功能",
-                    subtitle = "常用常用工具一键直达",
+                    title = "快捷中心",
+                    subtitle = "高频工具与常用入口一键直达",
                     trailing = {
-                        IconButton(onClick = startCustomizingQuickActions) {
-                            Icon(Icons.Outlined.Edit, contentDescription = "调整快捷操作", tint = MaterialTheme.colorScheme.primary)
+                        val editInteractionSource = remember { MutableInteractionSource() }
+                        Surface(
+                            onClick = startCustomizingQuickActions,
+                            interactionSource = editInteractionSource,
+                            modifier = Modifier.pressFeedback(editInteractionSource),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Edit,
+                                    contentDescription = "调整快捷操作",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(13.dp),
+                                )
+                                Text(
+                                    "自定义",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    ),
+                                )
+                            }
                         }
                     },
                 )
             }
 
             item(key = "quick-actions", contentType = "card") {
-                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val columnCount = quickActionColumnCount(maxWidth, LocalDensity.current.fontScale)
+                val configuration = LocalConfiguration.current
+                val density = LocalDensity.current
+                val columnCount = remember(configuration.screenWidthDp, density.fontScale) {
+                    quickActionColumnCount(configuration.screenWidthDp.dp, density.fontScale)
+                }
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(26.dp),
                     color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                     shadowElevation = 0.dp,
                 ) {
                     Column(
@@ -458,7 +493,6 @@ fun OverviewScreen(
                         }
                     }
                 }
-                }
             }
 
             // 5. 待处理事项
@@ -478,8 +512,7 @@ fun OverviewScreen(
                         interactionSource = incidentInteractionSource,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .pressFeedback(incidentInteractionSource)
-                            .clip(incidentCardShape),
+                            .pressFeedback(incidentInteractionSource),
                         shape = incidentCardShape,
                         color = Color(0xFFFEF2F2),
                         border = BorderStroke(0.5.dp, Color(0xFFFECACA)),
@@ -506,33 +539,30 @@ fun OverviewScreen(
 
             if (state.externalApplications.isNotEmpty()) {
                 item(key = "external-apps", contentType = "card") {
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        OverviewSectionTitle("外部应用", "独立项目免密入口")
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OverviewSectionTitle("外部应用", "独立项目免密快捷直达")
                         externalApplicationOpenError?.let { message ->
                             FeedbackBanner(message, error = true)
                         }
                         Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 0.dp,
-                ) {
-                    Column {
-                        state.externalApplications.forEachIndexed { index, application ->
-                            ExternalApplicationRow(
-                                application = application,
-                                opening = openingExternalApplicationId == application.id,
-                                onOpen = stableOpenExternalApplication,
-                            )
-                            if (index < state.externalApplications.lastIndex) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                )
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(26.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                            shadowElevation = 0.dp,
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                state.externalApplications.forEach { application ->
+                                    ExternalApplicationRow(
+                                        application = application,
+                                        opening = openingExternalApplicationId == application.id,
+                                        onOpen = stableOpenExternalApplication,
+                                    )
+                                }
                             }
-                        }
-                    }
                         }
                     }
                 }
@@ -540,8 +570,8 @@ fun OverviewScreen(
 
             // 6. 服务可用性
             item(key = "services", contentType = "card") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OverviewSectionTitle("服务监控", "核心微服务状态")
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OverviewSectionTitle("服务监控", "核心微服务运行指标与状态")
                     serviceOpenError?.let { message ->
                         FeedbackBanner(message, error = true)
                     }
@@ -549,27 +579,24 @@ fun OverviewScreen(
                         EmptyBlock("暂无服务监测", "等待平台状态同步")
                     } else {
                         Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 0.dp,
-                ) {
-                    Column {
-                        sortedServices.forEachIndexed { index, service ->
-                            ServiceRow(
-                                service = service,
-                                opening = openingServiceId == service.id,
-                                onOpen = stableOpenServiceAdmin,
-                            )
-                            if (index < sortedServices.lastIndex) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                )
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(26.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                            shadowElevation = 0.dp,
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                sortedServices.forEach { service ->
+                                    ServiceRow(
+                                        service = service,
+                                        opening = openingServiceId == service.id,
+                                        onOpen = stableOpenServiceAdmin,
+                                    )
+                                }
                             }
-                        }
-                    }
                         }
                     }
                 }
@@ -778,25 +805,72 @@ private fun homeQuickActionSpec(
     onOpenOperations: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
 ): HomeQuickActionSpec = when (action) {
-    HomeQuickAction.Today -> HomeQuickActionSpec(Icons.Outlined.CalendarMonth, "今日工作台", Ocean, OceanPale) {
-        onOpenWorkspace(WorkspaceDestination.Today)
-    }
-    HomeQuickAction.Notifications -> HomeQuickActionSpec(Icons.Outlined.Notifications, "通知中心", Coral, CoralPale) {
-        onOpenWorkspace(WorkspaceDestination.Notifications)
-    }
-    HomeQuickAction.Insights -> HomeQuickActionSpec(Icons.Outlined.BarChart, "趋势周报", Forest, MintPale) {
-        onOpenWorkspace(WorkspaceDestination.Insights)
-    }
-    HomeQuickAction.Scenes -> HomeQuickActionSpec(Icons.Outlined.Tune, "智能场景", Amber, AmberPale) {
-        onOpenWorkspace(WorkspaceDestination.Scenes)
-    }
-    HomeQuickAction.Devices -> HomeQuickActionSpec(Icons.Outlined.Hub, "设备控制", Forest, MintPale) {
-        onSelectTab(MainTab.Tools)
-    }
-    HomeQuickAction.Diagnostics -> HomeQuickActionSpec(Icons.Outlined.Speed, "一键巡检", Amber, AmberPale, onRunDiagnostics)
-    HomeQuickAction.Backup -> HomeQuickActionSpec(Icons.Outlined.Backup, "数据备份", Coral, CoralPale, onTriggerBackup)
-    HomeQuickAction.GoogleAccounts -> HomeQuickActionSpec(Icons.Outlined.Email, "邮箱台账", Ocean, OceanPale, onOpenGoogleAccountDesk)
-    HomeQuickAction.Operations -> HomeQuickActionSpec(Icons.Outlined.Settings, "高级工具", Amber, AmberPale, onOpenOperations)
+    HomeQuickAction.Today -> HomeQuickActionSpec(
+        icon = Icons.Outlined.CalendarMonth,
+        label = "今日工作台",
+        accent = Color(0xFF2563EB),
+        accentPale = Color(0xFFEFF6FF),
+    ) { onOpenWorkspace(WorkspaceDestination.Today) }
+
+    HomeQuickAction.Notifications -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Notifications,
+        label = "通知中心",
+        accent = Color(0xFFE11D48),
+        accentPale = Color(0xFFFFF1F2),
+    ) { onOpenWorkspace(WorkspaceDestination.Notifications) }
+
+    HomeQuickAction.Insights -> HomeQuickActionSpec(
+        icon = Icons.Outlined.BarChart,
+        label = "趋势周报",
+        accent = Color(0xFF059669),
+        accentPale = Color(0xFFECFDF5),
+    ) { onOpenWorkspace(WorkspaceDestination.Insights) }
+
+    HomeQuickAction.Scenes -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Tune,
+        label = "智能场景",
+        accent = Color(0xFF7C3AED),
+        accentPale = Color(0xFFF5F3FF),
+    ) { onOpenWorkspace(WorkspaceDestination.Scenes) }
+
+    HomeQuickAction.Devices -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Hub,
+        label = "设备控制",
+        accent = Color(0xFF0284C7),
+        accentPale = Color(0xFFF0F9FF),
+    ) { onSelectTab(MainTab.Tools) }
+
+    HomeQuickAction.Diagnostics -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Speed,
+        label = "一键巡检",
+        accent = Color(0xFFD97706),
+        accentPale = Color(0xFFFFFBEB),
+        onClick = onRunDiagnostics,
+    )
+
+    HomeQuickAction.Backup -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Backup,
+        label = "数据备份",
+        accent = Color(0xFF0D9488),
+        accentPale = Color(0xFFF0FDFA),
+        onClick = onTriggerBackup,
+    )
+
+    HomeQuickAction.GoogleAccounts -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Email,
+        label = "邮箱台账",
+        accent = Color(0xFF4F46E5),
+        accentPale = Color(0xFFEEF2FF),
+        onClick = onOpenGoogleAccountDesk,
+    )
+
+    HomeQuickAction.Operations -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Settings,
+        label = "高级工具",
+        accent = Color(0xFF64748B),
+        accentPale = Color(0xFFF8FAFC),
+        onClick = onOpenOperations,
+    )
 }
 
 @Composable
@@ -817,53 +891,73 @@ private fun QuickActionsDialog(
         footer = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                TextButton(onClick = onDismiss) { Text("取消") }
-                Button(onClick = { onSave(localOrder, localHidden) }) { Text("保存") }
+                AppDialogSecondaryButton(
+                    text = "取消",
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                )
+                AppDialogPrimaryButton(
+                    text = "保存配置",
+                    onClick = { onSave(localOrder, localHidden) },
+                    modifier = Modifier.weight(1f),
+                )
             }
         },
     ) {
         Column(
             modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             localOrder.forEachIndexed { index, action ->
                 val visibleCount = localOrder.count { it !in localHidden }
-                Row(
+                val isChecked = action !in localHidden
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isChecked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f)
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Checkbox(
-                        checked = action !in localHidden,
-                        enabled = action in localHidden || visibleCount > 1,
-                        onCheckedChange = { checked ->
-                            localHidden = if (checked) localHidden - action else localHidden + action
-                        },
-                    )
-                    Text(homeQuickActionLabel(action), modifier = Modifier.weight(1f))
-                    IconButton(
-                        onClick = {
-                            localOrder = localOrder.toMutableList().also {
-                                val item = it.removeAt(index)
-                                it.add(index - 1, item)
-                            }
-                        },
-                        enabled = index > 0,
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "上移")
-                    }
-                    IconButton(
-                        onClick = {
-                            localOrder = localOrder.toMutableList().also {
-                                val item = it.removeAt(index)
-                                it.add(index + 1, item)
-                            }
-                        },
-                        enabled = index < localOrder.lastIndex,
-                    ) {
-                        Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "下移")
+                        Checkbox(
+                            checked = isChecked,
+                            enabled = !isChecked || visibleCount > 1,
+                            onCheckedChange = { checked ->
+                                localHidden = if (checked) localHidden - action else localHidden + action
+                            },
+                        )
+                        Text(
+                            text = homeQuickActionLabel(action),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(
+                            onClick = {
+                                localOrder = localOrder.toMutableList().also {
+                                    val item = it.removeAt(index)
+                                    it.add(index - 1, item)
+                                }
+                            },
+                            enabled = index > 0,
+                        ) {
+                            Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "上移", modifier = Modifier.size(20.dp))
+                        }
+                        IconButton(
+                            onClick = {
+                                localOrder = localOrder.toMutableList().also {
+                                    val item = it.removeAt(index)
+                                    it.add(index + 1, item)
+                                }
+                            },
+                            enabled = index < localOrder.lastIndex,
+                        ) {
+                            Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "下移", modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
             }
@@ -883,9 +977,11 @@ private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action
     HomeQuickAction.Operations -> "高级工具"
 }
 
+private val WeekPattern = Regex("第(\\d+)周")
+
 private fun todayCourseCount(state: OverviewUiState): Int {
     val day = LocalDate.now().dayOfWeek.value
-    val week = Regex("第(\\d+)周").find(state.timetable?.currentCalendarText.orEmpty())
+    val week = WeekPattern.find(state.timetable?.currentCalendarText.orEmpty())
         ?.groupValues?.getOrNull(1)?.toIntOrNull()
     return state.timetable?.courses.orEmpty().count { course ->
         course.day == day && (week == null || course.weeks.isEmpty() || week in course.weeks)
@@ -1008,38 +1104,146 @@ private fun QuickAction(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(18.dp)
     val interactionSource = remember { MutableInteractionSource() }
+    val isDark = isSystemInDarkTheme()
+
+    val containerBg = if (isDark) {
+        accent.copy(alpha = 0.10f).compositeOver(MaterialTheme.colorScheme.surface)
+    } else {
+        accentPale.copy(alpha = 0.45f)
+    }
+
+    val borderColor = if (isDark) {
+        accent.copy(alpha = 0.22f)
+    } else {
+        accent.copy(alpha = 0.14f)
+    }
+
     Surface(
-        modifier = modifier
-            .pressFeedback(interactionSource)
-            .clip(shape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = LocalIndication.current,
-                role = Role.Button,
-                onClickLabel = label,
-                onClick = onClick,
-            ),
+        onClick = onClick,
+        interactionSource = interactionSource,
+        modifier = modifier.pressFeedback(interactionSource, pressedScale = 0.94f),
         shape = shape,
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = containerBg,
+        border = BorderStroke(0.8.dp, borderColor),
         shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
+                .padding(horizontal = 6.dp, vertical = 13.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            IconTile(icon, accent, accentPale, modifier = Modifier.size(38.dp))
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(
+                        if (isDark) accent.copy(alpha = 0.22f)
+                        else accent.copy(alpha = 0.14f)
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = accent,
+                    modifier = Modifier.size(23.dp),
+                )
+            }
             Text(
-                label,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                text = label,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.5.sp,
+                    letterSpacing = (-0.1).sp,
+                ),
                 color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
+    }
+}
+
+private data class VisualTheme(
+    val icon: ImageVector,
+    val accent: Color,
+    val accentPale: Color,
+)
+
+private fun applicationVisualTheme(application: ExternalApplication): VisualTheme {
+    val name = application.name.lowercase()
+    val id = application.id.lowercase()
+    return when {
+        "ar" in name || "签到" in name || "sign" in id -> VisualTheme(
+            icon = Icons.Outlined.CenterFocusWeak,
+            accent = Color(0xFF0EA5E9), // 极光青蓝
+            accentPale = Color(0xFFF0F9FF),
+        )
+        "chat" in name || "api" in name || "ai" in id || "gpt" in name -> VisualTheme(
+            icon = Icons.Outlined.AutoAwesome,
+            accent = Color(0xFF8B5CF6), // 智感紫罗兰
+            accentPale = Color(0xFFF5F3FF),
+        )
+        "monkey" in name || "code" in name || "调度" in name || "dev" in id -> VisualTheme(
+            icon = Icons.Outlined.Terminal,
+            accent = Color(0xFF4F46E5), // 极客靛蓝
+            accentPale = Color(0xFFEEF2FF),
+        )
+        else -> VisualTheme(
+            icon = Icons.Outlined.Public,
+            accent = Color(0xFF059669), // 矩阵绿
+            accentPale = Color(0xFFECFDF5),
+        )
+    }
+}
+
+private fun serviceVisualTheme(service: ServiceInfo): VisualTheme {
+    val id = service.id.lowercase()
+    val name = service.name.lowercase()
+    return when {
+        "mqtt" in id || "mqtt" in name -> VisualTheme(
+            icon = Icons.Outlined.Speed,
+            accent = Color(0xFF06B6D4), // 物联青
+            accentPale = Color(0xFFECFEFF),
+        )
+        "campus" in id || "校园" in name -> VisualTheme(
+            icon = Icons.Outlined.CalendarMonth,
+            accent = Color(0xFF2563EB), // 校园蓝
+            accentPale = Color(0xFFEFF6FF),
+        )
+        "platform" in id || "控制台" in name || "统一" in name -> VisualTheme(
+            icon = Icons.Outlined.Security,
+            accent = Color(0xFF059669), // 盾牌绿
+            accentPale = Color(0xFFECFDF5),
+        )
+        "exam" in id || "考试" in name -> VisualTheme(
+            icon = Icons.Outlined.FactCheck,
+            accent = Color(0xFFEA580C), // 能量橙
+            accentPale = Color(0xFFFFF7ED),
+        )
+        "notify" in id || "通知" in name -> VisualTheme(
+            icon = Icons.Outlined.Notifications,
+            accent = Color(0xFFE11D48), // 活力玫红
+            accentPale = Color(0xFFFFF1F2),
+        )
+        "ct8" in id || "自动化" in name -> VisualTheme(
+            icon = Icons.Outlined.CloudSync,
+            accent = Color(0xFF64748B), // 钛金灰
+            accentPale = Color(0xFFF8FAFC),
+        )
+        else -> if (service.category == "miniapp") VisualTheme(
+            icon = Icons.Outlined.Hub,
+            accent = Color(0xFF7C3AED), // 微应用紫
+            accentPale = Color(0xFFF5F3FF),
+        ) else VisualTheme(
+            icon = Icons.Outlined.Hub,
+            accent = Color(0xFF3B82F6),
+            accentPale = Color(0xFFEFF6FF),
+        )
     }
 }
 
@@ -1049,59 +1253,142 @@ private fun ServiceRow(
     opening: Boolean,
     onOpen: (ServiceInfo) -> Unit,
 ) {
-    val style = statusStyle(service.state)
+    val theme = remember(service.id, service.name) { serviceVisualTheme(service) }
     val hasAdminUrl = !service.adminUrl.isNullOrBlank()
     val shape = RoundedCornerShape(18.dp)
     val interactionSource = remember(service.id) { MutableInteractionSource() }
-    val rowModifier = Modifier
-        .fillMaxWidth()
-        .let { base ->
-            if (hasAdminUrl) {
-                base
-                    .pressFeedback(interactionSource)
-                    .clip(shape)
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = LocalIndication.current,
-                        enabled = !opening,
-                        role = Role.Button,
-                        onClickLabel = service.name,
-                        onClick = { onOpen(service) },
-                    )
-            } else {
-                base
-            }
-        }
-        .padding(horizontal = 14.dp, vertical = 12.dp)
-    Row(
-        modifier = rowModifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
+    val isDark = isSystemInDarkTheme()
+
+    val containerBg = if (isDark) {
+        theme.accent.copy(alpha = 0.07f).compositeOver(MaterialTheme.colorScheme.surface)
+    } else {
+        theme.accentPale.copy(alpha = 0.40f)
+    }
+
+    val borderColor = if (isDark) {
+        theme.accent.copy(alpha = 0.18f)
+    } else {
+        theme.accent.copy(alpha = 0.10f)
+    }
+
+    Surface(
+        onClick = { if (hasAdminUrl && !opening) onOpen(service) },
+        enabled = hasAdminUrl && !opening,
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .fillMaxWidth()
+            .pressFeedback(interactionSource, pressedScale = 0.98f),
+        shape = shape,
+        color = containerBg,
+        border = BorderStroke(0.8.dp, borderColor),
+        shadowElevation = 0.dp,
     ) {
-        val icon = serviceOverviewIcon(service)
-        IconTile(icon, style.foreground, style.background, modifier = Modifier.size(38.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(service.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                listOfNotNull(
-                    service.httpStatus?.let { "HTTP $it" },
-                    service.latencyMs?.let { "$it ms" },
-                ).joinToString(" · ").ifBlank { "等待监测数据" },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (opening) {
-            ServiceJumpIndicator()
-        } else {
-            StatusBadge(service.state)
-            if (hasAdminUrl) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(
+                        if (isDark) theme.accent.copy(alpha = 0.22f)
+                        else theme.accent.copy(alpha = 0.14f)
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(
-                    Icons.Outlined.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
+                    imageVector = theme.icon,
+                    contentDescription = service.name,
+                    tint = theme.accent,
+                    modifier = Modifier.size(23.dp),
                 )
+            }
+
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = service.name,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    service.httpStatus?.let { status ->
+                        val statusBg = if (status in 200..299) Color(0xFF059669) else Color(0xFFDC2626)
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = statusBg.copy(alpha = if (isDark) 0.2f else 0.10f),
+                        ) {
+                            Text(
+                                text = "HTTP $status",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.5.sp,
+                                    color = statusBg,
+                                ),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                            )
+                        }
+                    }
+                    service.latencyMs?.let { latency ->
+                        val latencyColor = when {
+                            latency < 50 -> Color(0xFF059669)
+                            latency < 150 -> Color(0xFF2563EB)
+                            else -> Color(0xFFD97706)
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = latencyColor.copy(alpha = if (isDark) 0.2f else 0.10f),
+                        ) {
+                            Text(
+                                text = "$latency ms",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.5.sp,
+                                    color = latencyColor,
+                                ),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                            )
+                        }
+                    }
+                    if (service.httpStatus == null && service.latencyMs == null) {
+                        Text(
+                            text = "等待监测数据",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            if (opening) {
+                ServiceJumpIndicator()
+            } else {
+                StatusBadge(service.state)
+                if (hasAdminUrl) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Outlined.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
             }
         }
     }
@@ -1113,48 +1400,124 @@ private fun ExternalApplicationRow(
     opening: Boolean,
     onOpen: (ExternalApplication) -> Unit,
 ) {
-    val style = statusStyle(application.health.state)
+    val theme = remember(application.id, application.name) { applicationVisualTheme(application) }
     val shape = RoundedCornerShape(18.dp)
     val interactionSource = remember(application.id) { MutableInteractionSource() }
-    Row(
+    val isDark = isSystemInDarkTheme()
+
+    val containerBg = if (isDark) {
+        theme.accent.copy(alpha = 0.08f).compositeOver(MaterialTheme.colorScheme.surface)
+    } else {
+        theme.accentPale.copy(alpha = 0.45f)
+    }
+
+    val borderColor = if (isDark) {
+        theme.accent.copy(alpha = 0.20f)
+    } else {
+        theme.accent.copy(alpha = 0.12f)
+    }
+
+    Surface(
+        onClick = { if (application.canAccess && !opening) onOpen(application) },
+        enabled = application.canAccess && !opening,
+        interactionSource = interactionSource,
         modifier = Modifier
             .fillMaxWidth()
-            .pressFeedback(interactionSource)
-            .clip(shape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = LocalIndication.current,
-                enabled = application.canAccess && !opening,
-                role = Role.Button,
-                onClickLabel = "打开${application.name}",
-                onClick = { onOpen(application) },
-            )
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
+            .pressFeedback(interactionSource, pressedScale = 0.98f),
+        shape = shape,
+        color = containerBg,
+        border = BorderStroke(0.8.dp, borderColor),
+        shadowElevation = 0.dp,
     ) {
-        IconTile(Icons.Outlined.Public, style.foreground, style.background, modifier = Modifier.size(38.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(application.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                externalApplicationDetail(application),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (opening) {
-            ServiceJumpIndicator()
-        } else {
-            StatusBadge(application.health.state)
-            if (application.canAccess) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(
+                        if (isDark) theme.accent.copy(alpha = 0.22f)
+                        else theme.accent.copy(alpha = 0.14f)
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(
-                    Icons.Outlined.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
+                    imageVector = theme.icon,
+                    contentDescription = application.name,
+                    tint = theme.accent,
+                    modifier = Modifier.size(23.dp),
                 )
+            }
+
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = application.name,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    application.health.latencyMs?.let { latency ->
+                        val latencyColor = when {
+                            latency < 50 -> Color(0xFF059669)
+                            latency < 150 -> Color(0xFF2563EB)
+                            else -> Color(0xFFD97706)
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = latencyColor.copy(alpha = if (isDark) 0.2f else 0.10f),
+                        ) {
+                            Text(
+                                text = "$latency ms",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.5.sp,
+                                    color = latencyColor,
+                                ),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                            )
+                        }
+                    }
+                    Text(
+                        text = if (application.canAccess) "最低权限 ${externalRoleLabel(application.requiredRole)}" else "当前账号无权访问",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
+            if (opening) {
+                ServiceJumpIndicator()
+            } else {
+                StatusBadge(application.health.state)
+                if (application.canAccess) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Outlined.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
             }
         }
     }
@@ -1253,12 +1616,4 @@ private fun servicePriority(state: String): Int = when (state) {
     "degraded" -> 1
     "healthy" -> 2
     else -> 3
-}
-
-private fun serviceOverviewIcon(service: ServiceInfo): ImageVector = when (service.id) {
-    "platform" -> Icons.Outlined.Security
-    "notify" -> Icons.Outlined.Notifications
-    "campus" -> Icons.Outlined.CalendarMonth
-    "mqtt" -> Icons.Outlined.Speed
-    else -> if (service.category == "miniapp") Icons.Outlined.Hub else Icons.Outlined.Speed
 }

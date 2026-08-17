@@ -79,6 +79,8 @@ data class OperationsUiState(
     val releases: ReleaseData?,
     val backup: BackupQuality?,
     val diagnostics: DiagnosticData?,
+    val networkHealth: NetworkHealth = NetworkHealth(),
+    val cacheStorageInfo: CacheStorageInfo = CacheStorageInfo(),
 ) {
     val actionRequiredTasks: List<PlatformTask>
         get() = tasks.filter { it.status in setOf("action_required", "failed") }
@@ -122,8 +124,6 @@ data class ProfileUiState(
     val user: PlatformUser?,
     val security: SecurityData?,
     val alertPreferences: AlertPreferences = AlertPreferences(),
-    val networkHealth: NetworkHealth = NetworkHealth(),
-    val cacheStorageInfo: CacheStorageInfo = CacheStorageInfo(),
     val latestRelease: ReleaseData? = null,
     val webLoginLink: WebLoginLink? = null,
 )
@@ -257,6 +257,8 @@ internal fun AppUiState.toOperationsUiState() = OperationsUiState(
     releases = releases,
     backup = backup,
     diagnostics = diagnostics,
+    networkHealth = networkHealth,
+    cacheStorageInfo = cacheStorageInfo,
 )
 
 internal fun AppUiState.toToolsUiState() = ToolsUiState(
@@ -276,8 +278,6 @@ internal fun AppUiState.toProfileUiState() = ProfileUiState(
     user = user,
     security = security,
     alertPreferences = alertPreferences,
-    networkHealth = networkHealth,
-    cacheStorageInfo = cacheStorageInfo,
     latestRelease = releases,
     webLoginLink = webLoginLink,
 )
