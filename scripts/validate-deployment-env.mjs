@@ -38,7 +38,6 @@ const policies = new Map([
   ['PLATFORM_INTERNAL_AUTH_PRIVATE_KEY', 32],
   ['PLATFORM_METRICS_TOKEN', 32],
   ['PLATFORM_BACKUP_RUNNER_TOKEN', 32],
-  ['PLATFORM_DEPLOY_HOOK_TOKEN', 32],
   ['CORE_JWT_SECRET', 32],
   ['CORE_WECHAT_APP_SECRET', 16],
   ['EXAM_JWT_SECRET', 32],
@@ -94,29 +93,8 @@ if (backupStorageEncryptionKey && (
   errors.push('PLATFORM_BACKUP_STORAGE_ENCRYPTION_KEY must be a Base64URL-encoded 32-byte key');
 }
 
-const composeProfiles = new Set(String(values.get('COMPOSE_PROFILES') || '').split(',').map((value) => value.trim()).filter(Boolean));
-if (composeProfiles.has('release')) {
-  const workspaceRoot = values.get('DEPLOY_RUNNER_WORKSPACE_ROOT') || '';
-  const composePath = values.get('DEPLOY_RUNNER_COMPOSE_PATH') || '';
-  if (!workspaceRoot.startsWith('/') || workspaceRoot.includes('..') || workspaceRoot.includes('\\')) {
-    errors.push('DEPLOY_RUNNER_WORKSPACE_ROOT must be an absolute Linux host path when the release profile is enabled');
-  }
-  if (!composePath || composePath.startsWith('/') || composePath.includes('\\') || composePath.split('/').includes('..') || !/\.ya?ml$/i.test(composePath)) {
-    errors.push('DEPLOY_RUNNER_COMPOSE_PATH must be a relative .yml or .yaml file inside DEPLOY_RUNNER_WORKSPACE_ROOT when the release profile is enabled');
-  }
-  if (values.get('PLATFORM_DEPLOY_HOOK_URL') !== 'http://deployment-runner:22104') {
-    errors.push('PLATFORM_DEPLOY_HOOK_URL must use the internal deployment Sidecar URL when the release profile is enabled');
-  }
-  if (!values.get('DEPLOYMENT_RUNNER_IMAGE')) {
-    errors.push('DEPLOYMENT_RUNNER_IMAGE is required when the release profile is enabled');
-  }
-  if (!/^\d+$/.test(values.get('DEPLOY_RUNNER_DOCKER_GID') || '')) {
-    errors.push('DEPLOY_RUNNER_DOCKER_GID must be numeric when the release profile is enabled');
-  }
-}
-
 if (String(values.get('PLATFORM_RELEASE_ACTIONS_ENABLED') || '').toLowerCase() === 'true') {
-  for (const key of ['PLATFORM_GITHUB_TOKEN', 'PLATFORM_RELEASE_CALLBACK_TOKEN', 'PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY', 'PLATFORM_DEPLOY_HOOK_URL']) {
+  for (const key of ['PLATFORM_GITHUB_TOKEN', 'PLATFORM_RELEASE_CALLBACK_TOKEN', 'PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY']) {
     if (!values.get(key)) errors.push(`${key} is required when release actions are enabled`);
   }
 }
@@ -141,4 +119,4 @@ if (errors.length > 0) {
   console.error(errors.join('\n'));
   process.exit(1);
 }
-console.log(`${path.basename(envPath)} contains distinct, non-template deployment secrets.`);
+console.log(`${path.basename(envPath)} contains distinct, non-template service secrets.`);

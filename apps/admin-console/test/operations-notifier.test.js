@@ -52,9 +52,9 @@ test('all operations notifications use WeChat-compatible plain text', async () =
 
   await notifier.sendIncident({ title: '服务异常', severity: 'critical', description: '连接失败' }, 'opened');
   await notifier.sendRelease({
-    kind: 'deployment',
+    kind: 'build',
     status: 'succeeded',
-    deployment: { environment: 'production', components: ['admin-console'], revision: 'abcdef1234567890' },
+    build: { environment: 'production', targets: ['platform'], revision: 'abcdef1234567890' },
   });
   await notifier.sendSecurityAlert({ type: 'new_ip_login', username: 'admin', ip: '203.0.113.10' });
 

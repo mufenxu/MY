@@ -128,13 +128,13 @@ Audit records intentionally contain request IDs, actor, source IP, target, outco
 - Passwords require at least 15 characters, use versioned scrypt parameters, and transparently upgrade legacy hashes after a successful login.
 - The security page supports Passkeys, one-time recovery codes, password changes, least-privilege account roles, and remote session revocation.
 - Viewer sessions cannot mutate `/apps/*` routes and cannot open the managed IoT WebSocket.
-- Backup restore, release actions, and security-setting changes require password reauthentication and TOTP.
+- Backup restore, image build triggers, and security-setting changes require password reauthentication and TOTP.
 
 ## Release center
 
-The release center is read-only by default. `PLATFORM_GITHUB_TOKEN` enables private Actions history, while a dedicated callback token persists verified build artifacts in MongoDB. `PLATFORM_RELEASE_ACTIONS_ENABLED=true` permits guarded workflow dispatch only after callback and repository allowlist checks pass. Deployment and rollback additionally require the backend-only deployment Sidecar and its separate strong token. The public platform container never receives the Docker socket.
+The release build center is read-only by default. `PLATFORM_GITHUB_TOKEN` enables private Actions history, while a dedicated callback token persists verified build artifacts in MongoDB. `PLATFORM_RELEASE_ACTIONS_ENABLED=true` permits guarded workflow dispatch only after callback and repository allowlist checks pass. The public platform container never receives the Docker socket and does not execute deployment commands.
 
-Cloud builds stamp images with the source revision and build timestamp. The ACR workflow builds and smoke-tests SHA candidates before promoting mutable deployment tags. The controlled deployment path always uses the recorded manifest Digest, keeps the previous runtime Digests available, and promotes related services together after preflight checks. See [release-center.md](release-center.md) for setup, activation, deployment, and rollback procedures.
+Cloud builds stamp images with the source revision and build timestamp. The ACR workflow builds and smoke-tests SHA candidates before promoting mutable deployment tags. Production updates remain an explicit Compose operation performed outside the console. See [release-center.md](release-center.md) for build-center setup and the manual server update boundary.
 
 ## Release and rollback
 

@@ -6,7 +6,6 @@ on:
     paths:
       - infra/docker/platform-api.Dockerfile
       - infra/docker/backup-runner.Dockerfile
-      - infra/docker/deployment-runner.Dockerfile
       - infra/docker/core-api.Dockerfile
       - infra/docker/exam-api.Dockerfile
       - infra/docker/notification-service.Dockerfile
@@ -29,8 +28,6 @@ on:
       - scripts/backup-runner.mjs
       - scripts/backup-mongodb-container.mjs
       - scripts/restore-mongodb-container.mjs
-      - scripts/deployment-runner.mjs
-      - scripts/configure-deployment-sidecar.mjs
       - infra/docker/compose.yml
       - infra/docker/mongodb.Dockerfile
       - infra/docker/mongodb-entrypoint.sh
@@ -42,7 +39,7 @@ on:
   workflow_dispatch:
     inputs:
       targets:
-        description: "Images to build: platform,backup,runner,core,exam,notification,campus,iot,mongodb,all"
+        description: "Images to build: platform,backup,core,exam,notification,campus,iot,mongodb,all"
         required: true
         default: "platform,backup"
       push_sha_tags:
@@ -193,7 +190,6 @@ jobs:
             [exam]="infra/docker/exam-api.Dockerfile"
             [notification]="infra/docker/notification-service.Dockerfile"
             [backup]="infra/docker/backup-runner.Dockerfile"
-            [runner]="infra/docker/deployment-runner.Dockerfile"
             [campus]="infra/docker/campus-service.Dockerfile"
             [iot]="infra/docker/iot-service.Dockerfile"
             [mongodb]="infra/docker/mongodb.Dockerfile"
@@ -204,7 +200,6 @@ jobs:
             [exam]="."
             [notification]="."
             [backup]="."
-            [runner]="."
             [campus]="."
             [iot]="."
             [mongodb]="infra/docker"
@@ -215,7 +210,6 @@ jobs:
             [exam]="exam-api-latest"
             [notification]="notification-service-latest"
             [backup]="backup-runner-latest"
-            [runner]="deployment-runner-latest"
             [campus]="campus-service-latest"
             [iot]="iot-service-latest"
             [mongodb]="mongodb-7.0"
@@ -231,7 +225,7 @@ jobs:
             target="$(normalize_target "${item}")"
             [ -z "${target}" ] && continue
             if [ "${target}" = "all" ]; then
-              targets=(platform core exam notification backup runner campus iot mongodb)
+              targets=(platform core exam notification backup campus iot mongodb)
               break
             fi
             case "${target}" in
@@ -240,7 +234,6 @@ jobs:
               exam-api) target="exam" ;;
               notification-service) target="notification" ;;
               backup-runner) target="backup" ;;
-              deployment-runner) target="runner" ;;
               campus-service) target="campus" ;;
               iot-service) target="iot" ;;
               mongo) target="mongodb" ;;
@@ -299,9 +292,7 @@ jobs:
             digest="$(node scripts/buildx-metadata.mjs "${metadata_file}")"
             rm -f "${metadata_file}"
             reference="${ACR_IMAGE}@${digest}"
-            if [ "${target}" != "runner" ]; then
-              printf '%s\t%s\t%s\t%s\t%s\n' "${target}" "${image}" "${digest}" "${reference}" "${candidate}" >> release-artifacts.tsv
-            fi
+            printf '%s\t%s\t%s\t%s\t%s\n' "${target}" "${image}" "${digest}" "${reference}" "${candidate}" >> release-artifacts.tsv
             echo "::endgroup::"
           done
 
@@ -319,7 +310,6 @@ jobs:
             [exam]="exam-api-latest"
             [notification]="notification-service-latest"
             [backup]="backup-runner-latest"
-            [runner]="deployment-runner-latest"
             [campus]="campus-service-latest"
             [iot]="iot-service-latest"
             [mongodb]="mongodb-7.0"
@@ -330,13 +320,12 @@ jobs:
             [exam]="EXAM_API_IMAGE"
             [notification]="NOTIFICATION_SERVICE_IMAGE"
             [backup]="BACKUP_RUNNER_IMAGE"
-            [runner]="DEPLOYMENT_RUNNER_IMAGE"
             [campus]="CAMPUS_SERVICE_IMAGE"
             [iot]="IOT_SERVICE_IMAGE"
             [mongodb]="MONGODB_IMAGE"
           )
           short_sha="${GITHUB_SHA::12}"
-          for target in platform core exam notification backup runner campus iot mongodb; do
+          for target in platform core exam notification backup campus iot mongodb; do
             suffix="${tags[$target]}"
             if printf ',%s,' "${RAW_TARGETS}" | grep -q ",${target},"; then
               suffix="${suffix}-${short_sha}"
@@ -422,7 +411,6 @@ jobs:
             [exam]="exam-api-latest"
             [notification]="notification-service-latest"
             [backup]="backup-runner-latest"
-            [runner]="deployment-runner-latest"
             [campus]="campus-service-latest"
             [iot]="iot-service-latest"
             [mongodb]="mongodb-7.0"

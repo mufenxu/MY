@@ -26,6 +26,8 @@ import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.CleaningServices
+import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Email
@@ -78,6 +80,8 @@ fun ProfileScreen(
     onOpenQrLogin: () -> Unit,
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
+    onClearCache: () -> Unit,
+    onForceFullSync: () -> Unit,
     onOpenAccountManagement: () -> Unit,
     onOpenGoogleAccountDesk: () -> Unit,
     notificationsEnabled: Boolean,
@@ -92,6 +96,7 @@ fun ProfileScreen(
     var showNotificationDialog by remember { mutableStateOf(false) }
     var showMagicLinkDialog by remember { mutableStateOf<String?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
+    var confirmClearCache by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -389,7 +394,56 @@ fun ProfileScreen(
                 }
             }
 
-            // 8. 关于应用
+            // 8. App 维护
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    shadowElevation = 1.dp,
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        ProfileCardHeader(
+                            icon = Icons.Outlined.CleaningServices,
+                            iconTint = Color(0xFF0D9488),
+                            iconBackground = Color(0xFFF0FDFA),
+                            title = "App 维护",
+                            subtitle = "本地缓存与数据同步",
+                            trailing = {
+                                Text(
+                                    state.cacheStorageInfo.totalFormatted,
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = Color(0xFF0D9488),
+                                )
+                            },
+                        )
+                        ProfileDivider()
+                        ProfileActionRow(
+                            icon = Icons.Outlined.CloudSync,
+                            iconTint = Color(0xFF2563EB),
+                            iconBackground = Color(0xFFEFF6FF),
+                            title = "强制全量重新同步",
+                            subtitle = "重新拉取全部模块的最新数据",
+                            onClick = {
+                                onForceFullSync()
+                                Toast.makeText(context, "正在全量重新同步数据...", Toast.LENGTH_SHORT).show()
+                            },
+                        )
+                        ProfileDivider()
+                        ProfileActionRow(
+                            icon = Icons.Outlined.CleaningServices,
+                            iconTint = Color(0xFF0D9488),
+                            iconBackground = Color(0xFFF0FDFA),
+                            title = "清理临时快照缓存",
+                            subtitle = "释放 ${state.cacheStorageInfo.totalFormatted}，保留登录和个人设置",
+                            onClick = { confirmClearCache = true },
+                        )
+                    }
+                }
+            }
+
+            // 9. 关于应用
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -422,7 +476,7 @@ fun ProfileScreen(
                 }
             }
 
-            // 9. 退出当前账号
+            // 10. 退出当前账号
             item {
                 val interactionSource = remember { MutableInteractionSource() }
                 Surface(
@@ -606,15 +660,6 @@ fun ProfileScreen(
                         }
                     }
 
-                    state.latestRelease?.deployments?.firstOrNull()?.let { deployment ->
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            "最近生产部署: ${deployment.action} (${deployment.components.joinToString()})\n状态: ${deployment.status}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-
                     Spacer(Modifier.height(20.dp))
 
                     Button(
@@ -650,6 +695,21 @@ fun ProfileScreen(
             onConfirm = { confirmLogout = false; onLogout() },
             icon = Icons.AutoMirrored.Outlined.Logout,
             danger = true,
+        )
+    }
+
+    if (confirmClearCache) {
+        AppConfirmDialog(
+            title = "清理本地临时缓存？",
+            detail = "将清理离线响应快照与临时缓存，登录凭据、账号配置和个人设置不受影响。",
+            confirmLabel = "确认清理",
+            onDismiss = { confirmClearCache = false },
+            onConfirm = {
+                confirmClearCache = false
+                onClearCache()
+                Toast.makeText(context, "本地快照缓存已清理", Toast.LENGTH_SHORT).show()
+            },
+            icon = Icons.Outlined.CleaningServices,
         )
     }
 }

@@ -16,6 +16,14 @@ enum class HomeQuickAction {
     Operations,
 }
 
+internal val DEFAULT_HIDDEN_HOME_QUICK_ACTIONS: Set<HomeQuickAction> = setOf(
+    HomeQuickAction.Today,
+    HomeQuickAction.Devices,
+    HomeQuickAction.Diagnostics,
+    HomeQuickAction.Backup,
+    HomeQuickAction.Operations,
+)
+
 @Immutable
 data class HomeQuickActionPreferences(
     val order: List<HomeQuickAction>,
@@ -31,8 +39,13 @@ class HomePreferences(context: Context) {
             .orEmpty()
             .mapNotNull { value -> HomeQuickAction.entries.firstOrNull { it.name == value } }
         val order = (savedOrder + HomeQuickAction.entries).distinct()
-        val hidden = preferences.getStringSet(KEY_HIDDEN, emptySet()).orEmpty()
-            .mapNotNullTo(mutableSetOf()) { value -> HomeQuickAction.entries.firstOrNull { it.name == value } }
+        val hasSavedPreferences = preferences.contains(KEY_ORDER) || preferences.contains(KEY_HIDDEN)
+        val hidden = if (hasSavedPreferences) {
+            preferences.getStringSet(KEY_HIDDEN, emptySet()).orEmpty()
+                .mapNotNullTo(mutableSetOf()) { value -> HomeQuickAction.entries.firstOrNull { it.name == value } }
+        } else {
+            DEFAULT_HIDDEN_HOME_QUICK_ACTIONS
+        }
         return HomeQuickActionPreferences(order = order, hidden = hidden)
     }
 

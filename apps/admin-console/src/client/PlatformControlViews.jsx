@@ -60,7 +60,6 @@ const TASK_STATUS = {
 const TASK_SOURCE = {
   backup: '数据备份',
   release_build: '发布构建',
-  release_deployment: '发布部署',
   notification: '通知任务',
   incident: '告警事件',
   configuration: '配置审批',

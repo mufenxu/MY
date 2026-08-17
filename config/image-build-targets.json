@@ -6,7 +6,6 @@
     "exam": { "aliases": ["exam-api"], "dockerfile": "infra/docker/exam-api.Dockerfile", "context": ".", "tag": "exam-api-latest", "envKey": "EXAM_API_IMAGE" },
     "notification": { "aliases": ["notification-service"], "dockerfile": "infra/docker/notification-service.Dockerfile", "context": ".", "tag": "notification-service-latest", "envKey": "NOTIFICATION_SERVICE_IMAGE" },
     "backup": { "aliases": ["backup-runner"], "dockerfile": "infra/docker/backup-runner.Dockerfile", "context": ".", "tag": "backup-runner-latest", "envKey": "BACKUP_RUNNER_IMAGE" },
-    "runner": { "aliases": ["deployment-runner"], "dockerfile": "infra/docker/deployment-runner.Dockerfile", "context": ".", "tag": "deployment-runner-latest", "envKey": "DEPLOYMENT_RUNNER_IMAGE", "releaseArtifact": false },
     "campus": { "aliases": ["campus-service"], "dockerfile": "infra/docker/campus-service.Dockerfile", "context": ".", "tag": "campus-service-latest", "envKey": "CAMPUS_SERVICE_IMAGE" },
     "iot": { "aliases": ["iot-service"], "dockerfile": "infra/docker/iot-service.Dockerfile", "context": ".", "tag": "iot-service-latest", "envKey": "IOT_SERVICE_IMAGE" },
     "mongodb": { "aliases": ["mongo"], "dockerfile": "infra/docker/mongodb.Dockerfile", "context": "infra/docker", "tag": "mongodb-7.0", "envKey": "MONGODB_IMAGE" }
@@ -25,12 +24,8 @@
       "targets": ["backup"]
     },
     {
-      "paths": ["infra/docker/deployment-runner.Dockerfile", "scripts/deployment-runner.mjs", "scripts/configure-deployment-sidecar.mjs"],
-      "targets": ["runner"]
-    },
-    {
       "paths": ["infra/docker/compose.yml"],
-      "targets": ["platform", "runner"]
+      "targets": ["platform"]
     },
     {
       "paths": ["infra/docker/core-api.Dockerfile", "apps/core-admin/**", "services/core-api/**"],

@@ -52,8 +52,7 @@ test('ACR workflow consumes Buildx metadata without an immediate registry lookup
   assert.match(workflow, /--metadata-file "\$\{metadata_file\}"/);
   assert.match(workflow, /node scripts\/buildx-metadata\.mjs "\$\{metadata_file\}"/);
   assert.doesNotMatch(workflow, /imagetools inspect "\$\{candidate\}"/);
-  assert.match(workflow, /\[runner\]="infra\/docker\/deployment-runner\.Dockerfile"/);
-  assert.match(workflow, /if \[ "\$\{target\}" != "runner" \]; then/);
+  assert.doesNotMatch(workflow, /deployment-runner|\[runner\]/);
   assert.match(workflow, /--provenance=false \\[\r\n]+\s+--sbom=false \\/);
   assert.match(workflow, /RELEASE_TARGETS: \$\{\{ steps\.resolve\.outputs\.release_targets \}\}/);
   assert.ok(releaseSmokeComposeLines.length >= 3);
@@ -77,7 +76,7 @@ test('ACR exact-candidate smoke retries transient registry pull failures', async
   assert.match(workflow, /pull_with_retry\s*\n\s*"\$\{compose\[@\]\}" up -d --no-build --wait --wait-timeout 240/);
 });
 
-test('ACR deployment-tag promotion retries transient registry authorization failures', async () => {
+test('ACR release-tag promotion retries transient registry authorization failures', async () => {
   const workflow = await readFile(new URL('../.github/workflows/aliyun-acr.yml', import.meta.url), 'utf8');
   assert.match(workflow, /promote_with_retry\(\) \{/);
   assert.match(workflow, /until docker buildx imagetools create --tag "\$\{deployment_tag\}" "\$\{candidate\}"; do/);

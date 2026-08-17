@@ -12,7 +12,6 @@ function createCalendar() {
         createdAt: '2026-07-21T10:00:00.000Z', completedAt: '2026-07-21T10:05:00.000Z',
         timeline: [{ type: 'queued', at: '2026-07-21T10:00:00.000Z', actor: 'admin', message: 'token=release-secret' }],
       }],
-      listDeployments: async () => [],
     },
     configurationStore: {
       listChanges: async () => [{

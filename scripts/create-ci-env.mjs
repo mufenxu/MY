@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { chmod, chown, stat, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { createPasswordHash } from '../apps/admin-console/src/auth.js';
 
 const random = (bytes = 32) => crypto.randomBytes(bytes).toString('base64url');
@@ -11,21 +11,15 @@ const externalAuthPrivateValue = externalAuthPrivateKey.export({ format: 'der', 
 const externalAuthPublicValue = externalAuthPublicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
 const adminPassword = `Aa1!${random(18)}`;
 const adminPasswordHash = await createPasswordHash(adminPassword);
-const dockerGid = process.platform === 'win32' ? 0 : (await stat('/var/run/docker.sock')).gid;
 
 const values = {
   TZ: 'Asia/Shanghai',
-  COMPOSE_PROFILES: 'release',
   MONGODB_IMAGE: 'my-platform/mongodb:ci',
   PLATFORM_API_IMAGE: 'my-platform/platform-api:ci',
   CORE_API_IMAGE: 'my-platform/core-api:ci',
   EXAM_API_IMAGE: 'my-platform/exam-api:ci',
   NOTIFICATION_SERVICE_IMAGE: 'my-platform/notification-service:ci',
   BACKUP_RUNNER_IMAGE: 'my-platform/backup-runner:ci',
-  DEPLOYMENT_RUNNER_IMAGE: 'my-platform/deployment-runner:ci',
-  DEPLOY_RUNNER_WORKSPACE_ROOT: process.platform === 'win32' ? '/opt/my-platform' : process.cwd(),
-  DEPLOY_RUNNER_COMPOSE_PATH: 'infra/docker/compose.yml',
-  DEPLOY_RUNNER_DOCKER_GID: String(dockerGid),
   CAMPUS_SERVICE_IMAGE: 'my-platform/campus-service:ci',
   IOT_SERVICE_IMAGE: 'my-platform/iot-service:ci',
   PLATFORM_BIND_ADDRESS: '127.0.0.1',
@@ -78,10 +72,6 @@ const values = {
   PLATFORM_RELEASE_ENVIRONMENT: 'production',
   PLATFORM_RELEASE_CALLBACK_TOKEN: random(),
   PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY: 'registry.example.com/team/platform',
-  PLATFORM_DEPLOY_HOOK_URL: 'http://deployment-runner:22104',
-  PLATFORM_DEPLOY_HOOK_TOKEN: random(),
-  DEPLOY_RUNNER_ENV_FILE: process.argv[2] || '.env',
-  DEPLOY_RUNNER_ALLOW_MONGODB: 'false',
   PLATFORM_SSO_CORE_USERNAME: 'admin',
   PLATFORM_SSO_EXAM_USERNAME: 'admin',
   CORE_JWT_SECRET: random(),
@@ -125,9 +115,5 @@ const output = `${Object.entries(values).map(([key, value]) => `${key}=${value}`
 const destination = process.argv[2];
 if (destination) {
   await writeFile(destination, output, { encoding: 'utf8', mode: 0o600 });
-  if (process.platform !== 'win32') {
-    await chown(destination, process.getuid(), dockerGid);
-    await chmod(destination, 0o640);
-  }
 }
 else process.stdout.write(output);

@@ -48,7 +48,6 @@ test('operational search aggregates bounded sources using a sensitive-field allo
     },
     releaseStore: {
       listBuilds: async () => [{ id: 'build-alpha', status: 'succeeded', targets: ['alpha-core'], artifacts: [{ token: 'artifact-secret-789' }], createdAt: '2026-07-21T12:00:00.000Z' }],
-      listDeployments: async () => [],
     },
     configurationStore: {
       listChanges: async () => [{ id: 'change-alpha', status: 'pending', summary: 'Alpha threshold', changedKeys: ['alphaLimit'], settings: { token: 'configuration-secret-456' }, createdAt: '2026-07-21T13:00:00.000Z' }],
@@ -89,7 +88,6 @@ test('operational search bounds hostile internal identifiers, statuses, timestam
     },
     releaseStore: {
       listBuilds: async () => [{ id: hostileId, status: `credential=${secret}`, targets: ['needle'], createdAt: 'not-a-date' }],
-      listDeployments: async () => [],
     },
     configurationStore: {
       listChanges: async () => [{ id: hostileId, status: `secret=${secret}`, summary: 'Needle configuration', changedKeys: ['needle'], createdAt: 'not-a-date' }],

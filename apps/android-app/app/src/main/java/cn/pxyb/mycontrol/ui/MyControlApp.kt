@@ -148,6 +148,7 @@ private object AppRoute {
     const val GoogleAccounts = "google-accounts"
     const val Search = "search"
     const val Today = "today"
+    const val FreeClassrooms = "free-classrooms"
     const val Notifications = "notifications"
     const val Insights = "insights"
     const val Scenes = "scenes"
@@ -155,7 +156,7 @@ private object AppRoute {
 
 private val tabs = listOf(
     TabItem(MainTab.Overview, "今日", Icons.Outlined.Home),
-    TabItem(MainTab.Operations, "系统", Icons.Outlined.Settings),
+    TabItem(MainTab.Operations, "状态", Icons.Outlined.Settings),
     TabItem(MainTab.Tools, "设备", Icons.Outlined.Hub),
     TabItem(MainTab.Profile, "我的", Icons.Outlined.Person),
 )
@@ -183,6 +184,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Overview,
     AppRoute.Search,
     AppRoute.Today,
+    AppRoute.FreeClassrooms,
     AppRoute.Insights,
     AppRoute.Scenes -> MainTab.Overview
     AppRoute.Notifications -> MainTab.Overview
@@ -199,6 +201,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Notifications,
     AppRoute.Search,
     AppRoute.Today,
+    AppRoute.FreeClassrooms,
     AppRoute.Insights,
     AppRoute.Scenes -> MainTab.Overview
     else -> null
@@ -1261,6 +1264,7 @@ private fun AuthenticatedShell(
             AppRoute.GoogleAccounts -> viewModel.syncNavigationDestination(MainTab.Profile, googleAccountDeskOpen = true)
             AppRoute.Search -> viewModel.syncNavigationDestination(MainTab.Overview, globalSearchOpen = true)
             AppRoute.Today -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
+            AppRoute.FreeClassrooms -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
             AppRoute.Insights -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Insights)
             AppRoute.Scenes -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Scenes)
         }
@@ -1361,29 +1365,10 @@ private fun AuthenticatedShell(
                         contentPadding = contentPadding,
                         onRunDiagnostics = viewModel::runDiagnostics,
                         onTriggerBackup = { viewModel.triggerBackup(onSensitiveActionConfirmation) },
-                        onApproveConfiguration = { id, note ->
-                            viewModel.approveConfiguration(
-                                changeId = id,
-                                note = note.ifBlank { "所有者通过 MY Control Android 确认执行" },
-                                confirmation = onSensitiveActionConfirmation,
-                            )
-                        },
-                        onRejectConfiguration = { id, note ->
-                            viewModel.rejectConfiguration(
-                                changeId = id,
-                                note = note.ifBlank { "所有者通过 MY Control Android 放弃变更" },
-                                confirmation = onSensitiveActionConfirmation,
-                            )
-                        },
                         onOpenNotifications = {
                             viewModel.openWorkspace(WorkspaceDestination.Notifications)
                         },
                         onMeasureNetwork = viewModel::measureNetworkHealth,
-                        onClearCache = viewModel::clearLocalCache,
-                        onForceFullSync = viewModel::forceFullSync,
-                        onGenerateDiagnosticReport = viewModel::generateDiagnosticReport,
-                        focusTaskId = state.focusTaskId,
-                        onFocusConsumed = viewModel::clearFocusTargets,
                         onRefresh = onRefresh,
                     )
                 }
@@ -1428,6 +1413,8 @@ private fun AuthenticatedShell(
                         onOpenQrLogin = viewModel::openQrScanner,
                         onLogout = viewModel::logout,
                         onRefresh = onRefresh,
+                        onClearCache = viewModel::clearLocalCache,
+                        onForceFullSync = viewModel::forceFullSync,
                         onOpenAccountManagement = viewModel::openAccountManagement,
                         onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
                         notificationsEnabled = notificationsEnabled,
@@ -1520,7 +1507,18 @@ private fun AuthenticatedShell(
                             }
                         },
                         onOpenNotifications = { navigateToTab(MainTab.Notifications) },
-                        onOpenTasks = { navigateToTab(MainTab.Operations) },
+                        onOpenFreeClassrooms = {
+                            navController.navigate(AppRoute.FreeClassrooms) { launchSingleTop = true }
+                        },
+                    )
+                }
+                composable(AppRoute.FreeClassrooms) {
+                    val freeClassroomState by viewModel.freeClassroomState.collectAsStateWithLifecycle()
+                    FreeClassroomScreen(
+                        state = freeClassroomState,
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onQuery = viewModel::queryFreeClassrooms,
                     )
                 }
                 composable(AppRoute.Insights) {
@@ -1836,7 +1834,7 @@ private fun BrandMark(compact: Boolean = false) {
 private fun tabTitle(tab: MainTab): String = when (tab) {
     MainTab.Overview -> "今日"
     MainTab.Notifications -> "通知中心"
-    MainTab.Operations -> "系统"
+    MainTab.Operations -> "状态"
     MainTab.Tools -> "设备"
     MainTab.Profile -> "我的"
 }

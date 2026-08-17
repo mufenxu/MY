@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Assignment
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -134,7 +133,6 @@ private fun SearchResultRow(item: GlobalSearchItem, onClick: () -> Unit) {
 private fun searchResultIcon(destination: SearchDestination): ImageVector = when (destination) {
     SearchDestination.Overview -> Icons.Outlined.Cloud
     SearchDestination.Notifications -> Icons.Outlined.Notifications
-    SearchDestination.Operations -> Icons.AutoMirrored.Outlined.Assignment
     SearchDestination.Tools -> Icons.Outlined.Devices
     SearchDestination.GoogleAccounts -> Icons.Outlined.Email
     SearchDestination.Today -> Icons.Outlined.CalendarMonth

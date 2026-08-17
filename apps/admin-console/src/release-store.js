@@ -47,34 +47,6 @@ function createBuildDocument(input, { idFactory, now }) {
   };
 }
 
-function createDeploymentDocument(input, { idFactory, now }) {
-  const timestamp = iso(now());
-  return {
-    id: String(input.id || idFactory()),
-    environment: 'production',
-    action: 'deploy',
-    status: 'queued',
-    imageReferenceMode: 'digest',
-    buildId: null,
-    sourceDeploymentId: null,
-    components: [],
-    artifacts: [],
-    previousArtifacts: [],
-    requestedBy: 'system',
-    requestedAt: timestamp,
-    startedAt: null,
-    completedAt: null,
-    preflight: null,
-    runtime: null,
-    rollback: null,
-    error: '',
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    timeline: [],
-    ...clone(input),
-  };
-}
-
 function updateRecord(record, patch, event, now) {
   Object.assign(record, clone(patch), { updatedAt: iso(now()) });
   if (event) record.timeline = [...(record.timeline || []), clone(event)].slice(-100);
@@ -86,7 +58,6 @@ export function createMemoryReleaseStore({
   now = () => new Date(),
 } = {}) {
   const builds = [];
-  const deployments = [];
 
   return {
     async createBuild(input) {
@@ -109,31 +80,6 @@ export function createMemoryReleaseStore({
       const states = status ? new Set(String(status).split(',').map((value) => value.trim()).filter(Boolean)) : null;
       return clone(builds
         .filter((item) => !states || states.has(item.status))
-        .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
-        .slice(0, normalizeLimit(limit)));
-    },
-
-    async createDeployment(input) {
-      const document = createDeploymentDocument(input, { idFactory, now });
-      if (deployments.some((item) => item.id === document.id)) throw new Error(`Duplicate deployment id: ${document.id}`);
-      deployments.push(document);
-      return clone(document);
-    },
-
-    async getDeployment(id) {
-      return clone(deployments.find((item) => item.id === String(id)) || null);
-    },
-
-    async updateDeployment(id, patch, event = null) {
-      const document = deployments.find((item) => item.id === String(id));
-      return document ? updateRecord(document, patch, event, now) : null;
-    },
-
-    async listDeployments({ status, component, limit = 20 } = {}) {
-      const states = status ? new Set(String(status).split(',').map((value) => value.trim()).filter(Boolean)) : null;
-      return clone(deployments
-        .filter((item) => !states || states.has(item.status))
-        .filter((item) => !component || item.components.includes(component))
         .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
         .slice(0, normalizeLimit(limit)));
     },
@@ -163,17 +109,12 @@ export async function createMongoReleaseStore({
   await client.connect();
   const db = client.db(databaseName);
   const builds = db.collection('release_builds');
-  const deployments = db.collection('release_deployments');
 
   await Promise.all([
     builds.createIndex({ id: 1 }, { unique: true }),
     builds.createIndex({ createdAt: -1 }),
     builds.createIndex({ status: 1, updatedAt: -1 }),
     builds.createIndex({ 'workflowRun.id': 1 }, { sparse: true }),
-    deployments.createIndex({ id: 1 }, { unique: true }),
-    deployments.createIndex({ createdAt: -1 }),
-    deployments.createIndex({ status: 1, updatedAt: -1 }),
-    deployments.createIndex({ components: 1, completedAt: -1 }),
   ]);
 
   return {
@@ -198,37 +139,6 @@ export async function createMongoReleaseStore({
     async listBuilds({ status, limit = 20 } = {}) {
       const states = status ? String(status).split(',').map((value) => value.trim()).filter(Boolean) : [];
       const rows = await builds.find(states.length ? { status: { $in: states } } : {}, { projection: { _id: 0 } })
-        .sort({ createdAt: -1 })
-        .limit(normalizeLimit(limit))
-        .toArray();
-      return rows.map(serializeDocument);
-    },
-
-    async createDeployment(input) {
-      const document = createDeploymentDocument(input, { idFactory: () => crypto.randomUUID(), now: () => new Date() });
-      await deployments.insertOne(mongoPatch(document));
-      return serializeDocument(document);
-    },
-
-    async getDeployment(id) {
-      const document = await deployments.findOne({ id: String(id) }, { projection: { _id: 0 } });
-      return document ? serializeDocument(document) : null;
-    },
-
-    async updateDeployment(id, patch, event = null) {
-      const update = { $set: mongoPatch(patch) };
-      if (event) update.$push = { timeline: { $each: [event], $slice: -100 } };
-      const document = await deployments.findOneAndUpdate({ id: String(id) }, update, { returnDocument: 'after' });
-      return document ? serializeDocument(document) : null;
-    },
-
-    async listDeployments({ status, component, limit = 20 } = {}) {
-      const states = status ? String(status).split(',').map((value) => value.trim()).filter(Boolean) : [];
-      const query = {
-        ...(states.length ? { status: { $in: states } } : {}),
-        ...(component ? { components: component } : {}),
-      };
-      const rows = await deployments.find(query, { projection: { _id: 0 } })
         .sort({ createdAt: -1 })
         .limit(normalizeLimit(limit))
         .toArray();

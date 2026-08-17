@@ -165,21 +165,8 @@ data class ReleaseBuild(
 )
 
 @Immutable
-data class ReleaseDeployment(
-    val id: String,
-    val status: String,
-    val action: String,
-    val requestedBy: String,
-    val createdAt: String?,
-    val components: List<String>,
-)
-
-@Immutable
 data class ReleaseData(
     val builds: List<ReleaseBuild>,
-    val deployments: List<ReleaseDeployment>,
-    val actionsEnabled: Boolean,
-    val runnerConnected: Boolean,
 )
 
 @Immutable

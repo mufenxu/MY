@@ -21,7 +21,8 @@ test('manual aliases, global rules, and release artifact filtering are determini
   const graph = await loadImageBuildGraph();
   assert.deepEqual(resolveRequestedImageTargets('notification-service,platform-api', graph), ['platform', 'notification']);
   assert.deepEqual(resolveChangedImageTargets(['.github/workflows/aliyun-acr.yml'], graph), Object.keys(graph.targets));
-  assert.equal(releaseArtifactTargets(['platform', 'runner', 'core'], graph).join(','), 'platform,core');
+  assert.equal('runner' in graph.targets, false);
+  assert.equal(releaseArtifactTargets(['platform', 'core'], graph).join(','), 'platform,core');
   assert.throws(() => resolveRequestedImageTargets('unknown', graph), /Unknown image target/);
 });
 

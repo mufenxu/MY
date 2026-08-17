@@ -21,6 +21,7 @@ import cn.pxyb.mycontrol.data.AutomationCondition
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationPreference
 import cn.pxyb.mycontrol.data.AppNotificationAction
+import cn.pxyb.mycontrol.data.CampusFreeClassrooms
 import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
@@ -32,6 +33,7 @@ import cn.pxyb.mycontrol.data.GoogleAccountStore
 import cn.pxyb.mycontrol.data.GoogleAliasRecord
 import cn.pxyb.mycontrol.data.HomePreferences
 import cn.pxyb.mycontrol.data.HomeQuickAction
+import cn.pxyb.mycontrol.data.DEFAULT_HIDDEN_HOME_QUICK_ACTIONS
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.IotData
 import cn.pxyb.mycontrol.data.IotSceneAction
@@ -82,7 +84,7 @@ enum class MainTab { Overview, Notifications, Operations, Tools, Profile }
 
 enum class WorkspaceDestination { Today, Notifications, Insights, Scenes }
 
-enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, Resources, Notifications }
+enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, FreeClassrooms, Resources, Notifications }
 
 @Immutable
 data class SectionLoadState(
@@ -132,18 +134,18 @@ data class AppUiState(
     val totpEnrollment: TotpEnrollment? = null,
     val recoveryCodes: List<String> = emptyList(),
     val passkeys: List<PlatformPasskey> = emptyList(),
-    val focusTaskId: String? = null,
     val error: String? = null,
     val message: String? = null,
     val offlineMode: Boolean = false,
     val cachedAtMillis: Long? = null,
     val sectionLoadStates: Map<DataSection, SectionLoadState> = emptyMap(),
     val homeQuickActionOrder: List<HomeQuickAction> = HomeQuickAction.entries,
-    val hiddenHomeQuickActions: Set<HomeQuickAction> = emptySet(),
+    val hiddenHomeQuickActions: Set<HomeQuickAction> = DEFAULT_HIDDEN_HOME_QUICK_ACTIONS,
     val todoSnapshot: TodoSnapshot = TodoSnapshot(),
     val pendingTodoMutations: Int = 0,
     val campusTimetable: CampusTimetable? = null,
     val campusOverview: CampusOverview? = null,
+    val freeClassroomResult: CampusFreeClassrooms? = null,
     val resourceExpiries: List<ResourceExpiry> = emptyList(),
     val alerts: List<AppAlertRecord> = emptyList(),
     val alertPreferences: AlertPreferences = AlertPreferences(),
@@ -154,8 +156,6 @@ data class AppUiState(
 ) {
     val activeIncidents: List<IncidentInfo>
         get() = incidents.filter { it.status != "resolved" }
-    val actionRequiredTasks: List<PlatformTask>
-        get() = tasks.filter { it.status in setOf("action_required", "failed") }
 }
 
 class AppViewModel(
@@ -208,6 +208,7 @@ class AppViewModel(
     val qrLoginState = deriveState(AppUiState::toQrLoginUiState)
     val globalSearchState = deriveState(AppUiState::toGlobalSearchUiState)
     val todayState = deriveState(AppUiState::toTodayUiState)
+    val freeClassroomState = deriveState(AppUiState::toFreeClassroomUiState)
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
     val insightsState = deriveState(AppUiState::toInsightsUiState)
     val scenesState = deriveState(AppUiState::toScenesUiState)
@@ -448,7 +449,6 @@ class AppViewModel(
                         googleAccountsRevision = 0,
                         googleAccountMigrationPending = false,
                         googleAccountsRemoteReady = false,
-                        focusTaskId = null,
                     )
                 }
             } else {
@@ -675,10 +675,11 @@ class AppViewModel(
         tab: MainTab? = null,
         taskId: String? = null,
     ) {
-        val resolvedTab = tab ?: when {
-            !taskId.isNullOrBlank() -> MainTab.Operations
-            else -> null
+        if (!taskId.isNullOrBlank()) {
+            openWorkspace(WorkspaceDestination.Notifications)
+            return
         }
+        val resolvedTab = tab
         mutableState.update {
             it.copy(
                 selectedTab = resolvedTab ?: it.selectedTab,
@@ -686,17 +687,12 @@ class AppViewModel(
                 googleAccountDeskOpen = false,
                 globalSearchOpen = false,
                 workspaceDestination = null,
-                focusTaskId = taskId?.takeIf(String::isNotBlank),
                 error = null,
                 message = null,
             )
         }
         persistNavigationState()
         resolvedTab?.let(::refreshForTab)
-    }
-
-    fun clearFocusTargets() {
-        mutableState.update { it.copy(focusTaskId = null) }
     }
 
     fun openQrScanner() {
@@ -758,7 +754,6 @@ class AppViewModel(
         when (item.destination) {
             SearchDestination.Overview -> selectTab(MainTab.Overview)
             SearchDestination.Notifications -> openWorkspace(WorkspaceDestination.Notifications)
-            SearchDestination.Operations -> openOperationalTarget(MainTab.Operations, taskId = item.focusId)
             SearchDestination.Tools -> selectTab(MainTab.Tools)
             SearchDestination.GoogleAccounts -> openGoogleAccountDesk()
             SearchDestination.Today -> openWorkspace(WorkspaceDestination.Today)
@@ -1401,8 +1396,6 @@ class AppViewModel(
             MainTab.Operations -> {
                 refreshOverview(force)
                 refreshIncidents(force)
-                refreshTasks(force)
-                refreshReleases(force)
                 refreshBackup(force)
                 refreshIot(force)
                 refreshResourceExpiries(force)
@@ -1496,10 +1489,17 @@ class AppViewModel(
             it.copy(
                 campusTimetable = campus.timetable,
                 campusOverview = campus.overview,
+                freeClassroomResult = it.freeClassroomResult ?: campus.overview.freeClassrooms,
             )
         }
         evaluatePersonalReminders()
     }
+
+    fun queryFreeClassrooms(dayplus: Int, sections: List<Int>, building: String) =
+        launchRefresh(DataSection.FreeClassrooms, force = true, publishError = false) {
+            val result = api.campusFreeClassrooms(dayplus, sections, building)
+            mutableState.update { it.copy(freeClassroomResult = result) }
+        }
 
     private fun refreshResourceExpiries(force: Boolean = false) = launchRefresh(DataSection.Resources, force) {
         val resources = api.resourceExpiries()
@@ -1519,7 +1519,12 @@ class AppViewModel(
         refreshPasskeysInternal()
     }
 
-    private fun launchRefresh(section: DataSection, force: Boolean = false, block: suspend () -> Unit) {
+    private fun launchRefresh(
+        section: DataSection,
+        force: Boolean = false,
+        publishError: Boolean = force,
+        block: suspend () -> Unit,
+    ) {
         if (mutableState.value.user == null || refreshJobs[section]?.isActive == true) return
         val now = SystemClock.elapsedRealtime()
         val lastRefresh = lastRefreshElapsedMs[section]
@@ -1545,7 +1550,7 @@ class AppViewModel(
                 }
                 if (error is ApiException && shouldInvalidatePlatformSession(error.status, error.code)) {
                     forceReauthentication(error.message ?: "登录会话已失效，请重新登录。")
-                } else if (force) {
+                } else if (publishError) {
                     mutableState.update {
                         it.copy(error = "部分数据暂不可用：${error.message ?: "请稍后重试。"}")
                     }
@@ -1595,26 +1600,6 @@ class AppViewModel(
                     (section to transform(current.sectionLoadStates[section] ?: SectionLoadState())),
             )
         }
-    }
-
-    fun approveConfiguration(
-        changeId: String,
-        note: String = "通过 MY Control Android 审批",
-        confirmation: suspend () -> Boolean,
-    ) = runAction("config-approve", "配置变更已审批并生效。", confirmation) {
-        api.approveConfiguration(changeId, note)
-        mutableState.update { it.copy(tasks = api.tasks().tasks) }
-        evaluateAlerts()
-    }
-
-    fun rejectConfiguration(
-        changeId: String,
-        note: String = "通过 MY Control Android 拒绝",
-        confirmation: suspend () -> Boolean,
-    ) = runAction("config-reject", "配置变更提案已拒绝。", confirmation) {
-        api.rejectConfiguration(changeId, note)
-        mutableState.update { it.copy(tasks = api.tasks().tasks) }
-        evaluateAlerts()
     }
 
     fun saveTodo(task: TodoTask) {
@@ -1737,7 +1722,7 @@ class AppViewModel(
         if (record.origin == "remote" && record.actions.firstOrNull()?.deepLink?.let(::openNotificationDeepLink) == true) return
         when (record.type) {
             "incident" -> openWorkspace(WorkspaceDestination.Notifications)
-            "task" -> openOperationalTarget(MainTab.Operations, taskId = record.sourceId)
+            "task" -> openWorkspace(WorkspaceDestination.Notifications)
             "todo", "course" -> openWorkspace(WorkspaceDestination.Today)
             else -> Unit
         }
@@ -2448,29 +2433,6 @@ class AppViewModel(
             }.onFailure { error ->
                 mutableState.update { it.copy(busyAction = null, error = error.message ?: "检查更新失败，请稍后重试") }
             }
-        }
-    }
-
-    fun generateDiagnosticReport(): String {
-        val current = mutableState.value
-        val user = current.user
-        val timeStr = java.time.ZonedDateTime.now().toString()
-        return buildString {
-            appendLine("=== MY Control 客户端运行诊断报告 ===")
-            appendLine("生成时间: $timeStr")
-            appendLine("应用版本: v${BuildConfig.VERSION_NAME}")
-            appendLine("设备型号: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} (Android SDK ${android.os.Build.VERSION.SDK_INT})")
-            appendLine("登录账号: ${user?.username ?: "未登录"} (角色: ${user?.role ?: "未知"})")
-            appendLine("网关节点: ${BuildConfig.PLATFORM_BASE_URL}")
-            appendLine("网络延迟: ${current.networkHealth.latencyMs?.let { "${it}ms" } ?: "未测速"}")
-            appendLine("网络状态: ${if (current.offlineMode) "离线模式" else "在线就绪"}")
-            appendLine("安全保护: TOTP=${user?.totpEnabled == true}, Passkey=${user?.passkeyCount ?: 0}")
-            appendLine("会话保护: 应用锁=${current.appLockEnabled}")
-            appendLine("免打扰: ${if (current.alertPreferences.quietHoursEnabled) "开启 (${current.alertPreferences.quietStartHour}:00 - ${current.alertPreferences.quietEndHour}:00)" else "未开启"}")
-            appendLine("通知过滤: ${current.alertPreferences.severityFilter}")
-            appendLine("本地快照: ${current.cacheStorageInfo.totalFormatted}")
-            appendLine("活动会话数: ${current.security?.sessions?.size ?: 0}")
-            appendLine("=======================================")
         }
     }
 

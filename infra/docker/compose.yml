@@ -70,56 +70,6 @@ services:
     networks:
       - backend
 
-  deployment-runner:
-    profiles: ["release"]
-    image: ${DEPLOYMENT_RUNNER_IMAGE:-my-platform/deployment-runner:local}
-    build:
-      context: ../..
-      dockerfile: infra/docker/deployment-runner.Dockerfile
-    restart: unless-stopped
-    init: true
-    environment:
-      NODE_ENV: production
-      TZ: ${TZ:-Asia/Shanghai}
-      DEPLOY_RUNNER_ENABLED: "true"
-      DEPLOY_RUNNER_HOST: 0.0.0.0
-      DEPLOY_RUNNER_PORT: 22104
-      DEPLOY_RUNNER_TOKEN: ${PLATFORM_DEPLOY_HOOK_TOKEN:?Set PLATFORM_DEPLOY_HOOK_TOKEN}
-      DEPLOY_RUNNER_CALLBACK_URL: http://platform-api:22100/api/releases/callback
-      DEPLOY_RUNNER_CALLBACK_TOKEN: ${PLATFORM_RELEASE_CALLBACK_TOKEN:?Set PLATFORM_RELEASE_CALLBACK_TOKEN}
-      DEPLOY_RUNNER_ALLOWED_IMAGE_REPOSITORY: ${PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY:?Set PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY}
-      DEPLOY_RUNNER_WORKSPACE_ROOT: ${DEPLOY_RUNNER_WORKSPACE_ROOT:?Set DEPLOY_RUNNER_WORKSPACE_ROOT to the absolute host repository path}
-      DEPLOY_RUNNER_COMPOSE_FILE: ${DEPLOY_RUNNER_WORKSPACE_ROOT:?Set DEPLOY_RUNNER_WORKSPACE_ROOT}/${DEPLOY_RUNNER_COMPOSE_PATH:-infra/docker/compose.yml}
-      DEPLOY_RUNNER_ENV_FILE: ${DEPLOY_RUNNER_WORKSPACE_ROOT:?Set DEPLOY_RUNNER_WORKSPACE_ROOT}/${DEPLOY_RUNNER_ENV_FILE:-.env}
-      DEPLOY_RUNNER_STATE_DIR: /state
-      DEPLOY_RUNNER_EXPECT_SELF_MOUNT: "true"
-      DEPLOY_RUNNER_DOCKER_GID: ${DEPLOY_RUNNER_DOCKER_GID:?Run release:sidecar:configure on the Docker host}
-      DEPLOY_RUNNER_ALLOW_MONGODB: ${DEPLOY_RUNNER_ALLOW_MONGODB:-false}
-      DEPLOY_RUNNER_MINIMUM_FREE_BYTES: ${DEPLOY_RUNNER_MINIMUM_FREE_BYTES:-2147483648}
-      DEPLOY_RUNNER_COMMAND_TIMEOUT_MS: ${DEPLOY_RUNNER_COMMAND_TIMEOUT_MS:-600000}
-      DEPLOY_RUNNER_WAIT_TIMEOUT_SECONDS: ${DEPLOY_RUNNER_WAIT_TIMEOUT_SECONDS:-240}
-      DEPLOY_RUNNER_SMOKE_URLS: http://platform-api:22100/api/readyz
-    read_only: true
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${DEPLOY_RUNNER_WORKSPACE_ROOT:?Set DEPLOY_RUNNER_WORKSPACE_ROOT}:${DEPLOY_RUNNER_WORKSPACE_ROOT:?Set DEPLOY_RUNNER_WORKSPACE_ROOT}
-      - deployment_runner_state:/state
-    group_add:
-      - ${DEPLOY_RUNNER_DOCKER_GID:?Run release:sidecar:configure on the Docker host}
-    tmpfs:
-      - /tmp:size=32m,noexec,nosuid,nodev
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    pids_limit: ${DEPLOY_RUNNER_PIDS_LIMIT:-128}
-    mem_limit: ${DEPLOY_RUNNER_MEMORY_LIMIT:-256m}
-    cpus: ${DEPLOY_RUNNER_CPU_LIMIT:-0.5}
-    stop_grace_period: 30s
-    logging: *default-logging
-    networks:
-      - backend
-
   platform-api:
     image: ${PLATFORM_API_IMAGE:-my-platform/platform-api:local}
     build:
@@ -218,8 +168,6 @@ services:
       PLATFORM_RELEASE_ENVIRONMENT: ${PLATFORM_RELEASE_ENVIRONMENT:-production}
       PLATFORM_RELEASE_CALLBACK_TOKEN: ${PLATFORM_RELEASE_CALLBACK_TOKEN:-}
       PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY: ${PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY:-}
-      PLATFORM_DEPLOY_HOOK_URL: ${PLATFORM_DEPLOY_HOOK_URL:-}
-      PLATFORM_DEPLOY_HOOK_TOKEN: ${PLATFORM_DEPLOY_HOOK_TOKEN:-}
       PLATFORM_API_IMAGE: ${PLATFORM_API_IMAGE:-my-platform/platform-api:local}
       BACKUP_RUNNER_IMAGE: ${BACKUP_RUNNER_IMAGE:-my-platform/backup-runner:local}
       CORE_API_IMAGE: ${CORE_API_IMAGE:-my-platform/core-api:local}
@@ -594,4 +542,3 @@ volumes:
   backup_runner_state:
   core_uploads:
   core_logs:
-  deployment_runner_state:

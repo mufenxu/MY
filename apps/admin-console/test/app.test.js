@@ -189,39 +189,21 @@ test('release callbacks require the dedicated bearer token instead of a console 
   });
 });
 
-test('release deployment route verifies the multi-component confirmation phrase', async () => {
+test('release deployment route is not exposed', async () => {
   const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
-  let deploymentRequest = null;
   const app = createApp({
     config,
     releaseManager: {
       getSummary: async () => ({ capabilities: {} }),
-      dispatchDeployment: async (input) => {
-        deploymentRequest = input;
-        return { id: 'deployment-1', ...input };
-      },
     },
   });
   await withServer(app, async (origin) => {
-    const invalid = await fetch(`${origin}/api/releases/deploy`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
-      body: JSON.stringify({ action: 'deploy', components: ['platform', 'core'], confirmText: 'DEPLOY platform' }),
-    });
-    assert.equal(invalid.status, 400);
     const response = await fetch(`${origin}/api/releases/deploy`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
-      body: JSON.stringify({
-        action: 'deploy',
-        buildId: 'build-1',
-        components: ['platform', 'core'],
-        confirmText: 'DEPLOY platform,core',
-      }),
+      body: JSON.stringify({ action: 'deploy', components: ['platform'] }),
     });
-    assert.equal(response.status, 202);
-    assert.deepEqual(deploymentRequest.components, ['platform', 'core']);
-    assert.equal(deploymentRequest.buildId, 'build-1');
+    assert.equal(response.status, 404);
   });
 });
 

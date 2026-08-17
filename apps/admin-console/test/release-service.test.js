@@ -17,8 +17,6 @@ function config(overrides = {}) {
     releaseEnvironment: 'production',
     releaseCallbackToken: '',
     releaseAllowedImageRepository: '',
-    deployHookUrl: '',
-    deployHookToken: '',
     releaseImages: { platform: `${imageRepository}:platform-api-latest` },
     releaseRevision: '1234567890abcdef',
     releaseDeployedAt: '2026-07-18T12:00:00Z',
@@ -95,6 +93,13 @@ function zipStoredText(filename, content) {
   end.writeUInt32LE(localSize, 16);
   return Buffer.concat([local, name, data, central, name, end]);
 }
+
+test('release service exposes build operations without deployment controls', () => {
+  const releases = createReleaseService({ config: config() });
+  assert.equal(typeof releases.dispatchBuild, 'function');
+  assert.equal('dispatchDeployment' in releases, false);
+  assert.equal('getPreflight' in releases, false);
+});
 
 test('release center remains explicitly read-only without credentials', async () => {
   const releases = createReleaseService({ config: config() });
@@ -191,63 +196,6 @@ test('workflow callbacks persist complete immutable artifacts and reject other r
     }),
     (error) => error.code === 'UNTRUSTED_RELEASE_ARTIFACT',
   );
-});
-
-test('release summary reports components that differ from the latest verified build', async () => {
-  const store = createMemoryReleaseStore();
-  const releases = createReleaseService({
-    config: config({
-      releaseCallbackToken: 'c'.repeat(32),
-      releaseAllowedImageRepository: imageRepository,
-      deployHookUrl: 'http://deployment-runner:22104',
-      deployHookToken: 'd'.repeat(32),
-    }),
-    store,
-    fetchImpl: async () => jsonResponse({
-      components: [{
-        component: 'platform',
-        configuredImage: `${imageRepository}@sha256:${'b'.repeat(64)}`,
-        digest: `sha256:${'b'.repeat(64)}`,
-        state: 'running',
-        health: 'healthy',
-        inSync: true,
-      }],
-      jobs: [],
-    }),
-  });
-  await releases.acceptCallback({
-    type: 'build',
-    releaseId: 'gha-update-1',
-    status: 'succeeded',
-    event: 'push',
-    targets: ['platform'],
-    artifacts: [artifact()],
-    revision: 'e'.repeat(40),
-    runId: '456',
-  });
-  const summary = await releases.getSummary();
-  assert.equal(summary.metrics.availableUpdates, 1);
-  assert.equal(summary.imageBuiltAt, '2026-07-18T12:00:00Z');
-  assert.equal(summary.metrics.observedComponents, 1);
-  assert.equal(summary.components[0].observed, true);
-  assert.deepEqual(summary.metrics.availableUpdateComponents, ['platform']);
-  assert.equal(summary.metrics.latestBuildId, 'gha-update-1');
-});
-
-test('release summary does not count missing runtime placeholders as observed containers', async () => {
-  const releases = createReleaseService({
-    config: config({
-      deployHookUrl: 'http://deployment-runner:22104',
-      deployHookToken: 'd'.repeat(32),
-    }),
-    fetchImpl: async () => jsonResponse({
-      components: [{ component: 'platform', state: 'missing', health: 'unknown', inSync: null }],
-      jobs: [],
-    }),
-  });
-  const summary = await releases.getSummary();
-  assert.equal(summary.metrics.observedComponents, 0);
-  assert.equal(summary.components[0].observed, false);
 });
 
 test('release summary exposes GitHub start, update and completion timestamps', async () => {
@@ -445,111 +393,4 @@ test('release summary restores missing artifacts from GitHub run artifact manife
   assert.equal(summary.builds[0].artifactSyncStatus, undefined);
   assert.equal((await store.getBuild('e5ad557074e4')).artifacts[0].reference, coreArtifact.reference);
   assert.ok(requests.includes('https://api.github.example/artifacts/300.zip'));
-});
-
-test('deployment uses build digests only after runner and platform preflight checks pass', async () => {
-  const store = createMemoryReleaseStore();
-  const requests = [];
-  const releases = createReleaseService({
-    config: enabledConfig({
-      deployHookUrl: 'http://deploy-runner.internal/',
-      deployHookToken: 'd'.repeat(32),
-    }),
-    store,
-    idFactory: () => 'deployment-1',
-    operationsStore: {
-      listIncidents: async () => [],
-      getSettings: async () => ({ maintenanceWindows: [] }),
-      addAudit: async () => ({}),
-    },
-    fetchImpl: async (url, options = {}) => {
-      const resource = String(url);
-      requests.push({ url: resource, options });
-      if (resource.includes('api.github.com')) return jsonResponse({ workflow_runs: [] });
-      if (resource.endsWith('/status')) return jsonResponse({ components: [] });
-      if (resource.endsWith('/preflight')) return jsonResponse({ ok: true, checks: [{ id: 'docker', status: 'passed' }] });
-      if (resource.endsWith('/deployments')) return jsonResponse({ id: 'deployment-1', status: 'queued' }, 202);
-      throw new Error(`Unexpected request: ${resource}`);
-    },
-  });
-  await releases.acceptCallback({
-    type: 'build',
-    releaseId: 'build-1',
-    status: 'succeeded',
-    targets: ['platform'],
-    artifacts: [artifact()],
-    revision: 'c'.repeat(40),
-  });
-
-  const deployment = await releases.dispatchDeployment({
-    action: 'deploy',
-    buildId: 'build-1',
-    components: ['platform'],
-    requestedBy: 'admin',
-  });
-  assert.equal(deployment.id, 'deployment-1');
-  assert.equal(deployment.artifacts[0].reference, `${imageRepository}@${digest}`);
-  const request = requests.find((item) => item.url.endsWith('/deployments'));
-  assert.equal(JSON.parse(request.options.body).artifacts[0].digest, digest);
-});
-
-test('deployment can preserve the mutable latest tag by explicit request', async () => {
-  const store = createMemoryReleaseStore();
-  const requests = [];
-  const releases = createReleaseService({
-    config: enabledConfig({
-      deployHookUrl: 'http://deploy-runner.internal/',
-      deployHookToken: 'd'.repeat(32),
-    }),
-    store,
-    idFactory: () => 'deployment-tag-mode',
-    operationsStore: {
-      listIncidents: async () => [],
-      getSettings: async () => ({ maintenanceWindows: [] }),
-      addAudit: async () => ({}),
-    },
-    fetchImpl: async (url, options = {}) => {
-      const resource = String(url);
-      requests.push({ url: resource, options });
-      if (resource.includes('api.github.com')) return jsonResponse({ workflow_runs: [] });
-      if (resource.endsWith('/status')) return jsonResponse({ components: [] });
-      if (resource.endsWith('/preflight')) return jsonResponse({ ok: true, checks: [{ id: 'docker', status: 'passed' }] });
-      if (resource.endsWith('/deployments')) return jsonResponse({ id: 'deployment-tag-mode', status: 'queued' }, 202);
-      throw new Error(`Unexpected request: ${resource}`);
-    },
-  });
-  await releases.acceptCallback({
-    type: 'build',
-    releaseId: 'build-tag-mode',
-    status: 'succeeded',
-    targets: ['platform'],
-    artifacts: [artifact()],
-    revision: 'd'.repeat(40),
-  });
-
-  const deployment = await releases.dispatchDeployment({
-    action: 'deploy',
-    buildId: 'build-tag-mode',
-    components: ['platform'],
-    imageReferenceMode: 'tag',
-    requestedBy: 'admin',
-  });
-  assert.equal(deployment.imageReferenceMode, 'tag');
-  const request = requests.find((item) => item.url.endsWith('/deployments'));
-  const body = JSON.parse(request.options.body);
-  assert.equal(body.imageReferenceMode, 'tag');
-  assert.equal(body.artifacts[0].image, `${imageRepository}:platform-latest`);
-});
-
-test('release preflight blocks deployment while a critical incident is active', async () => {
-  const releases = createReleaseService({
-    config: enabledConfig({ deployHookUrl: 'http://runner/', deployHookToken: 'd'.repeat(32) }),
-    operationsStore: { listIncidents: async () => [{ severity: 'critical' }] },
-    fetchImpl: async (url) => String(url).endsWith('/preflight')
-      ? jsonResponse({ ok: true, checks: [] })
-      : jsonResponse({ components: [] }),
-  });
-  const preflight = await releases.getPreflight({ components: ['platform'] });
-  assert.equal(preflight.ok, false);
-  assert.equal(preflight.checks.find((check) => check.id === 'critical_incidents').status, 'blocked');
 });

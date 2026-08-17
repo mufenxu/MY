@@ -436,7 +436,7 @@ class PlatformApi(
         supervisorScope {
             val timetable = async { campusTimetable() }
             val gpa = async { campusRequestOrNull(::campusGpa) }
-            val freeClassrooms = async { campusRequestOrNull(::campusFreeClassrooms) }
+            val freeClassrooms = async { campusRequestOrNull { campusFreeClassrooms() } }
             val campus = async { campusRequestOrNull(::campusLife) }
             val energy = async { campusRequestOrNull(::campusEnergy) }
             val campusLife = campus.await()
@@ -470,13 +470,61 @@ class PlatformApi(
         )
     }
 
-    private suspend fun campusFreeClassrooms(): CampusFreeClassrooms {
-        val data = campusData(CAMPUS_FREE_CLASSROOMS_PATH)
+    suspend fun campusFreeClassrooms(
+        dayplus: Int = 0,
+        sections: List<Int> = listOf(11, 12),
+        building: String = "study",
+    ): CampusFreeClassrooms = withContext(Dispatchers.IO) {
+        val safeDayplus = dayplus.coerceIn(0, 2)
+        val safeSections = sections.filter { it in 1..12 }.distinct().sorted().ifEmpty { listOf(11, 12) }
+        val safeBuilding = building.takeIf {
+            it in setOf("study", "all", "111", "112", "201", "202", "203", "205", "701")
+        } ?: "study"
+        val path = "$CAMPUS_FREE_CLASSROOMS_PATH?dayplus=$safeDayplus&sections=${safeSections.joinToString(",")}&building=${encodePath(safeBuilding)}"
+        val data = campusData(path)
         val stats = data.optJSONObject("stats") ?: JSONObject()
-        return CampusFreeClassrooms(
+        CampusFreeClassrooms(
             rooms = stats.optionalInt("rooms"),
             seats = stats.optionalInt("seats"),
             dayLabel = data.displayString("dayLabel"),
+            date = data.displayString("date"),
+            weekday = data.displayString("weekday"),
+            sections = data.optJSONArray("sections").toInts(),
+            sectionTimes = data.optJSONArray("sectionTimes").objects().map { item ->
+                CampusSectionTime(
+                    section = item.optInt("section"),
+                    start = item.optString("start"),
+                    end = item.optString("end"),
+                )
+            },
+            building = data.optJSONObject("building")?.let { item ->
+                CampusFreeClassroomOption(
+                    value = item.optString("value"),
+                    name = item.optString("name"),
+                )
+            },
+            buildingOptions = data.optJSONArray("buildingOptions").objects().map { item ->
+                CampusFreeClassroomOption(
+                    value = item.optString("value"),
+                    name = item.optString("name"),
+                )
+            },
+            buildings = data.optJSONArray("buildings").objects().map { item ->
+                CampusFreeClassroomBuilding(
+                    number = item.optString("number"),
+                    name = item.optString("name"),
+                    roomCount = item.optInt("roomCount"),
+                    seats = item.optInt("seats"),
+                    rooms = item.optJSONArray("rooms").objects().map { room ->
+                        CampusFreeClassroomRoom(
+                            room = room.optString("room"),
+                            floor = room.displayString("floor"),
+                            seats = room.optionalInt("seats")?.takeIf { it > 0 },
+                        )
+                    },
+                )
+            },
+            buildingCount = stats.optionalInt("buildings"),
         )
     }
 
@@ -540,7 +588,6 @@ class PlatformApi(
 
     suspend fun releases(): ReleaseData = withContext(Dispatchers.IO) {
         val json = execute("/api/releases").json
-        val capabilities = json.optJSONObject("capabilities") ?: JSONObject()
         ReleaseData(
             builds = json.optJSONArray("builds").objects().map { item ->
                 ReleaseBuild(
@@ -552,18 +599,6 @@ class PlatformApi(
                     components = item.optJSONArray("artifacts").objects().mapNotNull { it.nullableString("component") },
                 )
             },
-            deployments = json.optJSONArray("deployments").objects().map { item ->
-                ReleaseDeployment(
-                    id = item.optString("id"),
-                    status = item.optString("status", "unknown"),
-                    action = item.optString("action", "deploy"),
-                    requestedBy = item.optString("requestedBy", "--"),
-                    createdAt = item.nullableString("createdAt") ?: item.nullableString("startedAt"),
-                    components = item.optJSONArray("components").toStringList(),
-                )
-            },
-            actionsEnabled = capabilities.optBoolean("actionsEnabled", capabilities.optBoolean("canDispatch")),
-            runnerConnected = capabilities.optBoolean("runnerConnected", capabilities.optBoolean("canDeploy")),
         )
     }
 
@@ -849,20 +884,6 @@ class PlatformApi(
                 ?: latest?.nullableString("start_time")
                 ?: latest?.nullableString("createdAt"),
         )
-    }
-
-    suspend fun approveConfiguration(id: String, note: String = ""): Unit = withContext(Dispatchers.IO) {
-        val body = JSONObject()
-        if (note.isNotBlank()) body.put("note", note.trim())
-        execute("/api/configuration/changes/${encodePath(id)}/approve", "POST", body)
-        Unit
-    }
-
-    suspend fun rejectConfiguration(id: String, note: String = ""): Unit = withContext(Dispatchers.IO) {
-        val body = JSONObject()
-        if (note.isNotBlank()) body.put("note", note.trim())
-        execute("/api/configuration/changes/${encodePath(id)}/reject", "POST", body)
-        Unit
     }
 
     suspend fun runDiagnostics(): DiagnosticData = withContext(Dispatchers.IO) {

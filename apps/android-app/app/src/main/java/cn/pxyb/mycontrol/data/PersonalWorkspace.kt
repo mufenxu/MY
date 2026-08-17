@@ -102,10 +102,47 @@ data class CampusGpa(
 )
 
 @Immutable
+data class CampusSectionTime(
+    val section: Int,
+    val start: String,
+    val end: String,
+)
+
+@Immutable
+data class CampusFreeClassroomOption(
+    val value: String,
+    val name: String,
+)
+
+@Immutable
+data class CampusFreeClassroomRoom(
+    val room: String,
+    val floor: String? = null,
+    val seats: Int? = null,
+)
+
+@Immutable
+data class CampusFreeClassroomBuilding(
+    val number: String,
+    val name: String,
+    val roomCount: Int,
+    val seats: Int,
+    val rooms: List<CampusFreeClassroomRoom>,
+)
+
+@Immutable
 data class CampusFreeClassrooms(
     val rooms: Int? = null,
     val seats: Int? = null,
     val dayLabel: String? = null,
+    val date: String? = null,
+    val weekday: String? = null,
+    val sections: List<Int> = emptyList(),
+    val sectionTimes: List<CampusSectionTime> = emptyList(),
+    val building: CampusFreeClassroomOption? = null,
+    val buildingOptions: List<CampusFreeClassroomOption> = emptyList(),
+    val buildings: List<CampusFreeClassroomBuilding> = emptyList(),
+    val buildingCount: Int? = null,
 )
 
 @Immutable

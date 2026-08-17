@@ -5707,20 +5707,63 @@ input:focus-visible {
     transform: translateX(0);
   }
 
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 6px 14px;
+    padding: 0 0 16px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .sidebar-brand-mark {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    place-items: center;
+    overflow: hidden;
+    background: #ffffff;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(31, 55, 80, 0.12);
+  }
+
+  .sidebar-brand-mark img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .sidebar-brand-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .sidebar-brand-copy strong {
+    color: var(--ink);
+    font-size: 15px;
+    white-space: nowrap;
+  }
+
+  .sidebar-brand-copy small {
+    margin-top: 1px;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .main-nav {
     align-items: stretch;
     gap: 7px;
   }
 
   .main-nav::before {
-    display: block;
-    margin: 0 6px 14px;
-    padding-bottom: 16px;
-    color: var(--ink);
-    border-bottom: 1px solid var(--line);
-    content: "统一服务控制台";
-    font-size: 17px;
-    font-weight: 800;
+    display: none;
   }
 
   .main-nav button,
@@ -6505,7 +6548,6 @@ input:focus-visible {
 .ops-select-label,
 .settings-grid label,
 .reauth-fields label,
-.deployment-fields label,
 .incident-actions label {
   display: flex;
   flex-direction: column;
@@ -6525,8 +6567,6 @@ input:focus-visible {
 .settings-grid input,
 .settings-grid select,
 .reauth-fields input,
-.deployment-fields input,
-.deployment-fields select,
 .maintenance-form input,
 .maintenance-form select,
 .incident-actions textarea {
@@ -7108,9 +7148,7 @@ input:focus-visible {
 .release-run-source,
 .release-run-actor,
 .release-run-date,
-.release-run-duration,
-.release-operation-source > span,
-.release-preflight-list > div > span:last-child {
+.release-run-duration {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -7118,17 +7156,13 @@ input:focus-visible {
 }
 
 .release-inventory-row strong,
-.release-history-row strong,
-.release-operation-source strong,
-.release-preflight-list strong {
+.release-history-row strong {
   color: var(--ink);
   font-size: 10px;
 }
 
 .release-inventory-row small,
-.release-history-row small,
-.release-operation-source small,
-.release-preflight-list small {
+.release-history-row small {
   min-width: 0;
   overflow: hidden;
   color: var(--muted);
@@ -7284,8 +7318,7 @@ input:focus-visible {
 }
 
 .release-row-actions > a,
-.release-row-actions > button,
-.release-operation-source > button {
+.release-row-actions > button {
   display: inline-flex;
   min-height: 30px;
   align-items: center;
@@ -7331,101 +7364,6 @@ input:focus-visible {
 }
 
 .release-disabled-reason svg { flex: 0 0 auto; margin-top: 1px; }
-
-.release-operation-source {
-  display: flex;
-  min-height: 52px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
-}
-
-.release-operation-source > button {
-  width: 32px;
-  padding: 0;
-  color: var(--muted);
-}
-
-.release-reference-mode {
-  display: flex;
-  min-height: 48px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 12px;
-}
-
-.release-reference-mode > span {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.release-env-preview {
-  display: grid;
-  gap: 8px;
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  background: var(--panel-muted);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-}
-
-.release-env-preview > div {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(150px, 0.35fr) minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-}
-
-.release-env-preview strong,
-.release-env-preview span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.release-preflight-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 16px;
-  margin: 4px 0 16px;
-  border-top: 1px solid var(--line);
-}
-
-.release-preflight-list > div {
-  display: grid;
-  min-width: 0;
-  min-height: 54px;
-  grid-template-columns: 20px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid var(--line);
-}
-
-.release-preflight-list > div > span:first-child { color: var(--orange); }
-.release-preflight-list > div.check-passed > span:first-child { color: var(--green); }
-
-.release-maintenance-confirm {
-  display: flex !important;
-  min-height: 38px;
-  align-items: center;
-  flex-direction: row !important;
-  gap: 8px;
-  color: var(--ink);
-  font-size: 10px;
-  font-weight: 750;
-}
-
-.release-maintenance-confirm input {
-  width: 16px !important;
-  height: 16px !important;
-}
 
 .release-component-row,
 .release-run-row,
@@ -7531,20 +7469,11 @@ input:focus-visible {
   border-color: rgba(40, 119, 247, 0.3);
 }
 
-.reauth-fields,
-.deployment-fields {
+.reauth-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
   align-items: end;
   gap: 10px;
-}
-
-.deployment-fields {
-  grid-template-columns: repeat(2, minmax(140px, 0.6fr)) minmax(180px, 1fr);
-}
-
-.deployment-fields .wide {
-  grid-column: span 2;
 }
 
 .primary-button.compact {
@@ -8042,20 +7971,6 @@ input:focus-visible {
     display: none;
   }
 
-  .release-preflight-list {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .release-reference-mode {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .release-env-preview > div {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 3px;
-  }
-
   .ops-segmented {
     overflow-x: auto;
   }
@@ -8120,14 +8035,12 @@ input:focus-visible {
   }
 
   .reauth-fields,
-  .deployment-fields,
   .maintenance-form,
   .settings-grid,
   .incident-actions > .incident-assignment {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .deployment-fields .wide,
   .settings-grid .toggle-field {
     grid-column: 1;
   }
@@ -8170,13 +8083,10 @@ input:focus-visible {
 .release-inventory-head,
 .release-inventory-row small,
 .release-history-row small,
-.release-operation-source small,
-.release-preflight-list small,
 .release-sync,
 .release-status,
 .release-row-actions > a,
 .release-row-actions > button,
-.release-operation-source > button,
 .release-component-row small,
 .release-run-row small,
 .session-row small,
@@ -8205,7 +8115,6 @@ input:focus-visible {
 .ops-select-label,
 .settings-grid label,
 .reauth-fields label,
-.deployment-fields label,
 .incident-actions label,
 .ops-table-row,
 .audit-target strong,
@@ -8217,10 +8126,7 @@ input:focus-visible {
 .release-environment,
 .release-inventory-row strong,
 .release-history-row strong,
-.release-operation-source strong,
-.release-preflight-list strong,
 .release-disabled-reason,
-.release-maintenance-confirm,
 .release-component-row strong,
 .release-run-row strong,
 .session-row strong,
@@ -8274,8 +8180,6 @@ input:focus-visible {
 .settings-grid input,
 .settings-grid select,
 .reauth-fields input,
-.deployment-fields input,
-.deployment-fields select,
 .maintenance-form input,
 .maintenance-form select,
 .incident-actions textarea,
@@ -8379,16 +8283,12 @@ input:focus-visible {
 }
 
 .release-inventory-row strong,
-.release-history-row strong,
-.release-operation-source strong,
-.release-preflight-list strong {
+.release-history-row strong {
   font-size: var(--type-body);
 }
 
 .release-inventory-row small,
 .release-history-row small,
-.release-operation-source small,
-.release-preflight-list small,
 .release-sync,
 .release-status {
   font-size: var(--type-label);
@@ -8427,9 +8327,7 @@ input:focus-visible {
 .release-run-source,
 .release-run-actor,
 .release-run-date,
-.release-run-duration,
-.release-operation-source > span,
-.release-preflight-list > div > span:last-child {
+.release-run-duration {
   gap: 5px;
 }
 
@@ -8893,8 +8791,7 @@ input:focus-visible {
   box-shadow: 0 5px 14px rgba(40, 86, 186, 0.08), inset 0 0 0 1px rgba(40, 119, 247, 0.08);
 }
 
-.settings-grid input[type="checkbox"],
-.release-maintenance-confirm input[type="checkbox"] {
+.settings-grid input[type="checkbox"] {
   accent-color: var(--blue);
 }
 

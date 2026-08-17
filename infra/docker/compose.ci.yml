@@ -47,11 +47,6 @@ services:
       cache_from:
         - type=gha,scope=backup-runner
 
-  deployment-runner:
-    build:
-      cache_from:
-        - type=gha,scope=deployment-runner
-
   campus-service:
     build:
       cache_from:

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AppAlertRecord
+import cn.pxyb.mycontrol.data.CampusFreeClassrooms
 import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
@@ -16,7 +17,6 @@ import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.IotData
 import cn.pxyb.mycontrol.data.OverviewData
 import cn.pxyb.mycontrol.data.PlatformPasskey
-import cn.pxyb.mycontrol.data.PlatformTask
 import cn.pxyb.mycontrol.data.PlatformUser
 import cn.pxyb.mycontrol.data.QrLoginTarget
 import cn.pxyb.mycontrol.data.ReleaseData
@@ -43,7 +43,6 @@ data class AppEntryUiState(
     val googleAccountDeskOpen: Boolean,
     val globalSearchOpen: Boolean,
     val workspaceDestination: WorkspaceDestination?,
-    val focusTaskId: String?,
     val error: String?,
     val message: String?,
 )
@@ -71,20 +70,15 @@ data class OperationsUiState(
     val sectionError: String?,
     val busyAction: String?,
     val user: PlatformUser?,
-    val tasks: List<PlatformTask>,
     val overview: OverviewData?,
     val incidents: List<IncidentInfo>,
     val iot: IotData?,
     val resourceExpiries: List<ResourceExpiry>,
-    val releases: ReleaseData?,
+    val unreadAlerts: Int,
     val backup: BackupQuality?,
     val diagnostics: DiagnosticData?,
     val networkHealth: NetworkHealth = NetworkHealth(),
-    val cacheStorageInfo: CacheStorageInfo = CacheStorageInfo(),
-) {
-    val actionRequiredTasks: List<PlatformTask>
-        get() = tasks.filter { it.status in setOf("action_required", "failed") }
-}
+)
 
 @Immutable
 data class ToolsUiState(
@@ -126,6 +120,7 @@ data class ProfileUiState(
     val alertPreferences: AlertPreferences = AlertPreferences(),
     val latestRelease: ReleaseData? = null,
     val webLoginLink: WebLoginLink? = null,
+    val cacheStorageInfo: CacheStorageInfo = CacheStorageInfo(),
 )
 
 @Immutable
@@ -158,7 +153,7 @@ data class QrLoginUiState(
     val qrLoginError: String?,
 )
 
-enum class SearchDestination { Overview, Notifications, Operations, Tools, GoogleAccounts, Today, Scenes }
+enum class SearchDestination { Overview, Notifications, Tools, GoogleAccounts, Today, Scenes }
 
 @Immutable
 data class GlobalSearchItem(
@@ -183,9 +178,15 @@ data class TodayUiState(
     val pendingTodoMutations: Int,
     val timetable: CampusTimetable?,
     val campusOverview: CampusOverview?,
-    val incidents: List<IncidentInfo>,
-    val tasks: List<PlatformTask>,
+    val unreadAlerts: Int,
     val resourceExpiries: List<ResourceExpiry>,
+)
+
+@Immutable
+data class FreeClassroomUiState(
+    val refreshing: Boolean,
+    val error: String?,
+    val result: CampusFreeClassrooms?,
 )
 
 @Immutable
@@ -223,7 +224,6 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     googleAccountDeskOpen = googleAccountDeskOpen,
     globalSearchOpen = globalSearchOpen,
     workspaceDestination = workspaceDestination,
-    focusTaskId = focusTaskId,
     error = error,
     message = message,
 )
@@ -245,20 +245,18 @@ internal fun AppUiState.toOverviewUiState() = OverviewUiState(
 )
 
 internal fun AppUiState.toOperationsUiState() = OperationsUiState(
-    refreshing = isRefreshing(DataSection.Overview, DataSection.Incidents, DataSection.Tasks, DataSection.Releases, DataSection.Backup, DataSection.Iot, DataSection.Resources),
-    sectionError = sectionError(DataSection.Overview, DataSection.Incidents, DataSection.Tasks, DataSection.Releases, DataSection.Backup, DataSection.Iot, DataSection.Resources),
+    refreshing = isRefreshing(DataSection.Overview, DataSection.Incidents, DataSection.Backup, DataSection.Iot, DataSection.Resources),
+    sectionError = sectionError(DataSection.Overview, DataSection.Incidents, DataSection.Backup, DataSection.Iot, DataSection.Resources),
     busyAction = busyAction,
     user = user,
-    tasks = tasks,
     overview = overview,
     incidents = incidents,
     iot = iot,
     resourceExpiries = resourceExpiries,
-    releases = releases,
+    unreadAlerts = alerts.count { !it.read },
     backup = backup,
     diagnostics = diagnostics,
     networkHealth = networkHealth,
-    cacheStorageInfo = cacheStorageInfo,
 )
 
 internal fun AppUiState.toToolsUiState() = ToolsUiState(
@@ -280,6 +278,7 @@ internal fun AppUiState.toProfileUiState() = ProfileUiState(
     alertPreferences = alertPreferences,
     latestRelease = releases,
     webLoginLink = webLoginLink,
+    cacheStorageInfo = cacheStorageInfo,
 )
 
 internal fun AppUiState.toAccountManagementUiState() = AccountManagementUiState(
@@ -330,18 +329,6 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                     detail = listOf(incident.source, incident.description).filter(String::isNotBlank).joinToString(" · "),
                     category = "系统通知",
                     destination = SearchDestination.Notifications,
-                ),
-            )
-        }
-        tasks.forEach { task ->
-            add(
-                GlobalSearchItem(
-                    id = "task:${task.id}",
-                    title = task.title,
-                    detail = listOf(task.source, task.detail).filter(String::isNotBlank).joinToString(" · "),
-                    category = "任务",
-                    destination = SearchDestination.Operations,
-                    focusId = task.id,
                 ),
             )
         }
@@ -405,7 +392,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
 )
 
 internal fun AppUiState.toTodayUiState() = TodayUiState(
-    refreshing = isRefreshing(DataSection.Todos, DataSection.Campus, DataSection.Resources, DataSection.Incidents, DataSection.Tasks),
+    refreshing = isRefreshing(DataSection.Todos, DataSection.Campus, DataSection.Resources, DataSection.Incidents),
     calendarSyncing = busyAction == "calendar-sync",
     sectionError = sectionError(DataSection.Todos, DataSection.Campus, DataSection.Resources),
     offlineMode = offlineMode,
@@ -413,9 +400,14 @@ internal fun AppUiState.toTodayUiState() = TodayUiState(
     pendingTodoMutations = pendingTodoMutations,
     timetable = campusTimetable,
     campusOverview = campusOverview,
-    incidents = incidents,
-    tasks = tasks,
+    unreadAlerts = alerts.count { !it.read },
     resourceExpiries = resourceExpiries,
+)
+
+internal fun AppUiState.toFreeClassroomUiState() = FreeClassroomUiState(
+    refreshing = isRefreshing(DataSection.FreeClassrooms),
+    error = sectionError(DataSection.FreeClassrooms),
+    result = freeClassroomResult ?: campusOverview?.freeClassrooms,
 )
 
 internal fun AppUiState.toNotificationCenterUiState() = NotificationCenterUiState(

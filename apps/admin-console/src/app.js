@@ -319,7 +319,6 @@ export function createApp({
     config,
     fetchImpl,
     store: releaseData,
-    backupManager: backups,
     operationsStore: store,
     notifier,
   });
@@ -2526,23 +2525,6 @@ export function createApp({
     }
   });
 
-  app.post('/api/releases/preflight', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
-    try {
-      const result = await releases.getPreflight({
-        components: req.body?.components,
-        action: req.body?.action,
-        maintenanceApproved: Boolean(req.body?.maintenanceApproved),
-      });
-      return res.status(result.ok ? 200 : 409).json(result);
-    } catch (error) {
-      if (error instanceof ReleaseOperationError) {
-        return res.status(error.status).json({ error: error.message, code: error.code, details: error.details });
-      }
-      next(error);
-      return undefined;
-    }
-  });
-
   app.post('/api/releases/build', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
     try {
       if (!await verifyReauthentication(req)) {
@@ -2551,43 +2533,6 @@ export function createApp({
       }
       const result = await releases.dispatchBuild({ targets: req.body?.targets, requestedBy: req.consoleUser.username });
       await recordAudit(req, { action: 'release.build', targetType: 'release', targetId: result.id, details: { targets: result.targets } });
-      return res.status(202).json(result);
-    } catch (error) {
-      if (error instanceof ReleaseOperationError) return res.status(error.status).json({ error: error.message, code: error.code, details: error.details });
-      next(error);
-      return undefined;
-    }
-  });
-
-  app.post('/api/releases/deploy', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
-    try {
-      const action = String(req.body?.action || '');
-      const components = [...new Set((Array.isArray(req.body?.components) ? req.body.components : [req.body?.component])
-        .map((component) => String(component || '').trim())
-        .filter(Boolean))];
-      const expectedConfirmation = `${action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${components.join(',')}`;
-      if (!['deploy', 'rollback'].includes(action) || req.body?.confirmText !== expectedConfirmation) {
-        return res.status(400).json({ error: '部署确认短语不正确。', code: 'DEPLOY_CONFIRMATION_REQUIRED' });
-      }
-      if (!await verifyReauthentication(req)) {
-        await recordAudit(req, { action: 'release.deploy', outcome: 'failure', targetType: 'release', details: { reason: 'reauthentication_failed' } });
-        return res.status(403).json({ error: '二次验证失败。', code: 'REAUTHENTICATION_FAILED' });
-      }
-      const result = await releases.dispatchDeployment({
-        action,
-        buildId: req.body?.buildId,
-        sourceDeploymentId: req.body?.sourceDeploymentId,
-        components,
-        imageReferenceMode: req.body?.imageReferenceMode,
-        maintenanceApproved: Boolean(req.body?.maintenanceApproved),
-        requestedBy: req.consoleUser.username,
-      });
-      await recordAudit(req, {
-        action: `release.${action}`,
-        targetType: 'release',
-        targetId: result.id,
-        details: { components, buildId: result.buildId, sourceDeploymentId: result.sourceDeploymentId, imageReferenceMode: result.imageReferenceMode },
-      });
       return res.status(202).json(result);
     } catch (error) {
       if (error instanceof ReleaseOperationError) return res.status(error.status).json({ error: error.message, code: error.code, details: error.details });

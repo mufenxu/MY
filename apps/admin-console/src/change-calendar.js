@@ -28,9 +28,8 @@ function overlaps(event, from, to, currentTime) {
   return Number.isFinite(start) && start <= to && Math.max(start, Number.isFinite(end) ? end : start) >= from;
 }
 
-function mapReleases({ builds = [], deployments = [] }, from, to) {
-  return [
-    ...builds.map((build) => ({
+function mapReleases(builds, from, to) {
+  return builds.map((build) => ({
       id: `release:build:${build.id}`,
       type: 'release',
       category: 'build',
@@ -41,20 +40,7 @@ function mapReleases({ builds = [], deployments = [] }, from, to) {
       endsAt: build.completedAt || null,
       scope: safeIdentifiers(build.targets),
       timeline: timeline(build.timeline, from, to),
-    })),
-    ...deployments.map((deployment) => ({
-      id: `release:deployment:${deployment.id}`,
-      type: 'release',
-      category: deployment.action === 'rollback' ? 'rollback' : 'deployment',
-      title: deployment.action === 'rollback' ? 'Release rollback' : 'Release deployment',
-      status: String(deployment.status || ''),
-      serviceId: null,
-      startsAt: deployment.startedAt || deployment.requestedAt || deployment.createdAt,
-      endsAt: deployment.completedAt || null,
-      scope: safeIdentifiers(deployment.components),
-      timeline: timeline(deployment.timeline, from, to),
-    })),
-  ];
+    }));
 }
 
 function mapConfigurations(changes) {
@@ -133,11 +119,9 @@ export function createChangeCalendar({ services = [], releaseStore, configuratio
     const toTime = Date.parse(range.to);
     const currentTime = now().toISOString();
     const loaders = {
-      release: () => typeof releaseStore?.listBuilds === 'function' && typeof releaseStore?.listDeployments === 'function'
-        ? Promise.all([
-          releaseStore.listBuilds({ limit: 100 }),
-          releaseStore.listDeployments({ limit: 100 }),
-        ]).then(([builds, deployments]) => ({ events: mapReleases({ builds, deployments }, fromTime, toTime), scanLimitReached: builds.length >= 100 || deployments.length >= 100 }))
+      release: () => typeof releaseStore?.listBuilds === 'function'
+        ? releaseStore.listBuilds({ limit: 100 })
+          .then((builds) => ({ events: mapReleases(builds, fromTime, toTime), scanLimitReached: builds.length >= 100 }))
         : unavailable('Release source unavailable.'),
       configuration: () => typeof configurationStore?.listChanges === 'function'
         ? configurationStore.listChanges(SOURCE_SCAN_LIMIT).then((changes) => ({ events: mapConfigurations(changes), scanLimitReached: changes.length >= SOURCE_SCAN_LIMIT }))

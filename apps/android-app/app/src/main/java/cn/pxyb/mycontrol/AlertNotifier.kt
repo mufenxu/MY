@@ -19,7 +19,6 @@ import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.PlatformTask
 import cn.pxyb.mycontrol.data.SessionStore
 import cn.pxyb.mycontrol.data.accountStorageScope
-import cn.pxyb.mycontrol.ui.MainTab
 import java.time.LocalTime
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -31,7 +30,6 @@ internal fun localizedTaskTitle(task: PlatformTask): String {
     return when (task.source) {
         "configuration" -> if (title.contains("rollback", ignoreCase = true) || title.contains("回滚")) "配置回滚提案" else "配置变更提案"
         "release_build" -> "发布构建"
-        "release_deployment" -> "发布部署"
         "backup" -> "数据备份"
         "notification" -> "通知任务"
         else -> title.ifBlank { "平台任务" }
@@ -150,11 +148,10 @@ class AlertNotifier(context: Context) {
                     body = listOfNotNull(
                         sourceLabel(task.source),
                         task.detail.takeIf { it.isNotBlank() },
-                    ).joinToString(" · ").ifBlank { "打开任务中心处理" },
+                    ).joinToString(" · ").ifBlank { "打开通知中心查看" },
                     intent = DeepLinks.openIntent(
                         appContext,
-                        tab = MainTab.Operations,
-                        taskId = task.id,
+                        destination = "notifications",
                     ),
                 )
             }
@@ -238,7 +235,7 @@ class AlertNotifier(context: Context) {
         if (isQuietHours()) return false
         val intent = when (alert.type) {
             "incident" -> DeepLinks.openIntent(appContext, destination = "notifications")
-            "task" -> DeepLinks.openIntent(appContext, tab = MainTab.Operations, taskId = alert.sourceId)
+            "task" -> DeepLinks.openIntent(appContext, destination = "notifications")
             "todo", "course", "resource" -> DeepLinks.openIntent(appContext, destination = "today")
             else -> DeepLinks.openIntent(appContext, destination = "notifications")
         }
@@ -372,7 +369,6 @@ class AlertNotifier(context: Context) {
         "backup" -> "数据备份"
         "notification" -> "通知任务"
         "release_build" -> "发布构建"
-        "release_deployment" -> "发布部署"
         else -> source
     }
 

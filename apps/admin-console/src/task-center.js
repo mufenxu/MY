@@ -28,17 +28,17 @@ function mapBackup(job) {
   };
 }
 
-function mapRelease(item, kind) {
+function mapRelease(item) {
   return {
-    id: `${kind}:${item.id}`,
-    source: kind,
+    id: `release_build:${item.id}`,
+    source: 'release_build',
     sourceId: item.id,
-    title: kind === 'release_build' ? 'Release build' : item.action === 'rollback' ? 'Release rollback' : 'Release deployment',
+    title: 'Release build',
     status: normalizeTaskStatus(item.status),
     rawStatus: item.status,
     requestedBy: item.requestedBy || 'system',
     updatedAt: taskTime(item),
-    detail: (item.targets || item.components || []).join(', ') || item.error || '',
+    detail: (item.targets || []).join(', ') || item.error || '',
     view: 'releases',
   };
 }
@@ -103,8 +103,7 @@ export function createTaskCenter({ backups, releases, notificationManagement, op
     const [backupResult, releaseResult, notificationResult, incidentResult, configurationResult] = settled;
     const tasks = [
       ...(backupResult.status === 'fulfilled' ? (backupResult.value.jobs || []).map(mapBackup) : []),
-      ...(releaseResult.status === 'fulfilled' ? (releaseResult.value.builds || []).map((item) => mapRelease(item, 'release_build')) : []),
-      ...(releaseResult.status === 'fulfilled' ? (releaseResult.value.deployments || []).map((item) => mapRelease(item, 'release_deployment')) : []),
+      ...(releaseResult.status === 'fulfilled' ? (releaseResult.value.builds || []).map(mapRelease) : []),
       ...(notificationResult.status === 'fulfilled' ? (notificationResult.value.jobs || notificationResult.value.items || []).map(mapNotification) : []),
       ...(incidentResult.status === 'fulfilled' ? incidentResult.value.map(mapIncident) : []),
       ...(configurationResult.status === 'fulfilled' ? (configurationResult.value.changes || []).map(mapConfiguration) : []),

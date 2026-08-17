@@ -21,20 +21,16 @@ function incidentMessage(incident, transition, publicOrigin) {
 }
 
 function releaseMessage(event, publicOrigin) {
-  const record = event.build || event.deployment || {};
+  const record = event.build || {};
   const success = event.status === 'succeeded';
-  const rolledBack = event.status === 'rolled_back';
-  const status = success
-    ? '成功'
-    : rolledBack ? '已自动回滚' : '失败';
-  const kind = event.kind === 'build' ? '镜像构建' : event.kind === 'rollback' ? '生产回滚' : '生产部署';
-  const targets = record.targets || record.components || [];
+  const status = success ? '成功' : '失败';
+  const targets = record.targets || [];
   const lines = [
-    `【统一平台${kind}】`,
+    '【统一平台镜像构建】',
     `状态：${status}`,
     `环境：${record.environment || 'production'}`,
     `组件：${targets.join('、') || '--'}`,
-    `版本：${String(record.revision || record.buildId || '').slice(0, 12) || '--'}`,
+    `版本：${String(record.revision || '').slice(0, 12) || '--'}`,
     `操作人：${record.requestedBy || 'system'}`,
     `时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
   ];

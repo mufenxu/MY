@@ -89,9 +89,8 @@ function taskResults(tasks) {
   }));
 }
 
-function releaseResults({ builds = [], deployments = [] }) {
-  return [
-    ...builds.map((build) => ({
+function releaseResults(builds = []) {
+  return builds.map((build) => ({
       id: `release:build:${safeIdentifier(build.id)}`,
       entityId: safeIdentifier(build.id),
       type: 'release',
@@ -103,21 +102,7 @@ function releaseResults({ builds = [], deployments = [] }) {
       occurredAt: safeTimestamp(build.updatedAt || build.createdAt),
       view: 'releases',
       searchText: [build.id, build.status, build.environment, ...safeIdentifiers(build.targets)].join(' '),
-    })),
-    ...deployments.map((deployment) => ({
-      id: `release:deployment:${safeIdentifier(deployment.id)}`,
-      entityId: safeIdentifier(deployment.id),
-      type: 'release',
-      category: deployment.action === 'rollback' ? 'rollback' : 'deployment',
-      title: deployment.action === 'rollback' ? 'Release rollback' : 'Release deployment',
-      subtitle: safeIdentifiers(deployment.components).join(', '),
-      status: safeStatus(deployment.status),
-      serviceId: null,
-      occurredAt: safeTimestamp(deployment.updatedAt || deployment.requestedAt || deployment.createdAt),
-      view: 'releases',
-      searchText: [deployment.id, deployment.action, deployment.status, deployment.environment, ...safeIdentifiers(deployment.components)].join(' '),
-    })),
-  ];
+    }));
 }
 
 function configurationResults(changes) {
@@ -182,11 +167,8 @@ export function createOperationalSearch({
       task: () => typeof taskCenter?.list === 'function'
         ? taskCenter.list({ limit: SOURCE_SCAN_LIMIT }).then((result) => taskResults(result.tasks || []))
         : unavailable('Task source unavailable.'),
-      release: () => typeof releaseStore?.listBuilds === 'function' && typeof releaseStore?.listDeployments === 'function'
-        ? Promise.all([
-          releaseStore.listBuilds({ limit: 100 }),
-          releaseStore.listDeployments({ limit: 100 }),
-        ]).then(([builds, deployments]) => releaseResults({ builds, deployments }))
+      release: () => typeof releaseStore?.listBuilds === 'function'
+        ? releaseStore.listBuilds({ limit: 100 }).then(releaseResults)
         : unavailable('Release source unavailable.'),
       configuration: () => typeof configurationStore?.listChanges === 'function'
         ? configurationStore.listChanges(SOURCE_SCAN_LIMIT).then(configurationResults)

@@ -859,7 +859,7 @@ private fun homeQuickActionSpec(
 
     HomeQuickAction.Operations -> HomeQuickActionSpec(
         icon = Icons.Outlined.Settings,
-        label = "高级工具",
+        label = "系统状态",
         accent = Color(0xFF64748B),
         accentPale = Color(0xFFF8FAFC),
         onClick = onOpenOperations,
@@ -967,7 +967,7 @@ private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action
     HomeQuickAction.Diagnostics -> "系统自检"
     HomeQuickAction.Backup -> "数据备份"
     HomeQuickAction.GoogleAccounts -> "邮箱台账"
-    HomeQuickAction.Operations -> "高级工具"
+    HomeQuickAction.Operations -> "系统状态"
 }
 
 private val WeekPattern = Regex("第(\\d+)周")

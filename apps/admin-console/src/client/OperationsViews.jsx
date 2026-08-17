@@ -44,18 +44,12 @@ import {
 import { requestJson } from './api.js';
 import { resolveConsoleView } from './navigation.js';
 import {
-  componentObservation,
-  componentHistory,
   environmentLabel,
   releaseStateClass,
   releaseDuration,
   releaseIsActive,
   releaseStatusLabel,
   releaseTimingVerb,
-  runtimeImageReference,
-  runtimeStateSummary,
-  runtimeVersionLabel,
-  runtimeVersionTitle,
   workflowNameLabel,
 } from './release-presentation.js';
 import { SegmentedTabs, SelectControl } from './UiControls.jsx';
@@ -122,14 +116,6 @@ const ACTION_LABELS = {
   'release.build_succeeded': '镜像构建成功',
   'release.build_failed': '镜像构建失败',
   'release.build_cancelled': '镜像构建取消',
-  'release.deploy': '部署版本',
-  'release.deploy_succeeded': '生产部署成功',
-  'release.deploy_failed': '生产部署失败',
-  'release.deploy_rolled_back': '部署失败自动回滚',
-  'release.rollback': '回滚版本',
-  'release.rollback_succeeded': '生产回滚成功',
-  'release.rollback_failed': '生产回滚失败',
-  'release.rollback_rolled_back': '回滚失败自动恢复',
   'diagnostics.run': '运行诊断',
   'security.session_revoked': '撤销会话',
   'operations.settings_updated': '更新运维设置',
@@ -137,16 +123,6 @@ const ACTION_LABELS = {
 };
 const CHART_COLORS = ['#2877f7', '#11ad78', '#ff8a00', '#8a45ef', '#d75467', '#13bad6'];
 const RELEASE_HISTORY_COLLAPSED_LIMIT = 5;
-const RELEASE_IMAGE_ENV_KEYS = {
-  platform: 'PLATFORM_API_IMAGE',
-  backup: 'BACKUP_RUNNER_IMAGE',
-  core: 'CORE_API_IMAGE',
-  exam: 'EXAM_API_IMAGE',
-  notification: 'NOTIFICATION_SERVICE_IMAGE',
-  campus: 'CAMPUS_SERVICE_IMAGE',
-  iot: 'IOT_SERVICE_IMAGE',
-  mongodb: 'MONGODB_IMAGE',
-};
 const SLO_STATUS_LABELS = { healthy: '预算充足', at_risk: '预算承压', exhausted: '预算耗尽', no_data: '暂无数据' };
 const CALENDAR_TYPE_LABELS = { release: '发布', configuration: '配置', maintenance: '维护', incident: '事件' };
 const SEARCH_TYPE_LABELS = { service: '服务', incident: '事件', task: '任务', release: '发布', configuration: '配置' };
@@ -790,15 +766,9 @@ export function ReleasesView({ session, targetEntityId = '' }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [clockNow, setClockNow] = useState(Date.now());
-  const [historyTab, setHistoryTab] = useState('builds');
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [targets, setTargets] = useState(['platform']);
   const [credentials, setCredentials] = useState({ password: '', totp: '' });
-  const [operation, setOperation] = useState({
-    action: 'deploy', buildId: '', sourceDeploymentId: '', components: [], confirmText: '',
-    password: '', totp: '', maintenanceApproved: false, imageReferenceMode: 'digest',
-  });
-  const [preflight, setPreflight] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -809,13 +779,8 @@ export function ReleasesView({ session, targetEntityId = '' }) {
   useEffect(() => {
     if (!targetEntityId || !data) return undefined;
     const buildIndex = (data.builds || []).findIndex((build) => build.id === targetEntityId);
-    const deploymentIndex = (data.deployments || []).findIndex((deployment) => deployment.id === targetEntityId);
     if (buildIndex >= 0) {
-      setHistoryTab('builds');
       setHistoryExpanded(buildIndex >= RELEASE_HISTORY_COLLAPSED_LIMIT);
-    } else if (deploymentIndex >= 0) {
-      setHistoryTab('deployments');
-      setHistoryExpanded(deploymentIndex >= RELEASE_HISTORY_COLLAPSED_LIMIT);
     }
     const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
       const target = [...document.querySelectorAll('[data-release-entity-id]')]
@@ -850,55 +815,6 @@ export function ReleasesView({ session, targetEntityId = '' }) {
     setTargets((current) => current.includes(target) ? current.filter((value) => value !== target) : [...current, target]);
   }
 
-  function switchHistoryTab(tab) {
-    setHistoryTab(tab);
-    setHistoryExpanded(false);
-  }
-
-  function selectBuild(build) {
-    setHistoryTab('builds');
-    setPreflight(null);
-    setOperation({
-      action: 'deploy', buildId: build.id, sourceDeploymentId: '',
-      components: (build.artifacts || []).map((artifact) => artifact.component),
-      confirmText: '', password: '', totp: '', maintenanceApproved: false, imageReferenceMode: 'digest',
-    });
-  }
-
-  function selectLatestUpdates() {
-    const build = (data?.builds || []).find((item) => item.id === data?.metrics?.latestBuildId);
-    const components = data?.metrics?.availableUpdateComponents || [];
-    if (!build || !components.length) return;
-    setHistoryTab('builds');
-    setPreflight(null);
-    setOperation({
-      action: 'deploy', buildId: build.id, sourceDeploymentId: '', components,
-      confirmText: '', password: '', totp: '', maintenanceApproved: false, imageReferenceMode: 'digest',
-    });
-  }
-
-  function selectRollback(deployment) {
-    setHistoryTab('deployments');
-    setPreflight(null);
-    setOperation({
-      action: 'rollback', buildId: '', sourceDeploymentId: deployment.id,
-      components: [...(deployment.components || [])],
-      confirmText: '', password: '', totp: '', maintenanceApproved: false, imageReferenceMode: 'digest',
-    });
-  }
-
-  function toggleOperationComponent(component) {
-    setPreflight(null);
-    setOperation((current) => ({
-      ...current,
-      components: current.components.includes(component)
-        ? current.components.filter((value) => value !== component)
-        : [...current.components, component],
-      confirmText: '',
-      maintenanceApproved: component === 'mongodb' ? false : current.maintenanceApproved,
-    }));
-  }
-
   async function triggerBuild() {
     setSubmitting(true);
     setError('');
@@ -918,121 +834,47 @@ export function ReleasesView({ session, targetEntityId = '' }) {
     }
   }
 
-  async function runPreflight() {
-    setSubmitting(true);
-    setError('');
-    setMessage('');
-    setPreflight(null);
-    try {
-      const result = await requestJson('/api/releases/preflight', {
-        method: 'POST',
-        body: JSON.stringify({
-          action: operation.action,
-          components: operation.components,
-          maintenanceApproved: operation.maintenanceApproved,
-        }),
-      });
-      setPreflight(result);
-      setMessage('发布前检查已通过');
-    } catch (requestError) {
-      if (requestError.details?.checks) setPreflight(requestError.details);
-      setError(requestError.message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function triggerDeployment() {
-    const required = `${operation.action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${operation.components.join(',')}`;
-    if (operation.confirmText !== required) return;
-    setSubmitting(true);
-    setError('');
-    setMessage('');
-    try {
-      await requestJson('/api/releases/deploy', {
-        method: 'POST',
-        body: JSON.stringify(operation),
-      });
-      setMessage(operation.action === 'rollback' ? '回滚任务已进入受控执行队列' : '部署任务已进入受控执行队列');
-      setOperation((current) => ({ ...current, confirmText: '', password: '', totp: '' }));
-      setPreflight(null);
-      await load();
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   if (loading && !data) return <section className="page-view ops-page"><LoadingBlock label="正在读取发布状态" /></section>;
   const capabilities = data?.capabilities || {};
   const metrics = data?.metrics || {};
   const successRate = metrics.completedBuilds ? Math.round((metrics.successfulBuilds / metrics.completedBuilds) * 100) : null;
   const buildRows = data?.builds || [];
-  const deployments = data?.deployments || [];
-  const activeHistoryRows = historyTab === 'builds' ? buildRows : deployments;
   const visibleBuildRows = historyExpanded ? buildRows : buildRows.slice(0, RELEASE_HISTORY_COLLAPSED_LIMIT);
-  const visibleDeployments = historyExpanded ? deployments : deployments.slice(0, RELEASE_HISTORY_COLLAPSED_LIMIT);
-  const hiddenHistoryCount = Math.max(0, activeHistoryRows.length - RELEASE_HISTORY_COLLAPSED_LIMIT);
-  const selectedSource = operation.action === 'deploy'
-    ? (data?.builds || []).find((build) => build.id === operation.buildId)
-    : deployments.find((deployment) => deployment.id === operation.sourceDeploymentId);
-  const availableArtifacts = selectedSource?.artifacts || [];
-  const confirmation = `${operation.action === 'rollback' ? 'ROLLBACK' : 'DEPLOY'} ${operation.components.join(',')}`;
-  const operationAllowed = operation.action === 'rollback' ? capabilities.canRollback : capabilities.canDeploy;
-  const totpReady = !session.user?.totpEnabled || operation.totp.length === 6;
-  const selectedArtifactReferences = availableArtifacts
-    .filter((artifact) => operation.components.includes(artifact.component))
-    .map((artifact) => ({
-      component: artifact.component,
-      envKey: RELEASE_IMAGE_ENV_KEYS[artifact.component] || `${artifact.component.toUpperCase()}_IMAGE`,
-      value: operation.imageReferenceMode === 'tag' && operation.action === 'deploy' ? artifact.image : artifact.reference,
-    }));
-  const mode = capabilities.canDeploy ? '受控发布' : capabilities.canBuild ? '仅构建' : '只读';
+  const hiddenHistoryCount = Math.max(0, buildRows.length - RELEASE_HISTORY_COLLAPSED_LIMIT);
+  const mode = capabilities.canBuild ? '可构建' : '只读';
   return (
     <section className="page-view ops-page" aria-label="发布中心">
       <div className="ops-toolbar">
         <div className="release-capabilities">
           <span className={`integration-state ${capabilities.githubConfigured ? 'ready' : ''}`}><i />{capabilities.githubConfigured ? 'GitHub 已连接' : 'GitHub 未配置'}</span>
-          <span className={`integration-state ${capabilities.deployRunnerHealthy ? 'ready' : ''}`}><i />{capabilities.deployRunnerHealthy ? '部署执行器已连接' : capabilities.deployRunnerConfigured ? '部署执行器不可用' : '部署执行器未配置'}</span>
           <span className="release-environment"><Cloud size={15} />{environmentLabel(data?.environment)}</span>
-          {data?.metrics?.availableUpdates > 0 && <span className="integration-state ready"><i />{data.metrics.availableUpdates} 个更新可用</span>}
         </div>
         <div className="release-capabilities">
-          {roleAtLeast(session.user?.role, 'super_admin') && data?.metrics?.availableUpdates > 0 && <button className="primary-button" type="button" onClick={selectLatestUpdates} disabled={!capabilities.canDeploy || loading}><Rocket size={17} />一键更新</button>}
-          <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />检查更新</button>
+          <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />刷新状态</button>
         </div>
       </div>
       <Feedback error={error || capabilities.issue} message={message} />
       <div className="ops-kpis">
         <article><Rocket size={20} /><div><span>平台版本</span><strong>{data?.revision?.slice(0, 12) || '--'}</strong><small>{data?.imageBuiltAt ? `镜像构建 ${formatDateTime(data.imageBuiltAt)}` : '等待镜像版本标识'}</small></div></article>
-        <article><PackageCheck size={20} /><div><span>运行观测</span><strong>{metrics.observedComponents || 0}/{data?.components?.length || 0}</strong><small>实际运行组件</small></div></article>
-        <article className={metrics.driftCount ? 'warning' : ''}><AlertTriangle size={20} /><div><span>版本漂移</span><strong>{metrics.driftCount || 0}</strong><small>{metrics.driftCount ? '期望与实际不一致' : '未发现版本漂移'}</small></div></article>
+        <article><PackageCheck size={20} /><div><span>镜像目标</span><strong>{metrics.configuredComponents || 0}/{data?.components?.length || 0}</strong><small>已配置构建镜像</small></div></article>
+        <article><History size={20} /><div><span>完成构建</span><strong>{metrics.completedBuilds || 0}</strong><small>{metrics.latestRevision ? `最新 ${shortValue(metrics.latestRevision)}` : '暂无成功构建'}</small></div></article>
         <article><ShieldCheck size={20} /><div><span>操作模式</span><strong>{mode}</strong><small>{successRate === null ? '暂无持久化构建结果' : `最近构建成功率 ${successRate}%`}</small></div></article>
       </div>
 
       <section className="ops-panel release-inventory">
-        <header><div><span>生产事实源</span><h3>组件版本与运行状态</h3></div><HardDrive size={20} /></header>
-        <div className="release-inventory-head"><span>组件</span><span>期望镜像</span><span>实际镜像版本</span><span>生命周期</span><span>状态</span></div>
+        <header><div><span>构建目标</span><h3>组件镜像与最新产物</h3></div><PackageCheck size={20} /></header>
+        <div className="release-inventory-head"><span>组件</span><span>配置镜像</span><span>最新不可变产物</span><span>构建时间</span><span>状态</span></div>
         {(data?.components || []).map((component) => {
-          const observation = componentObservation(component);
-          const history = componentHistory(component, data?.builds, data?.deployments);
-          const actualImage = runtimeImageReference(component.runtime);
+          const latestBuild = buildRows.find((build) => build.status === 'succeeded'
+            && build.artifacts?.some((artifact) => artifact.component === component.id));
+          const artifact = latestBuild?.artifacts?.find((item) => item.component === component.id);
           return (
-            <div className={`release-inventory-row ${component.inSync === false ? 'drift' : ''}`} key={component.id}>
-              <span><strong>{component.id}</strong><small>{component.serviceId}</small></span>
-              <span className="release-reference"><strong title={component.desiredImage || ''}>{component.desiredImage || '未配置'}</strong><small>{component.configured ? '环境配置已声明' : '环境配置缺失'}</small></span>
-              <span className="release-reference release-runtime-reference">
-                <strong title={actualImage}>{actualImage}</strong>
-                <small title={runtimeVersionTitle(component.runtime)}>{runtimeVersionLabel(component.runtime)}</small>
-                <small>{runtimeStateSummary(component.runtime)}</small>
-              </span>
-              <span className="release-lifecycle">
-                <small title={history.buildId || ''}><b>构建</b>{formatDateTime(history.buildAt)}</small>
-                <small title={history.deploymentId || ''}><b>部署</b>{formatDateTime(history.deploymentAt)}</small>
-                <small title={component.runtime?.startedAt || ''}><b>启动</b>{formatDateTime(component.runtime?.startedAt)}{component.runtime?.startedAt ? ` · ${formatRelative(component.runtime.startedAt)}` : ''}</small>
-              </span>
-              <span className={`release-sync ${observation.className}`}><i />{observation.label}</span>
+            <div className="release-inventory-row" key={component.id}>
+              <span><strong>{component.id}</strong><small>ACR 构建目标</small></span>
+              <span className="release-reference"><strong title={component.image || ''}>{component.image || '未配置'}</strong><small>{component.configured ? '环境配置已声明' : '环境配置缺失'}</small></span>
+              <span className="release-reference"><strong title={artifact?.reference || ''}>{artifact?.reference || '暂无产物'}</strong><small>{artifact?.digest ? shortValue(artifact.digest, 24) : '等待构建回调'}</small></span>
+              <span className="release-lifecycle"><small title={latestBuild?.id || ''}><b>构建</b>{formatDateTime(latestBuild?.completedAt || latestBuild?.updatedAt)}</small></span>
+              <span className={`release-sync ${component.configured ? 'synced' : 'unknown'}`}><i />{component.configured ? '已配置' : '未配置'}</span>
             </div>
           );
         })}
@@ -1040,23 +882,15 @@ export function ReleasesView({ session, targetEntityId = '' }) {
 
       <section className="ops-panel release-history">
         <header>
-          <div><span>发布记录</span><h3>{historyTab === 'builds' ? '构建与产物' : '部署与回滚'}</h3></div>
-          <SegmentedTabs
-            ariaLabel="发布记录类型"
-            idPrefix="release-history-tab"
-            panelId="release-history-panel"
-            items={[{ id: 'builds', label: '构建' }, { id: 'deployments', label: '部署' }]}
-            value={historyTab}
-            onChange={switchHistoryTab}
-          />
+          <div><span>构建记录</span><h3>构建与产物</h3></div>
         </header>
-        <div id="release-history-panel" role="tabpanel" aria-labelledby={`release-history-tab-${historyTab}`}>
-        {activeHistoryRows.length > 0 && (
+        <div>
+        {buildRows.length > 0 && (
           <div className="release-history-head" aria-hidden="true">
             <span /><span>版本 / 任务</span><span>执行人</span><span>执行时间</span><span>耗时 / 同步</span><span>状态</span><span>操作</span>
           </div>
         )}
-        {historyTab === 'builds' && (buildRows.length ? visibleBuildRows.map((build) => (
+        {buildRows.length ? visibleBuildRows.map((build) => (
           <div className={`release-history-row ${targetEntityId === build.id ? 'targeted-entity' : ''}`} data-release-entity-id={build.id} key={build.id}>
             <span className={`run-state ${releaseStateClass(build.status)}`}><i /></span>
             <span className="release-run-source"><strong>{shortValue(build.revision || build.id)}</strong><small>{build.observedOnly ? `GitHub 观察 · ${workflowNameLabel(build.name || build.workflow)}` : build.targets?.length ? build.targets.join('、') : workflowNameLabel(build.name || build.workflow)}</small></span>
@@ -1071,33 +905,16 @@ export function ReleasesView({ session, targetEntityId = '' }) {
               {build.workflowRun?.url && <a href={build.workflowRun.url} target="_blank" rel="noreferrer" aria-label="打开 GitHub 运行记录"><ExternalLink size={15} /></a>}
               {build.observedOnly && <span className="release-observed-badge">未同步</span>}
               {!build.observedOnly && build.status === 'succeeded' && !build.artifacts?.length && <span className="release-observed-badge" title="缺少镜像 digest，等待 GitHub 回调或产物恢复">产物未同步</span>}
-              {roleAtLeast(session.user?.role, 'super_admin') && !build.observedOnly && build.status === 'succeeded' && build.artifacts?.length > 0 && <button type="button" onClick={() => selectBuild(build)} disabled={!capabilities.canDeploy}><Rocket size={15} />部署</button>}
             </span>
           </div>
-        )) : <div className="ops-empty">暂无构建记录</div>)}
-        {historyTab === 'deployments' && (deployments.length ? visibleDeployments.map((deployment) => (
-          <div className={`release-history-row ${targetEntityId === deployment.id ? 'targeted-entity' : ''}`} data-release-entity-id={deployment.id} key={deployment.id}>
-            <span className={`run-state ${releaseStateClass(deployment.status)}`}><i /></span>
-            <span className="release-run-source"><strong>{deployment.action === 'rollback' ? '回滚' : '部署'} · {shortValue(deployment.buildId || deployment.sourceDeploymentId)}</strong><small>{deployment.components.join('、')}</small></span>
-            <span className="release-run-actor"><strong>{deployment.requestedBy || '--'}</strong><small>操作发起人</small></span>
-            <span className="release-run-date"><strong>{formatDateTime(releaseIsActive(deployment.status) ? deployment.startedAt || deployment.createdAt : deployment.completedAt || deployment.updatedAt || deployment.createdAt)}</strong><small>{releaseIsActive(deployment.status) ? '开始时间' : '完成时间'}</small></span>
-            <span className="release-run-duration">
-              <strong className={releaseIsActive(deployment.status) ? 'live' : ''}>{releaseIsActive(deployment.status) ? `${releaseTimingVerb(deployment.status)} ${releaseDuration(deployment.startedAt || deployment.createdAt, null, clockNow)}` : releaseDuration(deployment.startedAt || deployment.createdAt, deployment.completedAt || deployment.updatedAt)}</strong>
-              <small>{releaseIsActive(deployment.status) ? `同步 ${releaseDuration(data?.refreshedAt || deployment.updatedAt, null, clockNow)}前` : '总耗时'}</small>
-            </span>
-            <span className={`release-status status-${releaseStateClass(deployment.status)}`}>{releaseStatusLabel(deployment.status)}</span>
-            <span className="release-row-actions">
-              {roleAtLeast(session.user?.role, 'super_admin') && deployment.status === 'succeeded' && <button type="button" onClick={() => selectRollback(deployment)} disabled={!capabilities.canRollback}><RotateCcw size={15} />回滚到此版本</button>}
-            </span>
-          </div>
-        )) : <div className="ops-empty">暂无部署记录</div>)}
+        )) : <div className="ops-empty">暂无构建记录</div>}
         {hiddenHistoryCount > 0 && (
           <div className="release-history-more">
             <button type="button" onClick={() => setHistoryExpanded((current) => !current)}>
               {historyExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               {historyExpanded ? '收起历史记录' : `展开 ${hiddenHistoryCount} 条历史记录`}
             </button>
-            <span>显示 {historyExpanded ? activeHistoryRows.length : Math.min(RELEASE_HISTORY_COLLAPSED_LIMIT, activeHistoryRows.length)} / {activeHistoryRows.length}</span>
+            <span>显示 {historyExpanded ? buildRows.length : Math.min(RELEASE_HISTORY_COLLAPSED_LIMIT, buildRows.length)} / {buildRows.length}</span>
           </div>
         )}
         </div>
@@ -1118,50 +935,6 @@ export function ReleasesView({ session, targetEntityId = '' }) {
         </section>
       )}
 
-      {roleAtLeast(session.user?.role, 'super_admin') && selectedSource && (
-        <section className="ops-panel protected-operation deployment-operation">
-          <header><div><span>受控执行</span><h3>{operation.action === 'rollback' ? '回滚历史成功版本' : '部署不可变构建产物'}</h3></div><ShieldCheck size={20} /></header>
-          {!operationAllowed && <div className="release-disabled-reason"><CircleAlert size={16} /><span>{capabilities.reasons?.[operation.action === 'rollback' ? 'rollback' : 'deploy']?.join('；') || '当前操作不可用'}</span></div>}
-          <div className="release-operation-source">
-            <span><strong>{operation.action === 'rollback' ? shortValue(selectedSource.buildId || selectedSource.id) : shortValue(selectedSource.revision || selectedSource.id)}</strong><small>{availableArtifacts.length} 个不可变产物</small></span>
-            <button type="button" onClick={() => { setOperation((current) => ({ ...current, buildId: '', sourceDeploymentId: '', components: [] })); setPreflight(null); }} aria-label="关闭发布操作"><XCircle size={18} /></button>
-          </div>
-          {operation.action === 'deploy' && (
-            <div className="release-reference-mode">
-              <span><strong>部署方式</strong><small>{operation.imageReferenceMode === 'tag' ? '写入 latest 标签，保留服务器手动更新习惯' : '写入本次构建 digest，锁定生产版本'}</small></span>
-              <SegmentedTabs
-                ariaLabel="部署镜像引用方式"
-                idPrefix="release-image-reference-mode"
-                items={[{ id: 'digest', label: '固定版本' }, { id: 'tag', label: '保持 latest' }]}
-                value={operation.imageReferenceMode}
-                onChange={(imageReferenceMode) => { setPreflight(null); setOperation({ ...operation, imageReferenceMode, confirmText: '' }); }}
-              />
-            </div>
-          )}
-          <div className="release-targets">
-            {availableArtifacts.map((artifact) => <label key={artifact.component}><input type="checkbox" checked={operation.components.includes(artifact.component)} onChange={() => toggleOperationComponent(artifact.component)} /><span>{artifact.component} · {shortValue(artifact.digest, 18)}</span></label>)}
-          </div>
-          {selectedArtifactReferences.length > 0 && (
-            <div className="release-env-preview">
-              {selectedArtifactReferences.map((item) => <div key={item.component}><strong>{item.envKey}</strong><span title={item.value}>{item.value || '--'}</span></div>)}
-            </div>
-          )}
-          {preflight?.checks?.length > 0 && <div className="release-preflight-list">
-            {preflight.checks.map((check) => <div key={check.id} className={`check-${check.status}`}><span>{check.status === 'passed' ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}</span><span><strong>{check.label}</strong><small>{check.detail}</small></span></div>)}
-          </div>}
-          <div className="deployment-fields">
-            <label>管理员密码<input type="password" autoComplete="current-password" value={operation.password} onChange={(event) => setOperation({ ...operation, password: event.target.value })} /></label>
-            {session.user?.totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={operation.totp} onChange={(event) => setOperation({ ...operation, totp: event.target.value.replace(/\D/g, '') })} /></label>}
-            {operation.components.includes('mongodb') && <label className="release-maintenance-confirm"><input type="checkbox" checked={operation.maintenanceApproved} onChange={(event) => { setPreflight(null); setOperation({ ...operation, maintenanceApproved: event.target.checked, confirmText: '' }); }} /><span>确认 MongoDB 维护窗口</span></label>}
-            <label className="wide">确认短语<input value={operation.confirmText} onChange={(event) => setOperation({ ...operation, confirmText: event.target.value })} placeholder={confirmation} /></label>
-            <button className="secondary-action" type="button" onClick={runPreflight} disabled={!operationAllowed || !operation.components.length || submitting}>{submitting ? <LoaderCircle className="spin" size={17} /> : <ShieldCheck size={17} />}运行预检</button>
-            <button className="primary-button" type="button" onClick={triggerDeployment} disabled={
-              !operationAllowed || !preflight?.ok || !operation.components.length || !operation.password || !totpReady || submitting
-              || operation.confirmText !== confirmation
-            }>{submitting ? <LoaderCircle className="spin" size={17} /> : operation.action === 'rollback' ? <RotateCcw size={17} /> : <Rocket size={17} />}{operation.action === 'rollback' ? '提交回滚' : '提交部署'}</button>
-          </div>
-        </section>
-      )}
     </section>
   );
 }

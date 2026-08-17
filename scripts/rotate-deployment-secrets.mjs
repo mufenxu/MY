@@ -10,7 +10,6 @@ const rotations = new Map([
   ['PLATFORM_BACKUP_RUNNER_TOKEN', () => crypto.randomBytes(32).toString('base64url')],
   ['PLATFORM_BACKUP_STORAGE_ENCRYPTION_KEY', () => crypto.randomBytes(32).toString('base64url')],
   ['PLATFORM_AUTH_ENCRYPTION_KEY', () => crypto.randomBytes(32).toString('base64url')],
-  ['PLATFORM_DEPLOY_HOOK_TOKEN', () => crypto.randomBytes(32).toString('base64url')],
   ['MONGO_BACKUP_PASSWORD', () => crypto.randomBytes(32).toString('base64url')],
   ['MQTT_PASSWORD', () => crypto.randomBytes(24).toString('base64url')],
 ]);

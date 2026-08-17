@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ViewList
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Add
@@ -149,7 +150,7 @@ fun TodayScreen(
     onDeleteTodo: (String) -> Unit,
     onSyncCalendar: () -> Unit,
     onOpenNotifications: () -> Unit,
-    onOpenTasks: () -> Unit,
+    onOpenFreeClassrooms: () -> Unit,
 ) {
     var editingTodo by remember { mutableStateOf<TodoTask?>(null) }
     var addingTodo by remember { mutableStateOf(false) }
@@ -285,23 +286,15 @@ fun TodayScreen(
                 }
 
                 item(key = "attention-title", contentType = "section") {
-                    SectionHeader("需要处理", "系统提醒与平台任务")
+                    SectionHeader("需要处理", "系统提醒统一进入通知中心")
                 }
                 item(key = "attention-cards", contentType = "card") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        AttentionCard(
-                            label = "系统通知",
-                            value = state.incidents.count { it.status != "resolved" },
-                            onClick = onOpenNotifications,
-                            modifier = Modifier.weight(1f),
-                        )
-                        AttentionCard(
-                            label = "待处理任务",
-                            value = state.tasks.count { it.status in setOf("action_required", "failed", "pending") },
-                            onClick = onOpenTasks,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+                    AttentionCard(
+                        label = "系统通知",
+                        value = state.unreadAlerts,
+                        onClick = onOpenNotifications,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
 
                 if (expiringResources.isNotEmpty()) {
@@ -325,7 +318,7 @@ fun TodayScreen(
                 )
             }
             CampusWorkspaceSection.Campus -> item(key = "campus-overview", contentType = "workspace") {
-                CampusOverviewSection(state.campusOverview)
+                CampusOverviewSection(state.campusOverview, onOpenFreeClassrooms)
             }
         }
     }
@@ -972,10 +965,10 @@ fun InsightsScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             EnhancedMetricCard(
-                                icon = Icons.Outlined.Assignment,
-                                label = "待处理任务",
-                                value = "${latestSample.pendingTasks}",
-                                color = Color(0xFFF59E0B),
+                                icon = Icons.Outlined.NotificationsActive,
+                                label = "活动问题",
+                                value = "${latestSample.activeIncidents}",
+                                color = Color(0xFFEF4444),
                                 modifier = Modifier.weight(1f)
                             )
                             EnhancedMetricCard(
@@ -1146,7 +1139,7 @@ fun ScenesScreen(
 }
 
 @Composable
-private fun WorkspacePage(
+internal fun WorkspacePage(
     title: String,
     subtitle: String,
     contentPadding: PaddingValues,
@@ -1657,7 +1650,10 @@ private fun CourseGridMatrix(
 }
 
 @Composable
-private fun CampusOverviewSection(overview: CampusOverview?) {
+private fun CampusOverviewSection(
+    overview: CampusOverview?,
+    onOpenFreeClassrooms: () -> Unit,
+) {
     if (overview == null) {
         EmptyBlock("校园信息正在同步", "连接学校账号后，会显示成绩、空教室、一卡通和宿舍能耗。")
         return
@@ -1682,9 +1678,10 @@ private fun CampusOverviewSection(overview: CampusOverview?) {
 
     FreeClassroomCard(
         freeClassrooms = overview.freeClassrooms,
+        onClick = onOpenFreeClassrooms,
     )
 
-    CampusQuickToolsGrid()
+    CampusQuickToolsGrid(onOpenFreeClassrooms)
 }
 
 @Composable
@@ -1942,8 +1939,9 @@ private fun AcademicGpaCard(
 @Composable
 private fun FreeClassroomCard(
     freeClassrooms: CampusFreeClassrooms?,
+    onClick: () -> Unit,
 ) {
-    AppPanel {
+    AppPanel(onClick = onClick) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1990,12 +1988,17 @@ private fun FreeClassroomCard(
                     )
                 }
             }
+            Icon(
+                Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
 
 @Composable
-private fun CampusQuickToolsGrid() {
+private fun CampusQuickToolsGrid(onOpenFreeClassrooms: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SectionHeader("校园快捷服务", "常用教务与生活服务指南")
         AppPanel {
@@ -2018,6 +2021,7 @@ private fun CampusQuickToolsGrid() {
                     accent = Color(0xFF059669),
                     accentPale = Color(0xFFD1FAE5),
                     modifier = Modifier.weight(1f),
+                    onClick = onOpenFreeClassrooms,
                 )
                 QuickToolItem(
                     icon = Icons.Outlined.CreditCard,
@@ -2045,9 +2049,20 @@ private fun QuickToolItem(
     accent: Color,
     accentPale: Color,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     Column(
-        modifier = modifier.padding(vertical = 4.dp),
+        modifier = modifier
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(onClick = onClick)
+                } else {
+                    Modifier
+                },
+            )
+            .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {

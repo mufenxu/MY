@@ -224,8 +224,6 @@ export function loadConfig(env = process.env) {
     releaseEnvironment: String(env.PLATFORM_RELEASE_ENVIRONMENT || 'production').trim().slice(0, 32),
     releaseCallbackToken: env.PLATFORM_RELEASE_CALLBACK_TOKEN || '',
     releaseAllowedImageRepository: String(env.PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY || '').trim().replace(/[:/@]+$/, ''),
-    deployHookUrl: parseHttpUrl(env.PLATFORM_DEPLOY_HOOK_URL),
-    deployHookToken: env.PLATFORM_DEPLOY_HOOK_TOKEN || '',
     releaseRevision: String(env.PLATFORM_RELEASE_REVISION || env.GITHUB_SHA || '').trim().slice(0, 64),
     releaseDeployedAt: String(env.PLATFORM_RELEASE_DEPLOYED_AT || '').trim(),
     releaseImages: {
@@ -289,9 +287,6 @@ export function loadConfig(env = process.env) {
     }
     if (config.releaseActionsEnabled && !/^[a-z0-9][a-z0-9._/-]+$/i.test(config.releaseAllowedImageRepository)) {
       missing.push('PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY');
-    }
-    if (config.deployHookUrl && (config.deployHookToken.length < 32 || isTemplatePlaceholder(config.deployHookToken))) {
-      missing.push('PLATFORM_DEPLOY_HOOK_TOKEN');
     }
     if (config.isProduction && !config.publicOrigin.startsWith('https://')) missing.push('PLATFORM_PUBLIC_ORIGIN_HTTPS');
     const publicHostname = config.publicOrigin ? new URL(config.publicOrigin).hostname : '';
