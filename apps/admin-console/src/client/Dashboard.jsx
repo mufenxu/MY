@@ -21,7 +21,6 @@ import { ApplicationsView } from './ApplicationsView.jsx';
 import { ServicesView } from './ServicesView.jsx';
 import { BackupRecoveryView } from './BackupRecoveryView.jsx';
 import { CommandPalette } from './CommandPalette.jsx';
-import { PLATFORM_BRAND_ICON } from './brand.js';
 
 const loadAutomationView = () => import('./AutomationView.jsx');
 const loadNotificationView = () => import('./NotificationServiceView.jsx');
@@ -361,7 +360,7 @@ export function Dashboard({ session, onLogout }) {
 
       <aside ref={sidebarRef} id="management-sidebar" className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`} aria-hidden={commandOpen || undefined} inert={commandOpen || undefined}>
         <div className="sidebar-brand" aria-hidden="true">
-          <span className="sidebar-brand-mark"><img src={PLATFORM_BRAND_ICON} alt="" /></span>
+          <span className="sidebar-brand-mark"><img src="/assets/console-avatar.jpg" alt="" /></span>
           <span className="sidebar-brand-copy"><strong>MY 平台</strong><small>统一服务控制台</small></span>
         </div>
         <nav className="main-nav" aria-label="管理模块">
@@ -417,12 +416,11 @@ export function Dashboard({ session, onLogout }) {
             >
               {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            <img className="welcome-avatar" src="/assets/console-avatar.jpg" alt="管理员头像" />
             <div className="welcome-copy">
               {activeFilter === 'all' ? (
                 <h1>{greeting}，<strong>{username}</strong></h1>
               ) : <h1><strong>{activeNavigationGroup.label}</strong></h1>}
-              <span>{activeFilter === 'all' ? '统一服务控制台' : viewMeta.subtitle}</span>
+              {activeFilter !== 'all' && <span>{viewMeta.subtitle}</span>}
             </div>
           </div>
 

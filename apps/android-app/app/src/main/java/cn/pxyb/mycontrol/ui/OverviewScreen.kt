@@ -163,6 +163,17 @@ fun OverviewScreen(
     val currentDate = LocalDate.now()
     val todayCourseTotal = remember(state.timetable, currentDate) { todayCourseCount(state) }
     val listState = rememberLazyListState()
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val quickActionColumns = remember(configuration.screenWidthDp, density.fontScale) {
+        quickActionColumnCount(configuration.screenWidthDp.dp, density.fontScale)
+    }
+    val visibleQuickActions = remember(state.homeQuickActionOrder, state.hiddenHomeQuickActions) {
+        state.homeQuickActionOrder.filterNot(state.hiddenHomeQuickActions::contains)
+    }
+    val quickActionRows = remember(visibleQuickActions, quickActionColumns) {
+        visibleQuickActions.chunked(quickActionColumns)
+    }
 
     fun openServiceAdmin(service: ServiceInfo) {
         val adminUrl = service.adminUrl?.takeIf { it.isNotBlank() } ?: return
@@ -449,48 +460,42 @@ fun OverviewScreen(
                 )
             }
 
-            item(key = "quick-actions", contentType = "card") {
-                val configuration = LocalConfiguration.current
-                val density = LocalDensity.current
-                val columnCount = remember(configuration.screenWidthDp, density.fontScale) {
-                    quickActionColumnCount(configuration.screenWidthDp.dp, density.fontScale)
-                }
+            items(
+                items = quickActionRows,
+                key = { rowActions -> "quick-actions-${rowActions.joinToString("-") { it.name }}" },
+                contentType = { "quick-action-row" },
+            ) { rowActions ->
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(26.dp),
+                    shape = RoundedCornerShape(22.dp),
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                     shadowElevation = 0.dp,
                 ) {
-                    Column(
+                    Row(
                         modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        val visibleActions = state.homeQuickActionOrder.filterNot(state.hiddenHomeQuickActions::contains)
-                        visibleActions.chunked(columnCount).forEach { rowActions ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                rowActions.forEach { action ->
-                                    val spec = remember(action) { homeQuickActionSpec(
-                                        action = action,
-                                        onSelectTab = onSelectTab,
-                                        onRunDiagnostics = onRunDiagnostics,
-                                        onTriggerBackup = onTriggerBackup,
-                                        onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
-                                        onOpenOperations = onOpenOperations,
-                                        onOpenWorkspace = onOpenWorkspace,
-                                    ) }
-                                    QuickAction(
-                                        icon = spec.icon,
-                                        label = spec.label,
-                                        accent = spec.accent,
-                                        accentPale = spec.accentPale,
-                                        modifier = Modifier.weight(1f),
-                                        onClick = spec.onClick,
-                                    )
-                                }
-                                repeat(columnCount - rowActions.size) { Spacer(Modifier.weight(1f)) }
-                            }
+                        rowActions.forEach { action ->
+                            val spec = remember(action) { homeQuickActionSpec(
+                                action = action,
+                                onSelectTab = onSelectTab,
+                                onRunDiagnostics = onRunDiagnostics,
+                                onTriggerBackup = onTriggerBackup,
+                                onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
+                                onOpenOperations = onOpenOperations,
+                                onOpenWorkspace = onOpenWorkspace,
+                            ) }
+                            QuickAction(
+                                icon = spec.icon,
+                                label = spec.label,
+                                accent = spec.accent,
+                                accentPale = spec.accentPale,
+                                modifier = Modifier.weight(1f),
+                                onClick = spec.onClick,
+                            )
                         }
+                        repeat(quickActionColumns - rowActions.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
@@ -538,66 +543,54 @@ fun OverviewScreen(
             }
 
             if (state.externalApplications.isNotEmpty()) {
-                item(key = "external-apps", contentType = "card") {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OverviewSectionTitle("外部应用", "独立项目免密快捷直达")
-                        externalApplicationOpenError?.let { message ->
-                            FeedbackBanner(message, error = true)
-                        }
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(26.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                            shadowElevation = 0.dp,
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                state.externalApplications.forEach { application ->
-                                    ExternalApplicationRow(
-                                        application = application,
-                                        opening = openingExternalApplicationId == application.id,
-                                        onOpen = stableOpenExternalApplication,
-                                    )
-                                }
-                            }
-                        }
+                item(key = "external-apps-title", contentType = "section") {
+                    OverviewSectionTitle("外部应用", "独立项目免密快捷直达")
+                }
+                externalApplicationOpenError?.let { message ->
+                    item(key = "external-apps-error", contentType = "banner") {
+                        FeedbackBanner(message, error = true)
+                    }
+                }
+                items(
+                    items = state.externalApplications,
+                    key = { "external-application-${it.id}" },
+                    contentType = { "external-application" },
+                ) { application ->
+                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                        ExternalApplicationRow(
+                            application = application,
+                            opening = openingExternalApplicationId == application.id,
+                            onOpen = stableOpenExternalApplication,
+                        )
                     }
                 }
             }
 
             // 6. 服务可用性
-            item(key = "services", contentType = "card") {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OverviewSectionTitle("服务监控", "核心微服务运行指标与状态")
-                    serviceOpenError?.let { message ->
-                        FeedbackBanner(message, error = true)
-                    }
-                    if (sortedServices.isEmpty()) {
-                        EmptyBlock("暂无服务监测", "等待平台状态同步")
-                    } else {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(26.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                            shadowElevation = 0.dp,
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                sortedServices.forEach { service ->
-                                    ServiceRow(
-                                        service = service,
-                                        opening = openingServiceId == service.id,
-                                        onOpen = stableOpenServiceAdmin,
-                                    )
-                                }
-                            }
-                        }
+            item(key = "services-title", contentType = "section") {
+                OverviewSectionTitle("服务监控", "核心微服务运行指标与状态")
+            }
+            serviceOpenError?.let { message ->
+                item(key = "services-error", contentType = "banner") {
+                    FeedbackBanner(message, error = true)
+                }
+            }
+            if (sortedServices.isEmpty()) {
+                item(key = "services-empty", contentType = "empty") {
+                    EmptyBlock("暂无服务监测", "等待平台状态同步")
+                }
+            } else {
+                items(
+                    items = sortedServices,
+                    key = { "service-${it.id}" },
+                    contentType = { "service" },
+                ) { service ->
+                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                        ServiceRow(
+                            service = service,
+                            opening = openingServiceId == service.id,
+                            onOpen = stableOpenServiceAdmin,
+                        )
                     }
                 }
             }
