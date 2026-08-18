@@ -1422,6 +1422,9 @@ private fun AuthenticatedShell(
                         onCreateDesktopMagicLink = viewModel::createDesktopMagicLink,
                         onUpdateNotificationPreferences = viewModel::updateNotificationPreferences,
                         onCheckUpdates = viewModel::checkAppUpdates,
+                        onDownloadAndInstallUpdate = viewModel::downloadAndInstallAppUpdate,
+                        onInstallDownloadedUpdate = viewModel::installDownloadedAppUpdate,
+                        onOpenReleases = viewModel::openAppReleasesPage,
                     )
                 }
                 composable(AppRoute.Account) {

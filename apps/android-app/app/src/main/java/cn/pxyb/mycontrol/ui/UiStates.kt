@@ -26,6 +26,7 @@ import cn.pxyb.mycontrol.data.TotpEnrollment
 import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.TrendSample
 import cn.pxyb.mycontrol.data.WebLoginLink
+import cn.pxyb.mycontrol.update.AppUpdateUiState
 
 @Immutable
 data class AppEntryUiState(
@@ -119,6 +120,7 @@ data class ProfileUiState(
     val security: SecurityData?,
     val alertPreferences: AlertPreferences = AlertPreferences(),
     val latestRelease: ReleaseData? = null,
+    val appUpdate: AppUpdateUiState = AppUpdateUiState(),
     val webLoginLink: WebLoginLink? = null,
     val cacheStorageInfo: CacheStorageInfo = CacheStorageInfo(),
 )
@@ -281,6 +283,7 @@ internal fun AppUiState.toProfileUiState() = ProfileUiState(
     security = security,
     alertPreferences = alertPreferences,
     latestRelease = releases,
+    appUpdate = appUpdate,
     webLoginLink = webLoginLink,
     cacheStorageInfo = cacheStorageInfo,
 )

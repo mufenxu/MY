@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Laptop
 import androidx.compose.material.icons.outlined.ManageAccounts
 import androidx.compose.material.icons.outlined.Notifications
@@ -41,6 +43,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -71,6 +74,7 @@ import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.SecuritySession
+import cn.pxyb.mycontrol.update.AppUpdatePhase
 
 @Composable
 fun ProfileScreen(
@@ -89,6 +93,9 @@ fun ProfileScreen(
     onCreateDesktopMagicLink: ((String?, String?) -> Unit) -> Unit,
     onUpdateNotificationPreferences: (AlertPreferences) -> Unit,
     onCheckUpdates: () -> Unit,
+    onDownloadAndInstallUpdate: () -> Unit,
+    onInstallDownloadedUpdate: () -> Unit,
+    onOpenReleases: (String?) -> Unit,
 ) {
     var revokeTarget by remember { mutableStateOf<SecuritySession?>(null) }
     var confirmLogout by remember { mutableStateOf(false) }
@@ -643,31 +650,131 @@ fun ProfileScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    Surface(
-                        color = Color(0xFFECFDF5),
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(0.5.dp, Color(0xFFA7F3D0)),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Color(0xFF047857), modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                "当前已是最新稳定版本 (v${BuildConfig.VERSION_NAME})\n后端平台服务运行状态良好",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                color = Color(0xFF047857),
-                            )
-                        }
+                    when (state.appUpdate.phase) {
+                        AppUpdatePhase.Idle,
+                        AppUpdatePhase.Checking,
+                        -> AppUpdateStatusPanel(
+                            icon = Icons.Outlined.SystemUpdate,
+                            tint = Color(0xFF2563EB),
+                            background = Color(0xFFEFF6FF),
+                            title = "正在检查 GitHub Releases",
+                            detail = "正在读取最新稳定版信息...",
+                            loading = true,
+                        )
+
+                        AppUpdatePhase.Current -> AppUpdateStatusPanel(
+                            icon = Icons.Outlined.CheckCircle,
+                            tint = Color(0xFF047857),
+                            background = Color(0xFFECFDF5),
+                            title = "当前已是最新稳定版",
+                            detail = "本机 v${BuildConfig.VERSION_NAME} · GitHub v${state.appUpdate.info?.versionName ?: BuildConfig.VERSION_NAME}",
+                        )
+
+                        AppUpdatePhase.Available -> AppUpdateStatusPanel(
+                            icon = Icons.Outlined.SystemUpdate,
+                            tint = Color(0xFF1D4ED8),
+                            background = Color(0xFFEFF6FF),
+                            title = "发现新版本 v${state.appUpdate.info?.versionName.orEmpty()}",
+                            detail = state.appUpdate.info?.notes?.ifBlank { "包含新的功能与稳定性改进" }
+                                ?: "包含新的功能与稳定性改进",
+                        )
+
+                        AppUpdatePhase.Downloading -> AppUpdateStatusPanel(
+                            icon = Icons.Outlined.FileDownload,
+                            tint = Color(0xFF2563EB),
+                            background = Color(0xFFEFF6FF),
+                            title = "正在下载并校验安装包",
+                            detail = "${state.appUpdate.progress}% · 完成后将打开系统安装器",
+                            progress = state.appUpdate.progress,
+                        )
+
+                        AppUpdatePhase.ReadyToInstall -> AppUpdateStatusPanel(
+                            icon = Icons.Outlined.CheckCircle,
+                            tint = Color(0xFF047857),
+                            background = Color(0xFFECFDF5),
+                            title = "安装包校验通过",
+                            detail = "可以继续交给 Android 系统安装器安装。",
+                        )
+
+                        AppUpdatePhase.InstallPermissionRequired -> AppUpdateStatusPanel(
+                            icon = Icons.Outlined.SystemUpdate,
+                            tint = Color(0xFFB45309),
+                            background = Color(0xFFFFFBEB),
+                            title = "需要允许此来源安装应用",
+                            detail = "在系统设置中开启权限，返回后点击继续安装。",
+                        )
+
+                        AppUpdatePhase.Installing -> AppUpdateStatusPanel(
+                            icon = Icons.Outlined.SystemUpdate,
+                            tint = Color(0xFF047857),
+                            background = Color(0xFFECFDF5),
+                            title = "系统安装器已打开",
+                            detail = "请按系统提示完成更新安装。",
+                        )
+
+                        AppUpdatePhase.Error -> AppUpdateStatusPanel(
+                            icon = Icons.Outlined.SystemUpdate,
+                            tint = Color(0xFFB91C1C),
+                            background = Color(0xFFFEF2F2),
+                            title = "更新检查或安装未完成",
+                            detail = state.appUpdate.error ?: "请稍后重试，或前往 GitHub Releases 手动下载。",
+                        )
                     }
 
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                    Button(
-                        onClick = { showUpdateDialog = false },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                    ) {
-                        Text("知道了")
+                    when (state.appUpdate.phase) {
+                        AppUpdatePhase.Available -> Button(
+                            onClick = onDownloadAndInstallUpdate,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                        ) {
+                            Icon(Icons.Outlined.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("下载并安装")
+                        }
+
+                        AppUpdatePhase.ReadyToInstall,
+                        AppUpdatePhase.InstallPermissionRequired,
+                        -> Button(
+                            onClick = onInstallDownloadedUpdate,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                        ) {
+                            Icon(Icons.Outlined.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (state.appUpdate.phase == AppUpdatePhase.InstallPermissionRequired) "继续安装" else "打开系统安装器")
+                        }
+
+                        AppUpdatePhase.Error -> {
+                            Button(
+                                onClick = onCheckUpdates,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                            ) {
+                                Icon(Icons.Outlined.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("重新检查")
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = { onOpenReleases(state.appUpdate.info?.releaseUrl) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                            ) {
+                                Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("打开 GitHub Releases")
+                            }
+                        }
+
+                        else -> OutlinedButton(
+                            onClick = { showUpdateDialog = false },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                        ) {
+                            Text("关闭")
+                        }
                     }
                 }
             }
@@ -711,6 +818,57 @@ fun ProfileScreen(
             },
             icon = Icons.Outlined.CleaningServices,
         )
+    }
+}
+
+@Composable
+private fun AppUpdateStatusPanel(
+    icon: ImageVector,
+    tint: Color,
+    background: Color,
+    title: String,
+    detail: String,
+    loading: Boolean = false,
+    progress: Int? = null,
+) {
+    Surface(
+        color = background,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                if (loading) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = tint)
+                } else {
+                    Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = tint,
+                    )
+                    Text(
+                        detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 5,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            progress?.let {
+                LinearProgressIndicator(
+                    progress = { it.coerceIn(0, 100) / 100f },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = tint,
+                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                )
+            }
+        }
     }
 }
 

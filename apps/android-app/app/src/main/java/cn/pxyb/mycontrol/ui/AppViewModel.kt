@@ -60,6 +60,10 @@ import cn.pxyb.mycontrol.data.mergeRemoteAlerts
 import cn.pxyb.mycontrol.data.mergeHydratedAlerts
 import cn.pxyb.mycontrol.data.shouldInvalidatePlatformSession
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
+import cn.pxyb.mycontrol.update.AppInstallResult
+import cn.pxyb.mycontrol.update.AppUpdateManager
+import cn.pxyb.mycontrol.update.AppUpdatePhase
+import cn.pxyb.mycontrol.update.AppUpdateUiState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -115,6 +119,7 @@ data class AppUiState(
     val incidents: List<IncidentInfo> = emptyList(),
     val tasks: List<PlatformTask> = emptyList(),
     val releases: ReleaseData? = null,
+    val appUpdate: AppUpdateUiState = AppUpdateUiState(),
     val backup: BackupQuality? = null,
     val iot: IotData? = null,
     val ct8: Ct8Data? = null,
@@ -170,6 +175,7 @@ class AppViewModel(
     private val personalStore = PersonalWorkspaceStore(application)
     private val snapshotStore = ResponseSnapshotStore(application)
     private val api = PlatformApi(sessionStore, snapshotStore)
+    private val appUpdateManager = AppUpdateManager(application)
     private val alertNotifier = AlertNotifier(application)
     private val androidCalendarSync = AndroidCalendarSync(application)
     private val hasSavedSession = sessionStore.hasSession()
@@ -2455,17 +2461,120 @@ class AppViewModel(
     }
 
     fun checkAppUpdates() {
+        if (mutableState.value.busyAction != null) return
         viewModelScope.launch {
-            mutableState.update { it.copy(busyAction = "check-updates", error = null) }
+            mutableState.update {
+                it.copy(
+                    busyAction = "check-updates",
+                    error = null,
+                    appUpdate = AppUpdateUiState(phase = AppUpdatePhase.Checking),
+                )
+            }
             runCatching {
-                api.releases()
-            }.onSuccess { releases ->
-                mutableState.update { it.copy(busyAction = null, releases = releases, message = "版本检查完成") }
+                appUpdateManager.fetchLatest()
+            }.onSuccess { update ->
+                val phase = if (update.isNewerThan(BuildConfig.VERSION_CODE)) {
+                    AppUpdatePhase.Available
+                } else {
+                    AppUpdatePhase.Current
+                }
+                mutableState.update {
+                    it.copy(
+                        busyAction = null,
+                        message = "版本检查完成",
+                        appUpdate = AppUpdateUiState(phase = phase, info = update),
+                    )
+                }
             }.onFailure { error ->
-                mutableState.update { it.copy(busyAction = null, error = error.message ?: "检查更新失败，请稍后重试") }
+                mutableState.update {
+                    it.copy(
+                        busyAction = null,
+                        appUpdate = AppUpdateUiState(
+                            phase = AppUpdatePhase.Error,
+                            error = error.message ?: "检查更新失败，请稍后重试",
+                        ),
+                    )
+                }
             }
         }
     }
+
+    fun downloadAndInstallAppUpdate() {
+        val update = mutableState.value.appUpdate.info ?: return
+        if (mutableState.value.busyAction != null) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    busyAction = "download-app-update",
+                    appUpdate = it.appUpdate.copy(
+                        phase = AppUpdatePhase.Downloading,
+                        progress = 0,
+                        error = null,
+                    ),
+                )
+            }
+            runCatching {
+                appUpdateManager.download(update) { progress ->
+                    mutableState.update { state ->
+                        state.copy(appUpdate = state.appUpdate.copy(progress = progress))
+                    }
+                }
+            }.onSuccess { apkFile ->
+                mutableState.update {
+                    it.copy(
+                        busyAction = null,
+                        appUpdate = it.appUpdate.copy(
+                            phase = AppUpdatePhase.ReadyToInstall,
+                            progress = 100,
+                            downloadedApkPath = apkFile.path,
+                        ),
+                    )
+                }
+                installDownloadedAppUpdate()
+            }.onFailure { error ->
+                val message = if (error.message?.contains("signing certificate") == true) {
+                    "当前安装来源与正式版签名不同。首次切换到专用签名需要卸载旧版本后，从 GitHub Releases 安装正式版。"
+                } else {
+                    error.message ?: "更新包下载或校验失败，请重试"
+                }
+                mutableState.update {
+                    it.copy(
+                        busyAction = null,
+                        appUpdate = it.appUpdate.copy(phase = AppUpdatePhase.Error, error = message),
+                    )
+                }
+            }
+        }
+    }
+
+    fun installDownloadedAppUpdate() {
+        val apkPath = mutableState.value.appUpdate.downloadedApkPath ?: return
+        runCatching {
+            appUpdateManager.install(java.io.File(apkPath))
+        }.onSuccess { result ->
+            mutableState.update {
+                it.copy(
+                    appUpdate = it.appUpdate.copy(
+                        phase = when (result) {
+                            AppInstallResult.Started -> AppUpdatePhase.Installing
+                            AppInstallResult.PermissionRequired -> AppUpdatePhase.InstallPermissionRequired
+                        },
+                    ),
+                )
+            }
+        }.onFailure { error ->
+            mutableState.update {
+                it.copy(
+                    appUpdate = it.appUpdate.copy(
+                        phase = AppUpdatePhase.Error,
+                        error = error.message ?: "无法启动系统安装器",
+                    ),
+                )
+            }
+        }
+    }
+
+    fun openAppReleasesPage(url: String? = null) = appUpdateManager.openReleasesPage(url)
 
     private companion object {
         const val REFRESH_CACHE_WINDOW_MS = 30_000L

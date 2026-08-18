@@ -4,6 +4,19 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val appVersionName = providers.gradleProperty("appVersionName").orElse("1.1.0")
+val appVersionCode = providers.gradleProperty("appVersionCode").map(String::toInt).orElse(1_001_000)
+val releaseSigningProperties = listOf(
+    providers.gradleProperty("androidReleaseStoreFile").orNull,
+    providers.gradleProperty("androidReleaseKeyAlias").orNull,
+    providers.gradleProperty("androidReleaseStorePassword").orNull,
+    providers.gradleProperty("androidReleaseKeyPassword").orNull,
+)
+val releaseSigningConfigured = releaseSigningProperties.all { !it.isNullOrBlank() }
+require(releaseSigningConfigured || releaseSigningProperties.all { it.isNullOrBlank() }) {
+    "Android release signing properties must either all be configured or all be omitted."
+}
+
 android {
     namespace = "cn.pxyb.mycontrol"
     compileSdk = 36
@@ -12,16 +25,44 @@ android {
         applicationId = "cn.pxyb.mycontrol"
         minSdk = 28
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = appVersionCode.get()
+        versionName = appVersionName.get()
 
         buildConfigField("String", "PLATFORM_BASE_URL", "\"https://pxyb.cn\"")
+        buildConfigField(
+            "String",
+            "APP_UPDATE_MANIFEST_URL",
+            "\"https://github.com/mufenxu/MY/releases/latest/download/latest.json\"",
+        )
+        buildConfigField(
+            "String",
+            "APP_RELEASES_URL",
+            "\"https://github.com/mufenxu/MY/releases\"",
+        )
+    }
+
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = file(releaseSigningProperties[0]!!)
+                keyAlias = releaseSigningProperties[1]
+                storePassword = releaseSigningProperties[2]
+                keyPassword = releaseSigningProperties[3]
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
