@@ -52,6 +52,7 @@ data class AppUpdateInfo(
     val versionCode: Int,
     val tag: String,
     val apkUrl: String,
+    val fallbackApkUrl: String? = null,
     val sha256: String,
     val apkSize: Long,
     val releaseUrl: String,
@@ -59,6 +60,9 @@ data class AppUpdateInfo(
     val notes: String,
 ) {
     fun isNewerThan(installedVersionCode: Int): Boolean = versionCode > installedVersionCode
+
+    val apkUrls: List<String>
+        get() = listOfNotNull(apkUrl, fallbackApkUrl).distinct()
 }
 
 fun parseAppUpdateManifest(raw: String): AppUpdateInfo {
@@ -75,6 +79,9 @@ fun parseAppUpdateManifest(raw: String): AppUpdateInfo {
     require(tag == "android-v$versionName") { "Release tag does not match version name" }
 
     val apkUrl = json.getString("apkUrl").requireHttpsUrl("apkUrl")
+    val fallbackApkUrl = json.optString("fallbackApkUrl")
+        .takeIf { it.isNotBlank() }
+        ?.also { it.requireHttpsUrl("fallbackApkUrl") }
     val releaseUrl = json.getString("releaseUrl").requireHttpsUrl("releaseUrl")
     val sha256 = json.getString("sha256").lowercase()
     require(sha256.matches(Regex("^[0-9a-f]{64}$"))) { "Invalid APK SHA-256" }
@@ -88,6 +95,7 @@ fun parseAppUpdateManifest(raw: String): AppUpdateInfo {
         versionCode = versionCode,
         tag = tag,
         apkUrl = apkUrl,
+        fallbackApkUrl = fallbackApkUrl,
         sha256 = sha256,
         apkSize = apkSize,
         releaseUrl = releaseUrl,

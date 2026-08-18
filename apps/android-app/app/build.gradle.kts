@@ -32,6 +32,11 @@ android {
         buildConfigField(
             "String",
             "APP_UPDATE_MANIFEST_URL",
+            "\"https://7n.pxyb.cn/android/latest.json\"",
+        )
+        buildConfigField(
+            "String",
+            "APP_UPDATE_MANIFEST_FALLBACK_URL",
             "\"https://github.com/mufenxu/MY/releases/latest/download/latest.json\"",
         )
         buildConfigField(

@@ -48,25 +48,40 @@ export function createAndroidReleaseManifest({
   apkSize,
   publishedAt,
   notes,
+  downloadBaseUrl,
 }) {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) throw new Error('Invalid GitHub repository');
   if (!/^[0-9a-f]{64}$/i.test(sha256)) throw new Error('Invalid APK SHA-256');
   if (!Number.isSafeInteger(apkSize) || apkSize <= 0) throw new Error('Invalid APK size');
   const tag = `android-v${version}`;
   const apkName = `my-control-${version}.apk`;
+  const githubApkUrl = `https://github.com/${repository}/releases/download/${tag}/${apkName}`;
+  const normalizedDownloadBaseUrl = normalizeDownloadBaseUrl(downloadBaseUrl);
 
   return {
     packageName: 'cn.pxyb.mycontrol',
     versionName: version,
     versionCode: versionCodeFor(version),
     tag,
-    apkUrl: `https://github.com/${repository}/releases/download/${tag}/${apkName}`,
+    apkUrl: normalizedDownloadBaseUrl
+      ? `${normalizedDownloadBaseUrl}/android/${apkName}`
+      : githubApkUrl,
+    ...(normalizedDownloadBaseUrl ? { fallbackApkUrl: githubApkUrl } : {}),
     sha256: sha256.toLowerCase(),
     apkSize,
     releaseUrl: `https://github.com/${repository}/releases/tag/${tag}`,
     publishedAt,
     notes,
   };
+}
+
+function normalizeDownloadBaseUrl(value) {
+  if (!value) return '';
+  const url = new URL(value);
+  if (url.protocol !== 'https:' || url.pathname !== '/' || url.search || url.hash || url.username || url.password) {
+    throw new Error('Download base URL must be a clean HTTPS origin');
+  }
+  return value.replace(/\/+$/, '');
 }
 
 function option(name) {
@@ -98,6 +113,7 @@ function runCli() {
       apkSize: Number(option('--apk-size')),
       publishedAt: option('--published-at'),
       notes: readFileSync(option('--notes-file'), 'utf8').trim(),
+      downloadBaseUrl: process.argv.includes('--download-base-url') ? option('--download-base-url') : undefined,
     });
     writeFileSync(option('--output'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
     return;

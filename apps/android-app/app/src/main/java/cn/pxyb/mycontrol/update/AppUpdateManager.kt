@@ -14,6 +14,7 @@ import okhttp3.Request
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
+import java.util.concurrent.CancellationException
 import java.util.concurrent.TimeUnit
 
 enum class AppUpdatePhase {
@@ -48,22 +49,16 @@ class AppUpdateManager(private val context: Context) {
         .build()
 
     suspend fun fetchLatest(): AppUpdateInfo = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
-            .url(BuildConfig.APP_UPDATE_MANIFEST_URL)
-            .header("Accept", "application/json")
-            .header("User-Agent", "MY-Control-Android/${BuildConfig.VERSION_NAME}")
-            .build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("GitHub Release 请求失败（HTTP ${response.code}）")
-            val body = response.body ?: throw IOException("GitHub Release 未返回版本清单")
-            val contentLength = body.contentLength()
-            require(contentLength == -1L || contentLength in 1L..MAX_MANIFEST_BYTES) { "版本清单大小无效" }
-            val source = body.source()
-            require(!source.request(MAX_MANIFEST_BYTES + 1L)) { "版本清单大小无效" }
-            val raw = source.readUtf8()
-            require(raw.isNotBlank()) { "版本清单为空" }
-            parseAppUpdateManifest(raw)
+        var lastError: Throwable? = null
+        manifestUrls().forEach { manifestUrl ->
+            try {
+                return@withContext fetchManifest(manifestUrl)
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                lastError = error
+            }
         }
+        throw IOException("版本清单请求失败，主下载源和备用源均不可用", lastError)
     }
 
     suspend fun download(
@@ -73,50 +68,88 @@ class AppUpdateManager(private val context: Context) {
         val updateDirectory = File(context.cacheDir, "updates").apply { mkdirs() }
         val target = File(updateDirectory, "my-control-${update.versionName}.apk")
         val temporary = File(updateDirectory, "${target.name}.part")
-        try {
-            val request = Request.Builder()
-                .url(update.apkUrl)
-                .header("Accept", "application/vnd.android.package-archive")
-                .header("User-Agent", "MY-Control-Android/${BuildConfig.VERSION_NAME}")
-                .build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("APK 下载失败（HTTP ${response.code}）")
-                val body = response.body ?: throw IOException("APK 下载内容为空")
-                body.byteStream().use { input ->
-                    temporary.outputStream().use { output ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        var total = 0L
-                        var lastProgress = -1
-                        while (true) {
-                            val read = input.read(buffer)
-                            if (read < 0) break
-                            total += read
-                            require(total <= update.apkSize) { "APK 下载大小超过版本清单" }
-                            output.write(buffer, 0, read)
-                            val progress = ((total * 100L) / update.apkSize).toInt().coerceIn(0, 100)
-                            if (progress != lastProgress) {
-                                lastProgress = progress
-                                onProgress(progress)
-                            }
+        var lastError: Throwable? = null
+        update.apkUrls.forEach { apkUrl ->
+            try {
+                downloadArtifact(apkUrl, update, temporary, onProgress)
+                val archiveIdentity = packageIdentity(temporary)
+                val installedIdentity = packageIdentity(
+                    context.packageManager.getPackageInfo(
+                        context.packageName,
+                        PackageManager.GET_SIGNING_CERTIFICATES,
+                    ),
+                )
+                verifyUpdateArtifact(update, temporary, archiveIdentity, installedIdentity)
+                if (target.exists()) target.delete()
+                check(temporary.renameTo(target)) { "无法保存已验证的 APK" }
+                onProgress(100)
+                return@withContext target
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                lastError = error
+                temporary.delete()
+            }
+        }
+        throw IOException("APK 下载失败，主下载源和备用源均不可用", lastError)
+    }
+
+    private fun manifestUrls(): List<String> = listOf(
+        BuildConfig.APP_UPDATE_MANIFEST_URL,
+        BuildConfig.APP_UPDATE_MANIFEST_FALLBACK_URL,
+    ).filter(String::isNotBlank).distinct()
+
+    private fun fetchManifest(manifestUrl: String): AppUpdateInfo {
+        val request = Request.Builder()
+            .url(manifestUrl)
+            .header("Accept", "application/json")
+            .header("User-Agent", "MY-Control-Android/${BuildConfig.VERSION_NAME}")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("版本清单请求失败（HTTP ${response.code}）")
+            val body = response.body ?: throw IOException("版本清单内容为空")
+            val contentLength = body.contentLength()
+            require(contentLength == -1L || contentLength in 1L..MAX_MANIFEST_BYTES) { "版本清单大小无效" }
+            val source = body.source()
+            require(!source.request(MAX_MANIFEST_BYTES + 1L)) { "版本清单大小无效" }
+            val raw = source.readUtf8()
+            require(raw.isNotBlank()) { "版本清单为空" }
+            return parseAppUpdateManifest(raw)
+        }
+    }
+
+    private fun downloadArtifact(
+        apkUrl: String,
+        update: AppUpdateInfo,
+        temporary: File,
+        onProgress: (Int) -> Unit,
+    ) {
+        val request = Request.Builder()
+            .url(apkUrl)
+            .header("Accept", "application/vnd.android.package-archive")
+            .header("User-Agent", "MY-Control-Android/${BuildConfig.VERSION_NAME}")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("APK 下载失败（HTTP ${response.code}）")
+            val body = response.body ?: throw IOException("APK 下载内容为空")
+            body.byteStream().use { input ->
+                temporary.outputStream().use { output ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var total = 0L
+                    var lastProgress = -1
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        total += read
+                        require(total <= update.apkSize) { "APK 下载大小超过版本清单" }
+                        output.write(buffer, 0, read)
+                        val progress = ((total * 100L) / update.apkSize).toInt().coerceIn(0, 100)
+                        if (progress != lastProgress) {
+                            lastProgress = progress
+                            onProgress(progress)
                         }
                     }
                 }
             }
-            val archiveIdentity = packageIdentity(temporary)
-            val installedIdentity = packageIdentity(
-                context.packageManager.getPackageInfo(
-                    context.packageName,
-                    PackageManager.GET_SIGNING_CERTIFICATES,
-                ),
-            )
-            verifyUpdateArtifact(update, temporary, archiveIdentity, installedIdentity)
-            if (target.exists()) target.delete()
-            check(temporary.renameTo(target)) { "无法保存已验证的 APK" }
-            onProgress(100)
-            target
-        } catch (error: Throwable) {
-            temporary.delete()
-            throw error
         }
     }
 

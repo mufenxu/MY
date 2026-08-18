@@ -129,6 +129,7 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
           SHA256: ${{ steps.assets.outputs.sha256 }}
           APK_SIZE: ${{ steps.assets.outputs.apk_size }}
+          DOWNLOAD_BASE_URL: https://7n.pxyb.cn
         shell: bash
         run: |
           set -euo pipefail
@@ -149,6 +150,7 @@ jobs:
             --apk-size "${APK_SIZE}" \
             --published-at "${published_at}" \
             --notes-file android-release-notes.md \
+            --download-base-url "${DOWNLOAD_BASE_URL}" \
             --output android-release-assets/latest.json
 
       - name: Create or update GitHub Release
@@ -169,3 +171,75 @@ jobs:
               --notes-file android-release-notes.md \
               --latest
           fi
+
+      - name: Publish update assets to Qiniu
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QINIU_ACCESS_KEY: ${{ secrets.QINIU_ACCESS_KEY }}
+          QINIU_SECRET_KEY: ${{ secrets.QINIU_SECRET_KEY }}
+          QINIU_BUCKET: ${{ secrets.QINIU_BUCKET }}
+          APK_NAME: ${{ steps.assets.outputs.apk_name }}
+          DOWNLOAD_BASE_URL: https://7n.pxyb.cn
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${QINIU_ACCESS_KEY}" || -z "${QINIU_SECRET_KEY}" || -z "${QINIU_BUCKET}" ]]; then
+            echo "::error::Qiniu upload secrets are incomplete. Configure QINIU_ACCESS_KEY, QINIU_SECRET_KEY and QINIU_BUCKET."
+            exit 1
+          fi
+
+          qshell_version="v2.19.12"
+          qshell_dir="${RUNNER_TEMP}/qshell"
+          mkdir -p "${qshell_dir}"
+          gh release download "${qshell_version}" \
+            --repo qiniu/qshell \
+            --pattern "qshell-${qshell_version}-linux-amd64.tar.gz" \
+            --dir "${qshell_dir}" \
+            --clobber
+          tar -xzf "${qshell_dir}/qshell-${qshell_version}-linux-amd64.tar.gz" -C "${qshell_dir}"
+          qshell_bin="${qshell_dir}/qshell"
+          chmod +x "${qshell_bin}"
+          "${qshell_bin}" -v
+
+          qshell_workspace="${RUNNER_TEMP}/qshell-workspace"
+          mkdir -p "${qshell_workspace}"
+          trap 'rm -rf "${qshell_workspace}" "${qshell_dir}"' EXIT
+          pushd "${qshell_workspace}" >/dev/null
+          "${qshell_bin}" -L account "${QINIU_ACCESS_KEY}" "${QINIU_SECRET_KEY}" android-release
+          "${qshell_bin}" -L fput "${QINIU_BUCKET}" "android/${APK_NAME}" \
+            "${GITHUB_WORKSPACE}/android-release-assets/${APK_NAME}" \
+            --overwrite --mimetype application/vnd.android.package-archive
+          "${qshell_bin}" -L fput "${QINIU_BUCKET}" android/latest.json \
+            "${GITHUB_WORKSPACE}/android-release-assets/latest.json" \
+            --overwrite --mimetype application/json
+          "${qshell_bin}" -L fput "${QINIU_BUCKET}" "android/${APK_NAME}.sha256" \
+            "${GITHUB_WORKSPACE}/android-release-assets/${APK_NAME}.sha256" \
+            --overwrite --mimetype text/plain
+
+          refresh_file="${RUNNER_TEMP}/qiniu-cdn-refresh.txt"
+          printf '%s\n' \
+            "${DOWNLOAD_BASE_URL}/android/latest.json" \
+            "${DOWNLOAD_BASE_URL}/android/${APK_NAME}" \
+            "${DOWNLOAD_BASE_URL}/android/${APK_NAME}.sha256" > "${refresh_file}"
+          "${qshell_bin}" -L cdnrefresh -i "${refresh_file}"
+
+          manifest_probe="${RUNNER_TEMP}/qiniu-latest.json"
+          for attempt in 1 2 3 4 5; do
+            if curl -fsSL --connect-timeout 10 --max-time 30 \
+              "${DOWNLOAD_BASE_URL}/android/latest.json" -o "${manifest_probe}"; then
+              break
+            fi
+            if [[ "${attempt}" == "5" ]]; then
+              echo "::error::Qiniu latest.json is not reachable over HTTPS after upload"
+              exit 1
+            fi
+            sleep 5
+          done
+          node -e '
+            const fs = require("node:fs");
+            const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            if (manifest.apkUrl !== `${process.env.DOWNLOAD_BASE_URL}/android/${process.env.APK_NAME}`) {
+              throw new Error("Qiniu manifest APK URL does not match the uploaded asset");
+            }
+          ' "${manifest_probe}"
+          popd >/dev/null

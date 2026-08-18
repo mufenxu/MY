@@ -42,3 +42,21 @@ test('release manifest points at the immutable GitHub assets', () => {
     },
   );
 });
+
+test('release manifest uses Qiniu as the primary APK source when configured', () => {
+  const manifest = createAndroidReleaseManifest({
+    repository: 'mufenxu/MY',
+    version: '1.2.0',
+    sha256: 'b'.repeat(64),
+    apkSize: 1,
+    publishedAt: '2026-08-18T11:00:00Z',
+    notes: '国内下载源',
+    downloadBaseUrl: 'https://7n.pxyb.cn/',
+  });
+
+  assert.equal(manifest.apkUrl, 'https://7n.pxyb.cn/android/my-control-1.2.0.apk');
+  assert.equal(
+    manifest.fallbackApkUrl,
+    'https://github.com/mufenxu/MY/releases/download/android-v1.2.0/my-control-1.2.0.apk',
+  );
+});
