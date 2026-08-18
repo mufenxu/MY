@@ -14,6 +14,7 @@ import android.webkit.URLUtil
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -127,6 +128,7 @@ internal class PlatformWebDownloadSupport(
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun saveImageToDownloads(image: PendingImage): Boolean {
         val resolver = activity.contentResolver
         val values = ContentValues().apply {
