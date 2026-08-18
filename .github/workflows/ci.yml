@@ -121,6 +121,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.resolve.outputs.matrix }}
+      has_targets: ${{ steps.resolve.outputs.has_targets }}
+      has_images: ${{ steps.resolve.outputs.has_images }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -143,16 +145,19 @@ jobs:
             node scripts/resolve-image-targets.mjs --files changed-files.txt --github-output resolved.env
           fi
           source resolved.env
-          matrix="$(TARGETS="${targets}" node -e "
+          TARGETS="${targets}" node <<'NODE' >> "${GITHUB_OUTPUT}"
             const graph = JSON.parse(require('fs').readFileSync('config/image-build-targets.json', 'utf8'));
-            const include = (process.env.TARGETS || '').split(',').filter((t) => t && t !== 'mongodb' && graph.targets[t])
+            const targets = (process.env.TARGETS || '').split(',').filter((t) => t && graph.targets[t]);
+            const include = targets.filter((t) => t !== 'mongodb')
               .map((t) => ({ image: graph.targets[t].aliases[0], context: graph.targets[t].context, file: graph.targets[t].dockerfile }));
-            console.log(JSON.stringify({ include }));
-          ")"
-          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
+            console.log(`matrix=${JSON.stringify({ include })}`);
+            console.log(`has_targets=${targets.length > 0}`);
+            console.log(`has_images=${include.length > 0}`);
+          NODE
 
   container-images:
     name: Build ${{ matrix.image }}
+    if: needs.image-targets.outputs.has_images == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: [quality, repository-security, codeql, image-targets]
@@ -198,9 +203,16 @@ jobs:
 
   docker-smoke:
     name: Docker smoke test
+    if: |
+      always() &&
+      needs.image-targets.outputs.has_targets == 'true' &&
+      needs.quality.result == 'success' &&
+      needs.repository-security.result == 'success' &&
+      needs.codeql.result == 'success' &&
+      (needs.container-images.result == 'success' || needs.container-images.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [quality, repository-security, codeql, container-images]
+    needs: [quality, repository-security, codeql, image-targets, container-images]
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7

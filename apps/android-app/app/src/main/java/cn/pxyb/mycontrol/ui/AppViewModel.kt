@@ -397,10 +397,6 @@ class AppViewModel(
         requestCredential: suspend (String) -> String,
         authorizeSession: suspend () -> Boolean,
     ) {
-        if (username.isBlank()) {
-            mutableState.update { it.copy(error = "请先输入平台账号。", message = null) }
-            return
-        }
         viewModelScope.launch {
             mutableState.update { it.copy(loginBusy = true, error = null, message = null) }
             runCatching {

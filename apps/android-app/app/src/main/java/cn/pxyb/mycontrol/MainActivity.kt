@@ -27,7 +27,11 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetPublicKeyCredentialOption
 import androidx.credentials.PublicKeyCredential
 import androidx.credentials.exceptions.CreateCredentialException
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.GetCredentialInterruptedException
+import androidx.credentials.exceptions.GetCredentialProviderConfigurationException
+import androidx.credentials.exceptions.GetCredentialUnsupportedException
 import androidx.credentials.exceptions.NoCredentialException
 import cn.pxyb.mycontrol.AlertNotifier
 import cn.pxyb.mycontrol.ui.AppViewModel
@@ -130,9 +134,17 @@ class MainActivity : ComponentActivity() {
         } catch (error: TimeoutCancellationException) {
             throw IllegalStateException("系统 Passkey 窗口未响应，请确认域名已关联当前 App 签名后重试。", error)
         } catch (error: NoCredentialException) {
-            throw IllegalStateException("设备中没有这个账号可用的 Passkey，请先在账号安全设置中绑定。", error)
+            throw IllegalStateException("设备中没有可用的 Passkey，请先在账号安全设置中绑定。", error)
+        } catch (error: GetCredentialCancellationException) {
+            throw IllegalStateException("Passkey 验证已取消。", error)
+        } catch (error: GetCredentialUnsupportedException) {
+            throw IllegalStateException("当前设备或系统不支持 Passkey 登录。", error)
+        } catch (error: GetCredentialProviderConfigurationException) {
+            throw IllegalStateException("系统 Passkey 服务未正确配置，请确认设备已启用密码管理器后重试。", error)
+        } catch (error: GetCredentialInterruptedException) {
+            throw IllegalStateException("系统 Passkey 验证被中断，请重试。", error)
         } catch (error: GetCredentialException) {
-            throw IllegalStateException("Passkey 验证未完成，请确认设备已保存该账号的 Passkey。", error)
+            throw IllegalStateException("Passkey 验证失败，请检查设备中的 Passkey 和域名关联后重试。", error)
         }
     }
 

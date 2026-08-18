@@ -750,7 +750,7 @@ private fun LoginScreen(
                                 if (state.androidPasskeySupported) {
                                     Spacer(Modifier.height(20.dp))
                                     PasskeyLoginMethod(
-                                        enabled = !state.loginBusy && username.isNotBlank(),
+                                        enabled = !state.loginBusy,
                                         onClick = {
                                             focusManager.clearFocus()
                                             onPasskeyLogin(username)
