@@ -1,8 +1,10 @@
 package cn.pxyb.mycontrol.update
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.io.IOException
 
 class AppUpdateVerificationTest {
     @Test
@@ -33,6 +35,16 @@ class AppUpdateVerificationTest {
         val installed = AppPackageIdentity("cn.pxyb.mycontrol", 1_001_000, setOf("release-certificate"))
 
         verifyUpdateArtifact(update, file, archive, installed)
+    }
+
+    @Test
+    fun `wrapped signing mismatch is recognized`() {
+        val error = IOException(
+            "APK 下载失败，主下载源和备用源均不可用",
+            AppUpdateSignatureMismatchException(),
+        )
+
+        assertTrue(isAppUpdateSigningMismatch(error))
     }
 
     private companion object {

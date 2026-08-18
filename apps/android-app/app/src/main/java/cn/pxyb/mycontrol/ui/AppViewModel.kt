@@ -64,6 +64,7 @@ import cn.pxyb.mycontrol.update.AppInstallResult
 import cn.pxyb.mycontrol.update.AppUpdateManager
 import cn.pxyb.mycontrol.update.AppUpdatePhase
 import cn.pxyb.mycontrol.update.AppUpdateUiState
+import cn.pxyb.mycontrol.update.isAppUpdateSigningMismatch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -2502,6 +2503,17 @@ class AppViewModel(
     fun downloadAndInstallAppUpdate() {
         val update = mutableState.value.appUpdate.info ?: return
         if (mutableState.value.busyAction != null) return
+        if (BuildConfig.DEBUG) {
+            mutableState.update {
+                it.copy(
+                    appUpdate = it.appUpdate.copy(
+                        phase = AppUpdatePhase.Error,
+                        error = DEBUG_RELEASE_UPDATE_MESSAGE,
+                    ),
+                )
+            }
+            return
+        }
         viewModelScope.launch {
             mutableState.update {
                 it.copy(
@@ -2532,8 +2544,8 @@ class AppViewModel(
                 }
                 installDownloadedAppUpdate()
             }.onFailure { error ->
-                val message = if (error.message?.contains("signing certificate") == true) {
-                    "当前安装来源与正式版签名不同。首次切换到专用签名需要卸载旧版本后，从 GitHub Releases 安装正式版。"
+                val message = if (isAppUpdateSigningMismatch(error)) {
+                    "当前安装版本与正式更新包的签名不一致，Android 不允许直接覆盖安装。请卸载当前版本后安装正式版。"
                 } else {
                     error.message ?: "更新包下载或校验失败，请重试"
                 }
@@ -2578,6 +2590,8 @@ class AppViewModel(
 
     private companion object {
         const val REFRESH_CACHE_WINDOW_MS = 30_000L
+        const val DEBUG_RELEASE_UPDATE_MESSAGE =
+            "当前安装的是 Debug 版本，不能直接更新为正式 Release 版本。请先卸载 Debug 版后安装正式版，或使用正式版设备测试。"
     }
 }
 
