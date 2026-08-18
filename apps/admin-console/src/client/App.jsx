@@ -27,11 +27,12 @@ function AuthenticatedApp() {
   }, [isExternalAuthLogin]);
 
   const finishAuthentication = useCallback((nextSession) => {
-    setSession(nextSession);
     const returnTo = new URLSearchParams(window.location.search).get('returnTo') || '';
     if (nextSession?.authenticated && /^(?:\/apps\/(?:core|exam|campus|iot)(?:\/|$)|\/oauth\/(?:authorize|external-launch)(?:\/|\?|$))/.test(returnTo)) {
       window.location.replace(returnTo);
+      return;
     }
+    setSession(nextSession);
   }, []);
 
   const checkSession = useCallback(async () => {

@@ -47,6 +47,13 @@ test('external OAuth authentication uses a dedicated login context without chang
   assert.match(login, /externalAuth = false/);
   assert.match(login, /externalAuth \? '统一身份认证' : '管理员身份验证'/);
   assert.match(login, /externalAuth \? '继续进入应用' : '我已保存，进入控制台'/);
+
+  const redirectIndex = app.indexOf('window.location.replace(returnTo);');
+  const sessionIndex = app.indexOf('setSession(nextSession);');
+  assert.ok(redirectIndex >= 0);
+  assert.ok(sessionIndex >= 0);
+  assert.ok(redirectIndex < sessionIndex);
+  assert.match(app, /window\.location\.replace\(returnTo\);\s*return;/);
 });
 
 test('client files never rely on an undeclared React namespace', () => {
