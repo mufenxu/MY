@@ -68,7 +68,7 @@ fun GlobalSearchScreen(
         item(key = "search-header") {
             AppSecondaryHeader(
                 title = "全局搜索",
-                subtitle = "服务、通知、任务、设备与邮箱",
+                subtitle = "应用、服务、任务、课程、设备与资源",
                 onBack = onBack,
             )
         }
@@ -89,7 +89,17 @@ fun GlobalSearchScreen(
                 ),
             )
         }
-        if (results.isEmpty()) {
+        if (state.refreshing) {
+            item(key = "search-loading") {
+                LoadingBlock("正在更新搜索数据")
+            }
+        }
+        state.error?.let { message ->
+            item(key = "search-error") {
+                FeedbackBanner(message = message, error = true)
+            }
+        }
+        if (results.isEmpty() && !state.refreshing) {
             item(key = "search-empty") {
                 AppPanel { EmptyBlock("没有匹配结果", "换个关键词试试") }
             }

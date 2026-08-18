@@ -166,7 +166,11 @@ data class GlobalSearchItem(
 )
 
 @Immutable
-data class GlobalSearchUiState(val items: List<GlobalSearchItem>)
+data class GlobalSearchUiState(
+    val refreshing: Boolean,
+    val error: String?,
+    val items: List<GlobalSearchItem>,
+)
 
 @Immutable
 data class TodayUiState(
@@ -309,7 +313,43 @@ internal fun AppUiState.toQrLoginUiState() = QrLoginUiState(
 )
 
 internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
+    refreshing = isRefreshing(
+        DataSection.Overview,
+        DataSection.ExternalApplications,
+        DataSection.Incidents,
+        DataSection.Tasks,
+        DataSection.Todos,
+        DataSection.Campus,
+        DataSection.Resources,
+        DataSection.Iot,
+        DataSection.Notifications,
+    ),
+    error = sectionError(
+        DataSection.Overview,
+        DataSection.ExternalApplications,
+        DataSection.Incidents,
+        DataSection.Tasks,
+        DataSection.Todos,
+        DataSection.Campus,
+        DataSection.Resources,
+        DataSection.Iot,
+        DataSection.Notifications,
+    ),
     items = buildList {
+        externalApplications.filter(ExternalApplication::enabled).forEach { application ->
+            add(
+                GlobalSearchItem(
+                    id = "application:${application.id}",
+                    title = application.name,
+                    detail = listOf(application.description, application.health.state)
+                        .filter(String::isNotBlank)
+                        .joinToString(" · "),
+                    category = "接入应用",
+                    destination = SearchDestination.Overview,
+                    focusId = application.id,
+                ),
+            )
+        }
         overview?.services.orEmpty().forEach { service ->
             add(
                 GlobalSearchItem(
@@ -332,6 +372,30 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                 ),
             )
         }
+        tasks.forEach { task ->
+            add(
+                GlobalSearchItem(
+                    id = "platform-task:${task.id}",
+                    title = task.title,
+                    detail = listOf(task.source, task.status, task.detail).filter(String::isNotBlank).joinToString(" · "),
+                    category = "平台任务",
+                    destination = SearchDestination.Notifications,
+                    focusId = task.id,
+                ),
+            )
+        }
+        alerts.filter { it.origin == "remote" }.forEach { alert ->
+            add(
+                GlobalSearchItem(
+                    id = "notification:${alert.id}",
+                    title = alert.title,
+                    detail = listOf(alert.type, alert.body).filter(String::isNotBlank).joinToString(" · "),
+                    category = "通知",
+                    destination = SearchDestination.Notifications,
+                    focusId = alert.id,
+                ),
+            )
+        }
         todoSnapshot.tasks.forEach { task ->
             add(
                 GlobalSearchItem(
@@ -341,6 +405,18 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                     category = "个人待办",
                     destination = SearchDestination.Today,
                     focusId = task.id,
+                ),
+            )
+        }
+        resourceExpiries.forEach { resource ->
+            add(
+                GlobalSearchItem(
+                    id = "resource:${resource.id}",
+                    title = resource.name,
+                    detail = "${resource.type} · ${resource.expiresAt}",
+                    category = "资源到期",
+                    destination = SearchDestination.Today,
+                    focusId = resource.id,
                 ),
             )
         }

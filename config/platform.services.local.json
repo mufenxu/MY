@@ -58,6 +58,7 @@
       "capabilities": ["校园", "能耗", "教务"],
       "managementAreas": [
         { "id": "workspace", "label": "校园工作台", "description": "查看校园服务、教务与能耗运行情况", "url": "/apps/campus/#overview" },
+        { "id": "academic", "label": "课表与提醒", "description": "查看课表、校历、日历订阅与课前提醒", "url": "/apps/campus/#study" },
         { "id": "accounts", "label": "账号与邀请码", "description": "管理校园服务账号、角色与注册邀请码", "url": "/apps/campus/#admin" }
       ]
     },

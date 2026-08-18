@@ -2,11 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Activity,
   ArrowUpRight,
+  BellRing,
+  CalendarClock,
   CheckCircle2,
   CircleAlert,
   CircleOff,
   Clock3,
   Database,
+  Cpu,
   LoaderCircle,
   Play,
   RefreshCw,
@@ -17,11 +20,19 @@ import { requestJson } from './api.js';
 import { isPlainInternalNavigation } from './navigation.js';
 
 const CT8_API_BASE = '/apps/core/api/ct8';
+const AUTOMATION_ENDPOINTS = Object.freeze({
+  resources: '/apps/core/api/resources/reminder-status',
+  campus: '/api/campus/academic/integrations',
+  iot: '/apps/iot/api/automations/status',
+  scheduledNotifications: '/api/notifications/jobs?status=scheduled&page=1&pageSize=1',
+  retryingNotifications: '/api/notifications/jobs?status=retrying&page=1&pageSize=1',
+});
 const STATE_META = {
   healthy: { label: '运行正常', className: 'healthy', icon: CheckCircle2 },
   degraded: { label: '响应异常', className: 'degraded', icon: CircleAlert },
   offline: { label: '暂不可用', className: 'offline', icon: CircleOff },
   unmonitored: { label: '未接入监测', className: 'unmonitored', icon: Clock3 },
+  idle: { label: '未启用', className: 'unmonitored', icon: Clock3 },
 };
 
 function formatCheckedAt(value) {
@@ -68,8 +79,27 @@ function ServiceStatus({ state }) {
   return <span className={`service-status ${meta.className}`}><Icon size={14} />{meta.label}</span>;
 }
 
+function settledValue(result, key) {
+  if (result?.status !== 'fulfilled') return null;
+  const value = result.value;
+  return key ? value?.[key] || null : value?.data || value;
+}
+
+function AutomationCapability({ item }) {
+  const Icon = item.icon;
+  return (
+    <a className="automation-capability" href={item.href}>
+      <span className={`automation-capability-icon ${item.tone}`}><Icon size={19} /></span>
+      <span className="automation-capability-copy"><strong>{item.name}</strong><small>{item.detail}</small></span>
+      <ServiceStatus state={item.state} />
+      <ArrowUpRight className="automation-capability-open" size={15} />
+    </a>
+  );
+}
+
 export default function AutomationView({ services, loading, refreshing, onRefresh, onLaunch, session }) {
   const automation = services.find((service) => service.category === 'automation');
+  const automationId = automation?.id || '';
   const meta = STATE_META[automation?.state] || STATE_META.unmonitored;
   const canOperate = ['operator', 'super_admin'].includes(session?.user?.role);
   const [ct8Data, setCt8Data] = useState({ stats: null, status: null, runs: [] });
@@ -78,6 +108,60 @@ export default function AutomationView({ services, loading, refreshing, onRefres
   const [ct8Error, setCt8Error] = useState('');
   const [ct8Message, setCt8Message] = useState('');
   const [triggering, setTriggering] = useState(false);
+  const [capabilities, setCapabilities] = useState({ loading: true, items: [] });
+
+  const loadCapabilities = useCallback(async () => {
+    setCapabilities((current) => ({ ...current, loading: true }));
+    const [resources, campus, iot, scheduled, retrying] = await Promise.allSettled([
+      requestJson(AUTOMATION_ENDPOINTS.resources),
+      requestJson(AUTOMATION_ENDPOINTS.campus),
+      requestJson(AUTOMATION_ENDPOINTS.iot),
+      requestJson(AUTOMATION_ENDPOINTS.scheduledNotifications),
+      requestJson(AUTOMATION_ENDPOINTS.retryingNotifications),
+    ]);
+    const resourceStatus = settledValue(resources, 'result');
+    const campusStatus = settledValue(campus);
+    const iotStatus = settledValue(iot);
+    const scheduledCount = settledValue(scheduled)?.total;
+    const retryingCount = settledValue(retrying)?.total;
+    const notificationAvailable = scheduled.status === 'fulfilled' && retrying.status === 'fulfilled';
+    const enabledChannels = resourceStatus
+      ? Object.values(resourceStatus.channels || {}).filter(Boolean).length
+      : 0;
+    const campusEnabled = Boolean(campusStatus?.calendar?.enabled || campusStatus?.reminder?.enabled);
+    const pendingNotifications = Number(scheduledCount || 0) + Number(retryingCount || 0);
+    setCapabilities({
+      loading: false,
+      items: [
+        {
+          id: 'resources', name: '资源到期提醒', icon: Database, tone: 'blue', href: '/apps/core/settings',
+          state: resources.status !== 'fulfilled' ? 'offline' : resourceStatus?.enabled ? 'healthy' : 'idle',
+          detail: resourceStatus
+            ? `${resourceStatus.dueCount || 0} 项进入提醒期 · ${enabledChannels} 个通知渠道`
+            : '状态读取失败',
+        },
+        {
+          id: 'campus', name: '校园日历与课前提醒', icon: CalendarClock, tone: 'cyan', href: '/apps/campus/#study',
+          state: campus.status !== 'fulfilled' ? 'offline' : campusEnabled ? 'healthy' : 'idle',
+          detail: campusStatus
+            ? `${campusStatus.calendar?.enabled ? '日历已订阅' : '日历未订阅'} · ${campusStatus.reminder?.enabled ? `提前 ${campusStatus.reminder.leadMinutes || 15} 分钟` : '课前提醒未启用'}`
+            : '状态读取失败',
+        },
+        {
+          id: 'iot', name: 'IoT 场景与规则', icon: Cpu, tone: 'purple', href: '/apps/iot/?page=automation',
+          state: iot.status !== 'fulfilled' ? 'offline' : iotStatus?.started ? (iotStatus.lastError ? 'degraded' : 'healthy') : 'idle',
+          detail: iotStatus
+            ? `${iotStatus.cachedRuleCount || 0} 条已加载规则${iotStatus.evaluationInFlight ? ' · 正在计算' : ''}`
+            : '状态读取失败',
+        },
+        {
+          id: 'notification', name: '通知调度', icon: BellRing, tone: 'green', href: '/?view=notification',
+          state: notificationAvailable ? (Number(retryingCount || 0) > 0 ? 'degraded' : 'healthy') : 'offline',
+          detail: notificationAvailable ? `${pendingNotifications} 个待处理任务 · ${retryingCount || 0} 个重试中` : '状态读取失败',
+        },
+      ],
+    });
+  }, []);
 
   const loadCt8 = useCallback(async ({ quiet = false } = {}) => {
     quiet ? setCt8Refreshing(true) : setCt8Loading(true);
@@ -102,8 +186,11 @@ export default function AutomationView({ services, loading, refreshing, onRefres
   }, []);
 
   useEffect(() => {
-    if (!loading && automation) loadCt8();
-  }, [automation, loadCt8, loading]);
+    if (!loading && automationId) {
+      loadCt8();
+      loadCapabilities();
+    }
+  }, [automationId, loadCapabilities, loadCt8, loading]);
 
   const activeTask = ct8Data.status?.activeTask || null;
   const latestRun = ct8Data.status?.latest || ct8Data.runs[0] || null;
@@ -127,7 +214,7 @@ export default function AutomationView({ services, loading, refreshing, onRefres
 
   async function handleRefresh() {
     setCt8Message('');
-    await Promise.all([onRefresh?.(), loadCt8({ quiet: true })]);
+    await Promise.all([onRefresh?.(), loadCt8({ quiet: true }), loadCapabilities()]);
   }
 
   async function handleTrigger() {
@@ -155,13 +242,14 @@ export default function AutomationView({ services, loading, refreshing, onRefres
   const latestRunTime = stats.lastRunTime || getRunTime(latestRun);
   const latestWorkflow = latestRun?.workflow || activeTask?.workflow || 'ssh-login.yml';
   const triggerDisabled = !canOperate || triggering || taskRunning || ct8Loading;
+  const automationRefreshing = refreshing || ct8Refreshing || capabilities.loading;
 
   return (
     <section className="page-view automation-view" aria-label="自动化中心">
       <div className="page-actions automation-actions">
-        <button className="secondary-action" type="button" onClick={handleRefresh} disabled={refreshing || ct8Refreshing}>
-          {refreshing || ct8Refreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
-          {refreshing || ct8Refreshing ? '正在同步' : '刷新状态'}
+        <button className="secondary-action" type="button" onClick={handleRefresh} disabled={automationRefreshing}>
+          {automationRefreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
+          {automationRefreshing ? '正在同步' : '刷新状态'}
         </button>
         <button className="primary-button" type="button" onClick={handleTrigger} disabled={triggerDisabled} title={!canOperate ? '需要操作员权限' : undefined}>
           {triggering || taskRunning ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}
@@ -198,6 +286,17 @@ export default function AutomationView({ services, loading, refreshing, onRefres
               {ct8Error ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}<span>{ct8Error || ct8Message}</span>
             </div>
           )}
+
+          <section className="view-card automation-capability-panel">
+            <header><div><span className="view-eyebrow">统一视图</span><h3>跨服务自动化</h3></div><Workflow size={21} /></header>
+            {capabilities.loading && capabilities.items.length === 0 ? (
+              <div className="ct8-inline-loading"><LoaderCircle className="spin" size={18} /> 正在汇总自动化状态</div>
+            ) : (
+              <div className="automation-capability-grid">
+                {capabilities.items.map((item) => <AutomationCapability key={item.id} item={item} />)}
+              </div>
+            )}
+          </section>
 
           <div className="automation-kpis">
             <article><span className="kpi-icon blue"><Timer size={20} /></span><div><span>今日运行</span><strong>{formatCount(stats.todayRuns)}</strong><small>GitHub Actions 调度</small></div></article>

@@ -63,6 +63,7 @@ import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -74,6 +75,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneId
@@ -741,8 +743,7 @@ class AppViewModel(
                 googleAccountDeskOpen = false,
             )
         }
-        syncRemoteNotifications()
-        loadGoogleAccounts()
+        refreshGlobalSearch(force = true)
     }
 
     fun closeGlobalSearch() {
@@ -1368,8 +1369,7 @@ class AppViewModel(
                 refreshPasskeys()
             }
             globalSearchOpen -> {
-                refreshOverview(force)
-                refreshTasks(force)
+                refreshGlobalSearch(force)
             }
             else -> {
                 refreshForTab(tab, force)
@@ -1384,6 +1384,19 @@ class AppViewModel(
         refreshTasks(force)
         refreshTodos(force)
         refreshCampus(force)
+    }
+
+    private fun refreshGlobalSearch(force: Boolean = false) {
+        refreshOverview(force)
+        refreshExternalApplications(force)
+        refreshIncidents(force)
+        refreshTasks(force)
+        refreshTodos(force)
+        refreshCampus(force)
+        refreshResourceExpiries(force)
+        refreshIot(force)
+        syncRemoteNotifications(force)
+        loadGoogleAccounts()
     }
 
     private fun refreshForTab(tab: MainTab, force: Boolean = false) {
@@ -2246,7 +2259,11 @@ class AppViewModel(
         } else {
             null
         }
-        val remoteItems = api.allAppNotifications()
+        val (remoteItems, remotePreference) = supervisorScope {
+            val notifications = async { api.allAppNotifications() }
+            val preference = async { runCatching { api.appNotificationPreference() }.getOrNull() }
+            notifications.await() to preference.await()
+        }
         val currentAlerts = mutableState.value.alerts
         val currentById = currentAlerts.associateBy(AppAlertRecord::id)
         remoteItems.forEach { remote ->
@@ -2258,9 +2275,23 @@ class AppViewModel(
             }
         }
         val merged = mergeRemoteAlerts(currentAlerts, remoteItems)
+        val mergedPreference = remotePreference?.let { remote ->
+            withContext(Dispatchers.IO) {
+                personalStore.readAlertPreferences().copy(
+                    quietHoursEnabled = remote.quietHoursEnabled,
+                    quietStartHour = remote.quietStartHour.coerceIn(0, 23),
+                    quietEndHour = remote.quietEndHour.coerceIn(0, 23),
+                ).also(personalStore::writeAlertPreferences)
+            }
+        }
         withContext(Dispatchers.IO) { personalStore.writeAlerts(merged) }
         withContext(Dispatchers.IO) { alertNotifier.evaluateRemote(merged) }
-        mutableState.update { it.copy(alerts = merged) }
+        mutableState.update {
+            it.copy(
+                alerts = merged,
+                alertPreferences = mergedPreference ?: it.alertPreferences,
+            )
+        }
         registrationError?.let { throw it }
     }
 

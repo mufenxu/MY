@@ -1,6 +1,7 @@
 package cn.pxyb.mycontrol.data
 
 import android.Manifest
+import android.content.ContentProviderOperation
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
@@ -102,16 +103,7 @@ class AndroidCalendarSync(context: Context) {
         val todoDrafts = buildTodoDrafts(todos)
         val resourceDrafts = buildResourceDrafts(resources)
         val calendarId = findCalendarId(accountScope) ?: createCalendar(accountScope)
-
-        resolver.delete(
-            CalendarContract.Events.CONTENT_URI,
-            "${CalendarContract.Events.CALENDAR_ID} = ?",
-            arrayOf(calendarId.toString()),
-        )
-
-        (courseDrafts.events + todoDrafts + resourceDrafts).forEach { draft ->
-            insertEvent(calendarId, draft)
-        }
+        replaceCalendarEvents(calendarId, courseDrafts.events + todoDrafts + resourceDrafts)
 
         return CalendarSyncResult(
             courseCount = courseDrafts.events.size,
@@ -161,31 +153,42 @@ class AndroidCalendarSync(context: Context) {
             ?: error("无法创建“$CALENDAR_DISPLAY_NAME”日历。")
     }
 
-    private fun insertEvent(calendarId: Long, draft: CalendarEventDraft) {
-        val values = ContentValues().apply {
-            put(CalendarContract.Events.CALENDAR_ID, calendarId)
-            put(CalendarContract.Events.TITLE, draft.title)
-            put(CalendarContract.Events.DESCRIPTION, draft.description)
-            put(CalendarContract.Events.EVENT_LOCATION, draft.location)
-            put(CalendarContract.Events.DTSTART, draft.startAtMillis)
-            put(CalendarContract.Events.DTEND, draft.endAtMillis)
-            put(CalendarContract.Events.EVENT_TIMEZONE, draft.timeZone)
-            put(CalendarContract.Events.ALL_DAY, if (draft.allDay) 1 else 0)
-            put(CalendarContract.Events.HAS_ALARM, if (draft.reminderMinutes != null) 1 else 0)
-            draft.rrule?.let { put(CalendarContract.Events.RRULE, it) }
+    private fun replaceCalendarEvents(calendarId: Long, drafts: List<CalendarEventDraft>) {
+        val operations = arrayListOf(
+            ContentProviderOperation.newDelete(CalendarContract.Events.CONTENT_URI)
+                .withSelection(
+                    "${CalendarContract.Events.CALENDAR_ID} = ?",
+                    arrayOf(calendarId.toString()),
+                )
+                .build(),
+        )
+        drafts.forEach { draft ->
+            val eventOperationIndex = operations.size
+            operations += ContentProviderOperation.newInsert(CalendarContract.Events.CONTENT_URI)
+                .withValues(
+                    ContentValues().apply {
+                        put(CalendarContract.Events.CALENDAR_ID, calendarId)
+                        put(CalendarContract.Events.TITLE, draft.title)
+                        put(CalendarContract.Events.DESCRIPTION, draft.description)
+                        put(CalendarContract.Events.EVENT_LOCATION, draft.location)
+                        put(CalendarContract.Events.DTSTART, draft.startAtMillis)
+                        put(CalendarContract.Events.DTEND, draft.endAtMillis)
+                        put(CalendarContract.Events.EVENT_TIMEZONE, draft.timeZone)
+                        put(CalendarContract.Events.ALL_DAY, if (draft.allDay) 1 else 0)
+                        put(CalendarContract.Events.HAS_ALARM, if (draft.reminderMinutes != null) 1 else 0)
+                        draft.rrule?.let { put(CalendarContract.Events.RRULE, it) }
+                    },
+                )
+                .build()
+            draft.reminderMinutes?.let { minutes ->
+                operations += ContentProviderOperation.newInsert(CalendarContract.Reminders.CONTENT_URI)
+                    .withValueBackReference(CalendarContract.Reminders.EVENT_ID, eventOperationIndex)
+                    .withValue(CalendarContract.Reminders.MINUTES, minutes)
+                    .withValue(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
+                    .build()
+            }
         }
-        val eventId = resolver.insert(CalendarContract.Events.CONTENT_URI, values)?.let { ContentUris.parseId(it) }
-            ?: error("日历事件写入失败：${draft.title}")
-        draft.reminderMinutes?.let { minutes ->
-            resolver.insert(
-                CalendarContract.Reminders.CONTENT_URI,
-                ContentValues().apply {
-                    put(CalendarContract.Reminders.EVENT_ID, eventId)
-                    put(CalendarContract.Reminders.MINUTES, minutes)
-                    put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
-                },
-            )
-        }
+        resolver.applyBatch(CalendarContract.AUTHORITY, operations)
     }
 
     private data class CourseDrafts(val events: List<CalendarEventDraft>, val skipped: Int)
