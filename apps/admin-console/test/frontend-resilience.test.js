@@ -38,6 +38,17 @@ test('session connectivity failures render a retry state instead of the login fo
   assert.match(source, /onRetry=\{checkSession\}/);
 });
 
+test('external OAuth authentication uses a dedicated login context without changing console login', () => {
+  const app = readSource('src', 'client', 'App.jsx');
+  const login = readSource('src', 'client', 'Login.jsx');
+
+  assert.match(app, /window\.location\.pathname === '\/auth\/login'/);
+  assert.match(app, /externalAuth=\{isExternalAuthLogin\}/);
+  assert.match(login, /externalAuth = false/);
+  assert.match(login, /externalAuth \? '统一身份认证' : '管理员身份验证'/);
+  assert.match(login, /externalAuth \? '继续进入应用' : '我已保存，进入控制台'/);
+});
+
 test('client files never rely on an undeclared React namespace', () => {
   const clientRoot = path.join(appRoot, 'src', 'client');
   const jsxFiles = fs.readdirSync(clientRoot).filter((name) => name.endsWith('.jsx'));

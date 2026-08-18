@@ -4,9 +4,14 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 
-internal fun openPlatformWebLink(context: Context, url: String, title: String? = null) {
+internal fun openPlatformWebLink(
+    context: Context,
+    url: String,
+    title: String? = null,
+    trustedDownloadUrl: String? = null,
+) {
     try {
-        val intent = PlatformWebActivity.createIntent(context, url, title).apply {
+        val intent = PlatformWebActivity.createIntent(context, url, title, trustedDownloadUrl).apply {
             if (context !is android.app.Activity) {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
@@ -24,4 +29,3 @@ internal fun openPlatformWebLink(context: Context, url: String, title: String? =
         }
     }
 }
-

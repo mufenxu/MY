@@ -840,7 +840,7 @@ export function createApp({
       const principal = await readExternalPrincipal(req);
       if (!principal) {
         const returnTo = `${req.path}?${new URLSearchParams(req.query).toString()}`;
-        return res.redirect(302, `/console?returnTo=${encodeURIComponent(returnTo)}`);
+        return res.redirect(302, `/auth/login?returnTo=${encodeURIComponent(returnTo)}`);
       }
       if (!roleCanAccessExternalApplication(principal.account.role, application)) {
         await recordAudit(req, {

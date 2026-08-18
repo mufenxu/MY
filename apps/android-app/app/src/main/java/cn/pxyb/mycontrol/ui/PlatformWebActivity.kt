@@ -4,18 +4,21 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
+import android.webkit.ValueCallback
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,6 +26,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.LinearProgressIndicator
@@ -44,23 +48,56 @@ import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 class PlatformWebActivity : ComponentActivity() {
 
     private var webViewInstance: WebView? = null
+    private lateinit var webDownloadSupport: PlatformWebDownloadSupport
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val callback = filePathCallback.also { filePathCallback = null } ?: return@registerForActivityResult
+        callback.onReceiveValue(
+            WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data),
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        webDownloadSupport = PlatformWebDownloadSupport(this) { webViewInstance }
 
         val initialUrl = intent.getStringExtra(EXTRA_URL).orEmpty()
         val initialTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "管理后台" }
+        val trustedDownloadUrl = intent.getStringExtra(EXTRA_TRUSTED_DOWNLOAD_URL)
 
         setContent {
             MYControlTheme {
                 PlatformWebScreen(
                     initialUrl = initialUrl,
                     initialTitle = initialTitle,
+                    trustedDownloadUrl = trustedDownloadUrl,
+                    webDownloadSupport = webDownloadSupport,
                     onFinish = { finish() },
                     onWebViewCreated = { webViewInstance = it },
+                    onShowFileChooser = ::showFileChooser,
                 )
             }
+        }
+    }
+
+    private fun showFileChooser(
+        callback: ValueCallback<Array<Uri>>?,
+        params: WebChromeClient.FileChooserParams,
+    ): Boolean {
+        filePathCallback?.onReceiveValue(null)
+        filePathCallback = callback
+
+        return runCatching {
+            fileChooserLauncher.launch(params.createIntent())
+            true
+        }.getOrElse {
+            filePathCallback?.onReceiveValue(null)
+            filePathCallback = null
+            false
         }
     }
 
@@ -75,6 +112,8 @@ class PlatformWebActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        filePathCallback?.onReceiveValue(null)
+        filePathCallback = null
         webViewInstance?.let { wv ->
             (wv.parent as? ViewGroup)?.removeView(wv)
             wv.stopLoading()
@@ -88,11 +127,18 @@ class PlatformWebActivity : ComponentActivity() {
     companion object {
         const val EXTRA_URL = "extra_url"
         const val EXTRA_TITLE = "extra_title"
+        private const val EXTRA_TRUSTED_DOWNLOAD_URL = "extra_trusted_download_url"
 
-        fun createIntent(context: Context, url: String, title: String? = null): Intent {
+        fun createIntent(
+            context: Context,
+            url: String,
+            title: String? = null,
+            trustedDownloadUrl: String? = null,
+        ): Intent {
             return Intent(context, PlatformWebActivity::class.java).apply {
                 putExtra(EXTRA_URL, url)
                 putExtra(EXTRA_TITLE, title)
+                trustedDownloadUrl?.let { putExtra(EXTRA_TRUSTED_DOWNLOAD_URL, it) }
             }
         }
     }
@@ -103,8 +149,14 @@ class PlatformWebActivity : ComponentActivity() {
 private fun PlatformWebScreen(
     initialUrl: String,
     initialTitle: String,
+    trustedDownloadUrl: String?,
+    webDownloadSupport: PlatformWebDownloadSupport,
     onFinish: () -> Unit,
     onWebViewCreated: (WebView) -> Unit,
+    onShowFileChooser: (
+        ValueCallback<Array<Uri>>?,
+        WebChromeClient.FileChooserParams,
+    ) -> Boolean,
 ) {
     var webView by remember { mutableStateOf<WebView?>(null) }
     var pageLoading by remember { mutableStateOf(true) }
@@ -127,7 +179,8 @@ private fun PlatformWebScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .imePadding(),
         ) {
             // 1. 原生全屏沉浸 WebView 容器
             AndroidView(
@@ -157,11 +210,13 @@ private fun PlatformWebScreen(
                                 displayZoomControls = false
                                 builtInZoomControls = false
                                 allowFileAccess = false
-                                allowContentAccess = false
+                                allowContentAccess = true
                                 mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                                 cacheMode = WebSettings.LOAD_DEFAULT
                                 defaultTextEncodingName = "UTF-8"
                             }
+
+                            webDownloadSupport.attachTo(this, trustedDownloadUrl)
 
                             webViewClient = object : WebViewClient() {
                                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -190,6 +245,15 @@ private fun PlatformWebScreen(
                             }
 
                             webChromeClient = object : WebChromeClient() {
+                                override fun onShowFileChooser(
+                                    view: WebView?,
+                                    filePathCallback: ValueCallback<Array<Uri>>?,
+                                    fileChooserParams: WebChromeClient.FileChooserParams?,
+                                ): Boolean {
+                                    val params = fileChooserParams ?: return false
+                                    return onShowFileChooser(filePathCallback, params)
+                                }
+
                                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                     loadProgress = newProgress / 100f
                                     if (newProgress >= 100) {

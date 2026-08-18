@@ -15,6 +15,16 @@ function AuthenticatedApp() {
   const [session, setSession] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [sessionError, setSessionError] = useState(null);
+  const isExternalAuthLogin = window.location.pathname === '/auth/login';
+
+  useEffect(() => {
+    if (!isExternalAuthLogin) return undefined;
+    const previousTitle = document.title;
+    document.title = '统一身份认证';
+    return () => {
+      document.title = previousTitle;
+    };
+  }, [isExternalAuthLogin]);
 
   const finishAuthentication = useCallback((nextSession) => {
     setSession(nextSession);
@@ -46,7 +56,13 @@ function AuthenticatedApp() {
 
   if (checkingSession) return <LoadingScreen />;
   if (sessionError) return <SessionUnavailableScreen error={sessionError} onRetry={checkSession} retrying={checkingSession} />;
-  if (!session?.authenticated) return <LoginScreen onAuthenticated={finishAuthentication} totpRequired={session?.totpRequired} />;
+  if (!session?.authenticated) {
+    return <LoginScreen
+      onAuthenticated={finishAuthentication}
+      totpRequired={session?.totpRequired}
+      externalAuth={isExternalAuthLogin}
+    />;
+  }
   return <Dashboard session={session} onLogout={() => setSession({ authenticated: false, authDisabled: false, totpRequired: Boolean(session.user?.totpEnabled), user: null })} />;
 }
 

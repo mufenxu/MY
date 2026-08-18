@@ -139,6 +139,45 @@ test('external application OIDC flow registers, launches, exchanges, and rejects
   });
 });
 
+test('unauthenticated OAuth authorization starts at the dedicated identity login page', async () => {
+  const config = {
+    ...loadConfig({ NODE_ENV: 'development' }),
+    authDisabled: false,
+    metricsToken: 'm'.repeat(32),
+  };
+  const externalApplicationStore = createMemoryExternalApplicationStore();
+  const created = await externalApplicationStore.createApplication({
+    name: '独立认证页项目',
+    redirectUris: ['https://login.example.com/auth/my/callback'],
+    launchUrl: 'https://login.example.com/auth/my/start',
+    requiredRole: 'viewer',
+    openMode: 'browser',
+    enabled: true,
+    actor: 'admin',
+  });
+  const app = createApp({ config, externalApplicationStore });
+
+  await withFetchServer(app, async (origin) => {
+    const authorization = new URL(`${origin}/oauth/authorize`);
+    authorization.search = new URLSearchParams({
+      response_type: 'code',
+      client_id: created.application.clientId,
+      redirect_uri: 'https://login.example.com/auth/my/callback',
+      scope: 'openid profile roles',
+      state: 'state-login-page',
+      nonce: 'nonce-login-page',
+      code_challenge: pkceChallenge('v'.repeat(64)),
+      code_challenge_method: 'S256',
+    }).toString();
+
+    const response = await fetch(authorization, { redirect: 'manual' });
+    assert.equal(response.status, 302);
+    const location = new URL(response.headers.get('location'), origin);
+    assert.equal(location.pathname, '/auth/login');
+    assert.equal(location.searchParams.get('returnTo'), `${authorization.pathname}?${authorization.searchParams.toString()}`);
+  });
+});
+
 test('authorize rejects unregistered redirects without redirecting', async () => {
   const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
   const externalApplicationStore = createMemoryExternalApplicationStore();

@@ -203,7 +203,12 @@ fun OverviewScreen(
                 val launch = requestExternalApplicationLaunch(application.id)
                 when (launch.openMode) {
                     "browser" -> openBrowserLink(context, launch.loginUrl)
-                    else -> openPlatformWebLink(context, launch.loginUrl, application.name)
+                    else -> openPlatformWebLink(
+                        context = context,
+                        url = launch.loginUrl,
+                        title = application.name,
+                        trustedDownloadUrl = application.launchUrl,
+                    )
                 }
             }
                 .onSuccess {

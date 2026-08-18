@@ -68,7 +68,7 @@ export function QrLoginPanel({ request, busy, error, remainingSeconds, onRefresh
   );
 }
 
-export function LoginScreen({ onAuthenticated, totpRequired = false }) {
+export function LoginScreen({ onAuthenticated, totpRequired = false, externalAuth = false }) {
   const [loginMode, setLoginMode] = useState('credentials');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -348,7 +348,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false }) {
           </span>
           <span>
             <strong>MY PLATFORM</strong>
-            <small>统一服务控制台 · UNIFIED CONSOLE</small>
+            <small>{externalAuth ? '统一身份认证 · SECURE SIGN-IN' : '统一服务控制台 · UNIFIED CONSOLE'}</small>
           </span>
         </div>
 
@@ -358,12 +358,12 @@ export function LoginScreen({ onAuthenticated, totpRequired = false }) {
           </span>
           <div>
             <h1 id="login-title">
-              {secondFactorRequired ? '安全二次验证' : loginMode === 'qr' ? 'App 扫码登录' : '管理员身份验证'}
+              {secondFactorRequired ? '安全二次验证' : loginMode === 'qr' ? 'App 扫码登录' : externalAuth ? '统一身份认证' : '管理员身份验证'}
             </h1>
             <p>
               {secondFactorRequired
                 ? '为了确保您的账户安全，请输入 6 位动态验证码'
-                : loginMode === 'qr' ? '由已登录的 MY Control 安全确认' : '登录后掌控平台运维、身份与灾备系统'}
+                : loginMode === 'qr' ? '由已登录的 MY Control 安全确认' : externalAuth ? '登录成功后将返回发起认证的应用' : '登录后掌控平台运维、身份与灾备系统'}
             </p>
           </div>
         </div>
@@ -420,7 +420,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false }) {
                 onClick={() => onAuthenticated(pendingSession)}
               >
                 <ShieldCheck size={18} />
-                我已保存，进入控制台
+                {externalAuth ? '继续进入应用' : '我已保存，进入控制台'}
               </button>
             </div>
           ) : (
