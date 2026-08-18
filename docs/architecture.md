@@ -97,6 +97,7 @@ Alibaba Cloud Container Registry is the primary production image source. GitHub 
 | Tuya-backed air-energy workflows | `core-api` | Remains a Core provider until an explicit data migration moves models, jobs and audit history together |
 | Platform and demo exam libraries | Exam `manage` identity | The `manage` and `console` routes share domain helpers but never share account or authorization policy |
 | Personal exam libraries and shared-paper copies | Exam `console` identity | Read-only share restrictions stay in the console adapter |
-| In-app notification records | Owning business service | Outbound WeCom delivery belongs to `notification-service`; Core uses one shared WeCom payload client |
+| Business events and domain announcements | Owning business service | Source records such as exams, tasks, incidents and published announcements remain with their domain owner |
+| Cross-channel notifications and recipient inbox state | `notification-service` | New user-directed notifications use the canonical API; the service owns App inbox/read/archive state, channel delivery, preferences and audit |
 
 New features must extend the canonical owner or call its internal API. A compatibility route may redirect or proxy temporarily, but it must not contain a second implementation of the feature.

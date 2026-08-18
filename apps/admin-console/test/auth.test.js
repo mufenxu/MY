@@ -83,7 +83,7 @@ test('registered sessions honor a per-session idle timeout', () => {
 
 test('registered sessions expose safe metadata and support remote revocation', () => {
   const sessions = createSessionRegistry({ secret: 'c'.repeat(32) });
-  sessions.issue({
+  const token = sessions.issue({
     username: 'operator',
     role: 'operator',
     ttlHours: 2,
@@ -95,7 +95,11 @@ test('registered sessions expose safe metadata and support remote revocation', (
   assert.equal(session.role, 'operator');
   assert.equal(session.ip, '127.0.0.1');
   assert.equal(session.userAgent, 'test-browser');
+  assert.equal(sessions.isActive({ nonce: session.nonce, subject: 'operator' }), true);
+  assert.equal(sessions.isActive({ nonce: session.nonce, subject: 'another-operator' }), false);
   assert.equal(sessions.revokeByNonce(session.nonce), true);
+  assert.equal(sessions.isActive({ nonce: session.nonce, subject: 'operator' }), false);
+  assert.equal(sessions.verify(token), null);
   assert.equal(sessions.list().length, 0);
 });
 

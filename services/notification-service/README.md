@@ -1,13 +1,16 @@
-# 企业微信通知 API 接入教程（Node.js）
+# 统一通知服务接入说明
 
-通知服务由统一 Compose 部署在 Docker 内网，生产入口为 `https://pxyb.cn/api/notify`。可选独立域名只作为 `platform-api` 的 Host 别名，不直接代理容器端口。
+通知服务由统一 Compose 部署在 Docker 内网，统一承载 Android App 收件箱、企业微信投递、通知编排、接收偏好和发送审计。生产兼容入口为 `https://pxyb.cn/api/notify`；可选独立域名只作为 `platform-api` 的 Host 别名，不直接代理容器端口。
 
 ---
 
 ## 1. 项目简介
 
 - 技术栈：Node.js + Express + Axios + Zod  
-- 提供接口：`GET /healthz` 探活、`POST /notify` 发送企业微信消息  
+- 规范入口：`POST /v1/notifications` 创建 App 通知并按需同步投递企业微信
+- App 接口：`/app/notifications`、已读、稍后提醒、归档、偏好和设备注册
+- 兼容接口：`POST /notify` 发送企业微信消息，明确的单用户接收人会同步写入 App 收件箱
+- 编排接口：`POST /enqueue` 创建即时或定时的企业微信任务
 - 支持消息类型：`text`、`markdown`、`textcard`、`news`  
 - 鉴权方式：请求头携带 `X-API-KEY`  
 - AccessToken：自动缓存刷新，处理失效重试
@@ -174,13 +177,15 @@
 
 ## 6. 系统集成指引
 
-1. **第三方调用**：通过 `POST https://pxyb.cn/api/notify` 携带 `X-API-KEY`；仓库内部服务使用 `http://notification-service:3000/notify` 和短时签名。
-2. **统一控制台**：在统一服务控制台的“通知通道”页管理模板、定时任务、目标偏好和发送台账；测试发送仅允许指定单个企业微信用户。
-3. **通知编排**：业务服务使用内部签名调用 `POST /enqueue` 创建即时或定时任务，支持幂等键、模板变量、最大重试次数和退避间隔。
-4. **目标偏好**：免打扰时段和停用状态由服务端执行；被抑制的任务会记录明确原因，不会伪装成已发送。
-5. **失败重试**：编排器按 `NOTIFY_ORCHESTRATION_INTERVAL_MS` 扫描到期任务；默认以 4 路受控并发发送。任务领取后持有可续租租约，进程崩溃或租约过期时会由其他实例自动接管；尝试次数耗尽后进入 `failed` 明确终态，并计入队列 dead-letter 指标。
-6. **鉴权管理**：建议将 `NOTIFY_API_KEY` 存放在服务端安全配置文件中，并定期更换；内部调用方必须列入 `NOTIFY_INTERNAL_CALLERS`。
-7. **审计日志**：任务状态、发送结果和重试来源都写入独立 `notification_app` 数据库，敏感载荷使用 AES-256-GCM 加密。
+1. **新增用户通知**：仓库内部服务使用短时签名调用 `POST http://notification-service:3000/v1/notifications`，明确提供 `audience`、`channels`、`category`、`source` 和幂等键。
+2. **兼容与第三方调用**：现有企业微信调用可继续通过 `POST https://pxyb.cn/api/notify` 携带 `X-API-KEY`；`/notify` 不再作为仓库内新增通知场景的首选入口。
+3. **统一控制台**：在统一服务控制台的“通知通道”页管理模板、定时任务、目标偏好和发送台账；测试发送仅允许指定单个用户。
+4. **通知编排**：需要计划执行的企业微信任务使用内部签名调用 `POST /enqueue`，支持幂等键、模板变量、最大重试次数和退避间隔。
+5. **目标偏好**：免打扰时段和停用状态由服务端执行；被抑制的任务会记录明确原因，不会伪装成已发送。
+6. **失败重试**：编排器按 `NOTIFY_ORCHESTRATION_INTERVAL_MS` 扫描到期任务；默认以 4 路受控并发发送。任务领取后持有可续租租约，进程崩溃或租约过期时会由其他实例自动接管；尝试次数耗尽后进入 `failed` 明确终态，并计入队列 dead-letter 指标。
+7. **鉴权管理**：建议将 `NOTIFY_API_KEY` 存放在服务端安全配置文件中，并定期更换；内部调用方必须列入 `NOTIFY_INTERNAL_CALLERS`。
+8. **审计日志**：任务状态、发送结果和重试来源都写入独立 `notification_app` 数据库，敏感载荷使用 AES-256-GCM 加密。
+9. **App 投递状态**：`channels.app=accepted` 只表示收件箱已经落库；只有 `push.sent > 0` 才表示原生推送已发送。注册为 `provider=poll` 的设备继续依赖前台同步和 WorkManager 兜底。
 
 编排可靠性参数：
 

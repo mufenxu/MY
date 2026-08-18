@@ -48,6 +48,9 @@ const appNotificationSchema = z.object({
   actions: z.array(actionSchema).max(5).default([]),
   expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
   dedupeKey: z.string().trim().max(200).optional(),
+  scheduledAt: z.string().datetime({ offset: true }).optional(),
+  dedupeWindowSeconds: z.number().int().min(1).max(86400).default(300),
+  maxAttempts: z.number().int().min(1).max(8).default(4),
   wecom: z.object({
     touser: z.string().trim().min(1).max(512).optional(),
     toparty: z.string().trim().min(1).max(512).optional(),
@@ -64,6 +67,7 @@ const appNotificationSchema = z.object({
   ...value,
   audience: { users: [...new Set(value.audience.users)] },
   expiresAt: value.expiresAt ? new Date(value.expiresAt) : null,
+  scheduledAt: value.scheduledAt ? new Date(value.scheduledAt) : null,
   dedupeKey: value.dedupeKey || value.idempotencyKey,
 }));
 

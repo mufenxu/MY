@@ -50,6 +50,53 @@ test('orchestrator schedules, deduplicates and delivers template jobs', async ()
   assert.equal(delivered[0].data.content, 'Alice 有 3 道题待复习');
 });
 
+test('orchestrator schedules and deduplicates canonical App notifications', async () => {
+  let current = new Date('2026-08-18T00:00:00.000Z');
+  const store = createMemoryNotificationStore({ encryptionKey, now: () => new Date(current) });
+  const delivered = [];
+  const orchestrator = createNotificationOrchestrator({
+    store,
+    now: () => new Date(current),
+    deliver: async () => { throw new Error('legacy delivery must not run'); },
+    deliverApp: async (payload) => {
+      delivered.push(payload);
+      return { notificationId: 'app-notification-1' };
+    },
+  });
+  const input = {
+    idempotencyKey: 'campus-course:user-1:course-1',
+    dedupeKey: 'campus-course:user-1:course-1',
+    audience: { users: ['user-1'] },
+    channels: ['app'],
+    priority: 'normal',
+    category: 'campus.course.reminder',
+    content: {
+      kind: 'text',
+      title: '课程即将开始',
+      summary: '高等数学将在 15 分钟后开始。',
+      blocks: [{ type: 'text', text: '上课地点：教学楼 101' }],
+    },
+    source: { service: 'campus-service', entityType: 'course', entityId: 'course-1' },
+    actions: [{ id: 'open-today', label: '查看今日', deepLink: 'mycontrol://open?destination=today' }],
+    scheduledAt: '2026-08-18T01:00:00.000Z',
+    dedupeWindowSeconds: 86400,
+    maxAttempts: 4,
+  };
+
+  const first = await orchestrator.enqueueApp(input, { caller: 'campus-service' });
+  const second = await orchestrator.enqueueApp(input, { caller: 'campus-service' });
+  assert.equal(first.deduplicated, false);
+  assert.equal(second.deduplicated, true);
+  assert.deepEqual(await orchestrator.runDue(), []);
+
+  current = new Date('2026-08-18T01:00:00.000Z');
+  const results = await orchestrator.runDue();
+  assert.equal(results[0].status, 'sent');
+  assert.equal(results[0].deliveryId, 'app-notification-1');
+  assert.equal(delivered.length, 1);
+  assert.equal(delivered[0].category, 'campus.course.reminder');
+});
+
 test('orchestrator applies recipient preferences and retry backoff', async () => {
   let current = new Date('2026-07-21T14:30:00.000Z');
   const store = createMemoryNotificationStore({ encryptionKey, now: () => new Date(current) });

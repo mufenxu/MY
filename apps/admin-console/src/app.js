@@ -804,6 +804,17 @@ export function createApp({
     res.json(externalIdentity.jwks());
   });
 
+  const oauthTokenLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: config.externalAuthTokenRateLimitPerMinute || 60,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    handler: (req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(429).json(oauthError('temporarily_unavailable', '令牌请求过于频繁，请稍后重试。'));
+    },
+  });
+
   app.get('/oauth/authorize', async (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     const clientId = String(req.query?.client_id || '');
@@ -884,7 +895,7 @@ export function createApp({
     }
   });
 
-  app.post('/oauth/token', express.urlencoded({ extended: false, limit: '16kb' }), async (req, res, next) => {
+  app.post('/oauth/token', oauthTokenLimiter, express.urlencoded({ extended: false, limit: '16kb' }), async (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     const credentials = readOAuthClientCredentials(req);
     try {
@@ -892,6 +903,16 @@ export function createApp({
       const validClient = application?.enabled
         && await externalApplications.verifyClientSecret(credentials.clientId, credentials.clientSecret);
       if (!validClient) {
+        await recordAudit(req, {
+          action: 'external_auth.token',
+          outcome: 'failure',
+          targetType: 'external_application',
+          targetId: application?.id || '',
+          details: {
+            reason: 'invalid_client',
+            clientId: String(credentials.clientId || '').slice(0, 128),
+          },
+        });
         res.setHeader('WWW-Authenticate', 'Basic realm="MY External Identity"');
         return res.status(401).json(oauthError('invalid_client', '客户端认证失败。'));
       }
@@ -918,10 +939,32 @@ export function createApp({
         });
         return res.status(400).json(oauthError('invalid_grant', '授权码无效、已过期或 PKCE 校验失败。'));
       }
+      const currentAccount = config.authDisabled
+        ? { username: code.username, role: code.role, active: true }
+        : await accounts.findAccount(code.username);
+      const sessionActive = config.authDisabled || await sessions.isActive({
+        nonce: code.sessionNonce,
+        subject: code.username,
+      });
+      if (
+        !sessionActive
+        || !currentAccount?.active
+        || !roleCanAccessExternalApplication(currentAccount.role, application)
+      ) {
+        await recordAudit(req, {
+          actor: code.username,
+          action: 'external_auth.token',
+          outcome: 'failure',
+          targetType: 'external_application',
+          targetId: application.id,
+          details: { reason: 'authorization_context_invalid', clientId: credentials.clientId },
+        });
+        return res.status(400).json(oauthError('invalid_grant', '授权上下文已失效，请重新登录。'));
+      }
       const tokens = externalIdentity.issueTokens({
         clientId: credentials.clientId,
         username: code.username,
-        role: code.role,
+        role: currentAccount.role,
         scope: code.scope,
         nonce: code.nonce,
       });

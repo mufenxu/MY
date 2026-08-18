@@ -49,6 +49,25 @@ test('calendar subscriptions and reminder preferences stay scoped to their user'
   assert.equal(await repository.findCalendarSubscriptionByTokenHash('hash-1'), null);
 });
 
+test('App-only reminder preferences persist their verified platform recipient', async () => {
+  const repository = new MemoryCampusRepository();
+  const timestamp = '2026-08-18T00:00:00.000Z';
+  await repository.upsertReminderPreference('user-1', {
+    enabled: true,
+    recipientId: '',
+    appRecipientId: 'platform-user',
+    leadMinutes: 15
+  }, timestamp);
+
+  const saved = await repository.getReminderPreference('user-1');
+  assert.equal(saved.app_recipient_id, 'platform-user');
+  assert.equal(saved.recipient_id, '');
+  assert.deepEqual(
+    (await repository.listEnabledReminderPreferences()).map((row) => row.user_id),
+    ['user-1']
+  );
+});
+
 test('repository list methods honor bounded windows', async () => {
   const repository = new MemoryCampusRepository();
   for (let index = 1; index <= 5; index += 1) {

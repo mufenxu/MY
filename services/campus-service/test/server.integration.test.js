@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
+import { issueInternalIdentity } from "@my-platform/platform-auth";
 
 const FETCH_FORBIDDEN_PORTS = new Set([
   1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95,
@@ -54,6 +55,9 @@ test("server authentication, revocation, validation and static caching work toge
   const port = await availablePort();
   const initialPassword = "initial-password-123";
   const nextPassword = "updated-password-456";
+  const { privateKey: platformPrivateKey, publicKey: platformPublicKey } = generateKeyPairSync("ed25519");
+  const platformPrivateKeyBase64Url = platformPrivateKey.export({ format: "der", type: "pkcs8" }).toString("base64url");
+  const platformPublicKeyBase64Url = platformPublicKey.export({ format: "der", type: "spki" }).toString("base64url");
   const child = spawn(process.execPath, ["server.js"], {
     cwd: process.cwd(),
     env: {
@@ -71,6 +75,7 @@ test("server authentication, revocation, validation and static caching work toge
       HGU_APP_COOKIE_SECURE: "true",
       HGU_TRUST_PROXY: "false",
       HGU_ENABLE_HSTS: "false",
+      PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: platformPublicKeyBase64Url,
       ACADEMIC_AUTO_REFRESH_MS: "0"
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -204,6 +209,45 @@ test("server authentication, revocation, validation and static caching work toge
   });
   assert.equal(reminderSettings.status, 200);
   assert.equal((await reminderSettings.json()).data.recipientId, "student-1");
+
+  const platformTicket = issueInternalIdentity({
+    audience: "campus",
+    session: {
+      sub: "admin",
+      role: "super_admin",
+      nonce: "campus-reminder-platform-mapping",
+      exp: Math.floor(Date.now() / 1000) + 3600
+    },
+    privateKey: platformPrivateKeyBase64Url,
+    method: "PUT",
+    pathname: "/api/academic/reminder"
+  });
+  const platformClaims = JSON.parse(Buffer.from(platformTicket.split(".", 1)[0], "base64url").toString("utf8"));
+  const appOnlyReminder = await fetch(`${origin}/api/academic/reminder`, {
+    method: "PUT",
+    headers: {
+      "content-type": "application/json",
+      "x-csrf-token": platformClaims.csrf,
+      "x-my-platform-sso": platformTicket
+    },
+    body: JSON.stringify({ enabled: true, recipientId: "", leadMinutes: 15 })
+  });
+  assert.equal(appOnlyReminder.status, 200);
+  assert.equal((await appOnlyReminder.json()).data.appRecipientId, "admin");
+
+  const combinedReminder = await fetch(`${origin}/api/academic/reminder`, {
+    method: "PUT",
+    headers: {
+      cookie: oldCookie,
+      "content-type": "application/json",
+      "x-csrf-token": loginPayload.data.csrfToken
+    },
+    body: JSON.stringify({ enabled: true, recipientId: "student-2", leadMinutes: 30 })
+  });
+  assert.equal(combinedReminder.status, 200);
+  const combinedReminderPayload = await combinedReminder.json();
+  assert.equal(combinedReminderPayload.data.recipientId, "student-2");
+  assert.equal(combinedReminderPayload.data.appRecipientId, "admin");
 
   const inviteCreate = await fetch(`${origin}/api/invites`, {
     method: "POST",

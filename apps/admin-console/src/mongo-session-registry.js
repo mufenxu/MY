@@ -124,6 +124,18 @@ export async function createMongoSessionRegistry({
       return (await sessions.deleteMany({ subject: String(subject || '') })).deletedCount;
     },
 
+    async isActive({ nonce, subject, now = Date.now() } = {}) {
+      if (!nonce || !subject) return false;
+      const active = await sessions.findOne({
+        nonce: String(nonce),
+        subject: String(subject),
+        expiresAt: { $gt: new Date(now) },
+      }, {
+        projection: { lastSeenAt: 1, idleTimeoutMinutes: 1 },
+      });
+      return Boolean(active?.lastSeenAt && active.lastSeenAt.getTime() + sessionIdleTimeoutMs(active) > now);
+    },
+
     async list({ subject, limit = 100 } = {}) {
       const query = {
         expiresAt: { $gt: new Date() },

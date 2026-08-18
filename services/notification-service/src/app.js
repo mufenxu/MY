@@ -355,9 +355,56 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
     }
   }
 
+  async function deliverAppNotification(rawInput, { caller, requestId, apiClient = null } = {}) {
+    const parsed = appNotificationSchema.parse(rawInput);
+    const created = await store.createAppNotification({
+      caller,
+      idempotencyKey: parsed.dedupeKey,
+      recipients: parsed.audience.users,
+      message: {
+        category: parsed.category,
+        priority: parsed.priority,
+        title: parsed.content.title,
+        summary: parsed.content.summary,
+        content: parsed.content,
+        source: parsed.source,
+        actions: parsed.actions,
+        expiresAt: parsed.expiresAt,
+      },
+    });
+    const push = created.deduplicated
+      ? { attempted: 0, sent: 0, deferred: 0, failed: 0, suppressed: 0, results: [] }
+      : await safelyDispatchAppPush(requestId, {
+        store,
+        notification: { id: created.notification.id, category: parsed.category, priority: parsed.priority },
+        recipients: parsed.audience.users,
+      });
+    let wecomDeliveryId = null;
+    let wecomStatus = parsed.channels.includes('wecom') ? 'deduplicated' : 'not-requested';
+    if (parsed.channels.includes('wecom') && !created.deduplicated) {
+      const delivered = await deliver(toWeComMessage(parsed), { caller, requestId, apiClient });
+      wecomDeliveryId = delivered.delivery?.id || null;
+      wecomStatus = 'sent';
+    }
+    return {
+      notificationId: created.notification.id,
+      deduplicated: created.deduplicated,
+      channels: { app: created.deduplicated ? 'deduplicated' : 'accepted', wecom: wecomStatus },
+      push: {
+        attempted: push.attempted,
+        sent: push.sent,
+        deferred: push.deferred,
+        failed: push.failed,
+        suppressed: push.suppressed,
+      },
+      wecomDeliveryId,
+    };
+  }
+
   const orchestrator = createNotificationOrchestrator({
     store,
     deliver,
+    deliverApp: deliverAppNotification,
     concurrency: config.orchestrationConcurrency,
     leaseMs: config.orchestrationLeaseMs,
   });
@@ -445,58 +492,44 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
         await recordManagedApiRequest(req, { endpoint: '/v1/notifications', httpStatus: 403, errorCode: 'API_SCOPE_REQUIRED', body: req.body });
         return res.status(403).json({ errcode: 403, errmsg: '当前 API Key 缺少企业微信发送权限', code: 'API_SCOPE_REQUIRED', requestId: req.id });
       }
-
-      const created = await store.createAppNotification({
-        caller: req.serviceCaller,
-        idempotencyKey: parsed.dedupeKey,
-        recipients: parsed.audience.users,
-        message: {
-          category: parsed.category,
-          priority: parsed.priority,
-          title: parsed.content.title,
-          summary: parsed.content.summary,
-          content: parsed.content,
-          source: parsed.source,
-          actions: parsed.actions,
-          expiresAt: parsed.expiresAt,
-        },
-      });
-      const push = created.deduplicated
-        ? { attempted: 0, sent: 0, deferred: 0, failed: 0, suppressed: 0, results: [] }
-        : await safelyDispatchAppPush(req.id, {
-          store,
-          notification: { id: created.notification.id, category: parsed.category, priority: parsed.priority },
-          recipients: parsed.audience.users,
-        });
-      let wecomDeliveryId = null;
-      let wecomStatus = parsed.channels.includes('wecom') ? 'deduplicated' : 'not-requested';
-      if (parsed.channels.includes('wecom') && !created.deduplicated) {
-        const delivered = await deliver(toWeComMessage(parsed), {
+      if (parsed.scheduledAt && parsed.scheduledAt > new Date()) {
+        if (req.apiClient?.managed && !hasScope(req.apiClient, 'notifications:enqueue')) {
+          await recordManagedApiRequest(req, { endpoint: '/v1/notifications', httpStatus: 403, errorCode: 'API_SCOPE_REQUIRED', body: req.body });
+          return res.status(403).json({ errcode: 403, errmsg: '当前 API Key 缺少通知编排权限', code: 'API_SCOPE_REQUIRED', requestId: req.id });
+        }
+        const queued = await orchestrator.enqueueApp(req.body, {
           caller: req.serviceCaller,
           requestId: req.id,
           apiClient: req.apiClient,
         });
-        wecomDeliveryId = delivered.delivery?.id || null;
-        wecomStatus = 'sent';
+        await recordManagedApiRequest(req, { endpoint: '/v1/notifications', httpStatus: 202, body: req.body });
+        return res.status(202).json({
+          scheduled: true,
+          jobId: queued.job.id,
+          scheduledAt: queued.job.scheduledAt,
+          deduplicated: queued.deduplicated,
+          channels: {
+            app: 'scheduled',
+            wecom: parsed.channels.includes('wecom') ? 'scheduled' : 'not-requested',
+          },
+          push: { attempted: 0, sent: 0, deferred: 0, failed: 0, suppressed: 0 },
+          wecomDeliveryId: null,
+          requestId: req.id,
+        });
       }
+      const outcome = await deliverAppNotification(req.body, {
+        caller: req.serviceCaller,
+        requestId: req.id,
+        apiClient: req.apiClient,
+      });
       await recordManagedApiRequest(req, {
         endpoint: '/v1/notifications',
         httpStatus: 202,
-        deliveryId: wecomDeliveryId,
+        deliveryId: outcome.wecomDeliveryId,
         body: req.body,
       });
       return res.status(202).json({
-        notificationId: created.notification.id,
-        deduplicated: created.deduplicated,
-        channels: { app: created.deduplicated ? 'deduplicated' : 'accepted', wecom: wecomStatus },
-        push: {
-          attempted: push.attempted,
-          sent: push.sent,
-          deferred: push.deferred,
-          failed: push.failed,
-          suppressed: push.suppressed,
-        },
-        wecomDeliveryId,
+        ...outcome,
         requestId: req.id,
       });
     } catch (error) {

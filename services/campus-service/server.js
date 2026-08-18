@@ -38,7 +38,11 @@ import {
 } from "./src/lib/upstream-response.js";
 import { createCampusRepository } from "./src/storage/campus-repository.js";
 import { buildCourseOccurrences, renderAcademicCalendar } from "./src/lib/academic-calendar.js";
-import { enqueueCampusNotification } from "./src/lib/notification-client.js";
+import {
+  buildCourseReminderDelivery,
+  enqueueCampusNotification,
+  sendCampusNotification
+} from "./src/lib/notification-client.js";
 import {
   UIAS_ENDPOINTS,
   casServiceFromTicketRedirect,
@@ -916,6 +920,7 @@ async function getAppSession(req) {
     return {
       required: true,
       platformSso: true,
+      platformUserId: platformIdentity.sub,
       platformRole: platformIdentity.role,
       ...appSessionData(user, {
         csrfToken: platformIdentity.csrf,
@@ -5272,6 +5277,7 @@ function publicReminderPreference(row) {
   return {
     enabled: Boolean(row?.enabled),
     recipientId: String(row?.recipient_id || ""),
+    appRecipientId: String(row?.app_recipient_id || ""),
     leadMinutes: Number(row?.lead_minutes || 15),
     updatedAt: row?.updated_at || null,
     deliveryConfigured: Boolean(process.env.NOTIFICATION_SERVICE_URL && (process.env.CAMPUS_NOTIFICATION_API_KEY || process.env.NOTIFY_API_KEY))
@@ -5305,12 +5311,17 @@ async function rotateAcademicCalendarSubscription(userId) {
   return academicIntegrationSettings(userId);
 }
 
-async function saveAcademicReminderPreference(userId, body = {}) {
+async function saveAcademicReminderPreference(userId, body = {}, platformUserId = "") {
   const enabled = Boolean(body.enabled);
   const recipientId = String(body.recipientId || "").trim();
+  const current = platformUserId ? null : await repository.getReminderPreference(userId);
+  const appRecipientId = String(platformUserId || current?.app_recipient_id || "").trim();
   const leadMinutes = Number(body.leadMinutes || 15);
-  if (enabled && !/^[^\s|]{1,128}$/u.test(recipientId)) {
-    throw new HttpError(400, "启用提醒时必须填写有效的企业微信成员账号。");
+  if (recipientId && !/^[^\s|]{1,128}$/u.test(recipientId)) {
+    throw new HttpError(400, "企业微信成员账号格式无效。");
+  }
+  if (enabled && !recipientId && !appRecipientId) {
+    throw new HttpError(400, "启用提醒时必须关联 App 平台账号或填写企业微信成员账号。");
   }
   if (![5, 10, 15, 30, 60].includes(leadMinutes)) {
     throw new HttpError(400, "课前提醒时间只支持 5、10、15、30 或 60 分钟。");
@@ -5318,6 +5329,7 @@ async function saveAcademicReminderPreference(userId, body = {}) {
   const row = await repository.upsertReminderPreference(userId, {
     enabled,
     recipientId,
+    appRecipientId,
     leadMinutes
   }, nowIso());
   return publicReminderPreference(row);
@@ -5355,34 +5367,6 @@ async function serveAcademicCalendar(res, token) {
     "content-length": Buffer.byteLength(body)
   });
   res.end(body);
-}
-
-function formatCourseReminderTime(date) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).format(date);
-}
-
-function courseReminderPayload(preference, occurrence, userId, now) {
-  const leadMinutes = Number(preference.lead_minutes || 15);
-  const scheduledAt = new Date(Math.max(now.getTime(), occurrence.startAt.getTime() - leadMinutes * 60_000));
-  const locationLine = occurrence.location ? `\n地点：${occurrence.location}` : "";
-  const identity = sha256Hex(`${userId}|${occurrence.id}|${occurrence.startAt.toISOString()}`).slice(0, 48);
-  return {
-    msgType: "text",
-    content: `【课程提醒】\n${occurrence.courseName} 将在 ${leadMinutes} 分钟后开始\n时间：${formatCourseReminderTime(occurrence.startAt)}${locationLine}`,
-    target: { touser: preference.recipient_id },
-    scheduledAt: scheduledAt.toISOString(),
-    dedupeKey: `campus-course-${identity}`,
-    dedupeWindowSeconds: 86400,
-    maxAttempts: 4
-  };
 }
 
 async function readBodyText(req) {
@@ -6579,7 +6563,7 @@ async function handleApi(req, res, url) {
     }
     if (url.pathname === "/api/academic/reminder" && req.method === "PUT") {
       const body = await readBodyJson(req);
-      const data = await saveAcademicReminderPreference(currentUserId(), body);
+      const data = await saveAcademicReminderPreference(currentUserId(), body, appSession.platformUserId);
       logger.info("audit_academic_reminder_updated", {
         actorUserId: currentUserId(),
         enabled: data.enabled,
@@ -6889,10 +6873,11 @@ async function enqueueUpcomingAcademicReminders(reason) {
       async ({ preference, occurrence }) => {
         if (shuttingDown || Date.now() >= deadline) return "timed_out";
         try {
-          const result = await enqueueCampusNotification(
-            courseReminderPayload(preference, occurrence, preference.user_id, now),
-            { requestId: `campus-reminder-${randomUUID()}` }
-          );
+          const delivery = buildCourseReminderDelivery(preference, occurrence, now);
+          const requestId = `campus-reminder-${randomUUID()}`;
+          const result = delivery.kind === "canonical"
+            ? await sendCampusNotification(delivery.payload, { requestId })
+            : await enqueueCampusNotification(delivery.payload, { requestId });
           return result.deduplicated ? "deduplicated" : "queued";
         } catch (error) {
           logger.warn("academic_reminder_enqueue_failed", {

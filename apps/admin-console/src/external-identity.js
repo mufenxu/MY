@@ -8,6 +8,7 @@ const OAUTH_ERROR_CODES = new Set([
   'unsupported_grant_type',
   'invalid_scope',
   'access_denied',
+  'temporarily_unavailable',
   'server_error',
 ]);
 

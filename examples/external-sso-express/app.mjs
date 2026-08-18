@@ -24,6 +24,15 @@ app.use(session({
 let discoveryCache;
 let jwksCache;
 
+class OidcTokenError extends Error {
+  constructor(code, message, statusCode, retryAfter = '') {
+    super(message);
+    this.code = code;
+    this.statusCode = statusCode;
+    this.retryAfter = retryAfter;
+  }
+}
+
 app.get('/', (req, res) => {
   if (!req.session.user) {
     return res.type('html').send('<p>尚未登录。<a href="/auth/my/start">使用 MY 登录</a></p>');
@@ -120,8 +129,14 @@ app.post('/logout', async (req, res, next) => {
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.use((error, _req, res, _next) => {
-  console.error(error instanceof Error ? error.message : 'Unexpected authentication error');
+  const errorCode = error instanceof OidcTokenError ? error.code : 'unexpected_error';
+  console.error(`External SSO authentication failed: ${errorCode}`);
+  if (error instanceof OidcTokenError) {
+    if (error.retryAfter) res.setHeader('Retry-After', error.retryAfter);
+    return res.status(error.statusCode).type('html').send(`<p>${escapeHtml(error.message)}</p>`);
+  }
   res.status(500).type('html').send('<p>登录暂时失败，请返回后重新发起登录。</p>');
+  return undefined;
 });
 
 app.listen(config.port, () => {
@@ -167,10 +182,37 @@ async function exchangeCode(discovery, code, verifier) {
     signal: AbortSignal.timeout(8_000),
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok || typeof body.id_token !== 'string') {
-    throw new Error(`Token exchange failed: ${String(body.error || response.status)}`);
+  if (!response.ok) throw mapTokenEndpointError(response, body);
+  if (typeof body.id_token !== 'string') {
+    throw new OidcTokenError('token_response_invalid', 'MY Token 响应无效，请重新登录。', 502);
   }
   return body;
+}
+
+function mapTokenEndpointError(response, body) {
+  const code = typeof body?.error === 'string' ? body.error : '';
+  if (code === 'temporarily_unavailable' && [429, 503].includes(response.status)) {
+    return new OidcTokenError(
+      code,
+      'MY 认证服务请求过于频繁，请稍后重新登录。',
+      503,
+      safeRetryAfter(response.headers.get('retry-after')),
+    );
+  }
+  if (code === 'invalid_grant' && response.status === 400) {
+    return new OidcTokenError(code, '登录授权已失效，请重新登录。', 400);
+  }
+  if (code === 'invalid_client' && [400, 401].includes(response.status)) {
+    return new OidcTokenError(code, 'MY OIDC 客户端配置无效，请联系管理员。', 503);
+  }
+  return new OidcTokenError('token_exchange_failed', 'MY Token 兑换失败，请重新登录。', 502);
+}
+
+function safeRetryAfter(value) {
+  const candidate = String(value || '').trim();
+  if (!/^\d{1,4}$/.test(candidate)) return '';
+  const seconds = Number(candidate);
+  return seconds >= 1 && seconds <= 3600 ? String(seconds) : '';
 }
 
 async function verifyIdToken(discovery, token, expectedNonce) {

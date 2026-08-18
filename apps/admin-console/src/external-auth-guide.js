@@ -10,7 +10,7 @@ const endpoint = (origin, pathname) => new URL(pathname, origin).toString();
 export function buildExternalAuthGuideContract({ origin, tokenTtlSeconds = 300 } = {}) {
   const issuer = new URL(origin || 'http://127.0.0.1').origin;
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     title: 'MY 外部项目 OIDC 接入契约',
     documentationUrl: endpoint(issuer, '/docs/external-auth'),
     machineReadableUrl: endpoint(issuer, '/docs/external-auth.json'),
@@ -82,6 +82,16 @@ export function buildExternalAuthGuideContract({ origin, tokenTtlSeconds = 300 }
       },
     },
     claims: ['sub', 'preferred_username', 'role'],
+    compatibility: {
+      existingRegistrationChangeRequired: false,
+      successfulLoginProtocolChanged: false,
+      clientErrorHandlingUpgradeRecommended: true,
+      upgradeWhen: [
+        '客户端会自动重试同一个授权码',
+        '客户端把所有 Token 非 200 响应统一映射为 500 或 502',
+        '客户端会向浏览器或日志透出上游 error_description',
+      ],
+    },
     registration: {
       requiredFields: ['name', 'launchUrl', 'redirectUris'],
       optionalFields: ['description', 'healthUrl', 'requiredRole', 'openMode', 'enabled'],
@@ -116,11 +126,31 @@ export function buildExternalAuthGuideContract({ origin, tokenTtlSeconds = 300 }
     },
     errorHandling: {
       callbackErrors: ['error', 'error_description', 'state'],
-      restartLoginOn: ['invalid_request', 'invalid_grant', 'expired_or_replayed_code', 'state_mismatch'],
+      restartLoginOn: [
+        'invalid_request', 'invalid_grant', 'expired_or_replayed_code', 'state_mismatch',
+        'temporarily_unavailable',
+      ],
       neverRetryAuthorizationCode: true,
+      neverExposeUpstreamErrorDescription: true,
+      tokenEndpointErrors: {
+        temporarily_unavailable: {
+          action: 'restart_login_after_delay',
+          honorRetryAfter: true,
+          retryAuthorizationCode: false,
+        },
+        invalid_grant: {
+          action: 'restart_login',
+          retryAuthorizationCode: false,
+        },
+        invalid_client: {
+          action: 'report_server_configuration_error',
+          retryAuthorizationCode: false,
+        },
+      },
       commonErrors: {
         invalid_client: '检查 client_id 和 client_secret 是否来自同一次创建或轮换。',
         invalid_grant: '授权码可能过期、已消费，或 redirect_uri、code_verifier 不匹配；重新开始登录。',
+        temporarily_unavailable: 'Token 请求过于频繁；遵循 Retry-After，等待后重新开始登录。',
         invalid_request: '检查必需授权参数、scope、nonce 和 PKCE S256。',
         access_denied: '账号角色不足或应用已停用。',
       },
@@ -138,6 +168,7 @@ export function buildExternalAuthGuideContract({ origin, tokenTtlSeconds = 300 }
       '开始登录时在服务端生成 state、nonce 和 43-128 字符 code_verifier，使用 S256 生成 code_challenge，并把临时值保存在服务端会话。',
       '授权请求必须包含 response_type、client_id、redirect_uri、scope、state、nonce、code_challenge 和 code_challenge_method。',
       '回调必须先处理 OAuth error，再校验并一次性删除 state，使用同一个 redirect_uri 和原始 code_verifier 从后端兑换 Token。',
+      'Token 端点返回 invalid_grant 时重新开始登录；返回 temporarily_unavailable 时遵循 Retry-After 后重新开始；invalid_client 必须报告服务端配置错误。任何情况都不得重试同一个授权码或透出上游 error_description。',
       'ID Token 必须使用 Discovery 的 jwks_uri 验证 EdDSA 签名及 iss、aud、exp、iat、nonce、token_use=id；未知 kid 时只刷新一次 JWKS。',
       '把 MY_ISSUER、MY_CLIENT_ID、MY_CLIENT_SECRET、MY_REDIRECT_URI 做成服务端环境变量。',
       '不要把 client_secret 放入浏览器、前端代码、URL 或日志。',
@@ -154,7 +185,8 @@ export function buildExternalAuthGuideContract({ origin, tokenTtlSeconds = 300 }
       ],
       verification: [
         'Discovery 返回 200 JSON 且 issuer 匹配', '登录跳转参数完整', 'state 和 nonce 不匹配时拒绝',
-        '回调换取 Token', 'ID Token 验签', '授权码不可重放', '角色映射', '退出', '健康检查',
+        '回调换取 Token', 'Token 错误分类与 Retry-After', 'ID Token 验签', '授权码不可重放',
+        '角色映射', '退出', '健康检查',
       ],
     },
   };
@@ -241,13 +273,14 @@ export function renderExternalAuthGuideHtml({ origin, tokenTtlSeconds = 300 } = 
     '开始登录时在服务端生成并保存 state、nonce、43-128 字符 code_verifier 和受控站内 returnTo，使用 S256 计算 code_challenge。',
     '授权请求完整携带 response_type=code、client_id、精确 redirect_uri、scope=openid profile roles、state、nonce、code_challenge、code_challenge_method=S256。',
     '回调先处理 error/error_description，再校验并一次性删除 state；后端使用同一个 redirect_uri、原始 code_verifier 和客户端凭据兑换 Token。',
+    'Token 端点返回 invalid_grant 时提示授权已失效并重新开始登录；返回 temporarily_unavailable 时遵循 Retry-After 后重新开始；invalid_client 作为服务端客户端配置错误处理。不得自动重试同一个授权码，也不得向客户端或日志透出上游 error_description。',
     '从 Discovery 的 jwks_uri 读取公钥，验证 ID Token 的 EdDSA 签名、kid、iss、aud、exp、iat、nonce 和 token_use=id；未知 kid 时最多刷新一次 JWKS。',
     '登录成功后重新生成本地 Session ID，只保存所需的 sub、preferred_username、role，并为业务接口实现默认拒绝的角色授权。',
     '实现 /auth/my/start、/auth/my/callback、本地会话、POST /auth/logout 和快速无认证 GET /health。退出只销毁本项目会话。',
     '把 MY_ISSUER、MY_CLIENT_ID、MY_CLIENT_SECRET、MY_REDIRECT_URI 做成服务端环境变量。',
     'client_secret、授权码、Token、Cookie 和完整回调查询参数不得进入前端、URL 或日志。',
     '请先检查现有登录代码和反向代理配置，再给出最小改动、迁移步骤和验证命令。',
-    '请增加针对 Discovery、跳转参数、state/nonce 失败、Token 兑换、ID Token 验签、授权码重放、角色映射、退出和健康检查的测试。',
+    '请增加针对 Discovery、跳转参数、state/nonce 失败、Token 兑换、Token 错误分类与 Retry-After、ID Token 验签、授权码重放、角色映射、退出和健康检查的测试。',
     '完成后明确给出控制台要填写的应用名称、启动地址、精确回调地址、健康检查地址、最低角色、Android 打开方式，以及需要配置的环境变量名；不得输出真实 Secret。',
   ].join('\n');
   const contractJson = escapeHtml(JSON.stringify(contract, null, 2));
@@ -260,7 +293,7 @@ export function renderExternalAuthGuideHtml({ origin, tokenTtlSeconds = 300 } = 
     '<div class="guide-layout"><nav class="guide-toc" aria-label="文档目录"><strong>目录</strong><a href="#quick-start">快速开始</a><a href="#endpoints">平台端点</a><a href="#registration">控制台填什么</a><a href="#implementation">外部项目怎么改</a><a href="#security">安全要求</a><a href="#ai">交给 AI</a></nav>',
     '<main class="guide-content"><p class="guide-kicker">PUBLIC INTEGRATION GUIDE</p><h1>让独立项目接入 MY 统一登录</h1><p class="guide-lead">本页无需登录。你可以把本页 URL 或 JSON 契约直接交给 AI，让 AI 按真实端点和字段实现接入。MY 使用标准 OIDC Authorization Code + PKCE，外部项目只需要在自己的后端增加登录回调和本地会话。</p>',
     '<div class="guide-notice"><strong>当前 Issuer：</strong> <span class="guide-endpoint">' + safeOrigin + '</span><br>客户端 Secret 只在控制台创建或轮换后显示一次，本页和 JSON 契约不会公开它。</div>',
-    '<section class="guide-section" id="quick-start"><h2>快速开始</h2><ol><li>准备外部项目的启动地址和精确回调地址。</li><li>登录控制台进入“服务目录 → 外部应用”，点击“接入应用”。</li><li>创建成功后立即保存 <code>client_id</code> 和 <code>client_secret</code>。</li><li>把本页和 JSON 契约交给 AI，要求它只在外部项目后端实现 OIDC。</li></ol></section>',
+    '<section class="guide-section" id="quick-start"><h2>快速开始</h2><ol><li>准备外部项目的启动地址和精确回调地址。</li><li>登录控制台进入“服务目录 → 外部应用”，点击“接入应用”。</li><li>创建成功后立即保存 <code>client_id</code> 和 <code>client_secret</code>。</li><li>把本页和 JSON 契约交给 AI，要求它只在外部项目后端实现 OIDC。</li></ol><p><strong>既有接入项目无需重新注册。</strong>现有 <code>client_id</code>、Secret、启动地址和回调地址继续有效，成功登录协议也未改变；但旧客户端若会重试同一个授权码、统一吞掉 Token 错误或透出上游错误描述，应按本页“安全与失败处理”升级。</p></section>',
     '<section class="guide-section" id="endpoints"><h2>平台端点</h2><p>外部项目运行时必须先读取 Discovery，并确认响应为 <code>200 application/json</code> 且 <code>issuer</code> 与配置一致。失败时停止登录并报告配置错误，不要自行拼接、硬编码或静默回退端点。</p><div class="guide-table-wrap"><table class="guide-table"><thead><tr><th>名称</th><th>方法</th><th>地址</th><th>用途</th></tr></thead><tbody>' + endpointRows + '</tbody></table></div></section>',
     '<section class="guide-section" id="registration"><h2>控制台填什么</h2><div class="guide-table-wrap"><table class="guide-table"><thead><tr><th>字段</th><th>应该填写什么</th><th>示例</th></tr></thead><tbody>',
     '<tr><td><code>应用名称</code></td><td>项目在控制台和 Android 中显示的名称。</td><td>我的项目</td></tr>',
@@ -276,7 +309,7 @@ export function renderExternalAuthGuideHtml({ origin, tokenTtlSeconds = 300 } = 
     '<h3>2. 回调与 Token 兑换</h3><p>回调先处理 <code>error</code>，再校验 <code>state</code>，并立即删除本次临时状态。Token 兑换只能从外部项目后端发起：</p><pre class="guide-code">' + escapeHtml(tokenRequest) + '</pre>',
     '<h3>3. Token 响应</h3><pre class="guide-code">' + escapeHtml(tokenResponse) + '</pre><p>不要仅仅解码 ID Token。必须使用 Discovery 的 <code>jwks_uri</code> 验证签名，并检查 <code>alg=EdDSA</code>、<code>iss</code>、<code>aud</code>、<code>exp</code>、<code>iat</code>、<code>nonce</code> 和 <code>token_use=id</code>。</p>',
     '<h3>4. 可选 UserInfo</h3><pre class="guide-code">' + escapeHtml(userinfoRequest) + '</pre></section>',
-    '<section class="guide-section" id="security"><h2>安全与失败处理</h2><ul><li>必须使用 Authorization Code + PKCE，禁止把 Secret 放进浏览器。</li><li>回调后立即删除 OAuth 临时状态，并重新生成本地 Session ID。</li><li>ID Token 必须检查 <code>iss</code>、<code>aud</code>、<code>exp</code>、<code>iat</code>、<code>nonce</code>、<code>token_use=id</code> 和 EdDSA 签名；遇到未知 <code>kid</code> 时刷新一次 JWKS，仍找不到就拒绝登录。</li><li>外部项目必须自行执行角色和业务权限判断，未知角色默认拒绝。</li><li>生产 Cookie 使用 HttpOnly、Secure、SameSite=Lax；多实例使用共享 Session Store。</li><li>不得记录授权码、Token、client_secret、Cookie 或完整回调查询参数。</li><li><code>invalid_grant</code>、state/nonce 不匹配、授权码过期或重放时必须重新开始登录，不得重试同一个授权码。</li><li>当前不支持跨项目统一退出；<code>POST /auth/logout</code> 只销毁外部项目自己的会话。</li></ul></section>',
+    '<section class="guide-section" id="security"><h2>安全与失败处理</h2><ul><li>必须使用 Authorization Code + PKCE，禁止把 Secret 放进浏览器。</li><li>回调后立即删除 OAuth 临时状态，并重新生成本地 Session ID。</li><li>ID Token 必须检查 <code>iss</code>、<code>aud</code>、<code>exp</code>、<code>iat</code>、<code>nonce</code>、<code>token_use=id</code> 和 EdDSA 签名；遇到未知 <code>kid</code> 时刷新一次 JWKS，仍找不到就拒绝登录。</li><li>外部项目必须自行执行角色和业务权限判断，未知角色默认拒绝。</li><li>生产 Cookie 使用 HttpOnly、Secure、SameSite=Lax；多实例使用共享 Session Store。</li><li>不得记录授权码、Token、client_secret、Cookie、上游 <code>error_description</code> 或完整回调查询参数。</li><li><code>invalid_grant</code>、state/nonce 不匹配、授权码过期或重放时必须重新开始登录，不得重试同一个授权码。</li><li><code>temporarily_unavailable</code> 时遵循受信任的 <code>Retry-After</code>，等待后重新开始登录；<code>invalid_client</code> 应报告服务端客户端配置错误。</li><li>当前不支持跨项目统一退出；<code>POST /auth/logout</code> 只销毁外部项目自己的会话。</li></ul></section>',
     '<section class="guide-section" id="ai"><h2>交给 AI 的任务模板</h2><p>把下面文字和 JSON 契约一起发给 AI，再补充你的项目技术栈：</p><pre class="guide-code">' + escapeHtml(aiPrompt) + '</pre><p>机器可读契约：<a href="/docs/external-auth.json"><code>' + escapeHtml(contract.machineReadableUrl) + '</code></a></p><details><summary>展开完整 JSON 契约</summary><pre class="guide-code">' + contractJson + '</pre></details></section>',
     '</main></div><footer class="guide-footer">MY 外部项目接入文档 · 公开页面不包含任何应用 Secret 或内部密钥。</footer></div></body></html>',
   ].join('');

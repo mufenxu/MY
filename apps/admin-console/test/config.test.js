@@ -22,8 +22,20 @@ test('development defaults to local auth bypass', () => {
   assert.equal(config.androidSessionTtlHours, 720);
   assert.equal(config.androidSessionIdleMinutes, 1440);
   assert.equal(config.externalAuthIssuer, 'http://127.0.0.1:22100');
+  assert.equal(config.externalAuthTokenRateLimitPerMinute, 60);
   assert.notEqual(config.externalAuthPrivateKey, config.internalAuthPrivateKey);
   assert.notEqual(config.externalAuthPublicKey, config.internalAuthPublicKey);
+});
+
+test('external token rate limit is configurable within safe bounds', () => {
+  assert.equal(loadConfig({
+    NODE_ENV: 'development',
+    PLATFORM_EXTERNAL_AUTH_TOKEN_RATE_LIMIT_PER_MINUTE: '120',
+  }).externalAuthTokenRateLimitPerMinute, 120);
+  assert.equal(loadConfig({
+    NODE_ENV: 'development',
+    PLATFORM_EXTERNAL_AUTH_TOKEN_RATE_LIMIT_PER_MINUTE: '5000',
+  }).externalAuthTokenRateLimitPerMinute, 1000);
 });
 
 test('proxy trust is limited to an explicit hop count', () => {

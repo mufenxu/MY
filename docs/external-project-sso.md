@@ -22,7 +22,10 @@ PLATFORM_EXTERNAL_AUTH_PRIVATE_KEY=...
 PLATFORM_EXTERNAL_AUTH_PUBLIC_KEY=...
 PLATFORM_EXTERNAL_AUTH_KEY_ID=external-auth-v1
 PLATFORM_EXTERNAL_AUTH_TOKEN_TTL_SECONDS=300
+PLATFORM_EXTERNAL_AUTH_TOKEN_RATE_LIMIT_PER_MINUTE=60
 ```
+
+`/oauth/token` 默认按客户端 IP 每分钟限制 60 次请求。达到限制时返回 `429 temporarily_unavailable`，并由限流器提供 `Retry-After`；可通过上述变量在安全范围内调整。
 
 密钥轮换时应先让外部项目能够刷新 JWKS，再切换 `PLATFORM_EXTERNAL_AUTH_KEY_ID` 和密钥对。当前实现只发布一个活动签名密钥，因此不要在旧 Token 仍需被接受时直接覆盖旧密钥。
 
@@ -41,6 +44,12 @@ PLATFORM_EXTERNAL_AUTH_TOKEN_TTL_SECONDS=300
 创建成功后会显示 `client_id` 和 `client_secret`。`client_secret` 只显示一次，外部项目必须立即写入自己的密钥管理系统。遗失后只能在控制台轮换，旧 Secret 会立即失效。
 
 回调地址采用完全匹配，不支持通配符。生产环境的启动、回调和健康检查地址必须为 HTTPS；开发环境仅允许 loopback HTTP。
+
+## 既有项目升级
+
+既有接入项目无需重新注册，现有 `client_id`、Secret、启动地址、回调地址和成功登录协议均不变，也不需要新增外部项目环境变量。
+
+建议检查客户端的 Token 失败处理。如果客户端会自动重试同一个授权码、把所有非 `200` 响应统一映射为 `500/502`，或把上游 `error_description` 返回给浏览器或写入日志，则需要按本文“标准登录流程”和“常见问题”升级。已经正确执行一次性授权码、错误分级和本地安全文案的项目不需要修改。
 
 ## OIDC 元数据
 
@@ -88,7 +97,7 @@ GET  /oauth/userinfo
 5. 按上一节要求验证 ID Token，并确认 `nonce`。
 6. 重新生成外部项目会话 ID，再写入本地用户身份和权限。
 
-授权码约 60 秒过期且只能消费一次。任何失败都应重新从 `/auth/my/start` 开始，不要重试同一个授权码。
+授权码约 60 秒过期且只能消费一次。外部项目取得回调后应立即消费并删除本地 OAuth 临时状态，因此 Token 兑换失败后也不能重放同一个授权码：`invalid_grant` 直接重新开始登录；`temporarily_unavailable` 遵循 `Retry-After`，等待后重新开始登录；`invalid_client` 停止登录并检查服务端客户端配置。
 
 ## 角色映射
 
@@ -124,6 +133,7 @@ POST /api/external-apps/:id/launch
 - 反向代理部署时正确配置可信代理，避免伪造协议和客户端地址。
 - `returnTo` 只允许站内相对路径，禁止把它直接作为外部跳转地址。
 - 不记录授权码、Access Token、ID Token、Secret、Cookie 或完整回调查询参数。
+- 不把 Token 端点的上游 `error_description` 原样返回给浏览器或写入日志，只映射受控错误码和本地文案。
 - JWKS 可以缓存，但遇到未知 `kid` 时应刷新一次，不能关闭签名验证。
 
 ## 健康检查
@@ -135,6 +145,8 @@ POST /api/external-apps/:id/launch
 `invalid_client`：检查 `client_id`、Secret 是否来自同一次创建或轮换，确认 Basic 编码或表单字段正确。
 
 `invalid_grant`：授权码可能过期、已消费，或 `redirect_uri`、PKCE verifier 与授权请求不一致。重新开始登录流程。
+
+`temporarily_unavailable`：Token 请求达到限流或认证服务暂时不可用。仅遵循可信、受限的 `Retry-After` 提示等待时间，等待后重新发起完整登录，不能重试原授权码。
 
 `invalid_request`：检查 `response_type=code`、`scope`、`state`、`nonce`、`code_challenge` 和精确回调地址。
 

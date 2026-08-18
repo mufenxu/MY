@@ -27,7 +27,14 @@
       } else if (!reminder.deliveryConfigured) {
         nodes.academicIntegrationStatus.textContent = "日历可用 · 通知服务未配置";
       } else {
-        const enabled = [calendar.enabled ? "日历" : "", reminder.enabled ? "提醒" : ""].filter(Boolean);
+        const reminderChannels = [
+          reminder.appRecipientId ? "App" : "",
+          reminder.recipientId ? "企业微信" : ""
+        ].filter(Boolean);
+        const enabled = [
+          calendar.enabled ? "日历" : "",
+          reminder.enabled && reminderChannels.length ? `${reminderChannels.join("、")}提醒` : ""
+        ].filter(Boolean);
         nodes.academicIntegrationStatus.textContent = enabled.length ? `${enabled.join("、")}已启用` : "尚未启用";
       }
     }

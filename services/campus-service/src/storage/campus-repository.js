@@ -361,7 +361,13 @@ export class CampusRepository {
   async listEnabledReminderPreferences(options = {}) {
     const { offset, limit } = boundedWindow(options);
     return this.db.collection("reminder_preferences")
-      .find({ enabled: true, recipient_id: { $type: "string", $ne: "" } }, { projection: { _id: 0 } })
+      .find({
+        enabled: true,
+        $or: [
+          { recipient_id: { $type: "string", $ne: "" } },
+          { app_recipient_id: { $type: "string", $ne: "" } }
+        ]
+      }, { projection: { _id: 0 } })
       .sort({ user_id: 1 })
       .skip(offset)
       .limit(limit)
@@ -376,6 +382,7 @@ export class CampusRepository {
           user_id: userId,
           enabled: Boolean(preference.enabled),
           recipient_id: String(preference.recipientId || ""),
+          app_recipient_id: String(preference.appRecipientId || ""),
           lead_minutes: Number(preference.leadMinutes),
           updated_at: timestamp
         },
@@ -521,13 +528,13 @@ export class MemoryCampusRepository {
   async listEnabledReminderPreferences(options = {}) {
     const { offset, limit } = boundedWindow(options);
     return clone(Array.from(this.reminderPreferences.values())
-      .filter((row) => row.enabled && row.recipient_id)
+      .filter((row) => row.enabled && (row.recipient_id || row.app_recipient_id))
       .sort((a, b) => a.user_id.localeCompare(b.user_id))
       .slice(offset, offset + limit));
   }
   async upsertReminderPreference(userId, preference, timestamp) {
     const current = this.reminderPreferences.get(userId);
-    const row = { user_id: userId, enabled: Boolean(preference.enabled), recipient_id: String(preference.recipientId || ""), lead_minutes: Number(preference.leadMinutes), created_at: current?.created_at || timestamp, updated_at: timestamp };
+    const row = { user_id: userId, enabled: Boolean(preference.enabled), recipient_id: String(preference.recipientId || ""), app_recipient_id: String(preference.appRecipientId || ""), lead_minutes: Number(preference.leadMinutes), created_at: current?.created_at || timestamp, updated_at: timestamp };
     this.reminderPreferences.set(userId, row);
     return clone(row);
   }

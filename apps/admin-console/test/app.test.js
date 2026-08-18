@@ -319,6 +319,9 @@ test('external authentication guide is public and exposes a safe machine-readabl
     assert.match(page, /client_id=&lt;MY_CLIENT_ID&gt;/);
     assert.match(page, /grant_type=authorization_code/);
     assert.match(page, /token_use=id/);
+    assert.match(page, /temporarily_unavailable/);
+    assert.match(page, /Retry-After/);
+    assert.match(page, /既有接入项目无需重新注册/);
     assert.match(page, /当前不支持跨项目统一退出/);
     assert.match(page, /完成后明确给出控制台要填写的/);
 
@@ -327,6 +330,7 @@ test('external authentication guide is public and exposes a safe machine-readabl
     assert.equal(contractResponse.headers.get('access-control-allow-origin'), '*');
     assert.equal(contractResponse.headers.get('cross-origin-resource-policy'), 'cross-origin');
     const contract = await contractResponse.json();
+    assert.equal(contract.schemaVersion, 2);
     assert.equal(contract.issuer, 'https://pxyb.cn');
     assert.equal(contract.endpoints.authorization, 'https://pxyb.cn/oauth/authorize');
     assert.equal(contract.protocol.pkceMethod, 'S256');
@@ -340,7 +344,15 @@ test('external authentication guide is public and exposes a safe machine-readabl
     assert.deepEqual(contract.registration.requiredFields, ['name', 'launchUrl', 'redirectUris']);
     assert.equal(contract.credentials.clientSecretServerOnly, true);
     assert.equal(contract.session.singleLogoutSupported, false);
+    assert.equal(contract.compatibility.existingRegistrationChangeRequired, false);
+    assert.equal(contract.compatibility.successfulLoginProtocolChanged, false);
+    assert.equal(contract.compatibility.clientErrorHandlingUpgradeRecommended, true);
     assert.equal(contract.errorHandling.neverRetryAuthorizationCode, true);
+    assert.equal(contract.errorHandling.neverExposeUpstreamErrorDescription, true);
+    assert.ok(contract.errorHandling.restartLoginOn.includes('temporarily_unavailable'));
+    assert.equal(contract.errorHandling.tokenEndpointErrors.temporarily_unavailable.honorRetryAfter, true);
+    assert.equal(contract.errorHandling.tokenEndpointErrors.invalid_grant.action, 'restart_login');
+    assert.equal(contract.errorHandling.tokenEndpointErrors.invalid_client.action, 'report_server_configuration_error');
     assert.deepEqual(contract.aiExpectedOutput.registrationFields, [
       'name', 'launchUrl', 'redirectUris', 'healthUrl', 'requiredRole', 'openMode',
     ]);

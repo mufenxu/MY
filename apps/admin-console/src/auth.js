@@ -178,6 +178,13 @@ export function createSessionRegistry({
     return revoked;
   }
 
+  function isActive({ nonce, subject, now = Date.now() } = {}) {
+    if (!nonce || !subject) return false;
+    prune(now);
+    const session = activeSessions.get(String(nonce));
+    return Boolean(session && session.sub === String(subject));
+  }
+
   function list({ subject } = {}) {
     prune();
     return [...activeSessions.values()]
@@ -206,6 +213,7 @@ export function createSessionRegistry({
     revoke,
     revokeByNonce,
     revokeBySubject,
+    isActive,
     list,
     size: () => activeSessions.size,
   };

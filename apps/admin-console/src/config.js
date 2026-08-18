@@ -160,6 +160,11 @@ export function loadConfig(env = process.env) {
     externalAuthPublicKey: env.PLATFORM_EXTERNAL_AUTH_PUBLIC_KEY || (isProduction ? '' : localExternalAuthPublicKey),
     externalAuthKeyId: String(env.PLATFORM_EXTERNAL_AUTH_KEY_ID || 'external-auth-v1').trim(),
     externalAuthTokenTtlSeconds: parseInteger(env.PLATFORM_EXTERNAL_AUTH_TOKEN_TTL_SECONDS, 300, { min: 60, max: 3600 }),
+    externalAuthTokenRateLimitPerMinute: parseInteger(
+      env.PLATFORM_EXTERNAL_AUTH_TOKEN_RATE_LIMIT_PER_MINUTE,
+      60,
+      { min: 5, max: 1000 },
+    ),
     mongoUri: env.PLATFORM_MONGODB_URI || '',
     metricsToken: env.PLATFORM_METRICS_TOKEN || '',
     blackboxIngestToken: env.PLATFORM_BLACKBOX_INGEST_TOKEN || '',

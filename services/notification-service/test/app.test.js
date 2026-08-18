@@ -188,6 +188,50 @@ test('canonical notification API creates an authenticated app inbox item', async
   }
 });
 
+test('canonical notification API queues future App notifications without early inbox delivery', async () => {
+  const body = {
+    idempotencyKey: 'campus-course:alice:course-1',
+    audience: { users: ['alice'] },
+    channels: ['app'],
+    priority: 'normal',
+    category: 'campus.course.reminder',
+    content: {
+      kind: 'text',
+      title: '课程即将开始',
+      summary: '高等数学将在 15 分钟后开始。',
+      blocks: [{ type: 'text', text: '上课地点：教学楼 101' }],
+    },
+    source: { service: 'campus-service', entityType: 'course', entityId: 'course-1' },
+    actions: [{ id: 'open-today', label: '查看今日', deepLink: 'mycontrol://open?destination=today' }],
+    scheduledAt: '2099-08-18T01:00:00.000Z',
+    dedupeWindowSeconds: 86400,
+    maxAttempts: 4,
+  };
+  const path = '/v1/notifications';
+  const serialized = JSON.stringify(body);
+  const headers = issueServiceRequest({
+    caller: 'core-api',
+    secret: config.apiKey,
+    method: 'POST',
+    pathname: path,
+    body: serialized,
+  });
+
+  await withServer({}, async (port, app) => {
+    const created = await request(port, { path, body, headers });
+    assert.equal(created.status, 202);
+    assert.equal(created.body.scheduled, true);
+    assert.equal(created.body.channels.app, 'scheduled');
+    assert.ok(created.body.jobId);
+
+    const jobs = await app.locals.notificationStore.listNotificationJobs();
+    assert.equal(jobs.total, 1);
+    assert.equal(jobs.items[0].deliveryKind, 'app');
+    const inbox = await app.locals.notificationStore.listAppNotifications('alice');
+    assert.equal(inbox.total, 0);
+  });
+});
+
 test('managed API clients enforce scopes, explicit targets and isolated delivery status', async () => {
   const sent = [];
   await withServer({ sendMessage: async (payload) => { sent.push(payload); return { errcode: 0 }; } }, async (port) => {

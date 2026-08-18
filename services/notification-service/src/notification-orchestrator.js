@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { z } = require('zod');
+const { appNotificationSchema } = require('./app-notification-schema');
 
 const templateKey = z.string().trim().min(2).max(80).regex(/^[a-z0-9][a-z0-9._-]*$/i);
 const messageType = z.enum(['text', 'markdown']);
@@ -77,6 +78,7 @@ function nextAllowedTime(now, preference) {
 function createNotificationOrchestrator({
   store,
   deliver,
+  deliverApp,
   now = () => new Date(),
   concurrency = 4,
   leaseMs = 120000,
@@ -132,6 +134,32 @@ function createNotificationOrchestrator({
     });
   }
 
+  async function enqueueApp(rawInput, { caller, actor = '', requestId = '', apiClient = null } = {}) {
+    const input = appNotificationSchema.parse(rawInput);
+    const requestedAt = input.scheduledAt || now();
+    const scheduledAt = requestedAt > now() ? requestedAt : now();
+    const recipients = [...input.audience.users].sort();
+    return store.createNotificationJob({
+      caller,
+      actor: String(actor || '').slice(0, 128),
+      requestId,
+      apiClientId: apiClient?.clientId || null,
+      apiClientName: apiClient?.clientName || '',
+      apiKeyId: apiClient?.keyId || null,
+      templateKey: '',
+      msgType: 'app',
+      deliveryKind: 'app',
+      targetType: 'app-user',
+      targetValue: recipients.join('|'),
+      status: 'scheduled',
+      scheduledAt,
+      maxAttempts: input.maxAttempts,
+      dedupeKey: input.dedupeKey,
+      dedupeWindowMs: input.dedupeWindowSeconds * 1000,
+      payload: input,
+    });
+  }
+
   async function processJob(job) {
     let heartbeatStopped = false;
     let heartbeatPromise = Promise.resolve();
@@ -150,7 +178,9 @@ function createNotificationOrchestrator({
 
     try {
       try {
-        const outcome = await deliver(job.payload, {
+        const delivery = job.deliveryKind === 'app' ? deliverApp : deliver;
+        if (typeof delivery !== 'function') throw new Error(`Notification delivery handler is unavailable for ${job.deliveryKind || 'wecom'} jobs.`);
+        const outcome = await delivery(job.payload, {
           caller: job.caller || 'notification-orchestrator',
           actor: job.actor,
           requestId: job.requestId || `notification-job-${job.id}`,
@@ -163,7 +193,7 @@ function createNotificationOrchestrator({
         return await store.updateNotificationJob(job.id, {
           status: 'sent',
           sentAt: now(),
-          deliveryId: outcome.delivery?.id || null,
+          deliveryId: outcome.delivery?.id || outcome.wecomDeliveryId || outcome.notificationId || null,
           lastError: '',
         }, { leaseId: job.leaseId });
       } catch (error) {
@@ -211,6 +241,7 @@ function createNotificationOrchestrator({
 
   return {
     enqueue,
+    enqueueApp,
     runDue,
     whenIdle: () => activeRun || Promise.resolve(),
     getQueueOverview: () => store.getNotificationQueueOverview(),
