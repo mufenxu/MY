@@ -297,21 +297,18 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
   }
 
   async function handlePasskeyLogin() {
-    if (!username.trim()) {
-      setError('请先输入管理员账号。');
-      return;
-    }
+    const passkeyUsername = username.trim();
     setSubmitting(true);
     setError('');
     try {
       const generated = await requestJson('/api/auth/passkey/options', {
         method: 'POST',
-        body: JSON.stringify({ username: username.trim(), challengeToken }),
+        body: JSON.stringify({ ...(passkeyUsername ? { username: passkeyUsername } : {}), challengeToken }),
       });
       const response = await startAuthentication({ optionsJSON: generated.options });
       const session = await requestJson('/api/auth/passkey/verify', {
         method: 'POST',
-        body: JSON.stringify({ username: username.trim(), challengeId: generated.challengeId, response }),
+        body: JSON.stringify({ ...(passkeyUsername ? { username: passkeyUsername } : {}), challengeId: generated.challengeId, response }),
       });
       onAuthenticated(session);
     } catch (passkeyError) {
@@ -617,7 +614,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
               {!secondFactorRequired && (
                 <button
                   className="secondary-action login-passkey-button"
-                  disabled={submitting || !username.trim() || (Boolean(challenge?.siteKey) && !challengeToken)}
+                  disabled={submitting || (Boolean(challenge?.siteKey) && !challengeToken)}
                   type="button"
                   onClick={handlePasskeyLogin}
                 >

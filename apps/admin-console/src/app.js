@@ -1276,18 +1276,19 @@ export function createApp({
   });
 
   app.post('/api/auth/passkey/verify', loginLimiter, requireConsoleRequest, async (req, res) => {
-    const username = String(req.body?.username || '').trim();
-    const riskState = await risk.assess({ username, ip: req.ip });
+    const requestedUsername = String(req.body?.username || '').trim();
+    const riskState = await risk.assess({ username: requestedUsername, ip: req.ip });
     if (riskState.blocked) return sendRiskResponse(res, riskState);
     try {
-      const verification = await passkeys.verifyAuthentication(username, req.body);
+      const verification = await passkeys.verifyAuthentication(requestedUsername, req.body);
+      const username = verification.username || requestedUsername;
       const account = verification.verified ? await accounts.findAccount(username) : null;
       if (!verification.verified || !account?.active) {
         return sendRiskResponse(res, await recordLoginFailure(req, username, 'invalid_passkey'));
       }
       return issueAuthenticatedSession(req, res, account, 'passkey');
     } catch {
-      return sendRiskResponse(res, await recordLoginFailure(req, username, 'invalid_passkey'));
+      return sendRiskResponse(res, await recordLoginFailure(req, requestedUsername, 'invalid_passkey'));
     }
   });
 

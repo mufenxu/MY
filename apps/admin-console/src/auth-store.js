@@ -266,6 +266,15 @@ export function createMemoryAuthStore({ bootstrap, encryptionKey, issuer = 'MY P
     async getPasskeys(username) {
       return structuredClone(accountFor(username)?.passkeys || []);
     },
+    async findPasskey(id) {
+      const passkeyId = String(id || '');
+      if (!passkeyId) return null;
+      for (const account of accounts.values()) {
+        const passkey = account.active === false ? null : account.passkeys.find((item) => item.id === passkeyId);
+        if (passkey) return { username: account.username, passkey: structuredClone(passkey) };
+      }
+      return null;
+    },
     async savePasskey(username, passkey) {
       const account = accountFor(username);
       if (!account || account.passkeys.some((item) => item.id === passkey.id)) return false;
@@ -492,6 +501,16 @@ export async function createMongoAuthStore({
     },
     async getPasskeys(username) {
       return (await rawAccount(username))?.passkeys || [];
+    },
+    async findPasskey(id) {
+      const passkeyId = String(id || '');
+      if (!passkeyId) return null;
+      const account = await accounts.findOne(
+        { active: { $ne: false }, 'passkeys.id': passkeyId },
+        { projection: { username: 1, passkeys: { $elemMatch: { id: passkeyId } } } },
+      );
+      const passkey = account?.passkeys?.[0];
+      return passkey ? { username: account.username, passkey } : null;
     },
     async savePasskey(username, passkey) {
       const result = await accounts.updateOne(

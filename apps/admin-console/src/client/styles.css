@@ -5048,6 +5048,7 @@ input:focus-visible {
 .login-heading {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 14px;
   padding: 24px 0 20px;
 }
