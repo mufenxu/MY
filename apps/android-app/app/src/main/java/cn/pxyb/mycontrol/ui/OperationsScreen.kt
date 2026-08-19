@@ -97,6 +97,12 @@ fun OperationsScreen(
                 ImmersiveHeader(
                     title = "状态",
                     subtitle = "系统健康、提醒与必要维护",
+                    actions = {
+                        AppNotificationButton(
+                            unreadCount = state.unreadAlerts,
+                            onClick = onOpenNotifications,
+                        )
+                    },
                 )
             }
 
@@ -111,34 +117,17 @@ fun OperationsScreen(
             }
             item(key = "overview", contentType = "card") {
                 AppPanel {
-                    Row(
+                    AdaptiveMetricGrid(
+                        itemCount = 4,
+                        maxColumns = 4,
                         modifier = Modifier.fillMaxWidth().padding(14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        MetricCell(
-                            "健康服务",
-                            "$healthyServices/$monitoredServices",
-                            Modifier.weight(1f),
-                            if (state.overview != null && healthyServices == monitoredServices) Forest else Amber,
-                        )
-                        MetricCell(
-                            "活动问题",
-                            activeIncidents.toString(),
-                            Modifier.weight(1f),
-                            if (activeIncidents == 0) Forest else Coral,
-                        )
-                        MetricCell(
-                            "在线设备",
-                            "$onlineDevices/$totalDevices",
-                            Modifier.weight(1f),
-                            if (state.iot != null && onlineDevices == totalDevices) Forest else Amber,
-                        )
-                        MetricCell(
-                            "即将到期",
-                            upcomingResources.size.toString(),
-                            Modifier.weight(1f),
-                            if (upcomingResources.isEmpty()) Forest else Amber,
-                        )
+                    ) { index ->
+                        when (index) {
+                            0 -> MetricCell("健康服务", "$healthyServices/$monitoredServices", Modifier.weight(1f), if (state.overview != null && healthyServices == monitoredServices) Forest else Amber)
+                            1 -> MetricCell("活动问题", activeIncidents.toString(), Modifier.weight(1f), if (activeIncidents == 0) Forest else Coral)
+                            2 -> MetricCell("在线设备", "$onlineDevices/$totalDevices", Modifier.weight(1f), if (state.iot != null && onlineDevices == totalDevices) Forest else Amber)
+                            else -> MetricCell("即将到期", upcomingResources.size.toString(), Modifier.weight(1f), if (upcomingResources.isEmpty()) Forest else Amber)
+                        }
                     }
                 }
             }

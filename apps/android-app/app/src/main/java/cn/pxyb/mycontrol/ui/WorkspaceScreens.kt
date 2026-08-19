@@ -372,9 +372,25 @@ fun NotificationCenterScreen(
     var filterTab by remember { mutableStateOf("all") }
     var settingsOpen by remember { mutableStateOf(false) }
     var selectedAlert by remember { mutableStateOf<AppAlertRecord?>(null) }
+    var pendingArchiveId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(pendingArchiveId) {
+        val id = pendingArchiveId ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(5_000)
+        if (pendingArchiveId == id) {
+            onArchive(id)
+            pendingArchiveId = null
+        }
+    }
+
+    fun queueArchive(id: String) {
+        pendingArchiveId?.takeIf { it != id }?.let(onArchive)
+        pendingArchiveId = id
+    }
 
     val now = System.currentTimeMillis()
     val visibleAlerts = state.alerts.filter { alert ->
+        if (alert.id == pendingArchiveId) return@filter false
         val isSnoozed = alert.snoozedUntil != null && alert.snoozedUntil > now
         when (filterTab) {
             "unread" -> !alert.read && !isSnoozed
@@ -433,6 +449,19 @@ fun NotificationCenterScreen(
                 alerts = state.alerts,
             )
         }
+        if (pendingArchiveId != null) {
+            item(key = "archive-undo", contentType = "banner") {
+                AppPanel {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("通知已归档", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        TextButton(onClick = { pendingArchiveId = null }) { Text("撤销") }
+                    }
+                }
+            }
+        }
 
         // 2. Banner 提醒
         state.syncError?.let { error ->
@@ -470,7 +499,7 @@ fun NotificationCenterScreen(
                         }
                     },
                     onMarkRead = onMarkRead,
-                    onArchive = onArchive,
+                    onArchive = ::queueArchive,
                     onSnooze = onSnooze,
                 )
             }

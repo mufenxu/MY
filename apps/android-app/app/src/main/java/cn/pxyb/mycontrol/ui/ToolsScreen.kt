@@ -132,6 +132,7 @@ fun ToolsScreen(
     onRunScene: (String) -> Unit,
     onControlRelay: (String, String, Boolean) -> Unit,
     onRefresh: () -> Unit,
+    onOpenNotifications: () -> Unit,
 ) {
     var confirmation by remember { mutableStateOf<ToolConfirmation?>(null) }
 
@@ -181,7 +182,11 @@ fun ToolsScreen(
         ) {
             // 1. 全新通透极简顶部标题（无黑色包覆块，无刷新按钮）
             item(key = "tools-header", contentType = "header") {
-                LightweightHeaderBanner(mqttConnected = iot?.mqttConnected == true)
+                LightweightHeaderBanner(
+                    mqttConnected = iot?.mqttConnected == true,
+                    unreadCount = state.unreadAlerts,
+                    onOpenNotifications = onOpenNotifications,
+                )
             }
 
             state.sectionError?.let { message ->
@@ -485,6 +490,8 @@ private fun TelemetryInsightUnavailable() {
 @Composable
 private fun LightweightHeaderBanner(
     mqttConnected: Boolean,
+    unreadCount: Int,
+    onOpenNotifications: () -> Unit,
 ) {
     val dotAlpha = if (mqttConnected) {
         val infiniteTransition = rememberInfiniteTransition(label = "pulse")
@@ -502,50 +509,51 @@ private fun LightweightHeaderBanner(
         1f
     }
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        // 清爽小胶囊 Badge
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = if (mqttConnected) Color(0xFFECFDF5) else Color(0xFFFEF2F2),
-            border = BorderStroke(0.5.dp, if (mqttConnected) Color(0xFFA7F3D0) else Color(0xFFFECACA)),
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (mqttConnected) Color(0xFFECFDF5) else Color(0xFFFEF2F2),
+                border = BorderStroke(0.5.dp, if (mqttConnected) Color(0xFFA7F3D0) else Color(0xFFFECACA)),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .graphicsLayer { alpha = dotAlpha }
-                        .background(
-                            color = if (mqttConnected) Color(0xFF10B981) else Color(0xFFEF4444),
-                            shape = CircleShape,
-                        )
-                )
-                Text(
-                    text = if (mqttConnected) "LIVE · 智控中心" else "OFFLINE · 离线模式",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp,
-                    ),
-                    color = if (mqttConnected) Color(0xFF047857) else Color(0xFFB91C1C),
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .graphicsLayer { alpha = dotAlpha }
+                            .background(
+                                color = if (mqttConnected) Color(0xFF10B981) else Color(0xFFEF4444),
+                                shape = CircleShape,
+                            )
+                    )
+                    Text(
+                        text = if (mqttConnected) "LIVE · 智控中心" else "OFFLINE · 离线模式",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = if (mqttConnected) Color(0xFF047857) else Color(0xFFB91C1C),
+                    )
+                }
             }
+            Text(
+                text = "设备与自动化",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                ),
+            )
         }
-
-        // 清爽优雅大标题
-        Text(
-            text = "设备与自动化",
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onBackground,
-            ),
+        AppNotificationButton(
+            unreadCount = unreadCount,
+            onClick = onOpenNotifications,
         )
     }
 }

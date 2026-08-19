@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
 internal val AppPageHorizontalPadding = 16.dp
 internal val AppPageTopSpacing = 8.dp
 internal val AppPageBottomSpacing = 16.dp
-internal val AppPageActionSize = 42.dp
+internal val AppPageActionSize = 48.dp
 
 internal data class AuthenticatedShellInsets(
     val navigationTop: Dp,

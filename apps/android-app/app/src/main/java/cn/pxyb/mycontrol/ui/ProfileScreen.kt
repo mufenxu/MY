@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.ManageAccounts
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -99,6 +100,8 @@ fun ProfileScreen(
     onDownloadAndInstallUpdate: () -> Unit,
     onInstallDownloadedUpdate: () -> Unit,
     onOpenReleases: (String?) -> Unit,
+    onOpenNotifications: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     var revokeTarget by remember { mutableStateOf<SecuritySession?>(null) }
     var confirmLogout by remember { mutableStateOf(false) }
@@ -154,6 +157,9 @@ fun ProfileScreen(
             item {
                 ModernProfileHeader(
                     onOpenQrLogin = onOpenQrLogin,
+                    unreadCount = state.unreadAlerts,
+                    onOpenNotifications = onOpenNotifications,
+                    onOpenSettings = onOpenSettings,
                 )
             }
 
@@ -883,6 +889,9 @@ private fun AppUpdateStatusPanel(
 @Composable
 private fun ModernProfileHeader(
     onOpenQrLogin: () -> Unit,
+    unreadCount: Int,
+    onOpenNotifications: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -899,7 +908,19 @@ private fun ModernProfileHeader(
             ),
         )
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AppNotificationButton(
+                unreadCount = unreadCount,
+                onClick = onOpenNotifications,
+            )
+            ModernHeaderIconButton(
+                icon = Icons.Outlined.Settings,
+                contentDescription = "应用设置",
+                onClick = onOpenSettings,
+            )
             ModernHeaderIconButton(
                 icon = Icons.Outlined.CenterFocusWeak,
                 contentDescription = "扫码登录",

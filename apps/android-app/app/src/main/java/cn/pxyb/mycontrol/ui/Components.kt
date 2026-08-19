@@ -41,14 +41,17 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -67,6 +70,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
@@ -98,6 +102,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -262,6 +268,68 @@ fun AppPanel(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         content()
+    }
+}
+
+@Composable
+fun AppNotificationButton(
+    unreadCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        AppHeaderIconButton(
+            icon = Icons.Outlined.Notifications,
+            contentDescription = if (unreadCount > 0) "通知中心，$unreadCount 条未读" else "通知中心",
+            onClick = onClick,
+        )
+        val badge = unreadBadgeLabel(unreadCount)
+        if (badge.isNotEmpty()) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 4.dp, y = (-3).dp)
+                    .heightIn(min = 18.dp)
+                    .semantics { contentDescription = "$unreadCount 条未读通知" },
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError,
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = badge,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AdaptiveMetricGrid(
+    itemCount: Int,
+    maxColumns: Int,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.(Int) -> Unit,
+) {
+    BoxWithConstraints(modifier = modifier) {
+        val columns = metricGridColumnCount(maxWidth, LocalDensity.current.fontScale, maxColumns)
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            (0 until itemCount).chunked(columns).forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    rowItems.forEach { index -> content(index) }
+                    repeat(columns - rowItems.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
     }
 }
 

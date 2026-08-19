@@ -45,6 +45,8 @@ import cn.pxyb.mycontrol.AlertNotifier
 import cn.pxyb.mycontrol.ui.AppViewModel
 import cn.pxyb.mycontrol.ui.MyControlApp
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
+import cn.pxyb.mycontrol.data.AppPreferences
+import cn.pxyb.mycontrol.data.AppThemePreference
 import cn.pxyb.mycontrol.data.SessionStore
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
@@ -74,7 +76,14 @@ class MainActivity : ComponentActivity() {
         handleOpenIntent(intent)
         enableEdgeToEdge()
         setContent {
-            MYControlTheme {
+            val appPreferences = remember { AppPreferences(this) }
+            val themePreference = remember { mutableStateOf(appPreferences.themePreference()) }
+            val useDarkTheme = when (themePreference.value) {
+                AppThemePreference.System -> androidx.compose.foundation.isSystemInDarkTheme()
+                AppThemePreference.Light -> false
+                AppThemePreference.Dark -> true
+            }
+            MYControlTheme(darkTheme = useDarkTheme) {
                 val biometricRequest = remember { { promptForUnlock(appViewModel::unlockSession) } }
                 val passkeyRequest: suspend (String) -> String = remember {
                     { requestJson -> requestPasskey(requestJson) }
@@ -103,6 +112,13 @@ class MainActivity : ComponentActivity() {
                     notificationsEnabled = notificationsEnabled.value,
                     onRequestNotifications = notificationPermissionRequest,
                     onWriteNfcScene = ::beginNfcSceneWrite,
+                    themePreference = themePreference.value,
+                    onThemePreferenceChange = { preference ->
+                        appPreferences.setThemePreference(preference)
+                        themePreference.value = preference
+                    },
+                    showInitialSetup = appPreferences.shouldShowInitialSetup(),
+                    onInitialSetupComplete = appPreferences::completeInitialSetup,
                 )
             }
         }

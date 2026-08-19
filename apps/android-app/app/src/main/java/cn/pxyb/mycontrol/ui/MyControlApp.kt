@@ -56,11 +56,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Settings
@@ -132,6 +135,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
+import cn.pxyb.mycontrol.data.AppThemePreference
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
@@ -219,6 +223,10 @@ fun MyControlApp(
     notificationsEnabled: Boolean,
     onRequestNotifications: () -> Unit,
     onWriteNfcScene: (String, String) -> Unit,
+    themePreference: AppThemePreference,
+    onThemePreferenceChange: (AppThemePreference) -> Unit,
+    showInitialSetup: Boolean,
+    onInitialSetupComplete: () -> Unit,
 ) {
     var splashVisible by remember { mutableStateOf(true) }
     var splashExiting by remember { mutableStateOf(false) }
@@ -290,6 +298,10 @@ fun MyControlApp(
                         notificationsEnabled,
                         onRequestNotifications,
                         onWriteNfcScene,
+                        themePreference,
+                        onThemePreferenceChange,
+                        showInitialSetup,
+                        onInitialSetupComplete,
                     )
                 }
             }
@@ -1180,6 +1192,10 @@ private fun AuthenticatedShell(
     notificationsEnabled: Boolean,
     onRequestNotifications: () -> Unit,
     onWriteNfcScene: (String, String) -> Unit,
+    themePreference: AppThemePreference,
+    onThemePreferenceChange: (AppThemePreference) -> Unit,
+    showInitialSetup: Boolean,
+    onInitialSetupComplete: () -> Unit,
 ) {
     if (state.qrLoginOpen) {
         val qrLoginState by viewModel.qrLoginState.collectAsStateWithLifecycle()
@@ -1198,7 +1214,12 @@ private fun AuthenticatedShell(
     var toastError by remember { mutableStateOf(false) }
     var toastDragOffset by remember { mutableFloatStateOf(0f) }
     var toastDragging by remember { mutableStateOf(false) }
+    var settingsOpen by remember { mutableStateOf(false) }
+    var initialSetupOpen by remember(showInitialSetup, state.user) {
+        mutableStateOf(showInitialSetup && state.user != null)
+    }
     val toastShape = RoundedCornerShape(20.dp)
+    val settingsProfileState by viewModel.profileState.collectAsStateWithLifecycle()
     val toastDismissThreshold = with(LocalDensity.current) { 72.dp.toPx() }
     val animatedToastOffset by animateFloatAsState(
         targetValue = toastDragOffset,
@@ -1356,6 +1377,7 @@ private fun AuthenticatedShell(
                         onOpenSearch = viewModel::openGlobalSearch,
                         onOpenQrLogin = viewModel::openQrScanner,
                         onOpenWorkspace = viewModel::openWorkspace,
+                        onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
                         requestWebLoginUrl = viewModel::createPlatformWebLoginUrl,
                         requestExternalApplicationLaunch = viewModel::createExternalApplicationLaunch,
@@ -1409,6 +1431,7 @@ private fun AuthenticatedShell(
                             viewModel.controlIotRelay(deviceId, relayId, enabled)
                         },
                         onRefresh,
+                        onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
                     )
                 }
                 composable(AppRoute.Profile) {
@@ -1432,6 +1455,8 @@ private fun AuthenticatedShell(
                         onDownloadAndInstallUpdate = viewModel::downloadAndInstallAppUpdate,
                         onInstallDownloadedUpdate = viewModel::installDownloadedAppUpdate,
                         onOpenReleases = viewModel::openAppReleasesPage,
+                        onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
+                        onOpenSettings = { settingsOpen = true },
                     )
                 }
                 composable(AppRoute.Account) {
@@ -1587,6 +1612,23 @@ private fun AuthenticatedShell(
                 )
             }
 
+            if (settingsOpen || initialSetupOpen) {
+                AppSettingsDialog(
+                    profile = settingsProfileState,
+                    notificationsEnabled = notificationsEnabled,
+                    themePreference = themePreference,
+                    initialSetup = initialSetupOpen,
+                    onRequestNotifications = onRequestNotifications,
+                    onForceFullSync = viewModel::forceFullSync,
+                    onThemePreferenceChange = onThemePreferenceChange,
+                    onDismiss = {
+                        if (initialSetupOpen) onInitialSetupComplete()
+                        initialSetupOpen = false
+                        settingsOpen = false
+                    },
+                )
+            }
+
             AnimatedVisibility(
                 visible = toastVisible,
                 enter = slideInVertically(animationSpec = tween(260, easing = FastOutSlowInEasing)) { -it } + fadeIn(animationSpec = tween(180)),
@@ -1639,6 +1681,145 @@ private fun AuthenticatedShell(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun AppSettingsDialog(
+    profile: ProfileUiState,
+    notificationsEnabled: Boolean,
+    themePreference: AppThemePreference,
+    initialSetup: Boolean,
+    onRequestNotifications: () -> Unit,
+    onForceFullSync: () -> Unit,
+    onThemePreferenceChange: (AppThemePreference) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val syncStates = profile.sectionLoadStates.values
+    val refreshingCount = syncStates.count(SectionLoadState::refreshing)
+    val failedCount = syncStates.count { !it.error.isNullOrBlank() }
+    val latestSync = syncStates.mapNotNull(SectionLoadState::updatedAtMillis).maxOrNull()
+    AppDialog(
+        onDismissRequest = onDismiss,
+        icon = if (initialSetup) Icons.Outlined.CheckCircle else Icons.Outlined.Settings,
+        title = if (initialSetup) "完成初始配置" else "应用设置",
+        subtitle = if (initialSetup) "确认外观、通知与数据同步状态" else "外观、权限与同步集中管理",
+        footer = {
+            AppDialogPrimaryButton(
+                text = if (initialSetup) "完成配置" else "完成",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+    ) {
+        SettingsSectionTitle(Icons.Outlined.DarkMode, "外观")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf(
+                AppThemePreference.System to "跟随系统",
+                AppThemePreference.Light to "浅色",
+                AppThemePreference.Dark to "深色",
+            ).forEach { (preference, label) ->
+                val selected = themePreference == preference
+                Surface(
+                    onClick = { onThemePreferenceChange(preference) },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    border = BorderStroke(
+                        1.dp,
+                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outlineVariant,
+                    ),
+                ) {
+                    Box(Modifier.fillMaxSize().padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+                        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                    }
+                }
+            }
+        }
+
+        SettingsSectionTitle(Icons.Outlined.NotificationsActive, "通知")
+        SettingsStatusRow(
+            title = "系统通知权限",
+            detail = if (notificationsEnabled) "已开启" else "未开启",
+            healthy = notificationsEnabled,
+            actionLabel = if (notificationsEnabled) null else "去开启",
+            onAction = onRequestNotifications,
+        )
+
+        SettingsSectionTitle(Icons.Outlined.CloudSync, "数据同步")
+        SettingsStatusRow(
+            title = when {
+                refreshingCount > 0 -> "$refreshingCount 个模块正在同步"
+                failedCount > 0 -> "$failedCount 个模块同步异常"
+                else -> "后台同步正常"
+            },
+            detail = listOfNotNull(
+                latestSync?.let(::relativeSyncTime),
+                profile.pendingTodoMutations.takeIf { it > 0 }?.let { "$it 项待办等待上传" },
+                if (profile.offlineMode) "当前使用离线数据" else null,
+            ).ifEmpty { listOf("等待首次同步记录") }.joinToString(" · "),
+            healthy = failedCount == 0 && !profile.offlineMode,
+            actionLabel = if (refreshingCount == 0) "立即同步" else null,
+            onAction = onForceFullSync,
+        )
+    }
+}
+
+@Composable
+private fun SettingsSectionTitle(icon: ImageVector, title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun SettingsStatusRow(
+    title: String,
+    detail: String,
+    healthy: Boolean,
+    actionLabel: String?,
+    onAction: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                if (healthy) Icons.Outlined.CheckCircle else Icons.Outlined.Cancel,
+                contentDescription = null,
+                tint = if (healthy) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp),
+            )
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            actionLabel?.let { label ->
+                TextButton(onClick = onAction) { Text(label) }
+            }
+        }
+    }
+}
+
+private fun relativeSyncTime(timestamp: Long): String {
+    val minutes = ((System.currentTimeMillis() - timestamp).coerceAtLeast(0L) / 60_000L).toInt()
+    return when {
+        minutes < 1 -> "刚刚同步"
+        minutes < 60 -> "$minutes 分钟前同步"
+        minutes < 24 * 60 -> "${minutes / 60} 小时前同步"
+        else -> "${minutes / (24 * 60)} 天前同步"
     }
 }
 

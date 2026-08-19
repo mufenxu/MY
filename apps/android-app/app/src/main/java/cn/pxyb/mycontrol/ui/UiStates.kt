@@ -93,6 +93,7 @@ data class ToolsUiState(
     val overview: OverviewData?,
     val iot: IotData?,
     val ct8: Ct8Data?,
+    val unreadAlerts: Int,
 )
 
 @Immutable
@@ -135,6 +136,10 @@ data class ProfileUiState(
     val appUpdate: AppUpdateUiState = AppUpdateUiState(),
     val webLoginLink: WebLoginLink? = null,
     val cacheStorageInfo: CacheStorageInfo = CacheStorageInfo(),
+    val unreadAlerts: Int = 0,
+    val offlineMode: Boolean = false,
+    val pendingTodoMutations: Int = 0,
+    val sectionLoadStates: Map<DataSection, SectionLoadState> = emptyMap(),
 )
 
 @Immutable
@@ -289,6 +294,7 @@ internal fun AppUiState.toToolsUiState() = ToolsUiState(
     overview = overview,
     iot = iot,
     ct8 = ct8,
+    unreadAlerts = alerts.count { !it.read },
 )
 
 internal fun AppUiState.toProfileUiState() = ProfileUiState(
@@ -302,6 +308,10 @@ internal fun AppUiState.toProfileUiState() = ProfileUiState(
     appUpdate = appUpdate,
     webLoginLink = webLoginLink,
     cacheStorageInfo = cacheStorageInfo,
+    unreadAlerts = alerts.count { !it.read },
+    offlineMode = offlineMode,
+    pendingTodoMutations = pendingTodoMutations,
+    sectionLoadStates = sectionLoadStates,
 )
 
 internal fun AppUiState.toAccountManagementUiState() = AccountManagementUiState(

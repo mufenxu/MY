@@ -132,6 +132,7 @@ fun OverviewScreen(
     onOpenSearch: () -> Unit,
     onOpenQrLogin: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
+    onOpenNotifications: () -> Unit,
     onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
     requestWebLoginUrl: suspend (String) -> String,
     requestExternalApplicationLaunch: suspend (String) -> ExternalApplicationLaunch,
@@ -253,6 +254,8 @@ fun OverviewScreen(
                 ModernOverviewHeader(
                     onOpenQrLogin = onOpenQrLogin,
                     onOpenSearch = onOpenSearch,
+                    unreadCount = state.unreadAlerts,
+                    onOpenNotifications = onOpenNotifications,
                 )
             }
 
@@ -657,6 +660,8 @@ fun OverviewScreen(
 private fun ModernOverviewHeader(
     onOpenQrLogin: () -> Unit,
     onOpenSearch: () -> Unit,
+    unreadCount: Int,
+    onOpenNotifications: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -677,6 +682,10 @@ private fun ModernOverviewHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            AppNotificationButton(
+                unreadCount = unreadCount,
+                onClick = onOpenNotifications,
+            )
             ModernHeaderIconButton(
                 icon = Icons.Outlined.Search,
                 contentDescription = "全局搜索",
