@@ -1195,6 +1195,7 @@ private fun AuthenticatedShell(
     var toastError by remember { mutableStateOf(false) }
     var toastDragOffset by remember { mutableFloatStateOf(0f) }
     var toastDragging by remember { mutableStateOf(false) }
+    val toastShape = RoundedCornerShape(20.dp)
     val toastDismissThreshold = with(LocalDensity.current) { 72.dp.toPx() }
     val animatedToastOffset by animateFloatAsState(
         targetValue = toastDragOffset,
@@ -1588,6 +1589,9 @@ private fun AuthenticatedShell(
                         translationX = animatedToastOffset
                         alpha = (1f - abs(animatedToastOffset) / (toastDismissThreshold * 2f))
                             .coerceIn(0.45f, 1f)
+                        shape = toastShape
+                        clip = true
+                        shadowElevation = if (toastDragging) 0f else 4.dp.toPx()
                     }
                     .pointerInput(toastMessage, toastDismissThreshold) {
                         detectHorizontalDragGestures(

@@ -795,18 +795,20 @@ fun AppToast(
     modifier: Modifier = Modifier,
 ) {
     val dark = isSystemInDarkTheme()
-    val container = if (error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer
-    val contentColor = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer
     val accentColor = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
-    val border = accentColor.copy(alpha = if (dark) 0.32f else 0.18f)
-    val iconBackground = accentColor.copy(alpha = if (dark) 0.2f else 0.12f)
+    val container = accentColor
+        .copy(alpha = if (dark) 0.1f else 0.035f)
+        .compositeOver(MaterialTheme.colorScheme.surface)
+    val contentColor = MaterialTheme.colorScheme.onSurface
+    val border = accentColor.copy(alpha = if (dark) 0.3f else 0.16f)
+    val iconBackground = accentColor.copy(alpha = if (dark) 0.18f else 0.1f)
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
         color = container,
         contentColor = contentColor,
-        shadowElevation = 10.dp,
-        border = BorderStroke(0.5.dp, border),
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, border),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
