@@ -4295,8 +4295,11 @@ input:focus-visible {
   margin-top: 16px;
 }
 
-.backup-offsite-config,
-.backup-offsite-remote { min-width: 0; }
+.backup-offsite-config { min-width: 0; }
+.backup-offsite-remote {
+  min-width: 0;
+  min-height: 0;
+}
 
 .offsite-subsection-head {
   display: flex;
@@ -4402,7 +4405,20 @@ input:focus-visible {
   margin-top: 14px;
 }
 
-.offsite-backup-list { display: grid; }
+.offsite-backup-list {
+  display: grid;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--line-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.offsite-backup-list::-webkit-scrollbar { width: 8px; }
+.offsite-backup-list::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 8px;
+}
 
 .offsite-backup-row {
   display: grid;

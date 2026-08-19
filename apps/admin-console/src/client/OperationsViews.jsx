@@ -1275,6 +1275,8 @@ export function BackupOffsitePanel({ session, localBackups = [], backupJob = nul
   const [executedJobId, setExecutedJobId] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const backupOffsiteConfigRef = useRef(null);
+  const backupOffsiteListRef = useRef(null);
   const canOperate = roleAtLeast(session.user?.role, 'operator');
   const canManage = roleAtLeast(session.user?.role, 'super_admin');
 
@@ -1307,6 +1309,30 @@ export function BackupOffsitePanel({ session, localBackups = [], backupJob = nul
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const configPanel = backupOffsiteConfigRef.current;
+    const remoteList = backupOffsiteListRef.current;
+    if (!configPanel || !remoteList) return undefined;
+
+    const syncRemoteListHeight = () => {
+      const configHeight = configPanel.offsetHeight;
+      const remoteHeader = remoteList.previousElementSibling;
+      const headerHeight = remoteHeader?.offsetHeight || 34;
+      remoteList.style.maxHeight = configHeight
+        ? `${Math.max(180, configHeight - headerHeight - 10)}px`
+        : '';
+    };
+
+    syncRemoteListHeight();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncRemoteListHeight) : null;
+    observer?.observe(configPanel);
+    window.addEventListener('resize', syncRemoteListHeight);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', syncRemoteListHeight);
+    };
+  }, []);
 
   useEffect(() => {
     if (!executedJobId || backupJob?.id !== executedJobId || backupJob.status === 'running') return;
@@ -1464,7 +1490,7 @@ export function BackupOffsitePanel({ session, localBackups = [], backupJob = nul
       <Feedback error={error} message={message} />
       {!encryptionReady && <div className="ops-feedback error"><CircleAlert size={17} />备份存储加密密钥未配置</div>}
       <div className="backup-offsite-layout">
-        <div className="backup-offsite-config">
+        <div className="backup-offsite-config" ref={backupOffsiteConfigRef}>
           <div className="offsite-subsection-head"><span>每日计划</span><FileClock size={18} /></div>
           <div className="offsite-schedule-controls">
             <label className="toggle-field"><span><strong>自动备份</strong><small>每日执行</small></span><input type="checkbox" checked={schedule.enabled} disabled={!canOperate || loading} onChange={(event) => setSchedule({ ...schedule, enabled: event.target.checked })} /></label>
@@ -1497,7 +1523,7 @@ export function BackupOffsitePanel({ session, localBackups = [], backupJob = nul
 
         <div className="backup-offsite-remote">
           <div className="offsite-subsection-head"><span>远端备份</span><button className="backup-row-action" type="button" title="刷新远端清单" aria-label="刷新远端清单" onClick={load} disabled={loading}>{loading ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}</button></div>
-          <div className="offsite-backup-list">
+          <div className="offsite-backup-list" ref={backupOffsiteListRef}>
             {loading ? <LoadingBlock label="正在读取远端备份" /> : remoteBackups.length > 0 ? remoteBackups.map((backup) => {
               const existsLocally = localNames.has(backup.name);
               const importing = busy === `import:${backup.key}`;
