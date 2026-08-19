@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -46,6 +48,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -1048,6 +1051,10 @@ private fun NotificationPreferencesDialog(
     var iotAlerts by remember { mutableStateOf(current.iotAlerts) }
     var campusAlerts by remember { mutableStateOf(current.campusAlerts) }
     var backupAlerts by remember { mutableStateOf(current.backupAlerts) }
+    var dailyBriefEnabled by remember { mutableStateOf(current.dailyBriefEnabled) }
+    var morningHour by remember { mutableStateOf(current.morningBriefHour.toString()) }
+    var eveningHour by remember { mutableStateOf(current.eveningBriefHour.toString()) }
+    var classFocusEnabled by remember { mutableStateOf(current.classFocusEnabled) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1061,7 +1068,7 @@ private fun NotificationPreferencesDialog(
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 6.dp,
         ) {
-            Column(modifier = Modifier.padding(22.dp)) {
+            Column(modifier = Modifier.padding(22.dp).verticalScroll(rememberScrollState())) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconTile(Icons.Outlined.NotificationsActive, Color(0xFFEA580C), Color(0xFFFFF7ED), modifier = Modifier.size(44.dp))
                     Spacer(Modifier.width(12.dp))
@@ -1119,6 +1126,47 @@ private fun NotificationPreferencesDialog(
 
                 Spacer(Modifier.height(12.dp))
 
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        PreferenceToggleRow("每日简报", dailyBriefEnabled) { dailyBriefEnabled = it }
+                        Text(
+                            "每天汇总下一节课、待办和需要关注的事项",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (dailyBriefEnabled) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = morningHour,
+                                    onValueChange = { morningHour = it.filter(Char::isDigit).take(2) },
+                                    label = { Text("早报小时") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                OutlinedTextField(
+                                    value = eveningHour,
+                                    onValueChange = { eveningHour = it.filter(Char::isDigit).take(2) },
+                                    label = { Text("晚报小时") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                        PreferenceToggleRow("上课专注模式", classFocusEnabled) { classFocusEnabled = it }
+                        Text(
+                            "上课期间静音普通提醒，紧急故障仍会通知",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
                 // 2. 严重等级过滤
                 Text("告警接收级别", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(6.dp))
@@ -1158,6 +1206,10 @@ private fun NotificationPreferencesDialog(
                                     iotAlerts = iotAlerts,
                                     campusAlerts = campusAlerts,
                                     backupAlerts = backupAlerts,
+                                    dailyBriefEnabled = dailyBriefEnabled,
+                                    morningBriefHour = morningHour.toIntOrNull()?.coerceIn(0, 23) ?: 7,
+                                    eveningBriefHour = eveningHour.toIntOrNull()?.coerceIn(0, 23) ?: 21,
+                                    classFocusEnabled = classFocusEnabled,
                                 )
                             )
                         },

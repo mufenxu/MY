@@ -266,6 +266,34 @@ fun OverviewScreen(
                     OfflineSnapshotNotice(state.cachedAtMillis)
                 }
             }
+            state.assistantSnapshot?.let { assistant ->
+                item(key = "assistant-next-action", contentType = "assistant") {
+                    AppPanel(
+                        onClick = {
+                            when (assistant.nextAction.destination) {
+                                cn.pxyb.mycontrol.assistant.AssistantDestination.Today -> onOpenWorkspace(WorkspaceDestination.Today)
+                                cn.pxyb.mycontrol.assistant.AssistantDestination.Notifications -> onOpenWorkspace(WorkspaceDestination.Notifications)
+                                cn.pxyb.mycontrol.assistant.AssistantDestination.Operations -> onOpenOperations()
+                                cn.pxyb.mycontrol.assistant.AssistantDestination.Profile -> onSelectTab(MainTab.Profile)
+                            }
+                        },
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            IconTile(Icons.Outlined.AutoAwesome, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
+                            Column(Modifier.weight(1f)) {
+                                Text("下一步", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                Text(assistant.nextAction.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(assistant.nextAction.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
             if (overview == null) {
                 item(key = "overview-sync", contentType = "sync") {
                     OverviewSyncPanel(refreshing = state.refreshing)

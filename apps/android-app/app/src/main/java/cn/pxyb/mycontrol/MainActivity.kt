@@ -5,6 +5,14 @@ import android.hardware.biometrics.BiometricPrompt
 import android.content.Intent
 import android.Manifest
 import android.content.pm.PackageManager
+import android.app.PendingIntent
+import android.content.IntentFilter
+import android.nfc.NdefMessage
+import android.nfc.NdefRecord
+import android.nfc.NfcAdapter
+import android.nfc.Tag
+import android.nfc.tech.Ndef
+import android.nfc.tech.NdefFormatable
 import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
@@ -37,6 +45,7 @@ import cn.pxyb.mycontrol.AlertNotifier
 import cn.pxyb.mycontrol.ui.AppViewModel
 import cn.pxyb.mycontrol.ui.MyControlApp
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
+import cn.pxyb.mycontrol.data.SessionStore
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlinx.coroutines.TimeoutCancellationException
@@ -49,6 +58,9 @@ class MainActivity : ComponentActivity() {
     private val appViewModel: AppViewModel by viewModels()
     private val credentialManager by lazy { CredentialManager.create(this) }
     private val alertNotifier by lazy { AlertNotifier(this) }
+    private val sessionStore by lazy { SessionStore(this) }
+    private val nfcAdapter by lazy { NfcAdapter.getDefaultAdapter(this) }
+    private var pendingNfcScene: Pair<String, String>? = null
     private var authenticationRequests = 0
     private var activityStopped = false
     private var notificationsEnabled = mutableStateOf(false)
@@ -90,12 +102,14 @@ class MainActivity : ComponentActivity() {
                     onSensitiveActionConfirmation = sensitiveActionConfirmation,
                     notificationsEnabled = notificationsEnabled.value,
                     onRequestNotifications = notificationPermissionRequest,
+                    onWriteNfcScene = ::beginNfcSceneWrite,
                 )
             }
         }
         lifecycleScope.launch(Dispatchers.Default) {
             alertNotifier.ensureChannel()
             OperationalSyncScheduler.schedule(this@MainActivity)
+            DailyBriefScheduler.schedule(this@MainActivity, sessionStore.readActiveUsername())
         }
     }
 
@@ -268,6 +282,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (pendingNfcScene != null) enableNfcForegroundDispatch()
+    }
+
+    override fun onPause() {
+        runCatching { nfcAdapter?.disableForegroundDispatch(this) }
+        super.onPause()
+    }
+
     private fun hasNotificationPermission(): Boolean =
         (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
@@ -275,6 +299,20 @@ class MainActivity : ComponentActivity() {
 
     private fun handleOpenIntent(intent: Intent?) {
         if (intent == null) return
+        if (intent.action == NfcAdapter.ACTION_TAG_DISCOVERED ||
+            intent.action == NfcAdapter.ACTION_TECH_DISCOVERED ||
+            intent.action == NfcAdapter.ACTION_NDEF_DISCOVERED
+        ) {
+            writePendingScene(intent)
+            return
+        }
+        if (intent.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            appViewModel.openSharedTodo(
+                subject = intent.getStringExtra(Intent.EXTRA_SUBJECT),
+                text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString(),
+            )
+            return
+        }
         val data = intent.data
         if (data != null) {
             appViewModel.handleOpenIntent(data)
@@ -287,6 +325,76 @@ class MainActivity : ComponentActivity() {
                 tab = DeepLinks.parseTab(tab),
                 taskId = taskId,
             )
+        }
+    }
+
+    private fun beginNfcSceneWrite(sceneId: String, sceneName: String) {
+        val adapter = nfcAdapter
+        if (adapter == null) {
+            Toast.makeText(this, "当前设备不支持 NFC。", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (!adapter.isEnabled) {
+            Toast.makeText(this, "请先开启 NFC，再把标签贴近手机。", Toast.LENGTH_LONG).show()
+            startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
+            return
+        }
+        pendingNfcScene = sceneId to sceneName
+        enableNfcForegroundDispatch()
+        Toast.makeText(this, "请将 NFC 标签贴近手机，写入“$sceneName”。", Toast.LENGTH_LONG).show()
+    }
+
+    private fun enableNfcForegroundDispatch() {
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            64001,
+            Intent(this, javaClass).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+        )
+        val filters = arrayOf(
+            IntentFilter(NfcAdapter.ACTION_TAG_DISCOVERED),
+            IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED),
+        )
+        nfcAdapter?.enableForegroundDispatch(this, pendingIntent, filters, null)
+    }
+
+    private fun writePendingScene(intent: Intent) {
+        val (sceneId, sceneName) = pendingNfcScene ?: return
+        val tag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(NfcAdapter.EXTRA_TAG, Tag::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(NfcAdapter.EXTRA_TAG)
+        } ?: return
+        val uri = DeepLinks.openIntent(this, destination = "scenes", sceneId = sceneId).data ?: return
+        val message = NdefMessage(arrayOf(NdefRecord.createUri(uri)))
+        val result = runCatching {
+            val ndef = Ndef.get(tag)
+            if (ndef != null) {
+                ndef.connect()
+                try {
+                    require(ndef.isWritable) { "这个 NFC 标签是只读的。" }
+                    require(ndef.maxSize >= message.toByteArray().size) { "NFC 标签容量不足。" }
+                    ndef.writeNdefMessage(message)
+                } finally {
+                    ndef.close()
+                }
+            } else {
+                val formatable = NdefFormatable.get(tag) ?: error("这个 NFC 标签不支持 NDEF 写入。")
+                formatable.connect()
+                try {
+                    formatable.format(message)
+                } finally {
+                    formatable.close()
+                }
+            }
+        }
+        if (result.isSuccess) {
+            pendingNfcScene = null
+            runCatching { nfcAdapter?.disableForegroundDispatch(this) }
+            Toast.makeText(this, "“$sceneName”已写入 NFC 标签。", Toast.LENGTH_LONG).show()
+        } else {
+            Toast.makeText(this, result.exceptionOrNull()?.message ?: "NFC 写入失败，请重试。", Toast.LENGTH_LONG).show()
         }
     }
 }

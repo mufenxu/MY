@@ -14,12 +14,19 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.VolumeOff
 import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +46,7 @@ import cn.pxyb.mycontrol.ui.theme.CoralPale
 import cn.pxyb.mycontrol.ui.theme.Forest
 import cn.pxyb.mycontrol.ui.theme.MintPale
 import cn.pxyb.mycontrol.ui.theme.Ocean
+import cn.pxyb.mycontrol.data.IncidentInfo
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -50,9 +58,14 @@ fun OperationsScreen(
     onTriggerBackup: () -> Unit,
     onOpenNotifications: () -> Unit,
     onMeasureNetwork: () -> Unit,
+    onIncidentNote: (String, String) -> Unit,
+    onIncidentMute: (String) -> Unit,
+    onIncidentResolve: (String, String) -> Unit,
     onRefresh: () -> Unit,
 ) {
     var confirmBackup by remember { mutableStateOf(false) }
+    var noteTarget by remember { mutableStateOf<IncidentInfo?>(null) }
+    var noteText by remember { mutableStateOf("") }
     val canOperate = state.user?.role in setOf("operator", "super_admin")
     val activeIncidents = state.incidents.count { it.status != "resolved" }
     val monitoredServices = state.overview?.monitoredCount ?: 0
@@ -157,6 +170,80 @@ fun OperationsScreen(
                             onClick = onMeasureNetwork,
                             trailing = networkStatusLabel(state.networkHealth.status),
                         )
+                        if (state.networkHealth.checks.isNotEmpty()) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                            Column(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(7.dp),
+                            ) {
+                                state.networkHealth.checks.forEach { check ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = if (check.ok) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
+                                            contentDescription = null,
+                                            tint = if (check.ok) Forest else Coral,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Text(check.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                                        Text(
+                                            check.detail,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (state.incidents.any { it.status != "resolved" }) {
+                item(key = "incident-actions-title", contentType = "section") {
+                    SectionHeader("正在处理的问题", "可以直接记录、静音或标记解决")
+                }
+                items(
+                    items = state.incidents.filter { it.status != "resolved" }.take(6),
+                    key = { "incident-action:${it.id}" },
+                    contentType = { "incident-action" },
+                ) { incident ->
+                    AppPanel {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                                IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale, modifier = Modifier.size(36.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(incident.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        incident.description.ifBlank { "${incident.source} · ${incident.severity}" },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                StatusBadge(incident.status)
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                TextButton(onClick = { noteTarget = incident; noteText = "" }, enabled = canOperate) {
+                                    Icon(Icons.Outlined.EditNote, null, modifier = Modifier.size(17.dp))
+                                    Text("记录")
+                                }
+                                TextButton(onClick = { onIncidentMute(incident.id) }, enabled = canOperate) {
+                                    Icon(Icons.Outlined.VolumeOff, null, modifier = Modifier.size(17.dp))
+                                    Text("静音 1 小时")
+                                }
+                                TextButton(onClick = { onIncidentResolve(incident.id, "已由手机端标记解决") }, enabled = canOperate) {
+                                    Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
+                                    Text("解决")
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -277,6 +364,33 @@ fun OperationsScreen(
                 onTriggerBackup()
             },
             icon = Icons.Outlined.Backup,
+        )
+    }
+    noteTarget?.let { incident ->
+        AlertDialog(
+            onDismissRequest = { noteTarget = null },
+            title = { Text("记录处理进展") },
+            text = {
+                OutlinedTextField(
+                    value = noteText,
+                    onValueChange = { noteText = it.take(500) },
+                    label = { Text("备注") },
+                    placeholder = { Text("例如：已重启服务，等待指标恢复") },
+                    minLines = 3,
+                    maxLines = 5,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onIncidentNote(incident.id, noteText)
+                        noteTarget = null
+                    },
+                    enabled = noteText.isNotBlank(),
+                ) { Text("保存记录") }
+            },
+            dismissButton = { TextButton(onClick = { noteTarget = null }) { Text("取消") } },
         )
     }
 }

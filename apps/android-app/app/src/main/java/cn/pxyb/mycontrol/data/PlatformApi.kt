@@ -253,6 +253,21 @@ class PlatformApi(
             .optJSONArray("incidents").objects().map { it.toIncidentInfo() }
     }
 
+    suspend fun updateIncident(
+        id: String,
+        action: String,
+        note: String = "",
+        muteMinutes: Int? = null,
+    ): IncidentInfo = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("action", action)
+        note.trim().takeIf(String::isNotBlank)?.let { body.put("note", it.take(500)) }
+        muteMinutes?.let { body.put("muteMinutes", it.coerceIn(5, 7 * 24 * 60)) }
+        execute("/api/incidents/${encodePath(id)}/actions", "POST", body).json
+            .optJSONObject("incident")
+            ?.toIncidentInfo()
+            ?: throw ApiException("异常操作未返回有效结果。", 502, "INCIDENT_ACTION_INVALID")
+    }
+
     suspend fun tasks(): TaskData = withContext(Dispatchers.IO) {
         val json = execute("/api/tasks?limit=100").json
         TaskData(

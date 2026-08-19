@@ -1,6 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.compose.runtime.Immutable
+import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot
 
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
@@ -18,6 +19,7 @@ import cn.pxyb.mycontrol.data.IotData
 import cn.pxyb.mycontrol.data.OverviewData
 import cn.pxyb.mycontrol.data.PlatformPasskey
 import cn.pxyb.mycontrol.data.PlatformUser
+import cn.pxyb.mycontrol.data.QuickScenePreference
 import cn.pxyb.mycontrol.data.QrLoginTarget
 import cn.pxyb.mycontrol.data.ReleaseData
 import cn.pxyb.mycontrol.data.ResourceExpiry
@@ -63,6 +65,7 @@ data class OverviewUiState(
     val timetable: CampusTimetable?,
     val campusOverview: CampusOverview?,
     val unreadAlerts: Int,
+    val assistantSnapshot: PersonalAssistantSnapshot?,
 )
 
 @Immutable
@@ -101,6 +104,15 @@ data class NetworkHealth(
     val dnsOk: Boolean = true,
     val apiOk: Boolean = true,
     val message: String? = null,
+    val certificateDaysRemaining: Long? = null,
+    val checks: List<NetworkCheckResult> = emptyList(),
+)
+
+@Immutable
+data class NetworkCheckResult(
+    val label: String,
+    val ok: Boolean,
+    val detail: String,
 )
 
 @Immutable
@@ -186,6 +198,7 @@ data class TodayUiState(
     val campusOverview: CampusOverview?,
     val unreadAlerts: Int,
     val resourceExpiries: List<ResourceExpiry>,
+    val sharedTodoDraft: String?,
 )
 
 @Immutable
@@ -213,6 +226,8 @@ data class ScenesUiState(
     val busyAction: String?,
     val offlineMode: Boolean,
     val iot: IotData?,
+    val quickScene: QuickScenePreference?,
+    val pendingSceneId: String?,
 )
 
 internal fun AppUiState.toEntryUiState() = AppEntryUiState(
@@ -248,6 +263,7 @@ internal fun AppUiState.toOverviewUiState() = OverviewUiState(
     timetable = campusTimetable,
     campusOverview = campusOverview,
     unreadAlerts = alerts.count { !it.read },
+    assistantSnapshot = assistantSnapshot,
 )
 
 internal fun AppUiState.toOperationsUiState() = OperationsUiState(
@@ -481,6 +497,7 @@ internal fun AppUiState.toTodayUiState() = TodayUiState(
     campusOverview = campusOverview,
     unreadAlerts = alerts.count { !it.read },
     resourceExpiries = resourceExpiries,
+    sharedTodoDraft = sharedTodoDraft,
 )
 
 internal fun AppUiState.toFreeClassroomUiState() = FreeClassroomUiState(
@@ -504,6 +521,8 @@ internal fun AppUiState.toScenesUiState() = ScenesUiState(
     busyAction = busyAction,
     offlineMode = offlineMode,
     iot = iot,
+    quickScene = quickScene,
+    pendingSceneId = pendingSceneId,
 )
 
 private fun AppUiState.isRefreshing(vararg sections: DataSection): Boolean =

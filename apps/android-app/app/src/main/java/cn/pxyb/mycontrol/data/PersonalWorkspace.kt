@@ -3,6 +3,10 @@ package cn.pxyb.mycontrol.data
 import androidx.compose.runtime.Immutable
 
 import android.content.Context
+import cn.pxyb.mycontrol.assistant.AssistantAction
+import cn.pxyb.mycontrol.assistant.AssistantDestination
+import cn.pxyb.mycontrol.assistant.AssistantPriority
+import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
@@ -193,11 +197,21 @@ data class AlertPreferences(
     val quietHoursEnabled: Boolean = false,
     val quietStartHour: Int = 22,
     val quietEndHour: Int = 7,
+    val dailyBriefEnabled: Boolean = true,
+    val morningBriefHour: Int = 7,
+    val eveningBriefHour: Int = 21,
+    val classFocusEnabled: Boolean = false,
     val severityFilter: String = "all",
     val incidentAlerts: Boolean = true,
     val iotAlerts: Boolean = true,
     val campusAlerts: Boolean = true,
     val backupAlerts: Boolean = true,
+)
+
+@Immutable
+data class QuickScenePreference(
+    val sceneId: String,
+    val sceneName: String,
 )
 
 @Immutable
@@ -263,6 +277,10 @@ class PersonalWorkspaceStore(context: Context) {
         quietHoursEnabled = scopedKey(KEY_QUIET_ENABLED)?.let { preferences.getBoolean(it, false) } ?: false,
         quietStartHour = scopedKey(KEY_QUIET_START)?.let { preferences.getInt(it, 22) }?.coerceIn(0, 23) ?: 22,
         quietEndHour = scopedKey(KEY_QUIET_END)?.let { preferences.getInt(it, 7) }?.coerceIn(0, 23) ?: 7,
+        dailyBriefEnabled = scopedKey(KEY_DAILY_BRIEF_ENABLED)?.let { preferences.getBoolean(it, true) } ?: true,
+        morningBriefHour = scopedKey(KEY_MORNING_BRIEF_HOUR)?.let { preferences.getInt(it, 7) }?.coerceIn(0, 23) ?: 7,
+        eveningBriefHour = scopedKey(KEY_EVENING_BRIEF_HOUR)?.let { preferences.getInt(it, 21) }?.coerceIn(0, 23) ?: 21,
+        classFocusEnabled = scopedKey(KEY_CLASS_FOCUS_ENABLED)?.let { preferences.getBoolean(it, false) } ?: false,
         severityFilter = scopedKey(KEY_SEVERITY_FILTER)?.let { preferences.getString(it, "all") } ?: "all",
         incidentAlerts = scopedKey(KEY_INCIDENT_ALERTS)?.let { preferences.getBoolean(it, true) } ?: true,
         iotAlerts = scopedKey(KEY_IOT_ALERTS)?.let { preferences.getBoolean(it, true) } ?: true,
@@ -276,12 +294,58 @@ class PersonalWorkspaceStore(context: Context) {
             .putBoolean("account_${scope}_$KEY_QUIET_ENABLED", value.quietHoursEnabled)
             .putInt("account_${scope}_$KEY_QUIET_START", value.quietStartHour.coerceIn(0, 23))
             .putInt("account_${scope}_$KEY_QUIET_END", value.quietEndHour.coerceIn(0, 23))
+            .putBoolean("account_${scope}_$KEY_DAILY_BRIEF_ENABLED", value.dailyBriefEnabled)
+            .putInt("account_${scope}_$KEY_MORNING_BRIEF_HOUR", value.morningBriefHour.coerceIn(0, 23))
+            .putInt("account_${scope}_$KEY_EVENING_BRIEF_HOUR", value.eveningBriefHour.coerceIn(0, 23))
+            .putBoolean("account_${scope}_$KEY_CLASS_FOCUS_ENABLED", value.classFocusEnabled)
             .putString("account_${scope}_$KEY_SEVERITY_FILTER", value.severityFilter)
             .putBoolean("account_${scope}_$KEY_INCIDENT_ALERTS", value.incidentAlerts)
             .putBoolean("account_${scope}_$KEY_IOT_ALERTS", value.iotAlerts)
             .putBoolean("account_${scope}_$KEY_CAMPUS_ALERTS", value.campusAlerts)
             .putBoolean("account_${scope}_$KEY_BACKUP_ALERTS", value.backupAlerts)
             .apply()
+    }
+
+    fun readAssistantSnapshot(): PersonalAssistantSnapshot? = scopedKey(KEY_ASSISTANT_SNAPSHOT)
+        ?.let(codec::read)
+        ?.let(::parseObject)
+        ?.toAssistantSnapshot()
+
+    fun writeAssistantSnapshot(snapshot: PersonalAssistantSnapshot) {
+        scopedKey(KEY_ASSISTANT_SNAPSHOT)?.let { key -> codec.write(key, snapshot.toJson().toString()) }
+    }
+
+    fun readNotificationMutations(): List<NotificationMutation> = scopedKey(KEY_NOTIFICATION_QUEUE)
+        ?.let(codec::read)
+        ?.let(::parseArray)
+        .objects()
+        .mapNotNull(JSONObject::toNotificationMutation)
+
+    fun writeNotificationMutations(mutations: List<NotificationMutation>) {
+        scopedKey(KEY_NOTIFICATION_QUEUE)?.let { key ->
+            codec.write(
+                key,
+                JSONArray().apply { mutations.takeLast(MAX_PENDING_MUTATIONS).forEach { put(it.toJson()) } }.toString(),
+            )
+        }
+    }
+
+    fun readQuickScene(): QuickScenePreference? = scopedKey(KEY_QUICK_SCENE)
+        ?.let(codec::read)
+        ?.let(::parseObject)
+        ?.let { json ->
+            val id = json.optString("sceneId").trim()
+            val name = json.optString("sceneName").trim()
+            if (id.isBlank() || name.isBlank()) null else QuickScenePreference(id, name)
+        }
+
+    fun writeQuickScene(value: QuickScenePreference?) {
+        val key = scopedKey(KEY_QUICK_SCENE) ?: return
+        if (value == null) {
+            preferences.edit().remove(key).apply()
+        } else {
+            codec.write(key, JSONObject().put("sceneId", value.sceneId).put("sceneName", value.sceneName).toString())
+        }
     }
 
     fun readTrendSamples(): List<TrendSample> = scopedKey(KEY_TRENDS)?.let { key -> codec.read(key) }
@@ -332,12 +396,19 @@ class PersonalWorkspaceStore(context: Context) {
         const val KEY_QUIET_ENABLED = "quiet_enabled"
         const val KEY_QUIET_START = "quiet_start"
         const val KEY_QUIET_END = "quiet_end"
+        const val KEY_DAILY_BRIEF_ENABLED = "daily_brief_enabled"
+        const val KEY_MORNING_BRIEF_HOUR = "morning_brief_hour"
+        const val KEY_EVENING_BRIEF_HOUR = "evening_brief_hour"
+        const val KEY_CLASS_FOCUS_ENABLED = "class_focus_enabled"
         const val KEY_SEVERITY_FILTER = "severity_filter"
         const val KEY_INCIDENT_ALERTS = "incident_alerts"
         const val KEY_IOT_ALERTS = "iot_alerts"
         const val KEY_CAMPUS_ALERTS = "campus_alerts"
         const val KEY_BACKUP_ALERTS = "backup_alerts"
         const val KEY_TRENDS = "trends"
+        const val KEY_ASSISTANT_SNAPSHOT = "assistant_snapshot"
+        const val KEY_NOTIFICATION_QUEUE = "notification_queue"
+        const val KEY_QUICK_SCENE = "quick_scene"
         const val MAX_PENDING_MUTATIONS = 100
         const val MAX_ALERTS = 200
         const val MAX_TREND_DAYS = 45
@@ -415,6 +486,23 @@ private fun TrendSample.toJson(): JSONObject = JSONObject()
     .put("pendingTasks", pendingTasks)
     .put("deviceTotal", deviceTotal)
     .put("onlineDevices", onlineDevices)
+
+private fun PersonalAssistantSnapshot.toJson(): JSONObject = JSONObject()
+    .put("nextAction", JSONObject()
+        .put("id", nextAction.id)
+        .put("title", nextAction.title)
+        .put("detail", nextAction.detail)
+        .put("destination", nextAction.destination.name)
+        .put("priority", nextAction.priority.name))
+    .put("morningBrief", morningBrief)
+    .put("eveningBrief", eveningBrief)
+    .put("classFocusUntilMillis", classFocusUntilMillis ?: JSONObject.NULL)
+    .put("generatedAtMillis", generatedAtMillis)
+
+private fun NotificationMutation.toJson(): JSONObject = JSONObject()
+    .put("type", type.name)
+    .put("alertId", alertId)
+    .put("snoozedUntilMillis", snoozedUntilMillis ?: JSONObject.NULL)
 
 internal fun JSONObject.toTodoTask(): TodoTask? {
     val id = optString("id").trim()
@@ -535,6 +623,34 @@ private fun JSONObject.toTrendSample(): TrendSample? {
         deviceTotal = optInt("deviceTotal"),
         onlineDevices = optInt("onlineDevices"),
     )
+}
+
+private fun JSONObject.toAssistantSnapshot(): PersonalAssistantSnapshot? {
+    val action = optJSONObject("nextAction") ?: return null
+    val id = action.optString("id").trim()
+    val title = action.optString("title").trim()
+    if (id.isBlank() || title.isBlank()) return null
+    val destination = runCatching { AssistantDestination.valueOf(action.optString("destination")) }.getOrNull() ?: return null
+    val priority = runCatching { AssistantPriority.valueOf(action.optString("priority")) }.getOrDefault(AssistantPriority.Normal)
+    return PersonalAssistantSnapshot(
+        nextAction = AssistantAction(
+            id = id,
+            title = title,
+            detail = action.optString("detail"),
+            destination = destination,
+            priority = priority,
+        ),
+        morningBrief = optString("morningBrief"),
+        eveningBrief = optString("eveningBrief"),
+        classFocusUntilMillis = nullableLong("classFocusUntilMillis"),
+        generatedAtMillis = optLong("generatedAtMillis"),
+    )
+}
+
+private fun JSONObject.toNotificationMutation(): NotificationMutation? {
+    val type = runCatching { NotificationMutationType.valueOf(optString("type")) }.getOrNull() ?: return null
+    val alertId = optString("alertId").trim().takeIf(String::isNotBlank) ?: return null
+    return NotificationMutation(type, alertId, nullableLong("snoozedUntilMillis"))
 }
 
 private fun parseObject(raw: String): JSONObject? = runCatching { JSONObject(raw) }.getOrNull()

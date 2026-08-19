@@ -10,6 +10,9 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import cn.pxyb.mycontrol.assistant.DailyBriefPeriod
+import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot
+import cn.pxyb.mycontrol.assistant.shouldSuppressNotification
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
@@ -94,8 +97,7 @@ class AlertNotifier(context: Context) {
         val newCritical = critical.filter { it.id !in seenIncidents }
         val newActionable = actionable.filter { it.id !in seenTasks }
 
-        personalStore.appendAlerts(
-            buildList {
+        val generated = buildList {
                 newCritical.forEach { incident ->
                     add(
                         AppAlertRecord(
@@ -123,38 +125,12 @@ class AlertNotifier(context: Context) {
                         ),
                     )
                 }
-            },
-        )
+            }
+        personalStore.appendAlerts(generated)
 
-        if (!seedOnly && !isQuietHours()) {
-            newCritical.take(3).forEach { incident ->
-                notify(
-                    notificationId = INCIDENT_BASE + incident.id.hashCode(),
-                    title = "系统异常：${incident.title}",
-                    body = listOfNotNull(
-                        incident.serviceId?.takeIf { it.isNotBlank() },
-                        incident.description.takeIf { it.isNotBlank() },
-                    ).joinToString(" · ").ifBlank { "请尽快确认并处理" },
-                    intent = DeepLinks.openIntent(
-                        appContext,
-                        destination = "notifications",
-                    ),
-                )
-            }
-            newActionable.take(3).forEach { task ->
-                notify(
-                    notificationId = TASK_BASE + task.id.hashCode(),
-                    title = if (task.status == "failed") "任务失败：${localizedTaskTitle(task)}" else "待处理：${localizedTaskTitle(task)}",
-                    body = listOfNotNull(
-                        sourceLabel(task.source),
-                        task.detail.takeIf { it.isNotBlank() },
-                    ).joinToString(" · ").ifBlank { "打开通知中心查看" },
-                    intent = DeepLinks.openIntent(
-                        appContext,
-                        destination = "notifications",
-                    ),
-                )
-            }
+        if (!seedOnly) {
+            generated.filter { it.type == "incident" }.take(3).forEach(::notifyRecord)
+            generated.filter { it.type == "task" }.take(3).forEach(::notifyRecord)
         }
 
         seenIncidents.clear()
@@ -169,6 +145,7 @@ class AlertNotifier(context: Context) {
 
     fun clear() {
         ResourceExpiryReminderScheduler.cancel(appContext, accountUsername)
+        DailyBriefScheduler.cancel(appContext, accountUsername)
         accountScope?.let { scope ->
             val prefix = "account_${scope}_"
             preferences.edit().apply {
@@ -219,20 +196,12 @@ class AlertNotifier(context: Context) {
             }
         }
         personalStore.appendAlerts(generated)
-        if (!isQuietHours()) {
-            generated.take(3).forEach { alert ->
-                notify(
-                    notificationId = PERSONAL_BASE + alert.id.hashCode(),
-                    title = alert.title,
-                    body = alert.body,
-                    intent = DeepLinks.openIntent(appContext, destination = "today"),
-                )
-            }
-        }
+        generated.take(3).forEach(::notifyRecord)
     }
 
     fun notifyRecord(alert: AppAlertRecord): Boolean {
-        if (isQuietHours()) return false
+        val critical = alert.priority in setOf("urgent", "high", "critical") || alert.type == "incident"
+        if (isSuppressed(critical)) return false
         val intent = when (alert.type) {
             "incident" -> DeepLinks.openIntent(appContext, destination = "notifications")
             "task" -> DeepLinks.openIntent(appContext, destination = "notifications")
@@ -240,7 +209,14 @@ class AlertNotifier(context: Context) {
             else -> DeepLinks.openIntent(appContext, destination = "notifications")
         }
         val channelId = if (alert.priority in setOf("high", "critical")) CHANNEL_ID else MESSAGE_CHANNEL_ID
-        val posted = notify(PERSONAL_BASE + alert.id.hashCode(), alert.title, alert.body, intent, channelId)
+        val posted = notify(
+            notificationId = PERSONAL_BASE + alert.id.hashCode(),
+            title = alert.title,
+            body = alert.body,
+            intent = intent,
+            channelId = channelId,
+            alert = alert,
+        )
         if (posted && alert.origin == "remote") {
             markRemoteSeen(alert.id)
         }
@@ -252,7 +228,21 @@ class AlertNotifier(context: Context) {
         ensureChannel()
         val seen = readRemoteSeenIds().toMutableSet()
         val unread = alerts.filter { it.origin == "remote" && !it.read && it.id !in seen }
-        if (!isQuietHours()) unread.take(3).forEach(::notifyRecord)
+        unread.take(3).forEach(::notifyRecord)
+    }
+
+    fun notifyDailyBrief(snapshot: PersonalAssistantSnapshot, period: DailyBriefPeriod): Boolean {
+        val date = LocalDate.now()
+        val alert = AppAlertRecord(
+            id = "daily:${period.name.lowercase()}:$date",
+            type = "daily",
+            sourceId = period.name,
+            title = if (period == DailyBriefPeriod.Morning) "早上好，今天这样安排" else "今晚收尾提醒",
+            body = if (period == DailyBriefPeriod.Morning) snapshot.morningBrief else snapshot.eveningBrief,
+            createdAt = System.currentTimeMillis(),
+        )
+        personalStore.appendAlerts(listOf(alert))
+        return notifyRecord(alert)
     }
 
     fun evaluateResourceExpiries(resources: List<ResourceExpiry>) {
@@ -297,6 +287,7 @@ class AlertNotifier(context: Context) {
         body: String,
         intent: android.content.Intent,
         channelId: String = CHANNEL_ID,
+        alert: AppAlertRecord? = null,
     ): Boolean {
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -318,7 +309,7 @@ class AlertNotifier(context: Context) {
             .setContentText(publicContent.body)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
-        val notification = NotificationCompat.Builder(appContext, channelId)
+        val builder = NotificationCompat.Builder(appContext, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
@@ -328,13 +319,63 @@ class AlertNotifier(context: Context) {
             .setPublicVersion(publicNotification)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .build()
+        alert?.let { addNotificationActions(builder, notificationId, it) }
+        val notification = builder.build()
         return try {
             NotificationManagerCompat.from(appContext).notify(notificationId, notification)
             true
         } catch (_: SecurityException) {
             false
         }
+    }
+
+    private fun addNotificationActions(
+        builder: NotificationCompat.Builder,
+        notificationId: Int,
+        alert: AppAlertRecord,
+    ) {
+        if (alert.type == "todo") {
+            builder.addAction(
+                R.mipmap.ic_launcher,
+                "完成",
+                notificationActionIntent(NotificationActionReceiver.ACTION_COMPLETE_TODO, notificationId, alert),
+            )
+        } else {
+            builder.addAction(
+                R.mipmap.ic_launcher,
+                "已读",
+                notificationActionIntent(NotificationActionReceiver.ACTION_MARK_READ, notificationId, alert),
+            )
+        }
+        builder.addAction(
+            R.mipmap.ic_launcher,
+            "1 小时后提醒",
+            notificationActionIntent(NotificationActionReceiver.ACTION_SNOOZE, notificationId, alert),
+        )
+        builder.addAction(
+            R.mipmap.ic_launcher,
+            "归档",
+            notificationActionIntent(NotificationActionReceiver.ACTION_ARCHIVE, notificationId, alert),
+        )
+    }
+
+    private fun notificationActionIntent(
+        action: String,
+        notificationId: Int,
+        alert: AppAlertRecord,
+    ): PendingIntent {
+        val intent = android.content.Intent(appContext, NotificationActionReceiver::class.java)
+            .setAction(action)
+            .putExtra(NotificationActionReceiver.EXTRA_ALERT_ID, alert.id)
+            .putExtra(NotificationActionReceiver.EXTRA_SOURCE_ID, alert.sourceId)
+            .putExtra(NotificationActionReceiver.EXTRA_REMOTE, alert.origin == "remote")
+            .putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+        return PendingIntent.getBroadcast(
+            appContext,
+            31 * notificationId + action.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     private fun markRemoteSeen(alertId: String) {
@@ -372,17 +413,13 @@ class AlertNotifier(context: Context) {
         else -> source
     }
 
-    private fun isQuietHours(): Boolean {
+    private fun isSuppressed(critical: Boolean): Boolean {
         val settings = personalStore.readAlertPreferences()
-        if (!settings.quietHoursEnabled) return false
-        val hour = LocalTime.now().hour
-        return if (settings.quietStartHour == settings.quietEndHour) {
-            true
-        } else if (settings.quietStartHour < settings.quietEndHour) {
-            hour in settings.quietStartHour until settings.quietEndHour
-        } else {
-            hour >= settings.quietStartHour || hour < settings.quietEndHour
-        }
+        return shouldSuppressNotification(
+            settings = settings,
+            classFocusUntilMillis = personalStore.readAssistantSnapshot()?.classFocusUntilMillis,
+            critical = critical,
+        )
     }
 
     private fun parseCourseStart(date: LocalDate, value: String): Long? {

@@ -32,7 +32,9 @@ export function createConfigurationManager({
 
   async function propose({ settings: requested, summary, actor, kind = 'change', targetVersion = null }) {
     const { settings: current, state } = await ensureState();
-    const target = await operations.previewSettings(requested || {});
+    const proposalSettings = { ...(requested || {}) };
+    delete proposalSettings.backupSchedule;
+    const target = await operations.previewSettings(proposalSettings);
     const keys = changedKeys(current, target);
     if (!keys.length) throw new ConfigurationError(400, 'CONFIGURATION_UNCHANGED', 'The proposed configuration does not change any values.');
     const normalizedSummary = String(summary || '').trim().slice(0, 200);
@@ -56,13 +58,18 @@ export function createConfigurationManager({
   }
 
   async function applyClaimed(change, actor, note) {
-    const { state } = await ensureState();
+    const { settings: current, state } = await ensureState();
     if (state.currentVersion !== change.baseVersion) {
       await store.updateChange(change.id, { status: 'conflicted', decisionNote: 'Base version is no longer current.' });
       throw new ConfigurationError(409, 'CONFIGURATION_VERSION_CONFLICT', 'The current configuration changed after this proposal was created.');
     }
+    const target = { ...change.settings, backupSchedule: current.backupSchedule };
+    if (!changedKeys(current, target).length) {
+      await store.updateChange(change.id, { status: 'conflicted', decisionNote: 'This proposal only changes settings managed outside configuration approval.' });
+      throw new ConfigurationError(409, 'CONFIGURATION_UNCHANGED', 'This proposal no longer changes approval-managed settings.');
+    }
     try {
-      const settings = await operations.updateSettings(change.settings, actor);
+      const settings = await operations.updateSettings(target, actor);
       const version = state.currentVersion + 1;
       const timestamp = now().toISOString();
       await store.createVersion({

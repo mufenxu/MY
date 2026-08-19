@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -15,6 +17,8 @@ import cn.pxyb.mycontrol.data.SessionStore
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.mergeRemoteAlerts
 import cn.pxyb.mycontrol.data.todayTrendSample
+import cn.pxyb.mycontrol.assistant.buildPersonalAssistantSnapshot
+import cn.pxyb.mycontrol.assistant.buildGuardianAlerts
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -65,6 +69,9 @@ class OperationalSyncWorker(
             if (api.isOffline()) return Result.retry()
             val resources = api.resourceExpiries()
             if (api.isOffline()) return Result.retry()
+            val backup = runCatching { api.backupQuality() }.getOrNull()
+            val security = runCatching { api.security() }.getOrNull()
+            flushNotificationMutations(api, personalStore)
             val remoteNotifications = api.allAppNotifications()
             val currentAlerts = personalStore.readAlerts()
             val currentById = currentAlerts.associateBy { it.id }
@@ -81,7 +88,27 @@ class OperationalSyncWorker(
             alertNotifier.evaluateRemote(mergedAlerts)
 
             val activeIncidents = incidents.filter { it.status != "resolved" }
-            MyControlWidgetProvider.publish(applicationContext, overview, activeIncidents, iot)
+            val assistant = buildPersonalAssistantSnapshot(
+                timetable = timetable,
+                todos = syncedTodo,
+                incidents = incidents,
+                alerts = mergedAlerts,
+                resources = resources,
+                backup = backup,
+                security = security,
+            )
+            personalStore.writeAssistantSnapshot(assistant)
+            val guardianAlerts = buildGuardianAlerts(backup = backup, security = security)
+            personalStore.appendAlerts(guardianAlerts)
+            guardianAlerts.forEach { alertNotifier.notifyRecord(it) }
+            MyControlWidgetProvider.publish(
+                applicationContext,
+                overview,
+                activeIncidents,
+                iot,
+                assistant,
+                personalStore.readQuickScene(),
+            )
             alertNotifier.evaluate(incidents = incidents, tasks = tasks)
             alertNotifier.evaluatePersonal(syncedTodo, timetable)
             alertNotifier.evaluateResourceExpiries(resources)
@@ -108,6 +135,17 @@ object OperationalSyncScheduler {
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             WORK_NAME,
             ExistingPeriodicWorkPolicy.UPDATE,
+            request,
+        )
+    }
+
+    fun runNow(context: Context) {
+        val request = OneTimeWorkRequestBuilder<OperationalSyncWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "$WORK_NAME-now",
+            ExistingWorkPolicy.REPLACE,
             request,
         )
     }

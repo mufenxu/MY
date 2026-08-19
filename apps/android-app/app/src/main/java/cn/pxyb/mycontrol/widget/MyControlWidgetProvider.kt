@@ -15,6 +15,8 @@ import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.IotData
 import cn.pxyb.mycontrol.data.OverviewData
+import cn.pxyb.mycontrol.data.QuickScenePreference
+import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot
 import java.util.Date
 
 class MyControlWidgetProvider : AppWidgetProvider() {
@@ -31,6 +33,11 @@ class MyControlWidgetProvider : AppWidgetProvider() {
         private const val KEY_INCIDENTS = "incidents"
         private const val KEY_DEVICES = "devices"
         private const val KEY_UPDATED_AT = "updated_at"
+        private const val KEY_ACTION_TITLE = "action_title"
+        private const val KEY_ACTION_DETAIL = "action_detail"
+        private const val KEY_ACTION_DESTINATION = "action_destination"
+        private const val KEY_QUICK_SCENE_ID = "quick_scene_id"
+        private const val KEY_QUICK_SCENE_NAME = "quick_scene_name"
         private const val TONE_HEALTHY = "healthy"
         private const val TONE_ATTENTION = "attention"
 
@@ -39,6 +46,8 @@ class MyControlWidgetProvider : AppWidgetProvider() {
             overview: OverviewData?,
             activeIncidents: List<IncidentInfo>,
             iot: IotData?,
+            assistant: PersonalAssistantSnapshot?,
+            quickScene: QuickScenePreference?,
         ) {
             val monitored = overview?.monitoredCount ?: 0
             val healthy = overview?.healthyCount ?: 0
@@ -64,6 +73,11 @@ class MyControlWidgetProvider : AppWidgetProvider() {
                 .putString(KEY_INCIDENTS, criticalIncidents.toString())
                 .putString(KEY_DEVICES, deviceValue)
                 .putLong(KEY_UPDATED_AT, System.currentTimeMillis())
+                .putString(KEY_ACTION_TITLE, assistant?.nextAction?.title)
+                .putString(KEY_ACTION_DETAIL, assistant?.nextAction?.detail)
+                .putString(KEY_ACTION_DESTINATION, assistant?.nextAction?.destination?.deepLinkValue)
+                .putString(KEY_QUICK_SCENE_ID, quickScene?.sceneId)
+                .putString(KEY_QUICK_SCENE_NAME, quickScene?.sceneName)
                 .apply()
             updateAll(context)
         }
@@ -101,6 +115,14 @@ class MyControlWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_service_value, preferences.getString(KEY_SERVICES, "--"))
             views.setTextViewText(R.id.widget_incident_value, preferences.getString(KEY_INCIDENTS, "--"))
             views.setTextViewText(R.id.widget_device_value, preferences.getString(KEY_DEVICES, "--"))
+            val actionTitle = preferences.getString(KEY_ACTION_TITLE, null)
+            val actionDetail = preferences.getString(KEY_ACTION_DETAIL, null)
+            views.setTextViewText(R.id.widget_action_title, actionTitle ?: "打开今日工作台")
+            views.setTextViewText(R.id.widget_action_detail, actionDetail ?: "查看课程、待办和提醒")
+            val quickSceneId = preferences.getString(KEY_QUICK_SCENE_ID, null)
+            val quickSceneName = preferences.getString(KEY_QUICK_SCENE_NAME, null)
+            views.setViewVisibility(R.id.widget_quick_scene, if (quickSceneId.isNullOrBlank()) android.view.View.GONE else android.view.View.VISIBLE)
+            views.setTextViewText(R.id.widget_quick_scene, quickSceneName?.let { "场景 · $it" } ?: "常用场景")
             views.setTextViewText(
                 R.id.widget_updated_at,
                 if (hasData) {
@@ -111,7 +133,12 @@ class MyControlWidgetProvider : AppWidgetProvider() {
                 },
             )
 
-            val openIntent = DeepLinks.openIntent(context, destination = "today")
+            val openIntent = when (preferences.getString(KEY_ACTION_DESTINATION, "today")) {
+                "notifications" -> DeepLinks.openIntent(context, destination = "notifications")
+                "operations" -> DeepLinks.openIntent(context, tab = MainTab.Operations)
+                "profile" -> DeepLinks.openIntent(context, tab = MainTab.Profile)
+                else -> DeepLinks.openIntent(context, destination = "today")
+            }
             val openPendingIntent = PendingIntent.getActivity(
                 context,
                 0,
@@ -119,6 +146,7 @@ class MyControlWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             views.setOnClickPendingIntent(R.id.widget_root, openPendingIntent)
+            views.setOnClickPendingIntent(R.id.widget_action_title, openPendingIntent)
 
             val notificationsIntent = DeepLinks.openIntent(context, tab = MainTab.Notifications)
             val notificationsPendingIntent = PendingIntent.getActivity(
@@ -144,6 +172,15 @@ class MyControlWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             runCatching { views.setOnClickPendingIntent(R.id.widget_device_value, devicesPendingIntent) }
+            if (!quickSceneId.isNullOrBlank()) {
+                val scenePendingIntent = PendingIntent.getActivity(
+                    context,
+                    4,
+                    DeepLinks.openIntent(context, destination = "scenes", sceneId = quickSceneId),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+                views.setOnClickPendingIntent(R.id.widget_quick_scene, scenePendingIntent)
+            }
             return views
         }
 

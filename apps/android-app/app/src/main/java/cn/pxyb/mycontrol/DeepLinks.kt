@@ -11,12 +11,14 @@ object DeepLinks {
     const val EXTRA_TAB = "tab"
     const val EXTRA_TASK_ID = "taskId"
     const val EXTRA_DESTINATION = "destination"
+    const val EXTRA_SCENE_ID = "sceneId"
 
     fun openIntent(
         context: Context,
         tab: MainTab? = null,
         taskId: String? = null,
         destination: String? = null,
+        sceneId: String? = null,
     ): Intent {
         val uri = Uri.Builder()
             .scheme(SCHEME)
@@ -25,6 +27,7 @@ object DeepLinks {
                 tab?.let { appendQueryParameter(EXTRA_TAB, it.name.lowercase()) }
                 taskId?.takeIf { it.isNotBlank() }?.let { appendQueryParameter(EXTRA_TASK_ID, it) }
                 destination?.takeIf { it.isNotBlank() }?.let { appendQueryParameter(EXTRA_DESTINATION, it) }
+                sceneId?.takeIf { it.isNotBlank() }?.let { appendQueryParameter(EXTRA_SCENE_ID, it) }
             }
             .build()
         return Intent(context, MainActivity::class.java).apply {

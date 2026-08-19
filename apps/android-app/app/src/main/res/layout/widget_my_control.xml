@@ -45,6 +45,28 @@
             android:textStyle="bold" />
     </LinearLayout>
 
+    <TextView
+        android:id="@+id/widget_action_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="打开今日工作台"
+        android:textColor="@color/widget_text_primary"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_action_detail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="查看课程、待办和提醒"
+        android:textColor="@color/widget_text_secondary"
+        android:textSize="11sp" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -126,6 +148,19 @@
                 android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_quick_scene"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:maxLines="1"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:textColor="@color/widget_status_healthy"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/widget_updated_at"

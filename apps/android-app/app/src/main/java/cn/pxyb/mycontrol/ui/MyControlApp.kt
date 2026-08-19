@@ -218,6 +218,7 @@ fun MyControlApp(
     onSensitiveActionConfirmation: suspend () -> Boolean,
     notificationsEnabled: Boolean,
     onRequestNotifications: () -> Unit,
+    onWriteNfcScene: (String, String) -> Unit,
 ) {
     var splashVisible by remember { mutableStateOf(true) }
     var splashExiting by remember { mutableStateOf(false) }
@@ -288,6 +289,7 @@ fun MyControlApp(
                         onSensitiveActionConfirmation,
                         notificationsEnabled,
                         onRequestNotifications,
+                        onWriteNfcScene,
                     )
                 }
             }
@@ -1177,6 +1179,7 @@ private fun AuthenticatedShell(
     onSensitiveActionConfirmation: suspend () -> Boolean,
     notificationsEnabled: Boolean,
     onRequestNotifications: () -> Unit,
+    onWriteNfcScene: (String, String) -> Unit,
 ) {
     if (state.qrLoginOpen) {
         val qrLoginState by viewModel.qrLoginState.collectAsStateWithLifecycle()
@@ -1370,6 +1373,9 @@ private fun AuthenticatedShell(
                             viewModel.openWorkspace(WorkspaceDestination.Notifications)
                         },
                         onMeasureNetwork = viewModel::measureNetworkHealth,
+                        onIncidentNote = viewModel::addIncidentNote,
+                        onIncidentMute = { id -> viewModel.muteIncident(id, onSensitiveActionConfirmation) },
+                        onIncidentResolve = { id, note -> viewModel.resolveIncident(id, note, onSensitiveActionConfirmation) },
                         onRefresh = onRefresh,
                     )
                 }
@@ -1514,6 +1520,7 @@ private fun AuthenticatedShell(
                         onOpenFreeClassrooms = {
                             navController.navigate(AppRoute.FreeClassrooms) { launchSingleTop = true }
                         },
+                        onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
                     )
                 }
                 composable(AppRoute.FreeClassrooms) {
@@ -1560,6 +1567,9 @@ private fun AuthenticatedShell(
                         onDeleteRule = { id ->
                             viewModel.deleteIotRule(id, onSensitiveActionConfirmation)
                         },
+                        onWriteNfc = onWriteNfcScene,
+                        onSetQuickScene = viewModel::setQuickScene,
+                        onConsumePendingScene = viewModel::consumePendingScene,
                     )
                 }
             }

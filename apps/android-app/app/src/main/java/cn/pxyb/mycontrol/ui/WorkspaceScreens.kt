@@ -68,6 +68,8 @@ import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
+import androidx.compose.material.icons.outlined.Nfc
+import androidx.compose.material.icons.outlined.DashboardCustomize
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -91,6 +93,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -151,10 +154,17 @@ fun TodayScreen(
     onSyncCalendar: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenFreeClassrooms: () -> Unit,
+    onConsumeSharedDraft: () -> Unit,
 ) {
     var editingTodo by remember { mutableStateOf<TodoTask?>(null) }
     var addingTodo by remember { mutableStateOf(false) }
     var campusSection by remember { mutableStateOf(CampusWorkspaceSection.Today) }
+    LaunchedEffect(state.sharedTodoDraft) {
+        if (!state.sharedTodoDraft.isNullOrBlank()) {
+            editingTodo = null
+            addingTodo = true
+        }
+    }
     val week = remember(state.timetable?.currentCalendarText) {
         Regex("第(\\d+)周").find(state.timetable?.currentCalendarText.orEmpty())?.groupValues?.getOrNull(1)?.toIntOrNull()
     }
@@ -326,12 +336,18 @@ fun TodayScreen(
     if (addingTodo || editingTodo != null) {
         TodoEditorDialog(
             task = editingTodo,
+            initialTitle = if (editingTodo == null) state.sharedTodoDraft.orEmpty() else "",
             courses = state.timetable?.courses.orEmpty().distinctBy(CampusCourse::id),
-            onDismiss = { addingTodo = false; editingTodo = null },
+            onDismiss = {
+                addingTodo = false
+                editingTodo = null
+                onConsumeSharedDraft()
+            },
             onSave = {
                 onSaveTodo(it)
                 addingTodo = false
                 editingTodo = null
+                onConsumeSharedDraft()
             },
         )
     }
@@ -999,6 +1015,9 @@ fun ScenesScreen(
     onSaveRule: (String?, String, Boolean, AutomationCondition, List<IotSceneAction>, Int) -> Unit,
     onToggleRule: (String, Boolean) -> Unit,
     onDeleteRule: (String) -> Unit,
+    onWriteNfc: (String, String) -> Unit,
+    onSetQuickScene: (String, String) -> Unit,
+    onConsumePendingScene: () -> Unit,
 ) {
     var editing by remember { mutableStateOf<IotScene?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -1007,6 +1026,12 @@ fun ScenesScreen(
     val scenes = state.iot?.scenes.orEmpty()
     val rules = state.iot?.rules.orEmpty()
     val runs = state.iot?.runs.orEmpty()
+    val pendingScene = scenes.firstOrNull { it.id == state.pendingSceneId }
+    LaunchedEffect(state.pendingSceneId, scenes) {
+        if (state.pendingSceneId != null && scenes.isNotEmpty() && pendingScene == null) {
+            onConsumePendingScene()
+        }
+    }
 
     WorkspacePage(
         title = "智能场景与自动化",
@@ -1058,6 +1083,9 @@ fun ScenesScreen(
                     onRun = onRun,
                     onEdit = { editing = scene },
                     onDelete = onDelete,
+                    onWriteNfc = { onWriteNfc(scene.id, scene.name) },
+                    onSetQuickScene = { onSetQuickScene(scene.id, scene.name) },
+                    quickScene = state.quickScene?.sceneId == scene.id,
                 )
             }
         }
@@ -1134,6 +1162,19 @@ fun ScenesScreen(
                 addingRule = false
                 editingRule = null
             },
+        )
+    }
+    if (pendingScene != null) {
+        AppConfirmDialog(
+            title = "执行“${pendingScene.name}”？",
+            detail = "这是从 NFC、快捷磁贴或桌面小组件打开的场景。确认后仍会验证设备身份。",
+            confirmLabel = "确认执行",
+            onDismiss = onConsumePendingScene,
+            onConfirm = {
+                onConsumePendingScene()
+                onRun(pendingScene.id)
+            },
+            icon = Icons.Outlined.PlayArrow,
         )
     }
 }
@@ -2831,7 +2872,17 @@ private fun EnhancedMetricCard(
 }
 
 @Composable
-private fun SceneCard(scene: IotScene, busy: Boolean, enabled: Boolean, onRun: (String) -> Unit, onEdit: () -> Unit, onDelete: (String) -> Unit) {
+private fun SceneCard(
+    scene: IotScene,
+    busy: Boolean,
+    enabled: Boolean,
+    onRun: (String) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: (String) -> Unit,
+    onWriteNfc: () -> Unit,
+    onSetQuickScene: () -> Unit,
+    quickScene: Boolean,
+) {
     AppPanel {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -2848,13 +2899,41 @@ private fun SceneCard(scene: IotScene, busy: Boolean, enabled: Boolean, onRun: (
                 Spacer(Modifier.width(6.dp))
                 Text("执行场景")
             }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onWriteNfc,
+                    enabled = enabled && !busy,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Icon(Icons.Outlined.Nfc, null)
+                    Spacer(Modifier.width(5.dp))
+                    Text("写入 NFC")
+                }
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onSetQuickScene,
+                    enabled = enabled && !busy,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Icon(Icons.Outlined.DashboardCustomize, null)
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (quickScene) "当前磁贴" else "设为磁贴")
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun TodoEditorDialog(task: TodoTask?, courses: List<CampusCourse>, onDismiss: () -> Unit, onSave: (TodoTask) -> Unit) {
-    var title by remember(task?.id) { mutableStateOf(task?.title.orEmpty()) }
+private fun TodoEditorDialog(
+    task: TodoTask?,
+    initialTitle: String = "",
+    courses: List<CampusCourse>,
+    onDismiss: () -> Unit,
+    onSave: (TodoTask) -> Unit,
+) {
+    var title by remember(task?.id, initialTitle) { mutableStateOf(task?.title ?: initialTitle) }
     var priority by remember(task?.id) { mutableStateOf(task?.priority ?: "normal") }
     var recurrence by remember(task?.id) { mutableStateOf(task?.recurrence ?: "none") }
     var duePreset by remember(task?.id) { mutableStateOf(duePreset(task?.dueAt)) }

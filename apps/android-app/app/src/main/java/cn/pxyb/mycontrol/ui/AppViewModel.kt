@@ -11,8 +11,14 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import cn.pxyb.mycontrol.AlertNotifier
 import cn.pxyb.mycontrol.BuildConfig
+import cn.pxyb.mycontrol.DailyBriefScheduler
 import cn.pxyb.mycontrol.DeepLinks
+import cn.pxyb.mycontrol.DeviceControlTileService
 import cn.pxyb.mycontrol.SnoozedAlertScheduler
+import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot
+import cn.pxyb.mycontrol.assistant.buildGuardianAlerts
+import cn.pxyb.mycontrol.assistant.buildPersonalAssistantSnapshot
+import cn.pxyb.mycontrol.assistant.sharedTodoTitle
 import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
@@ -42,6 +48,7 @@ import cn.pxyb.mycontrol.data.PlatformPasskey
 import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.PlatformTask
 import cn.pxyb.mycontrol.data.PlatformUser
+import cn.pxyb.mycontrol.data.QuickScenePreference
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.ReleaseData
 import cn.pxyb.mycontrol.data.ResourceExpiry
@@ -58,6 +65,7 @@ import cn.pxyb.mycontrol.data.WebLoginLink
 import cn.pxyb.mycontrol.data.todayTrendSample
 import cn.pxyb.mycontrol.data.mergeRemoteAlerts
 import cn.pxyb.mycontrol.data.mergeHydratedAlerts
+import cn.pxyb.mycontrol.flushNotificationMutations
 import cn.pxyb.mycontrol.data.shouldInvalidatePlatformSession
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
 import cn.pxyb.mycontrol.update.AppInstallResult
@@ -75,6 +83,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -86,6 +96,12 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
 import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.InetAddress
+import java.net.URL
+import java.time.temporal.ChronoUnit
+import javax.net.ssl.HttpsURLConnection
+import java.security.cert.X509Certificate
 
 enum class MainTab { Overview, Notifications, Operations, Tools, Profile }
 
@@ -161,11 +177,16 @@ data class AppUiState(
     val networkHealth: NetworkHealth = NetworkHealth(),
     val cacheStorageInfo: CacheStorageInfo = CacheStorageInfo(),
     val webLoginLink: WebLoginLink? = null,
+    val assistantSnapshot: PersonalAssistantSnapshot? = null,
+    val sharedTodoDraft: String? = null,
+    val pendingSceneId: String? = null,
+    val quickScene: QuickScenePreference? = null,
 ) {
     val activeIncidents: List<IncidentInfo>
         get() = incidents.filter { it.status != "resolved" }
 }
 
+@OptIn(kotlinx.coroutines.FlowPreview::class)
 class AppViewModel(
     application: Application,
     private val savedStateHandle: SavedStateHandle,
@@ -245,6 +266,13 @@ class AppViewModel(
         }
         if (!hasSavedSession) MyControlWidgetProvider.clear(getApplication())
         if (hasSavedSession && !lockEnabled) unlockSession()
+        viewModelScope.launch {
+            mutableState
+                .map(::assistantInputs)
+                .distinctUntilChanged()
+                .debounce(250)
+                .collectLatest(::refreshAssistantSnapshot)
+        }
     }
 
     private suspend fun hydrateLocalState() {
@@ -254,6 +282,8 @@ class AppViewModel(
             val alerts = personalStore.readAlerts()
             val alertPreferences = personalStore.readAlertPreferences()
             val trendSamples = personalStore.readTrendSamples()
+            val assistantSnapshot = personalStore.readAssistantSnapshot()
+            val quickScene = personalStore.readQuickScene()
             mutableState.update { current ->
                 if (!current.booting && !current.locked && current.user == null) {
                     current
@@ -264,6 +294,8 @@ class AppViewModel(
                         alerts = mergeHydratedAlerts(alerts, current.alerts),
                         alertPreferences = alertPreferences,
                         trendSamples = trendSamples,
+                        assistantSnapshot = assistantSnapshot,
+                        quickScene = quickScene,
                     )
                 }
             }
@@ -662,6 +694,12 @@ class AppViewModel(
             val workspace = uri.getQueryParameter(DeepLinks.EXTRA_DESTINATION)
                 ?.let { value -> WorkspaceDestination.entries.firstOrNull { it.name.equals(value, ignoreCase = true) } }
             if (workspace != null) {
+                val sceneId = uri.getQueryParameter(DeepLinks.EXTRA_SCENE_ID)
+                    ?.trim()
+                    ?.takeIf(String::isNotBlank)
+                if (workspace == WorkspaceDestination.Scenes && sceneId != null) {
+                    mutableState.update { it.copy(pendingSceneId = sceneId) }
+                }
                 openWorkspace(workspace)
                 return
             }
@@ -698,6 +736,29 @@ class AppViewModel(
         }
         persistNavigationState()
         resolvedTab?.let(::refreshForTab)
+    }
+
+    fun openSharedTodo(subject: String?, text: String?) {
+        val draft = sharedTodoTitle(subject, text)
+        if (draft.isBlank()) return
+        mutableState.update { it.copy(sharedTodoDraft = draft) }
+        openWorkspace(WorkspaceDestination.Today)
+    }
+
+    fun consumeSharedTodoDraft() {
+        mutableState.update { it.copy(sharedTodoDraft = null) }
+    }
+
+    fun consumePendingScene() {
+        mutableState.update { it.copy(pendingSceneId = null) }
+    }
+
+    fun setQuickScene(id: String, name: String) {
+        val value = QuickScenePreference(id, name)
+        personalStore.writeQuickScene(value)
+        mutableState.update { it.copy(quickScene = value, message = "快捷磁贴已设为“$name”。") }
+        DeviceControlTileService.requestRefresh(getApplication())
+        viewModelScope.launch { publishWidget() }
     }
 
     fun openQrScanner() {
@@ -1841,6 +1902,24 @@ class AppViewModel(
             publishWidget()
         }
 
+    fun addIncidentNote(id: String, note: String) =
+        runAction("incident-note:$id", "处理记录已保存。") {
+            api.updateIncident(id, "note", note)
+            mutableState.update { it.copy(incidents = api.incidents()) }
+        }
+
+    fun muteIncident(id: String, confirmation: suspend () -> Boolean) =
+        runAction("incident-mute:$id", "该问题已静音 1 小时。", confirmation) {
+            api.updateIncident(id, "mute", muteMinutes = 60)
+            mutableState.update { it.copy(incidents = api.incidents()) }
+        }
+
+    fun resolveIncident(id: String, note: String, confirmation: suspend () -> Boolean) =
+        runAction("incident-resolve:$id", "该问题已标记解决。", confirmation) {
+            api.updateIncident(id, "resolve", note)
+            mutableState.update { it.copy(incidents = api.incidents()) }
+        }
+
     fun controlIotRelay(
         deviceId: String,
         relayId: String,
@@ -2021,6 +2100,52 @@ class AppViewModel(
         mutableState.update { it.copy(error = null, message = null) }
     }
 
+    private fun assistantInputs(state: AppUiState) = AssistantInputs(
+        username = state.user?.username,
+        locked = state.locked,
+        timetable = state.campusTimetable,
+        todos = state.todoSnapshot,
+        incidents = state.incidents,
+        alerts = state.alerts,
+        resources = state.resourceExpiries,
+        backup = state.backup,
+        security = state.security,
+        preferences = state.alertPreferences,
+    )
+
+    private suspend fun refreshAssistantSnapshot(inputs: AssistantInputs) {
+        val username = inputs.username?.takeIf { !inputs.locked } ?: return
+        val snapshot = buildPersonalAssistantSnapshot(
+            timetable = inputs.timetable,
+            todos = inputs.todos,
+            incidents = inputs.incidents,
+            alerts = inputs.alerts,
+            resources = inputs.resources,
+            backup = inputs.backup,
+            security = inputs.security,
+        )
+        val guardianAlerts = buildGuardianAlerts(backup = inputs.backup, security = inputs.security)
+            .filter { alert -> alert.type != "backup" || inputs.preferences.backupAlerts }
+        val newGuardianAlerts = withContext(Dispatchers.IO) {
+            val existingIds = personalStore.readAlerts().mapTo(mutableSetOf(), AppAlertRecord::id)
+            personalStore.writeAssistantSnapshot(snapshot)
+            personalStore.appendAlerts(guardianAlerts)
+            DailyBriefScheduler.schedule(getApplication(), username)
+            guardianAlerts.filterNot { it.id in existingIds }
+        }
+        newGuardianAlerts.forEach { alert ->
+            withContext(Dispatchers.IO) { alertNotifier.notifyRecord(alert) }
+        }
+        val storedAlerts = withContext(Dispatchers.IO) { personalStore.readAlerts() }
+        mutableState.update { current ->
+            if (current.user?.username != username || current.locked) current else current.copy(
+                assistantSnapshot = snapshot,
+                alerts = mergeHydratedAlerts(storedAlerts, current.alerts),
+            )
+        }
+        publishWidget()
+    }
+
     private suspend fun publishWidget() {
         val current = mutableState.value
         withContext(Dispatchers.IO) {
@@ -2029,6 +2154,8 @@ class AppViewModel(
                 overview = current.overview,
                 activeIncidents = current.activeIncidents,
                 iot = current.iot,
+                assistant = current.assistantSnapshot,
+                quickScene = current.quickScene,
             )
         }
     }
@@ -2255,6 +2382,7 @@ class AppViewModel(
     }
 
     private fun syncRemoteNotifications(force: Boolean = false) = launchRefresh(DataSection.Notifications, force) {
+        flushNotificationMutations(api, personalStore)
         val registrationError = if (!appDeviceRegistered) {
             runCatching { api.registerAppDevice(appInstallationId) }
                 .onSuccess { appDeviceRegistered = true }
@@ -2312,7 +2440,12 @@ class AppViewModel(
                 "today" -> openWorkspace(WorkspaceDestination.Today)
                 "notifications" -> openWorkspace(WorkspaceDestination.Notifications)
                 "insights" -> openWorkspace(WorkspaceDestination.Insights)
-                "scenes" -> openWorkspace(WorkspaceDestination.Scenes)
+                "scenes" -> {
+                    uri.getQueryParameter(DeepLinks.EXTRA_SCENE_ID)
+                        ?.takeIf(String::isNotBlank)
+                        ?.let { id -> mutableState.update { it.copy(pendingSceneId = id) } }
+                    openWorkspace(WorkspaceDestination.Scenes)
+                }
                 else -> return false
             }
             return true
@@ -2349,45 +2482,98 @@ class AppViewModel(
         if (mutableState.value.user == null) return
         viewModelScope.launch {
             mutableState.update { it.copy(networkHealth = it.networkHealth.copy(status = "measuring")) }
-            val startNs = System.nanoTime()
-            val result = runCatching { api.authStatus() }
-            val elapsedMs = (System.nanoTime() - startNs) / 1_000_000L
-            if (result.isSuccess) {
-                val status = when {
-                    elapsedMs < 150 -> "healthy"
-                    elapsedMs < 500 -> "warning"
-                    else -> "error"
-                }
-                mutableState.update {
-                    it.copy(
-                        networkHealth = NetworkHealth(
-                            latencyMs = elapsedMs,
-                            status = status,
-                            gatewayUrl = BuildConfig.PLATFORM_BASE_URL,
-                            checkedAtMillis = System.currentTimeMillis(),
-                            dnsOk = true,
-                            apiOk = true,
-                            message = "连接正常 · 响应延迟 ${elapsedMs}ms",
-                        )
-                    )
-                }
-            } else {
-                mutableState.update {
-                    it.copy(
-                        networkHealth = NetworkHealth(
-                            latencyMs = null,
-                            status = "error",
-                            gatewayUrl = BuildConfig.PLATFORM_BASE_URL,
-                            checkedAtMillis = System.currentTimeMillis(),
-                            dnsOk = false,
-                            apiOk = false,
-                            message = result.exceptionOrNull()?.message ?: "远程网关连接超时",
-                        )
-                    )
-                }
-            }
+            mutableState.update { it.copy(networkHealth = withContext(Dispatchers.IO) { inspectNetworkHealth() }) }
         }
     }
+
+    private suspend fun inspectNetworkHealth(): NetworkHealth {
+        val checks = mutableListOf<NetworkCheckResult>()
+        val baseUrl = runCatching { URL(BuildConfig.PLATFORM_BASE_URL) }.getOrNull()
+        val host = baseUrl?.host.orEmpty()
+        val dnsStart = System.nanoTime()
+        val dnsResult = runCatching { InetAddress.getByName(host) }
+        val dnsMs = (System.nanoTime() - dnsStart) / 1_000_000L
+        checks += NetworkCheckResult(
+            label = "DNS 解析",
+            ok = dnsResult.isSuccess,
+            detail = if (dnsResult.isSuccess) "$host · ${dnsMs}ms" else "无法解析 $host",
+        )
+
+        val apiStart = System.nanoTime()
+        val apiResult = runCatching { api.authStatus() }
+        val apiMs = (System.nanoTime() - apiStart) / 1_000_000L
+        checks += NetworkCheckResult(
+            label = "平台 API",
+            ok = apiResult.isSuccess,
+            detail = if (apiResult.isSuccess) "响应 ${apiMs}ms" else (apiResult.exceptionOrNull()?.message ?: "请求失败"),
+        )
+
+        val updateResult = checkHttpEndpoint(BuildConfig.APP_UPDATE_MANIFEST_URL)
+        checks += NetworkCheckResult("更新源", updateResult.first, updateResult.second)
+        val fallbackResult = checkHttpEndpoint(BuildConfig.APP_UPDATE_MANIFEST_FALLBACK_URL)
+        checks += NetworkCheckResult("GitHub 备用源", fallbackResult.first, fallbackResult.second)
+
+        val certificateDays = checkCertificateDays(baseUrl)
+        checks += NetworkCheckResult(
+            label = "HTTPS 证书",
+            ok = certificateDays == null || certificateDays >= 14,
+            detail = certificateDays?.let { "剩余约 ${it.coerceAtLeast(0)} 天" } ?: "未能读取证书有效期",
+        )
+        val apiOk = apiResult.isSuccess
+        val dnsOk = dnsResult.isSuccess
+        val hardFailure = !dnsOk || !apiOk
+        val status = when {
+            hardFailure -> "error"
+            checks.any { !it.ok } -> "warning"
+            apiMs < 150 -> "healthy"
+            apiMs < 500 -> "warning"
+            else -> "error"
+        }
+        val message = when (status) {
+            "healthy" -> "手机到平台与更新源均可访问 · API ${apiMs}ms"
+            "warning" -> checks.firstOrNull { !it.ok }?.let { "${it.label}需要关注：${it.detail}" }
+                ?: "平台可访问，但响应偏慢 · API ${apiMs}ms"
+            else -> checks.firstOrNull { !it.ok }?.let { "${it.label}失败：${it.detail}" } ?: "远程网关连接失败"
+        }
+        return NetworkHealth(
+            latencyMs = apiMs,
+            status = status,
+            gatewayUrl = BuildConfig.PLATFORM_BASE_URL,
+            checkedAtMillis = System.currentTimeMillis(),
+            dnsOk = dnsOk,
+            apiOk = apiOk,
+            message = message,
+            certificateDaysRemaining = certificateDays,
+            checks = checks,
+        )
+    }
+
+    private fun checkHttpEndpoint(rawUrl: String): Pair<Boolean, String> = runCatching {
+        val connection = URL(rawUrl).openConnection() as HttpURLConnection
+        connection.connectTimeout = 5_000
+        connection.readTimeout = 5_000
+        connection.requestMethod = "GET"
+        connection.instanceFollowRedirects = true
+        try {
+            val code = connection.responseCode
+            if (code in 200..399) true to "HTTP $code" else false to "HTTP $code"
+        } finally {
+            connection.disconnect()
+        }
+    }.getOrElse { false to (it.message ?: "请求失败") }
+
+    private fun checkCertificateDays(url: URL?): Long? = runCatching {
+        val connection = url?.openConnection() as? HttpsURLConnection ?: return null
+        connection.connectTimeout = 5_000
+        connection.readTimeout = 5_000
+        try {
+            connection.connect()
+            val certificate = connection.serverCertificates.firstOrNull() as? X509Certificate ?: return null
+            ChronoUnit.DAYS.between(java.time.Instant.now(), certificate.notAfter.toInstant())
+        } finally {
+            connection.disconnect()
+        }
+    }.getOrNull()
 
     fun updateCacheStorageInfo() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -2452,6 +2638,7 @@ class AppViewModel(
     fun updateNotificationPreferences(preferences: AlertPreferences) {
         viewModelScope.launch(Dispatchers.IO) {
             personalStore.writeAlertPreferences(preferences)
+            DailyBriefScheduler.schedule(getApplication(), mutableState.value.user?.username)
             mutableState.update { it.copy(alertPreferences = preferences) }
             reloadPersonalState()
         }
@@ -2597,6 +2784,19 @@ private fun formatBytes(bytes: Long): String = when {
     bytes < 1024L * 1024L -> String.format(java.util.Locale.US, "%.1f KB", bytes.toDouble() / 1024.0)
     else -> String.format(java.util.Locale.US, "%.2f MB", bytes.toDouble() / (1024.0 * 1024.0))
 }
+
+private data class AssistantInputs(
+    val username: String?,
+    val locked: Boolean,
+    val timetable: CampusTimetable?,
+    val todos: TodoSnapshot,
+    val incidents: List<IncidentInfo>,
+    val alerts: List<AppAlertRecord>,
+    val resources: List<ResourceExpiry>,
+    val backup: BackupQuality?,
+    val security: SecurityData?,
+    val preferences: AlertPreferences,
+)
 
 internal fun operationalAlertsReady(incidentsLoaded: Boolean, tasksLoaded: Boolean): Boolean =
     incidentsLoaded && tasksLoaded

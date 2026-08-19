@@ -286,8 +286,6 @@ export function ConfigurationView({ session, targetEntityId = '' }) {
           {CONFIG_FIELDS.map((field) => (
             <label key={field.key}><span>{field.label}<small>{field.unit}</small></span><input type="number" min={field.min} max={field.max} value={draft?.[field.key] ?? ''} disabled={!canPropose || busy} onChange={(event) => updateField(field.key, Number(event.target.value))} /></label>
           ))}
-          <label><span>定时备份时间<small>本地时间</small></span><input type="time" value={draft?.backupSchedule?.time || '02:30'} disabled={!canPropose || busy} onChange={(event) => setDraft((current) => ({ ...current, backupSchedule: { ...current.backupSchedule, time: event.target.value } }))} /></label>
-          <label className="inline-check"><span>启用定时备份<small>按上方时间执行</small></span><input type="checkbox" checked={Boolean(draft?.backupSchedule?.enabled)} disabled={!canPropose || busy} onChange={(event) => setDraft((current) => ({ ...current, backupSchedule: { ...current.backupSchedule, enabled: event.target.checked } }))} /></label>
         </div>
         <div className="configuration-submit">
           <label><span>变更摘要</span><textarea maxLength={200} required value={summary} disabled={!canPropose || busy} placeholder="说明修改目的、影响与观察项" onChange={(event) => setSummary(event.target.value)} /></label>
