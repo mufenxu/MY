@@ -1218,7 +1218,6 @@ private fun AuthenticatedShell(
     var initialSetupOpen by remember(showInitialSetup, state.user) {
         mutableStateOf(showInitialSetup && state.user != null)
     }
-    val toastShape = RoundedCornerShape(20.dp)
     val settingsProfileState by viewModel.profileState.collectAsStateWithLifecycle()
     val toastDismissThreshold = with(LocalDensity.current) { 72.dp.toPx() }
     val animatedToastOffset by animateFloatAsState(
@@ -1641,9 +1640,6 @@ private fun AuthenticatedShell(
                         translationX = animatedToastOffset
                         alpha = (1f - abs(animatedToastOffset) / (toastDismissThreshold * 2f))
                             .coerceIn(0.45f, 1f)
-                        shape = toastShape
-                        clip = true
-                        shadowElevation = if (toastDragging) 0f else 4.dp.toPx()
                     }
                     .pointerInput(toastMessage, toastDismissThreshold) {
                         detectHorizontalDragGestures(
