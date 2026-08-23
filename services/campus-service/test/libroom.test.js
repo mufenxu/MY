@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createLibroomClient,
+  libroomCasFromCallbackResult,
   libroomCasFromCallback,
   normalizeReservationInput,
   LIBROOM_SERVICE_URL
@@ -15,6 +16,16 @@ test("extracts the library exchange code from its CAS callback redirect", () => 
   assert.equal(
     libroomCasFromCallback("https://libroom.hgu.edu.cn/h5/index.html#/cas/?cas=library-code"),
     "library-code"
+  );
+});
+
+test("extracts the library exchange code from a followed callback final URL", () => {
+  assert.equal(
+    libroomCasFromCallbackResult({
+      finalUrl: "https://libroom.hgu.edu.cn/h5/index.html#/cas/?cas=webvpn-code",
+      location: "https://libroom.hgu.edu.cn/v4/login/cas?ticket=already-used"
+    }),
+    "webvpn-code"
   );
 });
 

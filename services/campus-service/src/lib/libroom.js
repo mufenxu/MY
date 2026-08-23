@@ -93,6 +93,17 @@ export function libroomCasFromCallback(value) {
   }
 }
 
+export function libroomCasFromCallbackResult({ finalUrl = "", location = "", baseUrl = LIBROOM_ORIGIN } = {}) {
+  const fromFinalUrl = libroomCasFromCallback(finalUrl);
+  if (fromFinalUrl) return fromFinalUrl;
+  if (!location) return "";
+  try {
+    return libroomCasFromCallback(new URL(location, baseUrl).href);
+  } catch {
+    return "";
+  }
+}
+
 export function createLibroomClient({
   token = "",
   getMemberToken,

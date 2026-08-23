@@ -37,6 +37,7 @@ import {
   LIBROOM_ORIGIN,
   LIBROOM_SERVICE_URL,
   libroomCasFromCallback,
+  libroomCasFromCallbackResult,
   normalizeReservationInput
 } from "./src/lib/libroom.js";
 import {
@@ -1812,44 +1813,67 @@ function cachedLibroomToken(jar) {
   return Date.parse(session.expiresAt) > Date.now() + 30_000 ? String(session.token) : "";
 }
 
-async function issueLibroomMemberToken(jar, credentials = {}) {
-  await ensureWebvpnSession(jar, credentials);
-  const finalUrl = await getCasTicketRedirect({ jar, ...credentials, serviceUrl: LIBROOM_SERVICE_URL });
-  const { ticket } = casServiceFromTicketRedirect(finalUrl);
-  if (!ticket) throw new HttpError(401, "学校预约入口未返回统一认证票据，请重新登录学校账号。", null, "LIBROOM_CAS_TICKET_REQUIRED");
+function tagLibroomStage(error, stage) {
+  if (error && typeof error === "object" && !error.libroomStage) error.libroomStage = stage;
+  return error;
+}
 
-  let callbackCas = libroomCasFromCallback(finalUrl);
-  if (!callbackCas) {
-    const callback = await fetchLibroomWithWebvpn(jar, finalUrl, {
-      headers: {
-        accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
-        referer: `${CAS_ORIGIN}/cas/login`
-      }
-    });
-    if (callback.response.status >= 300 && callback.response.status < 400) {
-      const callbackLocation = callback.response.headers.get("location");
-      await discardUpstreamResponse(callback.response);
-      callbackCas = libroomCasFromCallback(callbackLocation ? new URL(callbackLocation, finalUrl).href : "");
-    } else {
-      const redirectUrl = extractSimpleLocationRedirectUrl(callback.text, finalUrl);
-      callbackCas = libroomCasFromCallback(redirectUrl);
-    }
-  }
-  if (!callbackCas) throw new HttpError(502, "图书馆预约系统未返回身份转换凭据。", null, "LIBROOM_CALLBACK_CAS_REQUIRED");
-
-  const token = await exchangeLibroomMemberToken({
-    cas: callbackCas,
-    requestImpl: (pathname, data, options) => requestLibroomJsonWithWebvpn(jar, pathname, data, options)
-  });
-  const capturedAt = Date.now();
-  jar.meta ||= {};
-  jar.meta.libroom = {
-    token,
-    capturedAt: new Date(capturedAt).toISOString(),
-    expiresAt: libroomTokenExpiry(token, capturedAt)
+function libroomFailureLog(error) {
+  return {
+    stage: error?.libroomStage || null,
+    status: error?.status || null,
+    code: error?.code || null,
+    message: error?.message || null
   };
-  if (jar.meta.cas) jar.meta.cas.lastError = null;
-  return token;
+}
+
+async function issueLibroomMemberToken(jar, credentials = {}) {
+  let stage = "webvpn_session";
+  try {
+    await ensureWebvpnSession(jar, credentials);
+    stage = "cas_ticket";
+    const finalUrl = await getCasTicketRedirect({ jar, ...credentials, serviceUrl: LIBROOM_SERVICE_URL });
+    const { ticket } = casServiceFromTicketRedirect(finalUrl);
+    if (!ticket) throw new HttpError(401, "学校预约入口未返回统一认证票据，请重新登录学校账号。", null, "LIBROOM_CAS_TICKET_REQUIRED");
+
+    stage = "libroom_callback";
+    let callbackCas = libroomCasFromCallback(finalUrl);
+    if (!callbackCas) {
+      const callback = await fetchLibroomWithWebvpn(jar, finalUrl, {
+        headers: {
+          accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+          referer: `${CAS_ORIGIN}/cas/login`
+        }
+      });
+      callbackCas = libroomCasFromCallbackResult({ finalUrl: callback.finalUrl, baseUrl: finalUrl });
+      if (callback.response.status >= 300 && callback.response.status < 400) {
+        const callbackLocation = callback.response.headers.get("location");
+        await discardUpstreamResponse(callback.response);
+        callbackCas ||= libroomCasFromCallbackResult({ location: callbackLocation, baseUrl: finalUrl });
+      } else if (!callbackCas) {
+        const redirectUrl = extractSimpleLocationRedirectUrl(callback.text, finalUrl);
+        callbackCas = libroomCasFromCallback(redirectUrl);
+      }
+    }
+    if (!callbackCas) throw new HttpError(502, "图书馆预约系统未返回身份转换凭据。", null, "LIBROOM_CALLBACK_CAS_REQUIRED");
+
+    stage = "member_token";
+    const token = await exchangeLibroomMemberToken({
+      cas: callbackCas,
+      requestImpl: (pathname, data, options) => requestLibroomJsonWithWebvpn(jar, pathname, data, options)
+    });
+    const capturedAt = Date.now();
+    jar.meta ||= {};
+    jar.meta.libroom = {
+      token,
+      capturedAt: new Date(capturedAt).toISOString(),
+      expiresAt: libroomTokenExpiry(token, capturedAt)
+    };
+    if (jar.meta.cas) jar.meta.cas.lastError = null;
+    return token;
+  } catch (error) {
+    throw tagLibroomStage(error, stage);
+  }
 }
 
 async function getLibroomMemberToken({ force = false } = {}) {
@@ -1864,6 +1888,7 @@ async function getLibroomMemberToken({ force = false } = {}) {
       await saveSessionJar(jar);
       return token;
     } catch (error) {
+      logger.warn("libroom_member_token_failed", { userId: currentUserId(), ...libroomFailureLog(error) });
       markCasFailureIfNeeded(jar, error);
       jar.meta ||= {};
       jar.meta.libroom = {
@@ -1936,6 +1961,7 @@ async function loginWithCasFull({ username, password, rememberMe = true }) {
     jar.meta.portal.lastError = error.message || "用户中心登录失败";
   });
   await issueLibroomMemberToken(jar, { username, password, rememberMe }).catch((error) => {
+    logger.warn("libroom_member_token_failed", { userId: currentUserId(), ...libroomFailureLog(error) });
     markCasFailureIfNeeded(jar, error);
     jar.meta.libroom = {
       lastError: isCasLoginRequiredError(error)
@@ -3210,7 +3236,10 @@ async function fetchLibroomWithWebvpn(jar, targetUrl, {
     if (verifyUrl && attempt < 2) {
       await discardUpstreamResponse(response);
       await ensureWebvpnSession(jar);
-      await requestAcademicHtmlWithSimpleRedirects(jar, verifyUrl, { referer: targetUrl });
+      const verified = await requestAcademicHtmlWithSimpleRedirects(jar, verifyUrl, { referer: targetUrl });
+      if (method.toUpperCase() === "GET" && libroomCasFromCallback(verified.finalUrl)) {
+        return { response: { status: 200, headers: new Headers() }, text: verified.html, finalUrl: verified.finalUrl };
+      }
       return fetchLibroomWithWebvpn(jar, targetUrl, { method, headers, body, attempt: attempt + 1 });
     }
     return { response, text: null, finalUrl: targetUrl };
