@@ -1766,7 +1766,9 @@ function libroomTokenExpiry(token, capturedAt = Date.now()) {
     const payload = JSON.parse(Buffer.from(String(token).split(".")[1] || "", "base64url").toString("utf8"));
     const expiresAt = Number(payload.exp) * 1000;
     if (Number.isFinite(expiresAt) && expiresAt > capturedAt) return new Date(expiresAt).toISOString();
-  } catch {}
+  } catch {
+    // 非 JWT token 使用下面的短期兜底过期时间。
+  }
   return new Date(capturedAt + 10 * 60 * 1000).toISOString();
 }
 
