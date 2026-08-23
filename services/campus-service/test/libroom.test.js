@@ -160,6 +160,26 @@ test("loads a member token before the first upstream request", async () => {
   assert.equal(requests[0].options.headers.Authorization, "bearerfresh-token");
 });
 
+test("allows the caller to provide the upstream request transport", async () => {
+  const calls = [];
+  const client = createLibroomClient({
+    token: "member-token",
+    requestImpl: async (pathname, data, { token }) => {
+      calls.push({ pathname, data, token });
+      return { code: 0, data: [{ id: 14, name: "单人研修间" }] };
+    }
+  });
+
+  const result = await client.listSpaces();
+
+  assert.deepEqual(result, [{ id: 14, name: "单人研修间" }]);
+  assert.deepEqual(calls, [{
+    pathname: "/v4/seminar/index",
+    data: {},
+    token: "member-token"
+  }]);
+});
+
 test("maps upstream failures without exposing credentials", async () => {
   const client = createLibroomClient({
     token: "member-token",

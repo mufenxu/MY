@@ -34,6 +34,7 @@ import { createStaticAssetHandler } from "./src/lib/static-assets.js";
 import {
   createLibroomClient,
   exchangeLibroomMemberToken,
+  LIBROOM_ORIGIN,
   LIBROOM_SERVICE_URL,
   libroomCasFromCallback,
   normalizeReservationInput
@@ -1786,25 +1787,33 @@ async function getLibroomMemberToken({ force = false } = {}) {
       const cached = cachedLibroomToken(jar);
       if (cached) return cached;
     }
+    await ensureWebvpnSession(jar);
     const finalUrl = await getCasTicketRedirect({ jar, serviceUrl: LIBROOM_SERVICE_URL });
     const { ticket } = casServiceFromTicketRedirect(finalUrl);
     if (!ticket) throw new HttpError(401, "学校预约入口未返回统一认证票据，请重新登录学校账号。", null, "LIBROOM_CAS_TICKET_REQUIRED");
 
     let callbackCas = libroomCasFromCallback(finalUrl);
     if (!callbackCas) {
-      const callbackResponse = await fetchWithJar(finalUrl, {
-        jar,
+      const callback = await fetchLibroomWithWebvpn(jar, finalUrl, {
         headers: {
           accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
           referer: `${CAS_ORIGIN}/cas/login`
         }
       });
-      const callbackLocation = callbackResponse.headers.get("location");
-      await discardUpstreamResponse(callbackResponse);
-      callbackCas = libroomCasFromCallback(callbackLocation ? new URL(callbackLocation, finalUrl).href : "");
+      if (callback.response.status >= 300 && callback.response.status < 400) {
+        const callbackLocation = callback.response.headers.get("location");
+        await discardUpstreamResponse(callback.response);
+        callbackCas = libroomCasFromCallback(callbackLocation ? new URL(callbackLocation, finalUrl).href : "");
+      } else {
+        const redirectUrl = extractSimpleLocationRedirectUrl(callback.text, finalUrl);
+        callbackCas = libroomCasFromCallback(redirectUrl);
+      }
     }
     if (!callbackCas) throw new HttpError(502, "图书馆预约系统未返回身份转换凭据。", null, "LIBROOM_CALLBACK_CAS_REQUIRED");
-    const token = await exchangeLibroomMemberToken({ cas: callbackCas });
+    const token = await exchangeLibroomMemberToken({
+      cas: callbackCas,
+      requestImpl: (pathname, data, options) => requestLibroomJsonWithWebvpn(jar, pathname, data, options)
+    });
     const capturedAt = Date.now();
     jar.meta ||= {};
     jar.meta.libroom = {
@@ -1821,7 +1830,14 @@ async function libroomClient() {
   const jar = await readSessionJar();
   return createLibroomClient({
     token: cachedLibroomToken(jar),
-    getMemberToken: () => getLibroomMemberToken({ force: true })
+    getMemberToken: () => getLibroomMemberToken({ force: true }),
+    requestImpl: async (pathname, data, options) => {
+      const latestJar = await readSessionJar();
+      Object.assign(jar, mergeSessionJars(latestJar, jar));
+      const result = await requestLibroomJsonWithWebvpn(jar, pathname, data, options);
+      await saveSessionJar(jar);
+      return result;
+    }
   });
 }
 
@@ -3108,6 +3124,71 @@ function extractSimpleLocationRedirectUrl(html, baseUrl) {
   if (direct) return new URL(direct[1], baseUrl).href;
   const variable = source.match(/locationUrl\s*=\s*["']([^"']+)["']/);
   return variable ? new URL(variable[1], baseUrl).href : "";
+}
+
+async function fetchLibroomWithWebvpn(jar, targetUrl, {
+  method = "GET",
+  headers = {},
+  body,
+  attempt = 0
+} = {}) {
+  const response = await fetchWithJar(targetUrl, {
+    jar,
+    method,
+    headers: {
+      accept: "application/json, text/plain, */*",
+      referer: `${LIBROOM_ORIGIN}/h5/index.html`,
+      ...headers
+    },
+    body
+  });
+
+  if (response.status >= 300 && response.status < 400) {
+    return { response, text: null, finalUrl: targetUrl };
+  }
+
+  const text = await readUpstreamText(response);
+  const verifyUrl = extractWebvpnVerifyUrl(text, targetUrl);
+  if (verifyUrl && attempt < 2) {
+    await ensureWebvpnSession(jar);
+    await requestAcademicHtmlWithSimpleRedirects(jar, verifyUrl, { referer: targetUrl });
+    return fetchLibroomWithWebvpn(jar, targetUrl, { method, headers, body, attempt: attempt + 1 });
+  }
+
+  return { response, text, finalUrl: targetUrl };
+}
+
+async function requestLibroomJsonWithWebvpn(jar, pathname, data = {}, { token = "" } = {}) {
+  const headers = {
+    accept: "application/json, text/plain, */*",
+    "content-type": "application/json;charset=UTF-8",
+    "x-requested-with": "XMLHttpRequest",
+    origin: LIBROOM_ORIGIN,
+    referer: `${LIBROOM_ORIGIN}/h5/index.html`
+  };
+  if (token) headers.authorization = `bearer${token}`;
+
+  const { response, text } = await fetchLibroomWithWebvpn(jar, new URL(pathname, LIBROOM_ORIGIN).href, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(data || {})
+  });
+
+  let payload;
+  try {
+    payload = parseJsonLike(text || "{}");
+  } catch {
+    throw new HttpError(502, "空间预约系统返回的 JSON 结构不符合预期。", {
+      endpoint: pathname,
+      sample: normalizeHtmlText(text).slice(0, 200)
+    });
+  }
+
+  return {
+    payload,
+    status: response.status,
+    ok: response.status >= 200 && response.status < 300
+  };
 }
 
 function looksLikeAcademicLoginHtml(html, finalUrl = "") {

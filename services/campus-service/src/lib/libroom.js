@@ -96,11 +96,33 @@ export function libroomCasFromCallback(value) {
 export function createLibroomClient({
   token = "",
   getMemberToken,
+  requestImpl,
   fetchImpl = fetch,
   baseUrl = LIBROOM_ORIGIN,
   timeoutMs = 15_000
 } = {}) {
   let currentToken = String(token || "");
+
+  async function defaultRequestImpl(pathname, data, { token: memberToken }) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetchImpl(`${String(baseUrl).replace(/\/+$/, "")}${pathname}`, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json;charset=UTF-8",
+          Authorization: `bearer${memberToken}`
+        },
+        body: JSON.stringify(data || {}),
+        signal: controller.signal
+      });
+      const payload = await response.json().catch(() => ({}));
+      return { payload, status: response.status, ok: response.ok };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   async function request(pathname, data = {}, { retry = true } = {}) {
     if (!currentToken) {
@@ -108,34 +130,23 @@ export function createLibroomClient({
       currentToken = String(await getMemberToken() || "");
       if (!currentToken) fail(401, "空间预约会话已过期，请重新登录学校账号。", "LIBROOM_AUTH_EXPIRED");
     }
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    let response;
-    let payload;
-    try {
-      response = await fetchImpl(`${String(baseUrl).replace(/\/+$/, "")}${pathname}`, {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json;charset=UTF-8",
-          Authorization: `bearer${currentToken}`
-        },
-        body: JSON.stringify(data || {}),
-        signal: controller.signal
-      });
-      payload = await response.json().catch(() => ({}));
-    } finally {
-      clearTimeout(timer);
-    }
+    const rawResult = await (requestImpl || defaultRequestImpl)(pathname, data || {}, {
+      token: currentToken,
+      baseUrl,
+      timeoutMs
+    });
+    const payload = rawResult && Object.hasOwn(rawResult, "payload") ? rawResult.payload : rawResult;
+    const statusCode = Number(rawResult?.status || 200);
+    const responseOk = rawResult?.ok !== undefined ? Boolean(rawResult.ok) : statusCode >= 200 && statusCode < 300;
 
     const code = Number(payload?.code);
-    const authError = !response?.ok && [401, 403].includes(response.status) || AUTH_ERROR_CODES.has(code);
+    const authError = !responseOk && [401, 403].includes(statusCode) || AUTH_ERROR_CODES.has(code);
     if (authError && retry && typeof getMemberToken === "function") {
       currentToken = String(await getMemberToken() || "");
       if (!currentToken) fail(401, "空间预约会话已过期，请重新登录学校账号。", "LIBROOM_AUTH_EXPIRED");
       return request(pathname, data, { retry: false });
     }
-    if (!response?.ok) fail(response.status || 502, upstreamMessage(payload, `空间预约系统返回 HTTP ${response?.status || 502}。`), "LIBROOM_UPSTREAM_HTTP");
+    if (!responseOk) fail(statusCode || 502, upstreamMessage(payload, `空间预约系统返回 HTTP ${statusCode || 502}。`), "LIBROOM_UPSTREAM_HTTP");
     if (payload && payload.code !== undefined && code !== 0) {
       const status = code === 20001 || /预约|占用|已被/.test(upstreamMessage(payload, "")) ? 409 : 502;
       fail(status, upstreamMessage(payload, "空间预约系统拒绝了请求。"), "LIBROOM_UPSTREAM_REJECTED");
@@ -160,9 +171,21 @@ export function createLibroomClient({
   });
 }
 
-export async function exchangeLibroomMemberToken({ cas, fetchImpl = fetch, baseUrl = LIBROOM_ORIGIN, timeoutMs = 15_000 } = {}) {
+export async function exchangeLibroomMemberToken({ cas, requestImpl, fetchImpl = fetch, baseUrl = LIBROOM_ORIGIN, timeoutMs = 15_000 } = {}) {
   const ticket = String(cas || "").trim();
   if (!ticket) fail(401, "统一身份认证票据缺失，请重新登录学校账号。", "LIBROOM_CAS_TICKET_REQUIRED");
+  if (typeof requestImpl === "function") {
+    const rawResult = await requestImpl("/v4/login/user", { cas: ticket }, { token: "", baseUrl, timeoutMs });
+    const payload = rawResult && Object.hasOwn(rawResult, "payload") ? rawResult.payload : rawResult;
+    const statusCode = Number(rawResult?.status || 200);
+    const responseOk = rawResult?.ok !== undefined ? Boolean(rawResult.ok) : statusCode >= 200 && statusCode < 300;
+    const token = payload?.data?.member?.token || payload?.member?.token || payload?.data?.token;
+    if (!responseOk || (payload?.code !== undefined && Number(payload.code) !== 0) || !token) {
+      fail(responseOk ? 401 : statusCode, upstreamMessage(payload, "空间预约身份转换失败。"), "LIBROOM_AUTH_EXPIRED");
+    }
+    return String(token);
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
