@@ -35,6 +35,7 @@ import {
   createLibroomClient,
   exchangeLibroomMemberToken,
   LIBROOM_SERVICE_URL,
+  libroomCasFromCallback,
   normalizeReservationInput
 } from "./src/lib/libroom.js";
 import {
@@ -1787,8 +1788,23 @@ async function getLibroomMemberToken({ force = false } = {}) {
     }
     const finalUrl = await getCasTicketRedirect({ jar, serviceUrl: LIBROOM_SERVICE_URL });
     const { ticket } = casServiceFromTicketRedirect(finalUrl);
-    if (!ticket) throw new HttpError(401, "空间预约身份转换失败，请重新登录学校账号。", null, "LIBROOM_CAS_TICKET_REQUIRED");
-    const token = await exchangeLibroomMemberToken({ cas: ticket });
+    if (!ticket) throw new HttpError(401, "学校预约入口未返回统一认证票据，请重新登录学校账号。", null, "LIBROOM_CAS_TICKET_REQUIRED");
+
+    let callbackCas = libroomCasFromCallback(finalUrl);
+    if (!callbackCas) {
+      const callbackResponse = await fetchWithJar(finalUrl, {
+        jar,
+        headers: {
+          accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+          referer: `${CAS_ORIGIN}/cas/login`
+        }
+      });
+      const callbackLocation = callbackResponse.headers.get("location");
+      await discardUpstreamResponse(callbackResponse);
+      callbackCas = libroomCasFromCallback(callbackLocation ? new URL(callbackLocation, finalUrl).href : "");
+    }
+    if (!callbackCas) throw new HttpError(502, "图书馆预约系统未返回身份转换凭据。", null, "LIBROOM_CALLBACK_CAS_REQUIRED");
+    const token = await exchangeLibroomMemberToken({ cas: callbackCas });
     const capturedAt = Date.now();
     jar.meta ||= {};
     jar.meta.libroom = {

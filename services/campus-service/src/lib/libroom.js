@@ -1,7 +1,7 @@
 import { HttpError } from "./http.js";
 
 export const LIBROOM_ORIGIN = "https://libroom.hgu.edu.cn";
-export const LIBROOM_SERVICE_URL = `${LIBROOM_ORIGIN}/h5/index.html`;
+export const LIBROOM_SERVICE_URL = `${LIBROOM_ORIGIN}/v4/login/cas`;
 const AUTH_ERROR_CODES = new Set([401, 403, 10001, 10002, 10003]);
 
 function fail(status, message, code = "LIBROOM_REQUEST_FAILED", details = null) {
@@ -81,6 +81,16 @@ function responseData(payload) {
 
 function upstreamMessage(payload, fallback) {
   return String(payload?.message || payload?.msg || payload?.error || fallback);
+}
+
+export function libroomCasFromCallback(value) {
+  try {
+    const url = new URL(String(value || ""));
+    const match = url.hash.match(/[?&]cas=([^&]+)/i);
+    return match ? decodeURIComponent(match[1]) : "";
+  } catch {
+    return "";
+  }
 }
 
 export function createLibroomClient({

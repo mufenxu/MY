@@ -2,8 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createLibroomClient,
-  normalizeReservationInput
+  libroomCasFromCallback,
+  normalizeReservationInput,
+  LIBROOM_SERVICE_URL
 } from "../src/lib/libroom.js";
+
+test("uses the CAS service URL published by the library system", () => {
+  assert.equal(LIBROOM_SERVICE_URL, "https://libroom.hgu.edu.cn/v4/login/cas");
+});
+
+test("extracts the library exchange code from its CAS callback redirect", () => {
+  assert.equal(
+    libroomCasFromCallback("https://libroom.hgu.edu.cn/h5/index.html#/cas/?cas=library-code"),
+    "library-code"
+  );
+});
 
 test("normalizes a single-person reservation with an empty team", () => {
   const result = normalizeReservationInput({
