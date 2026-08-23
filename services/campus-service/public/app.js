@@ -2519,6 +2519,14 @@ function authSessionEntries(auth = {}) {
         assumedExpiresAt: auth.academic?.assumedExpiresAt,
         lastError: auth.academic?.lastError
       }
+    },
+    {
+      key: "libroom",
+      label: "预约",
+      data: sessions.libroom || {
+        connected: false,
+        status: "missing"
+      }
     }
   ];
 }

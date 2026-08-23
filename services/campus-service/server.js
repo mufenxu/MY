@@ -1376,11 +1376,42 @@ function portalSessionSummary(jar) {
   });
 }
 
-function markCasFailureIfNeeded(jar, error) {
+function libroomSessionSummary(jar) {
+  const libroom = jar.meta?.libroom || {};
+  return serviceSessionSummary({
+    key: "libroom",
+    label: "空间预约",
+    connected: Boolean(libroom.token),
+    capturedAt: libroom.capturedAt || null,
+    expiresAt: libroom.expiresAt || null,
+    lastError: libroom.lastError || null,
+    detail: {
+      hasToken: Boolean(libroom.token)
+    }
+  });
+}
+
+function isCasLoginRequiredError(error) {
   const message = error?.message || "";
-  if (error?.status === 401 && /统一身份认证|CAS|重新登录学校账号/.test(message)) {
+  const code = error?.code || "";
+  return Boolean(
+    error?.status === 401
+    && (/统一身份认证|CAS|重新登录学校账号/.test(message) || code === "LIBROOM_AUTH_EXPIRED" || code === "LIBROOM_CAS_TICKET_REQUIRED")
+  );
+}
+
+function casLoginRequiredMessage(error) {
+  const message = error?.message || "";
+  return /统一身份认证|CAS|重新登录学校账号/.test(message)
+    ? message
+    : "统一身份认证会话已过期，请重新登录学校账号。";
+}
+
+function markCasFailureIfNeeded(jar, error) {
+  if (isCasLoginRequiredError(error)) {
+    jar.meta ||= {};
     jar.meta.cas ||= {};
-    jar.meta.cas.lastError = message;
+    jar.meta.cas.lastError = casLoginRequiredMessage(error);
   }
 }
 
@@ -1395,17 +1426,18 @@ function storedSessionSummary(jar) {
   const campus = campusSessionSummary(jar);
   const academic = academicSessionSummary(jar);
   const portal = portalSessionSummary(jar);
-  const hasStoredSession = Boolean(cas.connected || energy.connected || campus.connected || academic.connected || portal.connected);
+  const libroom = libroomSessionSummary(jar);
+  const hasStoredSession = Boolean(cas.connected || energy.connected || campus.connected || academic.connected || portal.connected || libroom.connected || libroom.lastError);
   const schoolAccount = normalizeSchoolLoginAccount(jar.meta?.schoolAccount || jar.meta?.loginUsername);
   const primaryRefreshableSessions = [energy, campus, academic];
-  const globalLoginSessions = [energy, academic];
+  const globalLoginSessions = [energy, academic, libroom];
   const needsLogin = hasStoredSession && (
     (refreshBlockedByCas(cas) && primaryRefreshableSessions.some(sessionNeedsRefresh))
     || globalLoginSessions.some(sessionHasLoginRequiredError)
   );
   const loginRequiredMessage = needsLogin ? "统一身份认证会话已过期，请重新登录学校账号。" : null;
 
-  const sessions = { cas, energy, campus, academic, portal };
+  const sessions = { cas, energy, campus, academic, portal, libroom };
   if (loginRequiredMessage) {
     for (const session of primaryRefreshableSessions) {
       if (sessionNeedsRefresh(session)) {
@@ -1780,6 +1812,46 @@ function cachedLibroomToken(jar) {
   return Date.parse(session.expiresAt) > Date.now() + 30_000 ? String(session.token) : "";
 }
 
+async function issueLibroomMemberToken(jar, credentials = {}) {
+  await ensureWebvpnSession(jar, credentials);
+  const finalUrl = await getCasTicketRedirect({ jar, ...credentials, serviceUrl: LIBROOM_SERVICE_URL });
+  const { ticket } = casServiceFromTicketRedirect(finalUrl);
+  if (!ticket) throw new HttpError(401, "学校预约入口未返回统一认证票据，请重新登录学校账号。", null, "LIBROOM_CAS_TICKET_REQUIRED");
+
+  let callbackCas = libroomCasFromCallback(finalUrl);
+  if (!callbackCas) {
+    const callback = await fetchLibroomWithWebvpn(jar, finalUrl, {
+      headers: {
+        accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+        referer: `${CAS_ORIGIN}/cas/login`
+      }
+    });
+    if (callback.response.status >= 300 && callback.response.status < 400) {
+      const callbackLocation = callback.response.headers.get("location");
+      await discardUpstreamResponse(callback.response);
+      callbackCas = libroomCasFromCallback(callbackLocation ? new URL(callbackLocation, finalUrl).href : "");
+    } else {
+      const redirectUrl = extractSimpleLocationRedirectUrl(callback.text, finalUrl);
+      callbackCas = libroomCasFromCallback(redirectUrl);
+    }
+  }
+  if (!callbackCas) throw new HttpError(502, "图书馆预约系统未返回身份转换凭据。", null, "LIBROOM_CALLBACK_CAS_REQUIRED");
+
+  const token = await exchangeLibroomMemberToken({
+    cas: callbackCas,
+    requestImpl: (pathname, data, options) => requestLibroomJsonWithWebvpn(jar, pathname, data, options)
+  });
+  const capturedAt = Date.now();
+  jar.meta ||= {};
+  jar.meta.libroom = {
+    token,
+    capturedAt: new Date(capturedAt).toISOString(),
+    expiresAt: libroomTokenExpiry(token, capturedAt)
+  };
+  if (jar.meta.cas) jar.meta.cas.lastError = null;
+  return token;
+}
+
 async function getLibroomMemberToken({ force = false } = {}) {
   return libroomSessionQueue.run(currentUserId(), async () => {
     const jar = await readSessionJar();
@@ -1787,42 +1859,21 @@ async function getLibroomMemberToken({ force = false } = {}) {
       const cached = cachedLibroomToken(jar);
       if (cached) return cached;
     }
-    await ensureWebvpnSession(jar);
-    const finalUrl = await getCasTicketRedirect({ jar, serviceUrl: LIBROOM_SERVICE_URL });
-    const { ticket } = casServiceFromTicketRedirect(finalUrl);
-    if (!ticket) throw new HttpError(401, "学校预约入口未返回统一认证票据，请重新登录学校账号。", null, "LIBROOM_CAS_TICKET_REQUIRED");
-
-    let callbackCas = libroomCasFromCallback(finalUrl);
-    if (!callbackCas) {
-      const callback = await fetchLibroomWithWebvpn(jar, finalUrl, {
-        headers: {
-          accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
-          referer: `${CAS_ORIGIN}/cas/login`
-        }
-      });
-      if (callback.response.status >= 300 && callback.response.status < 400) {
-        const callbackLocation = callback.response.headers.get("location");
-        await discardUpstreamResponse(callback.response);
-        callbackCas = libroomCasFromCallback(callbackLocation ? new URL(callbackLocation, finalUrl).href : "");
-      } else {
-        const redirectUrl = extractSimpleLocationRedirectUrl(callback.text, finalUrl);
-        callbackCas = libroomCasFromCallback(redirectUrl);
-      }
+    try {
+      const token = await issueLibroomMemberToken(jar);
+      await saveSessionJar(jar);
+      return token;
+    } catch (error) {
+      markCasFailureIfNeeded(jar, error);
+      jar.meta ||= {};
+      jar.meta.libroom = {
+        lastError: isCasLoginRequiredError(error)
+          ? casLoginRequiredMessage(error)
+          : (error.message || "空间预约会话已过期，请重新登录学校账号。")
+      };
+      await saveSessionJar(jar).catch(() => {});
+      throw error;
     }
-    if (!callbackCas) throw new HttpError(502, "图书馆预约系统未返回身份转换凭据。", null, "LIBROOM_CALLBACK_CAS_REQUIRED");
-    const token = await exchangeLibroomMemberToken({
-      cas: callbackCas,
-      requestImpl: (pathname, data, options) => requestLibroomJsonWithWebvpn(jar, pathname, data, options)
-    });
-    const capturedAt = Date.now();
-    jar.meta ||= {};
-    jar.meta.libroom = {
-      token,
-      capturedAt: new Date(capturedAt).toISOString(),
-      expiresAt: libroomTokenExpiry(token, capturedAt)
-    };
-    await saveSessionJar(jar);
-    return token;
   });
 }
 
@@ -1883,6 +1934,14 @@ async function loginWithCasFull({ username, password, rememberMe = true }) {
   await activatePortalSession(jar, { username, password, rememberMe }).catch((error) => {
     jar.meta.portal ||= {};
     jar.meta.portal.lastError = error.message || "用户中心登录失败";
+  });
+  await issueLibroomMemberToken(jar, { username, password, rememberMe }).catch((error) => {
+    markCasFailureIfNeeded(jar, error);
+    jar.meta.libroom = {
+      lastError: isCasLoginRequiredError(error)
+        ? casLoginRequiredMessage(error)
+        : (error.message || "空间预约登录失败")
+    };
   });
   await saveSessionJar(jar);
   return { view, status: storedSessionSummary(jar) };
