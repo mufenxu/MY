@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createLibroomClient,
+  decryptLibroomConfigPayload,
+  libroomCasLoginOptionsFromConfig,
   libroomCasFromCallbackResult,
   libroomCasFromCallback,
   normalizeReservationInput,
@@ -10,6 +12,24 @@ import {
 
 test("uses the CAS service URL published by the library system", () => {
   assert.equal(LIBROOM_SERVICE_URL, "https://libroom.hgu.edu.cn/v4/login/cas");
+});
+
+test("decrypts the official library config payload", () => {
+  const encrypted = "JYDFboSfGMi8aFIYhkexQoww4fsLbIfDU+3bI6FBDiyrytfo5mC/pgSedh4eGtgjNiReD3XCDXCsurzhWmDcnw==";
+
+  assert.deepEqual(
+    decryptLibroomConfigPayload(encrypted, { now: new Date("2026-08-23T12:00:00+08:00") }),
+    { ok: true, cas_url: "https://cas.hgu.edu.cn/cas/login" }
+  );
+});
+
+test("derives the library CAS login and service URL from official config", () => {
+  const casUrl = "https://cas.hgu.edu.cn/cas/login?service=https%3A%2F%2Flibroom.hgu.edu.cn%2Fv4%2Flogin%2Fcas";
+
+  assert.deepEqual(libroomCasLoginOptionsFromConfig({ cas_url: casUrl }), {
+    loginBaseUrl: casUrl,
+    serviceUrl: "https://libroom.hgu.edu.cn/v4/login/cas"
+  });
 });
 
 test("extracts the library exchange code from its CAS callback redirect", () => {

@@ -1,7 +1,9 @@
 import { HttpError } from "./http.js";
+import { createDecipheriv } from "node:crypto";
 
 export const LIBROOM_ORIGIN = "https://libroom.hgu.edu.cn";
 export const LIBROOM_SERVICE_URL = `${LIBROOM_ORIGIN}/v4/login/cas`;
+const LIBROOM_CONFIG_IV = "ZZWBKJ_ZHIHUAWEI";
 const AUTH_ERROR_CODES = new Set([401, 403, 10001, 10002, 10003]);
 
 function fail(status, message, code = "LIBROOM_REQUEST_FAILED", details = null) {
@@ -22,6 +24,36 @@ function localDate(now) {
     month: "2-digit",
     day: "2-digit"
   }).format(now);
+}
+
+function libroomConfigKey(now = new Date()) {
+  const date = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(now).replaceAll("-", "");
+  return `${date}${date.split("").reverse().join("")}`;
+}
+
+export function decryptLibroomConfigPayload(value, { now = new Date() } = {}) {
+  const encrypted = String(value || "");
+  if (!encrypted) return null;
+  try {
+    const decipher = createDecipheriv("aes-128-cbc", Buffer.from(libroomConfigKey(now), "utf8"), Buffer.from(LIBROOM_CONFIG_IV, "utf8"));
+    const decrypted = Buffer.concat([decipher.update(encrypted, "base64"), decipher.final()]).toString("utf8");
+    return JSON.parse(decrypted);
+  } catch {
+    return null;
+  }
+}
+
+export function libroomCasLoginOptionsFromConfig(config = {}) {
+  const casUrl = String(config?.cas_url || "");
+  if (!casUrl) return { loginBaseUrl: `${new URL("/cas/login", "https://cas.hgu.edu.cn").href}`, serviceUrl: LIBROOM_SERVICE_URL };
+  const parsed = new URL(casUrl);
+  const serviceUrl = parsed.searchParams.get("service") || LIBROOM_SERVICE_URL;
+  return { loginBaseUrl: parsed.href, serviceUrl };
 }
 
 function dateDelta(date, today) {

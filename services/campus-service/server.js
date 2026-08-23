@@ -33,9 +33,10 @@ import { invalidateRequestMemo, requestMemo, setRequestMemo } from "./src/lib/re
 import { createStaticAssetHandler } from "./src/lib/static-assets.js";
 import {
   createLibroomClient,
+  decryptLibroomConfigPayload,
   exchangeLibroomMemberToken,
   LIBROOM_ORIGIN,
-  LIBROOM_SERVICE_URL,
+  libroomCasLoginOptionsFromConfig,
   libroomCasFromCallback,
   libroomCasFromCallbackResult,
   normalizeReservationInput
@@ -1685,6 +1686,9 @@ async function loginCasService({ jar, username, password, rememberMe = true, ser
   }
 
   const html = await readUpstreamText(loginPage);
+  const redirectUrl = extractSimpleLocationRedirectUrl(html, loginUrl);
+  if (redirectUrl) return assertAllowedSchoolUrl(redirectUrl);
+
   if (!username || !password) {
     throw new HttpError(401, "统一身份认证会话已过期，请重新登录学校账号。");
   }
@@ -1831,8 +1835,10 @@ async function issueLibroomMemberToken(jar, credentials = {}) {
   let stage = "webvpn_session";
   try {
     await ensureWebvpnSession(jar, credentials);
+    stage = "libroom_config";
+    const casLoginOptions = await getLibroomCasLoginOptions(jar);
     stage = "cas_ticket";
-    const finalUrl = await getCasTicketRedirect({ jar, ...credentials, serviceUrl: LIBROOM_SERVICE_URL });
+    const finalUrl = await getCasTicketRedirect({ jar, ...credentials, ...casLoginOptions });
     const { ticket } = casServiceFromTicketRedirect(finalUrl);
     if (!ticket) throw new HttpError(401, "学校预约入口未返回统一认证票据，请重新登录学校账号。", null, "LIBROOM_CAS_TICKET_REQUIRED");
 
@@ -3254,6 +3260,26 @@ async function fetchLibroomWithWebvpn(jar, targetUrl, {
   }
 
   return { response, text, finalUrl: targetUrl };
+}
+
+async function getLibroomCasLoginOptions(jar) {
+  const { response, text } = await fetchLibroomWithWebvpn(jar, new URL("/v4/index/peizhi", LIBROOM_ORIGIN).href, {
+    method: "POST",
+    headers: {
+      accept: "application/json, text/plain, */*",
+      "content-type": "application/json;charset=UTF-8",
+      "x-requested-with": "XMLHttpRequest",
+      origin: LIBROOM_ORIGIN,
+      referer: `${LIBROOM_ORIGIN}/h5/index.html`
+    }
+  });
+  if (response.status < 200 || response.status >= 300) {
+    throw new HttpError(502, "图书馆预约系统配置读取失败。", { status: response.status }, "LIBROOM_CONFIG_FAILED");
+  }
+  const payload = parseJsonLike(text || "{}");
+  const config = decryptLibroomConfigPayload(payload?.data?.data ?? payload?.data);
+  if (!config) throw new HttpError(502, "图书馆预约系统配置解密失败。", null, "LIBROOM_CONFIG_DECRYPT_FAILED");
+  return libroomCasLoginOptionsFromConfig(config?.config || config);
 }
 
 async function requestLibroomJsonWithWebvpn(jar, pathname, data = {}, { token = "" } = {}) {
