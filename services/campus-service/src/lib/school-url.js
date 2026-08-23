@@ -27,3 +27,22 @@ export function normalizeAllowedSchoolUrl(value, { extraHosts = [] } = {}) {
   }
   return url.href;
 }
+
+export function webvpnVerifyUrlFromRedirect(location, baseUrl, { webvpnOrigin = "https://webvpn.hgu.edu.cn" } = {}) {
+  if (!location) return "";
+  let url;
+  try {
+    url = new URL(location, baseUrl);
+  } catch {
+    return "";
+  }
+  const webvpn = new URL(webvpnOrigin);
+  if (
+    url.hostname !== webvpn.hostname
+    || url.pathname !== "/controller/v1/public/verify"
+    || !url.searchParams.get("t")
+  ) {
+    return "";
+  }
+  return normalizeAllowedSchoolUrl(url.href);
+}

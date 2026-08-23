@@ -26,7 +26,7 @@ import {
   extractInputValue,
   htmlErrorMessage
 } from "./src/lib/cas-protocol.js";
-import { normalizeAllowedSchoolUrl } from "./src/lib/school-url.js";
+import { normalizeAllowedSchoolUrl, webvpnVerifyUrlFromRedirect } from "./src/lib/school-url.js";
 import { verifyPlatformSso } from "./src/lib/platform-sso.js";
 import { platformRoleAllowsRequest } from "./src/lib/platform-role.js";
 import { invalidateRequestMemo, requestMemo, setRequestMemo } from "./src/lib/request-memo.js";
@@ -3073,6 +3073,8 @@ function looksLikeAcademicTimetableHtml(html) {
 }
 
 function extractWebvpnVerifyUrl(html, baseUrl) {
+  const redirectedVerifyUrl = webvpnVerifyUrlFromRedirect(baseUrl, baseUrl);
+  if (redirectedVerifyUrl) return redirectedVerifyUrl;
   try {
     const url = new URL(baseUrl);
     if (url.hostname === new URL(WEBVPN_ORIGIN).hostname && url.pathname === "/portal/shortcut.html" && url.searchParams.get("t")) {
@@ -3203,6 +3205,14 @@ async function fetchLibroomWithWebvpn(jar, targetUrl, {
   });
 
   if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get("location");
+    const verifyUrl = webvpnVerifyUrlFromRedirect(location, targetUrl);
+    if (verifyUrl && attempt < 2) {
+      await discardUpstreamResponse(response);
+      await ensureWebvpnSession(jar);
+      await requestAcademicHtmlWithSimpleRedirects(jar, verifyUrl, { referer: targetUrl });
+      return fetchLibroomWithWebvpn(jar, targetUrl, { method, headers, body, attempt: attempt + 1 });
+    }
     return { response, text: null, finalUrl: targetUrl };
   }
 

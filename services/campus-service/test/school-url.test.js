@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeAllowedSchoolUrl } from "../src/lib/school-url.js";
+import * as schoolUrl from "../src/lib/school-url.js";
+const { normalizeAllowedSchoolUrl } = schoolUrl;
 
 test("school URL policy upgrades known HGU HTTP redirects without allowing external origins", () => {
   assert.equal(
@@ -26,5 +27,13 @@ test("extra school hosts are exact, explicit allow-list entries", () => {
   assert.throws(
     () => normalizeAllowedSchoolUrl("https://sub.service.official-campus.cn/callback", { extraHosts }),
     (error) => error.code === "UNTRUSTED_SCHOOL_REDIRECT"
+  );
+});
+
+test("extracts WebVPN verify URL from a protected resource redirect", () => {
+  const location = "https://webvpn.hgu.edu.cn/controller/v1/public/verify?t=verify-ticket";
+  assert.equal(
+    schoolUrl.webvpnVerifyUrlFromRedirect(location, "https://libroom.hgu.edu.cn/v4/login/cas"),
+    location
   );
 });
