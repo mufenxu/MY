@@ -32,6 +32,12 @@ import { platformRoleAllowsRequest } from "./src/lib/platform-role.js";
 import { invalidateRequestMemo, requestMemo, setRequestMemo } from "./src/lib/request-memo.js";
 import { createStaticAssetHandler } from "./src/lib/static-assets.js";
 import {
+  createLibroomClient,
+  exchangeLibroomMemberToken,
+  LIBROOM_SERVICE_URL,
+  normalizeReservationInput
+} from "./src/lib/libroom.js";
+import {
   discardUpstreamResponse,
   releaseUpstreamResponse,
   trackUpstreamResponse
@@ -234,6 +240,7 @@ const academicEvaluationAutoTasks = new Set();
 const backgroundTasks = new Set();
 const academicSessionQueue = new KeyedSerialQueue();
 const campusSessionQueue = new KeyedSerialQueue();
+const libroomSessionQueue = new KeyedSerialQueue();
 const logger = createLogger({ service: "hgu-campus-hub", environment: NODE_ENV });
 const CONFIGURED_DATA_ENCRYPTION_KEY = String(process.env.HGU_DATA_ENCRYPTION_KEY || "").trim();
 const DERIVED_DATA_ENCRYPTION_KEY = deriveDataEncryptionKey(APP_SESSION_SECRET);
@@ -1752,6 +1759,73 @@ async function getCasTicketRedirect({ jar, username, password, rememberMe = true
   await discardUpstreamResponse(post);
   if (!location) throw new HttpError(401, "CAS 未返回服务跳转地址，登录失败。");
   return assertAllowedSchoolUrl(new URL(location, action).href);
+}
+
+function libroomTokenExpiry(token, capturedAt = Date.now()) {
+  try {
+    const payload = JSON.parse(Buffer.from(String(token).split(".")[1] || "", "base64url").toString("utf8"));
+    const expiresAt = Number(payload.exp) * 1000;
+    if (Number.isFinite(expiresAt) && expiresAt > capturedAt) return new Date(expiresAt).toISOString();
+  } catch {}
+  return new Date(capturedAt + 10 * 60 * 1000).toISOString();
+}
+
+function cachedLibroomToken(jar) {
+  const session = jar.meta?.libroom;
+  if (!session?.token || !session.expiresAt) return "";
+  return Date.parse(session.expiresAt) > Date.now() + 30_000 ? String(session.token) : "";
+}
+
+async function getLibroomMemberToken({ force = false } = {}) {
+  return libroomSessionQueue.run(currentUserId(), async () => {
+    const jar = await readSessionJar();
+    if (!force) {
+      const cached = cachedLibroomToken(jar);
+      if (cached) return cached;
+    }
+    const finalUrl = await getCasTicketRedirect({ jar, serviceUrl: LIBROOM_SERVICE_URL });
+    const { ticket } = casServiceFromTicketRedirect(finalUrl);
+    if (!ticket) throw new HttpError(401, "空间预约身份转换失败，请重新登录学校账号。", null, "LIBROOM_CAS_TICKET_REQUIRED");
+    const token = await exchangeLibroomMemberToken({ cas: ticket });
+    const capturedAt = Date.now();
+    jar.meta ||= {};
+    jar.meta.libroom = {
+      token,
+      capturedAt: new Date(capturedAt).toISOString(),
+      expiresAt: libroomTokenExpiry(token, capturedAt)
+    };
+    await saveSessionJar(jar);
+    return token;
+  });
+}
+
+async function libroomClient() {
+  const jar = await readSessionJar();
+  return createLibroomClient({
+    token: cachedLibroomToken(jar),
+    getMemberToken: () => getLibroomMemberToken({ force: true })
+  });
+}
+
+function libroomSpaceId(value) {
+  const id = Number(value);
+  if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, "预约空间不正确。", null, "INVALID_RESERVATION_SPACE");
+  return id;
+}
+
+function libroomDate(value) {
+  const date = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00+08:00`))) {
+    throw new HttpError(400, "预约日期格式不正确。", null, "INVALID_RESERVATION_DATE");
+  }
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(new Date());
+  const delta = Math.round((Date.parse(`${date}T00:00:00+08:00`) - Date.parse(`${today}T00:00:00+08:00`)) / DAY_MS);
+  if (delta < 0 || delta > 3) {
+    throw new HttpError(400, "预约日期必须是今天起 3 日内。", null, "RESERVATION_DATE_OUT_OF_RANGE");
+  }
+  return date;
 }
 
 async function loginWithCasFull({ username, password, rememberMe = true }) {
@@ -6520,6 +6594,40 @@ async function handleApi(req, res, url) {
     }
     if (url.pathname === "/api/campus/recharge-link") {
       json(res, 200, { ok: true, data: await withCampusSessionLock(() => getCampusRechargeLink()) });
+      return;
+    }
+    if (url.pathname === "/api/campus/libroom/spaces" && req.method === "GET") {
+      const client = await libroomClient();
+      json(res, 200, { ok: true, data: await client.listSpaces() });
+      return;
+    }
+    if (url.pathname === "/api/campus/libroom/rules" && req.method === "GET") {
+      const spaceId = libroomSpaceId(url.searchParams.get("spaceId"));
+      const client = await libroomClient();
+      json(res, 200, { ok: true, data: await client.getRules(spaceId) });
+      return;
+    }
+    if (url.pathname === "/api/campus/libroom/availability" && req.method === "GET") {
+      const spaceId = libroomSpaceId(url.searchParams.get("spaceId"));
+      const date = libroomDate(url.searchParams.get("date"));
+      const client = await libroomClient();
+      const availability = await client.getAvailability({ spaceId, date });
+      json(res, 200, { ok: true, data: { date, availability } });
+      return;
+    }
+    if (url.pathname === "/api/campus/libroom/reservations" && req.method === "POST") {
+      const body = await readBodyJson(req);
+      const normalized = normalizeReservationInput(body);
+      const client = await libroomClient();
+      const result = await client.submitReservation(body);
+      logger.info("audit_libroom_reservation_submitted", {
+        actorUserId: currentUserId(),
+        areaId: normalized.payload.area_id,
+        date: normalized.date,
+        startTime: normalized.startTime,
+        endTime: normalized.endTime
+      });
+      json(res, 201, { ok: true, data: result });
       return;
     }
 

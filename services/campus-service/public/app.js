@@ -458,6 +458,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 window.__HGU_APP_READY__ = true;
+window.HguCampusApi = api;
 initDialog();
 initEnhancedControls();
 init();
@@ -3899,7 +3900,7 @@ function setSyncStatus(node, text, isSynced = false) {
 
 function handleRouting() {
   const hash = window.location.hash || "#overview";
-  const sections = ["#overview", "#study", "#rooms", "#evaluation", "#campus", "#energy", "#admin"];
+  const sections = ["#overview", "#study", "#rooms", "#reservation", "#evaluation", "#campus", "#energy", "#admin"];
 
   if (!sections.includes(hash)) return;
   if (hash === "#admin" && !isAdminUser()) {
