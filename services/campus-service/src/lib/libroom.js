@@ -136,6 +136,10 @@ export function libroomCasFromCallbackResult({ finalUrl = "", location = "", bas
   }
 }
 
+export function libroomRequiresCasTicket(finalUrl) {
+  return !libroomCasFromCallback(finalUrl);
+}
+
 export function createLibroomClient({
   token = "",
   getMemberToken,
@@ -205,10 +209,34 @@ export function createLibroomClient({
     return request(endpoint, normalized.payload);
   }
 
+  async function listSpaces(data = {}) {
+    const requestData = {
+      premises: data.premises || [],
+      members: data.members || "",
+      date: data.date || "",
+      floor: data.floor || [],
+      category: data.category || [],
+      room: data.room || "",
+      name: data.name || "",
+      boutique: data.boutique || [],
+      start_time: data.start_time || "",
+      end_time: data.end_time || ""
+    };
+    const first = await request("/v4/seminar/list", { ...requestData, page: Number(data.page || 1) });
+    if (Array.isArray(first)) return first;
+    const items = Array.isArray(first?.data) ? [...first.data] : [];
+    const lastPage = Math.min(20, Math.max(1, Number(first?.last_page || first?.lastPage || 1)));
+    for (let page = 2; page <= lastPage; page += 1) {
+      const next = await request("/v4/seminar/list", { ...requestData, page });
+      if (Array.isArray(next?.data)) items.push(...next.data);
+    }
+    return items;
+  }
+
   return Object.freeze({
     request,
-    listSpaces: (data = {}) => request("/v4/seminar/index", data),
-    getRules: (spaceId) => request("/v4/Help/should", { id: Number(spaceId) }),
+    listSpaces,
+    getRules: () => request("/v4/index/bookingRules", {}),
     getAvailability: ({ spaceId }) => request("/v4/seminar/seminar", { id: Number(spaceId) }),
     submitReservation
   });

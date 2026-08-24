@@ -17,6 +17,15 @@ export function casLoginUrlWithService(loginBaseUrl, serviceUrl, casOrigin) {
   return url.href;
 }
 
+export function isCasLoginRedirect(redirectUrl, casOrigin) {
+  try {
+    const parsed = new URL(redirectUrl, casOrigin);
+    return parsed.origin === new URL(casOrigin).origin && parsed.pathname === "/cas/login";
+  } catch {
+    return false;
+  }
+}
+
 export function casServiceFromTicketRedirect(redirectUrl) {
   const parsed = new URL(redirectUrl);
   const ticket = parsed.searchParams.get("ticket");

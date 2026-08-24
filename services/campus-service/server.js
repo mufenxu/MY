@@ -39,6 +39,7 @@ import {
   libroomCasLoginOptionsFromConfig,
   libroomCasFromCallback,
   libroomCasFromCallbackResult,
+  libroomRequiresCasTicket,
   normalizeReservationInput
 } from "./src/lib/libroom.js";
 import {
@@ -57,6 +58,7 @@ import {
   UIAS_ENDPOINTS,
   casServiceFromTicketRedirect,
   casLoginUrlWithService,
+  isCasLoginRedirect,
   uiasCasServiceUrl
 } from "./src/lib/uias-cas.js";
 import {
@@ -1742,17 +1744,23 @@ async function loginCasService({ jar, username, password, rememberMe = true, ser
 }
 
 async function getCasTicketRedirect({ jar, username, password, rememberMe = true, serviceUrl, loginBaseUrl = `${CAS_ORIGIN}/cas/login` }) {
-  const loginUrl = casLoginUrlWithService(loginBaseUrl, serviceUrl, CAS_ORIGIN);
-  const loginPage = await fetchWithJar(loginUrl, {
+  let loginUrl = casLoginUrlWithService(loginBaseUrl, serviceUrl, CAS_ORIGIN);
+  let loginPage = await fetchWithJar(loginUrl, {
     jar,
     headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }
   });
 
-  if (loginPage.status >= 300 && loginPage.status < 400) {
+  for (let i = 0; loginPage.status >= 300 && loginPage.status < 400 && i < 4; i += 1) {
     const location = loginPage.headers.get("location");
     await discardUpstreamResponse(loginPage);
     if (!location) throw new HttpError(401, "CAS 未返回服务跳转地址，登录失败。");
-    return assertAllowedSchoolUrl(new URL(location, loginUrl).href);
+    const redirectUrl = assertAllowedSchoolUrl(new URL(location, loginUrl).href);
+    if (!isCasLoginRedirect(redirectUrl, CAS_ORIGIN)) return redirectUrl;
+    loginUrl = redirectUrl;
+    loginPage = await fetchWithJar(loginUrl, {
+      jar,
+      headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }
+    });
   }
 
   const html = await readUpstreamText(loginPage);
@@ -1831,6 +1839,22 @@ function libroomFailureLog(error) {
   };
 }
 
+function upstreamUrlShape(value) {
+  try {
+    const url = new URL(String(value || ""));
+    const hashQuery = url.hash.includes("?") ? new URLSearchParams(url.hash.slice(url.hash.indexOf("?") + 1)) : null;
+    return {
+      origin: url.origin,
+      pathname: url.pathname,
+      searchKeys: [...url.searchParams.keys()],
+      hashPath: url.hash ? url.hash.split("?")[0] : "",
+      hashSearchKeys: hashQuery ? [...hashQuery.keys()] : []
+    };
+  } catch {
+    return { invalid: true };
+  }
+}
+
 async function issueLibroomMemberToken(jar, credentials = {}) {
   let stage = "webvpn_session";
   try {
@@ -1840,7 +1864,10 @@ async function issueLibroomMemberToken(jar, credentials = {}) {
     stage = "cas_ticket";
     const finalUrl = await getCasTicketRedirect({ jar, ...credentials, ...casLoginOptions });
     const { ticket } = casServiceFromTicketRedirect(finalUrl);
-    if (!ticket) throw new HttpError(401, "学校预约入口未返回统一认证票据，请重新登录学校账号。", null, "LIBROOM_CAS_TICKET_REQUIRED");
+    if (!ticket && libroomRequiresCasTicket(finalUrl)) {
+      logger.warn("libroom_cas_redirect_missing_ticket", { userId: currentUserId(), redirect: upstreamUrlShape(finalUrl) });
+      throw new HttpError(401, "学校预约入口未返回统一认证票据，请重新登录学校账号。", null, "LIBROOM_CAS_TICKET_REQUIRED");
+    }
 
     stage = "libroom_callback";
     let callbackCas = libroomCasFromCallback(finalUrl);
@@ -6825,9 +6852,8 @@ async function handleApi(req, res, url) {
       return;
     }
     if (url.pathname === "/api/campus/libroom/rules" && req.method === "GET") {
-      const spaceId = libroomSpaceId(url.searchParams.get("spaceId"));
       const client = await libroomClient();
-      json(res, 200, { ok: true, data: await client.getRules(spaceId) });
+      json(res, 200, { ok: true, data: await client.getRules() });
       return;
     }
     if (url.pathname === "/api/campus/libroom/availability" && req.method === "GET") {

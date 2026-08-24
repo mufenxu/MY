@@ -4,6 +4,7 @@ import {
   UIAS_ENDPOINTS,
   casServiceFromTicketRedirect,
   casLoginUrlWithService,
+  isCasLoginRedirect,
   uiasCasServiceUrl
 } from "../src/lib/uias-cas.js";
 
@@ -45,6 +46,13 @@ test("the CAS service does not embed an application route", () => {
 
   assert.doesNotMatch(loginUrl, /redirectUrl/);
   assert.doesNotMatch(loginUrl, /easytong_webapp/);
+});
+
+test("CAS login normalization redirect is not a service ticket result", () => {
+  const redirectUrl = `${CAS_ORIGIN}/cas/login?service=${encodeURIComponent("https://libroom.hgu.edu.cn/v4/login/cas")}`;
+
+  assert.equal(isCasLoginRedirect(redirectUrl, CAS_ORIGIN), true);
+  assert.equal(isCasLoginRedirect("https://libroom.hgu.edu.cn/v4/login/cas?ticket=ST-1", CAS_ORIGIN), false);
 });
 
 test("a bare CAS ticket redirect preserves the exact service", () => {

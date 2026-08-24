@@ -6,6 +6,7 @@ import {
   libroomCasLoginOptionsFromConfig,
   libroomCasFromCallbackResult,
   libroomCasFromCallback,
+  libroomRequiresCasTicket,
   normalizeReservationInput,
   LIBROOM_SERVICE_URL
 } from "../src/lib/libroom.js";
@@ -46,6 +47,17 @@ test("extracts the library exchange code from a followed callback final URL", ()
       location: "https://libroom.hgu.edu.cn/v4/login/cas?ticket=already-used"
     }),
     "webvpn-code"
+  );
+});
+
+test("does not require a CAS ticket when the library callback already carries cas", () => {
+  assert.equal(
+    libroomRequiresCasTicket("https://libroom.hgu.edu.cn/h5/index.html#/cas/?cas=direct-code"),
+    false
+  );
+  assert.equal(
+    libroomRequiresCasTicket("https://libroom.hgu.edu.cn/v4/login/cas?ticket=ST-1"),
+    true
   );
 });
 
@@ -205,10 +217,27 @@ test("allows the caller to provide the upstream request transport", async () => 
 
   assert.deepEqual(result, [{ id: 14, name: "单人研修间" }]);
   assert.deepEqual(calls, [{
-    pathname: "/v4/seminar/index",
-    data: {},
+    pathname: "/v4/seminar/list",
+    data: {
+      premises: [], members: "", date: "", floor: [], category: [], room: "", name: "", boutique: [],
+      page: 1, start_time: "", end_time: ""
+    },
     token: "member-token"
   }]);
+});
+
+test("loads booking rules from the official rules endpoint", async () => {
+  const calls = [];
+  const client = createLibroomClient({
+    token: "member-token",
+    requestImpl: async (pathname, data, { token }) => {
+      calls.push({ pathname, data, token });
+      return { code: 0, data: { rules: "single room" } };
+    }
+  });
+
+  await client.getRules(23);
+  assert.deepEqual(calls, [{ pathname: "/v4/index/bookingRules", data: {}, token: "member-token" }]);
 });
 
 test("maps upstream failures without exposing credentials", async () => {
