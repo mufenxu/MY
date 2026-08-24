@@ -2,7 +2,9 @@ import { HttpError } from "./http.js";
 import { createDecipheriv } from "node:crypto";
 
 export const LIBROOM_ORIGIN = "https://libroom.hgu.edu.cn";
-export const LIBROOM_SERVICE_URL = `${LIBROOM_ORIGIN}/v4/login/cas`;
+// CAS registers the legacy HTTP service URL; transport is upgraded to HTTPS by
+// the school URL policy after CAS returns the ticket.
+export const LIBROOM_SERVICE_URL = "http://libroom.hgu.edu.cn/v4/login/cas";
 const LIBROOM_CONFIG_IV = "ZZWBKJ_ZHIHUAWEI";
 const AUTH_ERROR_CODES = new Set([401, 403, 10001, 10002, 10003]);
 

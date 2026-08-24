@@ -12,7 +12,7 @@ import {
 } from "../src/lib/libroom.js";
 
 test("uses the CAS service URL published by the library system", () => {
-  assert.equal(LIBROOM_SERVICE_URL, "https://libroom.hgu.edu.cn/v4/login/cas");
+  assert.equal(LIBROOM_SERVICE_URL, "http://libroom.hgu.edu.cn/v4/login/cas");
 });
 
 test("decrypts the official library config payload", () => {
@@ -25,12 +25,22 @@ test("decrypts the official library config payload", () => {
 });
 
 test("derives the library CAS login and service URL from official config", () => {
-  const casUrl = "https://cas.hgu.edu.cn/cas/login?service=https%3A%2F%2Flibroom.hgu.edu.cn%2Fv4%2Flogin%2Fcas";
+  const casUrl = "https://cas.hgu.edu.cn/cas/login?service=http%3A%2F%2Flibroom.hgu.edu.cn%2Fv4%2Flogin%2Fcas";
 
   assert.deepEqual(libroomCasLoginOptionsFromConfig({ cas_url: casUrl }), {
     loginBaseUrl: casUrl,
-    serviceUrl: "https://libroom.hgu.edu.cn/v4/login/cas"
+    serviceUrl: "http://libroom.hgu.edu.cn/v4/login/cas"
   });
+});
+
+test("uses the CAS-registered HTTP service when config omits service", () => {
+  assert.deepEqual(
+    libroomCasLoginOptionsFromConfig({ cas_url: "https://cas.hgu.edu.cn/cas/login" }),
+    {
+      loginBaseUrl: "https://cas.hgu.edu.cn/cas/login",
+      serviceUrl: "http://libroom.hgu.edu.cn/v4/login/cas"
+    }
+  );
 });
 
 test("extracts the library exchange code from its CAS callback redirect", () => {
