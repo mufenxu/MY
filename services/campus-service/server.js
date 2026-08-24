@@ -38,7 +38,6 @@ import {
   LIBROOM_ORIGIN,
   libroomCasLoginOptionsFromConfig,
   libroomCasFromCallback,
-  libroomCasFromCallbackResult,
   libroomRequiresCasTicket,
   resolveLibroomCasCallback,
   clearLibroomLastError,
