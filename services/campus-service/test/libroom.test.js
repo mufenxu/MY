@@ -7,7 +7,9 @@ import {
   libroomCasFromCallbackResult,
   libroomCasFromCallback,
   libroomRequiresCasTicket,
+  resolveLibroomCasCallback,
   normalizeReservationInput,
+  clearLibroomLastError,
   LIBROOM_SERVICE_URL
 } from "../src/lib/libroom.js";
 
@@ -41,6 +43,40 @@ test("uses the CAS-registered HTTP service when config omits service", () => {
       serviceUrl: "http://libroom.hgu.edu.cn/v4/login/cas"
     }
   );
+});
+
+test("clears a stale library login error after a successful authenticated request", () => {
+  const meta = { libroom: { token: "member-token", lastError: "统一身份认证会话已过期，请重新登录学校账号。" } };
+
+  clearLibroomLastError(meta);
+
+  assert.equal(meta.libroom.lastError, null);
+});
+
+test("follows intermediate library callback redirects until the exchange code appears", async () => {
+  const calls = [];
+  const result = await resolveLibroomCasCallback(
+    "https://libroom.hgu.edu.cn/v4/login/cas?ticket=ST-1",
+    {
+      requestImpl: async (url) => {
+        calls.push(url);
+        if (calls.length === 1) {
+          return { status: 302, location: "http://libroom.hgu.edu.cn/v4/login/cas", finalUrl: url };
+        }
+        return {
+          status: 302,
+          location: "https://libroom.hgu.edu.cn/h5/index.html#/cas/?cas=exchange-code",
+          finalUrl: url
+        };
+      }
+    }
+  );
+
+  assert.equal(result, "exchange-code");
+  assert.deepEqual(calls, [
+    "https://libroom.hgu.edu.cn/v4/login/cas?ticket=ST-1",
+    "http://libroom.hgu.edu.cn/v4/login/cas"
+  ]);
 });
 
 test("extracts the library exchange code from its CAS callback redirect", () => {

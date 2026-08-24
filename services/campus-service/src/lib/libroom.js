@@ -138,8 +138,53 @@ export function libroomCasFromCallbackResult({ finalUrl = "", location = "", bas
   }
 }
 
+function simpleCallbackRedirect(text, baseUrl) {
+  const source = String(text || "");
+  const match = source.match(/location\.replace\(["']([^"']+)/)
+    || source.match(/window\.location(?:\.href)?\s*=\s*["']([^"']+)/)
+    || source.match(/locationUrl\s*=\s*["']([^"']+)["']/);
+  if (!match) return "";
+  try {
+    return new URL(match[1], baseUrl).href;
+  } catch {
+    return "";
+  }
+}
+
+export async function resolveLibroomCasCallback(startUrl, { requestImpl, maxRedirects = 6 } = {}) {
+  if (typeof requestImpl !== "function") return libroomCasFromCallback(startUrl);
+  let currentUrl = String(startUrl || "");
+  for (let attempt = 0; attempt <= maxRedirects; attempt += 1) {
+    const currentCas = libroomCasFromCallback(currentUrl);
+    if (currentCas) return currentCas;
+    const result = await requestImpl(currentUrl);
+    const fromResult = libroomCasFromCallbackResult({
+      finalUrl: result?.finalUrl || currentUrl,
+      location: result?.location || "",
+      baseUrl: currentUrl
+    });
+    if (fromResult) return fromResult;
+    let location = "";
+    try {
+      location = result?.location ? new URL(result.location, currentUrl).href : "";
+    } catch {
+      location = "";
+    }
+    const nextUrl = location || simpleCallbackRedirect(result?.text, currentUrl);
+    if (!nextUrl) return "";
+    currentUrl = nextUrl;
+  }
+  return "";
+}
+
 export function libroomRequiresCasTicket(finalUrl) {
   return !libroomCasFromCallback(finalUrl);
+}
+
+export function clearLibroomLastError(meta = {}) {
+  meta.libroom ||= {};
+  meta.libroom.lastError = null;
+  return meta;
 }
 
 export function createLibroomClient({
