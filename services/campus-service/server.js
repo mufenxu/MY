@@ -7004,7 +7004,7 @@ async function handleApi(req, res, url) {
         if (!Array.isArray(spaces) || spaces.length === 0) {
           spaces = await client.listSpaces({});
         }
-      } catch (err) {
+      } catch {
         spaces = await client.listSpaces({}).catch(() => []);
       }
 
