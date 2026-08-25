@@ -1571,6 +1571,7 @@ private fun AuthenticatedShell(
                         onRefresh = viewModel::refreshReservation,
                         onLoadSpaces = viewModel::loadReservationSpaces,
                         onQueryRulesAndAvailability = viewModel::queryReservationRulesAndAvailability,
+                        onQuerySpacesByTime = viewModel::queryAvailableSpacesByTime,
                         onSubmitReservation = viewModel::submitReservation,
                         onLoadAutoTasks = viewModel::loadAutoReservationTasks,
                         onSaveAutoTask = viewModel::saveAutoReservationTask,

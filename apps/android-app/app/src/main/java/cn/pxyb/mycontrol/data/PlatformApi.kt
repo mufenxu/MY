@@ -544,8 +544,17 @@ class PlatformApi(
         )
     }
 
-    suspend fun campusReservationSpaces(): List<CampusReservationSpace> = withContext(Dispatchers.IO) {
-        val response = execute(CAMPUS_LIBROOM_SPACES_PATH)
+    suspend fun campusReservationSpaces(
+        date: String? = null,
+        startTime: String? = null,
+        endTime: String? = null,
+    ): List<CampusReservationSpace> = withContext(Dispatchers.IO) {
+        val queryParams = mutableListOf<String>()
+        if (!date.isNullOrBlank()) queryParams.add("date=${Uri.encode(date.trim())}")
+        if (!startTime.isNullOrBlank()) queryParams.add("startTime=${Uri.encode(startTime.trim())}")
+        if (!endTime.isNullOrBlank()) queryParams.add("endTime=${Uri.encode(endTime.trim())}")
+        val queryString = if (queryParams.isNotEmpty()) "?${queryParams.joinToString("&")}" else ""
+        val response = execute("$CAMPUS_LIBROOM_SPACES_PATH$queryString")
         val queue = ArrayDeque<Any>()
         val foundArrays = mutableListOf<List<JSONObject>>()
         val data = response.json.opt("data") ?: response.json

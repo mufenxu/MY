@@ -193,6 +193,9 @@ data class AppUiState(
     val reservationFreeWindows: List<CampusReservationTimeWindow> = emptyList(),
     val reservationAvailabilitySpaceId: Int? = null,
     val reservationAvailabilityDate: String? = null,
+    val reservationAvailableSpaces: List<CampusReservationSpace> = emptyList(),
+    val reservationAvailableSpacesQueryText: String? = null,
+    val reservationAvailableSpacesLoading: Boolean = false,
     val reservationQueryLoading: Boolean = false,
     val reservationSubmitLoading: Boolean = false,
     val reservationAutoTasks: List<CampusAutoReservationTask> = emptyList(),
@@ -1702,6 +1705,37 @@ class AppViewModel(
                         reservationAvailabilityDate = null,
                         reservationQueryLoading = false,
                         reservationError = error.message ?: "查询失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun queryAvailableSpacesByTime(date: String, startTime: String, endTime: String) {
+        if (date.isBlank() || startTime.isBlank() || endTime.isBlank() || mutableState.value.reservationAvailableSpacesLoading) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    reservationAvailableSpacesLoading = true,
+                    reservationAvailableSpaces = emptyList(),
+                    reservationAvailableSpacesQueryText = "$date $startTime - $endTime",
+                    reservationError = null,
+                )
+            }
+            try {
+                val availableSpaces = api.campusReservationSpaces(date = date, startTime = startTime, endTime = endTime)
+                mutableState.update {
+                    it.copy(
+                        reservationAvailableSpaces = availableSpaces,
+                        reservationAvailableSpacesLoading = false,
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        reservationAvailableSpacesLoading = false,
+                        reservationError = error.message ?: "按时段查询空闲学习间失败，请重试。",
                     )
                 }
             }

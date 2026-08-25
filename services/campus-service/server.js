@@ -6987,8 +6987,11 @@ async function handleApi(req, res, url) {
       }
     }
     if (url.pathname === "/api/campus/libroom/spaces" && req.method === "GET") {
+      const date = url.searchParams.get("date") || "";
+      const startTime = url.searchParams.get("startTime") || url.searchParams.get("start_time") || "";
+      const endTime = url.searchParams.get("endTime") || url.searchParams.get("end_time") || "";
       const client = await libroomClient();
-      json(res, 200, { ok: true, data: await client.listSpaces() });
+      json(res, 200, { ok: true, data: await client.listSpaces({ date, start_time: startTime, end_time: endTime }) });
       return;
     }
     if (url.pathname === "/api/campus/libroom/rules" && req.method === "GET") {

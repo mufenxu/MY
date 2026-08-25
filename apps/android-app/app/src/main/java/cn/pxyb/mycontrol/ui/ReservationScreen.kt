@@ -106,6 +106,7 @@ fun ReservationScreen(
     onRefresh: () -> Unit,
     onLoadSpaces: () -> Unit,
     onQueryRulesAndAvailability: (Int, String) -> Unit,
+    onQuerySpacesByTime: (String, String, String) -> Unit,
     onSubmitReservation: (CampusReservationRequest, () -> Unit) -> Unit,
     onLoadAutoTasks: () -> Unit,
     onSaveAutoTask: (CampusAutoReservationTask, () -> Unit) -> Unit,
@@ -197,6 +198,9 @@ fun ReservationScreen(
                         spaces = state.spaces,
                         spacesLoading = state.spacesLoading,
                         queryLoading = state.queryLoading,
+                        availableSpaces = state.availableSpaces,
+                        availableSpacesQueryText = state.availableSpacesQueryText,
+                        availableSpacesLoading = state.availableSpacesLoading,
                         submitLoading = state.submitLoading,
                         rules = state.rules,
                         availability = state.availability,
@@ -205,6 +209,7 @@ fun ReservationScreen(
                         availabilityDate = state.availabilityDate,
                         onReloadSpaces = onLoadSpaces,
                         onQuery = onQueryRulesAndAvailability,
+                        onQuerySpacesByTime = onQuerySpacesByTime,
                         onSubmit = onSubmitReservation,
                         onClearFeedback = onClearFeedback,
                     )
@@ -235,6 +240,9 @@ private fun SingleReservationPanel(
     spaces: List<CampusReservationSpace>,
     spacesLoading: Boolean,
     queryLoading: Boolean,
+    availableSpaces: List<CampusReservationSpace>,
+    availableSpacesQueryText: String?,
+    availableSpacesLoading: Boolean,
     submitLoading: Boolean,
     rules: String?,
     availability: String?,
@@ -243,6 +251,7 @@ private fun SingleReservationPanel(
     availabilityDate: String?,
     onReloadSpaces: () -> Unit,
     onQuery: (Int, String) -> Unit,
+    onQuerySpacesByTime: (String, String, String) -> Unit,
     onSubmit: (CampusReservationRequest, () -> Unit) -> Unit,
     onClearFeedback: () -> Unit,
 ) {
@@ -718,28 +727,72 @@ private fun SingleReservationPanel(
                     }
                 }
 
-                // 查询规则和时段按钮
-                OutlinedButton(
-                    onClick = {
-                        if (selectedSpaceId <= 0) {
-                            formValidationNotice = "请先选择空间"
-                            return@OutlinedButton
-                        }
-                        formValidationNotice = null
-                        onQuery(selectedSpaceId, selectedDate)
-                    },
-                    enabled = !queryLoading && selectedSpaceId > 0,
+                // 双向查询操作栏
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    if (queryLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
-                    } else {
-                        Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
+                    OutlinedButton(
+                        onClick = {
+                            if (selectedSpaceId <= 0) {
+                                formValidationNotice = "请先选择空间"
+                                return@OutlinedButton
+                            }
+                            formValidationNotice = null
+                            onQuery(selectedSpaceId, selectedDate)
+                        },
+                        enabled = !queryLoading && selectedSpaceId > 0,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                    ) {
+                        if (queryLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(6.dp))
+                        } else {
+                            Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text("查空间空闲时段", style = MaterialTheme.typography.labelMedium, maxLines = 1)
                     }
-                    Text("查询该空间开放规则与空闲时段", fontWeight = FontWeight.SemiBold)
+
+                    Button(
+                        onClick = {
+                            if (!isDurationValid) {
+                                formValidationNotice = "请先设置有效的时间段（1至4小时）"
+                                return@Button
+                            }
+                            formValidationNotice = null
+                            onQuerySpacesByTime(selectedDate, startTime, endTime)
+                        },
+                        enabled = !availableSpacesLoading && isDurationValid,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                    ) {
+                        if (availableSpacesLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = Color.White)
+                            Spacer(Modifier.width(6.dp))
+                        } else {
+                            Icon(Icons.Outlined.MeetingRoom, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text("查时段空闲房间", style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                    }
+                }
+
+                // 按时段查询空闲学习间结果展示
+                if (availableSpacesLoading || availableSpacesQueryText != null) {
+                    AvailableSpacesByTimeBlock(
+                        queryText = availableSpacesQueryText,
+                        availableSpaces = availableSpaces,
+                        selectedSpaceId = selectedSpaceId,
+                        loading = availableSpacesLoading,
+                        onSelectSpace = { space ->
+                            selectedSpaceId = space.id
+                            onClearFeedback()
+                        },
+                    )
                 }
             }
         }
@@ -1004,6 +1057,136 @@ private fun FreeWindowList(
                         color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AvailableSpacesByTimeBlock(
+    queryText: String?,
+    availableSpaces: List<CampusReservationSpace>,
+    selectedSpaceId: Int,
+    loading: Boolean,
+    onSelectSpace: (CampusReservationSpace) -> Unit,
+) {
+    if (loading) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "正在查询该时段空闲学习间...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        return
+    }
+
+    if (queryText == null) return
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = if (availableSpaces.isNotEmpty()) Color(0xFFF0FDF4) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        border = BorderStroke(
+            1.dp,
+            if (availableSpaces.isNotEmpty()) Color(0xFF86EFAC) else MaterialTheme.colorScheme.outlineVariant,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(
+                        if (availableSpaces.isNotEmpty()) Icons.Outlined.CheckCircle else Icons.Outlined.Info,
+                        contentDescription = null,
+                        tint = if (availableSpaces.isNotEmpty()) Color(0xFF16803B) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        text = if (availableSpaces.isNotEmpty()) "在该时段找到 ${availableSpaces.size} 间空闲学习间" else "该时段暂无空闲学习间",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (availableSpaces.isNotEmpty()) Color(0xFF16803B) else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                if (availableSpaces.isNotEmpty()) {
+                    Text(
+                        text = "点击可直接选中",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF15803D),
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+
+            if (availableSpaces.isNotEmpty()) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    availableSpaces.forEach { space ->
+                        val isSelected = space.id == selectedSpaceId
+                        Surface(
+                            onClick = { onSelectSpace(space) },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
+                            contentColor = if (isSelected) Color.White else Color(0xFF1E293B),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFFBBF7D0),
+                            ),
+                            shadowElevation = if (isSelected) 2.dp else 0.5.dp,
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            ) {
+                                Icon(
+                                    imageVector = if (isSelected) Icons.Outlined.CheckCircle else Icons.Outlined.MeetingRoom,
+                                    contentDescription = null,
+                                    tint = if (isSelected) Color.White else Color(0xFF059669),
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Text(
+                                    text = space.name,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    text = "在选定日期与时段（$queryText）暂无可预约研讨间/学习间，建议调整时段或选择其他日期。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -1366,7 +1549,7 @@ private fun AutoReservationEditDialog(
     var reservationDate by rememberSaveable {
         mutableStateOf(task?.reservationDate?.ifBlank { null } ?: today.plusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE))
     }
-    var executeTime by rememberSaveable { mutableStateOf(task?.executeTime ?: "08:30") }
+    var executeTime by rememberSaveable { mutableStateOf(task?.executeTime?.ifBlank { null } ?: "07:00") }
     var title by rememberSaveable { mutableStateOf(task?.title?.ifBlank { null } ?: "个人课程研读与学习") }
     var mobile by rememberSaveable { mutableStateOf(task?.mobile?.ifBlank { null } ?: "18783388384") }
     var content by rememberSaveable { mutableStateOf(task?.content?.ifBlank { null } ?: "用于个人课程自主研读、文献查阅及学术研讨。") }
@@ -1514,7 +1697,7 @@ private fun AutoReservationEditDialog(
                     value = executeTime,
                     onValueChange = { executeTime = it; validationError = null },
                     label = { Text("尝试时间") },
-                    placeholder = { Text("08:30") },
+                    placeholder = { Text("07:00") },
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.weight(1f),
                     singleLine = true,
@@ -1561,11 +1744,12 @@ private fun AutoReservationEditDialog(
             if (candidates.size < 20) {
                 OutlinedButton(
                     onClick = {
+                        val lastCandidate = candidates.lastOrNull()
                         candidates.add(
                             CampusAutoReservationCandidate(
                                 areaId = spaces.firstOrNull()?.id ?: 1,
-                                startTime = "09:00",
-                                endTime = "11:00",
+                                startTime = lastCandidate?.startTime ?: "09:00",
+                                endTime = lastCandidate?.endTime ?: "11:00",
                             )
                         )
                     },

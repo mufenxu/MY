@@ -1729,61 +1729,47 @@ private fun CampusOverviewSection(
     onOpenReservation: () -> Unit,
 ) {
     if (overview == null) {
-        ReservationCard(onClick = onOpenReservation)
-        EmptyBlock("校园信息正在同步", "连接学校账号后，会显示成绩、空教室、一卡通和宿舍能耗。")
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            CampusQuickToolsGrid(
+                onOpenFreeClassrooms = onOpenFreeClassrooms,
+                onOpenReservation = onOpenReservation,
+            )
+            EmptyBlock("校园信息正在同步", "连接学校账号后，会显示成绩、空教室、一卡通和宿舍能耗。")
+        }
         return
     }
 
-    SmartCardView(
-        balance = overview.cardBalance,
-        waterCode = overview.waterCode,
-    )
-
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        DormEnergyCard(
-            energyBalance = overview.energyBalance,
-            roomName = overview.energyRoom ?: overview.dormitory,
-            modifier = Modifier.weight(1f),
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        SmartCardView(
+            balance = overview.cardBalance,
+            waterCode = overview.waterCode,
         )
-        AcademicGpaCard(
-            gpa = overview.gpa,
-            modifier = Modifier.weight(1f),
-        )
-    }
 
-    FreeClassroomCard(
-        freeClassrooms = overview.freeClassrooms,
-        onClick = onOpenFreeClassrooms,
-    )
-
-    ReservationCard(onClick = onOpenReservation)
-
-    CampusQuickToolsGrid(onOpenFreeClassrooms)
-}
-
-@Composable
-private fun ReservationCard(onClick: () -> Unit) {
-    AppPanel(onClick = onClick) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            IconTile(Icons.Outlined.Event, Color(0xFF2563EB), Color(0xFFEFF6FF))
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("研讨间预约", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "单次预约 · 自动预约任务 · 按候选时段顺序尝试",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            DormEnergyCard(
+                energyBalance = overview.energyBalance,
+                roomName = overview.energyRoom ?: overview.dormitory,
+                modifier = Modifier.weight(1f),
+            )
+            AcademicGpaCard(
+                gpa = overview.gpa,
+                modifier = Modifier.weight(1f),
+            )
         }
+
+        CampusQuickToolsGrid(
+            onOpenFreeClassrooms = onOpenFreeClassrooms,
+            onOpenReservation = onOpenReservation,
+        )
     }
 }
 
@@ -1795,16 +1781,20 @@ private fun SmartCardView(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = AppCardShape,
-        color = Color(0xFF1E293B),
+        color = Color(0xFF1D4ED8),
         contentColor = Color.White,
-        shadowElevation = 4.dp,
+        shadowElevation = 5.dp,
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF3730A3)),
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF1E3A8A),
+                            Color(0xFF2563EB),
+                            Color(0xFF0284C7),
+                        ),
                     )
                 )
                 .padding(20.dp)
@@ -1820,8 +1810,9 @@ private fun SmartCardView(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Surface(
-                            color = Color.White.copy(alpha = 0.15f),
+                            color = Color.White.copy(alpha = 0.18f),
                             shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
                         ) {
                             Icon(
                                 Icons.Outlined.CreditCard,
@@ -1840,16 +1831,17 @@ private fun SmartCardView(
                             Text(
                                 "智能通行与支付结算",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.65f),
+                                color = Color.White.copy(alpha = 0.8f),
                             )
                         }
                     }
 
                     if (!waterCode.isNullOrBlank()) {
                         Surface(
-                            color = Color(0xFF4F46E5),
+                            color = Color.White.copy(alpha = 0.2f),
                             contentColor = Color.White,
                             shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
@@ -1859,7 +1851,7 @@ private fun SmartCardView(
                                 Icon(Icons.Outlined.QrCode, contentDescription = null, modifier = Modifier.size(13.dp))
                                 Text(
                                     "用水码 $waterCode",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
                                 )
                             }
                         }
@@ -1875,7 +1867,7 @@ private fun SmartCardView(
                         Text(
                             "卡内可用余额",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = Color.White.copy(alpha = 0.8f),
                         )
                         Text(
                             balance?.let(::formatCampusAmount) ?: "¥ --",
@@ -1888,16 +1880,28 @@ private fun SmartCardView(
                     }
 
                     Surface(
-                        color = Color.White.copy(alpha = 0.2f),
+                        color = Color.White.copy(alpha = 0.18f),
                         contentColor = Color.White,
                         shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
                     ) {
-                        Text(
-                            "实时在线",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF4ADE80))
+                            )
+                            Text(
+                                "实时在线",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
                     }
                 }
             }
@@ -2040,68 +2044,10 @@ private fun AcademicGpaCard(
 }
 
 @Composable
-private fun FreeClassroomCard(
-    freeClassrooms: CampusFreeClassrooms?,
-    onClick: () -> Unit,
+private fun CampusQuickToolsGrid(
+    onOpenFreeClassrooms: () -> Unit,
+    onOpenReservation: () -> Unit,
 ) {
-    AppPanel(onClick = onClick) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            IconTile(Icons.Outlined.MeetingRoom, Color(0xFF059669), Color(0xFFD1FAE5))
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        "自习空教室指南",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    freeClassrooms?.dayLabel?.let { label ->
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(6.dp),
-                        ) {
-                            Text(
-                                label,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
-                    }
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text(
-                        "空教室 ${freeClassrooms?.rooms ?: 0} 间",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF059669),
-                    )
-                    Text(
-                        "空余座位 ${freeClassrooms?.seats ?: 0} 个",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Icon(
-                Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun CampusQuickToolsGrid(onOpenFreeClassrooms: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SectionHeader("校园快捷服务", "常用教务与生活服务指南")
         AppPanel {
@@ -2109,28 +2055,29 @@ private fun CampusQuickToolsGrid(onOpenFreeClassrooms: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(14.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 QuickToolItem(
-                    icon = Icons.Outlined.School,
-                    label = "成绩明细",
-                    accent = Color(0xFF7C3AED),
-                    accentPale = Color(0xFFF3E8FF),
-                    modifier = Modifier.weight(1f),
-                )
-                QuickToolItem(
                     icon = Icons.Outlined.MeetingRoom,
-                    label = "空教室",
+                    label = "自习空教室",
                     accent = Color(0xFF059669),
                     accentPale = Color(0xFFD1FAE5),
                     modifier = Modifier.weight(1f),
                     onClick = onOpenFreeClassrooms,
                 )
                 QuickToolItem(
-                    icon = Icons.Outlined.CreditCard,
-                    label = "一卡通流水",
-                    accent = Color(0xFF4F46E5),
-                    accentPale = Color(0xFFEEF2FF),
+                    icon = Icons.Outlined.CalendarMonth,
+                    label = "研讨间预约",
+                    accent = Color(0xFF2563EB),
+                    accentPale = Color(0xFFEFF6FF),
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenReservation,
+                )
+                QuickToolItem(
+                    icon = Icons.Outlined.School,
+                    label = "成绩明细",
+                    accent = Color(0xFF7C3AED),
+                    accentPale = Color(0xFFF3E8FF),
                     modifier = Modifier.weight(1f),
                 )
                 QuickToolItem(
@@ -2169,12 +2116,14 @@ private fun QuickToolItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        IconTile(icon, accent, accentPale, modifier = Modifier.size(40.dp))
+        IconTile(icon, accent, accentPale, modifier = Modifier.size(42.dp))
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
