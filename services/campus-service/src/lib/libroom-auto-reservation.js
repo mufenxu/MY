@@ -3,6 +3,7 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const BOOKABLE_START_MINUTE = 8 * 60;
 const BOOKABLE_END_MINUTE = 21 * 60 + 45;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function fail(message, code = "INVALID_AUTO_RESERVATION_TASK") {
   const error = new Error(message);
@@ -11,12 +12,42 @@ function fail(message, code = "INVALID_AUTO_RESERVATION_TASK") {
   throw error;
 }
 
+function formatUtcDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function utcDay(value) {
+  const date = String(value || "").trim();
+  if (!DATE_PATTERN.test(date)) return null;
+  const [year, month, day] = date.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return formatUtcDate(parsed) === date ? parsed : null;
+}
+
+function dateDelta(date, baseDate) {
+  const target = utcDay(date);
+  const base = utcDay(baseDate);
+  if (!target || !base) return null;
+  return Math.round((target.getTime() - base.getTime()) / DAY_MS);
+}
+
+function addDays(date, days) {
+  const base = utcDay(date);
+  if (!base) return null;
+  return formatUtcDate(new Date(base.getTime() + days * DAY_MS));
+}
+
 function parseDate(value, label) {
   const date = String(value || "").trim();
-  if (!DATE_PATTERN.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00+08:00`))) {
+  if (!utcDay(date)) {
     fail(`${label}格式不正确。`);
   }
   return date;
+}
+
+function parseOptionalDate(value, label) {
+  const date = String(value || "").trim();
+  return date ? parseDate(date, label) : null;
 }
 
 function parseTime(value, label) {
@@ -42,12 +73,19 @@ export function normalizeAutoReservationTaskInput(input = {}) {
   const name = String(input.name || "").trim();
   const enabled = input.enabled !== false;
   const reservationDate = parseDate(input.reservationDate ?? input.reservation_date ?? input.startDate ?? input.start_date, "预约日期");
+  const executeDate = parseOptionalDate(input.executeDate ?? input.execute_date ?? input.runDate ?? input.run_date, "运行日期");
   const executeTime = parseTime(input.executeTime ?? input.execute_time, "开始预约时间");
   const candidates = Array.isArray(input.candidates) ? input.candidates.map(cloneCandidate) : [];
   const title = String(input.title || "").trim();
   const content = String(input.content || "").trim();
   const mobile = String(input.mobile || input.phone || "").trim();
 
+  if (executeDate) {
+    const executeDelta = dateDelta(reservationDate, executeDate);
+    if (!Number.isInteger(executeDelta) || executeDelta < 0 || executeDelta > 3) {
+      fail("运行日期必须在预约目标日期前 3 天至预约当天内。", "AUTO_RESERVATION_EXECUTE_DATE_OUT_OF_RANGE");
+    }
+  }
   if (!name || name.length > 80) fail("任务名称不能为空且不能超过 80 个字符。", "INVALID_AUTO_RESERVATION_NAME");
   if (!candidates.length || candidates.length > 20) fail("至少设置一个候选空间和时段，最多 20 个。", "AUTO_RESERVATION_CANDIDATES_REQUIRED");
   candidates.forEach((candidate) => {
@@ -68,6 +106,7 @@ export function normalizeAutoReservationTaskInput(input = {}) {
     name,
     enabled,
     reservationDate,
+    executeDate,
     executeTime,
     candidates,
     title,
@@ -100,10 +139,50 @@ function localParts(now) {
 }
 
 export function isAutoReservationDue(task, now = new Date()) {
-  if (!task?.enabled) return false;
+  return autoReservationRunPlan(task, now).due;
+}
+
+function taskTargetDate(task) {
+  return String(task?.reservationDate || task?.startDate || "").trim();
+}
+
+function taskExecuteDate(task, currentDate, targetDate) {
+  const configured = String(task?.executeDate ?? task?.execute_date ?? task?.runDate ?? task?.run_date ?? "").trim();
+  if (configured) return configured;
+  const targetDelta = dateDelta(targetDate, currentDate);
+  if (Number.isInteger(targetDelta) && targetDelta >= 0 && targetDelta <= 3) return currentDate;
+  return addDays(targetDate, -3) || "";
+}
+
+function taskExecuteTime(task) {
+  return String(task?.executeTime ?? task?.execute_time ?? "").trim();
+}
+
+export function autoReservationRunPlan(task, now = new Date()) {
   const current = localParts(now);
-  const reservationDate = task.reservationDate || task.startDate;
-  return current.date === reservationDate && current.time >= task.executeTime;
+  const targetDate = taskTargetDate(task);
+  const executeTime = taskExecuteTime(task);
+  const executeDate = taskExecuteDate(task, current.date, targetDate);
+  const targetDelta = dateDelta(targetDate, current.date);
+  const executeDelta = dateDelta(targetDate, executeDate);
+  const due = Boolean(task?.enabled)
+    && Boolean(targetDate)
+    && Boolean(executeDate)
+    && TIME_PATTERN.test(executeTime)
+    && Number.isInteger(executeDelta)
+    && executeDelta >= 0
+    && executeDelta <= 3
+    && Number.isInteger(targetDelta)
+    && targetDelta >= 0
+    && targetDelta <= 3
+    && `${current.date}T${current.time}` >= `${executeDate}T${executeTime}`;
+  return {
+    due,
+    targetDate: targetDate || null,
+    executeDate: executeDate || null,
+    executeTime: executeTime || null,
+    runKey: targetDate && executeDate && executeTime ? `${targetDate}:${executeDate}T${executeTime}` : null
+  };
 }
 
 function isConflictError(error) {

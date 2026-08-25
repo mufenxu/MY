@@ -1409,10 +1409,10 @@ private fun AutoTaskCard(
             }
 
             // 基础属性行
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 val taskWk = remember(task.reservationDate) {
                     try {
@@ -1439,6 +1439,19 @@ private fun AutoTaskCard(
                     )
                 }
 
+                val executeWk = remember(task.executeDate) {
+                    try {
+                        val d = LocalDate.parse(task.executeDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
+                        " (${weekdayName(d)})"
+                    } catch (_: Throwable) {
+                        ""
+                    }
+                }
+                val executeText = if (task.executeDate.isNotBlank()) {
+                    "${task.executeDate}$executeWk ${task.executeTime}"
+                } else {
+                    "进入 3 天窗口后 ${task.executeTime}"
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1450,7 +1463,7 @@ private fun AutoTaskCard(
                         modifier = Modifier.size(14.dp),
                     )
                     Text(
-                        text = "触发: ${task.executeTime}",
+                        text = "运行: $executeText",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1557,6 +1570,9 @@ private fun AutoReservationEditDialog(
     var reservationDate by rememberSaveable {
         mutableStateOf(task?.reservationDate?.ifBlank { null } ?: today.plusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE))
     }
+    var executeDate by rememberSaveable {
+        mutableStateOf(task?.executeDate?.ifBlank { null } ?: defaultAutoReservationExecuteDate(reservationDate, today))
+    }
     var executeTime by rememberSaveable { mutableStateOf(task?.executeTime?.ifBlank { null } ?: "07:00") }
     var title by rememberSaveable { mutableStateOf(task?.title?.ifBlank { null } ?: "个人课程研读与学习") }
     var mobile by rememberSaveable { mutableStateOf(task?.mobile?.ifBlank { null } ?: "18783388384") }
@@ -1584,6 +1600,14 @@ private fun AutoReservationEditDialog(
     val dateWeekday = remember(reservationDate) {
         try {
             val parsed = LocalDate.parse(reservationDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
+            weekdayName(parsed)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+    val executeDateWeekday = remember(executeDate) {
+        try {
+            val parsed = LocalDate.parse(executeDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
             weekdayName(parsed)
         } catch (_: Throwable) {
             null
@@ -1618,8 +1642,12 @@ private fun AutoReservationEditDialog(
                             validationError = "请填写预约目标日期"
                             return@AppDialogPrimaryButton
                         }
+                        if (executeDate.isBlank()) {
+                            validationError = "请填写任务运行日期"
+                            return@AppDialogPrimaryButton
+                        }
                         if (executeTime.isBlank()) {
-                            validationError = "请填写尝试时间"
+                            validationError = "请填写运行时间"
                             return@AppDialogPrimaryButton
                         }
                         if (candidates.isEmpty()) {
@@ -1651,6 +1679,7 @@ private fun AutoReservationEditDialog(
                             name = name.trim(),
                             enabled = enabled,
                             reservationDate = reservationDate.trim(),
+                            executeDate = executeDate.trim(),
                             executeTime = executeTime.trim(),
                             candidates = candidates.toList(),
                             title = title.trim(),
@@ -1713,6 +1742,7 @@ private fun AutoReservationEditDialog(
                     Surface(
                         onClick = {
                             reservationDate = dateStr
+                            executeDate = defaultAutoReservationExecuteDate(dateStr, today)
                             validationError = null
                         },
                         shape = RoundedCornerShape(6.dp),
@@ -1738,46 +1768,62 @@ private fun AutoReservationEditDialog(
                 }
             }
 
+            OutlinedTextField(
+                value = reservationDate,
+                onValueChange = { reservationDate = it; validationError = null },
+                label = { Text(if (dateWeekday != null) "预约目标日期 ($dateWeekday)" else "预约目标日期") },
+                placeholder = { Text("YYYY-MM-DD") },
+                trailingIcon = dateWeekday?.let { wk ->
+                    {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.padding(end = 4.dp),
+                        ) {
+                            Text(
+                                text = wk,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedTextField(
-                    value = reservationDate,
-                    onValueChange = { reservationDate = it; validationError = null },
-                    label = { Text(if (dateWeekday != null) "预约目标日期 ($dateWeekday)" else "预约目标日期") },
+                    value = executeDate,
+                    onValueChange = { executeDate = it; validationError = null },
+                    label = { Text(if (executeDateWeekday != null) "任务运行日期 ($executeDateWeekday)" else "任务运行日期") },
                     placeholder = { Text("YYYY-MM-DD") },
-                    trailingIcon = dateWeekday?.let { wk ->
-                        {
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.padding(end = 4.dp),
-                            ) {
-                                Text(
-                                    text = wk,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                )
-                            }
-                        }
-                    },
                     shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.weight(1.3f),
+                    modifier = Modifier.weight(1.25f),
                     singleLine = true,
                 )
 
                 OutlinedTextField(
                     value = executeTime,
                     onValueChange = { executeTime = it; validationError = null },
-                    label = { Text("尝试时间") },
+                    label = { Text("运行时间") },
                     placeholder = { Text("07:00") },
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                 )
             }
+
+            Text(
+                text = "到达运行日期和运行时间后，系统会预约目标日期的候选空间。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -2056,6 +2102,14 @@ private fun DetailRow(label: String, value: String) {
 
 private fun weekdayName(date: LocalDate): String {
     return date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.SIMPLIFIED_CHINESE)
+}
+
+private fun defaultAutoReservationExecuteDate(reservationDate: String, today: LocalDate): String {
+    val target = runCatching {
+        LocalDate.parse(reservationDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
+    }.getOrNull() ?: today
+    val earliest = target.minusDays(3)
+    return (if (earliest.isAfter(today)) earliest else today).format(DateTimeFormatter.ISO_LOCAL_DATE)
 }
 
 private fun reservationWindowText(windows: List<CampusReservationTimeWindow>?): String {

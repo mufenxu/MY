@@ -44,9 +44,9 @@ import {
   normalizeReservationInput
 } from "./src/lib/libroom.js";
 import {
+  autoReservationRunPlan,
   executeAutoReservationCandidates,
   isAutoReservationDue,
-  localDateForTimeZone,
   normalizeAutoReservationTaskInput
 } from "./src/lib/libroom-auto-reservation.js";
 import {
@@ -1997,6 +1997,7 @@ function autoReservationTaskPublic(row) {
     name: row.name,
     enabled: Boolean(row.enabled),
     reservationDate: row.reservationDate || row.startDate || null,
+    executeDate: row.executeDate || row.execute_date || row.runDate || row.run_date || null,
     executeTime: row.executeTime,
     candidates: Array.isArray(row.candidates) ? row.candidates : [],
     title: row.title,
@@ -2044,12 +2045,14 @@ async function saveAutoReservationTask(userId, body, existing = null) {
 }
 
 async function runAutoReservationTask(task, user, now = new Date()) {
-  const date = localDateForTimeZone(now);
+  const plan = autoReservationRunPlan(task, now);
+  const date = plan.targetDate;
+  if (!date || !plan.runKey) return null;
   const nowValue = now.toISOString();
   const claimed = await repository.claimAutoReservationTask(
     user.id,
     task.id,
-    date,
+    plan.runKey,
     nowValue,
     new Date(now.getTime() + LIBROOM_AUTO_RESERVATION_LOCK_MS).toISOString()
   );
@@ -2076,6 +2079,7 @@ async function runAutoReservationTask(task, user, now = new Date()) {
     userId: user.id,
     taskId: task.id,
     date,
+    executeDate: plan.executeDate,
     status: result.status,
     candidateIndex: result.candidateIndex
   });

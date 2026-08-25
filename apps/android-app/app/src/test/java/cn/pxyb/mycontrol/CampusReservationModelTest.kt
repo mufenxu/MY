@@ -78,6 +78,7 @@ class CampusReservationModelTest {
             name = "每周三自动预约",
             enabled = true,
             reservationDate = "2026-08-26",
+            executeDate = "2026-08-23",
             executeTime = "08:30",
             candidates = candidates,
             title = "研讨室使用",
@@ -89,6 +90,7 @@ class CampusReservationModelTest {
         )
 
         assertEquals("task-123", task.id)
+        assertEquals("2026-08-23", task.executeDate)
         assertEquals(2, task.candidates.size)
         assertEquals(1, task.candidates[0].areaId)
         assertEquals(2, task.candidates[1].areaId)

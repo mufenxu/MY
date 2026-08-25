@@ -210,6 +210,7 @@ data class CampusAutoReservationTask(
     val name: String = "",
     val enabled: Boolean = true,
     val reservationDate: String = "",
+    val executeDate: String = "",
     val executeTime: String = "08:30",
     val candidates: List<CampusAutoReservationCandidate> = emptyList(),
     val title: String = "",

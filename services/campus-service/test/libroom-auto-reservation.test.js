@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   normalizeAutoReservationTaskInput,
+  autoReservationRunPlan,
   isAutoReservationDue,
   executeAutoReservationCandidates
 } from "../src/lib/libroom-auto-reservation.js";
@@ -10,6 +11,7 @@ const baseInput = {
   name: "周三研讨",
   enabled: true,
   reservationDate: "2026-08-27",
+  executeDate: "2026-08-24",
   executeTime: "08:30",
   candidates: [
     { areaId: 9, startTime: "09:00", endTime: "11:00" },
@@ -28,6 +30,7 @@ test("normalizes an editable one-time auto-reservation task", () => {
       name: "周三研讨",
       enabled: true,
       reservationDate: "2026-08-27",
+      executeDate: "2026-08-24",
       executeTime: "08:30",
       candidates: baseInput.candidates,
       title: "个人学习",
@@ -38,25 +41,69 @@ test("normalizes an editable one-time auto-reservation task", () => {
   );
 });
 
-test("matches only the configured reservation date after the start time", () => {
+test("runs at the configured execute date for a future target date", () => {
+  const task = normalizeAutoReservationTaskInput(baseInput);
+
   assert.equal(
     isAutoReservationDue(
-      normalizeAutoReservationTaskInput(baseInput),
-      new Date("2026-08-27T08:30:00+08:00")
+      task,
+      new Date("2026-08-24T08:30:00+08:00")
     ),
     true
   );
   assert.equal(
     isAutoReservationDue(
-      normalizeAutoReservationTaskInput(baseInput),
-      new Date("2026-08-27T08:29:59+08:00")
+      task,
+      new Date("2026-08-24T08:29:59+08:00")
     ),
     false
   );
   assert.equal(
     isAutoReservationDue(
-      normalizeAutoReservationTaskInput(baseInput),
-      new Date("2026-08-28T08:30:00+08:00")
+      task,
+      new Date("2026-08-23T08:30:00+08:00")
+    ),
+    false
+  );
+  assert.deepEqual(
+    autoReservationRunPlan(task, new Date("2026-08-24T08:30:00+08:00")),
+    {
+      due: true,
+      targetDate: "2026-08-27",
+      executeDate: "2026-08-24",
+      executeTime: "08:30",
+      runKey: "2026-08-27:2026-08-24T08:30"
+    }
+  );
+});
+
+test("legacy tasks without execute date run when the target enters the three-day booking window", () => {
+  const legacyInput = { ...baseInput };
+  delete legacyInput.executeDate;
+  const task = normalizeAutoReservationTaskInput(legacyInput);
+
+  assert.equal(task.executeDate, null);
+  assert.equal(isAutoReservationDue(task, new Date("2026-08-23T08:30:00+08:00")), false);
+  assert.equal(isAutoReservationDue(task, new Date("2026-08-24T08:29:59+08:00")), false);
+  assert.equal(isAutoReservationDue(task, new Date("2026-08-24T08:30:00+08:00")), true);
+});
+
+test("rejects execute dates outside the school booking window", () => {
+  assert.throws(
+    () => normalizeAutoReservationTaskInput({ ...baseInput, executeDate: "2026-08-23" }),
+    /运行日期必须在预约目标日期前 3 天至预约当天内/
+  );
+  assert.throws(
+    () => normalizeAutoReservationTaskInput({ ...baseInput, executeDate: "2026-08-28" }),
+    /运行日期必须在预约目标日期前 3 天至预约当天内/
+  );
+});
+
+test("does not run stored tasks whose execute date is outside the booking window", () => {
+  assert.equal(
+    isAutoReservationDue(
+      { ...normalizeAutoReservationTaskInput(baseInput), executeDate: "2026-08-23" },
+      new Date("2026-08-24T08:30:00+08:00")
     ),
     false
   );

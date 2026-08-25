@@ -1765,6 +1765,7 @@ private fun JSONObject.toCampusAutoReservationTask(): CampusAutoReservationTask 
         name = optString("name"),
         enabled = optBoolean("enabled", true),
         reservationDate = optString("reservationDate", optString("reservation_date", optString("startDate", optString("start_date", "")))),
+        executeDate = optString("executeDate", optString("execute_date", optString("runDate", optString("run_date", "")))),
         executeTime = optString("executeTime", optString("execute_time", "08:30")),
         candidates = candidates,
         title = optString("title"),
@@ -1784,6 +1785,7 @@ private fun CampusAutoReservationTask.toJson(): JSONObject = JSONObject().apply 
     put("name", name.trim())
     put("enabled", enabled)
     put("reservationDate", reservationDate.trim())
+    put("executeDate", executeDate.trim())
     put("executeTime", executeTime.trim())
     put("title", title.trim())
     put("content", content.trim())
