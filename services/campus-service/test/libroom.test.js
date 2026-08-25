@@ -154,6 +154,19 @@ test("selects confirm for a first-period reservation and submit otherwise", asyn
   });
   assert.deepEqual(JSON.parse(requests[0].options.body), { id: 9 });
   assert.match(requests.at(-1).url, /\/v4\/seminar\/confirm$/);
+  assert.deepEqual(JSON.parse(requests.at(-1).options.body), {
+    area_id: 9,
+    start_date: "2026-08-26",
+    end_date: "2026-08-26",
+    title: "个人学习",
+    title_id: "",
+    content: "阅读",
+    open: 1,
+    team: "",
+    mobile: "13800138000",
+    time: [{ start_time: "09:00", end_time: "11:00" }],
+    file: null
+  });
 
   requests.length = 0;
   const submitClient = createLibroomClient({
@@ -172,6 +185,19 @@ test("selects confirm for a first-period reservation and submit otherwise", asyn
   });
   assert.deepEqual(JSON.parse(requests[0].options.body), { id: 9 });
   assert.match(requests.at(-1).url, /\/v4\/seminar\/submit$/);
+  assert.deepEqual(JSON.parse(requests.at(-1).options.body), {
+    area_id: 9,
+    start_date: "2026-08-26",
+    end_date: "2026-08-26",
+    title: "个人学习",
+    title_id: "",
+    content: "阅读",
+    open: 1,
+    team: "",
+    mobile: "13800138000",
+    time: [{ start_time: "09:00", end_time: "11:00" }],
+    file: null
+  });
 });
 
 test("loads space availability by the upstream space id", async () => {
@@ -218,6 +244,99 @@ test("derives free reservation windows from occupied periods", () => {
           { start_time: "09:00", end_time: "10:00" },
           { startTime: "14:00", endTime: "16:30" }
         ]
+      }
+    }
+  );
+});
+
+test("derives availability from the official axis for the selected date", () => {
+  assert.deepEqual(
+    summarizeLibroomAvailability({
+      detail: {
+        id: "12",
+        name: "单人学习间5"
+      },
+      axis: {
+        list: [
+          {
+            date: "2026-08-26",
+            info: {
+              start_time: 480,
+              end_time: 1305,
+              fully_booked: "0",
+              list: [
+                {
+                  begin_timestamp: "2026-08-26 10:00:00",
+                  end_timestamp: "2026-08-26 13:59:59",
+                  begin_num: 600,
+                  end_num: 839
+                },
+                {
+                  begin_timestamp: "2026-08-26 14:00:00",
+                  end_timestamp: "2026-08-26 17:30:00",
+                  begin_num: 840,
+                  end_num: 1050
+                },
+                {
+                  begin_timestamp: "2026-08-26 18:30:00",
+                  end_timestamp: "2026-08-26 21:45:00",
+                  begin_num: 1110,
+                  end_num: 1305
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }, { date: "2026-08-26" }),
+    {
+      freeWindows: [
+        { start: "08:00", end: "10:00" },
+        { start: "17:30", end: "18:30" }
+      ],
+      busyWindows: [
+        { start: "10:00", end: "17:30" },
+        { start: "18:30", end: "21:45" }
+      ],
+      source: "official-axis",
+      detail: "根据学校接口返回的目标日期占用轴计算空闲时段。",
+      raw: {
+        detail: {
+          id: "12",
+          name: "单人学习间5"
+        },
+        axis: {
+          list: [
+            {
+              date: "2026-08-26",
+              info: {
+                start_time: 480,
+                end_time: 1305,
+                fully_booked: "0",
+                list: [
+                  {
+                    begin_timestamp: "2026-08-26 10:00:00",
+                    end_timestamp: "2026-08-26 13:59:59",
+                    begin_num: 600,
+                    end_num: 839
+                  },
+                  {
+                    begin_timestamp: "2026-08-26 14:00:00",
+                    end_timestamp: "2026-08-26 17:30:00",
+                    begin_num: 840,
+                    end_num: 1050
+                  },
+                  {
+                    begin_timestamp: "2026-08-26 18:30:00",
+                    end_timestamp: "2026-08-26 21:45:00",
+                    begin_num: 1110,
+                    end_num: 1305
+                  }
+                ]
+              }
+            }
+          ]
+        }
       }
     }
   );

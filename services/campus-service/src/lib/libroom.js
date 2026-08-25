@@ -71,6 +71,73 @@ function normalizeTimeWindows(windows = []) {
   return merged.map((window) => ({ start: formatTime(window.start), end: formatTime(window.end) }));
 }
 
+function parseTimestampMinute(value, { roundEnd = false } = {}) {
+  const match = /(?:^|\s)(\d{1,2}):([0-5]\d)(?::([0-5]\d))?/.exec(String(value || "").trim());
+  if (!match) return null;
+  const minutes = Number(match[1]) * 60 + Number(match[2]);
+  if (minutes < 0 || minutes > 1440) return null;
+  if (roundEnd && Number(match[3] || 0) > 0) return Math.min(1440, minutes + 1);
+  return minutes;
+}
+
+function minutesWindow(start, end) {
+  return start !== null && end !== null && end > start ? { start: formatTime(start), end: formatTime(end) } : null;
+}
+
+function officialAxisBaseWindows(info, fallback) {
+  const start = parseTimestampMinute(info?.start_timestamp)
+    ?? parseLooseTime(info?.start_num ?? info?.begin_num ?? info?.start_time ?? info?.startTime);
+  const end = parseTimestampMinute(info?.end_timestamp, { roundEnd: true })
+    ?? parseLooseTime(info?.end_num ?? info?.end_time ?? info?.endTime);
+  const window = minutesWindow(start, end);
+  return window ? [window] : fallback;
+}
+
+function officialAxisBusyWindow(period) {
+  const start = parseTimestampMinute(period?.begin_timestamp ?? period?.start_timestamp)
+    ?? parseLooseTime(period?.begin_num ?? period?.start_num ?? period?.start_time ?? period?.begin_time ?? period?.startTime);
+  const end = parseTimestampMinute(period?.end_timestamp, { roundEnd: true })
+    ?? parseLooseTime(period?.end_num ?? period?.end_time ?? period?.endTime);
+  return minutesWindow(start, end);
+}
+
+function isTruthyFlag(value) {
+  return value === true || value === 1 || String(value).trim().toLowerCase() === "1" || String(value).trim().toLowerCase() === "true";
+}
+
+function summarizeLibroomAxisAvailability(raw, { date = "", bookableWindows = LIBROOM_DEFAULT_BOOKABLE_WINDOWS } = {}) {
+  const list = Array.isArray(raw?.axis?.list) ? raw.axis.list : null;
+  if (!list) return null;
+
+  const targetDate = String(date || "").trim();
+  const entry = targetDate ? list.find((item) => String(item?.date || "") === targetDate) : (list.length === 1 ? list[0] : null);
+  if (!entry) {
+    return {
+      freeWindows: [],
+      busyWindows: [],
+      source: "unrecognized",
+      detail: targetDate
+        ? "学校接口未返回目标日期的空间占用轴，请以官网查询结果为准。"
+        : "学校接口返回多个日期的空间占用轴，但未指定目标日期，请以官网查询结果为准。",
+      raw
+    };
+  }
+
+  const info = entry.info && typeof entry.info === "object" ? entry.info : entry;
+  const baseWindows = officialAxisBaseWindows(info, bookableWindows);
+  const busyWindows = isTruthyFlag(info.fully_booked)
+    ? normalizeTimeWindows(baseWindows)
+    : normalizeTimeWindows((Array.isArray(info.list) ? info.list : []).map(officialAxisBusyWindow).filter(Boolean));
+
+  return {
+    freeWindows: subtractBusyWindows(baseWindows, busyWindows),
+    busyWindows,
+    source: "official-axis",
+    detail: "根据学校接口返回的目标日期占用轴计算空闲时段。",
+    raw
+  };
+}
+
 function collectAvailabilityWindows(value, path = "", result = { free: [], busy: [] }, seen = new Set()) {
   if (!value || typeof value !== "object" || seen.has(value)) return result;
   seen.add(value);
@@ -117,7 +184,10 @@ function subtractBusyWindows(baseWindows, busyWindows) {
   return normalizeTimeWindows(free);
 }
 
-export function summarizeLibroomAvailability(raw, { bookableWindows = LIBROOM_DEFAULT_BOOKABLE_WINDOWS } = {}) {
+export function summarizeLibroomAvailability(raw, { bookableWindows = LIBROOM_DEFAULT_BOOKABLE_WINDOWS, date = "" } = {}) {
+  const axisAvailability = summarizeLibroomAxisAvailability(raw, { date, bookableWindows });
+  if (axisAvailability) return axisAvailability;
+
   const collected = collectAvailabilityWindows(raw);
   const explicitFreeWindows = normalizeTimeWindows(collected.free);
   const busyWindows = normalizeTimeWindows(collected.busy);
@@ -418,7 +488,7 @@ export function createLibroomClient({
     getRules: () => request("/v4/index/bookingRules", {}),
     getAvailability: async ({ spaceId, date }) => {
       const raw = await request("/v4/seminar/seminar", { id: Number(spaceId), date: String(date || "") });
-      return summarizeLibroomAvailability(raw);
+      return summarizeLibroomAvailability(raw, { date: String(date || "") });
     },
     submitReservation
   });
