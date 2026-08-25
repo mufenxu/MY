@@ -167,9 +167,16 @@ data class CampusDashboard(
 )
 
 @Immutable
+data class CampusReservationTimeWindow(
+    val start: String = "08:00",
+    val end: String = "21:45",
+)
+
+@Immutable
 data class CampusReservationSpace(
     val id: Int,
     val name: String,
+    val availableWindows: List<CampusReservationTimeWindow> = listOf(CampusReservationTimeWindow()),
 )
 
 @Immutable

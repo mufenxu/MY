@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.YearMonth
 import java.io.IOException
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class PlatformApi(
@@ -587,7 +588,11 @@ class PlatformApi(
                 ?: item.displayString("title")
                 ?: item.displayString("room_name")
                 ?: "空间 $id"
-            CampusReservationSpace(id = id, name = name)
+            CampusReservationSpace(
+                id = id,
+                name = name,
+                availableWindows = item.reservationTimeWindows(),
+            )
         }
     }
 
@@ -1553,6 +1558,79 @@ private fun JSONObject.displayString(key: String): String? = opt(key)
     ?.trim()
     ?.takeIf { it.isNotBlank() }
 
+private val reservationStartTimeKeys = listOf(
+    "startTime",
+    "start_time",
+    "start",
+    "beginTime",
+    "begin_time",
+    "begin",
+    "openTime",
+    "open_time",
+    "startMinute",
+    "start_minute",
+)
+
+private val reservationEndTimeKeys = listOf(
+    "endTime",
+    "end_time",
+    "end",
+    "closeTime",
+    "close_time",
+    "finishTime",
+    "finish_time",
+    "endMinute",
+    "end_minute",
+)
+
+private fun JSONObject.reservationTimeWindows(): List<CampusReservationTimeWindow> {
+    val windows = mutableListOf<CampusReservationTimeWindow>()
+    collectReservationTimeWindows(this, windows)
+    return windows.distinct().ifEmpty { listOf(CampusReservationTimeWindow()) }
+}
+
+private fun collectReservationTimeWindows(value: Any?, windows: MutableList<CampusReservationTimeWindow>) {
+    when (value) {
+        is JSONArray -> {
+            for (index in 0 until value.length()) collectReservationTimeWindows(value.opt(index), windows)
+        }
+        is JSONObject -> {
+            val start = value.firstReservationTime(reservationStartTimeKeys)
+            val end = value.firstReservationTime(reservationEndTimeKeys)
+            if (start != null && end != null && end > start) {
+                windows.add(CampusReservationTimeWindow(start = start.toReservationTimeText(), end = end.toReservationTimeText()))
+            }
+            val keys = value.keys()
+            while (keys.hasNext()) collectReservationTimeWindows(value.opt(keys.next()), windows)
+        }
+    }
+}
+
+private fun JSONObject.firstReservationTime(keys: List<String>): Int? {
+    for (key in keys) {
+        if (!has(key) || isNull(key)) continue
+        parseReservationTime(opt(key))?.let { return it }
+    }
+    return null
+}
+
+private fun parseReservationTime(value: Any?): Int? {
+    return when (value) {
+        is Number -> value.toInt().takeIf { it in 0..1440 }
+        else -> {
+            val text = value?.toString()?.trim().orEmpty()
+            val match = Regex("^(\\d{1,2}):([0-5]\\d)(?::[0-5]\\d)?$").matchEntire(text) ?: return null
+            (match.groupValues[1].toInt() * 60 + match.groupValues[2].toInt()).takeIf { it in 0..1440 }
+        }
+    }
+}
+
+private fun Int.toReservationTimeText(): String {
+    val hour = this / 60
+    val minute = this % 60
+    return String.format(Locale.ROOT, "%02d:%02d", hour, minute)
+}
+
 private fun JSONObject.optionalInt(key: String): Int? = opt(key)
     ?.takeUnless { it == JSONObject.NULL }
     ?.toString()
@@ -1644,4 +1722,3 @@ private fun formatCampusJsonValue(value: Any?): String = when (value) {
     }
     else -> value.toString()
 }
-

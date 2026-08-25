@@ -64,6 +64,7 @@ import cn.pxyb.mycontrol.data.CampusAutoReservationCandidate
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusReservationSpace
+import cn.pxyb.mycontrol.data.CampusReservationTimeWindow
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -73,6 +74,8 @@ private enum class ReservationTab(val label: String) {
     Single("单次预约"),
     Auto("自动任务"),
 }
+
+private val DefaultReservationWindows = listOf(CampusReservationTimeWindow())
 
 @Composable
 fun ReservationScreen(
@@ -219,8 +222,9 @@ private fun SingleReservationPanel(
         }
     }
 
-    val selectedSpaceName = spaces.firstOrNull { it.id == selectedSpaceId }?.name
-        ?: if (spacesLoading) "正在加载空间..." else "请选择空间"
+    val selectedSpace = spaces.firstOrNull { it.id == selectedSpaceId }
+    val selectedSpaceName = selectedSpace?.name ?: if (spacesLoading) "正在加载空间..." else "请选择空间"
+    val selectedWindowText = reservationWindowText(selectedSpace?.availableWindows)
 
     if (showConfirmDialog) {
         AlertDialog(
@@ -305,10 +309,19 @@ private fun SingleReservationPanel(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
                                 Icon(Icons.Outlined.MeetingRoom, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.width(8.dp))
-                                Text(selectedSpaceName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                Text(
+                                    text = selectedSpaceName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                             Icon(Icons.Outlined.ExpandMore, contentDescription = null)
                         }
@@ -319,7 +332,16 @@ private fun SingleReservationPanel(
                     ) {
                         spaces.forEach { space ->
                             DropdownMenuItem(
-                                text = { Text(space.name) },
+                                text = {
+                                    Column {
+                                        Text(space.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(
+                                            text = "可预约时间：${reservationWindowText(space.availableWindows)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                },
                                 onClick = {
                                     selectedSpaceId = space.id
                                     spaceDropdownOpen = false
@@ -329,6 +351,12 @@ private fun SingleReservationPanel(
                         }
                     }
                 }
+                Text(
+                    text = "当前空间可预约时间：$selectedWindowText",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SpaceWindowList(spaces = spaces, selectedSpaceId = selectedSpaceId)
 
                 // 日期选择
                 Text("预约日期", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
@@ -357,7 +385,7 @@ private fun SingleReservationPanel(
                 }
 
                 // 时间选择
-                Text("预约时段（1 ~ 4 小时）", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Text("预约时段（$selectedWindowText，1 ~ 4 小时）", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -367,6 +395,8 @@ private fun SingleReservationPanel(
                         onValueChange = { startTime = it; onClearFeedback() },
                         label = { Text("开始时间") },
                         placeholder = { Text("09:00") },
+                        supportingText = { Text("格式 HH:mm") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                     )
@@ -375,6 +405,8 @@ private fun SingleReservationPanel(
                         onValueChange = { endTime = it; onClearFeedback() },
                         label = { Text("结束时间") },
                         placeholder = { Text("11:00") },
+                        supportingText = { Text("格式 HH:mm") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                     )
@@ -481,6 +513,10 @@ private fun SingleReservationPanel(
                                 formValidationNotice = "请选择预约空间"
                                 return@Button
                             }
+                            if (!isReservationTimeValid(startTime, endTime, selectedSpace?.availableWindows)) {
+                                formValidationNotice = "请选择 $selectedWindowText 内 1 至 4 小时的预约时段"
+                                return@Button
+                            }
                             if (title.isBlank()) {
                                 formValidationNotice = "请填写申请主题"
                                 return@Button
@@ -545,6 +581,46 @@ private fun SingleReservationPanel(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpaceWindowList(spaces: List<CampusReservationSpace>, selectedSpaceId: Int) {
+    if (spaces.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("各空间可预约时间", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        spaces.forEach { space ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(
+                    1.dp,
+                    if (space.id == selectedSpaceId) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant,
+                ),
+                color = MaterialTheme.colorScheme.surface,
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = space.name,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = reservationWindowText(space.availableWindows),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -636,7 +712,7 @@ private fun AutoReservationPanel(
                 if (tasks.isEmpty() && !tasksLoading) {
                     EmptyBlock(
                         title = "还没有自动预约任务",
-                        message = "点击右上角“新建任务”，设置候选空间与预约时段，系统会在指定时间自动为您尝试预约。",
+                        detail = "点击右上角“新建任务”，设置候选空间与预约时段，系统会在指定时间自动为您尝试预约。",
                     )
                 }
 
@@ -871,6 +947,11 @@ private fun AutoReservationEditDialog(
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                 )
+                Text(
+                    text = "可预约时间：${reservationWindowText(null)}，每次 1 至 4 小时",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
                 candidates.forEachIndexed { index, candidate ->
                     CandidateEditRow(
@@ -985,6 +1066,15 @@ private fun AutoReservationEditDialog(
                         validationError = "至少设置一个候选空间和时段"
                         return@Button
                     }
+                    val invalidCandidate = candidates.firstOrNull { candidate ->
+                        val space = spaces.firstOrNull { it.id == candidate.areaId }
+                        !isReservationTimeValid(candidate.startTime, candidate.endTime, space?.availableWindows)
+                    }
+                    if (invalidCandidate != null) {
+                        val space = spaces.firstOrNull { it.id == invalidCandidate.areaId }
+                        validationError = "候选时段需在 ${reservationWindowText(space?.availableWindows)} 内，且预约 1 至 4 小时"
+                        return@Button
+                    }
                     validationError = null
                     val newTask = CampusAutoReservationTask(
                         id = task?.id ?: "",
@@ -1031,7 +1121,9 @@ private fun CandidateEditRow(
     onDelete: () -> Unit,
 ) {
     var spaceMenuOpen by remember { mutableStateOf(false) }
-    val spaceName = spaces.firstOrNull { it.id == candidate.areaId }?.name ?: "空间 ${candidate.areaId}"
+    val selectedSpace = spaces.firstOrNull { it.id == candidate.areaId }
+    val spaceName = selectedSpace?.name ?: "空间 ${candidate.areaId}"
+    val windowText = reservationWindowText(selectedSpace?.availableWindows)
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -1082,14 +1174,29 @@ private fun CandidateEditRow(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(spaceName, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            text = spaceName,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         Icon(Icons.Outlined.ExpandMore, contentDescription = null, modifier = Modifier.size(16.dp))
                     }
                 }
                 DropdownMenu(expanded = spaceMenuOpen, onDismissRequest = { spaceMenuOpen = false }) {
                     spaces.forEach { s ->
                         DropdownMenuItem(
-                            text = { Text(s.name) },
+                            text = {
+                                Column {
+                                    Text(s.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        text = "可预约时间：${reservationWindowText(s.availableWindows)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            },
                             onClick = {
                                 onUpdate(candidate.copy(areaId = s.id))
                                 spaceMenuOpen = false
@@ -1098,6 +1205,11 @@ private fun CandidateEditRow(
                     }
                 }
             }
+            Text(
+                text = "可预约时间：$windowText",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1107,6 +1219,8 @@ private fun CandidateEditRow(
                     value = candidate.startTime,
                     onValueChange = { onUpdate(candidate.copy(startTime = it)) },
                     label = { Text("开始", style = MaterialTheme.typography.labelSmall) },
+                    placeholder = { Text("09:00") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                 )
@@ -1114,6 +1228,8 @@ private fun CandidateEditRow(
                     value = candidate.endTime,
                     onValueChange = { onUpdate(candidate.copy(endTime = it)) },
                     label = { Text("结束", style = MaterialTheme.typography.labelSmall) },
+                    placeholder = { Text("11:00") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                 )
@@ -1135,4 +1251,30 @@ private fun DetailRow(label: String, value: String) {
 
 private fun weekdayName(date: LocalDate): String {
     return date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.SIMPLIFIED_CHINESE)
+}
+
+private fun reservationWindowText(windows: List<CampusReservationTimeWindow>?): String {
+    return (windows?.takeIf { it.isNotEmpty() } ?: DefaultReservationWindows)
+        .joinToString("、") { "${it.start} - ${it.end}" }
+}
+
+private fun reservationTimeMinutes(value: String): Int? {
+    val match = Regex("^(\\d{1,2}):([0-5]\\d)$").matchEntire(value.trim()) ?: return null
+    val minutes = match.groupValues[1].toInt() * 60 + match.groupValues[2].toInt()
+    return minutes.takeIf { it in 0..1440 }
+}
+
+private fun isReservationTimeValid(
+    startTime: String,
+    endTime: String,
+    windows: List<CampusReservationTimeWindow>?,
+): Boolean {
+    val start = reservationTimeMinutes(startTime) ?: return false
+    val end = reservationTimeMinutes(endTime) ?: return false
+    if (end - start !in 60..240) return false
+    return (windows?.takeIf { it.isNotEmpty() } ?: DefaultReservationWindows).any { window ->
+        val windowStart = reservationTimeMinutes(window.start) ?: return@any false
+        val windowEnd = reservationTimeMinutes(window.end) ?: return@any false
+        start >= windowStart && end <= windowEnd
+    }
 }
