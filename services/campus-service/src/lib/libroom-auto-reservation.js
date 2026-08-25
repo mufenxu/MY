@@ -1,6 +1,8 @@
 const TIME_ZONE = "Asia/Shanghai";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const BOOKABLE_START_MINUTE = 8 * 60;
+const BOOKABLE_END_MINUTE = 21 * 60 + 45;
 
 function fail(message, code = "INVALID_AUTO_RESERVATION_TASK") {
   const error = new Error(message);
@@ -52,6 +54,9 @@ export function normalizeAutoReservationTaskInput(input = {}) {
     if (!Number.isInteger(candidate.areaId) || candidate.areaId <= 0) fail("候选预约空间不正确。", "INVALID_RESERVATION_SPACE");
     parseTime(candidate.startTime, "候选开始时间");
     parseTime(candidate.endTime, "候选结束时间");
+    if (timeMinutes(candidate.startTime) < BOOKABLE_START_MINUTE || timeMinutes(candidate.endTime) > BOOKABLE_END_MINUTE) {
+      fail("候选可预约时间为 08:00 至 21:45。", "AUTO_RESERVATION_TIME_OUT_OF_RANGE");
+    }
     const duration = timeMinutes(candidate.endTime) - timeMinutes(candidate.startTime);
     if (duration < 60 || duration > 240) fail("候选预约时长需为 1 至 4 小时。", "INVALID_RESERVATION_DURATION");
   });

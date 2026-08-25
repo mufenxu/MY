@@ -167,6 +167,51 @@ data class CampusDashboard(
 )
 
 @Immutable
+data class CampusReservationSpace(
+    val id: Int,
+    val name: String,
+)
+
+@Immutable
+data class CampusReservationRequest(
+    val areaId: Int,
+    val date: String,
+    val startTime: String,
+    val endTime: String,
+    val title: String,
+    val content: String,
+    val mobile: String,
+    val open: Boolean = false,
+)
+
+@Immutable
+data class CampusAutoReservationCandidate(
+    val areaId: Int,
+    val startTime: String = "09:00",
+    val endTime: String = "11:00",
+)
+
+@Immutable
+data class CampusAutoReservationTask(
+    val id: String = "",
+    val name: String = "",
+    val enabled: Boolean = true,
+    val reservationDate: String = "",
+    val executeTime: String = "08:30",
+    val candidates: List<CampusAutoReservationCandidate> = emptyList(),
+    val title: String = "",
+    val content: String = "",
+    val mobile: String = "",
+    val open: Boolean = false,
+    val lastStatus: String? = null,
+    val lastMessage: String? = null,
+    val lastCandidateIndex: Int? = null,
+    val lastExecutedAt: String? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+)
+
+@Immutable
 data class ResourceExpiry(
     val id: String,
     val type: String,

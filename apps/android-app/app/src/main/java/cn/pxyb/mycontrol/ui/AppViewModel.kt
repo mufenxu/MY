@@ -27,8 +27,11 @@ import cn.pxyb.mycontrol.data.AutomationCondition
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationPreference
 import cn.pxyb.mycontrol.data.AppNotificationAction
+import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusFreeClassrooms
 import cn.pxyb.mycontrol.data.CampusOverview
+import cn.pxyb.mycontrol.data.CampusReservationRequest
+import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
@@ -107,7 +110,7 @@ enum class MainTab { Overview, Notifications, Operations, Tools, Profile }
 
 enum class WorkspaceDestination { Today, Notifications, Insights, Scenes }
 
-enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, FreeClassrooms, Resources, Notifications }
+enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, FreeClassrooms, Resources, Notifications, Reservation }
 
 @Immutable
 data class SectionLoadState(
@@ -181,6 +184,18 @@ data class AppUiState(
     val sharedTodoDraft: String? = null,
     val pendingSceneId: String? = null,
     val quickScene: QuickScenePreference? = null,
+    val reservationSpaces: List<CampusReservationSpace> = emptyList(),
+    val reservationSpacesLoading: Boolean = false,
+    val reservationRules: String? = null,
+    val reservationAvailability: String? = null,
+    val reservationQueryLoading: Boolean = false,
+    val reservationSubmitLoading: Boolean = false,
+    val reservationAutoTasks: List<CampusAutoReservationTask> = emptyList(),
+    val reservationAutoTasksLoading: Boolean = false,
+    val reservationSavingTask: Boolean = false,
+    val reservationDeletingTaskId: String? = null,
+    val reservationError: String? = null,
+    val reservationMessage: String? = null,
 ) {
     val activeIncidents: List<IncidentInfo>
         get() = incidents.filter { it.status != "resolved" }
@@ -239,6 +254,7 @@ class AppViewModel(
     val globalSearchState = deriveState(AppUiState::toGlobalSearchUiState)
     val todayState = deriveState(AppUiState::toTodayUiState)
     val freeClassroomState = deriveState(AppUiState::toFreeClassroomUiState)
+    val reservationState = deriveState(AppUiState::toReservationUiState)
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
     val insightsState = deriveState(AppUiState::toInsightsUiState)
     val scenesState = deriveState(AppUiState::toScenesUiState)
@@ -1594,6 +1610,200 @@ class AppViewModel(
             val result = api.campusFreeClassrooms(dayplus, sections, building)
             mutableState.update { it.copy(freeClassroomResult = result) }
         }
+
+    fun refreshReservation() {
+        loadReservationSpaces(force = true)
+        loadAutoReservationTasks(force = true)
+    }
+
+    fun loadReservationSpaces(force: Boolean = false) {
+        if (mutableState.value.reservationSpacesLoading) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(reservationSpacesLoading = true, reservationError = null) }
+            runCatching { api.campusReservationSpaces() }
+                .onSuccess { spaces ->
+                    mutableState.update {
+                        it.copy(
+                            reservationSpaces = spaces,
+                            reservationSpacesLoading = false,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(
+                            reservationSpacesLoading = false,
+                            reservationError = error.message ?: "空间加载失败，请重试。",
+                        )
+                    }
+                }
+        }
+    }
+
+    fun queryReservationRulesAndAvailability(spaceId: Int, date: String) {
+        if (spaceId <= 0 || date.isBlank() || mutableState.value.reservationQueryLoading) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    reservationQueryLoading = true,
+                    reservationRules = "查询中...",
+                    reservationAvailability = "查询中...",
+                    reservationError = null,
+                )
+            }
+            try {
+                coroutineScope {
+                    val rulesDeferred = async { runCatching { api.campusReservationRules(spaceId) }.getOrNull() }
+                    val availabilityDeferred = async { runCatching { api.campusReservationAvailability(spaceId, date) }.getOrNull() }
+                    val rules = rulesDeferred.await() ?: "暂无规则信息"
+                    val availability = availabilityDeferred.await() ?: "暂无时段占用信息"
+                    mutableState.update {
+                        it.copy(
+                            reservationRules = rules,
+                            reservationAvailability = availability,
+                            reservationQueryLoading = false,
+                        )
+                    }
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        reservationRules = "查询失败",
+                        reservationAvailability = "查询失败",
+                        reservationQueryLoading = false,
+                        reservationError = error.message ?: "查询失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun submitReservation(request: CampusReservationRequest, onSuccess: () -> Unit = {}) {
+        if (mutableState.value.reservationSubmitLoading) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(reservationSubmitLoading = true, reservationError = null, reservationMessage = null) }
+            runCatching { api.submitCampusReservation(request) }
+                .onSuccess {
+                    mutableState.update {
+                        it.copy(
+                            reservationSubmitLoading = false,
+                            reservationMessage = "预约已提交成功，请以学校预约系统记录为准。",
+                        )
+                    }
+                    onSuccess()
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(
+                            reservationSubmitLoading = false,
+                            reservationError = error.message ?: "预约提交失败，请重试。",
+                        )
+                    }
+                }
+        }
+    }
+
+    fun loadAutoReservationTasks(force: Boolean = false) {
+        if (mutableState.value.reservationAutoTasksLoading) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(reservationAutoTasksLoading = true, reservationError = null) }
+            runCatching { api.campusAutoReservations() }
+                .onSuccess { tasks ->
+                    mutableState.update {
+                        it.copy(
+                            reservationAutoTasks = tasks,
+                            reservationAutoTasksLoading = false,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(
+                            reservationAutoTasksLoading = false,
+                            reservationError = error.message ?: "自动预约任务加载失败。",
+                        )
+                    }
+                }
+        }
+    }
+
+    fun saveAutoReservationTask(task: CampusAutoReservationTask, onSuccess: () -> Unit = {}) {
+        if (mutableState.value.reservationSavingTask) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(reservationSavingTask = true, reservationError = null, reservationMessage = null) }
+            runCatching {
+                if (task.id.isNotBlank()) {
+                    api.updateCampusAutoReservation(task)
+                } else {
+                    api.createCampusAutoReservation(task)
+                }
+            }
+                .onSuccess {
+                    mutableState.update {
+                        it.copy(
+                            reservationSavingTask = false,
+                            reservationMessage = "自动预约任务已保存。",
+                        )
+                    }
+                    loadAutoReservationTasks(force = true)
+                    onSuccess()
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(
+                            reservationSavingTask = false,
+                            reservationError = error.message ?: "自动预约任务保存失败。",
+                        )
+                    }
+                }
+        }
+    }
+
+    fun toggleAutoReservationTask(task: CampusAutoReservationTask) {
+        viewModelScope.launch {
+            runCatching {
+                api.updateCampusAutoReservation(task.copy(enabled = !task.enabled))
+            }
+                .onSuccess {
+                    loadAutoReservationTasks(force = true)
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(reservationError = error.message ?: "任务状态更新失败。")
+                    }
+                }
+        }
+    }
+
+    fun deleteAutoReservationTask(taskId: String) {
+        if (taskId.isBlank()) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(reservationDeletingTaskId = taskId, reservationError = null, reservationMessage = null) }
+            runCatching { api.deleteCampusAutoReservation(taskId) }
+                .onSuccess {
+                    mutableState.update {
+                        it.copy(
+                            reservationDeletingTaskId = null,
+                            reservationMessage = "自动预约任务已删除。",
+                        )
+                    }
+                    loadAutoReservationTasks(force = true)
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(
+                            reservationDeletingTaskId = null,
+                            reservationError = error.message ?: "任务删除失败。",
+                        )
+                    }
+                }
+        }
+    }
+
+    fun clearReservationFeedback() {
+        mutableState.update { it.copy(reservationError = null, reservationMessage = null) }
+    }
 
     private fun refreshResourceExpiries(force: Boolean = false) = launchRefresh(DataSection.Resources, force) {
         val resources = api.resourceExpiries()

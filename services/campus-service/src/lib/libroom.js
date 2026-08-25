@@ -7,6 +7,8 @@ export const LIBROOM_ORIGIN = "https://libroom.hgu.edu.cn";
 export const LIBROOM_SERVICE_URL = "http://libroom.hgu.edu.cn/v4/login/cas";
 const LIBROOM_CONFIG_IV = "ZZWBKJ_ZHIHUAWEI";
 const AUTH_ERROR_CODES = new Set([401, 403, 10001, 10002, 10003]);
+export const LIBROOM_BOOKABLE_START_MINUTE = 8 * 60;
+export const LIBROOM_BOOKABLE_END_MINUTE = 21 * 60 + 45;
 
 function fail(status, message, code = "LIBROOM_REQUEST_FAILED", details = null) {
   throw new HttpError(status, message, details, code);
@@ -84,6 +86,9 @@ export function normalizeReservationInput(input = {}, { now = new Date() } = {})
     fail(400, "预约日期必须是今天起 3 日内。", "RESERVATION_DATE_OUT_OF_RANGE");
   }
   if (start === null || end === null || end <= start) fail(400, "预约时间不正确。", "INVALID_RESERVATION_TIME");
+  if (start < LIBROOM_BOOKABLE_START_MINUTE || end > LIBROOM_BOOKABLE_END_MINUTE) {
+    fail(400, "可预约时间为 08:00 至 21:45。", "RESERVATION_TIME_OUT_OF_RANGE");
+  }
   if (end - start < 60 || end - start > 240) fail(400, "预约时长需为 1 至 4 小时。", "INVALID_RESERVATION_DURATION");
   if (!title) fail(400, "请填写申请主题。", "RESERVATION_TITLE_REQUIRED");
   if (!content) fail(400, "请填写申请内容。", "RESERVATION_CONTENT_REQUIRED");

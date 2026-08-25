@@ -543,6 +543,105 @@ class PlatformApi(
         )
     }
 
+    suspend fun campusReservationSpaces(): List<CampusReservationSpace> = withContext(Dispatchers.IO) {
+        val response = execute(CAMPUS_LIBROOM_SPACES_PATH)
+        val queue = ArrayDeque<Any>()
+        val foundArrays = mutableListOf<List<JSONObject>>()
+        val data = response.json.opt("data") ?: response.json
+        if (data is JSONObject || data is JSONArray) {
+            queue.add(data)
+        } else if (response.jsonArray.length() > 0) {
+            queue.add(response.jsonArray)
+        }
+
+        val seen = mutableSetOf<Any>()
+        while (queue.isNotEmpty()) {
+            val current = queue.removeFirst()
+            if (!seen.add(current)) continue
+            when (current) {
+                is JSONArray -> {
+                    val list = current.objects()
+                    if (list.any { it.optInt("id", it.optInt("area_id", it.optInt("areaId", 0))) > 0 }) {
+                        foundArrays.add(list)
+                    }
+                    for (i in 0 until current.length()) {
+                        current.opt(i)?.let { if (it is JSONObject || it is JSONArray) queue.add(it) }
+                    }
+                }
+                is JSONObject -> {
+                    val keys = current.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        current.opt(key)?.let { if (it is JSONObject || it is JSONArray) queue.add(it) }
+                    }
+                }
+            }
+        }
+        val targetList = foundArrays.maxByOrNull { it.size } ?: emptyList()
+        targetList.mapNotNull { item ->
+            val id = item.optInt("id", item.optInt("area_id", item.optInt("areaId", 0)))
+            if (id <= 0) return@mapNotNull null
+            val name = item.displayString("name")
+                ?: item.displayString("area_name")
+                ?: item.displayString("areaName")
+                ?: item.displayString("title")
+                ?: item.displayString("room_name")
+                ?: "空间 $id"
+            CampusReservationSpace(id = id, name = name)
+        }
+    }
+
+    suspend fun campusReservationRules(spaceId: Int): String = withContext(Dispatchers.IO) {
+        val response = execute("$CAMPUS_LIBROOM_RULES_PATH?spaceId=$spaceId")
+        val data = response.json.opt("data") ?: response.json
+        formatCampusJsonValue(data)
+    }
+
+    suspend fun campusReservationAvailability(spaceId: Int, date: String): String = withContext(Dispatchers.IO) {
+        val path = "$CAMPUS_LIBROOM_AVAILABILITY_PATH?spaceId=$spaceId&date=${encodePath(date)}"
+        val response = execute(path)
+        val data = response.json.opt("data") ?: response.json
+        val availability = if (data is JSONObject) data.opt("availability") ?: data else data
+        formatCampusJsonValue(availability)
+    }
+
+    suspend fun submitCampusReservation(request: CampusReservationRequest): Unit = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("areaId", request.areaId)
+            .put("date", request.date)
+            .put("startTime", request.startTime)
+            .put("endTime", request.endTime)
+            .put("title", request.title)
+            .put("content", request.content)
+            .put("mobile", request.mobile)
+            .put("open", request.open)
+        execute(CAMPUS_LIBROOM_RESERVATIONS_PATH, method = "POST", body = body)
+    }
+
+    suspend fun campusAutoReservations(): List<CampusAutoReservationTask> = withContext(Dispatchers.IO) {
+        val response = execute(CAMPUS_LIBROOM_AUTO_RESERVATIONS_PATH)
+        val data = response.json.optJSONArray("data") ?: response.jsonArray
+        data.objects().map { it.toCampusAutoReservationTask() }
+    }
+
+    suspend fun createCampusAutoReservation(task: CampusAutoReservationTask): CampusAutoReservationTask = withContext(Dispatchers.IO) {
+        val response = execute(CAMPUS_LIBROOM_AUTO_RESERVATIONS_PATH, method = "POST", body = task.toJson())
+        val data = response.json.optJSONObject("data") ?: response.json
+        data.toCampusAutoReservationTask()
+    }
+
+    suspend fun updateCampusAutoReservation(task: CampusAutoReservationTask): CampusAutoReservationTask = withContext(Dispatchers.IO) {
+        val path = "$CAMPUS_LIBROOM_AUTO_RESERVATIONS_PATH/${encodePath(task.id)}"
+        val response = execute(path, method = "PUT", body = task.toJson())
+        val data = response.json.optJSONObject("data") ?: response.json
+        data.toCampusAutoReservationTask()
+    }
+
+    suspend fun deleteCampusAutoReservation(taskId: String): Unit = withContext(Dispatchers.IO) {
+        val path = "$CAMPUS_LIBROOM_AUTO_RESERVATIONS_PATH/${encodePath(taskId)}"
+        execute(path, method = "DELETE")
+    }
+
     private suspend fun campusLife(): CampusLife {
         val data = campusData(CAMPUS_SUMMARY_PATH)
         return CampusLife(
@@ -1467,3 +1566,82 @@ private fun JSONObject.optIntOrNull(key: String): Int? =
 
 private fun JSONObject.optDoubleOrNull(key: String): Double? =
     takeIf { has(key) && !isNull(key) }?.optDouble(key)?.takeIf { it.isFinite() }
+
+private fun JSONObject.toCampusAutoReservationTask(): CampusAutoReservationTask {
+    val candidatesArray = optJSONArray("candidates") ?: JSONArray()
+    val candidates = buildList {
+        for (i in 0 until candidatesArray.length()) {
+            val obj = candidatesArray.optJSONObject(i) ?: continue
+            add(
+                CampusAutoReservationCandidate(
+                    areaId = obj.optInt("areaId", obj.optInt("area_id", 0)),
+                    startTime = obj.optString("startTime", obj.optString("start_time", "09:00")),
+                    endTime = obj.optString("endTime", obj.optString("end_time", "11:00")),
+                )
+            )
+        }
+    }
+    return CampusAutoReservationTask(
+        id = optString("id"),
+        name = optString("name"),
+        enabled = optBoolean("enabled", true),
+        reservationDate = optString("reservationDate", optString("reservation_date", optString("startDate", optString("start_date", "")))),
+        executeTime = optString("executeTime", optString("execute_time", "08:30")),
+        candidates = candidates,
+        title = optString("title"),
+        content = optString("content"),
+        mobile = optString("mobile", optString("phone", "")),
+        open = optBoolean("open", false),
+        lastStatus = nullableString("lastStatus"),
+        lastMessage = nullableString("lastMessage"),
+        lastCandidateIndex = optIntOrNull("lastCandidateIndex"),
+        lastExecutedAt = nullableString("lastExecutedAt"),
+        createdAt = nullableString("createdAt"),
+        updatedAt = nullableString("updatedAt"),
+    )
+}
+
+private fun CampusAutoReservationTask.toJson(): JSONObject = JSONObject().apply {
+    put("name", name.trim())
+    put("enabled", enabled)
+    put("reservationDate", reservationDate.trim())
+    put("executeTime", executeTime.trim())
+    put("title", title.trim())
+    put("content", content.trim())
+    put("mobile", mobile.trim())
+    put("open", open)
+    val candidatesArr = JSONArray()
+    candidates.forEach { candidate ->
+        candidatesArr.put(
+            JSONObject().apply {
+                put("areaId", candidate.areaId)
+                put("startTime", candidate.startTime)
+                put("endTime", candidate.endTime)
+            }
+        )
+    }
+    put("candidates", candidatesArr)
+}
+
+private fun formatCampusJsonValue(value: Any?): String = when (value) {
+    null, JSONObject.NULL, "" -> "暂无数据"
+    is JSONObject -> {
+        val keys = value.keys()
+        val lines = mutableListOf<String>()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val item = value.opt(key)
+            lines.add("$key：${formatCampusJsonValue(item)}")
+        }
+        lines.joinToString("\n").ifBlank { "暂无数据" }
+    }
+    is JSONArray -> {
+        val lines = mutableListOf<String>()
+        for (i in 0 until value.length()) {
+            lines.add(formatCampusJsonValue(value.opt(i)))
+        }
+        lines.joinToString("\n").ifBlank { "暂无数据" }
+    }
+    else -> value.toString()
+}
+

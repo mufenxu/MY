@@ -153,6 +153,7 @@ private object AppRoute {
     const val Search = "search"
     const val Today = "today"
     const val FreeClassrooms = "free-classrooms"
+    const val Reservation = "reservation"
     const val Notifications = "notifications"
     const val Insights = "insights"
     const val Scenes = "scenes"
@@ -189,6 +190,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Search,
     AppRoute.Today,
     AppRoute.FreeClassrooms,
+    AppRoute.Reservation,
     AppRoute.Insights,
     AppRoute.Scenes -> MainTab.Overview
     AppRoute.Notifications -> MainTab.Overview
@@ -206,6 +208,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Search,
     AppRoute.Today,
     AppRoute.FreeClassrooms,
+    AppRoute.Reservation,
     AppRoute.Insights,
     AppRoute.Scenes -> MainTab.Overview
     else -> null
@@ -1545,9 +1548,7 @@ private fun AuthenticatedShell(
                             navController.navigate(AppRoute.FreeClassrooms) { launchSingleTop = true }
                         },
                         onOpenReservation = {
-                            viewModel.openCampusReservation { url ->
-                                openPlatformWebLink(context, url, "研讨间预约")
-                            }
+                            navController.navigate(AppRoute.Reservation) { launchSingleTop = true }
                         },
                         onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
                     )
@@ -1559,6 +1560,23 @@ private fun AuthenticatedShell(
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
                         onQuery = viewModel::queryFreeClassrooms,
+                    )
+                }
+                composable(AppRoute.Reservation) {
+                    val reservationState by viewModel.reservationState.collectAsStateWithLifecycle()
+                    ReservationScreen(
+                        state = reservationState,
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onRefresh = viewModel::refreshReservation,
+                        onLoadSpaces = viewModel::loadReservationSpaces,
+                        onQueryRulesAndAvailability = viewModel::queryReservationRulesAndAvailability,
+                        onSubmitReservation = viewModel::submitReservation,
+                        onLoadAutoTasks = viewModel::loadAutoReservationTasks,
+                        onSaveAutoTask = viewModel::saveAutoReservationTask,
+                        onToggleAutoTask = viewModel::toggleAutoReservationTask,
+                        onDeleteAutoTask = viewModel::deleteAutoReservationTask,
+                        onClearFeedback = viewModel::clearReservationFeedback,
                     )
                 }
                 composable(AppRoute.Insights) {

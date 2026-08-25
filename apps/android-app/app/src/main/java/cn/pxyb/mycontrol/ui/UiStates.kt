@@ -6,8 +6,10 @@ import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AppAlertRecord
+import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusFreeClassrooms
 import cn.pxyb.mycontrol.data.CampusOverview
+import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
@@ -211,6 +213,23 @@ data class FreeClassroomUiState(
     val refreshing: Boolean,
     val error: String?,
     val result: CampusFreeClassrooms?,
+)
+
+@Immutable
+data class ReservationUiState(
+    val refreshing: Boolean = false,
+    val spaces: List<CampusReservationSpace> = emptyList(),
+    val spacesLoading: Boolean = false,
+    val rules: String? = null,
+    val availability: String? = null,
+    val queryLoading: Boolean = false,
+    val submitLoading: Boolean = false,
+    val autoTasks: List<CampusAutoReservationTask> = emptyList(),
+    val autoTasksLoading: Boolean = false,
+    val savingTask: Boolean = false,
+    val deletingTaskId: String? = null,
+    val error: String? = null,
+    val message: String? = null,
 )
 
 @Immutable
@@ -514,6 +533,22 @@ internal fun AppUiState.toFreeClassroomUiState() = FreeClassroomUiState(
     refreshing = isRefreshing(DataSection.FreeClassrooms),
     error = sectionError(DataSection.FreeClassrooms),
     result = freeClassroomResult ?: campusOverview?.freeClassrooms,
+)
+
+internal fun AppUiState.toReservationUiState() = ReservationUiState(
+    refreshing = isRefreshing(DataSection.Reservation),
+    spaces = reservationSpaces,
+    spacesLoading = reservationSpacesLoading,
+    rules = reservationRules,
+    availability = reservationAvailability,
+    queryLoading = reservationQueryLoading,
+    submitLoading = reservationSubmitLoading,
+    autoTasks = reservationAutoTasks,
+    autoTasksLoading = reservationAutoTasksLoading,
+    savingTask = reservationSavingTask,
+    deletingTaskId = reservationDeletingTaskId,
+    error = sectionError(DataSection.Reservation) ?: reservationError,
+    message = reservationMessage,
 )
 
 internal fun AppUiState.toNotificationCenterUiState() = NotificationCenterUiState(
