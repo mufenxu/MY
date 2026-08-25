@@ -75,8 +75,6 @@ private enum class ReservationTab(val label: String) {
     Auto("自动任务"),
 }
 
-private val DefaultReservationWindows = listOf(CampusReservationTimeWindow())
-
 @Composable
 fun ReservationScreen(
     state: ReservationUiState,
@@ -159,6 +157,9 @@ fun ReservationScreen(
                         submitLoading = state.submitLoading,
                         rules = state.rules,
                         availability = state.availability,
+                        freeWindows = state.freeWindows,
+                        availabilitySpaceId = state.availabilitySpaceId,
+                        availabilityDate = state.availabilityDate,
                         onReloadSpaces = onLoadSpaces,
                         onQuery = onQueryRulesAndAvailability,
                         onSubmit = onSubmitReservation,
@@ -194,6 +195,9 @@ private fun SingleReservationPanel(
     submitLoading: Boolean,
     rules: String?,
     availability: String?,
+    freeWindows: List<CampusReservationTimeWindow>,
+    availabilitySpaceId: Int?,
+    availabilityDate: String?,
     onReloadSpaces: () -> Unit,
     onQuery: (Int, String) -> Unit,
     onSubmit: (CampusReservationRequest, () -> Unit) -> Unit,
@@ -224,7 +228,8 @@ private fun SingleReservationPanel(
 
     val selectedSpace = spaces.firstOrNull { it.id == selectedSpaceId }
     val selectedSpaceName = selectedSpace?.name ?: if (spacesLoading) "正在加载空间..." else "请选择空间"
-    val selectedWindowText = reservationWindowText(selectedSpace?.availableWindows)
+    val currentFreeWindows = if (availabilitySpaceId == selectedSpaceId && availabilityDate == selectedDate) freeWindows else emptyList()
+    val queriedWindowText = reservationWindowText(currentFreeWindows)
 
     if (showConfirmDialog) {
         AlertDialog(
@@ -333,14 +338,7 @@ private fun SingleReservationPanel(
                         spaces.forEach { space ->
                             DropdownMenuItem(
                                 text = {
-                                    Column {
-                                        Text(space.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text(
-                                            text = "可预约时间：${reservationWindowText(space.availableWindows)}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
+                                    Text(space.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 },
                                 onClick = {
                                     selectedSpaceId = space.id
@@ -352,11 +350,11 @@ private fun SingleReservationPanel(
                     }
                 }
                 Text(
-                    text = "当前空间可预约时间：$selectedWindowText",
+                    text = if (currentFreeWindows.isEmpty()) "选择空间和日期后，先查询该空间当天空闲时段。" else "当前可预约空闲时段：$queriedWindowText",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                SpaceWindowList(spaces = spaces, selectedSpaceId = selectedSpaceId)
+                FreeWindowList(windows = currentFreeWindows)
 
                 // 日期选择
                 Text("预约日期", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
@@ -385,7 +383,7 @@ private fun SingleReservationPanel(
                 }
 
                 // 时间选择
-                Text("预约时段（$selectedWindowText，1 ~ 4 小时）", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Text("预约时段（需落在已查询空闲时段内，1 ~ 4 小时）", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -513,8 +511,12 @@ private fun SingleReservationPanel(
                                 formValidationNotice = "请选择预约空间"
                                 return@Button
                             }
-                            if (!isReservationTimeValid(startTime, endTime, selectedSpace?.availableWindows)) {
-                                formValidationNotice = "请选择 $selectedWindowText 内 1 至 4 小时的预约时段"
+                            if (currentFreeWindows.isEmpty()) {
+                                formValidationNotice = "请先查询该空间当天的空闲时段"
+                                return@Button
+                            }
+                            if (!isReservationTimeValid(startTime, endTime, currentFreeWindows)) {
+                                formValidationNotice = "请选择 $queriedWindowText 内 1 至 4 小时的预约时段"
                                 return@Button
                             }
                             if (title.isBlank()) {
@@ -567,7 +569,7 @@ private fun SingleReservationPanel(
                     }
 
                     if (availability != null) {
-                        Text("空间与时段占用", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text("空闲时段说明", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(6.dp),
@@ -588,40 +590,23 @@ private fun SingleReservationPanel(
 }
 
 @Composable
-private fun SpaceWindowList(spaces: List<CampusReservationSpace>, selectedSpaceId: Int) {
-    if (spaces.isEmpty()) return
+private fun FreeWindowList(windows: List<CampusReservationTimeWindow>) {
+    if (windows.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("各空间可预约时间", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-        spaces.forEach { space ->
+        Text("可预约空闲时段", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        windows.forEach { window ->
             Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(6.dp),
-                border = BorderStroke(
-                    1.dp,
-                    if (space.id == selectedSpaceId) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant,
-                ),
+                shape = RoundedCornerShape(999.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 color = MaterialTheme.colorScheme.surface,
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = space.name,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = reservationWindowText(space.availableWindows),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text(
+                    text = "${window.start} - ${window.end}",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -948,7 +933,7 @@ private fun AutoReservationEditDialog(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "可预约时间：${reservationWindowText(null)}，每次 1 至 4 小时",
+                    text = "每次预约 1 至 4 小时；执行时会按候选顺序尝试未被占用的时段。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1067,12 +1052,10 @@ private fun AutoReservationEditDialog(
                         return@Button
                     }
                     val invalidCandidate = candidates.firstOrNull { candidate ->
-                        val space = spaces.firstOrNull { it.id == candidate.areaId }
-                        !isReservationTimeValid(candidate.startTime, candidate.endTime, space?.availableWindows)
+                        spaces.none { it.id == candidate.areaId } || !isReservationDurationValid(candidate.startTime, candidate.endTime)
                     }
                     if (invalidCandidate != null) {
-                        val space = spaces.firstOrNull { it.id == invalidCandidate.areaId }
-                        validationError = "候选时段需在 ${reservationWindowText(space?.availableWindows)} 内，且预约 1 至 4 小时"
+                        validationError = "候选空间需从空间列表中选择，且预约时长需为 1 至 4 小时"
                         return@Button
                     }
                     validationError = null
@@ -1123,7 +1106,6 @@ private fun CandidateEditRow(
     var spaceMenuOpen by remember { mutableStateOf(false) }
     val selectedSpace = spaces.firstOrNull { it.id == candidate.areaId }
     val spaceName = selectedSpace?.name ?: "空间 ${candidate.areaId}"
-    val windowText = reservationWindowText(selectedSpace?.availableWindows)
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -1187,16 +1169,7 @@ private fun CandidateEditRow(
                 DropdownMenu(expanded = spaceMenuOpen, onDismissRequest = { spaceMenuOpen = false }) {
                     spaces.forEach { s ->
                         DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text(s.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(
-                                        text = "可预约时间：${reservationWindowText(s.availableWindows)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            },
+                            text = { Text(s.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             onClick = {
                                 onUpdate(candidate.copy(areaId = s.id))
                                 spaceMenuOpen = false
@@ -1205,11 +1178,6 @@ private fun CandidateEditRow(
                     }
                 }
             }
-            Text(
-                text = "可预约时间：$windowText",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1254,8 +1222,9 @@ private fun weekdayName(date: LocalDate): String {
 }
 
 private fun reservationWindowText(windows: List<CampusReservationTimeWindow>?): String {
-    return (windows?.takeIf { it.isNotEmpty() } ?: DefaultReservationWindows)
+    return windows.orEmpty()
         .joinToString("、") { "${it.start} - ${it.end}" }
+        .ifBlank { "暂无可预约空闲时段" }
 }
 
 private fun reservationTimeMinutes(value: String): Int? {
@@ -1272,9 +1241,15 @@ private fun isReservationTimeValid(
     val start = reservationTimeMinutes(startTime) ?: return false
     val end = reservationTimeMinutes(endTime) ?: return false
     if (end - start !in 60..240) return false
-    return (windows?.takeIf { it.isNotEmpty() } ?: DefaultReservationWindows).any { window ->
+    return windows.orEmpty().any { window ->
         val windowStart = reservationTimeMinutes(window.start) ?: return@any false
         val windowEnd = reservationTimeMinutes(window.end) ?: return@any false
         start >= windowStart && end <= windowEnd
     }
+}
+
+private fun isReservationDurationValid(startTime: String, endTime: String): Boolean {
+    val start = reservationTimeMinutes(startTime) ?: return false
+    val end = reservationTimeMinutes(endTime) ?: return false
+    return end - start in 60..240
 }

@@ -9,6 +9,14 @@ const LIBROOM_CONFIG_IV = "ZZWBKJ_ZHIHUAWEI";
 const AUTH_ERROR_CODES = new Set([401, 403, 10001, 10002, 10003]);
 export const LIBROOM_BOOKABLE_START_MINUTE = 8 * 60;
 export const LIBROOM_BOOKABLE_END_MINUTE = 21 * 60 + 45;
+export const LIBROOM_DEFAULT_BOOKABLE_WINDOWS = Object.freeze([{ start: "08:00", end: "21:45" }]);
+const LIBROOM_FREE_WINDOW_HINT = /free|available|idle|vacant|optional|可约|可预约|空闲|剩余/iu;
+const LIBROOM_BUSY_WINDOW_HINT = /reserve|reservation|reserved|order|book|booking|occupied|occupy|used|apply|appointment|record|period|times?|list|占用|已约|预约|申请|记录|时段/iu;
+const LIBROOM_BUSY_EXCLUDE_HINT = /free|available|idle|vacant|open|close|rule|config|setting|可约|可预约|空闲|开放|规则|配置/iu;
+const LIBROOM_TIME_FIELD_KEYS = {
+  start: ["startTime", "start_time", "start", "beginTime", "begin_time", "begin", "openTime", "open_time", "startMinute", "start_minute"],
+  end: ["endTime", "end_time", "end", "closeTime", "close_time", "finishTime", "finish_time", "endMinute", "end_minute"]
+};
 
 function fail(status, message, code = "LIBROOM_REQUEST_FAILED", details = null) {
   throw new HttpError(status, message, details, code);
@@ -19,6 +27,125 @@ function parseTime(value) {
   if (!match) return null;
   const [hour, minute] = String(value).split(":").map(Number);
   return hour * 60 + minute;
+}
+
+function parseLooseTime(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value >= 0 && value <= 1440 ? value : null;
+  const match = /^(\d{1,2}):([0-5]\d)(?::[0-5]\d)?$/.exec(String(value || "").trim());
+  if (!match) return null;
+  const minutes = Number(match[1]) * 60 + Number(match[2]);
+  return minutes >= 0 && minutes <= 1440 ? minutes : null;
+}
+
+function formatTime(minutes) {
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function firstLooseTime(value, keys) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  for (const key of keys) {
+    if (value[key] === undefined || value[key] === null) continue;
+    const minutes = parseLooseTime(value[key]);
+    if (minutes !== null) return minutes;
+  }
+  return null;
+}
+
+function normalizeTimeWindows(windows = []) {
+  const normalized = windows.map((window) => {
+    const start = parseLooseTime(window?.start ?? window?.startTime ?? window?.start_time);
+    const end = parseLooseTime(window?.end ?? window?.endTime ?? window?.end_time);
+    return start !== null && end !== null && end > start ? { start, end } : null;
+  }).filter(Boolean).sort((a, b) => a.start - b.start || a.end - b.end);
+  const merged = [];
+  for (const window of normalized) {
+    const last = merged.at(-1);
+    if (last && window.start <= last.end) {
+      last.end = Math.max(last.end, window.end);
+    } else {
+      merged.push({ ...window });
+    }
+  }
+  return merged.map((window) => ({ start: formatTime(window.start), end: formatTime(window.end) }));
+}
+
+function collectAvailabilityWindows(value, path = "", result = { free: [], busy: [] }, seen = new Set()) {
+  if (!value || typeof value !== "object" || seen.has(value)) return result;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => collectAvailabilityWindows(item, `${path}.${index}`, result, seen));
+    return result;
+  }
+
+  const start = firstLooseTime(value, LIBROOM_TIME_FIELD_KEYS.start);
+  const end = firstLooseTime(value, LIBROOM_TIME_FIELD_KEYS.end);
+  if (start !== null && end !== null && end > start) {
+    const text = path.toLowerCase();
+    const window = { start: formatTime(start), end: formatTime(end) };
+    if (LIBROOM_FREE_WINDOW_HINT.test(text)) {
+      result.free.push(window);
+    } else if (LIBROOM_BUSY_WINDOW_HINT.test(text) && !LIBROOM_BUSY_EXCLUDE_HINT.test(text)) {
+      result.busy.push(window);
+    }
+  }
+
+  for (const [key, item] of Object.entries(value)) {
+    collectAvailabilityWindows(item, path ? `${path}.${key}` : key, result, seen);
+  }
+  return result;
+}
+
+function subtractBusyWindows(baseWindows, busyWindows) {
+  let free = normalizeTimeWindows(baseWindows).map((window) => ({
+    start: parseLooseTime(window.start),
+    end: parseLooseTime(window.end)
+  }));
+  for (const busy of normalizeTimeWindows(busyWindows)) {
+    const busyStart = parseLooseTime(busy.start);
+    const busyEnd = parseLooseTime(busy.end);
+    if (busyStart === null || busyEnd === null) continue;
+    free = free.flatMap((window) => {
+      if (busyEnd <= window.start || busyStart >= window.end) return [window];
+      return [
+        busyStart > window.start ? { start: window.start, end: busyStart } : null,
+        busyEnd < window.end ? { start: busyEnd, end: window.end } : null
+      ].filter(Boolean);
+    });
+  }
+  return normalizeTimeWindows(free);
+}
+
+export function summarizeLibroomAvailability(raw, { bookableWindows = LIBROOM_DEFAULT_BOOKABLE_WINDOWS } = {}) {
+  const collected = collectAvailabilityWindows(raw);
+  const explicitFreeWindows = normalizeTimeWindows(collected.free);
+  const busyWindows = normalizeTimeWindows(collected.busy);
+  if (explicitFreeWindows.length) {
+    return {
+      freeWindows: explicitFreeWindows,
+      busyWindows,
+      source: "upstream-free",
+      detail: "学校接口返回了可识别的空闲时段。",
+      raw
+    };
+  }
+  if (busyWindows.length) {
+    return {
+      freeWindows: subtractBusyWindows(bookableWindows, busyWindows),
+      busyWindows,
+      source: "derived-from-busy",
+      detail: "根据学校接口返回的占用时段计算空闲时段。",
+      raw
+    };
+  }
+  return {
+    freeWindows: [],
+    busyWindows: [],
+    source: "unrecognized",
+    detail: "学校接口未返回可识别的空闲或占用时段，请以官网查询结果为准。",
+    raw
+  };
 }
 
 function localDate(now) {
@@ -289,7 +416,10 @@ export function createLibroomClient({
     request,
     listSpaces,
     getRules: () => request("/v4/index/bookingRules", {}),
-    getAvailability: ({ spaceId }) => request("/v4/seminar/seminar", { id: Number(spaceId) }),
+    getAvailability: async ({ spaceId, date }) => {
+      const raw = await request("/v4/seminar/seminar", { id: Number(spaceId), date: String(date || "") });
+      return summarizeLibroomAvailability(raw);
+    },
     submitReservation
   });
 }

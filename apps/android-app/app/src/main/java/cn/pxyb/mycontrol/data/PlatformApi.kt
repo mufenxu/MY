@@ -591,7 +591,6 @@ class PlatformApi(
             CampusReservationSpace(
                 id = id,
                 name = name,
-                availableWindows = item.reservationTimeWindows(),
             )
         }
     }
@@ -602,12 +601,20 @@ class PlatformApi(
         formatCampusJsonValue(data)
     }
 
-    suspend fun campusReservationAvailability(spaceId: Int, date: String): String = withContext(Dispatchers.IO) {
+    suspend fun campusReservationAvailability(spaceId: Int, date: String): CampusReservationAvailability = withContext(Dispatchers.IO) {
         val path = "$CAMPUS_LIBROOM_AVAILABILITY_PATH?spaceId=$spaceId&date=${encodePath(date)}"
         val response = execute(path)
         val data = response.json.opt("data") ?: response.json
-        val availability = if (data is JSONObject) data.opt("availability") ?: data else data
-        formatCampusJsonValue(availability)
+        val availability = if (data is JSONObject) data.optJSONObject("availability") ?: data else null
+        if (availability == null) {
+            CampusReservationAvailability(detail = formatCampusJsonValue(data))
+        } else {
+            CampusReservationAvailability(
+                freeWindows = availability.optJSONArray("freeWindows").toReservationTimeWindows(),
+                busyWindows = availability.optJSONArray("busyWindows").toReservationTimeWindows(),
+                detail = availability.displayString("detail") ?: formatCampusJsonValue(availability),
+            )
+        }
     }
 
     suspend fun submitCampusReservation(request: CampusReservationRequest): Unit = withContext(Dispatchers.IO) {
@@ -1582,6 +1589,25 @@ private val reservationEndTimeKeys = listOf(
     "endMinute",
     "end_minute",
 )
+
+private fun JSONArray?.toReservationTimeWindows(): List<CampusReservationTimeWindow> {
+    if (this == null) return emptyList()
+    return buildList {
+        for (index in 0 until length()) {
+            optJSONObject(index)?.toReservationTimeWindow()?.let(::add)
+        }
+    }.distinct()
+}
+
+private fun JSONObject.toReservationTimeWindow(): CampusReservationTimeWindow? {
+    val start = firstReservationTime(reservationStartTimeKeys)
+    val end = firstReservationTime(reservationEndTimeKeys)
+    return if (start != null && end != null && end > start) {
+        CampusReservationTimeWindow(start = start.toReservationTimeText(), end = end.toReservationTimeText())
+    } else {
+        null
+    }
+}
 
 private fun JSONObject.reservationTimeWindows(): List<CampusReservationTimeWindow> {
     val windows = mutableListOf<CampusReservationTimeWindow>()

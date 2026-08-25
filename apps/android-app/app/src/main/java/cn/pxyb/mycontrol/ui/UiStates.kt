@@ -10,6 +10,7 @@ import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusFreeClassrooms
 import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusReservationSpace
+import cn.pxyb.mycontrol.data.CampusReservationTimeWindow
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
@@ -222,6 +223,9 @@ data class ReservationUiState(
     val spacesLoading: Boolean = false,
     val rules: String? = null,
     val availability: String? = null,
+    val freeWindows: List<CampusReservationTimeWindow> = emptyList(),
+    val availabilitySpaceId: Int? = null,
+    val availabilityDate: String? = null,
     val queryLoading: Boolean = false,
     val submitLoading: Boolean = false,
     val autoTasks: List<CampusAutoReservationTask> = emptyList(),
@@ -541,6 +545,9 @@ internal fun AppUiState.toReservationUiState() = ReservationUiState(
     spacesLoading = reservationSpacesLoading,
     rules = reservationRules,
     availability = reservationAvailability,
+    freeWindows = reservationFreeWindows,
+    availabilitySpaceId = reservationAvailabilitySpaceId,
+    availabilityDate = reservationAvailabilityDate,
     queryLoading = reservationQueryLoading,
     submitLoading = reservationSubmitLoading,
     autoTasks = reservationAutoTasks,

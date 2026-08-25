@@ -10,7 +10,8 @@ import {
   resolveLibroomCasCallback,
   normalizeReservationInput,
   clearLibroomLastError,
-  LIBROOM_SERVICE_URL
+  LIBROOM_SERVICE_URL,
+  summarizeLibroomAvailability
 } from "../src/lib/libroom.js";
 
 test("uses the CAS service URL published by the library system", () => {
@@ -189,7 +190,37 @@ test("loads space availability by the upstream space id", async () => {
   await client.getAvailability({ spaceId: 9, date: "2026-08-26" });
 
   assert.match(requests[0].url, /\/v4\/seminar\/seminar$/);
-  assert.deepEqual(JSON.parse(requests[0].options.body), { id: 9 });
+  assert.deepEqual(JSON.parse(requests[0].options.body), { id: 9, date: "2026-08-26" });
+});
+
+test("derives free reservation windows from occupied periods", () => {
+  assert.deepEqual(
+    summarizeLibroomAvailability({
+      reservations: [
+        { start_time: "09:00", end_time: "10:00" },
+        { startTime: "14:00", endTime: "16:30" }
+      ]
+    }),
+    {
+      freeWindows: [
+        { start: "08:00", end: "09:00" },
+        { start: "10:00", end: "14:00" },
+        { start: "16:30", end: "21:45" }
+      ],
+      busyWindows: [
+        { start: "09:00", end: "10:00" },
+        { start: "14:00", end: "16:30" }
+      ],
+      source: "derived-from-busy",
+      detail: "根据学校接口返回的占用时段计算空闲时段。",
+      raw: {
+        reservations: [
+          { start_time: "09:00", end_time: "10:00" },
+          { startTime: "14:00", endTime: "16:30" }
+        ]
+      }
+    }
+  );
 });
 
 test("refreshes the member token once after an upstream auth error", async () => {

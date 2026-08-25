@@ -30,8 +30,10 @@ import cn.pxyb.mycontrol.data.AppNotificationAction
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusFreeClassrooms
 import cn.pxyb.mycontrol.data.CampusOverview
+import cn.pxyb.mycontrol.data.CampusReservationAvailability
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusReservationSpace
+import cn.pxyb.mycontrol.data.CampusReservationTimeWindow
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
@@ -188,6 +190,9 @@ data class AppUiState(
     val reservationSpacesLoading: Boolean = false,
     val reservationRules: String? = null,
     val reservationAvailability: String? = null,
+    val reservationFreeWindows: List<CampusReservationTimeWindow> = emptyList(),
+    val reservationAvailabilitySpaceId: Int? = null,
+    val reservationAvailabilityDate: String? = null,
     val reservationQueryLoading: Boolean = false,
     val reservationSubmitLoading: Boolean = false,
     val reservationAutoTasks: List<CampusAutoReservationTask> = emptyList(),
@@ -1648,6 +1653,9 @@ class AppViewModel(
                     reservationQueryLoading = true,
                     reservationRules = "查询中...",
                     reservationAvailability = "查询中...",
+                    reservationFreeWindows = emptyList(),
+                    reservationAvailabilitySpaceId = null,
+                    reservationAvailabilityDate = null,
                     reservationError = null,
                 )
             }
@@ -1670,11 +1678,15 @@ class AppViewModel(
                         }
                     }
                     val rules = rulesDeferred.await() ?: "暂无规则信息"
-                    val availability = availabilityDeferred.await() ?: "暂无时段占用信息"
+                    val availability = availabilityDeferred.await()
+                        ?: CampusReservationAvailability(detail = "暂无时段占用信息")
                     mutableState.update {
                         it.copy(
                             reservationRules = rules,
-                            reservationAvailability = availability,
+                            reservationAvailability = availability.detail,
+                            reservationFreeWindows = availability.freeWindows,
+                            reservationAvailabilitySpaceId = spaceId,
+                            reservationAvailabilityDate = date,
                             reservationQueryLoading = false,
                         )
                     }
@@ -1685,6 +1697,9 @@ class AppViewModel(
                     it.copy(
                         reservationRules = "查询失败",
                         reservationAvailability = "查询失败",
+                        reservationFreeWindows = emptyList(),
+                        reservationAvailabilitySpaceId = null,
+                        reservationAvailabilityDate = null,
                         reservationQueryLoading = false,
                         reservationError = error.message ?: "查询失败，请重试。",
                     )

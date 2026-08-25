@@ -176,7 +176,13 @@ data class CampusReservationTimeWindow(
 data class CampusReservationSpace(
     val id: Int,
     val name: String,
-    val availableWindows: List<CampusReservationTimeWindow> = listOf(CampusReservationTimeWindow()),
+)
+
+@Immutable
+data class CampusReservationAvailability(
+    val freeWindows: List<CampusReservationTimeWindow> = emptyList(),
+    val busyWindows: List<CampusReservationTimeWindow> = emptyList(),
+    val detail: String = "",
 )
 
 @Immutable

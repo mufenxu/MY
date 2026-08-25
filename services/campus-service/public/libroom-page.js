@@ -6,7 +6,7 @@
 
   const stylesheet = document.createElement("link");
   stylesheet.rel = "stylesheet";
-  stylesheet.href = "./libroom-page.css?v=20260825-hours-v1";
+  stylesheet.href = "./libroom-page.css?v=20260825-free-v1";
   document.head.append(stylesheet);
 
   const nav = document.querySelector(".quick-nav");
@@ -26,7 +26,7 @@
     </div>
     <div class="libroom-layout">
       <form id="libroomForm" class="libroom-panel libroom-form">
-        <label class="libroom-wide"><span>预约空间</span><select id="libroomSpace" required><option value="">正在加载空间...</option></select><small id="libroomSpaceSchedule" class="libroom-space-schedule">可预约时间：08:00 - 21:45</small></label>
+        <label class="libroom-wide"><span>预约空间</span><select id="libroomSpace" required><option value="">正在加载空间...</option></select><small id="libroomSpaceSchedule" class="libroom-space-schedule">选择空间和日期后查询空闲时段。</small></label>
         <label><span>预约日期</span><input id="libroomDate" type="date" required></label>
         <div class="libroom-time"><label><span>开始时间</span><input id="libroomStart" type="time" min="08:00" max="21:45" step="900" value="09:00" required></label><label><span>结束时间</span><input id="libroomEnd" type="time" min="08:00" max="21:45" step="900" value="11:00" required></label></div>
         <label class="libroom-wide"><span>申请主题</span><input id="libroomTitle" maxlength="80" placeholder="例如：个人课程研读" required></label>
@@ -37,14 +37,14 @@
       </form>
       <div class="libroom-side">
         <section class="libroom-panel"><h3>预约规则</h3><div id="libroomRules" class="libroom-output">选择空间后查询。</div></section>
-        <section class="libroom-panel"><h3>空间与时段</h3><div id="libroomAvailability" class="libroom-output">尚未查询。</div></section>
+        <section class="libroom-panel"><h3>空闲时段</h3><div id="libroomAvailability" class="libroom-output">尚未查询。</div></section>
         <section id="libroomConfirmPanel" class="libroom-panel libroom-confirm" hidden><h3>提交前确认</h3><dl id="libroomSummary"></dl><button id="libroomSubmitButton" type="button">确认并提交预约</button></section>
         <p id="libroomStatus" class="libroom-status" role="status" aria-live="polite"></p>
       </div>
     </div>`;
   document.querySelector(".main-content")?.append(section);
   const autoScript = document.createElement("script");
-  autoScript.src = "./libroom-auto-page.js?v=20260825-hours-v1";
+  autoScript.src = "./libroom-auto-page.js?v=20260825-free-v1";
   autoScript.defer = true;
   document.head.append(autoScript);
 
@@ -59,7 +59,8 @@
   let loaded = false;
   let pendingReservation = null;
   let spaces = [];
-  const defaultWindows = [{ start: "08:00", end: "21:45" }];
+  let queriedAvailabilityKey = "";
+  let queriedFreeWindows = [];
   const timeFieldKeys = {
     start: ["startTime", "start_time", "start", "beginTime", "begin_time", "begin", "openTime", "open_time", "startMinute", "start_minute"],
     end: ["endTime", "end_time", "end", "closeTime", "close_time", "finishTime", "finish_time", "endMinute", "end_minute"]
@@ -128,11 +129,12 @@
   }
 
   function windowText(windows) {
-    return (windows.length ? windows : defaultWindows).map((item) => `${item.start} - ${item.end}`).join("、");
+    return windows.length ? windows.map((item) => `${item.start} - ${item.end}`).join("、") : "暂无可预约空闲时段";
   }
 
   function renderWindowChips(windows) {
-    return `<div class="libroom-time-windows">${(windows.length ? windows : defaultWindows).map((item) => `<span>${escapeHtml(`${item.start} - ${item.end}`)}</span>`).join("")}</div>`;
+    if (!windows.length) return '<p class="libroom-muted">暂无可预约空闲时段。</p>';
+    return `<div class="libroom-time-windows">${windows.map((item) => `<span>${escapeHtml(`${item.start} - ${item.end}`)}</span>`).join("")}</div>`;
   }
 
   function selectedSpace() {
@@ -141,16 +143,11 @@
   }
 
   function updateSelectedSpaceSchedule() {
-    const space = selectedSpace();
-    nodes.spaceSchedule.textContent = `可预约时间：${windowText(space?.windows || defaultWindows)}`;
+    nodes.spaceSchedule.textContent = "选择空间和日期后查询该空间当天空闲时段。";
   }
 
   function renderSpaceSchedules() {
-    if (!spaces.length) {
-      nodes.availability.textContent = "尚未查询。";
-      return;
-    }
-    nodes.availability.innerHTML = spaces.map((space) => `<article class="libroom-space-row"><strong>${escapeHtml(space.name)}</strong>${renderWindowChips(space.windows || defaultWindows)}</article>`).join("");
+    nodes.availability.textContent = spaces.length ? "选择空间和日期后点击“查询规则和时段”。" : "尚未查询。";
   }
 
   function hideConfirmation() {
@@ -184,7 +181,7 @@
   function spaceOption(space) {
     const id = Number(space.id ?? space.area_id ?? space.areaId);
     const name = space.name ?? space.area_name ?? space.areaName ?? space.title ?? space.room_name ?? `空间 ${id}`;
-    return { id, name: String(name), windows: scheduleWindows(space) };
+    return { id, name: String(name) };
   }
 
   async function loadSpaces() {
@@ -195,7 +192,7 @@
       const payload = await api("/api/campus/libroom/spaces");
       spaces = spaceCandidates(payload).map(spaceOption).filter((item) => item.id > 0);
       if (!spaces.length) throw new Error("学校预约系统没有返回可识别的空间列表。");
-      nodes.space.innerHTML = '<option value="">请选择空间</option>' + spaces.map((item) => `<option value="${item.id}">${escapeHtml(`${item.name}（${windowText(item.windows)}）`)}</option>`).join("");
+      nodes.space.innerHTML = '<option value="">请选择空间</option>' + spaces.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("");
       updateSelectedSpaceSchedule();
       renderSpaceSchedules();
       loaded = true;
@@ -212,9 +209,17 @@
   }
 
   function renderAvailability(value) {
-    const windows = scheduleWindows(value);
-    const detail = objectText(value);
-    nodes.availability.innerHTML = `<div class="libroom-availability-block"><strong>官网返回时段</strong>${renderWindowChips(windows)}<pre>${escapeHtml(detail)}</pre></div>`;
+    const freeWindows = Array.isArray(value?.freeWindows) ? scheduleWindows(value.freeWindows) : scheduleWindows(value);
+    const busyWindows = Array.isArray(value?.busyWindows) ? scheduleWindows(value.busyWindows) : [];
+    queriedAvailabilityKey = `${nodes.space.value}|${nodes.date.value}`;
+    queriedFreeWindows = freeWindows;
+    nodes.availability.innerHTML = `<div class="libroom-availability-block"><strong>可预约空闲时段</strong>${renderWindowChips(freeWindows)}${busyWindows.length ? `<strong>已占用时段</strong>${renderWindowChips(busyWindows)}` : ""}<pre>${escapeHtml(value?.detail || "空闲时段已按学校接口返回结果更新。")}</pre></div>`;
+  }
+
+  function clearQueriedAvailability() {
+    queriedAvailabilityKey = "";
+    queriedFreeWindows = [];
+    nodes.availability.textContent = "空间或日期已变化，请重新查询空闲时段。";
   }
 
   async function querySpace() {
@@ -236,7 +241,7 @@
       ]);
       nodes.rules.textContent = objectText(rules);
       renderAvailability(availability?.availability ?? availability);
-      status("规则和空间信息已更新。", "ok");
+      status("规则和空闲时段已更新。", "ok");
     } catch (error) {
       nodes.rules.textContent = "查询失败";
       nodes.availability.textContent = "查询失败";
@@ -256,14 +261,14 @@
   function validateSelectedTime() {
     const start = parseTime(nodes.start.value);
     const end = parseTime(nodes.end.value);
-    const windows = selectedSpace()?.windows || defaultWindows;
+    const windows = queriedAvailabilityKey === `${nodes.space.value}|${nodes.date.value}` ? queriedFreeWindows : [];
     const inWindow = start !== null && end !== null && windows.some((item) => {
       const windowStart = parseTime(item.start);
       const windowEnd = parseTime(item.end);
       return windowStart !== null && windowEnd !== null && start >= windowStart && end <= windowEnd;
     });
     const validDuration = start !== null && end !== null && end - start >= 60 && end - start <= 240;
-    const message = inWindow && validDuration ? "" : `请选择 ${windowText(windows)} 内 1 至 4 小时的预约时段。`;
+    const message = inWindow && validDuration ? "" : windows.length ? `请选择 ${windowText(windows)} 内 1 至 4 小时的预约时段。` : "请先查询该空间当天的空闲时段。";
     nodes.start.setCustomValidity(message);
     nodes.end.setCustomValidity(message);
     return !message;
@@ -283,7 +288,8 @@
   nodes.date.max = localDate(3);
   nodes.date.value = localDate(1);
   nodes.form.addEventListener("input", hideConfirmation);
-  nodes.space.addEventListener("change", () => { updateSelectedSpaceSchedule(); validateSelectedTime(); });
+  nodes.space.addEventListener("change", () => { updateSelectedSpaceSchedule(); clearQueriedAvailability(); validateSelectedTime(); });
+  nodes.date.addEventListener("change", () => { clearQueriedAvailability(); validateSelectedTime(); });
   nodes.start.addEventListener("input", validateSelectedTime);
   nodes.end.addEventListener("input", validateSelectedTime);
   nodes.reload.addEventListener("click", loadSpaces);
