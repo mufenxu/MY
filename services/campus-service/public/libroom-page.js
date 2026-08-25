@@ -137,11 +137,6 @@
     return `<div class="libroom-time-windows">${windows.map((item) => `<span>${escapeHtml(`${item.start} - ${item.end}`)}</span>`).join("")}</div>`;
   }
 
-  function selectedSpace() {
-    const id = Number(nodes.space.value);
-    return spaces.find((item) => Number(item.id) === id) || null;
-  }
-
   function updateSelectedSpaceSchedule() {
     nodes.spaceSchedule.textContent = "选择空间和日期后查询该空间当天空闲时段。";
   }
