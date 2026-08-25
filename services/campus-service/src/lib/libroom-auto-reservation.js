@@ -38,25 +38,15 @@ function cloneCandidate(candidate) {
 
 export function normalizeAutoReservationTaskInput(input = {}) {
   const name = String(input.name || "").trim();
-  const recurrenceMode = String(input.recurrenceMode || input.recurrence_mode || "daily").trim();
   const enabled = input.enabled !== false;
-  const weekdays = Array.isArray(input.weekdays)
-    ? [...new Set(input.weekdays.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value >= 0 && value <= 6))].sort((a, b) => a - b)
-    : [];
-  const startDate = parseDate(input.startDate ?? input.start_date, "生效日期");
-  const endDate = parseDate(input.endDate ?? input.end_date, "结束日期");
-  const executeTime = parseTime(input.executeTime ?? input.execute_time, "执行时间");
+  const reservationDate = parseDate(input.reservationDate ?? input.reservation_date ?? input.startDate ?? input.start_date, "预约日期");
+  const executeTime = parseTime(input.executeTime ?? input.execute_time, "开始预约时间");
   const candidates = Array.isArray(input.candidates) ? input.candidates.map(cloneCandidate) : [];
   const title = String(input.title || "").trim();
   const content = String(input.content || "").trim();
   const mobile = String(input.mobile || input.phone || "").trim();
 
   if (!name || name.length > 80) fail("任务名称不能为空且不能超过 80 个字符。", "INVALID_AUTO_RESERVATION_NAME");
-  if (!["daily", "weekly"].includes(recurrenceMode)) fail("周期类型不正确。", "INVALID_AUTO_RESERVATION_RECURRENCE");
-  if (recurrenceMode === "weekly" && !weekdays.length) fail("按星期执行时至少选择一天。", "AUTO_RESERVATION_WEEKDAYS_REQUIRED");
-  if (Date.parse(`${endDate}T00:00:00+08:00`) < Date.parse(`${startDate}T00:00:00+08:00`)) {
-    fail("结束日期不能早于生效日期。", "INVALID_AUTO_RESERVATION_DATE_RANGE");
-  }
   if (!candidates.length || candidates.length > 20) fail("至少设置一个候选空间和时段，最多 20 个。", "AUTO_RESERVATION_CANDIDATES_REQUIRED");
   candidates.forEach((candidate) => {
     if (!Number.isInteger(candidate.areaId) || candidate.areaId <= 0) fail("候选预约空间不正确。", "INVALID_RESERVATION_SPACE");
@@ -72,10 +62,7 @@ export function normalizeAutoReservationTaskInput(input = {}) {
   return {
     name,
     enabled,
-    recurrenceMode,
-    weekdays: recurrenceMode === "weekly" ? weekdays : [],
-    startDate,
-    endDate,
+    reservationDate,
     executeTime,
     candidates,
     title,
@@ -110,9 +97,8 @@ function localParts(now) {
 export function isAutoReservationDue(task, now = new Date()) {
   if (!task?.enabled) return false;
   const current = localParts(now);
-  if (current.date < task.startDate || current.date > task.endDate || current.time < task.executeTime) return false;
-  if (task.recurrenceMode === "weekly" && !task.weekdays.includes(current.weekday)) return false;
-  return true;
+  const reservationDate = task.reservationDate || task.startDate;
+  return current.date === reservationDate && current.time >= task.executeTime;
 }
 
 function isConflictError(error) {

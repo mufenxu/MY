@@ -101,16 +101,32 @@ test('auto reservation tasks stay scoped and can be claimed once per occurrence'
     user_id: 'user-1',
     name: '研讨',
     enabled: true,
+    recurrenceMode: 'weekly',
+    weekdays: [1, 3, 5],
+    startDate: '2026-08-25',
+    endDate: '2026-09-30',
     created_at: '2026-08-25T00:00:00.000Z',
     updated_at: '2026-08-25T00:00:00.000Z'
   };
   await repository.insertAutoReservationTask(task);
   assert.equal((await repository.listAutoReservationTasks('user-2')).length, 0);
+  const updated = await repository.updateAutoReservationTask(
+    'user-1',
+    'task-1',
+    { reservationDate: '2026-08-25' },
+    '2026-08-25T00:30:00.000Z'
+  );
+  assert.equal(updated.reservationDate, '2026-08-25');
+  assert.equal('recurrenceMode' in updated, false);
+  assert.equal('weekdays' in updated, false);
+  assert.equal('startDate' in updated, false);
+  assert.equal('endDate' in updated, false);
   assert.equal((await repository.claimAutoReservationTask('user-1', 'task-1', '2026-08-25', '2026-08-25T01:00:00.000Z', '2026-08-25T01:05:00.000Z'))?.id, 'task-1');
   assert.equal(await repository.claimAutoReservationTask('user-1', 'task-1', '2026-08-25', '2026-08-25T01:00:01.000Z', '2026-08-25T01:05:01.000Z'), null);
   await repository.finishAutoReservationTask('user-1', 'task-1', { status: 'succeeded', candidateIndex: 0, attempts: [] }, '2026-08-25T01:01:00.000Z');
   const saved = (await repository.listAutoReservationTasks('user-1'))[0];
   assert.equal(saved.last_status, 'succeeded');
+  assert.equal(saved.enabled, false);
   await repository.deleteAutoReservationTask('user-1', 'task-1');
   assert.equal((await repository.listAutoReservationTasks('user-1')).length, 0);
 });

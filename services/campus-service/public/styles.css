@@ -5913,7 +5913,7 @@ body.dark-theme .rooms-section .section-chip span {
   }
 
   .quick-nav {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
   .quick-nav a {
@@ -6206,7 +6206,7 @@ body.dark-theme #themeToggleButton::before {
     right: max(10px, env(safe-area-inset-right, 0px));
     bottom: max(8px, env(safe-area-inset-bottom, 0px));
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 5px;
     padding: 6px;
     border-radius: 22px;
@@ -8455,7 +8455,7 @@ body.dark-theme button.danger {
   }
 
   .quick-nav {
-    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
   }
 
   .gate-register-toggle {
@@ -11315,14 +11315,14 @@ body.dark-theme .semester-course.next-course {
   }
 }
 
-/* Six-item mobile dock: always one row, compact icon-over-label navigation. */
+/* Seven-item mobile dock: always one row, compact icon-over-label navigation. */
 @media (max-width: 760px) {
   :root {
     --mobile-nav-height: 72px;
   }
 
   body:not([data-app-locked="true"]) .quick-nav {
-    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
     grid-auto-flow: row;
     gap: 3px;
     padding: 5px;

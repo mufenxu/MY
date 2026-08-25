@@ -166,9 +166,7 @@ test("server authentication, revocation, validation and static caching work toge
     body: JSON.stringify({
       name: "集成测试任务",
       enabled: false,
-      recurrenceMode: "daily",
-      startDate: "2026-08-25",
-      endDate: "2026-09-01",
+      reservationDate: "2026-08-25",
       executeTime: "08:30",
       candidates: [{ areaId: 9, startTime: "09:00", endTime: "11:00" }],
       title: "个人学习",
@@ -180,6 +178,7 @@ test("server authentication, revocation, validation and static caching work toge
   assert.equal(autoReservationTask.status, 201);
   const autoReservationTaskPayload = await autoReservationTask.json();
   assert.equal(autoReservationTaskPayload.data.enabled, false);
+  assert.equal(autoReservationTaskPayload.data.reservationDate, "2026-08-25");
   const autoReservationTaskList = await fetch(`${origin}/api/campus/libroom/auto-reservations`, {
     headers: { cookie: oldCookie }
   });

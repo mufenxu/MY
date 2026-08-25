@@ -426,7 +426,10 @@ export class CampusRepository {
   async updateAutoReservationTask(userId, id, changes, timestamp) {
     await this.db.collection("auto_reservation_tasks").updateOne(
       { id, user_id: userId },
-      { $set: { ...clone(changes), updated_at: timestamp } }
+      {
+        $set: { ...clone(changes), updated_at: timestamp },
+        $unset: { recurrenceMode: "", weekdays: "", startDate: "", endDate: "" }
+      }
     );
     return this.db.collection("auto_reservation_tasks").findOne({ id, user_id: userId }, { projection: { _id: 0 } });
   }
@@ -457,6 +460,7 @@ export class CampusRepository {
         $set: {
           run_lock_until: null,
           last_run_at: timestamp,
+          enabled: false,
           last_status: result.status,
           last_message: result.message || null,
           last_candidate_index: Number.isInteger(result.candidateIndex) ? result.candidateIndex : null,
@@ -643,6 +647,10 @@ export class MemoryCampusRepository {
   async updateAutoReservationTask(userId, id, changes, timestamp) {
     const row = this.autoReservationTasks.get(id);
     if (!row || row.user_id !== userId) return null;
+    delete row.recurrenceMode;
+    delete row.weekdays;
+    delete row.startDate;
+    delete row.endDate;
     Object.assign(row, clone(changes), { updated_at: timestamp });
     return clone(row);
   }
@@ -666,6 +674,7 @@ export class MemoryCampusRepository {
     Object.assign(row, {
       run_lock_until: null,
       last_run_at: timestamp,
+      enabled: false,
       last_status: result.status,
       last_message: result.message || null,
       last_candidate_index: Number.isInteger(result.candidateIndex) ? result.candidateIndex : null,

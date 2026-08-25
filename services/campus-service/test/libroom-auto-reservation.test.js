@@ -7,12 +7,9 @@ import {
 } from "../src/lib/libroom-auto-reservation.js";
 
 const baseInput = {
-  name: "工作日研讨",
+  name: "周三研讨",
   enabled: true,
-  recurrenceMode: "weekly",
-  weekdays: [1, 3, 5],
-  startDate: "2026-08-24",
-  endDate: "2026-09-30",
+  reservationDate: "2026-08-27",
   executeTime: "08:30",
   candidates: [
     { areaId: 9, startTime: "09:00", endTime: "11:00" },
@@ -24,16 +21,13 @@ const baseInput = {
   open: false
 };
 
-test("normalizes an editable weekly auto-reservation task", () => {
+test("normalizes an editable one-time auto-reservation task", () => {
   assert.deepEqual(
     normalizeAutoReservationTaskInput(baseInput),
     {
-      name: "工作日研讨",
+      name: "周三研讨",
       enabled: true,
-      recurrenceMode: "weekly",
-      weekdays: [1, 3, 5],
-      startDate: "2026-08-24",
-      endDate: "2026-09-30",
+      reservationDate: "2026-08-27",
       executeTime: "08:30",
       candidates: baseInput.candidates,
       title: "个人学习",
@@ -44,25 +38,25 @@ test("normalizes an editable weekly auto-reservation task", () => {
   );
 });
 
-test("matches a daily or weekly task only inside its active date window", () => {
+test("matches only the configured reservation date after the start time", () => {
   assert.equal(
     isAutoReservationDue(
-      normalizeAutoReservationTaskInput({ ...baseInput, recurrenceMode: "daily", weekdays: [] }),
-      new Date("2026-08-25T08:30:00+08:00")
+      normalizeAutoReservationTaskInput(baseInput),
+      new Date("2026-08-27T08:30:00+08:00")
     ),
     true
   );
   assert.equal(
     isAutoReservationDue(
       normalizeAutoReservationTaskInput(baseInput),
-      new Date("2026-08-25T08:30:00+08:00")
+      new Date("2026-08-27T08:29:59+08:00")
     ),
     false
   );
   assert.equal(
     isAutoReservationDue(
       normalizeAutoReservationTaskInput(baseInput),
-      new Date("2026-09-30T08:29:59+08:00")
+      new Date("2026-08-28T08:30:00+08:00")
     ),
     false
   );
