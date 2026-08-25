@@ -598,7 +598,7 @@ class PlatformApi(
     suspend fun campusReservationRules(spaceId: Int): String = withContext(Dispatchers.IO) {
         val response = execute("$CAMPUS_LIBROOM_RULES_PATH?spaceId=$spaceId")
         val data = response.json.opt("data") ?: response.json
-        formatCampusJsonValue(data)
+        formatCampusReservationRulesForDisplay(data)
     }
 
     suspend fun campusReservationAvailability(spaceId: Int, date: String): CampusReservationAvailability = withContext(Dispatchers.IO) {
@@ -1564,6 +1564,72 @@ private fun JSONObject.displayString(key: String): String? = opt(key)
     ?.toString()
     ?.trim()
     ?.takeIf { it.isNotBlank() }
+
+internal fun formatCampusReservationRulesForDisplay(value: Any?): String {
+    val sections = mutableListOf<String>()
+    collectCampusReservationRuleSections(value, sections)
+    return sections
+        .map(::htmlToPlainCampusText)
+        .filter { it.isNotBlank() && it != "暂无数据" }
+        .distinct()
+        .joinToString("\n\n")
+        .ifBlank { "暂无规则信息" }
+}
+
+private fun collectCampusReservationRuleSections(value: Any?, sections: MutableList<String>) {
+    when (value) {
+        null, JSONObject.NULL -> Unit
+        is JSONObject -> {
+            val keys = value.keys()
+            while (keys.hasNext()) collectCampusReservationRuleSections(value.opt(keys.next()), sections)
+        }
+        is JSONArray -> {
+            for (index in 0 until value.length()) collectCampusReservationRuleSections(value.opt(index), sections)
+        }
+        is String -> sections.add(value)
+    }
+}
+
+private fun htmlToPlainCampusText(value: String): String {
+    var text = decodeCampusHtmlEntities(value.trim())
+    text = text
+        .replace(Regex("(?i)<\\s*br\\s*/?\\s*>"), "\n")
+        .replace(Regex("(?i)<\\s*/\\s*(p|div|li|tr|h[1-6])\\s*>"), "\n")
+        .replace(Regex("(?i)<\\s*(p|div|li|tr|h[1-6])\\b[^>]*>"), "\n")
+        .replace(Regex("<[^>]+>"), "")
+    text = decodeCampusHtmlEntities(text)
+    return text
+        .replace('\u00A0', ' ')
+        .replace(Regex("[\\t ]+"), " ")
+        .lines()
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .joinToString("\n")
+}
+
+private fun decodeCampusHtmlEntities(value: String): String {
+    val named = value
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+    return Regex("&#(x?[0-9a-fA-F]+);").replace(named) { match ->
+        val raw = match.groupValues[1]
+        val codePoint = if (raw.startsWith("x", ignoreCase = true)) {
+            raw.drop(1).toIntOrNull(16)
+        } else {
+            raw.toIntOrNull()
+        }
+        if (codePoint != null && Character.isValidCodePoint(codePoint)) {
+            String(Character.toChars(codePoint))
+        } else {
+            match.value
+        }
+    }
+}
 
 private val reservationStartTimeKeys = listOf(
     "startTime",

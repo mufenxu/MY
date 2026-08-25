@@ -1066,9 +1066,12 @@ async function requireAppAccess(req) {
     throw new HttpError(403, "The unified-platform role cannot perform this operation.");
   }
   if (methodNeedsCsrf(req.method)) {
-    const supplied = req.headers["x-csrf-token"];
-    if (!session.csrfToken || !supplied || !safeEqualString(String(supplied), session.csrfToken)) {
-      throw new HttpError(403, "系统访问校验失败，请刷新页面后重试。");
+    const isPlatformTrustedClient = session.platformSso && req.headers["x-platform-request"] === "console";
+    if (!isPlatformTrustedClient) {
+      const supplied = req.headers["x-csrf-token"];
+      if (!session.csrfToken || !supplied || !safeEqualString(String(supplied), session.csrfToken)) {
+        throw new HttpError(403, "系统访问校验失败，请刷新页面后重试。");
+      }
     }
   }
   return session;

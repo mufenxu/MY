@@ -9,6 +9,8 @@ import cn.pxyb.mycontrol.data.CampusAutoReservationCandidate
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusReservationSpace
+import cn.pxyb.mycontrol.data.formatCampusReservationRulesForDisplay
+import org.json.JSONObject
 import cn.pxyb.mycontrol.ui.ReservationUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,6 +25,24 @@ class CampusReservationModelTest {
         assertEquals("/apps/campus/api/campus/libroom/availability", CAMPUS_LIBROOM_AVAILABILITY_PATH)
         assertEquals("/apps/campus/api/campus/libroom/reservations", CAMPUS_LIBROOM_RESERVATIONS_PATH)
         assertEquals("/apps/campus/api/campus/libroom/auto-reservations", CAMPUS_LIBROOM_AUTO_RESERVATIONS_PATH)
+    }
+
+    @Test
+    fun `campus reservation rules render html as readable Chinese text`() {
+        val rules = JSONObject()
+            .put(
+                "seat",
+                "座位预约规则中文<p style=\"text-align: left;\">1、读者可预约当日或次日的座位。</p><p><br></p><p style=\"text-align: left;\">2、预约成功后30分钟内完成签到。</p>"
+            )
+
+        val text = formatCampusReservationRulesForDisplay(rules)
+
+        assertTrue(text.contains("座位预约规则中文"))
+        assertTrue(text.contains("1、读者可预约当日或次日的座位。"))
+        assertTrue(text.contains("2、预约成功后30分钟内完成签到。"))
+        assertFalse(text.contains("<p"))
+        assertFalse(text.contains("style="))
+        assertFalse(text.contains("seat："))
     }
 
     @Test
