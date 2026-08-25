@@ -9,6 +9,7 @@ enum class HomeQuickAction {
     Notifications,
     Insights,
     Scenes,
+    Reservation,
     Devices,
     Diagnostics,
     Backup,

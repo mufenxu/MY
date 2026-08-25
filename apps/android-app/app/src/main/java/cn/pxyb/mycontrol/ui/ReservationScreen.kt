@@ -1414,6 +1414,14 @@ private fun AutoTaskCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val taskWk = remember(task.reservationDate) {
+                    try {
+                        val d = LocalDate.parse(task.reservationDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
+                        " (${weekdayName(d)})"
+                    } catch (_: Throwable) {
+                        ""
+                    }
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1425,7 +1433,7 @@ private fun AutoTaskCard(
                         modifier = Modifier.size(14.dp),
                     )
                     Text(
-                        text = "目标: ${task.reservationDate}",
+                        text = "目标: ${task.reservationDate}$taskWk",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1573,6 +1581,15 @@ private fun AutoReservationEditDialog(
 
     var validationError by remember { mutableStateOf<String?>(null) }
 
+    val dateWeekday = remember(reservationDate) {
+        try {
+            val parsed = LocalDate.parse(reservationDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
+            weekdayName(parsed)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     AppDialog(
         onDismissRequest = onDismiss,
         icon = Icons.Outlined.AutoAwesome,
@@ -1594,27 +1611,31 @@ private fun AutoReservationEditDialog(
                     text = "保存任务",
                     onClick = {
                         if (name.isBlank()) {
-                            validationError = "任务名称不能为空"
+                            validationError = "请填写任务名称"
                             return@AppDialogPrimaryButton
                         }
                         if (reservationDate.isBlank()) {
-                            validationError = "预约日期不能为空"
+                            validationError = "请填写预约目标日期"
                             return@AppDialogPrimaryButton
                         }
-                        if (title.isBlank()) {
-                            validationError = "申请主题不能为空"
+                        if (executeTime.isBlank()) {
+                            validationError = "请填写尝试时间"
+                            return@AppDialogPrimaryButton
+                        }
+                        if (candidates.isEmpty()) {
+                            validationError = "请至少添加一个候选时段"
                             return@AppDialogPrimaryButton
                         }
                         if (!Regex("^\\d{11}$").matches(mobile.trim())) {
                             validationError = "请输入正确的 11 位手机号码"
                             return@AppDialogPrimaryButton
                         }
-                        if (content.isBlank()) {
-                            validationError = "申请内容不能为空"
+                        if (title.isBlank()) {
+                            validationError = "申请主题不能为空"
                             return@AppDialogPrimaryButton
                         }
-                        if (candidates.isEmpty()) {
-                            validationError = "至少设置一个候选空间和时段"
+                        if (content.isBlank()) {
+                            validationError = "申请内容不能为空"
                             return@AppDialogPrimaryButton
                         }
                         val invalidCandidate = candidates.firstOrNull { candidate ->
@@ -1679,6 +1700,44 @@ private fun AutoReservationEditDialog(
                 }
             }
 
+            // 快速选择今天/明天/后天/大后天
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                listOf("今天", "明天", "后天", "大后天").forEachIndexed { index, label ->
+                    val targetDate = today.plusDays(index.toLong())
+                    val dateStr = targetDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                    val wk = weekdayName(targetDate)
+                    val isSelected = reservationDate.trim() == dateStr
+                    Surface(
+                        onClick = {
+                            reservationDate = dateStr
+                            validationError = null
+                        },
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(30.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "$label($wk)",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1686,10 +1745,26 @@ private fun AutoReservationEditDialog(
                 OutlinedTextField(
                     value = reservationDate,
                     onValueChange = { reservationDate = it; validationError = null },
-                    label = { Text("预约目标日期") },
+                    label = { Text(if (dateWeekday != null) "预约目标日期 ($dateWeekday)" else "预约目标日期") },
                     placeholder = { Text("YYYY-MM-DD") },
+                    trailingIcon = dateWeekday?.let { wk ->
+                        {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.padding(end = 4.dp),
+                            ) {
+                                Text(
+                                    text = wk,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                    },
                     shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.weight(1.2f),
+                    modifier = Modifier.weight(1.3f),
                     singleLine = true,
                 )
 

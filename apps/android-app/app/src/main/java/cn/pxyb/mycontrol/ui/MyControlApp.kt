@@ -1380,6 +1380,7 @@ private fun AuthenticatedShell(
                         onOpenQrLogin = viewModel::openQrScanner,
                         onOpenWorkspace = viewModel::openWorkspace,
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
+                        onOpenReservation = { navController.navigate(AppRoute.Reservation) },
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
                         requestWebLoginUrl = viewModel::createPlatformWebLoginUrl,
                         requestExternalApplicationLaunch = viewModel::createExternalApplicationLaunch,

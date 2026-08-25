@@ -6991,7 +6991,55 @@ async function handleApi(req, res, url) {
       const startTime = url.searchParams.get("startTime") || url.searchParams.get("start_time") || "";
       const endTime = url.searchParams.get("endTime") || url.searchParams.get("end_time") || "";
       const client = await libroomClient();
-      json(res, 200, { ok: true, data: await client.listSpaces({ date, start_time: startTime, end_time: endTime }) });
+
+      let spaces = [];
+      try {
+        if (date && startTime && endTime) {
+          try {
+            spaces = await client.listSpaces({ date, start_time: startTime, end_time: endTime });
+          } catch {
+            spaces = [];
+          }
+        }
+        if (!Array.isArray(spaces) || spaces.length === 0) {
+          spaces = await client.listSpaces({});
+        }
+      } catch (err) {
+        spaces = await client.listSpaces({}).catch(() => []);
+      }
+
+      if (date && startTime && endTime && Array.isArray(spaces) && spaces.length > 0) {
+        try {
+          const checkAvailability = async (space) => {
+            const spaceId = space?.id ?? space?.area_id ?? space?.areaId;
+            if (!spaceId) return null;
+            try {
+              const avail = await client.getAvailability({ spaceId, date });
+              const freeWindows = avail?.freeWindows || [];
+              const busyWindows = avail?.busyWindows || [];
+
+              const isFree = freeWindows.some((w) => String(w.start || "") <= startTime && String(w.end || "") >= endTime) &&
+                !busyWindows.some((b) => !(String(b.end || "") <= startTime || String(b.start || "") >= endTime));
+
+              if (isFree) {
+                return { ...space, availability: avail };
+              }
+              return null;
+            } catch {
+              return null;
+            }
+          };
+
+          const results = await Promise.all(spaces.map(checkAvailability));
+          const availableSpaces = results.filter(Boolean);
+          json(res, 200, { ok: true, data: availableSpaces });
+          return;
+        } catch {
+          // fallback to spaces
+        }
+      }
+
+      json(res, 200, { ok: true, data: spaces });
       return;
     }
     if (url.pathname === "/api/campus/libroom/rules" && req.method === "GET") {

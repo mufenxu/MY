@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
@@ -1567,6 +1568,16 @@ private fun TermTimetable(
     }
 }
 
+private fun getSectionTopOffset(sec: Int, sectionHeight: androidx.compose.ui.unit.Dp, gridGap: androidx.compose.ui.unit.Dp, mealGap: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp {
+    val baseGapCount = (sec - 1).coerceAtLeast(0)
+    val mealCount = when {
+        sec >= 11 -> 2
+        sec >= 6 -> 1
+        else -> 0
+    }
+    return sectionHeight * baseGapCount + gridGap * baseGapCount + mealGap * mealCount
+}
+
 @Composable
 private fun CourseGridMatrix(
     courses: List<CampusCourse>,
@@ -1574,44 +1585,55 @@ private fun CourseGridMatrix(
     onCourseClick: (CampusCourse) -> Unit,
 ) {
     val days = listOf("一", "二", "三", "四", "五", "六", "日")
+    val totalSections = remember(courses) {
+        maxOf(12, courses.maxOfOrNull { it.endSection } ?: 12)
+    }
+    val sectionHeight = 44.dp
+    val gridGap = 2.5.dp
+    val mealGap = 12.dp
+    val totalGridHeight = getSectionTopOffset(totalSections, sectionHeight, gridGap, mealGap) + sectionHeight
+    val todayDayOfWeek = remember { DayOfWeek.from(LocalDate.now()).value }
 
     AppPanel(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // 顶部星期栏
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     modifier = Modifier
-                        .width(30.dp)
-                        .height(34.dp),
+                        .width(28.dp)
+                        .height(32.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         "节次",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                     )
                 }
                 days.forEachIndexed { index, day ->
-                    val isToday = (index + 1) == DayOfWeek.from(LocalDate.now()).value
+                    val isToday = (index + 1) == todayDayOfWeek
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(34.dp)
+                            .height(32.dp)
+                            .padding(horizontal = 1.5.dp)
                             .background(
-                                if (isToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else Color.Transparent,
-                                shape = RoundedCornerShape(8.dp),
+                                if (isToday) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                shape = RoundedCornerShape(6.dp),
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             "周$day",
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.5.sp),
                             fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
                             color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         )
@@ -1619,96 +1641,149 @@ private fun CourseGridMatrix(
                 }
             }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 6.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-            )
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+            // 课表主网格（左侧节次列 + 7 天课程网格列）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(totalGridHeight),
             ) {
-                for (section in 1..11 step 2) {
-                    val endSec = section + 1
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(72.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                // 左侧节次序号栏
+                Column(
+                    modifier = Modifier
+                        .width(28.dp)
+                        .fillMaxHeight(),
+                ) {
+                    for (sec in 1..totalSections) {
+                        if (sec > 1) {
+                            val gap = if (sec == 6 || sec == 11) mealGap + gridGap else gridGap
+                            Spacer(Modifier.height(gap))
+                        }
                         Box(
                             modifier = Modifier
-                                .width(30.dp)
-                                .fillMaxHeight(),
+                                .fillMaxWidth()
+                                .height(sectionHeight),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    "$section",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Text(
-                                    "$endSec",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                            Text(
+                                text = "$sec",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            )
+                        }
+                    }
+                }
+
+                // 7 天课程网格
+                for (dayIndex in 1..7) {
+                    val isToday = dayIndex == todayDayOfWeek
+                    val dayCourses = remember(courses, dayIndex, selectedWeek) {
+                        courses
+                            .filter { it.day == dayIndex && it.startSection in 1..totalSections }
+                            .groupBy { "${it.startSection}-${it.endSection}" }
+                            .values
+                            .map { list ->
+                                list.firstOrNull { it.weeks.isEmpty() || selectedWeek in it.weeks } ?: list.first()
+                            }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(horizontal = 1.5.dp),
+                    ) {
+                        // 背景网格方格线
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            for (sec in 1..totalSections) {
+                                if (sec > 1) {
+                                    val gap = if (sec == 6 || sec == 11) mealGap + gridGap else gridGap
+                                    Spacer(Modifier.height(gap))
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(sectionHeight)
+                                        .background(
+                                            if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.04f)
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f),
+                                            shape = RoundedCornerShape(4.dp),
+                                        )
+                                        .border(
+                                            0.5.dp,
+                                            if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                                            shape = RoundedCornerShape(4.dp),
+                                        ),
                                 )
                             }
                         }
 
-                        for (dayIndex in 1..7) {
-                            val matchingCourse = courses.firstOrNull { course ->
-                                course.day == dayIndex && (course.startSection <= section && course.endSection >= section)
-                            }
+                        // 真实跨节课程卡片（精确 Y 轴位置与精确节次跨度）
+                        dayCourses.forEach { course ->
+                            val s = course.startSection.coerceIn(1, totalSections)
+                            val e = course.endSection.coerceIn(s, totalSections)
+                            val span = e - s + 1
+                            val topOffset = getSectionTopOffset(s, sectionHeight, gridGap, mealGap)
+                            val bottomOffset = getSectionTopOffset(e, sectionHeight, gridGap, mealGap) + sectionHeight
+                            val cardHeight = bottomOffset - topOffset
+                            val isThisWeek = course.weeks.isEmpty() || selectedWeek in course.weeks
+                            val colorScheme = getCourseColorScheme(course.courseName)
 
-                            Box(
+                            Surface(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .padding(horizontal = 2.dp),
+                                    .offset(y = topOffset)
+                                    .height(cardHeight)
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { onCourseClick(course) },
+                                color = if (isThisWeek) colorScheme.background else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(
+                                    0.5.dp,
+                                    if (isThisWeek) colorScheme.accentColor.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                ),
+                                shadowElevation = if (isThisWeek) 0.5.dp else 0.dp,
                             ) {
-                                if (matchingCourse != null) {
-                                    val isThisWeek = matchingCourse.weeks.isEmpty() || selectedWeek in matchingCourse.weeks
-                                    val colorScheme = getCourseColorScheme(matchingCourse.courseName)
-
-                                    val bg = if (isThisWeek) colorScheme.background else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                                    val textColor = if (isThisWeek) colorScheme.contentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    val borderColor = if (isThisWeek) colorScheme.accentColor.copy(alpha = 0.35f) else Color.Transparent
-
-                                    val courseShape = RoundedCornerShape(10.dp)
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .clip(courseShape)
-                                            .clickable { onCourseClick(matchingCourse) },
-                                        color = bg,
-                                        shape = courseShape,
-                                        border = BorderStroke(0.5.dp, borderColor),
-                                    ) {
-                                        Column(
-                                            modifier = Modifier
-                                                .padding(4.dp)
-                                                .fillMaxSize(),
-                                            verticalArrangement = Arrangement.SpaceBetween,
-                                        ) {
-                                            Text(
-                                                matchingCourse.courseName,
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontSize = 10.sp,
-                                                    lineHeight = 12.sp,
-                                                ),
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 3.dp, vertical = 3.5.dp),
+                                    verticalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                        Text(
+                                            text = course.courseName,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 9.5.sp,
+                                                lineHeight = 11.5.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = textColor,
-                                                maxLines = 2,
+                                            ),
+                                            color = if (isThisWeek) colorScheme.contentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                            maxLines = if (span >= 3) 4 else if (span == 2) 3 else 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+
+                                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                        if (isThisWeek && course.location.isNotBlank()) {
+                                            Text(
+                                                text = course.location,
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 8.sp,
+                                                    lineHeight = 9.5.sp,
+                                                ),
+                                                color = colorScheme.contentColor.copy(alpha = 0.85f),
+                                                maxLines = if (span >= 3) 2 else 1,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
+                                        } else if (!isThisWeek) {
                                             Text(
-                                                if (isThisWeek) matchingCourse.location.ifBlank { "在线/待定" } else "(非本周)",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
-                                                color = textColor.copy(alpha = 0.85f),
+                                                text = "(非本周)",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.5.sp),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                                                 maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
                                             )
                                         }
                                     }

@@ -56,6 +56,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -133,6 +134,7 @@ fun OverviewScreen(
     onOpenQrLogin: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenReservation: () -> Unit = {},
     onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
     requestWebLoginUrl: suspend (String) -> String,
     requestExternalApplicationLaunch: suspend (String) -> ExternalApplicationLaunch,
@@ -521,6 +523,7 @@ fun OverviewScreen(
                                 onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
                                 onOpenOperations = onOpenOperations,
                                 onOpenWorkspace = onOpenWorkspace,
+                                onOpenReservation = onOpenReservation,
                             ) }
                             QuickAction(
                                 icon = spec.icon,
@@ -839,6 +842,7 @@ private fun homeQuickActionSpec(
     onOpenGoogleAccountDesk: () -> Unit,
     onOpenOperations: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
+    onOpenReservation: () -> Unit,
 ): HomeQuickActionSpec = when (action) {
     HomeQuickAction.Today -> HomeQuickActionSpec(
         icon = Icons.Outlined.CalendarMonth,
@@ -867,6 +871,14 @@ private fun homeQuickActionSpec(
         accent = Color(0xFF7C3AED),
         accentPale = Color(0xFFF5F3FF),
     ) { onOpenWorkspace(WorkspaceDestination.Scenes) }
+
+    HomeQuickAction.Reservation -> HomeQuickActionSpec(
+        icon = Icons.Outlined.MeetingRoom,
+        label = "研讨间预约",
+        accent = Color(0xFF2563EB),
+        accentPale = Color(0xFFEFF6FF),
+        onClick = onOpenReservation,
+    )
 
     HomeQuickAction.Devices -> HomeQuickActionSpec(
         icon = Icons.Outlined.Hub,
@@ -1005,6 +1017,7 @@ private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action
     HomeQuickAction.Notifications -> "通知中心"
     HomeQuickAction.Insights -> "趋势周报"
     HomeQuickAction.Scenes -> "智能场景"
+    HomeQuickAction.Reservation -> "研讨间预约"
     HomeQuickAction.Devices -> "设备控制"
     HomeQuickAction.Diagnostics -> "系统自检"
     HomeQuickAction.Backup -> "数据备份"
