@@ -1544,6 +1544,11 @@ private fun AuthenticatedShell(
                         onOpenFreeClassrooms = {
                             navController.navigate(AppRoute.FreeClassrooms) { launchSingleTop = true }
                         },
+                        onOpenReservation = {
+                            viewModel.openCampusReservation { url ->
+                                openPlatformWebLink(context, url, "研讨间预约")
+                            }
+                        },
                         onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
                     )
                 }

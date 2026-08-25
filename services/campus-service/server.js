@@ -44,6 +44,12 @@ import {
   normalizeReservationInput
 } from "./src/lib/libroom.js";
 import {
+  executeAutoReservationCandidates,
+  isAutoReservationDue,
+  localDateForTimeZone,
+  normalizeAutoReservationTaskInput
+} from "./src/lib/libroom-auto-reservation.js";
+import {
   discardUpstreamResponse,
   releaseUpstreamResponse,
   trackUpstreamResponse
@@ -171,6 +177,9 @@ const ACADEMIC_AUTO_REFRESH_MS = Number(process.env.ACADEMIC_AUTO_REFRESH_MS || 
 const ACADEMIC_AUTO_REFRESH_START_DELAY_MS = Number(process.env.ACADEMIC_AUTO_REFRESH_START_DELAY_MS || 30 * 1000);
 const CAMPUS_REMINDER_INTERVAL_MS = Number(process.env.CAMPUS_REMINDER_INTERVAL_MS || 5 * 60 * 1000);
 const CAMPUS_REMINDER_START_DELAY_MS = Number(process.env.CAMPUS_REMINDER_START_DELAY_MS || 45 * 1000);
+const LIBROOM_AUTO_RESERVATION_INTERVAL_MS = Number(process.env.CAMPUS_LIBROOM_AUTO_RESERVATION_INTERVAL_MS || 15 * 1000);
+const LIBROOM_AUTO_RESERVATION_START_DELAY_MS = Number(process.env.CAMPUS_LIBROOM_AUTO_RESERVATION_START_DELAY_MS || 30 * 1000);
+const LIBROOM_AUTO_RESERVATION_LOCK_MS = 2 * 60 * 1000;
 const CAMPUS_REMINDER_HORIZON_HOURS = Math.min(168, Math.max(1, Number(process.env.CAMPUS_REMINDER_HORIZON_HOURS || 24) || 24));
 const CAMPUS_REMINDER_BATCH_SIZE = Math.min(1_000, Math.max(1, Math.trunc(Number(process.env.CAMPUS_REMINDER_BATCH_SIZE || 100) || 100)));
 const BACKGROUND_USER_SCAN_LIMIT = 1_000;
@@ -245,6 +254,9 @@ const academicEvaluationDrafts = new Map();
 const academicEvaluationAutoJobs = new Map();
 const academicEvaluationAutoTasks = new Set();
 const backgroundTasks = new Set();
+let libroomAutoReservationStartTimer = null;
+let libroomAutoReservationInterval = null;
+let libroomAutoReservationRunning = false;
 const academicSessionQueue = new KeyedSerialQueue();
 const campusSessionQueue = new KeyedSerialQueue();
 const libroomSessionQueue = new KeyedSerialQueue();
@@ -1973,6 +1985,101 @@ function libroomDate(value) {
     throw new HttpError(400, "预约日期必须是今天起 3 日内。", null, "RESERVATION_DATE_OUT_OF_RANGE");
   }
   return date;
+}
+
+function autoReservationTaskPublic(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    enabled: Boolean(row.enabled),
+    recurrenceMode: row.recurrenceMode,
+    weekdays: Array.isArray(row.weekdays) ? row.weekdays : [],
+    startDate: row.startDate,
+    endDate: row.endDate,
+    executeTime: row.executeTime,
+    candidates: Array.isArray(row.candidates) ? row.candidates : [],
+    title: row.title,
+    content: row.content,
+    mobile: row.mobile,
+    open: Boolean(row.open),
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+    lastRunAt: row.last_run_at || null,
+    lastStatus: row.last_status || null,
+    lastMessage: row.last_message || null,
+    lastCandidateIndex: Number.isInteger(row.last_candidate_index) ? row.last_candidate_index : null,
+    lastAttempts: Array.isArray(row.last_attempts) ? row.last_attempts : [],
+    lastReservation: row.last_reservation || null
+  };
+}
+
+function autoReservationTaskRecord(userId, normalized, timestamp, id = randomUUID()) {
+  return {
+    id,
+    user_id: userId,
+    ...normalized,
+    created_at: timestamp,
+    updated_at: timestamp,
+    last_run_key: null,
+    run_lock_until: null,
+    last_run_at: null,
+    last_status: null,
+    last_message: null,
+    last_candidate_index: null,
+    last_attempts: [],
+    last_reservation: null
+  };
+}
+
+async function saveAutoReservationTask(userId, body, existing = null) {
+  const normalized = normalizeAutoReservationTaskInput(body);
+  const timestamp = nowIso();
+  if (!existing) {
+    const row = await repository.insertAutoReservationTask(autoReservationTaskRecord(userId, normalized, timestamp));
+    return autoReservationTaskPublic(row);
+  }
+  const row = await repository.updateAutoReservationTask(userId, existing.id, normalized, timestamp);
+  return autoReservationTaskPublic(row);
+}
+
+async function runAutoReservationTask(task, user, now = new Date()) {
+  const date = localDateForTimeZone(now);
+  const nowValue = now.toISOString();
+  const claimed = await repository.claimAutoReservationTask(
+    user.id,
+    task.id,
+    date,
+    nowValue,
+    new Date(now.getTime() + LIBROOM_AUTO_RESERVATION_LOCK_MS).toISOString()
+  );
+  if (!claimed) return null;
+
+  let result;
+  try {
+    const client = await libroomClient();
+    result = await executeAutoReservationCandidates({
+      task: claimed,
+      date,
+      submitReservation: (candidate) => client.submitReservation(candidate, { now })
+    });
+  } catch (error) {
+    result = {
+      status: "failed",
+      candidateIndex: -1,
+      message: error.message || "自动预约执行失败。",
+      attempts: []
+    };
+  }
+  await repository.finishAutoReservationTask(user.id, task.id, result, nowValue);
+  logger.info("libroom_auto_reservation_completed", {
+    userId: user.id,
+    taskId: task.id,
+    date,
+    status: result.status,
+    candidateIndex: result.candidateIndex
+  });
+  return result;
 }
 
 async function loginWithCasFull({ username, password, rememberMe = true }) {
@@ -6850,6 +6957,35 @@ async function handleApi(req, res, url) {
       json(res, 200, { ok: true, data: await withCampusSessionLock(() => getCampusRechargeLink()) });
       return;
     }
+    const autoReservationPath = url.pathname.match(/^\/api\/campus\/libroom\/auto-reservations(?:\/([^/]+))?$/);
+    if (autoReservationPath) {
+      const userId = currentUserId();
+      const taskId = autoReservationPath[1] ? decodeURIComponent(autoReservationPath[1]) : "";
+      if (req.method === "GET" && !taskId) {
+        json(res, 200, { ok: true, data: (await repository.listAutoReservationTasks(userId)).map(autoReservationTaskPublic) });
+        return;
+      }
+      if (req.method === "POST" && !taskId) {
+        const body = await readBodyJson(req);
+        const data = await saveAutoReservationTask(userId, body);
+        json(res, 201, { ok: true, data });
+        return;
+      }
+      if (!taskId) throw new HttpError(400, "自动预约任务标识不正确。", null, "INVALID_AUTO_RESERVATION_ID");
+      const existing = await repository.getAutoReservationTask(userId, taskId);
+      if (!existing) throw new HttpError(404, "自动预约任务不存在。", null, "AUTO_RESERVATION_NOT_FOUND");
+      if (req.method === "PUT") {
+        const body = await readBodyJson(req);
+        const data = await saveAutoReservationTask(userId, { ...existing, ...body }, existing);
+        json(res, 200, { ok: true, data });
+        return;
+      }
+      if (req.method === "DELETE") {
+        await repository.deleteAutoReservationTask(userId, taskId);
+        json(res, 200, { ok: true, data: null });
+        return;
+      }
+    }
     if (url.pathname === "/api/campus/libroom/spaces" && req.method === "GET") {
       const client = await libroomClient();
       json(res, 200, { ok: true, data: await client.listSpaces() });
@@ -7289,6 +7425,45 @@ function startAcademicReminderScheduler() {
   );
 }
 
+async function runLibroomAutoReservationScheduler(reason) {
+  if (shuttingDown || libroomAutoReservationRunning) return;
+  libroomAutoReservationRunning = true;
+  try {
+    const rows = await repository.listEnabledAutoReservationTasks({ limit: BACKGROUND_USER_SCAN_LIMIT + 1 });
+    const tasks = rows.slice(0, BACKGROUND_USER_SCAN_LIMIT);
+    const now = new Date();
+    await mapWithConcurrency(tasks, 2, async (task) => {
+      if (!isAutoReservationDue(task, now)) return "skipped";
+      const user = await repository.findUserById(task.user_id);
+      if (!user || user.disabled) return "skipped";
+      return userContextStorage.run(
+        { requestId: `auto-reservation-${randomUUID()}`, user },
+        async () => {
+          const result = await runAutoReservationTask(task, user, now);
+          return result?.status || "claimed";
+        }
+      );
+    });
+    if (reason !== "interval" && tasks.length) logger.info("libroom_auto_reservation_scan_completed", { reason, tasks: tasks.length });
+  } catch (error) {
+    logger.warn("libroom_auto_reservation_scan_failed", { reason, error });
+  } finally {
+    libroomAutoReservationRunning = false;
+  }
+}
+
+function startLibroomAutoReservationScheduler() {
+  if (!Number.isFinite(LIBROOM_AUTO_RESERVATION_INTERVAL_MS) || LIBROOM_AUTO_RESERVATION_INTERVAL_MS <= 0) return;
+  libroomAutoReservationStartTimer = setTimeout(
+    () => trackBackgroundTask(() => runLibroomAutoReservationScheduler("startup")),
+    Math.max(0, LIBROOM_AUTO_RESERVATION_START_DELAY_MS)
+  );
+  libroomAutoReservationInterval = setInterval(
+    () => trackBackgroundTask(() => runLibroomAutoReservationScheduler("interval")),
+    LIBROOM_AUTO_RESERVATION_INTERVAL_MS
+  );
+}
+
 const server = createServer((req, res) => {
   const incomingRequestId = String(req.headers["x-request-id"] || "");
   const requestId = /^[A-Za-z0-9._:-]{1,128}$/.test(incomingRequestId) ? incomingRequestId : randomUUID();
@@ -7349,6 +7524,7 @@ server.listen(PORT, HOST, () => {
   logger.info("service_started", { host: HOST, port: typeof address === "object" ? address?.port : PORT });
   startAcademicAutoRefresh();
   startAcademicReminderScheduler();
+  startLibroomAutoReservationScheduler();
 });
 
 let shuttingDown = false;
@@ -7374,6 +7550,8 @@ function shutdown(signal) {
   if (academicRefreshInterval) clearInterval(academicRefreshInterval);
   if (academicReminderStartTimer) clearTimeout(academicReminderStartTimer);
   if (academicReminderInterval) clearInterval(academicReminderInterval);
+  if (libroomAutoReservationStartTimer) clearTimeout(libroomAutoReservationStartTimer);
+  if (libroomAutoReservationInterval) clearInterval(libroomAutoReservationInterval);
   for (const job of academicEvaluationAutoJobs.values()) {
     if (!activeAcademicEvaluationAutoStatus(job.status)) continue;
     job.cancelRequested = true;

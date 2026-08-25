@@ -142,6 +142,8 @@ import kotlin.math.roundToInt
 
 private enum class CampusWorkspaceSection { Today, Timetable, Campus }
 
+internal fun campusReservationRedirect(): String = "/apps/campus/#reservation"
+
 @Composable
 fun TodayScreen(
     state: TodayUiState,
@@ -154,6 +156,7 @@ fun TodayScreen(
     onSyncCalendar: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenFreeClassrooms: () -> Unit,
+    onOpenReservation: () -> Unit,
     onConsumeSharedDraft: () -> Unit,
 ) {
     var editingTodo by remember { mutableStateOf<TodoTask?>(null) }
@@ -328,7 +331,7 @@ fun TodayScreen(
                 )
             }
             CampusWorkspaceSection.Campus -> item(key = "campus-overview", contentType = "workspace") {
-                CampusOverviewSection(state.campusOverview, onOpenFreeClassrooms)
+                CampusOverviewSection(state.campusOverview, onOpenFreeClassrooms, onOpenReservation)
             }
         }
     }
@@ -1723,8 +1726,10 @@ private fun CourseGridMatrix(
 private fun CampusOverviewSection(
     overview: CampusOverview?,
     onOpenFreeClassrooms: () -> Unit,
+    onOpenReservation: () -> Unit,
 ) {
     if (overview == null) {
+        ReservationCard(onClick = onOpenReservation)
         EmptyBlock("校园信息正在同步", "连接学校账号后，会显示成绩、空教室、一卡通和宿舍能耗。")
         return
     }
@@ -1751,7 +1756,35 @@ private fun CampusOverviewSection(
         onClick = onOpenFreeClassrooms,
     )
 
+    ReservationCard(onClick = onOpenReservation)
+
     CampusQuickToolsGrid(onOpenFreeClassrooms)
+}
+
+@Composable
+private fun ReservationCard(onClick: () -> Unit) {
+    AppPanel(onClick = onClick) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            IconTile(Icons.Outlined.Event, Color(0xFF2563EB), Color(0xFFEFF6FF))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("研讨间预约", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "单次预约 · 自动预约任务 · 按候选时段顺序尝试",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
 
 @Composable

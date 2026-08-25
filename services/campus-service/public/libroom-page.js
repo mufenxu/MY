@@ -6,7 +6,7 @@
 
   const stylesheet = document.createElement("link");
   stylesheet.rel = "stylesheet";
-  stylesheet.href = "./libroom-page.css?v=20260823-v1";
+  stylesheet.href = "./libroom-page.css?v=20260825-auto-v1";
   document.head.append(stylesheet);
 
   const nav = document.querySelector(".quick-nav");
@@ -43,6 +43,10 @@
       </div>
     </div>`;
   document.querySelector(".main-content")?.append(section);
+  const autoScript = document.createElement("script");
+  autoScript.src = "./libroom-auto-page.js?v=20260825-auto-v1";
+  autoScript.defer = true;
+  document.head.append(autoScript);
 
   const nodes = {
     form: section.querySelector("#libroomForm"), space: section.querySelector("#libroomSpace"), date: section.querySelector("#libroomDate"),

@@ -1297,6 +1297,23 @@ class AppViewModel(
             ?: throw IllegalStateException("服务端未返回自动登录链接。")
     }
 
+    fun openCampusReservation(onOpen: (String) -> Unit) {
+        if (mutableState.value.busyAction != null) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(busyAction = "campus-reservation", error = null, message = null) }
+            runCatching { createPlatformWebLoginUrl(campusReservationRedirect()) }
+                .onSuccess { url ->
+                    mutableState.update { it.copy(busyAction = null) }
+                    onOpen(url)
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(busyAction = null, error = error.message ?: "研讨间预约入口打开失败，请稍后重试。")
+                    }
+                }
+        }
+    }
+
     suspend fun createExternalApplicationLaunch(applicationId: String): ExternalApplicationLaunch {
         val launch = api.launchExternalApplication(applicationId)
         if (launch.loginUrl.isBlank()) throw IllegalStateException("服务端未返回外部应用登录地址。")

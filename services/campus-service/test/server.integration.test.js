@@ -156,6 +156,36 @@ test("server authentication, revocation, validation and static caching work toge
   assert.equal(integrationSettings.status, 200);
   assert.equal((await integrationSettings.json()).data.calendar.enabled, false);
 
+  const autoReservationTask = await fetch(`${origin}/api/campus/libroom/auto-reservations`, {
+    method: "POST",
+    headers: {
+      cookie: oldCookie,
+      "content-type": "application/json",
+      "x-csrf-token": loginPayload.data.csrfToken
+    },
+    body: JSON.stringify({
+      name: "集成测试任务",
+      enabled: false,
+      recurrenceMode: "daily",
+      startDate: "2026-08-25",
+      endDate: "2026-09-01",
+      executeTime: "08:30",
+      candidates: [{ areaId: 9, startTime: "09:00", endTime: "11:00" }],
+      title: "个人学习",
+      content: "自动预约集成测试",
+      mobile: "13800138000",
+      open: false
+    })
+  });
+  assert.equal(autoReservationTask.status, 201);
+  const autoReservationTaskPayload = await autoReservationTask.json();
+  assert.equal(autoReservationTaskPayload.data.enabled, false);
+  const autoReservationTaskList = await fetch(`${origin}/api/campus/libroom/auto-reservations`, {
+    headers: { cookie: oldCookie }
+  });
+  assert.equal(autoReservationTaskList.status, 200);
+  assert.equal((await autoReservationTaskList.json()).data.length, 1);
+
   const operationsStatus = await fetch(`${origin}/api/operations/status`, {
     headers: { cookie: oldCookie }
   });

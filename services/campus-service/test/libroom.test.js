@@ -148,7 +148,7 @@ test("selects confirm for a first-period reservation and submit otherwise", asyn
   });
 
   await client.submitReservation({
-    areaId: 9, date: "2026-08-24", startTime: "09:00", endTime: "11:00",
+    areaId: 9, date: "2026-08-26", startTime: "09:00", endTime: "11:00",
     title: "个人学习", content: "阅读", mobile: "13800138000"
   });
   assert.deepEqual(JSON.parse(requests[0].options.body), { id: 9 });
@@ -166,7 +166,7 @@ test("selects confirm for a first-period reservation and submit otherwise", asyn
     }
   });
   await submitClient.submitReservation({
-    areaId: 9, date: "2026-08-24", startTime: "09:00", endTime: "11:00",
+    areaId: 9, date: "2026-08-26", startTime: "09:00", endTime: "11:00",
     title: "个人学习", content: "阅读", mobile: "13800138000"
   });
   assert.deepEqual(JSON.parse(requests[0].options.body), { id: 9 });
@@ -186,7 +186,7 @@ test("loads space availability by the upstream space id", async () => {
     }
   });
 
-  await client.getAvailability({ spaceId: 9, date: "2026-08-24" });
+  await client.getAvailability({ spaceId: 9, date: "2026-08-26" });
 
   assert.match(requests[0].url, /\/v4\/seminar\/seminar$/);
   assert.deepEqual(JSON.parse(requests[0].options.body), { id: 9 });
@@ -217,7 +217,7 @@ test("refreshes the member token once after an upstream auth error", async () =>
   });
 
   const result = await client.submitReservation({
-    areaId: 9, date: "2026-08-24", startTime: "09:00", endTime: "11:00",
+    areaId: 9, date: "2026-08-26", startTime: "09:00", endTime: "11:00",
     title: "个人学习", content: "阅读", mobile: "13800138000"
   });
   assert.equal(result.id, "r1");
@@ -297,7 +297,7 @@ test("maps upstream failures without exposing credentials", async () => {
 
   await assert.rejects(
     () => client.submitReservation({
-      areaId: 9, date: "2026-08-24", startTime: "09:00", endTime: "11:00",
+      areaId: 9, date: "2026-08-26", startTime: "09:00", endTime: "11:00",
       title: "个人学习", content: "阅读", mobile: "13800138000"
     }),
     (error) => error.status === 409 && error.code === "LIBROOM_UPSTREAM_REJECTED" && !String(error.message).includes("member-token")
@@ -306,11 +306,11 @@ test("maps upstream failures without exposing credentials", async () => {
 
 test("rejects invalid duration and phone before any request", () => {
   assert.throws(() => normalizeReservationInput({
-    areaId: 9, date: "2026-08-24", startTime: "09:00", endTime: "09:30",
+    areaId: 9, date: "2026-08-26", startTime: "09:00", endTime: "09:30",
     title: "个人学习", content: "阅读", mobile: "13800138000"
   }), /预约时长需为 1 至 4 小时/);
   assert.throws(() => normalizeReservationInput({
-    areaId: 9, date: "2026-08-24", startTime: "09:00", endTime: "11:00",
+    areaId: 9, date: "2026-08-26", startTime: "09:00", endTime: "11:00",
     title: "个人学习", content: "阅读", mobile: "123"
   }), /联系电话格式不正确/);
 });

@@ -52,6 +52,9 @@ export class CampusRepository {
       this.db.collection("calendar_subscriptions").createIndex({ user_id: 1 }, { unique: true }),
       this.db.collection("calendar_subscriptions").createIndex({ token_hash: 1 }, { unique: true }),
       this.db.collection("reminder_preferences").createIndex({ user_id: 1 }, { unique: true }),
+      this.db.collection("auto_reservation_tasks").createIndex({ id: 1 }, { unique: true }),
+      this.db.collection("auto_reservation_tasks").createIndex({ user_id: 1, created_at: 1 }),
+      this.db.collection("auto_reservation_tasks").createIndex({ enabled: 1, run_lock_until: 1 }),
       this.db.collection("invites").createIndex({ id: 1 }, { unique: true }),
       this.db.collection("invites").createIndex({ code_hash: 1 }, { unique: true }),
       this.db.collection("invites").createIndex({ created_at: -1 })
@@ -165,6 +168,7 @@ export class CampusRepository {
         await this.db.collection("academic_caches").deleteMany({ user_id: id }, { session });
         await this.db.collection("calendar_subscriptions").deleteMany({ user_id: id }, { session });
         await this.db.collection("reminder_preferences").deleteMany({ user_id: id }, { session });
+        await this.db.collection("auto_reservation_tasks").deleteMany({ user_id: id }, { session });
         await this.db.collection("invites").updateMany(
           { created_by: id },
           { $set: { created_by: null } },
@@ -392,6 +396,77 @@ export class CampusRepository {
     );
     return this.getReminderPreference(userId);
   }
+
+  async listAutoReservationTasks(userId) {
+    return this.db.collection("auto_reservation_tasks")
+      .find({ user_id: userId }, { projection: { _id: 0 } })
+      .sort({ created_at: 1 })
+      .toArray();
+  }
+
+  async getAutoReservationTask(userId, id) {
+    return this.db.collection("auto_reservation_tasks").findOne({ id, user_id: userId }, { projection: { _id: 0 } });
+  }
+
+  async listEnabledAutoReservationTasks(options = {}) {
+    const { offset, limit } = boundedWindow(options);
+    return this.db.collection("auto_reservation_tasks")
+      .find({ enabled: true }, { projection: { _id: 0 } })
+      .sort({ updated_at: 1 })
+      .skip(offset)
+      .limit(limit)
+      .toArray();
+  }
+
+  async insertAutoReservationTask(row) {
+    await this.db.collection("auto_reservation_tasks").insertOne({ _id: row.id, ...clone(row) });
+    return clone(row);
+  }
+
+  async updateAutoReservationTask(userId, id, changes, timestamp) {
+    await this.db.collection("auto_reservation_tasks").updateOne(
+      { id, user_id: userId },
+      { $set: { ...clone(changes), updated_at: timestamp } }
+    );
+    return this.db.collection("auto_reservation_tasks").findOne({ id, user_id: userId }, { projection: { _id: 0 } });
+  }
+
+  async deleteAutoReservationTask(userId, id) {
+    await this.db.collection("auto_reservation_tasks").deleteOne({ id, user_id: userId });
+  }
+
+  async claimAutoReservationTask(userId, id, runKey, now, lockUntil) {
+    const result = await this.db.collection("auto_reservation_tasks").findOneAndUpdate(
+      {
+        id,
+        user_id: userId,
+        enabled: true,
+        last_run_key: { $ne: runKey },
+        $or: [{ run_lock_until: { $exists: false } }, { run_lock_until: { $lte: now } }]
+      },
+      { $set: { last_run_key: runKey, run_lock_until: lockUntil, last_run_started_at: now } },
+      { returnDocument: "after", projection: { _id: 0 } }
+    );
+    return result?.value || result || null;
+  }
+
+  async finishAutoReservationTask(userId, id, result, timestamp) {
+    await this.db.collection("auto_reservation_tasks").updateOne(
+      { id, user_id: userId },
+      {
+        $set: {
+          run_lock_until: null,
+          last_run_at: timestamp,
+          last_status: result.status,
+          last_message: result.message || null,
+          last_candidate_index: Number.isInteger(result.candidateIndex) ? result.candidateIndex : null,
+          last_attempts: clone(result.attempts || []),
+          last_reservation: clone(result.result || null),
+          updated_at: timestamp
+        }
+      }
+    );
+  }
 }
 
 export class MemoryCampusRepository {
@@ -402,6 +477,7 @@ export class MemoryCampusRepository {
     this.invites = new Map();
     this.calendarSubscriptions = new Map();
     this.reminderPreferences = new Map();
+    this.autoReservationTasks = new Map();
   }
 
   async initialize() {}
@@ -457,6 +533,7 @@ export class MemoryCampusRepository {
     for (const key of this.caches.keys()) if (key.startsWith(`${id}:`)) this.caches.delete(key);
     this.calendarSubscriptions.delete(id);
     this.reminderPreferences.delete(id);
+    for (const [taskId, task] of this.autoReservationTasks) if (task.user_id === id) this.autoReservationTasks.delete(taskId);
   }
 
   async listInvites() {
@@ -537,6 +614,65 @@ export class MemoryCampusRepository {
     const row = { user_id: userId, enabled: Boolean(preference.enabled), recipient_id: String(preference.recipientId || ""), app_recipient_id: String(preference.appRecipientId || ""), lead_minutes: Number(preference.leadMinutes), created_at: current?.created_at || timestamp, updated_at: timestamp };
     this.reminderPreferences.set(userId, row);
     return clone(row);
+  }
+
+  async listAutoReservationTasks(userId) {
+    return clone(Array.from(this.autoReservationTasks.values())
+      .filter((row) => row.user_id === userId)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at)));
+  }
+
+  async getAutoReservationTask(userId, id) {
+    const row = this.autoReservationTasks.get(id);
+    return row?.user_id === userId ? clone(row) : null;
+  }
+
+  async listEnabledAutoReservationTasks(options = {}) {
+    const { offset, limit } = boundedWindow(options);
+    return clone(Array.from(this.autoReservationTasks.values())
+      .filter((row) => row.enabled)
+      .sort((a, b) => String(a.updated_at || "").localeCompare(String(b.updated_at || "")))
+      .slice(offset, offset + limit));
+  }
+
+  async insertAutoReservationTask(row) {
+    this.autoReservationTasks.set(row.id, clone(row));
+    return clone(row);
+  }
+
+  async updateAutoReservationTask(userId, id, changes, timestamp) {
+    const row = this.autoReservationTasks.get(id);
+    if (!row || row.user_id !== userId) return null;
+    Object.assign(row, clone(changes), { updated_at: timestamp });
+    return clone(row);
+  }
+
+  async deleteAutoReservationTask(userId, id) {
+    const row = this.autoReservationTasks.get(id);
+    if (row?.user_id === userId) this.autoReservationTasks.delete(id);
+  }
+
+  async claimAutoReservationTask(userId, id, runKey, now, lockUntil) {
+    const row = this.autoReservationTasks.get(id);
+    if (!row || row.user_id !== userId || !row.enabled || row.last_run_key === runKey) return null;
+    if (row.run_lock_until && row.run_lock_until > now) return null;
+    Object.assign(row, { last_run_key: runKey, run_lock_until: lockUntil, last_run_started_at: now });
+    return clone(row);
+  }
+
+  async finishAutoReservationTask(userId, id, result, timestamp) {
+    const row = this.autoReservationTasks.get(id);
+    if (!row || row.user_id !== userId) return;
+    Object.assign(row, {
+      run_lock_until: null,
+      last_run_at: timestamp,
+      last_status: result.status,
+      last_message: result.message || null,
+      last_candidate_index: Number.isInteger(result.candidateIndex) ? result.candidateIndex : null,
+      last_attempts: clone(result.attempts || []),
+      last_reservation: clone(result.result || null),
+      updated_at: timestamp
+    });
   }
 }
 
