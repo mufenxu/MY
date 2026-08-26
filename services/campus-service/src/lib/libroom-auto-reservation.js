@@ -4,6 +4,7 @@ const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const BOOKABLE_START_MINUTE = 8 * 60;
 const BOOKABLE_END_MINUTE = 21 * 60 + 45;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 function fail(message, code = "INVALID_AUTO_RESERVATION_TASK") {
   const error = new Error(message);
@@ -158,6 +159,13 @@ function taskExecuteTime(task) {
   return String(task?.executeTime ?? task?.execute_time ?? "").trim();
 }
 
+function beijingDateTimeMs(date, time) {
+  if (!utcDay(date) || !TIME_PATTERN.test(time)) return null;
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+  return Date.UTC(year, month - 1, day, hour, minute, 0, 0) - BEIJING_OFFSET_MS;
+}
+
 export function autoReservationRunPlan(task, now = new Date()) {
   const current = localParts(now);
   const targetDate = taskTargetDate(task);
@@ -183,6 +191,26 @@ export function autoReservationRunPlan(task, now = new Date()) {
     executeTime: executeTime || null,
     runKey: targetDate && executeDate && executeTime ? `${targetDate}:${executeDate}T${executeTime}` : null
   };
+}
+
+export function autoReservationNextScanDelay(tasks = [], now = new Date(), { fallbackMs = 15_000 } = {}) {
+  const fallbackDelay = Math.max(1, Math.trunc(Number(fallbackMs) || 15_000));
+  const list = Array.isArray(tasks) ? tasks : [];
+  const nowMs = now.getTime();
+  let delay = fallbackDelay;
+
+  for (const task of list) {
+    const plan = autoReservationRunPlan(task, now);
+    if (plan.due) return 0;
+    if (!task?.enabled || !plan.targetDate || !plan.executeDate || !TIME_PATTERN.test(plan.executeTime || "")) continue;
+    const executeDelta = dateDelta(plan.targetDate, plan.executeDate);
+    if (!Number.isInteger(executeDelta) || executeDelta < 0 || executeDelta > 3) continue;
+    const runAtMs = beijingDateTimeMs(plan.executeDate, plan.executeTime);
+    if (!Number.isFinite(runAtMs) || runAtMs <= nowMs) continue;
+    delay = Math.min(delay, runAtMs - nowMs);
+  }
+
+  return Math.max(0, Math.trunc(delay));
 }
 
 function isConflictError(error) {

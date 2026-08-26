@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   normalizeAutoReservationTaskInput,
   autoReservationRunPlan,
+  autoReservationNextScanDelay,
   isAutoReservationDue,
   executeAutoReservationCandidates
 } from "../src/lib/libroom-auto-reservation.js";
@@ -74,6 +75,32 @@ test("runs at the configured execute date for a future target date", () => {
       executeTime: "08:30",
       runKey: "2026-08-27:2026-08-24T08:30"
     }
+  );
+});
+
+test("schedules the next scan exactly at the configured Beijing run minute", () => {
+  const task = normalizeAutoReservationTaskInput({
+    ...baseInput,
+    reservationDate: "2026-08-28",
+    executeDate: "2026-08-26",
+    executeTime: "07:43"
+  });
+
+  assert.equal(
+    autoReservationNextScanDelay(
+      [task],
+      new Date("2026-08-25T23:42:58.250Z"),
+      { fallbackMs: 15_000 }
+    ),
+    1_750
+  );
+  assert.equal(
+    autoReservationNextScanDelay(
+      [task],
+      new Date("2026-08-25T23:43:00.000Z"),
+      { fallbackMs: 15_000 }
+    ),
+    0
   );
 });
 
