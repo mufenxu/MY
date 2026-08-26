@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MemoryCampusRepository } from '../src/storage/campus-repository.js';
+import { CampusRepository, MemoryCampusRepository } from '../src/storage/campus-repository.js';
 
 test('school session compare-and-set rejects stale writers', async () => {
   const repository = new MemoryCampusRepository();
@@ -129,4 +129,55 @@ test('auto reservation tasks stay scoped and can be claimed once per occurrence'
   assert.equal(saved.enabled, false);
   await repository.deleteAutoReservationTask('user-1', 'task-1');
   assert.equal((await repository.listAutoReservationTasks('user-1')).length, 0);
+});
+
+test('Mongo auto reservation claims tasks with a null lock timestamp', async () => {
+  const repository = new CampusRepository();
+  const row = {
+    id: 'task-1',
+    user_id: 'user-1',
+    enabled: true,
+    last_run_key: null,
+    run_lock_until: null
+  };
+  repository.db = {
+    collection(name) {
+      assert.equal(name, 'auto_reservation_tasks');
+      return {
+        async findOneAndUpdate(query, update) {
+          const matchesLock = query.$or.some((condition) => {
+            if (Object.hasOwn(condition, 'run_lock_until')) {
+              const value = condition.run_lock_until;
+              if (value === null) return row.run_lock_until === null;
+              if (value?.$exists === false) return !Object.hasOwn(row, 'run_lock_until');
+              if (value?.$lte) return typeof row.run_lock_until === typeof value.$lte && row.run_lock_until <= value.$lte;
+            }
+            return false;
+          });
+          if (
+            query.id === row.id &&
+            query.user_id === row.user_id &&
+            query.enabled === row.enabled &&
+            row.last_run_key !== query.last_run_key.$ne &&
+            matchesLock
+          ) {
+            Object.assign(row, update.$set);
+            return { value: { ...row } };
+          }
+          return { value: null };
+        }
+      };
+    }
+  };
+
+  const claimed = await repository.claimAutoReservationTask(
+    'user-1',
+    'task-1',
+    '2026-08-28:2026-08-26T07:43',
+    '2026-08-25T23:43:00.000Z',
+    '2026-08-25T23:45:00.000Z'
+  );
+
+  assert.equal(claimed?.id, 'task-1');
+  assert.equal(claimed.run_lock_until, '2026-08-25T23:45:00.000Z');
 });

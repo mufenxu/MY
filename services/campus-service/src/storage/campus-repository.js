@@ -445,7 +445,11 @@ export class CampusRepository {
         user_id: userId,
         enabled: true,
         last_run_key: { $ne: runKey },
-        $or: [{ run_lock_until: { $exists: false } }, { run_lock_until: { $lte: now } }]
+        $or: [
+          { run_lock_until: { $exists: false } },
+          { run_lock_until: null },
+          { run_lock_until: { $lte: now } }
+        ]
       },
       { $set: { last_run_key: runKey, run_lock_until: lockUntil, last_run_started_at: now } },
       { returnDocument: "after", projection: { _id: 0 } }
