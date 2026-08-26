@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -764,125 +765,19 @@ private fun SingleReservationPanel(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                // 时段手动设置
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "预约时段（单次可约 1 ~ 4 小时）",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        OutlinedTextField(
-                            value = startTime,
-                            onValueChange = { startTime = it; onClearFeedback() },
-                            label = { Text("开始时间") },
-                            placeholder = { Text("09:00") },
-                            leadingIcon = {
-                                Icon(Icons.Outlined.AccessTime, contentDescription = null, modifier = Modifier.size(18.dp))
-                            },
-                            supportingText = { Text("格式 HH:mm") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
-                            singleLine = true,
-                        )
-                        OutlinedTextField(
-                            value = endTime,
-                            onValueChange = { endTime = it; onClearFeedback() },
-                            label = { Text("结束时间") },
-                            placeholder = { Text("11:00") },
-                            leadingIcon = {
-                                Icon(Icons.Outlined.AccessTime, contentDescription = null, modifier = Modifier.size(18.dp))
-                            },
-                            supportingText = { Text("格式 HH:mm") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
-                            singleLine = true,
-                        )
-                    }
-
-                    // 实时时长反馈胶囊
-                    if (durationMin != null) {
-                        val hours = durationMin / 60
-                        val mins = durationMin % 60
-                        val durationText = "${if (hours > 0) "${hours}小时" else ""}${if (mins > 0) "${mins}分钟" else ""}"
-                        val statusColor = if (isDurationValid) Color(0xFF16803B) else MaterialTheme.colorScheme.error
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = statusColor.copy(alpha = 0.08f),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                Icon(
-                                    if (isDurationValid) Icons.Outlined.CheckCircle else Icons.Outlined.WarningAmber,
-                                    contentDescription = null,
-                                    tint = statusColor,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                                Text(
-                                    text = if (isDurationValid) "已选时长：$durationText（符合 1~4 小时规则）" else "已选时长：$durationText（预约时长需在 1 至 4 小时之间）",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = statusColor,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // 快捷时段预设按钮
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "常用时段快捷选择",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        listOf(
-                            "09:00 - 11:00" to ("09:00" to "11:00"),
-                            "14:00 - 16:00" to ("14:00" to "16:00"),
-                            "19:00 - 21:00" to ("19:00" to "21:00"),
-                        ).forEach { (label, times) ->
-                            val isPresetSelected = startTime == times.first && endTime == times.second
-                            Surface(
-                                onClick = {
-                                    startTime = times.first
-                                    endTime = times.second
-                                    onClearFeedback()
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isPresetSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isPresetSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                                ),
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = if (isPresetSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isPresetSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(vertical = 8.dp),
-                                    maxLines = 1,
-                                )
-                            }
-                        }
-                    }
-                }
+                // 全新美观快捷时段选择器
+                ReservationTimeRangePicker(
+                    startTime = startTime,
+                    endTime = endTime,
+                    onStartTimeChange = {
+                        startTime = it
+                        onClearFeedback()
+                    },
+                    onEndTimeChange = {
+                        endTime = it
+                        onClearFeedback()
+                    },
+                )
 
                 // 双向查询操作栏
                 Row(
@@ -2589,30 +2484,76 @@ private fun CandidateEditRow(
                 }
             }
 
+            var pickingTimeTarget by remember { mutableStateOf<String?>(null) }
+            if (pickingTimeTarget != null) {
+                val isStart = pickingTimeTarget == "start"
+                TimeSelectionModal(
+                    title = if (isStart) "选择候选开始时间" else "选择候选结束时间",
+                    currentTime = if (isStart) candidate.startTime else candidate.endTime,
+                    onDismiss = { pickingTimeTarget = null },
+                    onSelectTime = { chosen ->
+                        if (isStart) {
+                            val newStartMin = reservationTimeMinutes(chosen)
+                            val currEndMin = reservationTimeMinutes(candidate.endTime)
+                            val autoEnd = if (newStartMin != null && (currEndMin == null || currEndMin <= newStartMin || (currEndMin - newStartMin) > 240)) {
+                                formatMinutesToTime((newStartMin + 120).coerceAtMost(1305))
+                            } else {
+                                candidate.endTime
+                            }
+                            onUpdate(candidate.copy(startTime = chosen, endTime = autoEnd))
+                        } else {
+                            onUpdate(candidate.copy(endTime = chosen))
+                        }
+                    },
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedTextField(
-                    value = candidate.startTime,
-                    onValueChange = { onUpdate(candidate.copy(startTime = it)) },
-                    label = { Text("开始", style = MaterialTheme.typography.labelSmall) },
-                    placeholder = { Text("09:00") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(6.dp),
+                Surface(
+                    onClick = { pickingTimeTarget = "start" },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
                     modifier = Modifier.weight(1f),
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = candidate.endTime,
-                    onValueChange = { onUpdate(candidate.copy(endTime = it)) },
-                    label = { Text("结束", style = MaterialTheme.typography.labelSmall) },
-                    placeholder = { Text("11:00") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(6.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column {
+                            Text("开始时间", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(candidate.startTime, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        }
+                        Icon(Icons.Outlined.AccessTime, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+
+                Icon(Icons.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                Surface(
+                    onClick = { pickingTimeTarget = "end" },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
                     modifier = Modifier.weight(1f),
-                    singleLine = true,
-                )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column {
+                            Text("结束时间", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(candidate.endTime, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        }
+                        Icon(Icons.Outlined.AccessTime, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
             }
         }
     }
@@ -2681,8 +2622,379 @@ private fun isReservationTimeValid(
     }
 }
 
+private fun formatMinutesToTime(minutes: Int): String {
+    val clamped = minutes.coerceIn(0, 1440)
+    val h = clamped / 60
+    val m = clamped % 60
+    return String.format(Locale.ROOT, "%02d:%02d", h, m)
+}
+
 private fun isReservationDurationValid(startTime: String, endTime: String): Boolean {
     val start = reservationTimeMinutes(startTime) ?: return false
     val end = reservationTimeMinutes(endTime) ?: return false
     return end - start in 60..240
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TimeSelectionModal(
+    title: String,
+    currentTime: String,
+    onDismiss: () -> Unit,
+    onSelectTime: (String) -> Unit,
+) {
+    AppDialog(
+        onDismissRequest = onDismiss,
+        icon = Icons.Outlined.AccessTime,
+        iconTint = MaterialTheme.colorScheme.primary,
+        iconBackground = MaterialTheme.colorScheme.primaryContainer,
+        title = title,
+        subtitle = "请点击快捷选取标准半小时时段",
+        footer = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                AppDialogSecondaryButton(
+                    text = "关闭",
+                    onClick = onDismiss,
+                )
+            }
+        },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 360.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            listOf(
+                "上午 (08:00 ~ 12:00)" to listOf("08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00"),
+                "下午 (12:30 ~ 18:00)" to listOf("12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00"),
+                "晚上 (18:30 ~ 21:45)" to listOf("18:30", "19:00", "19:30", "20:00", "20:30", "21:00", "21:30", "21:45"),
+            ).forEach { (groupLabel, times) ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = groupLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        times.forEach { t ->
+                            val isSelected = currentTime == t
+                            Surface(
+                                onClick = {
+                                    onSelectTime(t)
+                                    onDismiss()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                ),
+                            ) {
+                                Text(
+                                    text = t,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReservationTimeRangePicker(
+    startTime: String,
+    endTime: String,
+    onStartTimeChange: (String) -> Unit,
+    onEndTimeChange: (String) -> Unit,
+) {
+    var pickingTarget by remember { mutableStateOf<String?>(null) }
+
+    val startMin = reservationTimeMinutes(startTime)
+    val endMin = reservationTimeMinutes(endTime)
+    val durationMin = if (startMin != null && endMin != null && endMin > startMin) endMin - startMin else null
+    val isDurationValid = durationMin != null && durationMin in 60..240
+
+    if (pickingTarget != null) {
+        val isStart = pickingTarget == "start"
+        TimeSelectionModal(
+            title = if (isStart) "选择开始时间" else "选择结束时间",
+            currentTime = if (isStart) startTime else endTime,
+            onDismiss = { pickingTarget = null },
+            onSelectTime = { chosen ->
+                if (isStart) {
+                    onStartTimeChange(chosen)
+                    val newStartMin = reservationTimeMinutes(chosen)
+                    if (newStartMin != null) {
+                        val currEndMin = reservationTimeMinutes(endTime)
+                        if (currEndMin == null || currEndMin <= newStartMin || (currEndMin - newStartMin) > 240) {
+                            val autoEndMin = (newStartMin + 120).coerceAtMost(1305)
+                            onEndTimeChange(formatMinutesToTime(autoEndMin))
+                        }
+                    }
+                } else {
+                    onEndTimeChange(chosen)
+                }
+            },
+        )
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // 1. 顶部标题与时长标签
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "预约时段（单次可约 1 ~ 4 小时）",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (durationMin != null) {
+                val hours = durationMin / 60
+                val mins = durationMin % 60
+                val durationText = "${if (hours > 0) "${hours}小时" else ""}${if (mins > 0) "${mins}分钟" else ""}"
+                val statusColor = if (isDurationValid) Color(0xFF15803D) else MaterialTheme.colorScheme.error
+                val statusBg = if (isDurationValid) Color(0xFFDCFCE7) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = statusBg,
+                    border = BorderStroke(1.dp, statusColor.copy(alpha = 0.3f)),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            if (isDurationValid) Icons.Outlined.CheckCircle else Icons.Outlined.WarningAmber,
+                            contentDescription = null,
+                            tint = statusColor,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            text = if (isDurationValid) "时长 $durationText (合规)" else "时长 $durationText (需1~4小时)",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                            color = statusColor,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. 双联时间大卡片（点击直接唤起选择弹窗）
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // 开始时间卡片
+            Surface(
+                onClick = { pickingTarget = "start" },
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.weight(1f),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = "开始时间",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.AccessTime,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = startTime,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                letterSpacing = 0.5.sp,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+
+            // 中间箭头指示
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Outlined.ArrowForward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+
+            // 结束时间卡片
+            Surface(
+                onClick = { pickingTarget = "end" },
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.weight(1f),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = "结束时间",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.AccessTime,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = endTime,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                letterSpacing = 0.5.sp,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+        }
+
+        // 3. 常用时长一键快速推算（1小时、1.5小时、2小时、3小时、4小时）
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "快捷时长推算（从开始时间自动顺延）",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                listOf(
+                    "1小时" to 60,
+                    "1.5小时" to 90,
+                    "2小时" to 120,
+                    "3小时" to 180,
+                    "4小时" to 240,
+                ).forEach { (label, durationMinutes) ->
+                    val isCurrentDuration = durationMin == durationMinutes
+                    Surface(
+                        onClick = {
+                            val curStartMin = reservationTimeMinutes(startTime) ?: 540
+                            val targetEndMin = (curStartMin + durationMinutes).coerceAtMost(1305)
+                            onEndTimeChange(formatMinutesToTime(targetEndMin))
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isCurrentDuration) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(
+                            1.dp,
+                            if (isCurrentDuration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(32.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                fontWeight = if (isCurrentDuration) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isCurrentDuration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. 全天常用黄金时段快速选择
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "全天常用黄金时段",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                listOf(
+                    "09:00 - 11:00" to ("09:00" to "11:00"),
+                    "10:00 - 12:00" to ("10:00" to "12:00"),
+                    "14:00 - 16:00" to ("14:00" to "16:00"),
+                    "14:30 - 17:30" to ("14:30" to "17:30"),
+                    "16:00 - 18:00" to ("16:00" to "18:00"),
+                    "19:00 - 21:00" to ("19:00" to "21:00"),
+                    "19:00 - 21:45" to ("19:00" to "21:45"),
+                ).forEach { (label, times) ->
+                    val isSelected = startTime == times.first && endTime == times.second
+                    Surface(
+                        onClick = {
+                            onStartTimeChange(times.first)
+                            onEndTimeChange(times.second)
+                        },
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        ),
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
