@@ -198,6 +198,20 @@ data class CampusReservationRequest(
 )
 
 @Immutable
+data class CampusMyReservation(
+    val id: String = "",
+    val spaceId: Int = 0,
+    val spaceName: String = "",
+    val date: String = "",
+    val startTime: String = "",
+    val endTime: String = "",
+    val title: String = "",
+    val statusText: String = "预约成功",
+    val canCancel: Boolean = true,
+    val createdAt: String = "",
+)
+
+@Immutable
 data class CampusAutoReservationCandidate(
     val areaId: Int,
     val startTime: String = "09:00",
@@ -313,11 +327,19 @@ class PersonalWorkspaceStore(context: Context) {
         }
     }
 
-    fun readAlerts(): List<AppAlertRecord> = scopedKey(KEY_ALERTS)?.let { key -> codec.read(key) }
-        ?.let(::parseArray)
-        .objects()
-        .mapNotNull(JSONObject::toAlertRecord)
-        .sortedByDescending(AppAlertRecord::createdAt)
+    fun readAlerts(): List<AppAlertRecord> {
+        val raw = scopedKey(KEY_ALERTS)?.let { key -> codec.read(key) }
+            ?.let(::parseArray)
+            .objects()
+            .mapNotNull(JSONObject::toAlertRecord)
+            .sortedByDescending(AppAlertRecord::createdAt)
+            .orEmpty()
+        val cleaned = raw.filter { it.type != "task" }
+        if (cleaned.size != raw.size) {
+            writeAlerts(cleaned)
+        }
+        return cleaned
+    }
 
     fun writeAlerts(alerts: List<AppAlertRecord>) {
         scopedKey(KEY_ALERTS)?.let { key ->

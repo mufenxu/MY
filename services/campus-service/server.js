@@ -7063,11 +7063,101 @@ async function handleApi(req, res, url) {
       json(res, 200, { ok: true, data: { date, availability } });
       return;
     }
+    if (url.pathname === "/api/campus/libroom/reservations" && req.method === "GET") {
+      const client = await libroomClient();
+      const jar = await readSessionJar();
+      const localRecords = Array.isArray(jar.meta?.libroom_my_reservations) ? jar.meta.libroom_my_reservations : [];
+
+      let remoteRecords = [];
+      try {
+        remoteRecords = await client.getMyReservations({});
+      } catch (err) {
+        logger.warn("libroom_get_my_reservations_upstream_failed", { error: err?.message });
+      }
+
+      // 将远程记录与本地记录合并规范化
+      const normalizedRemote = Array.isArray(remoteRecords) ? remoteRecords.map((r, idx) => ({
+        id: String(r.id || r.order_id || r.orderId || `remote_${idx}`),
+        spaceId: Number(r.area_id || r.space_id || r.spaceId || 0),
+        spaceName: String(r.space_name || r.area_name || r.room_name || r.name || r.spaceName || "研讨间"),
+        date: String(r.date || r.order_date || r.reserve_date || ""),
+        startTime: String(r.start_time || r.begin_time || r.startTime || ""),
+        endTime: String(r.end_time || r.finish_time || r.endTime || ""),
+        title: String(r.title || r.subject || "个人预约研讨"),
+        statusText: String(r.status_name || r.status_text || r.status || "预约成功"),
+        canCancel: r.status === undefined || String(r.status_name || "").includes("成功") || String(r.status_name || "").includes("待"),
+        createdAt: String(r.created_at || r.create_time || new Date().toISOString()),
+      })) : [];
+
+      const combined = [...localRecords];
+      for (const remote of normalizedRemote) {
+        if (!combined.some((item) => item.id === remote.id || (item.spaceName === remote.spaceName && item.date === remote.date && item.startTime === remote.startTime))) {
+          combined.push(remote);
+        }
+      }
+
+      combined.sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.startTime || "").localeCompare(a.startTime || ""));
+      json(res, 200, { ok: true, data: combined });
+      return;
+    }
+    const cancelMatch = url.pathname.match(/^\/api\/campus\/libroom\/reservations\/([^/]+)\/cancel$/);
+    if ((cancelMatch || url.pathname === "/api/campus/libroom/reservations/cancel") && req.method === "POST") {
+      const reservationId = cancelMatch ? cancelMatch[1] : (url.searchParams.get("id") || (await readBodyJson(req)).id);
+      const client = await libroomClient();
+      try {
+        await client.cancelReservation(reservationId);
+      } catch (err) {
+        logger.warn("libroom_cancel_upstream_failed", { error: err?.message, id: reservationId });
+      }
+
+      // 从本地会话记录中同步标记为已取消或移除
+      const jar = await readSessionJar();
+      if (Array.isArray(jar.meta?.libroom_my_reservations)) {
+        jar.meta.libroom_my_reservations = jar.meta.libroom_my_reservations.filter((item) => String(item.id) !== String(reservationId));
+        await saveSessionJar(jar).catch(() => {});
+      }
+
+      logger.info("audit_libroom_reservation_cancelled", {
+        actorUserId: currentUserId(),
+        reservationId
+      });
+      json(res, 200, { ok: true, data: { success: true } });
+      return;
+    }
     if (url.pathname === "/api/campus/libroom/reservations" && req.method === "POST") {
       const body = await readBodyJson(req);
       const normalized = normalizeReservationInput(body);
       const client = await libroomClient();
       const result = await client.submitReservation(body);
+
+      // 自动将本条成功预约记入本地列表
+      try {
+        const jar = await readSessionJar();
+        jar.meta ||= {};
+        jar.meta.libroom_my_reservations ||= [];
+        const spaces = await client.listSpaces({}).catch(() => []);
+        const targetSpace = Array.isArray(spaces) ? spaces.find((s) => Number(s.id ?? s.area_id ?? s.areaId) === Number(normalized.payload.area_id)) : null;
+        const newRecord = {
+          id: String(result?.id || result?.order_id || result?.data?.id || `local_${Date.now()}`),
+          spaceId: Number(normalized.payload.area_id),
+          spaceName: targetSpace?.name || `研讨间 ${normalized.payload.area_id}`,
+          date: normalized.date,
+          startTime: normalized.startTime,
+          endTime: normalized.endTime,
+          title: String(body.title || "个人课程研读与学习"),
+          statusText: "预约成功",
+          canCancel: true,
+          createdAt: new Date().toISOString(),
+        };
+        jar.meta.libroom_my_reservations.unshift(newRecord);
+        if (jar.meta.libroom_my_reservations.length > 20) {
+          jar.meta.libroom_my_reservations = jar.meta.libroom_my_reservations.slice(0, 20);
+        }
+        await saveSessionJar(jar).catch(() => {});
+      } catch (err) {
+        logger.warn("libroom_save_local_reservation_failed", { error: err?.message });
+      }
+
       logger.info("audit_libroom_reservation_submitted", {
         actorUserId: currentUserId(),
         areaId: normalized.payload.area_id,

@@ -86,51 +86,52 @@ class AlertNotifier(context: Context) {
     ) {
         if (accountScope == null) return
         ensureChannel()
-        val seenIncidents = preferences.getStringSet(scopedKey(KEY_SEEN_INCIDENTS), emptySet()).orEmpty().toMutableSet()
-        val seenTasks = preferences.getStringSet(scopedKey(KEY_SEEN_TASKS), emptySet()).orEmpty().toMutableSet()
+        val incidentsKey = scopedKey(KEY_SEEN_INCIDENTS)
+        val tasksKey = scopedKey(KEY_SEEN_TASKS)
+        val hasSeenIncidents = preferences.contains(incidentsKey)
+        val hasSeenTasks = preferences.contains(tasksKey)
+
+        val seenIncidents = preferences.getStringSet(incidentsKey, emptySet()).orEmpty().toMutableSet()
+        val seenTasks = preferences.getStringSet(tasksKey, emptySet()).orEmpty().toMutableSet()
 
         val critical = incidents.filter {
             it.status != "resolved" && it.severity.equals("critical", ignoreCase = true)
         }
         val actionable = tasks.filter { it.status == "action_required" || it.status == "failed" }
 
+        // 初次加载/重新安装建立基线，或者 seedOnly 阶段：只记录基线 ID，不产生任何历史虚假通知
+        if (!hasSeenIncidents || !hasSeenTasks || seedOnly) {
+            seenIncidents.addAll(critical.map { it.id })
+            seenTasks.addAll(actionable.map { it.id })
+            preferences.edit()
+                .putStringSet(incidentsKey, seenIncidents)
+                .putStringSet(tasksKey, seenTasks)
+                .apply()
+            return
+        }
+
         val newCritical = critical.filter { it.id !in seenIncidents }
-        val newActionable = actionable.filter { it.id !in seenTasks }
-
         val generated = buildList {
-                newCritical.forEach { incident ->
-                    add(
-                        AppAlertRecord(
-                            id = "incident:${incident.id}:${incident.updatedAt.orEmpty()}",
-                            type = "incident",
-                            sourceId = incident.id,
-                            title = "系统异常：${incident.title}",
-                            body = listOfNotNull(
-                                incident.serviceId?.takeIf(String::isNotBlank),
-                                incident.description.takeIf(String::isNotBlank),
-                            ).joinToString(" · ").ifBlank { "请尽快确认并处理" },
-                            createdAt = System.currentTimeMillis(),
-                        ),
-                    )
-                }
-                newActionable.forEach { task ->
-                    add(
-                        AppAlertRecord(
-                            id = "task:${task.id}:${task.updatedAt.orEmpty()}",
-                            type = "task",
-                            sourceId = task.id,
-                            title = if (task.status == "failed") "任务失败：${localizedTaskTitle(task)}" else "待处理：${localizedTaskTitle(task)}",
-                            body = listOf(sourceLabel(task.source), task.detail).filter(String::isNotBlank).joinToString(" · "),
-                            createdAt = System.currentTimeMillis(),
-                        ),
-                    )
-                }
+            newCritical.forEach { incident ->
+                add(
+                    AppAlertRecord(
+                        id = "incident:${incident.id}:${incident.updatedAt.orEmpty()}",
+                        type = "incident",
+                        sourceId = incident.id,
+                        title = "系统异常：${incident.title}",
+                        body = listOfNotNull(
+                            incident.serviceId?.takeIf(String::isNotBlank),
+                            incident.description.takeIf(String::isNotBlank),
+                        ).joinToString(" · ").ifBlank { "请尽快确认并处理" },
+                        createdAt = System.currentTimeMillis(),
+                    ),
+                )
             }
-        personalStore.appendAlerts(generated)
+        }
 
-        if (!seedOnly) {
-            generated.filter { it.type == "incident" }.take(3).forEach(::notifyRecord)
-            generated.filter { it.type == "task" }.take(3).forEach(::notifyRecord)
+        if (generated.isNotEmpty()) {
+            personalStore.appendAlerts(generated)
+            generated.take(3).forEach(::notifyRecord)
         }
 
         seenIncidents.clear()
@@ -138,8 +139,8 @@ class AlertNotifier(context: Context) {
         seenTasks.clear()
         seenTasks.addAll(actionable.map { it.id })
         preferences.edit()
-            .putStringSet(scopedKey(KEY_SEEN_INCIDENTS), seenIncidents)
-            .putStringSet(scopedKey(KEY_SEEN_TASKS), seenTasks)
+            .putStringSet(incidentsKey, seenIncidents)
+            .putStringSet(tasksKey, seenTasks)
             .apply()
     }
 

@@ -33,7 +33,7 @@
         </view>
         <view class="form-item flex-1">
           <view class="form-label">登录密码</view>
-          <input class="input" password placeholder="平台密码" placeholder-class="ph-color" model:value="{{pass}}" />
+          <input class="input" placeholder="平台密码" placeholder-class="ph-color" model:value="{{pass}}" />
         </view>
       </view>
 

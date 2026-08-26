@@ -482,9 +482,42 @@ export function createLibroomClient({
     return items;
   }
 
+  async function getMyReservations(data = {}) {
+    const endpoints = ["/v4/order/list", "/v4/order/my_order", "/v4/seminar/my_order", "/v4/order/my"];
+    for (const endpoint of endpoints) {
+      try {
+        const result = await request(endpoint, { page: Number(data.page || 1), ...data });
+        if (Array.isArray(result)) return result;
+        if (Array.isArray(result?.data)) return result.data;
+        if (Array.isArray(result?.list)) return result.list;
+        if (Array.isArray(result?.rows)) return result.rows;
+      } catch {
+        // try next endpoint
+      }
+    }
+    return [];
+  }
+
+  async function cancelReservation(id) {
+    const orderId = String(id || "").trim();
+    const endpoints = ["/v4/order/cancel", "/v4/seminar/cancel"];
+    let lastError = null;
+    for (const endpoint of endpoints) {
+      try {
+        return await request(endpoint, { id: orderId, order_id: orderId });
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    if (lastError) throw lastError;
+    return { success: true };
+  }
+
   return Object.freeze({
     request,
     listSpaces,
+    getMyReservations,
+    cancelReservation,
     getRules: () => request("/v4/index/bookingRules", {}),
     getAvailability: async ({ spaceId, date }) => {
       const raw = await request("/v4/seminar/seminar", { id: Number(spaceId), date: String(date || "") });

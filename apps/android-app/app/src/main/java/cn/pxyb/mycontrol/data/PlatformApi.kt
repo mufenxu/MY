@@ -639,6 +639,17 @@ class PlatformApi(
         execute(CAMPUS_LIBROOM_RESERVATIONS_PATH, method = "POST", body = body)
     }
 
+    suspend fun campusMyReservations(): List<CampusMyReservation> = withContext(Dispatchers.IO) {
+        val response = execute(CAMPUS_LIBROOM_RESERVATIONS_PATH)
+        val data = response.json.optJSONArray("data") ?: response.jsonArray
+        data.objects().map { it.toCampusMyReservation() }
+    }
+
+    suspend fun cancelCampusReservation(reservationId: String): Unit = withContext(Dispatchers.IO) {
+        val path = "$CAMPUS_LIBROOM_RESERVATIONS_PATH/${encodePath(reservationId)}/cancel"
+        execute(path, method = "POST")
+    }
+
     suspend fun campusAutoReservations(): List<CampusAutoReservationTask> = withContext(Dispatchers.IO) {
         val response = execute(CAMPUS_LIBROOM_AUTO_RESERVATIONS_PATH)
         val data = response.json.optJSONArray("data") ?: response.jsonArray
@@ -1803,6 +1814,19 @@ private fun CampusAutoReservationTask.toJson(): JSONObject = JSONObject().apply 
     }
     put("candidates", candidatesArr)
 }
+
+private fun JSONObject.toCampusMyReservation(): CampusMyReservation = CampusMyReservation(
+    id = optString("id", optString("order_id", optString("orderId", ""))),
+    spaceId = optInt("spaceId", optInt("space_id", optInt("areaId", optInt("area_id", 0)))),
+    spaceName = optString("spaceName", optString("space_name", optString("areaName", optString("area_name", optString("room_name", optString("name", "研讨间")))))),
+    date = optString("date", optString("order_date", optString("reserve_date", ""))),
+    startTime = optString("startTime", optString("start_time", optString("begin_time", ""))),
+    endTime = optString("endTime", optString("end_time", optString("finish_time", ""))),
+    title = optString("title", optString("subject", "个人预约研讨")),
+    statusText = optString("statusText", optString("status_text", optString("status_name", optString("status", "预约成功")))),
+    canCancel = optBoolean("canCancel", true),
+    createdAt = optString("createdAt", optString("created_at", "")),
+)
 
 private fun formatCampusJsonValue(value: Any?): String = when (value) {
     null, JSONObject.NULL, "" -> "暂无数据"

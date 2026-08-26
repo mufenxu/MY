@@ -61,6 +61,7 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -135,6 +136,8 @@ fun OverviewScreen(
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenReservation: () -> Unit = {},
+    onOpenFreeClassrooms: () -> Unit = {},
+    onOpenAccountManagement: () -> Unit = {},
     onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
     requestWebLoginUrl: suspend (String) -> String,
     requestExternalApplicationLaunch: suspend (String) -> ExternalApplicationLaunch,
@@ -249,7 +252,7 @@ fun OverviewScreen(
                     top = contentPadding.calculateTopPadding() + 4.dp,
                 ),
             contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // 1. 通透清爽顶栏
             item(key = "overview-header", contentType = "header") {
@@ -284,17 +287,17 @@ fun OverviewScreen(
                         },
                     ) {
                         Row(
-                            modifier = Modifier.padding(16.dp),
+                            modifier = Modifier.padding(13.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            IconTile(Icons.Outlined.AutoAwesome, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
+                            IconTile(Icons.Outlined.AutoAwesome, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(36.dp))
                             Column(Modifier.weight(1f)) {
-                                Text("下一步", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                                Text(assistant.nextAction.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(assistant.nextAction.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text("下一步", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                                Text(assistant.nextAction.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, fontSize = 14.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(assistant.nextAction.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
-                            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
@@ -309,150 +312,208 @@ fun OverviewScreen(
             item(key = "health-hero", contentType = "hero") {
                 val incidentCount = activeIncidents.size
                 val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
+                val isDark = isSystemInDarkTheme()
+                val topGradientStart = if (stable) {
+                    if (isDark) Color(0xFF064E3B).copy(alpha = 0.30f) else Color(0xFFECFDF5).copy(alpha = 0.85f)
+                } else {
+                    if (isDark) Color(0xFF78350F).copy(alpha = 0.30f) else Color(0xFFFFFBEB).copy(alpha = 0.85f)
+                }
                 Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(26.dp),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 0.dp,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    (if (stable) Color(0xFFECFDF5) else Color(0xFFFFFBEB)).copy(alpha = 0.6f),
-                                    Color.Transparent,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 0.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(topGradientStart, Color.Transparent),
                                 ),
                             )
-                        )
-                        .padding(18.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                val progress = if (monitoredCount == 0) 0f else healthyCount.toFloat() / monitoredCount.toFloat()
-                                CircularProgressIndicator(
-                                    progress = { progress },
-                                    modifier = Modifier.size(56.dp),
-                                    color = if (stable) Color(0xFF059669) else Color(0xFFD97706),
-                                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                    strokeWidth = 5.dp,
-                                    strokeCap = StrokeCap.Round,
+                            .padding(14.dp),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(42.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    val progress = if (monitoredCount == 0) 0f else healthyCount.toFloat() / monitoredCount.toFloat()
+                                    CircularProgressIndicator(
+                                        progress = { progress },
+                                        modifier = Modifier.size(42.dp),
+                                        color = if (stable) Color(0xFF059669) else Color(0xFFD97706),
+                                        trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                        strokeWidth = 3.8.dp,
+                                        strokeCap = StrokeCap.Round,
+                                    )
+                                    Icon(
+                                        if (stable) Icons.Outlined.CloudDone else Icons.Outlined.ErrorOutline,
+                                        contentDescription = null,
+                                        tint = if (stable) Color(0xFF059669) else Color(0xFFD97706),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        if (stable) "一切正常，平台稳定运行"
+                                        else if (incidentCount > 0) "有 $incidentCount 项需关注"
+                                        else "部分服务需关注",
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        "$healthyCount/$monitoredCount 服务监测中 · ${formatPlatformTime(overview.refreshedAt)}",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontSize = 11.5.sp,
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 1.dp),
+                                    )
+                                }
+                            }
+
+                            // 三列 Bento 指标
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                ModernOverviewMetric(
+                                    label = "健康服务",
+                                    value = "$healthyCount/$monitoredCount",
+                                    accent = Color(0xFF059669),
+                                    bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5),
+                                    modifier = Modifier.weight(1f),
                                 )
-                                Icon(
-                                    if (stable) Icons.Outlined.CloudDone else Icons.Outlined.ErrorOutline,
-                                    contentDescription = null,
-                                    tint = if (stable) Color(0xFF059669) else Color(0xFFD97706),
-                                    modifier = Modifier.size(24.dp),
+                                ModernOverviewMetric(
+                                    label = "平均响应",
+                                    value = averageLatencyMs?.let { "$it ms" } ?: "--",
+                                    accent = Color(0xFF2563EB),
+                                    bgColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.22f) else Color(0xFFEFF6FF),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                ModernOverviewMetric(
+                                    label = "待处理事项",
+                                    value = activeIncidents.size.toString(),
+                                    accent = if (activeIncidents.isEmpty()) Color(0xFF059669) else Color(0xFFDC2626),
+                                    bgColor = if (activeIncidents.isEmpty()) {
+                                        if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5)
+                                    } else {
+                                        if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.22f) else Color(0xFFFEF2F2)
+                                    },
+                                    modifier = Modifier.weight(1f),
                                 )
                             }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    if (stable) "一切正常，平台稳定运行"
-                                    else if (incidentCount > 0) "有 $incidentCount 件事项需要处理"
-                                    else "部分服务需要关注",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 18.sp,
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                                Text(
-                                    "$healthyCount/$monitoredCount 服务监测中 · ${formatPlatformTime(overview.refreshedAt)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 2.dp),
-                                )
-                            }
-                        }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                        // 三列 Bento 指标
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            ModernOverviewMetric(
-                                label = "健康服务",
-                                value = "$healthyCount/$monitoredCount",
-                                accent = Color(0xFF059669),
-                                bgColor = Color(0xFFECFDF5),
-                                modifier = Modifier.weight(1f),
-                            )
-                            ModernOverviewMetric(
-                                label = "平均响应",
-                                value = averageLatencyMs?.let { "$it ms" } ?: "--",
-                                accent = Color(0xFF2563EB),
-                                bgColor = Color(0xFFEFF6FF),
-                                modifier = Modifier.weight(1f),
-                            )
-                            ModernOverviewMetric(
-                                label = "待处理事项",
-                                value = activeIncidents.size.toString(),
-                                accent = if (activeIncidents.isEmpty()) Color(0xFF059669) else Color(0xFFDC2626),
-                                bgColor = if (activeIncidents.isEmpty()) Color(0xFFECFDF5) else Color(0xFFFEF2F2),
-                                modifier = Modifier.weight(1f),
-                            )
                         }
                     }
-                }
                 }
             }
 
             // 3. 校园智览卡片
             item(key = "campus-title", contentType = "section") {
-                OverviewSectionTitle("校园工作台", "课表、成绩与校园生活")
+                OverviewSectionTitle("校园工作台", "课表、成绩与校园日常")
             }
             item(key = "campus-card", contentType = "card") {
                 val campus = state.campusOverview
-                val campusCardShape = RoundedCornerShape(24.dp)
+                val isDark = isSystemInDarkTheme()
                 val campusInteractionSource = remember { MutableInteractionSource() }
                 Surface(
                     onClick = openTodayWorkspace,
                     interactionSource = campusInteractionSource,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .pressFeedback(campusInteractionSource),
-                    shape = campusCardShape,
+                        .pressFeedback(campusInteractionSource, pressedScale = 0.985f),
+                    shape = RoundedCornerShape(20.dp),
                     color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                     shadowElevation = 0.dp,
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            IconTile(Icons.Outlined.CalendarMonth, Ocean, OceanPale)
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (isDark) Ocean.copy(alpha = 0.20f)
+                                        else OceanPale.copy(alpha = 0.65f)
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Outlined.CalendarMonth,
+                                    contentDescription = null,
+                                    tint = Ocean,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("校园日常概览", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                                Text(
+                                    "校园日常概览",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                    ),
+                                )
                                 Text(
                                     state.timetable?.currentCalendarText?.takeIf(String::isNotBlank)
                                         ?: "课表、成绩和校园生活信息",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = 11.5.sp,
+                                    ),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            Icon(Icons.Outlined.ChevronRight, contentDescription = "查看校园智览", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                            Icon(
+                                Icons.Outlined.ChevronRight,
+                                contentDescription = "查看校园智览",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            ModernOverviewMetric("今日课程", todayCourseTotal.toString(), Color(0xFF2563EB), Color(0xFFEFF6FF), Modifier.weight(1f))
-                            ModernOverviewMetric("本学期课程", if (courseCount > 0) "$courseCount 门" else "--", Color(0xFF059669), Color(0xFFECFDF5), Modifier.weight(1f))
-                            ModernOverviewMetric("GPA", campus?.gpa?.overall ?: "--", Color(0xFF7C3AED), Color(0xFFF5F3FF), Modifier.weight(1f))
+                            ModernOverviewMetric(
+                                label = "今日课程",
+                                value = "$todayCourseTotal 节",
+                                accent = Color(0xFF2563EB),
+                                bgColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.22f) else Color(0xFFEFF6FF),
+                                modifier = Modifier.weight(1f),
+                            )
+                            ModernOverviewMetric(
+                                label = "本学期课程",
+                                value = if (courseCount > 0) "$courseCount 门" else "--",
+                                accent = Color(0xFF059669),
+                                bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5),
+                                modifier = Modifier.weight(1f),
+                            )
+                            ModernOverviewMetric(
+                                label = "综合绩点",
+                                value = campus?.gpa?.overall ?: "--",
+                                accent = Color(0xFF7C3AED),
+                                bgColor = if (isDark) Color(0xFF581C87).copy(alpha = 0.22f) else Color(0xFFF5F3FF),
+                                modifier = Modifier.weight(1f),
+                            )
                         }
                     }
                 }
@@ -469,26 +530,26 @@ fun OverviewScreen(
                             onClick = startCustomizingQuickActions,
                             interactionSource = editInteractionSource,
                             modifier = Modifier.pressFeedback(editInteractionSource),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(10.dp),
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
                             border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
                             ) {
                                 Icon(
                                     Icons.Outlined.Edit,
                                     contentDescription = "调整快捷操作",
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(13.dp),
+                                    modifier = Modifier.size(12.dp),
                                 )
                                 Text(
                                     "自定义",
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = FontWeight.SemiBold,
-                                        fontSize = 12.sp,
+                                        fontSize = 11.5.sp,
                                         color = MaterialTheme.colorScheme.primary,
                                     ),
                                 )
@@ -498,43 +559,50 @@ fun OverviewScreen(
                 )
             }
 
-            items(
-                items = quickActionRows,
-                key = { rowActions -> "quick-actions-${rowActions.joinToString("-") { it.name }}" },
-                contentType = { "quick-action-row" },
-            ) { rowActions ->
+            item(key = "quick-actions-card", contentType = "quick-actions-grid") {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(20.dp),
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                     shadowElevation = 0.dp,
                 ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    Column(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        rowActions.forEach { action ->
-                            val spec = remember(action) { homeQuickActionSpec(
-                                action = action,
-                                onSelectTab = onSelectTab,
-                                onRunDiagnostics = onRunDiagnostics,
-                                onTriggerBackup = onTriggerBackup,
-                                onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
-                                onOpenOperations = onOpenOperations,
-                                onOpenWorkspace = onOpenWorkspace,
-                                onOpenReservation = onOpenReservation,
-                            ) }
-                            QuickAction(
-                                icon = spec.icon,
-                                label = spec.label,
-                                accent = spec.accent,
-                                accentPale = spec.accentPale,
-                                modifier = Modifier.weight(1f),
-                                onClick = spec.onClick,
-                            )
+                        quickActionRows.forEach { rowActions ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                            ) {
+                                rowActions.forEach { action ->
+                                    val spec = remember(action) { homeQuickActionSpec(
+                                        action = action,
+                                        onSelectTab = onSelectTab,
+                                        onRunDiagnostics = onRunDiagnostics,
+                                        onTriggerBackup = onTriggerBackup,
+                                        onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
+                                        onOpenOperations = onOpenOperations,
+                                        onOpenWorkspace = onOpenWorkspace,
+                                        onOpenReservation = onOpenReservation,
+                                        onOpenFreeClassrooms = onOpenFreeClassrooms,
+                                        onOpenSearch = onOpenSearch,
+                                        onOpenQrLogin = onOpenQrLogin,
+                                        onOpenAccountManagement = onOpenAccountManagement,
+                                    ) }
+                                    QuickAction(
+                                        icon = spec.icon,
+                                        label = spec.label,
+                                        accent = spec.accent,
+                                        accentPale = spec.accentPale,
+                                        modifier = Modifier.weight(1f),
+                                        onClick = spec.onClick,
+                                    )
+                                }
+                                repeat(quickActionColumns - rowActions.size) { Spacer(Modifier.weight(1f)) }
+                            }
                         }
-                        repeat(quickActionColumns - rowActions.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
@@ -549,8 +617,9 @@ fun OverviewScreen(
                     key = { "incident-${it.id}" },
                     contentType = { "incident" },
                 ) { incident ->
-                    val incidentCardShape = RoundedCornerShape(20.dp)
+                    val incidentCardShape = RoundedCornerShape(16.dp)
                     val incidentInteractionSource = remember(incident.id) { MutableInteractionSource() }
+                    val isDark = isSystemInDarkTheme()
                     Surface(
                         onClick = openNotificationsWorkspace,
                         interactionSource = incidentInteractionSource,
@@ -558,24 +627,37 @@ fun OverviewScreen(
                             .fillMaxWidth()
                             .pressFeedback(incidentInteractionSource),
                         shape = incidentCardShape,
-                        color = Color(0xFFFEF2F2),
-                        border = BorderStroke(0.5.dp, Color(0xFFFECACA)),
+                        color = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.20f) else Color(0xFFFEF2F2),
+                        border = BorderStroke(0.5.dp, if (isDark) Color(0xFF991B1B).copy(alpha = 0.4f) else Color(0xFFFECACA)),
                     ) {
                         Row(
-                            modifier = Modifier.padding(14.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(11.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale)
+                            IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale, modifier = Modifier.size(34.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(incident.title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    incident.title,
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                                 Text(
                                     "${incident.source} · ${formatPlatformTime(incident.updatedAt ?: incident.openedAt)}",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            Icon(Icons.Outlined.ChevronRight, contentDescription = "查看通知", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(
+                                Icons.Outlined.ChevronRight,
+                                contentDescription = "查看通知",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
                     }
                 }
@@ -595,13 +677,11 @@ fun OverviewScreen(
                     key = { "external-application-${it.id}" },
                     contentType = { "external-application" },
                 ) { application ->
-                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                        ExternalApplicationRow(
-                            application = application,
-                            opening = openingExternalApplicationId == application.id,
-                            onOpen = stableOpenExternalApplication,
-                        )
-                    }
+                    ExternalApplicationRow(
+                        application = application,
+                        opening = openingExternalApplicationId == application.id,
+                        onOpen = stableOpenExternalApplication,
+                    )
                 }
             }
 
@@ -624,18 +704,16 @@ fun OverviewScreen(
                     key = { "service-${it.id}" },
                     contentType = { "service" },
                 ) { service ->
-                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                        ServiceRow(
-                            service = service,
-                            opening = openingServiceId == service.id,
-                            onOpen = stableOpenServiceAdmin,
-                        )
-                    }
+                    ServiceRow(
+                        service = service,
+                        opening = openingServiceId == service.id,
+                        onOpen = stableOpenServiceAdmin,
+                    )
                 }
             }
 
             item(key = "overview-bottom-spacer", contentType = "spacer") {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(8.dp))
             }
             }
         }
@@ -669,21 +747,32 @@ private fun ModernOverviewHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .padding(horizontal = 2.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = "工作台",
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onBackground,
-            ),
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = "工作台",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 22.sp,
+                    letterSpacing = (-0.2).sp,
+                    color = MaterialTheme.colorScheme.onBackground,
+                ),
+            )
+            Text(
+                text = "系统与校园日常综合控制台",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
+        }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             AppNotificationButton(
                 unreadCount = unreadCount,
@@ -693,12 +782,18 @@ private fun ModernOverviewHeader(
                 icon = Icons.Outlined.Search,
                 contentDescription = "全局搜索",
                 onClick = onOpenSearch,
+                size = 38.dp,
+                iconSize = 19.dp,
+                shape = RoundedCornerShape(12.dp),
             )
 
             ModernHeaderIconButton(
                 icon = Icons.Outlined.CenterFocusWeak,
                 contentDescription = "扫码登录",
                 onClick = onOpenQrLogin,
+                size = 38.dp,
+                iconSize = 19.dp,
+                shape = RoundedCornerShape(12.dp),
             )
         }
     }
@@ -714,19 +809,24 @@ private fun OverviewSectionTitle(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
+            .padding(horizontal = 2.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column {
             Text(
                 title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                ),
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
                 subtitle,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 11.sp,
+                ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -745,25 +845,29 @@ private fun ModernOverviewMetric(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         color = bgColor,
-        border = BorderStroke(0.5.dp, accent.copy(alpha = 0.3f)),
+        border = BorderStroke(0.5.dp, accent.copy(alpha = 0.25f)),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             Text(
                 label,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.5.sp,
+                ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 value,
                 style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
+                    fontWeight = FontWeight.Bold,
                     color = accent,
-                    fontSize = 17.sp,
+                    fontSize = 14.5.sp,
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -843,6 +947,10 @@ private fun homeQuickActionSpec(
     onOpenOperations: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
     onOpenReservation: () -> Unit,
+    onOpenFreeClassrooms: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onOpenQrLogin: () -> Unit,
+    onOpenAccountManagement: () -> Unit,
 ): HomeQuickActionSpec = when (action) {
     HomeQuickAction.Today -> HomeQuickActionSpec(
         icon = Icons.Outlined.CalendarMonth,
@@ -878,6 +986,14 @@ private fun homeQuickActionSpec(
         accent = Color(0xFF2563EB),
         accentPale = Color(0xFFEFF6FF),
         onClick = onOpenReservation,
+    )
+
+    HomeQuickAction.FreeClassrooms -> HomeQuickActionSpec(
+        icon = Icons.Outlined.School,
+        label = "空闲教室",
+        accent = Color(0xFF0284C7),
+        accentPale = Color(0xFFF0F9FF),
+        onClick = onOpenFreeClassrooms,
     )
 
     HomeQuickAction.Devices -> HomeQuickActionSpec(
@@ -917,6 +1033,30 @@ private fun homeQuickActionSpec(
         accent = Color(0xFF64748B),
         accentPale = Color(0xFFF8FAFC),
         onClick = onOpenOperations,
+    )
+
+    HomeQuickAction.Search -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Search,
+        label = "全局搜索",
+        accent = Color(0xFFEA580C),
+        accentPale = Color(0xFFFFF7ED),
+        onClick = onOpenSearch,
+    )
+
+    HomeQuickAction.QrScanner -> HomeQuickActionSpec(
+        icon = Icons.Outlined.CenterFocusWeak,
+        label = "扫码登录",
+        accent = Color(0xFF0EA5E9),
+        accentPale = Color(0xFFF0F9FF),
+        onClick = onOpenQrLogin,
+    )
+
+    HomeQuickAction.Account -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Security,
+        label = "安全中心",
+        accent = Color(0xFF059669),
+        accentPale = Color(0xFFECFDF5),
+        onClick = onOpenAccountManagement,
     )
 }
 
@@ -1018,11 +1158,15 @@ private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action
     HomeQuickAction.Insights -> "趋势周报"
     HomeQuickAction.Scenes -> "智能场景"
     HomeQuickAction.Reservation -> "研讨间预约"
+    HomeQuickAction.FreeClassrooms -> "空闲教室"
     HomeQuickAction.Devices -> "设备控制"
     HomeQuickAction.Diagnostics -> "系统自检"
     HomeQuickAction.Backup -> "数据备份"
     HomeQuickAction.GoogleAccounts -> "邮箱台账"
     HomeQuickAction.Operations -> "系统状态"
+    HomeQuickAction.Search -> "全局搜索"
+    HomeQuickAction.QrScanner -> "扫码登录"
+    HomeQuickAction.Account -> "安全中心"
 }
 
 private val WeekPattern = Regex("第(\\d+)周")
@@ -1152,67 +1296,49 @@ private fun QuickAction(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(18.dp)
     val interactionSource = remember { MutableInteractionSource() }
     val isDark = isSystemInDarkTheme()
 
-    val containerBg = if (isDark) {
-        accent.copy(alpha = 0.10f).compositeOver(MaterialTheme.colorScheme.surface)
-    } else {
-        accentPale.copy(alpha = 0.45f)
-    }
-
-    val borderColor = if (isDark) {
-        accent.copy(alpha = 0.22f)
-    } else {
-        accent.copy(alpha = 0.14f)
-    }
-
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        modifier = modifier.pressFeedback(interactionSource, pressedScale = 0.94f),
-        shape = shape,
-        color = containerBg,
-        border = BorderStroke(0.8.dp, borderColor),
-        shadowElevation = 0.dp,
+    Column(
+        modifier = modifier
+            .pressFeedback(interactionSource, pressedScale = 0.90f)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(vertical = 4.dp, horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 13.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(
-                        if (isDark) accent.copy(alpha = 0.22f)
-                        else accent.copy(alpha = 0.14f)
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = accent,
-                    modifier = Modifier.size(23.dp),
-                )
-            }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.5.sp,
-                    letterSpacing = (-0.1).sp,
+                .size(38.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (isDark) accent.copy(alpha = 0.20f)
+                    else accentPale.copy(alpha = 0.65f)
                 ),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = accent,
+                modifier = Modifier.size(20.dp),
             )
         }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Medium,
+                fontSize = 11.5.sp,
+                letterSpacing = (-0.1).sp,
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -1303,7 +1429,7 @@ private fun ServiceRow(
 ) {
     val theme = remember(service.id, service.name) { serviceVisualTheme(service) }
     val hasAdminUrl = !service.adminUrl.isNullOrBlank()
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(16.dp)
     val interactionSource = remember(service.id) { MutableInteractionSource() }
     val isDark = isSystemInDarkTheme()
 
@@ -1314,7 +1440,7 @@ private fun ServiceRow(
     }
 
     val borderColor = if (isDark) {
-        theme.accent.copy(alpha = 0.18f)
+        theme.accent.copy(alpha = 0.16f)
     } else {
         theme.accent.copy(alpha = 0.10f)
     }
@@ -1325,23 +1451,23 @@ private fun ServiceRow(
         interactionSource = interactionSource,
         modifier = Modifier
             .fillMaxWidth()
-            .pressFeedback(interactionSource, pressedScale = 0.98f),
+            .pressFeedback(interactionSource, pressedScale = 0.985f),
         shape = shape,
         color = containerBg,
         border = BorderStroke(0.8.dp, borderColor),
         shadowElevation = 0.dp,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(13.dp))
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(11.dp))
                     .background(
-                        if (isDark) theme.accent.copy(alpha = 0.22f)
+                        if (isDark) theme.accent.copy(alpha = 0.20f)
                         else theme.accent.copy(alpha = 0.14f)
                     ),
                 contentAlignment = Alignment.Center,
@@ -1350,16 +1476,16 @@ private fun ServiceRow(
                     imageVector = theme.icon,
                     contentDescription = service.name,
                     tint = theme.accent,
-                    modifier = Modifier.size(23.dp),
+                    modifier = Modifier.size(20.dp),
                 )
             }
 
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
                     text = service.name,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
+                        fontSize = 14.5.sp,
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -1367,22 +1493,22 @@ private fun ServiceRow(
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     service.httpStatus?.let { status ->
                         val statusBg = if (status in 200..299) Color(0xFF059669) else Color(0xFFDC2626)
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = RoundedCornerShape(5.dp),
                             color = statusBg.copy(alpha = if (isDark) 0.2f else 0.10f),
                         ) {
                             Text(
                                 text = "HTTP $status",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 10.5.sp,
+                                    fontSize = 10.sp,
                                     color = statusBg,
                                 ),
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                             )
                         }
                     }
@@ -1393,24 +1519,24 @@ private fun ServiceRow(
                             else -> Color(0xFFD97706)
                         }
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = RoundedCornerShape(5.dp),
                             color = latencyColor.copy(alpha = if (isDark) 0.2f else 0.10f),
                         ) {
                             Text(
                                 text = "$latency ms",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 10.5.sp,
+                                    fontSize = 10.sp,
                                     color = latencyColor,
                                 ),
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                             )
                         }
                     }
                     if (service.httpStatus == null && service.latencyMs == null) {
                         Text(
                             text = "等待监测数据",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -1424,7 +1550,7 @@ private fun ServiceRow(
                 if (hasAdminUrl) {
                     Box(
                         modifier = Modifier
-                            .size(24.dp)
+                            .size(22.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
                         contentAlignment = Alignment.Center,
@@ -1433,7 +1559,7 @@ private fun ServiceRow(
                             Icons.Outlined.ChevronRight,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(15.dp),
                         )
                     }
                 }
@@ -1449,7 +1575,7 @@ private fun ExternalApplicationRow(
     onOpen: (ExternalApplication) -> Unit,
 ) {
     val theme = remember(application.id, application.name) { applicationVisualTheme(application) }
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(16.dp)
     val interactionSource = remember(application.id) { MutableInteractionSource() }
     val isDark = isSystemInDarkTheme()
 
@@ -1460,9 +1586,9 @@ private fun ExternalApplicationRow(
     }
 
     val borderColor = if (isDark) {
-        theme.accent.copy(alpha = 0.20f)
+        theme.accent.copy(alpha = 0.18f)
     } else {
-        theme.accent.copy(alpha = 0.12f)
+        theme.accent.copy(alpha = 0.10f)
     }
 
     Surface(
@@ -1471,23 +1597,23 @@ private fun ExternalApplicationRow(
         interactionSource = interactionSource,
         modifier = Modifier
             .fillMaxWidth()
-            .pressFeedback(interactionSource, pressedScale = 0.98f),
+            .pressFeedback(interactionSource, pressedScale = 0.985f),
         shape = shape,
         color = containerBg,
         border = BorderStroke(0.8.dp, borderColor),
         shadowElevation = 0.dp,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(13.dp))
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(11.dp))
                     .background(
-                        if (isDark) theme.accent.copy(alpha = 0.22f)
+                        if (isDark) theme.accent.copy(alpha = 0.20f)
                         else theme.accent.copy(alpha = 0.14f)
                     ),
                 contentAlignment = Alignment.Center,
@@ -1496,16 +1622,16 @@ private fun ExternalApplicationRow(
                     imageVector = theme.icon,
                     contentDescription = application.name,
                     tint = theme.accent,
-                    modifier = Modifier.size(23.dp),
+                    modifier = Modifier.size(20.dp),
                 )
             }
 
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
                     text = application.name,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
+                        fontSize = 14.5.sp,
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -1513,7 +1639,7 @@ private fun ExternalApplicationRow(
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     application.health.latencyMs?.let { latency ->
                         val latencyColor = when {
@@ -1522,23 +1648,23 @@ private fun ExternalApplicationRow(
                             else -> Color(0xFFD97706)
                         }
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = RoundedCornerShape(5.dp),
                             color = latencyColor.copy(alpha = if (isDark) 0.2f else 0.10f),
                         ) {
                             Text(
                                 text = "$latency ms",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 10.5.sp,
+                                    fontSize = 10.sp,
                                     color = latencyColor,
                                 ),
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                             )
                         }
                     }
                     Text(
                         text = if (application.canAccess) "最低权限 ${externalRoleLabel(application.requiredRole)}" else "当前账号无权访问",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -1553,7 +1679,7 @@ private fun ExternalApplicationRow(
                 if (application.canAccess) {
                     Box(
                         modifier = Modifier
-                            .size(24.dp)
+                            .size(22.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
                         contentAlignment = Alignment.Center,
@@ -1562,7 +1688,7 @@ private fun ExternalApplicationRow(
                             Icons.Outlined.ChevronRight,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(15.dp),
                         )
                     }
                 }

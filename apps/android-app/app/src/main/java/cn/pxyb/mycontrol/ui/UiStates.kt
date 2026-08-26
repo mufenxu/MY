@@ -8,6 +8,7 @@ import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusFreeClassrooms
+import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.data.CampusReservationTimeWindow
@@ -224,6 +225,7 @@ data class ReservationUiState(
     val rules: String? = null,
     val availability: String? = null,
     val freeWindows: List<CampusReservationTimeWindow> = emptyList(),
+    val busyWindows: List<CampusReservationTimeWindow> = emptyList(),
     val availabilitySpaceId: Int? = null,
     val availabilityDate: String? = null,
     val availableSpaces: List<CampusReservationSpace> = emptyList(),
@@ -235,6 +237,9 @@ data class ReservationUiState(
     val autoTasksLoading: Boolean = false,
     val savingTask: Boolean = false,
     val deletingTaskId: String? = null,
+    val myReservations: List<CampusMyReservation> = emptyList(),
+    val myReservationsLoading: Boolean = false,
+    val cancellingReservationId: String? = null,
     val error: String? = null,
     val message: String? = null,
 )
@@ -549,6 +554,7 @@ internal fun AppUiState.toReservationUiState() = ReservationUiState(
     rules = reservationRules,
     availability = reservationAvailability,
     freeWindows = reservationFreeWindows,
+    busyWindows = reservationBusyWindows,
     availabilitySpaceId = reservationAvailabilitySpaceId,
     availabilityDate = reservationAvailabilityDate,
     availableSpaces = reservationAvailableSpaces,
@@ -560,6 +566,9 @@ internal fun AppUiState.toReservationUiState() = ReservationUiState(
     autoTasksLoading = reservationAutoTasksLoading,
     savingTask = reservationSavingTask,
     deletingTaskId = reservationDeletingTaskId,
+    myReservations = reservationMyReservations,
+    myReservationsLoading = reservationMyReservationsLoading,
+    cancellingReservationId = reservationCancellingReservationId,
     error = sectionError(DataSection.Reservation) ?: reservationError,
     message = reservationMessage,
 )

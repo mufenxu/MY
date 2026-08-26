@@ -29,6 +29,7 @@ import cn.pxyb.mycontrol.data.AppNotificationPreference
 import cn.pxyb.mycontrol.data.AppNotificationAction
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusFreeClassrooms
+import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusReservationAvailability
 import cn.pxyb.mycontrol.data.CampusReservationRequest
@@ -191,6 +192,7 @@ data class AppUiState(
     val reservationRules: String? = null,
     val reservationAvailability: String? = null,
     val reservationFreeWindows: List<CampusReservationTimeWindow> = emptyList(),
+    val reservationBusyWindows: List<CampusReservationTimeWindow> = emptyList(),
     val reservationAvailabilitySpaceId: Int? = null,
     val reservationAvailabilityDate: String? = null,
     val reservationAvailableSpaces: List<CampusReservationSpace> = emptyList(),
@@ -202,6 +204,9 @@ data class AppUiState(
     val reservationAutoTasksLoading: Boolean = false,
     val reservationSavingTask: Boolean = false,
     val reservationDeletingTaskId: String? = null,
+    val reservationMyReservations: List<CampusMyReservation> = emptyList(),
+    val reservationMyReservationsLoading: Boolean = false,
+    val reservationCancellingReservationId: String? = null,
     val reservationError: String? = null,
     val reservationMessage: String? = null,
 ) {
@@ -1621,6 +1626,7 @@ class AppViewModel(
 
     fun refreshReservation() {
         loadReservationSpaces(force = true)
+        loadMyReservations(force = true)
         loadAutoReservationTasks(force = true)
     }
 
@@ -1657,6 +1663,7 @@ class AppViewModel(
                     reservationRules = "查询中...",
                     reservationAvailability = "查询中...",
                     reservationFreeWindows = emptyList(),
+                    reservationBusyWindows = emptyList(),
                     reservationAvailabilitySpaceId = null,
                     reservationAvailabilityDate = null,
                     reservationError = null,
@@ -1688,6 +1695,7 @@ class AppViewModel(
                             reservationRules = rules,
                             reservationAvailability = availability.detail,
                             reservationFreeWindows = availability.freeWindows,
+                            reservationBusyWindows = availability.busyWindows,
                             reservationAvailabilitySpaceId = spaceId,
                             reservationAvailabilityDate = date,
                             reservationQueryLoading = false,
@@ -1701,6 +1709,7 @@ class AppViewModel(
                         reservationRules = "查询失败",
                         reservationAvailability = "查询失败",
                         reservationFreeWindows = emptyList(),
+                        reservationBusyWindows = emptyList(),
                         reservationAvailabilitySpaceId = null,
                         reservationAvailabilityDate = null,
                         reservationQueryLoading = false,
@@ -1754,6 +1763,7 @@ class AppViewModel(
                         reservationMessage = "预约已提交成功，请以学校预约系统记录为准。",
                     )
                 }
+                loadMyReservations(force = true)
                 onSuccess()
             } catch (error: Throwable) {
                 if (error is CancellationException) throw error
@@ -1761,6 +1771,56 @@ class AppViewModel(
                     it.copy(
                         reservationSubmitLoading = false,
                         reservationError = error.message ?: "预约提交失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun loadMyReservations(force: Boolean = false) {
+        if (mutableState.value.reservationMyReservationsLoading) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(reservationMyReservationsLoading = true) }
+            try {
+                val records = api.campusMyReservations()
+                mutableState.update {
+                    it.copy(
+                        reservationMyReservations = records,
+                        reservationMyReservationsLoading = false,
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        reservationMyReservationsLoading = false,
+                    )
+                }
+            }
+        }
+    }
+
+    fun cancelMyReservation(reservationId: String, onSuccess: () -> Unit = {}) {
+        if (reservationId.isBlank() || mutableState.value.reservationCancellingReservationId != null) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(reservationCancellingReservationId = reservationId, reservationError = null, reservationMessage = null) }
+            try {
+                api.cancelCampusReservation(reservationId)
+                mutableState.update {
+                    it.copy(
+                        reservationCancellingReservationId = null,
+                        reservationMessage = "已成功取消该研讨间预约。",
+                        reservationMyReservations = it.reservationMyReservations.filter { r -> r.id != reservationId }
+                    )
+                }
+                loadMyReservations(force = true)
+                onSuccess()
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        reservationCancellingReservationId = null,
+                        reservationError = error.message ?: "取消预约失败，请重试。",
                     )
                 }
             }

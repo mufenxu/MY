@@ -4,21 +4,23 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,11 +34,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 internal val AppPageHorizontalPadding = 16.dp
-internal val AppPageTopSpacing = 8.dp
+internal val AppPageTopSpacing = 6.dp
 internal val AppPageBottomSpacing = 16.dp
-internal val AppPageActionSize = 48.dp
+internal val AppPageActionSize = 36.dp
 
 internal data class AuthenticatedShellInsets(
     val navigationTop: Dp,
@@ -80,7 +83,7 @@ fun AppSecondaryHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp),
+            .heightIn(min = 44.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -89,25 +92,34 @@ fun AppSecondaryHeader(
             contentDescription = "返回",
             onClick = onBack,
         )
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (subtitle.isNotBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 11.5.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             actions?.invoke(this)
         }
@@ -120,28 +132,48 @@ fun AppHeaderIconButton(
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    size: Dp = AppPageActionSize,
+    iconSize: Dp = 19.dp,
+    shape: RoundedCornerShape = RoundedCornerShape(11.dp),
     enabled: Boolean = true,
     loading: Boolean = false,
-    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    containerColor: Color = MaterialTheme.colorScheme.surface,
+    iconTint: Color = MaterialTheme.colorScheme.onSurface,
+    containerColor: Color? = null,
+    borderColor: Color? = null,
 ) {
+    val isDark = isSystemInDarkTheme()
+    val resolvedBg = containerColor ?: if (isDark) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    }
+    val resolvedBorder = borderColor ?: if (isDark) {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f)
+    }
+
     val interactionSource = remember { MutableInteractionSource() }
     Surface(
-        modifier = modifier.pressFeedback(interactionSource),
-        shape = CircleShape,
-        color = containerColor,
-        border = BorderStroke(1.dp, iconTint.copy(alpha = 0.18f)),
+        onClick = onClick,
+        enabled = enabled && !loading,
+        interactionSource = interactionSource,
+        modifier = modifier
+            .size(size)
+            .pressFeedback(interactionSource, pressedScale = 0.92f),
+        shape = shape,
+        color = resolvedBg,
+        border = BorderStroke(0.6.dp, resolvedBorder),
+        shadowElevation = 0.dp,
     ) {
-        IconButton(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = Modifier.size(AppPageActionSize),
-            interactionSource = interactionSource,
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
         ) {
             Crossfade(targetState = loading, animationSpec = tween(160), label = "header-action") { busy ->
                 if (busy) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -150,7 +182,7 @@ fun AppHeaderIconButton(
                         icon,
                         contentDescription = contentDescription,
                         tint = iconTint,
-                        modifier = Modifier.size(21.dp),
+                        modifier = Modifier.size(iconSize),
                     )
                 }
             }

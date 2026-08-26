@@ -1381,6 +1381,10 @@ private fun AuthenticatedShell(
                         onOpenWorkspace = viewModel::openWorkspace,
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
                         onOpenReservation = { navController.navigate(AppRoute.Reservation) },
+                        onOpenFreeClassrooms = {
+                            navController.navigate(AppRoute.FreeClassrooms) { launchSingleTop = true }
+                        },
+                        onOpenAccountManagement = viewModel::openAccountManagement,
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
                         requestWebLoginUrl = viewModel::createPlatformWebLoginUrl,
                         requestExternalApplicationLaunch = viewModel::createExternalApplicationLaunch,
@@ -1571,6 +1575,8 @@ private fun AuthenticatedShell(
                         onBack = navigateBackFromSubScreen,
                         onRefresh = viewModel::refreshReservation,
                         onLoadSpaces = viewModel::loadReservationSpaces,
+                        onLoadMyReservations = viewModel::loadMyReservations,
+                        onCancelMyReservation = viewModel::cancelMyReservation,
                         onQueryRulesAndAvailability = viewModel::queryReservationRulesAndAvailability,
                         onQuerySpacesByTime = viewModel::queryAvailableSpacesByTime,
                         onSubmitReservation = viewModel::submitReservation,

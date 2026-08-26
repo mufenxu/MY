@@ -10,11 +10,15 @@ enum class HomeQuickAction {
     Insights,
     Scenes,
     Reservation,
+    FreeClassrooms,
     Devices,
     Diagnostics,
     Backup,
     GoogleAccounts,
     Operations,
+    Search,
+    QrScanner,
+    Account,
 }
 
 internal val DEFAULT_HIDDEN_HOME_QUICK_ACTIONS: Set<HomeQuickAction> = setOf(
@@ -23,6 +27,7 @@ internal val DEFAULT_HIDDEN_HOME_QUICK_ACTIONS: Set<HomeQuickAction> = setOf(
     HomeQuickAction.Diagnostics,
     HomeQuickAction.Backup,
     HomeQuickAction.Operations,
+    HomeQuickAction.GoogleAccounts,
 )
 
 @Immutable

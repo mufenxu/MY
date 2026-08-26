@@ -123,6 +123,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
@@ -1174,7 +1175,7 @@ fun ImmersiveHeader(
     }
 }
 
-/** 
+/**
  * 高颜值极简现代纯 Icon 顶栏按钮 (搜索、扫码通用双子按钮)
  */
 @Composable
@@ -1183,6 +1184,9 @@ fun ModernHeaderIconButton(
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    size: Dp = 38.dp,
+    iconSize: Dp = 20.dp,
+    shape: RoundedCornerShape = RoundedCornerShape(12.dp),
     iconTint: Color = Color(0xFF2563EB),
     containerColor: Color = Color(0xFFEFF6FF),
     borderColor: Color = Color(0xFFDBEAFE),
@@ -1192,12 +1196,12 @@ fun ModernHeaderIconButton(
         onClick = onClick,
         interactionSource = interactionSource,
         modifier = modifier
-            .size(42.dp)
+            .size(size)
             .pressFeedback(interactionSource),
-        shape = RoundedCornerShape(14.dp),
+        shape = shape,
         color = containerColor,
-        border = BorderStroke(1.dp, borderColor),
-        shadowElevation = 0.5.dp,
+        border = BorderStroke(0.8.dp, borderColor),
+        shadowElevation = 0.dp,
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -1207,7 +1211,7 @@ fun ModernHeaderIconButton(
                 imageVector = icon,
                 contentDescription = contentDescription,
                 tint = iconTint,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(iconSize),
             )
         }
     }
