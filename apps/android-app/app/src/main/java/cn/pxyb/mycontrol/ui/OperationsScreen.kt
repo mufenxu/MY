@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.theme.Amber
 import cn.pxyb.mycontrol.ui.theme.AmberPale
 import cn.pxyb.mycontrol.ui.theme.Coral
@@ -538,7 +539,7 @@ fun OperationsScreen(
                 item(key = "backup", contentType = "card") {
                     val backup = state.backup
                     AppPanel {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 IconTile(
                                     Icons.Outlined.Backup,
@@ -635,12 +636,18 @@ private fun OperationsStatusRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(11.dp),
         ) {
-            IconTile(icon, iconTint, iconBackground, modifier = Modifier.size(38.dp))
+            IconTile(icon, iconTint, iconBackground, modifier = Modifier.size(36.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.5.sp,
+                    ),
+                )
                 Text(
                     subtitle,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -653,7 +660,11 @@ private fun OperationsStatusRow(
                     color = iconTint,
                 )
             } else {
-                Text(trailing, style = MaterialTheme.typography.labelLarge, color = iconTint, fontWeight = FontWeight.Bold)
+                Text(
+                    trailing,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp),
+                    color = iconTint,
+                )
             }
         }
     }

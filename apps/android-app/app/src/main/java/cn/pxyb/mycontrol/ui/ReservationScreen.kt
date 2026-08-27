@@ -1,8 +1,11 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +22,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -62,6 +68,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
@@ -70,13 +77,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -156,7 +166,7 @@ fun ReservationScreen(
                         ),
                         modifier = Modifier
                             .weight(1f)
-                            .height(44.dp),
+                            .height(40.dp),
                     ) {
                         Row(
                             modifier = Modifier.fillMaxSize(),
@@ -171,12 +181,12 @@ fun ReservationScreen(
                                 },
                                 contentDescription = null,
                                 tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(17.dp),
+                                modifier = Modifier.size(16.dp),
                             )
                             Spacer(Modifier.width(5.dp))
                             Text(
                                 text = tab.label,
-                                style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.5.sp),
+                                style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.sp),
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             )
@@ -411,71 +421,100 @@ private fun SingleReservationPanel(
             Surface(
                 onClick = onNavigateToMyReservations,
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primary),
-                            contentAlignment = Alignment.Center,
+                        Icon(
+                            Icons.Outlined.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            Icon(
-                                Icons.Outlined.CheckCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(18.dp),
+                            Text(
+                                text = "您当前已预约：${latest.spaceName}",
+                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
                             )
-                        }
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFFDCFCE7),
+                                border = BorderStroke(0.5.dp, Color(0xFF86EFAC)),
                             ) {
                                 Text(
-                                    text = "您当前已预约：${latest.spaceName}",
-                                    style = MaterialTheme.typography.labelMedium,
+                                    text = latest.statusText.ifBlank { "预约成功" },
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                    color = Color(0xFF15803D),
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
                                 )
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFFDCFCE7),
-                                ) {
-                                    Text(
-                                        text = latest.statusText,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                        color = Color(0xFF15803D),
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                    )
-                                }
                             }
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                Icons.Outlined.AccessTime,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(12.dp),
+                            )
                             Text(
-                                text = "${latest.date} ${latest.startTime} - ${latest.endTime}",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                text = "${latest.date}  ${latest.startTime} - ${latest.endTime}",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
                             )
                         }
                     }
-                    Text(
-                        text = "查看 >",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            text = if (myReservations.size > 1) "共${myReservations.size}条" else "查看",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Icon(
+                            Icons.Outlined.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
             }
         }
@@ -483,8 +522,8 @@ private fun SingleReservationPanel(
         // 卡片一：空间与时段设置
         AppPanel {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 SectionHeader(
                     title = "空间与时段",
@@ -594,14 +633,62 @@ private fun SingleReservationPanel(
                     }
                 }
 
-                // 日期选择 (单行圆角 Chip)
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "预约日期",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                // 日期选择 (单行圆角 Chip + 滚轮选择弹窗)
+                var singleDatePickerOpen by remember { mutableStateOf(false) }
+                if (singleDatePickerOpen) {
+                    WheelDatePickerModal(
+                        title = "选择预约日期",
+                        currentDate = selectedDate,
+                        today = today,
+                        onDismiss = { singleDatePickerOpen = false },
+                        onConfirm = { chosenDate ->
+                            val parsed = runCatching { LocalDate.parse(chosenDate, DateTimeFormatter.ISO_LOCAL_DATE) }.getOrNull()
+                            if (parsed != null) {
+                                val offset = java.time.temporal.ChronoUnit.DAYS.between(today, parsed).toInt()
+                                dayOffset = offset
+                                onClearFeedback()
+                            }
+                        },
                     )
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "预约日期",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Surface(
+                            onClick = { singleDatePickerOpen = true },
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            ) {
+                                Icon(
+                                    Icons.Outlined.CalendarMonth,
+                                    contentDescription = "滑动选择更多日期",
+                                    modifier = Modifier.size(13.dp),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    text = if (dayOffset in 0..3) "滑动选日期" else "$selectedDate (${weekdayName(today.plusDays(dayOffset.toLong()))})",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                        }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -2051,6 +2138,40 @@ private fun AutoReservationEditDialog(
         }
     }
 
+    var datePickerTarget by remember { mutableStateOf<String?>(null) }
+    var timePickerOpen by remember { mutableStateOf(false) }
+
+    if (datePickerTarget != null) {
+        val isReservation = datePickerTarget == "reservation"
+        WheelDatePickerModal(
+            title = if (isReservation) "选择预约目标日期" else "选择任务运行日期",
+            currentDate = if (isReservation) reservationDate else executeDate,
+            today = today,
+            onDismiss = { datePickerTarget = null },
+            onConfirm = { chosenDate ->
+                if (isReservation) {
+                    reservationDate = chosenDate
+                    executeDate = defaultAutoReservationExecuteDate(chosenDate, today)
+                } else {
+                    executeDate = chosenDate
+                }
+                validationError = null
+            },
+        )
+    }
+
+    if (timePickerOpen) {
+        WheelTimePickerModal(
+            title = "选择任务运行时间",
+            currentTime = executeTime.ifBlank { "07:00" },
+            onDismiss = { timePickerOpen = false },
+            onConfirm = { chosenTime ->
+                executeTime = chosenTime
+                validationError = null
+            },
+        )
+    }
+
     AppDialog(
         onDismissRequest = onDismiss,
         icon = Icons.Outlined.AutoAwesome,
@@ -2205,55 +2326,121 @@ private fun AutoReservationEditDialog(
                 }
             }
 
-            OutlinedTextField(
-                value = reservationDate,
-                onValueChange = { reservationDate = it; validationError = null },
-                label = { Text(if (dateWeekday != null) "预约目标日期 ($dateWeekday)" else "预约目标日期") },
-                placeholder = { Text("YYYY-MM-DD") },
-                trailingIcon = dateWeekday?.let { wk ->
-                    {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.padding(end = 4.dp),
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { datePickerTarget = "reservation" }
+            ) {
+                OutlinedTextField(
+                    value = reservationDate,
+                    onValueChange = { reservationDate = it; validationError = null },
+                    readOnly = true,
+                    enabled = false,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                    label = { Text(if (dateWeekday != null) "预约目标日期 ($dateWeekday)" else "预约目标日期") },
+                    placeholder = { Text("点击滑动选择日期") },
+                    trailingIcon = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.padding(end = 6.dp),
                         ) {
-                            Text(
-                                text = wk,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            dateWeekday?.let { wk ->
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                ) {
+                                    Text(
+                                        text = wk,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                    )
+                                }
+                            }
+                            Icon(
+                                Icons.Outlined.CalendarMonth,
+                                contentDescription = "滑动选择日期",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
                             )
                         }
-                    }
-                },
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OutlinedTextField(
-                    value = executeDate,
-                    onValueChange = { executeDate = it; validationError = null },
-                    label = { Text(if (executeDateWeekday != null) "任务运行日期 ($executeDateWeekday)" else "任务运行日期") },
-                    placeholder = { Text("YYYY-MM-DD") },
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.weight(1.25f),
-                    singleLine = true,
-                )
+                Box(
+                    modifier = Modifier
+                        .weight(1.25f)
+                        .clickable { datePickerTarget = "execute" }
+                ) {
+                    OutlinedTextField(
+                        value = executeDate,
+                        onValueChange = { executeDate = it; validationError = null },
+                        readOnly = true,
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                        label = { Text(if (executeDateWeekday != null) "任务运行日期 ($executeDateWeekday)" else "任务运行日期") },
+                        placeholder = { Text("点击选择") },
+                        trailingIcon = {
+                            Icon(
+                                Icons.Outlined.CalendarMonth,
+                                contentDescription = "滑动选择日期",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp).padding(end = 4.dp),
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                }
 
-                OutlinedTextField(
-                    value = executeTime,
-                    onValueChange = { executeTime = it; validationError = null },
-                    label = { Text("运行时间") },
-                    placeholder = { Text("07:00") },
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { timePickerOpen = true }
+                ) {
+                    OutlinedTextField(
+                        value = executeTime,
+                        onValueChange = { executeTime = it; validationError = null },
+                        readOnly = true,
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                        label = { Text("运行时间") },
+                        placeholder = { Text("07:00") },
+                        trailingIcon = {
+                            Icon(
+                                Icons.Outlined.AccessTime,
+                                contentDescription = "滑动选择时间",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp).padding(end = 4.dp),
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                }
             }
 
             Text(
@@ -2487,11 +2674,11 @@ private fun CandidateEditRow(
             var pickingTimeTarget by remember { mutableStateOf<String?>(null) }
             if (pickingTimeTarget != null) {
                 val isStart = pickingTimeTarget == "start"
-                TimeSelectionModal(
+                WheelTimePickerModal(
                     title = if (isStart) "选择候选开始时间" else "选择候选结束时间",
                     currentTime = if (isStart) candidate.startTime else candidate.endTime,
                     onDismiss = { pickingTimeTarget = null },
-                    onSelectTime = { chosen ->
+                    onConfirm = { chosen ->
                         if (isStart) {
                             val newStartMin = reservationTimeMinutes(chosen)
                             val currEndMin = reservationTimeMinutes(candidate.endTime)
@@ -2635,82 +2822,277 @@ private fun isReservationDurationValid(startTime: String, endTime: String): Bool
     return end - start in 60..240
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TimeSelectionModal(
+private fun <T> WheelPicker(
+    items: List<T>,
+    selectedIndex: Int,
+    onSelectedIndexChanged: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    visibleItemCount: Int = 3,
+    itemHeight: androidx.compose.ui.unit.Dp = 44.dp,
+    unitText: String? = null,
+    formatItem: (T) -> String = { it.toString() },
+) {
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = selectedIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0)),
+    )
+    val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+    val coroutineScope = rememberCoroutineScope()
+
+    val centerIndex by remember(items) {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val visibleItems = layoutInfo.visibleItemsInfo
+            if (visibleItems.isEmpty()) return@derivedStateOf selectedIndex
+            val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+            val closest = visibleItems.minByOrNull { item ->
+                val itemCenter = item.offset + item.size / 2
+                kotlin.math.abs(itemCenter - viewportCenter)
+            }
+            closest?.index ?: selectedIndex
+        }
+    }
+
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (!listState.isScrollInProgress) {
+            if (centerIndex in items.indices && centerIndex != selectedIndex) {
+                onSelectedIndexChanged(centerIndex)
+            }
+        }
+    }
+
+    LaunchedEffect(selectedIndex) {
+        if (!listState.isScrollInProgress && centerIndex != selectedIndex && selectedIndex in items.indices) {
+            listState.animateScrollToItem(selectedIndex)
+        }
+    }
+
+    val verticalPadding = itemHeight * ((visibleItemCount - 1) / 2)
+
+    Box(
+        modifier = modifier.height(itemHeight * visibleItemCount),
+        contentAlignment = Alignment.Center,
+    ) {
+        LazyColumn(
+            state = listState,
+            flingBehavior = flingBehavior,
+            contentPadding = PaddingValues(vertical = verticalPadding),
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            itemsIndexed(items) { index, item ->
+                val isSelected = index == centerIndex
+                val distance = kotlin.math.abs(index - centerIndex)
+                val alpha = when (distance) {
+                    0 -> 1f
+                    1 -> 0.45f
+                    else -> 0.2f
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(itemHeight)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) {
+                            coroutineScope.launch {
+                                listState.animateScrollToItem(index)
+                            }
+                            onSelectedIndexChanged(index)
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = formatItem(item),
+                            style = if (isSelected) {
+                                MaterialTheme.typography.titleLarge.copy(
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            } else {
+                                MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Normal,
+                                )
+                            },
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
+                            },
+                            textAlign = TextAlign.Center,
+                        )
+                        if (isSelected && !unitText.isNullOrBlank()) {
+                            Spacer(Modifier.width(2.dp))
+                            Text(
+                                text = unitText,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(bottom = 6.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WheelTimePickerModal(
     title: String,
     currentTime: String,
     onDismiss: () -> Unit,
-    onSelectTime: (String) -> Unit,
+    onConfirm: (String) -> Unit,
 ) {
+    val parts = currentTime.split(":")
+    val initH = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 9
+    val initM = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+
+    val hours = remember { (0..23).map { String.format(Locale.ROOT, "%02d", it) } }
+    val minutes = remember { (0..59).map { String.format(Locale.ROOT, "%02d", it) } }
+
+    var selectedHourIndex by remember { mutableIntStateOf(initH) }
+    var selectedMinuteIndex by remember { mutableIntStateOf(initM) }
+
+    val formattedTime = "${hours.getOrElse(selectedHourIndex) { "09" }}:${minutes.getOrElse(selectedMinuteIndex) { "00" }}"
+
     AppDialog(
         onDismissRequest = onDismiss,
         icon = Icons.Outlined.AccessTime,
         iconTint = MaterialTheme.colorScheme.primary,
         iconBackground = MaterialTheme.colorScheme.primaryContainer,
         title = title,
-        subtitle = "请点击快捷选取标准半小时时段",
+        subtitle = "当前选择：$formattedTime",
         footer = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 AppDialogSecondaryButton(
-                    text = "关闭",
+                    text = "取消",
                     onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                )
+                AppDialogPrimaryButton(
+                    text = "确定",
+                    onClick = {
+                        onConfirm(formattedTime)
+                        onDismiss()
+                    },
+                    modifier = Modifier.weight(1f),
                 )
             }
         },
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 360.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            listOf(
-                "上午 (08:00 ~ 12:00)" to listOf("08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00"),
-                "下午 (12:30 ~ 18:00)" to listOf("12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00"),
-                "晚上 (18:30 ~ 21:45)" to listOf("18:30", "19:00", "19:30", "20:00", "20:30", "21:00", "21:30", "21:45"),
-            ).forEach { (groupLabel, times) ->
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = groupLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        times.forEach { t ->
-                            val isSelected = currentTime == t
-                            Surface(
-                                onClick = {
-                                    onSelectTime(t)
-                                    onDismiss()
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                                ),
-                            ) {
-                                Text(
-                                    text = t,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                )
-                            }
-                        }
-                    }
-                }
+            WheelPicker(
+                items = hours,
+                selectedIndex = selectedHourIndex,
+                onSelectedIndexChanged = { selectedHourIndex = it },
+                unitText = "时",
+                modifier = Modifier.weight(1f),
+            )
+            WheelPicker(
+                items = minutes,
+                selectedIndex = selectedMinuteIndex,
+                onSelectedIndexChanged = { selectedMinuteIndex = it },
+                unitText = "分",
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun WheelDatePickerModal(
+    title: String,
+    currentDate: String,
+    today: LocalDate = LocalDate.now(),
+    daysCount: Int = 30,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    val dates = remember(today, daysCount) {
+        (-2 until daysCount).map { today.plusDays(it.toLong()) }
+    }
+    val currentLocalDate = remember(currentDate) {
+        try {
+            LocalDate.parse(currentDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
+        } catch (_: Exception) {
+            today
+        }
+    }
+    val initIndex = remember(dates, currentLocalDate) {
+        val found = dates.indexOfFirst { it == currentLocalDate }
+        if (found >= 0) found else dates.indexOfFirst { it == today }.coerceAtLeast(0)
+    }
+
+    var selectedIndex by remember { mutableIntStateOf(initIndex) }
+    val chosenDate = dates.getOrElse(selectedIndex) { today }
+    val chosenDateStr = chosenDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
+    val chosenWk = weekdayName(chosenDate)
+
+    AppDialog(
+        onDismissRequest = onDismiss,
+        icon = Icons.Outlined.CalendarMonth,
+        iconTint = MaterialTheme.colorScheme.primary,
+        iconBackground = MaterialTheme.colorScheme.primaryContainer,
+        title = title,
+        subtitle = "当前选择：$chosenDateStr ($chosenWk)",
+        footer = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                AppDialogSecondaryButton(
+                    text = "取消",
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                )
+                AppDialogPrimaryButton(
+                    text = "确定",
+                    onClick = {
+                        onConfirm(chosenDateStr)
+                        onDismiss()
+                    },
+                    modifier = Modifier.weight(1f),
+                )
             }
+        },
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            WheelPicker(
+                items = dates,
+                selectedIndex = selectedIndex,
+                onSelectedIndexChanged = { selectedIndex = it },
+                formatItem = { d ->
+                    "${d.monthValue}月${d.dayOfMonth}日 ${weekdayName(d)}"
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -2732,11 +3114,11 @@ private fun ReservationTimeRangePicker(
 
     if (pickingTarget != null) {
         val isStart = pickingTarget == "start"
-        TimeSelectionModal(
+        WheelTimePickerModal(
             title = if (isStart) "选择开始时间" else "选择结束时间",
             currentTime = if (isStart) startTime else endTime,
             onDismiss = { pickingTarget = null },
-            onSelectTime = { chosen ->
+            onConfirm = { chosen ->
                 if (isStart) {
                     onStartTimeChange(chosen)
                     val newStartMin = reservationTimeMinutes(chosen)
@@ -2835,10 +3217,9 @@ private fun ReservationTimeRangePicker(
                         )
                         Text(
                             text = startTime,
-                            style = MaterialTheme.typography.titleLarge.copy(
+                            style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
-                                letterSpacing = 0.5.sp,
+                                fontSize = 17.5.sp,
                             ),
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -2849,7 +3230,7 @@ private fun ReservationTimeRangePicker(
             // 中间箭头指示
             Box(
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(26.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
                 contentAlignment = Alignment.Center,
@@ -2858,7 +3239,7 @@ private fun ReservationTimeRangePicker(
                     Icons.Outlined.ArrowForward,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(14.dp),
                 )
             }
 
@@ -2891,10 +3272,9 @@ private fun ReservationTimeRangePicker(
                         )
                         Text(
                             text = endTime,
-                            style = MaterialTheme.typography.titleLarge.copy(
+                            style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
-                                letterSpacing = 0.5.sp,
+                                fontSize = 17.5.sp,
                             ),
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -2946,71 +3326,6 @@ private fun ReservationTimeRangePicker(
                                 color = if (isCurrentDuration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                             )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 4. 全天常用黄金时段快速选择（一行4个，极紧凑微间距）
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
-                text = "全天常用黄金时段",
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            val goldenSlots = listOf(
-                "09:00-11:00" to ("09:00" to "11:00"),
-                "10:00-12:00" to ("10:00" to "12:00"),
-                "14:00-16:00" to ("14:00" to "16:00"),
-                "14:30-17:30" to ("14:30" to "17:30"),
-                "16:00-18:00" to ("16:00" to "18:00"),
-                "18:30-20:30" to ("18:30" to "20:30"),
-                "19:00-21:00" to ("19:00" to "21:00"),
-                "19:00-21:45" to ("19:00" to "21:45"),
-            )
-            val rows = goldenSlots.chunked(4)
-            Column(verticalArrangement = Arrangement.spacedBy(2.5.dp)) {
-                rows.forEach { rowSlots ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        rowSlots.forEach { (label, times) ->
-                            val isSelected = startTime == times.first && endTime == times.second
-                            Surface(
-                                onClick = {
-                                    onStartTimeChange(times.first)
-                                    onEndTimeChange(times.second)
-                                },
-                                shape = RoundedCornerShape(999.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                                ),
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier.padding(vertical = 3.5.dp, horizontal = 1.dp),
-                                ) {
-                                    Text(
-                                        text = label,
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontSize = 9.5.sp,
-                                            letterSpacing = (-0.2).sp,
-                                        ),
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        textAlign = TextAlign.Center,
-                                    )
-                                }
-                            }
-                        }
-                        repeat(4 - rowSlots.size) {
-                            Spacer(Modifier.weight(1f))
                         }
                     }
                 }

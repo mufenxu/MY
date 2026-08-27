@@ -155,9 +155,9 @@ data class StatusStyle(
     val icon: ImageVector,
 )
 
-val AppCardShape = RoundedCornerShape(24.dp)
-val AppSearchFieldShape = RoundedCornerShape(24.dp)
-private val AppDialogShape = RoundedCornerShape(28.dp)
+val AppCardShape = RoundedCornerShape(18.dp)
+val AppSearchFieldShape = RoundedCornerShape(20.dp)
+private val AppDialogShape = RoundedCornerShape(24.dp)
 
 /** 统一按压反馈：按下轻微缩放，松开时用柔和弹性恢复。 */
 @Composable
@@ -345,12 +345,24 @@ fun SectionHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
             if (!subtitle.isNullOrBlank()) {
                 Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 11.5.sp,
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -369,15 +381,22 @@ fun MetricCell(
     valueColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     val displayValueColor = if (isSystemInDarkTheme()) lerp(valueColor, Color.White, 0.28f) else valueColor
-    Column(modifier = modifier.padding(vertical = 4.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(4.dp))
+    Column(modifier = modifier.padding(vertical = 2.dp)) {
         Text(
-            value,
-            style = MaterialTheme.typography.titleLarge,
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.5.sp,
+            ),
             color = displayValueColor,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

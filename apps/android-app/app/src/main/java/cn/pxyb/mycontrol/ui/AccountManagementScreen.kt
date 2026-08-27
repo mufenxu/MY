@@ -303,12 +303,12 @@ fun AccountManagementScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(18.dp),
+                            .padding(14.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
-                            modifier = Modifier.size(76.dp)
+                            modifier = Modifier.size(72.dp)
                         ) {
                             Surface(
                                 shape = CircleShape,
@@ -320,39 +320,39 @@ fun AccountManagementScreen(
                                 shape = CircleShape,
                                 color = MaterialTheme.colorScheme.surface,
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-                                modifier = Modifier.size(66.dp)
+                                modifier = Modifier.size(62.dp)
                             ) {
                                 Image(
                                     painter = painterResource(R.drawable.platform_logo),
                                     contentDescription = "头像",
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .padding(10.dp)
+                                        .padding(8.dp)
                                         .fillMaxSize(),
                                 )
                             }
                         }
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             user.username,
-                            style = MaterialTheme.typography.headlineSmall.copy(
+                            style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
+                                fontSize = 18.sp,
                             ),
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(3.dp))
                         Surface(
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
                             shape = RoundedCornerShape(6.dp),
                         ) {
                             Text(
                                 text = roleLabel(user.role),
-                                style = MaterialTheme.typography.labelMedium.copy(
+                                style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                 ),
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                             )
                         }
                     }
@@ -1260,9 +1260,10 @@ private fun AccountSectionHeader(title: String) {
         text = title,
         style = MaterialTheme.typography.labelLarge.copy(
             fontWeight = FontWeight.Bold,
+            fontSize = 13.5.sp,
             color = MaterialTheme.colorScheme.primary,
         ),
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 6.dp),
+        modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 4.dp),
     )
 }
 
@@ -1279,21 +1280,21 @@ private fun AccountActionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Surface(
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(10.dp),
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
-                    .padding(9.dp)
-                    .size(20.dp),
+                    .padding(8.dp)
+                    .size(18.dp),
             )
         }
         Column(modifier = Modifier.weight(1f)) {
@@ -1301,12 +1302,14 @@ private fun AccountActionRow(
                 text = title,
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
+                    fontSize = 14.5.sp,
                 ),
             )
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 11.5.sp,
+                ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1315,7 +1318,10 @@ private fun AccountActionRow(
         if (!statusText.isNullOrBlank()) {
             Text(
                 text = statusText,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.5.sp,
+                ),
                 color = statusColor,
             )
         }
@@ -1323,7 +1329,7 @@ private fun AccountActionRow(
             imageVector = Icons.Outlined.ChevronRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(16.dp),
         )
     }
 }
