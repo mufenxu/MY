@@ -6,14 +6,15 @@ import org.junit.Test
 
 class UiLayoutTest {
     @Test
-    fun quickActionsUseTwoColumnsForSmallOrLargeTextLayouts() {
-        assertEquals(2, quickActionColumnCount(320.dp, fontScale = 1f))
-        assertEquals(2, quickActionColumnCount(600.dp, fontScale = 1.3f))
+    fun quickActionsUseThreeColumnsForSmallOrLargeTextLayouts() {
+        assertEquals(3, quickActionColumnCount(320.dp, fontScale = 1f))
+        assertEquals(3, quickActionColumnCount(600.dp, fontScale = 1.3f))
     }
 
     @Test
-    fun quickActionsUseFourColumnsOnWideLayouts() {
-        assertEquals(4, quickActionColumnCount(720.dp, fontScale = 1f))
+    fun quickActionsUseFourOrFiveColumnsOnStandardAndWideLayouts() {
+        assertEquals(4, quickActionColumnCount(400.dp, fontScale = 1f))
+        assertEquals(5, quickActionColumnCount(720.dp, fontScale = 1f))
     }
 
     @Test

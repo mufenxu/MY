@@ -1453,7 +1453,8 @@ private fun AuthenticatedShell(
             AppRoute.GoogleAccounts -> viewModel.syncNavigationDestination(MainTab.Profile, googleAccountDeskOpen = true)
             AppRoute.Search -> viewModel.syncNavigationDestination(MainTab.Overview, globalSearchOpen = true)
             AppRoute.Today -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
-            AppRoute.FreeClassrooms -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
+            AppRoute.FreeClassrooms -> viewModel.syncNavigationDestination(MainTab.Overview)
+            AppRoute.Reservation -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.Insights -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Insights)
             AppRoute.Scenes -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Scenes)
         }

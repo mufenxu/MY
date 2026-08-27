@@ -2952,8 +2952,8 @@ private fun ReservationTimeRangePicker(
             }
         }
 
-        // 4. 全天常用黄金时段快速选择（一行4个，紧凑行距）
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // 4. 全天常用黄金时段快速选择（一行4个，极紧凑微间距）
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
                 text = "全天常用黄金时段",
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
@@ -2970,7 +2970,7 @@ private fun ReservationTimeRangePicker(
                 "19:00-21:45" to ("19:00" to "21:45"),
             )
             val rows = goldenSlots.chunked(4)
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.5.dp)) {
                 rows.forEach { rowSlots ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -2993,7 +2993,7 @@ private fun ReservationTimeRangePicker(
                             ) {
                                 Box(
                                     contentAlignment = Alignment.Center,
-                                    modifier = Modifier.padding(vertical = 4.5.dp, horizontal = 1.dp),
+                                    modifier = Modifier.padding(vertical = 3.5.dp, horizontal = 1.dp),
                                 ) {
                                     Text(
                                         text = label,
