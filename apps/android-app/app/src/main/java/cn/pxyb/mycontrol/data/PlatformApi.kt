@@ -782,6 +782,9 @@ class PlatformApi(
                     createdAt = item.nullableString("createdAt"),
                     lastSeenAt = item.nullableString("lastSeenAt"),
                     expiresAt = item.nullableString("expiresAt"),
+                    sessionKind = item.optString("sessionKind", "browser"),
+                    parentSessionNonce = item.nullableString("parentSessionNonce"),
+                    deviceId = item.nullableString("deviceId"),
                     current = item.optString("nonce") == currentNonce,
                 )
             },
@@ -1161,6 +1164,7 @@ class PlatformApi(
             .url("${BuildConfig.PLATFORM_BASE_URL}$path")
             .header("Accept", "application/json")
             .header("User-Agent", "MY-Control-Android/${BuildConfig.VERSION_NAME}")
+            .header("X-Platform-Device-Id", sessionStore.readOrCreateDeviceId())
         if (authenticated) {
             val cookie = sessionStore.readCookie()
                 ?: throw ApiException("登录会话已失效，请重新登录。", 401, "UNAUTHORIZED")

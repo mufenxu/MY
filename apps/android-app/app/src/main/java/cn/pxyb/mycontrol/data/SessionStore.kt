@@ -8,6 +8,7 @@ import android.util.Base64
 import android.os.Build
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
+import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -102,6 +103,13 @@ class SessionStore(context: Context) {
 
     fun writeActiveUsername(username: String) {
         preferences.edit().putString(KEY_ACTIVE_USERNAME, username.trim()).apply()
+    }
+
+    fun readOrCreateDeviceId(): String {
+        preferences.getString(KEY_DEVICE_ID, null)?.trim()?.takeIf(String::isNotBlank)?.let { return it }
+        val deviceId = UUID.randomUUID().toString()
+        preferences.edit().putString(KEY_DEVICE_ID, deviceId).apply()
+        return deviceId
     }
 
     fun clear() {
@@ -249,5 +257,6 @@ class SessionStore(context: Context) {
         const val KEY_LAST_USED_AT = "last_used_at"
         const val KEY_IDLE_TIMEOUT = "idle_timeout"
         const val KEY_ACTIVE_USERNAME = "active_username"
+        const val KEY_DEVICE_ID = "device_id"
     }
 }

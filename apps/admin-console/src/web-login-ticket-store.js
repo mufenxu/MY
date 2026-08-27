@@ -41,6 +41,7 @@ export function createMemoryWebLoginTicketStore({
       appSessionNonce = '',
       appIp = '',
       appUserAgent = '',
+      sessionKind = 'browser',
     }) {
       const ticket = secretFactory();
       const createdAt = now();
@@ -53,6 +54,7 @@ export function createMemoryWebLoginTicketStore({
         appSessionNonce: String(appSessionNonce).slice(0, 160),
         appIp: String(appIp).slice(0, 128),
         appUserAgent: String(appUserAgent).slice(0, 256),
+        sessionKind: String(sessionKind || 'browser').slice(0, 32),
         consumedAt: null,
         createdAt: createdAt.toISOString(),
         expiresAt: new Date(createdAt.getTime() + ttlMs).toISOString(),
@@ -97,6 +99,7 @@ export async function createMongoWebLoginTicketStore({
       appSessionNonce = '',
       appIp = '',
       appUserAgent = '',
+      sessionKind = 'browser',
     }) {
       const ticket = crypto.randomBytes(32).toString('base64url');
       const createdAt = new Date();
@@ -109,6 +112,7 @@ export async function createMongoWebLoginTicketStore({
         appSessionNonce: String(appSessionNonce).slice(0, 160),
         appIp: String(appIp).slice(0, 128),
         appUserAgent: String(appUserAgent).slice(0, 256),
+        sessionKind: String(sessionKind || 'browser').slice(0, 32),
         consumedAt: null,
         createdAt,
         expiresAt: new Date(createdAt.getTime() + ttlMs),

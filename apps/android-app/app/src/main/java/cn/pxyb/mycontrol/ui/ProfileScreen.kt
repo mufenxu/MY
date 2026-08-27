@@ -133,12 +133,32 @@ fun ProfileScreen(
         protectionCount == 3 -> "正常"
         else -> "待完善"
     }
-    val currentSession = security?.sessions?.firstOrNull { it.current }
-    val otherSessionCount = security?.sessions?.count { !it.current }
+    val rawVisibleSessions = security?.sessions?.filterNot { it.sessionKind == "embedded_web" }
+    val identifiedNativeFallbackKeys = rawVisibleSessions
+        ?.filter { it.sessionKind == "native_app" && !it.deviceId.isNullOrBlank() }
+        ?.mapTo(mutableSetOf()) { "${it.subject}|${it.userAgent}|${it.ip}" }
+        .orEmpty()
+    val visibleSessions = rawVisibleSessions
+        ?.filterNot {
+            it.sessionKind == "native_app"
+                && it.deviceId.isNullOrBlank()
+                && "${it.subject}|${it.userAgent}|${it.ip}" in identifiedNativeFallbackKeys
+        }
+        ?.groupBy { session ->
+            when {
+                session.sessionKind != "native_app" -> session.nonce
+                !session.deviceId.isNullOrBlank() -> "${session.subject}|${session.deviceId}"
+                else -> "${session.subject}|${session.userAgent}|${session.ip}"
+            }
+        }
+        ?.values
+        ?.map { group -> group.firstOrNull { it.current } ?: group.first() }
+    val currentSession = visibleSessions?.firstOrNull { it.current }
+    val otherSessionCount = visibleSessions?.count { !it.current }
     val sessionSummary = when {
         security == null -> "正在同步登录设备"
         otherSessionCount == 0 -> "${currentSession?.let { deviceLabel(it.userAgent) } ?: "当前设备"} · 扫码登录网页端"
-        else -> "$otherSessionCount 台其他设备 · ${currentSession?.let { deviceLabel(it.userAgent) } ?: "当前设备"}"
+        else -> "$otherSessionCount 个其他登录会话 · ${currentSession?.let { deviceLabel(it.userAgent) } ?: "当前设备"}"
     }
 
     val adaptive = LocalAdaptiveWindow.current
@@ -295,13 +315,13 @@ fun ProfileScreen(
                                         ProfileDivider()
                                         when {
                                             security == null -> LoadingBlock("正在同步登录设备")
-                                            security.sessions.isEmpty() -> Text(
+                                            visibleSessions.isNullOrEmpty() -> Text(
                                                 "暂无活动会话",
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
                                             )
-                                            else -> security.sessions.forEachIndexed { index, session ->
+                                            else -> visibleSessions.forEachIndexed { index, session ->
                                                 if (index > 0) ProfileDivider()
                                                 SessionRow(
                                                     session = session,
@@ -708,13 +728,13 @@ fun ProfileScreen(
                                 ProfileDivider()
                                 when {
                                     security == null -> LoadingBlock("正在同步登录设备")
-                                    security.sessions.isEmpty() -> Text(
+                                    visibleSessions.isNullOrEmpty() -> Text(
                                         "暂无活动会话",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
                                     )
-                                    else -> security.sessions.forEachIndexed { index, session ->
+                                    else -> visibleSessions.forEachIndexed { index, session ->
                                         if (index > 0) ProfileDivider()
                                         SessionRow(
                                             session = session,

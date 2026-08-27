@@ -101,6 +101,11 @@ export function createSessionRegistry({
     }
   }
 
+  function legacySessionKind(session) {
+    return String(session?.sessionKind || '').trim()
+      || (String(session?.userAgent || '').startsWith('MY-Control-Android/') ? 'native_app' : 'browser');
+  }
+
   function issue({
     username,
     role = 'super_admin',
@@ -108,6 +113,10 @@ export function createSessionRegistry({
     idleTimeoutMinutes: sessionIdleTimeoutMinutes = defaultIdleTimeoutMinutes,
     ip = '',
     userAgent = '',
+    deviceId = '',
+    sessionKind = 'browser',
+    parentSessionNonce = '',
+    replaceExisting = false,
     now = Date.now(),
   }) {
     prune(now);
@@ -116,10 +125,30 @@ export function createSessionRegistry({
     }
     const token = issueSession({ username, role, secret, ttlHours, now });
     const session = verifySession(token, secret, now);
+    const normalizedKind = String(sessionKind || 'browser').slice(0, 32);
+    const normalizedParentNonce = String(parentSessionNonce || '').slice(0, 160);
+    const normalizedDeviceId = String(deviceId || '').slice(0, 128);
+    const normalizedIp = String(ip || '').slice(0, 128);
+    const normalizedUserAgent = String(userAgent || '').slice(0, 256);
+    if (replaceExisting && (normalizedParentNonce || normalizedDeviceId)) {
+      for (const [nonce, active] of activeSessions) {
+        if (
+          active.sub === username
+          && legacySessionKind(active) === normalizedKind
+          && (
+            (normalizedParentNonce && active.parentSessionNonce === normalizedParentNonce)
+            || (normalizedDeviceId && active.deviceId === normalizedDeviceId)
+          )
+        ) activeSessions.delete(nonce);
+      }
+    }
     activeSessions.set(session.nonce, {
       ...session,
-      ip: String(ip || '').slice(0, 128),
-      userAgent: String(userAgent || '').slice(0, 256),
+      ip: normalizedIp,
+      userAgent: normalizedUserAgent,
+      deviceId: normalizedDeviceId,
+      sessionKind: normalizedKind,
+      parentSessionNonce: normalizedParentNonce,
       idleTimeoutMinutes: Math.max(Number(sessionIdleTimeoutMinutes) || defaultIdleTimeoutMinutes, 1),
       createdAt: new Date(now).toISOString(),
       lastSeenAt: now,
@@ -196,6 +225,9 @@ export function createSessionRegistry({
         role: session.role || 'super_admin',
         ip: session.ip,
         userAgent: session.userAgent,
+        sessionKind: legacySessionKind(session),
+        parentSessionNonce: session.parentSessionNonce || '',
+        deviceId: session.deviceId || '',
         createdAt: session.createdAt,
         lastSeenAt: new Date(session.lastSeenAt).toISOString(),
         idleExpiresAt: new Date(Math.min(

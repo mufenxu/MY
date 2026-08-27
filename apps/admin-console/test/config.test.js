@@ -27,6 +27,12 @@ test('development defaults to local auth bypass', () => {
   assert.notEqual(config.externalAuthPublicKey, config.internalAuthPublicKey);
 });
 
+test('gateway alert defaults ignore small traffic bursts and minor latency spikes', () => {
+  const config = loadConfig({ NODE_ENV: 'development' });
+  assert.equal(config.proxyP95ThresholdMs, 3000);
+  assert.equal(config.proxyAlertMinimumRequests, 50);
+});
+
 test('external token rate limit is configurable within safe bounds', () => {
   assert.equal(loadConfig({
     NODE_ENV: 'development',

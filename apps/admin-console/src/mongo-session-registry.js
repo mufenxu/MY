@@ -35,6 +35,10 @@ export async function createMongoSessionRegistry({
       idleTimeoutMinutes: sessionIdleTimeoutMinutes = defaultIdleTimeoutMinutes,
       ip = '',
       userAgent = '',
+      deviceId = '',
+      sessionKind = 'browser',
+      parentSessionNonce = '',
+      replaceExisting = false,
       now = Date.now(),
     }) {
       const count = await sessions.estimatedDocumentCount();
@@ -48,17 +52,34 @@ export async function createMongoSessionRegistry({
       }
       const token = issueSession({ username, role, secret, ttlHours, now });
       const session = verifySession(token, secret, now);
+      const normalizedKind = String(sessionKind || 'browser').slice(0, 32);
+      const normalizedParentNonce = String(parentSessionNonce || '').slice(0, 160);
+      const normalizedDeviceId = String(deviceId || '').slice(0, 128);
+      const normalizedIp = String(ip || '').slice(0, 128);
+      const normalizedUserAgent = String(userAgent || '').slice(0, 256);
       await sessions.insertOne({
         nonce: session.nonce,
         subject: session.sub,
         role,
-        ip: String(ip || '').slice(0, 128),
-        userAgent: String(userAgent || '').slice(0, 256),
+        ip: normalizedIp,
+        userAgent: normalizedUserAgent,
+        deviceId: normalizedDeviceId,
+        sessionKind: normalizedKind,
+        parentSessionNonce: normalizedParentNonce,
         idleTimeoutMinutes: Math.max(Number(sessionIdleTimeoutMinutes) || defaultIdleTimeoutMinutes, 1),
         expiresAt: new Date(session.exp * 1000),
         createdAt: new Date(now),
         lastSeenAt: new Date(now),
       });
+      if (replaceExisting && (normalizedParentNonce || normalizedDeviceId)) {
+        await sessions.deleteMany({
+          nonce: { $ne: session.nonce },
+          subject: session.sub,
+          sessionKind: normalizedKind,
+          ...(normalizedParentNonce ? { parentSessionNonce: normalizedParentNonce } : {}),
+          ...(normalizedDeviceId ? { deviceId: normalizedDeviceId } : {}),
+        });
+      }
       return token;
     },
 
@@ -150,6 +171,10 @@ export async function createMongoSessionRegistry({
           .map((row) => ({
             ...row,
             role: row.role || 'super_admin',
+            sessionKind: String(row.sessionKind || '').trim()
+              || (String(row.userAgent || '').startsWith('MY-Control-Android/') ? 'native_app' : 'browser'),
+            parentSessionNonce: row.parentSessionNonce || '',
+            deviceId: row.deviceId || '',
             createdAt: row.createdAt?.toISOString?.() || row.createdAt,
             lastSeenAt: row.lastSeenAt?.toISOString?.() || row.lastSeenAt,
             idleExpiresAt: new Date(Math.min(

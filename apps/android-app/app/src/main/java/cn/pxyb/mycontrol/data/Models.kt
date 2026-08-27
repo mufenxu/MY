@@ -333,6 +333,9 @@ data class SecuritySession(
     val createdAt: String?,
     val lastSeenAt: String?,
     val expiresAt: String?,
+    val sessionKind: String,
+    val parentSessionNonce: String?,
+    val deviceId: String?,
     val current: Boolean,
 )
 

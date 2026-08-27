@@ -70,6 +70,11 @@ function isAndroidAppRequest(req) {
   return String(req.get('user-agent') || '').startsWith(ANDROID_APP_USER_AGENT_PREFIX);
 }
 
+function requestDeviceId(req) {
+  const value = String(req.get('x-platform-device-id') || '').trim();
+  return /^[A-Za-z0-9._:-]{8,128}$/.test(value) ? value : '';
+}
+
 function sessionPolicyForRequest(req, config) {
   const androidApp = String(req.get('user-agent') || '').startsWith(ANDROID_APP_USER_AGENT_PREFIX);
   return androidApp
@@ -556,8 +561,10 @@ export function createApp({
     });
   }
 
-  async function issueSessionCookie(req, res, account, authenticationMethod) {
-    const policy = sessionPolicyForRequest(req, config);
+  async function issueSessionCookie(req, res, account, authenticationMethod, options = {}) {
+    const policy = options.policy || sessionPolicyForRequest(req, config);
+    const sessionKind = options.sessionKind || (isAndroidAppRequest(req) ? 'native_app' : 'browser');
+    const deviceId = options.deviceId || requestDeviceId(req);
     const now = Date.now();
     const token = await sessions.issue({
       username: account.username,
@@ -566,6 +573,10 @@ export function createApp({
       idleTimeoutMinutes: policy.idleMinutes,
       ip: req.ip,
       userAgent: req.get('user-agent'),
+      sessionKind,
+      parentSessionNonce: options.parentSessionNonce || '',
+      deviceId,
+      replaceExisting: options.replaceExisting ?? (sessionKind === 'native_app' && Boolean(deviceId)),
       now,
     });
     res.cookie(sessionCookieName(config.isProduction), token, sessionCookieOptions(config, policy.ttlHours));
@@ -1468,7 +1479,13 @@ export function createApp({
       if (!account?.active || (config.requireMfa && !strongFactorEnabled(account))) {
         return res.status(403).send(renderAppLoginErrorHtml('无权访问', '当前账号已被禁用或尚未满足多因素认证要求。'));
       }
-      await issueSessionCookie(req, res, account, 'android_web_ticket');
+      const embeddedWebSession = consumed.sessionKind === 'embedded_web';
+      await issueSessionCookie(req, res, account, 'android_web_ticket', embeddedWebSession ? {
+        policy: { ttlHours: config.sessionTtlHours, idleMinutes: Math.min(config.sessionIdleMinutes, 5) },
+        sessionKind: 'embedded_web',
+        parentSessionNonce: consumed.appSessionNonce,
+        replaceExisting: true,
+      } : { sessionKind: 'browser' });
       await recordAudit(req, {
         actor: account.username,
         action: 'auth.web_login_ticket.consume',
@@ -1665,6 +1682,7 @@ export function createApp({
           appSessionNonce: req.consoleSession?.nonce,
           appIp: req.ip,
           appUserAgent: req.get('user-agent'),
+          sessionKind: application.openMode === 'webview' ? 'embedded_web' : 'browser',
         });
         const ticketUrl = new URL('/console/app-login', publicUrl.origin);
         ticketUrl.searchParams.set('ticket', created.ticket);

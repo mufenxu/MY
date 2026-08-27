@@ -148,6 +148,51 @@ test('gateway error-rate observations create and recover a derived incident', as
   assert.equal((await store.listIncidents({ status: 'resolved' })).some((incident) => incident.key === 'gateway:core:5xx'), true);
 });
 
+test('gateway latency requires consecutive breach and recovery evaluations', async () => {
+  let current = new Date('2026-07-18T12:00:00.000Z');
+  const store = createMemoryOperationsStore({ now: () => current });
+  const center = createOperationsCenter({
+    services: [service],
+    monitor: { refresh: async () => [{ ...service, state: 'healthy', latencyMs: 10, checkedAt: current.toISOString() }] },
+    store,
+    notifier: { check: async () => ({ configured: false }), sendIncident: async () => ({ delivered: false }) },
+    backups: { getStatus: async () => ({ backups: [], jobs: [], capabilities: {} }) },
+    releaseService: { getSummary: async () => ({ capabilities: {} }) },
+    now: () => current,
+    config: {
+      monitorIntervalMs: 30000,
+      incidentFailureThreshold: 2,
+      incidentRecoveryThreshold: 2,
+      proxyAlertMinimumRequests: 5,
+      proxyErrorRatePercent: 1,
+      proxyP95ThresholdMs: 2000,
+      backupRpoHours: 26,
+      workspaceRoot: process.cwd(),
+    },
+  });
+
+  for (let index = 0; index < 5; index += 1) {
+    await center.recordProxyMetric({ service: 'core', outcome: 'success', statusClass: '2xx', durationMs: 2100 });
+  }
+  current = new Date(current.getTime() + 11000);
+  await center.recordProxyMetric({ service: 'core', outcome: 'success', statusClass: '2xx', durationMs: 2100 });
+  assert.equal((await store.listIncidents({ status: 'open' })).some((incident) => incident.key === 'gateway:core:latency'), false);
+
+  current = new Date(current.getTime() + 11000);
+  await center.recordProxyMetric({ service: 'core', outcome: 'success', statusClass: '2xx', durationMs: 2100 });
+  assert.equal((await store.listIncidents({ status: 'open' })).some((incident) => incident.key === 'gateway:core:latency'), true);
+
+  current = new Date(current.getTime() + 6 * 60000);
+  await center.recordProxyMetric({ service: 'core', outcome: 'success', statusClass: '2xx', durationMs: 100 });
+  const pendingRecovery = (await store.listIncidents({ status: 'open' })).find((incident) => incident.key === 'gateway:core:latency');
+  assert.equal(Boolean(pendingRecovery), true);
+  assert.match(pendingRecovery.description, /2100 ms/);
+
+  current = new Date(current.getTime() + 11000);
+  await center.recordProxyMetric({ service: 'core', outcome: 'success', statusClass: '2xx', durationMs: 100 });
+  assert.equal((await store.listIncidents({ status: 'resolved' })).some((incident) => incident.key === 'gateway:core:latency'), true);
+});
+
 test('backup quality enforces restore drill age, RTO, and offsite incident recovery', async () => {
   let current = new Date('2026-07-18T12:00:00.000Z');
   let offsiteHealthy = false;

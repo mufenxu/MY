@@ -74,7 +74,7 @@ function operationDefaults(config) {
     failureThreshold: config.incidentFailureThreshold || 2,
     recoveryThreshold: config.incidentRecoveryThreshold || 2,
     serviceLatencyThresholdMs: config.serviceLatencyThresholdMs || 2000,
-    proxyP95ThresholdMs: config.proxyP95ThresholdMs || 2000,
+    proxyP95ThresholdMs: config.proxyP95ThresholdMs || 3000,
     proxyErrorRatePercent: config.proxyErrorRatePercent || 1,
     diskUsageThresholdPercent: config.diskUsageThresholdPercent || 80,
     backupRpoHours: config.backupRpoHours || 26,
@@ -166,6 +166,7 @@ export function createOperationsCenter({
   const observedBackupJobs = new Set();
   const proxyWindows = new Map();
   const lastProxyEvaluation = new Map();
+  const proxyLatencyStreaks = new Map();
   let capacityCache = null;
   let capacityCachedAt = 0;
 
@@ -640,7 +641,34 @@ export function createOperationsCenter({
     const failures = samples.filter((sample) => sample.statusClass === '5xx').length;
     const errorPercent = samples.length ? (failures / samples.length) * 100 : 0;
     const p95 = percentile(samples.map((sample) => sample.durationMs), 0.95);
-    const enoughTraffic = samples.length >= (config.proxyAlertMinimumRequests || 20);
+    const enoughTraffic = samples.length >= (config.proxyAlertMinimumRequests || 50);
+    const latencyActive = enoughTraffic && Number.isFinite(p95) && p95 > settings.proxyP95ThresholdMs;
+    const latencyKey = `gateway:${serviceId}:latency`;
+    const latencyIncident = await store.findActiveIncident(latencyKey);
+    const latencyStreak = proxyLatencyStreaks.get(serviceId) || { failures: 0, recoveries: 0 };
+    if (latencyActive) {
+      latencyStreak.failures += 1;
+      latencyStreak.recoveries = 0;
+    } else {
+      latencyStreak.failures = 0;
+      latencyStreak.recoveries = latencyIncident ? latencyStreak.recoveries + 1 : 0;
+    }
+    proxyLatencyStreaks.set(serviceId, latencyStreak);
+    const evaluatedLatencyActive = latencyActive
+      ? Boolean(latencyIncident || latencyStreak.failures >= settings.failureThreshold)
+      : Boolean(latencyIncident && latencyStreak.recoveries < settings.recoveryThreshold);
+    const latencyEvaluation = latencyIncident && !latencyActive && latencyStreak.recoveries < settings.recoveryThreshold
+      ? Promise.resolve(latencyIncident)
+      : evaluateDerivedIncident({
+        key: latencyKey,
+        active: evaluatedLatencyActive,
+        severity: 'warning',
+        title: `${serviceId} 网关 P95 延迟过高`,
+        description: `最近 5 分钟 P95 延迟为 ${p95 || 0} ms。`,
+        source: 'gateway',
+        observedState: 'high_latency',
+        details: { p95LatencyMs: p95, requests: samples.length },
+      }, settings);
     await Promise.all([
       evaluateDerivedIncident({
         key: `gateway:${serviceId}:5xx`,
@@ -652,16 +680,7 @@ export function createOperationsCenter({
         observedState: 'high_error_rate',
         details: { errorPercent, requests: samples.length },
       }, settings),
-      evaluateDerivedIncident({
-        key: `gateway:${serviceId}:latency`,
-        active: enoughTraffic && Number.isFinite(p95) && p95 > settings.proxyP95ThresholdMs,
-        severity: 'warning',
-        title: `${serviceId} 网关 P95 延迟过高`,
-        description: `最近 5 分钟 P95 延迟为 ${p95 || 0} ms。`,
-        source: 'gateway',
-        observedState: 'high_latency',
-        details: { p95LatencyMs: p95, requests: samples.length },
-      }, settings),
+      latencyEvaluation,
     ]);
     return { serviceId, samples: samples.length, failures, errorPercent, p95, enoughTraffic };
   }
