@@ -95,6 +95,8 @@ fun AccountManagementScreen(
     var showPasskeyDialog by remember { mutableStateOf(false) }
     var showPasskeyRegisterDialog by remember { mutableStateOf(false) }
     var passkeyToDelete by remember { mutableStateOf<PlatformPasskey?>(null) }
+    val adaptive = LocalAdaptiveWindow.current
+    val isTablet = adaptive.isTabletOrExpanded
 
     val listState = rememberLazyListState()
     PullToRefresh(
@@ -119,165 +121,342 @@ fun AccountManagementScreen(
             item(key = "section-error") { FeedbackBanner("安全数据暂不可用：$message", error = true) }
         }
 
-        // 1. 个人资料概览卡片
-        item {
-            AppPanel {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+        if (isTablet) {
+            // 平板双列布局：左列（头像资料 + 本地指纹锁），右列（密码、TOTP、Passkey、恢复码安全密钥）
+            item(key = "tablet-account-bento") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.size(76.dp)
+                    // 左列
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                            modifier = Modifier.fillMaxSize()
-                        ) {}
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-                            modifier = Modifier.size(66.dp)
-                        ) {
-                            Image(
-                                painter = painterResource(R.drawable.platform_logo),
-                                contentDescription = "头像",
+                        AppPanel {
+                            Column(
                                 modifier = Modifier
-                                    .clip(CircleShape)
-                                    .padding(10.dp)
-                                    .fillMaxSize(),
-                            )
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.size(88.dp)
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {}
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                                        modifier = Modifier.size(76.dp)
+                                    ) {
+                                        Image(
+                                            painter = painterResource(R.drawable.platform_logo),
+                                            contentDescription = "头像",
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .padding(12.dp)
+                                                .fillMaxSize(),
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    user.username,
+                                    style = MaterialTheme.typography.headlineSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 22.sp,
+                                    ),
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                    shape = RoundedCornerShape(8.dp),
+                                ) {
+                                    Text(
+                                        text = roleLabel(user.role),
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 13.sp,
+                                        ),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                    )
+                                }
+                            }
+                        }
+
+                        AppPanel {
+                            Column {
+                                AccountSectionHeader("本地安全")
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                ) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                        shape = RoundedCornerShape(12.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Fingerprint,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier
+                                                .padding(9.dp)
+                                                .size(20.dp),
+                                        )
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "打开应用时验证身份",
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 15.sp,
+                                            ),
+                                        )
+                                        Text(
+                                            text = if (state.appLockEnabled) {
+                                                "已开启 · 每次打开 App 需指纹或 PIN 验证"
+                                            } else {
+                                                "已关闭 · 打开 App 无需验证"
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    Switch(
+                                        checked = state.appLockEnabled,
+                                        onCheckedChange = onSetAppLockEnabled,
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = Color.White,
+                                            checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                        ),
+                                    )
+                                }
+                            }
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        user.username,
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                        ),
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                        shape = RoundedCornerShape(6.dp),
+
+                    // 右列：安全认证与密钥
+                    Column(
+                        modifier = Modifier.weight(1.2f),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        Text(
-                            text = roleLabel(user.role),
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp,
-                            ),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-                        )
+                        AppPanel {
+                            Column {
+                                AccountSectionHeader("安全认证与密钥")
+                                AccountActionRow(
+                                    icon = Icons.Outlined.LockReset,
+                                    title = "修改登录密码",
+                                    subtitle = "定期更新密码以保证中央控制面板安全",
+                                    onClick = { showChangePasswordDialog = true }
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                AccountActionRow(
+                                    icon = Icons.Outlined.Shield,
+                                    title = "二次动态验证（TOTP MFA）",
+                                    subtitle = if (totpEnabled) "已开启 · 动态口令双重防护" else "尚未开启 · 建议绑定 Auth 验证器",
+                                    statusText = if (totpEnabled) "已开启" else "去开启",
+                                    statusColor = if (totpEnabled) Color(0xFF166534) else Color(0xFFD97706),
+                                    onClick = {
+                                        if (totpEnabled) showTotpManageDialog = true else showTotpSetupDialog = true
+                                    }
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                AccountActionRow(
+                                    icon = Icons.Outlined.Fingerprint,
+                                    title = "Passkey 生物识别密钥",
+                                    subtitle = "$passkeyCount 个已绑定的设备通行密钥",
+                                    statusText = "管理",
+                                    onClick = { showPasskeyDialog = true }
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                AccountActionRow(
+                                    icon = Icons.Outlined.VpnKey,
+                                    title = "紧急恢复码（Backup Codes）",
+                                    subtitle = recoveryCodesRemaining?.let { "剩余 $it 个可使用的恢复码" } ?: "紧急情况下用于无手机登录",
+                                    statusText = "管理",
+                                    onClick = {
+                                        if (totpEnabled) showTotpManageDialog = true else showTotpSetupDialog = true
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
-        }
-
-        // 2. 安全认证与密钥管理
-        item {
-            AppPanel {
-                Column {
-                    AccountSectionHeader("安全认证与密钥")
-                    AccountActionRow(
-                        icon = Icons.Outlined.LockReset,
-                        title = "修改登录密码",
-                        subtitle = "定期更新密码以保证中央控制面板安全",
-                        onClick = { showChangePasswordDialog = true }
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    AccountActionRow(
-                        icon = Icons.Outlined.Shield,
-                        title = "二次动态验证（TOTP MFA）",
-                        subtitle = if (totpEnabled) "已开启 · 动态口令双重防护" else "尚未开启 · 建议绑定 Auth 验证器",
-                        statusText = if (totpEnabled) "已开启" else "去开启",
-                        statusColor = if (totpEnabled) Color(0xFF166534) else Color(0xFFD97706),
-                        onClick = {
-                            if (totpEnabled) showTotpManageDialog = true else showTotpSetupDialog = true
-                        }
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    AccountActionRow(
-                        icon = Icons.Outlined.Fingerprint,
-                        title = "Passkey 生物识别密钥",
-                        subtitle = "$passkeyCount 个已绑定的设备通行密钥",
-                        statusText = "管理",
-                        onClick = { showPasskeyDialog = true }
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    AccountActionRow(
-                        icon = Icons.Outlined.VpnKey,
-                        title = "紧急恢复码（Backup Codes）",
-                        subtitle = recoveryCodesRemaining?.let { "剩余 $it 个可使用的恢复码" } ?: "紧急情况下用于无手机登录",
-                        statusText = "管理",
-                        onClick = {
-                            if (totpEnabled) showTotpManageDialog = true else showTotpSetupDialog = true
-                        }
-                    )
-                }
-            }
-        }
-
-        // 本地解锁开关
-        item {
-            AppPanel {
-                Column {
-                    AccountSectionHeader("本地解锁")
-                    Row(
+        } else {
+            // 手机单列流保持原有排列
+            item {
+                AppPanel {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            .padding(18.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                            shape = RoundedCornerShape(12.dp),
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(76.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Fingerprint,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .padding(9.dp)
-                                    .size(20.dp),
-                            )
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                                modifier = Modifier.fillMaxSize()
+                            ) {}
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                                modifier = Modifier.size(66.dp)
+                            ) {
+                                Image(
+                                    painter = painterResource(R.drawable.platform_logo),
+                                    contentDescription = "头像",
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .padding(10.dp)
+                                        .fillMaxSize(),
+                                )
+                            }
                         }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "打开应用时验证身份",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp,
-                                ),
-                            )
-                            Text(
-                                text = if (state.appLockEnabled) {
-                                    "已开启 · 每次打开 App 需指纹或 PIN 验证"
-                                } else {
-                                    "已关闭 · 打开 App 无需验证"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        Switch(
-                            checked = state.appLockEnabled,
-                            onCheckedChange = onSetAppLockEnabled,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            user.username,
+                            style = MaterialTheme.typography.headlineSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
                             ),
                         )
+                        Spacer(Modifier.height(4.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(6.dp),
+                        ) {
+                            Text(
+                                text = roleLabel(user.role),
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp,
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2. 安全认证与密钥管理
+            item {
+                AppPanel {
+                    Column {
+                        AccountSectionHeader("安全认证与密钥")
+                        AccountActionRow(
+                            icon = Icons.Outlined.LockReset,
+                            title = "修改登录密码",
+                            subtitle = "定期更新密码以保证中央控制面板安全",
+                            onClick = { showChangePasswordDialog = true }
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        AccountActionRow(
+                            icon = Icons.Outlined.Shield,
+                            title = "二次动态验证（TOTP MFA）",
+                            subtitle = if (totpEnabled) "已开启 · 动态口令双重防护" else "尚未开启 · 建议绑定 Auth 验证器",
+                            statusText = if (totpEnabled) "已开启" else "去开启",
+                            statusColor = if (totpEnabled) Color(0xFF166534) else Color(0xFFD97706),
+                            onClick = {
+                                if (totpEnabled) showTotpManageDialog = true else showTotpSetupDialog = true
+                            }
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        AccountActionRow(
+                            icon = Icons.Outlined.Fingerprint,
+                            title = "Passkey 生物识别密钥",
+                            subtitle = "$passkeyCount 个已绑定的设备通行密钥",
+                            statusText = "管理",
+                            onClick = { showPasskeyDialog = true }
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        AccountActionRow(
+                            icon = Icons.Outlined.VpnKey,
+                            title = "紧急恢复码（Backup Codes）",
+                            subtitle = recoveryCodesRemaining?.let { "剩余 $it 个可使用的恢复码" } ?: "紧急情况下用于无手机登录",
+                            statusText = "管理",
+                            onClick = {
+                                if (totpEnabled) showTotpManageDialog = true else showTotpSetupDialog = true
+                            }
+                        )
+                    }
+                }
+            }
+
+            // 本地解锁开关
+            item {
+                AppPanel {
+                    Column {
+                        AccountSectionHeader("本地解锁")
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                shape = RoundedCornerShape(12.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Fingerprint,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .padding(9.dp)
+                                        .size(20.dp),
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "打开应用时验证身份",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 15.sp,
+                                    ),
+                                )
+                                Text(
+                                    text = if (state.appLockEnabled) {
+                                        "已开启 · 每次打开 App 需指纹或 PIN 验证"
+                                    } else {
+                                        "已关闭 · 打开 App 无需验证"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Switch(
+                                checked = state.appLockEnabled,
+                                onCheckedChange = onSetAppLockEnabled,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                ),
+                            )
+                        }
                     }
                 }
             }

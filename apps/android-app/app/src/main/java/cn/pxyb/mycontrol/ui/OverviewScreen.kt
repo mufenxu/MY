@@ -231,6 +231,9 @@ fun OverviewScreen(
     val stableOpenExternalApplication: (ExternalApplication) -> Unit = remember {
         { application -> openExternalApplication(application) }
     }
+    val adaptive = LocalAdaptiveWindow.current
+    val isTablet = adaptive.isTabletOrExpanded
+
     val openTodayWorkspace = remember { { onOpenWorkspace(WorkspaceDestination.Today) } }
     val openNotificationsWorkspace = remember { { onOpenWorkspace(WorkspaceDestination.Notifications) } }
     val startCustomizingQuickActions = remember { { customizingQuickActions = true } }
@@ -307,413 +310,795 @@ fun OverviewScreen(
                     OverviewSyncPanel(refreshing = state.refreshing)
                 }
             } else {
+                if (isTablet) {
+                    // 平板 / 展开大屏：自适应 2 列 Bento Grid 仪表盘
+                    item(key = "tablet-overview-bento", contentType = "tablet-bento") {
+                    val incidentCount = activeIncidents.size
+                    val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
+                    val isDark = isSystemInDarkTheme()
+                    val campus = state.campusOverview
+                    val campusInteractionSource = remember { MutableInteractionSource() }
 
-            // 2. Bento Style 核心系统状态 Hero Card
-            item(key = "health-hero", contentType = "hero") {
-                val incidentCount = activeIncidents.size
-                val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
-                val isDark = isSystemInDarkTheme()
-                val topGradientStart = if (stable) {
-                    if (isDark) Color(0xFF064E3B).copy(alpha = 0.30f) else Color(0xFFECFDF5).copy(alpha = 0.85f)
-                } else {
-                    if (isDark) Color(0xFF78350F).copy(alpha = 0.30f) else Color(0xFFFFFBEB).copy(alpha = 0.85f)
-                }
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 0.dp,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(topGradientStart, Color.Transparent),
-                                ),
-                            )
-                            .padding(14.dp),
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        // 左列 (50% 宽)：核心状态 Hero + 校园日常 + 快捷中心 + 待处理事项
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            // 1. 系统状态 Hero Card
+                            val topGradientStart = if (stable) {
+                                if (isDark) Color(0xFF064E3B).copy(alpha = 0.30f) else Color(0xFFECFDF5).copy(alpha = 0.85f)
+                            } else {
+                                if (isDark) Color(0xFF78350F).copy(alpha = 0.30f) else Color(0xFFFFFBEB).copy(alpha = 0.85f)
+                            }
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                shadowElevation = 0.dp,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                             ) {
                                 Box(
-                                    modifier = Modifier.size(42.dp),
-                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                colors = listOf(topGradientStart, Color.Transparent),
+                                            ),
+                                        )
+                                        .padding(14.dp),
                                 ) {
-                                    val progress = if (monitoredCount == 0) 0f else healthyCount.toFloat() / monitoredCount.toFloat()
-                                    CircularProgressIndicator(
-                                        progress = { progress },
-                                        modifier = Modifier.size(42.dp),
-                                        color = if (stable) Color(0xFF059669) else Color(0xFFD97706),
-                                        trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                                        strokeWidth = 3.8.dp,
-                                        strokeCap = StrokeCap.Round,
-                                    )
-                                    Icon(
-                                        if (stable) Icons.Outlined.CloudDone else Icons.Outlined.ErrorOutline,
-                                        contentDescription = null,
-                                        tint = if (stable) Color(0xFF059669) else Color(0xFFD97706),
-                                        modifier = Modifier.size(20.dp),
-                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        ) {
+                                            Box(
+                                                modifier = Modifier.size(42.dp),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                val progress = if (monitoredCount == 0) 0f else healthyCount.toFloat() / monitoredCount.toFloat()
+                                                CircularProgressIndicator(
+                                                    progress = { progress },
+                                                    modifier = Modifier.size(42.dp),
+                                                    color = if (stable) Color(0xFF059669) else Color(0xFFD97706),
+                                                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                                    strokeWidth = 3.8.dp,
+                                                    strokeCap = StrokeCap.Round,
+                                                )
+                                                Icon(
+                                                    if (stable) Icons.Outlined.CloudDone else Icons.Outlined.ErrorOutline,
+                                                    contentDescription = null,
+                                                    tint = if (stable) Color(0xFF059669) else Color(0xFFD97706),
+                                                    modifier = Modifier.size(20.dp),
+                                                )
+                                            }
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    if (stable) "一切正常，平台稳定运行"
+                                                    else if (incidentCount > 0) "有 $incidentCount 项需关注"
+                                                    else "部分服务需关注",
+                                                    style = MaterialTheme.typography.titleMedium.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 16.sp,
+                                                    ),
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                )
+                                                Text(
+                                                    "$healthyCount/$monitoredCount 服务监测中 · ${formatPlatformTime(overview.refreshedAt)}",
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        fontSize = 11.5.sp,
+                                                    ),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(top = 1.dp),
+                                                )
+                                            }
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            ModernOverviewMetric(
+                                                label = "健康服务",
+                                                value = "$healthyCount/$monitoredCount",
+                                                accent = Color(0xFF059669),
+                                                bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5),
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            ModernOverviewMetric(
+                                                label = "平均响应",
+                                                value = averageLatencyMs?.let { "$it ms" } ?: "--",
+                                                accent = Color(0xFF2563EB),
+                                                bgColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.22f) else Color(0xFFEFF6FF),
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            ModernOverviewMetric(
+                                                label = "待处理事项",
+                                                value = activeIncidents.size.toString(),
+                                                accent = if (activeIncidents.isEmpty()) Color(0xFF059669) else Color(0xFFDC2626),
+                                                bgColor = if (activeIncidents.isEmpty()) {
+                                                    if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5)
+                                                } else {
+                                                    if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.22f) else Color(0xFFFEF2F2)
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                    }
                                 }
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        if (stable) "一切正常，平台稳定运行"
-                                        else if (incidentCount > 0) "有 $incidentCount 项需关注"
-                                        else "部分服务需关注",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 16.sp,
-                                        ),
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                    Text(
-                                        "$healthyCount/$monitoredCount 服务监测中 · ${formatPlatformTime(overview.refreshedAt)}",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            fontSize = 11.5.sp,
-                                        ),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(top = 1.dp),
+                            }
+
+                            // 2. 校园智览卡片
+                            OverviewSectionTitle("校园工作台", "课表、成绩与校园日常")
+                            Surface(
+                                onClick = openTodayWorkspace,
+                                interactionSource = campusInteractionSource,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .pressFeedback(campusInteractionSource, pressedScale = 0.985f),
+                                shape = RoundedCornerShape(20.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                                shadowElevation = 0.dp,
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(
+                                                    if (isDark) Ocean.copy(alpha = 0.20f)
+                                                    else OceanPale.copy(alpha = 0.65f)
+                                                ),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                Icons.Outlined.CalendarMonth,
+                                                contentDescription = null,
+                                                tint = Ocean,
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                "校园日常概览",
+                                                style = MaterialTheme.typography.titleMedium.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 15.sp,
+                                                ),
+                                            )
+                                            Text(
+                                                state.timetable?.currentCalendarText?.takeIf(String::isNotBlank)
+                                                    ?: "课表、成绩和校园生活信息",
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    fontSize = 11.5.sp,
+                                                ),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        Icon(
+                                            Icons.Outlined.ChevronRight,
+                                            contentDescription = "查看校园智览",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        ModernOverviewMetric(
+                                            label = "今日课程",
+                                            value = "$todayCourseTotal 节",
+                                            accent = Color(0xFF2563EB),
+                                            bgColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.22f) else Color(0xFFEFF6FF),
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        ModernOverviewMetric(
+                                            label = "本学期课程",
+                                            value = if (courseCount > 0) "$courseCount 门" else "--",
+                                            accent = Color(0xFF059669),
+                                            bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5),
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        ModernOverviewMetric(
+                                            label = "综合绩点",
+                                            value = campus?.gpa?.overall ?: "--",
+                                            accent = Color(0xFF7C3AED),
+                                            bgColor = if (isDark) Color(0xFF581C87).copy(alpha = 0.22f) else Color(0xFFF5F3FF),
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
+                                }
+                            }
+
+                            // 3. 快捷中心
+                            OverviewSectionTitle(
+                                title = "快捷中心",
+                                subtitle = "高频工具与常用入口一键直达",
+                                trailing = {
+                                    val editInteractionSource = remember { MutableInteractionSource() }
+                                    Surface(
+                                        onClick = startCustomizingQuickActions,
+                                        interactionSource = editInteractionSource,
+                                        modifier = Modifier.pressFeedback(editInteractionSource),
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                        ) {
+                                            Icon(
+                                                Icons.Outlined.Edit,
+                                                contentDescription = "调整快捷操作",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(12.dp),
+                                            )
+                                            Text(
+                                                "自定义",
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontSize = 11.5.sp,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                ),
+                                            )
+                                        }
+                                    }
+                                },
+                            )
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                                shadowElevation = 0.dp,
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    quickActionRows.forEach { rowActions ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceEvenly,
+                                        ) {
+                                            rowActions.forEach { action ->
+                                                val spec = remember(action) { homeQuickActionSpec(
+                                                    action = action,
+                                                    onSelectTab = onSelectTab,
+                                                    onRunDiagnostics = onRunDiagnostics,
+                                                    onTriggerBackup = onTriggerBackup,
+                                                    onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
+                                                    onOpenOperations = onOpenOperations,
+                                                    onOpenWorkspace = onOpenWorkspace,
+                                                    onOpenReservation = onOpenReservation,
+                                                    onOpenFreeClassrooms = onOpenFreeClassrooms,
+                                                    onOpenSearch = onOpenSearch,
+                                                    onOpenQrLogin = onOpenQrLogin,
+                                                    onOpenAccountManagement = onOpenAccountManagement,
+                                                ) }
+                                                QuickAction(
+                                                    icon = spec.icon,
+                                                    label = spec.label,
+                                                    accent = spec.accent,
+                                                    accentPale = spec.accentPale,
+                                                    modifier = Modifier.weight(1f),
+                                                    onClick = spec.onClick,
+                                                )
+                                            }
+                                            repeat(quickActionColumns - rowActions.size) { Spacer(Modifier.weight(1f)) }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 4. 待处理事项
+                            if (activeIncidents.isNotEmpty()) {
+                                OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知")
+                                visibleIncidents.forEach { incident ->
+                                    val incidentCardShape = RoundedCornerShape(16.dp)
+                                    val incidentInteractionSource = remember(incident.id) { MutableInteractionSource() }
+                                    Surface(
+                                        onClick = openNotificationsWorkspace,
+                                        interactionSource = incidentInteractionSource,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .pressFeedback(incidentInteractionSource),
+                                        shape = incidentCardShape,
+                                        color = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.20f) else Color(0xFFFEF2F2),
+                                        border = BorderStroke(0.5.dp, if (isDark) Color(0xFF991B1B).copy(alpha = 0.4f) else Color(0xFFFECACA)),
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        ) {
+                                            IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale, modifier = Modifier.size(34.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    incident.title,
+                                                    style = MaterialTheme.typography.titleMedium.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 14.sp,
+                                                    ),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                                Text(
+                                                    "${incident.source} · ${formatPlatformTime(incident.updatedAt ?: incident.openedAt)}",
+                                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                            Icon(
+                                                Icons.Outlined.ChevronRight,
+                                                contentDescription = "查看通知",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 右列 (50% 宽)：外部应用 + 核心服务健康监控
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            if (state.externalApplications.isNotEmpty()) {
+                                OverviewSectionTitle("外部应用", "独立项目免密快捷直达")
+                                externalApplicationOpenError?.let { message ->
+                                    FeedbackBanner(message, error = true)
+                                }
+                                state.externalApplications.forEach { application ->
+                                    ExternalApplicationRow(
+                                        application = application,
+                                        opening = openingExternalApplicationId == application.id,
+                                        onOpen = stableOpenExternalApplication,
                                     )
                                 }
                             }
 
-                            // 三列 Bento 指标
+                            OverviewSectionTitle("服务监控", "核心微服务运行指标与状态")
+                            serviceOpenError?.let { message ->
+                                FeedbackBanner(message, error = true)
+                            }
+                            if (sortedServices.isEmpty()) {
+                                EmptyBlock("暂无服务监测", "等待平台状态同步")
+                            } else {
+                                sortedServices.forEach { service ->
+                                    ServiceRow(
+                                        service = service,
+                                        opening = openingServiceId == service.id,
+                                        onOpen = stableOpenServiceAdmin,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // 手机 / 紧凑屏幕模式：经典单列流
+                item(key = "health-hero", contentType = "hero") {
+                    val incidentCount = activeIncidents.size
+                    val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
+                    val isDark = isSystemInDarkTheme()
+                    val topGradientStart = if (stable) {
+                        if (isDark) Color(0xFF064E3B).copy(alpha = 0.30f) else Color(0xFFECFDF5).copy(alpha = 0.85f)
+                    } else {
+                        if (isDark) Color(0xFF78350F).copy(alpha = 0.30f) else Color(0xFFFFFBEB).copy(alpha = 0.85f)
+                    }
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        shadowElevation = 0.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(topGradientStart, Color.Transparent),
+                                    ),
+                                )
+                                .padding(14.dp),
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Box(
+                                        modifier = Modifier.size(42.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        val progress = if (monitoredCount == 0) 0f else healthyCount.toFloat() / monitoredCount.toFloat()
+                                        CircularProgressIndicator(
+                                            progress = { progress },
+                                            modifier = Modifier.size(42.dp),
+                                            color = if (stable) Color(0xFF059669) else Color(0xFFD97706),
+                                            trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                            strokeWidth = 3.8.dp,
+                                            strokeCap = StrokeCap.Round,
+                                        )
+                                        Icon(
+                                            if (stable) Icons.Outlined.CloudDone else Icons.Outlined.ErrorOutline,
+                                            contentDescription = null,
+                                            tint = if (stable) Color(0xFF059669) else Color(0xFFD97706),
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            if (stable) "一切正常，平台稳定运行"
+                                            else if (incidentCount > 0) "有 $incidentCount 项需关注"
+                                            else "部分服务需关注",
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 16.sp,
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                        )
+                                        Text(
+                                            "$healthyCount/$monitoredCount 服务监测中 · ${formatPlatformTime(overview.refreshedAt)}",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontSize = 11.5.sp,
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 1.dp),
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    ModernOverviewMetric(
+                                        label = "健康服务",
+                                        value = "$healthyCount/$monitoredCount",
+                                        accent = Color(0xFF059669),
+                                        bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5),
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    ModernOverviewMetric(
+                                        label = "平均响应",
+                                        value = averageLatencyMs?.let { "$it ms" } ?: "--",
+                                        accent = Color(0xFF2563EB),
+                                        bgColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.22f) else Color(0xFFEFF6FF),
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    ModernOverviewMetric(
+                                        label = "待处理事项",
+                                        value = activeIncidents.size.toString(),
+                                        accent = if (activeIncidents.isEmpty()) Color(0xFF059669) else Color(0xFFDC2626),
+                                        bgColor = if (activeIncidents.isEmpty()) {
+                                            if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5)
+                                        } else {
+                                            if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.22f) else Color(0xFFFEF2F2)
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item(key = "campus-title", contentType = "section") {
+                    OverviewSectionTitle("校园工作台", "课表、成绩与校园日常")
+                }
+                item(key = "campus-card", contentType = "card") {
+                    val campus = state.campusOverview
+                    val isDark = isSystemInDarkTheme()
+                    val campusInteractionSource = remember { MutableInteractionSource() }
+                    Surface(
+                        onClick = openTodayWorkspace,
+                        interactionSource = campusInteractionSource,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .pressFeedback(campusInteractionSource, pressedScale = 0.985f),
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                        shadowElevation = 0.dp,
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (isDark) Ocean.copy(alpha = 0.20f)
+                                            else OceanPale.copy(alpha = 0.65f)
+                                        ),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.CalendarMonth,
+                                        contentDescription = null,
+                                        tint = Ocean,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "校园日常概览",
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp,
+                                        ),
+                                    )
+                                    Text(
+                                        state.timetable?.currentCalendarText?.takeIf(String::isNotBlank)
+                                            ?: "课表、成绩和校园生活信息",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontSize = 11.5.sp,
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Icon(
+                                    Icons.Outlined.ChevronRight,
+                                    contentDescription = "查看校园智览",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 ModernOverviewMetric(
-                                    label = "健康服务",
-                                    value = "$healthyCount/$monitoredCount",
-                                    accent = Color(0xFF059669),
-                                    bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5),
-                                    modifier = Modifier.weight(1f),
-                                )
-                                ModernOverviewMetric(
-                                    label = "平均响应",
-                                    value = averageLatencyMs?.let { "$it ms" } ?: "--",
+                                    label = "今日课程",
+                                    value = "$todayCourseTotal 节",
                                     accent = Color(0xFF2563EB),
                                     bgColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.22f) else Color(0xFFEFF6FF),
                                     modifier = Modifier.weight(1f),
                                 )
                                 ModernOverviewMetric(
-                                    label = "待处理事项",
-                                    value = activeIncidents.size.toString(),
-                                    accent = if (activeIncidents.isEmpty()) Color(0xFF059669) else Color(0xFFDC2626),
-                                    bgColor = if (activeIncidents.isEmpty()) {
-                                        if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5)
-                                    } else {
-                                        if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.22f) else Color(0xFFFEF2F2)
-                                    },
+                                    label = "本学期课程",
+                                    value = if (courseCount > 0) "$courseCount 门" else "--",
+                                    accent = Color(0xFF059669),
+                                    bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                ModernOverviewMetric(
+                                    label = "综合绩点",
+                                    value = campus?.gpa?.overall ?: "--",
+                                    accent = Color(0xFF7C3AED),
+                                    bgColor = if (isDark) Color(0xFF581C87).copy(alpha = 0.22f) else Color(0xFFF5F3FF),
                                     modifier = Modifier.weight(1f),
                                 )
                             }
                         }
                     }
                 }
-            }
 
-            // 3. 校园智览卡片
-            item(key = "campus-title", contentType = "section") {
-                OverviewSectionTitle("校园工作台", "课表、成绩与校园日常")
-            }
-            item(key = "campus-card", contentType = "card") {
-                val campus = state.campusOverview
-                val isDark = isSystemInDarkTheme()
-                val campusInteractionSource = remember { MutableInteractionSource() }
-                Surface(
-                    onClick = openTodayWorkspace,
-                    interactionSource = campusInteractionSource,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .pressFeedback(campusInteractionSource, pressedScale = 0.985f),
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                    shadowElevation = 0.dp,
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        if (isDark) Ocean.copy(alpha = 0.20f)
-                                        else OceanPale.copy(alpha = 0.65f)
-                                    ),
-                                contentAlignment = Alignment.Center,
+                item(key = "quick-actions-title", contentType = "section") {
+                    OverviewSectionTitle(
+                        title = "快捷中心",
+                        subtitle = "高频工具与常用入口一键直达",
+                        trailing = {
+                            val editInteractionSource = remember { MutableInteractionSource() }
+                            Surface(
+                                onClick = startCustomizingQuickActions,
+                                interactionSource = editInteractionSource,
+                                modifier = Modifier.pressFeedback(editInteractionSource),
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                             ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Edit,
+                                        contentDescription = "调整快捷操作",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(12.dp),
+                                    )
+                                    Text(
+                                        "自定义",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 11.5.sp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        ),
+                                    )
+                                }
+                            }
+                        },
+                    )
+                }
+
+                item(key = "quick-actions-card", contentType = "quick-actions-grid") {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                        shadowElevation = 0.dp,
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            quickActionRows.forEach { rowActions ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                ) {
+                                    rowActions.forEach { action ->
+                                        val spec = remember(action) { homeQuickActionSpec(
+                                            action = action,
+                                            onSelectTab = onSelectTab,
+                                            onRunDiagnostics = onRunDiagnostics,
+                                            onTriggerBackup = onTriggerBackup,
+                                            onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
+                                            onOpenOperations = onOpenOperations,
+                                            onOpenWorkspace = onOpenWorkspace,
+                                            onOpenReservation = onOpenReservation,
+                                            onOpenFreeClassrooms = onOpenFreeClassrooms,
+                                            onOpenSearch = onOpenSearch,
+                                            onOpenQrLogin = onOpenQrLogin,
+                                            onOpenAccountManagement = onOpenAccountManagement,
+                                        ) }
+                                        QuickAction(
+                                            icon = spec.icon,
+                                            label = spec.label,
+                                            accent = spec.accent,
+                                            accentPale = spec.accentPale,
+                                            modifier = Modifier.weight(1f),
+                                            onClick = spec.onClick,
+                                        )
+                                    }
+                                    repeat(quickActionColumns - rowActions.size) { Spacer(Modifier.weight(1f)) }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (activeIncidents.isNotEmpty()) {
+                    item(key = "incident-title", contentType = "section") {
+                        OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知")
+                    }
+                    items(
+                        items = visibleIncidents,
+                        key = { "incident-${it.id}" },
+                        contentType = { "incident" },
+                    ) { incident ->
+                        val incidentCardShape = RoundedCornerShape(16.dp)
+                        val incidentInteractionSource = remember(incident.id) { MutableInteractionSource() }
+                        val isDark = isSystemInDarkTheme()
+                        Surface(
+                            onClick = openNotificationsWorkspace,
+                            interactionSource = incidentInteractionSource,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .pressFeedback(incidentInteractionSource),
+                            shape = incidentCardShape,
+                            color = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.20f) else Color(0xFFFEF2F2),
+                            border = BorderStroke(0.5.dp, if (isDark) Color(0xFF991B1B).copy(alpha = 0.4f) else Color(0xFFFECACA)),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale, modifier = Modifier.size(34.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        incident.title,
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        "${incident.source} · ${formatPlatformTime(incident.updatedAt ?: incident.openedAt)}",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                                 Icon(
-                                    Icons.Outlined.CalendarMonth,
-                                    contentDescription = null,
-                                    tint = Ocean,
+                                    Icons.Outlined.ChevronRight,
+                                    contentDescription = "查看通知",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(18.dp),
                                 )
                             }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "校园日常概览",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp,
-                                    ),
-                                )
-                                Text(
-                                    state.timetable?.currentCalendarText?.takeIf(String::isNotBlank)
-                                        ?: "课表、成绩和校园生活信息",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontSize = 11.5.sp,
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            Icon(
-                                Icons.Outlined.ChevronRight,
-                                contentDescription = "查看校园智览",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            ModernOverviewMetric(
-                                label = "今日课程",
-                                value = "$todayCourseTotal 节",
-                                accent = Color(0xFF2563EB),
-                                bgColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.22f) else Color(0xFFEFF6FF),
-                                modifier = Modifier.weight(1f),
-                            )
-                            ModernOverviewMetric(
-                                label = "本学期课程",
-                                value = if (courseCount > 0) "$courseCount 门" else "--",
-                                accent = Color(0xFF059669),
-                                bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5),
-                                modifier = Modifier.weight(1f),
-                            )
-                            ModernOverviewMetric(
-                                label = "综合绩点",
-                                value = campus?.gpa?.overall ?: "--",
-                                accent = Color(0xFF7C3AED),
-                                bgColor = if (isDark) Color(0xFF581C87).copy(alpha = 0.22f) else Color(0xFFF5F3FF),
-                                modifier = Modifier.weight(1f),
-                            )
                         }
                     }
                 }
-            }
 
-            // 4. 快捷操作
-            item(key = "quick-actions-title", contentType = "section") {
-                OverviewSectionTitle(
-                    title = "快捷中心",
-                    subtitle = "高频工具与常用入口一键直达",
-                    trailing = {
-                        val editInteractionSource = remember { MutableInteractionSource() }
-                        Surface(
-                            onClick = startCustomizingQuickActions,
-                            interactionSource = editInteractionSource,
-                            modifier = Modifier.pressFeedback(editInteractionSource),
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Edit,
-                                    contentDescription = "调整快捷操作",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(12.dp),
-                                )
-                                Text(
-                                    "自定义",
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 11.5.sp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    ),
-                                )
-                            }
-                        }
-                    },
-                )
-            }
-
-            item(key = "quick-actions-card", contentType = "quick-actions-grid") {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                    shadowElevation = 0.dp,
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        quickActionRows.forEach { rowActions ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
-                            ) {
-                                rowActions.forEach { action ->
-                                    val spec = remember(action) { homeQuickActionSpec(
-                                        action = action,
-                                        onSelectTab = onSelectTab,
-                                        onRunDiagnostics = onRunDiagnostics,
-                                        onTriggerBackup = onTriggerBackup,
-                                        onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
-                                        onOpenOperations = onOpenOperations,
-                                        onOpenWorkspace = onOpenWorkspace,
-                                        onOpenReservation = onOpenReservation,
-                                        onOpenFreeClassrooms = onOpenFreeClassrooms,
-                                        onOpenSearch = onOpenSearch,
-                                        onOpenQrLogin = onOpenQrLogin,
-                                        onOpenAccountManagement = onOpenAccountManagement,
-                                    ) }
-                                    QuickAction(
-                                        icon = spec.icon,
-                                        label = spec.label,
-                                        accent = spec.accent,
-                                        accentPale = spec.accentPale,
-                                        modifier = Modifier.weight(1f),
-                                        onClick = spec.onClick,
-                                    )
-                                }
-                                repeat(quickActionColumns - rowActions.size) { Spacer(Modifier.weight(1f)) }
-                            }
+                if (state.externalApplications.isNotEmpty()) {
+                    item(key = "external-apps-title", contentType = "section") {
+                        OverviewSectionTitle("外部应用", "独立项目免密快捷直达")
+                    }
+                    externalApplicationOpenError?.let { message ->
+                        item(key = "external-apps-error", contentType = "banner") {
+                            FeedbackBanner(message, error = true)
                         }
                     }
-                }
-            }
-
-            // 5. 待处理事项
-            if (activeIncidents.isNotEmpty()) {
-                item(key = "incident-title", contentType = "section") {
-                    OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知")
-                }
-                items(
-                    items = visibleIncidents,
-                    key = { "incident-${it.id}" },
-                    contentType = { "incident" },
-                ) { incident ->
-                    val incidentCardShape = RoundedCornerShape(16.dp)
-                    val incidentInteractionSource = remember(incident.id) { MutableInteractionSource() }
-                    val isDark = isSystemInDarkTheme()
-                    Surface(
-                        onClick = openNotificationsWorkspace,
-                        interactionSource = incidentInteractionSource,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .pressFeedback(incidentInteractionSource),
-                        shape = incidentCardShape,
-                        color = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.20f) else Color(0xFFFEF2F2),
-                        border = BorderStroke(0.5.dp, if (isDark) Color(0xFF991B1B).copy(alpha = 0.4f) else Color(0xFFFECACA)),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale, modifier = Modifier.size(34.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    incident.title,
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                    ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    "${incident.source} · ${formatPlatformTime(incident.updatedAt ?: incident.openedAt)}",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Icon(
-                                Icons.Outlined.ChevronRight,
-                                contentDescription = "查看通知",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
+                    items(
+                        items = state.externalApplications,
+                        key = { "external-application-${it.id}" },
+                        contentType = { "external-application" },
+                    ) { application ->
+                        ExternalApplicationRow(
+                            application = application,
+                            opening = openingExternalApplicationId == application.id,
+                            onOpen = stableOpenExternalApplication,
+                        )
                     }
                 }
-            }
 
-            if (state.externalApplications.isNotEmpty()) {
-                item(key = "external-apps-title", contentType = "section") {
-                    OverviewSectionTitle("外部应用", "独立项目免密快捷直达")
+                item(key = "services-title", contentType = "section") {
+                    OverviewSectionTitle("服务监控", "核心微服务运行指标与状态")
                 }
-                externalApplicationOpenError?.let { message ->
-                    item(key = "external-apps-error", contentType = "banner") {
+                serviceOpenError?.let { message ->
+                    item(key = "services-error", contentType = "banner") {
                         FeedbackBanner(message, error = true)
                     }
                 }
-                items(
-                    items = state.externalApplications,
-                    key = { "external-application-${it.id}" },
-                    contentType = { "external-application" },
-                ) { application ->
-                    ExternalApplicationRow(
-                        application = application,
-                        opening = openingExternalApplicationId == application.id,
-                        onOpen = stableOpenExternalApplication,
-                    )
+                if (sortedServices.isEmpty()) {
+                    item(key = "services-empty", contentType = "empty") {
+                        EmptyBlock("暂无服务监测", "等待平台状态同步")
+                    }
+                } else {
+                    items(
+                        items = sortedServices,
+                        key = { "service-${it.id}" },
+                        contentType = { "service" },
+                    ) { service ->
+                        ServiceRow(
+                            service = service,
+                            opening = openingServiceId == service.id,
+                            onOpen = stableOpenServiceAdmin,
+                        )
+                    }
                 }
-            }
 
-            // 6. 服务可用性
-            item(key = "services-title", contentType = "section") {
-                OverviewSectionTitle("服务监控", "核心微服务运行指标与状态")
-            }
-            serviceOpenError?.let { message ->
-                item(key = "services-error", contentType = "banner") {
-                    FeedbackBanner(message, error = true)
+                item(key = "overview-bottom-spacer", contentType = "spacer") {
+                    Spacer(Modifier.height(8.dp))
                 }
-            }
-            if (sortedServices.isEmpty()) {
-                item(key = "services-empty", contentType = "empty") {
-                    EmptyBlock("暂无服务监测", "等待平台状态同步")
-                }
-            } else {
-                items(
-                    items = sortedServices,
-                    key = { "service-${it.id}" },
-                    contentType = { "service" },
-                ) { service ->
-                    ServiceRow(
-                        service = service,
-                        opening = openingServiceId == service.id,
-                        onOpen = stableOpenServiceAdmin,
-                    )
-                }
-            }
-
-            item(key = "overview-bottom-spacer", contentType = "spacer") {
-                Spacer(Modifier.height(8.dp))
             }
             }
         }

@@ -82,6 +82,9 @@ fun OperationsScreen(
     }
     val listState = rememberLazyListState()
 
+    val adaptive = LocalAdaptiveWindow.current
+    val isTablet = adaptive.isTabletOrExpanded
+
     PullToRefresh(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,
@@ -112,229 +115,455 @@ fun OperationsScreen(
                 }
             }
 
-            item(key = "overview-title", contentType = "section") {
-                SectionHeader("系统概览", "只保留日常需要关注的结论")
-            }
-            item(key = "overview", contentType = "card") {
-                AppPanel {
-                    AdaptiveMetricGrid(
-                        itemCount = 4,
-                        maxColumns = 4,
-                        modifier = Modifier.fillMaxWidth().padding(14.dp),
-                    ) { index ->
-                        when (index) {
-                            0 -> MetricCell("健康服务", "$healthyServices/$monitoredServices", Modifier.weight(1f), if (state.overview != null && healthyServices == monitoredServices) Forest else Amber)
-                            1 -> MetricCell("活动问题", activeIncidents.toString(), Modifier.weight(1f), if (activeIncidents == 0) Forest else Coral)
-                            2 -> MetricCell("在线设备", "$onlineDevices/$totalDevices", Modifier.weight(1f), if (state.iot != null && onlineDevices == totalDevices) Forest else Amber)
-                            else -> MetricCell("即将到期", upcomingResources.size.toString(), Modifier.weight(1f), if (upcomingResources.isEmpty()) Forest else Amber)
-                        }
-                    }
-                }
-            }
+            if (isTablet) {
+                // 平板 / 大屏：自适应双列运维管理布局
+                item(key = "tablet-operations-layout", contentType = "tablet-operations") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        // 左列：系统概览指标 + 检查与连通性 + 诊断巡检 + 备份健康
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            SectionHeader("系统概览", "只保留日常需要关注的结论")
+                            AppPanel {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    MetricCell("健康服务", "$healthyServices/$monitoredServices", Modifier.weight(1f), if (state.overview != null && healthyServices == monitoredServices) Forest else Amber)
+                                    MetricCell("活动问题", activeIncidents.toString(), Modifier.weight(1f), if (activeIncidents == 0) Forest else Coral)
+                                    MetricCell("在线设备", "$onlineDevices/$totalDevices", Modifier.weight(1f), if (state.iot != null && onlineDevices == totalDevices) Forest else Amber)
+                                    MetricCell("即将到期", upcomingResources.size.toString(), Modifier.weight(1f), if (upcomingResources.isEmpty()) Forest else Amber)
+                                }
+                            }
 
-            item(key = "checks-title", contentType = "section") {
-                SectionHeader("检查与提醒", "问题处理统一进入通知中心")
-            }
-            item(key = "checks", contentType = "card") {
-                AppPanel {
-                    Column {
-                        OperationsStatusRow(
-                            icon = Icons.Outlined.NotificationsActive,
-                            iconTint = if (state.unreadAlerts == 0) Forest else Coral,
-                            iconBackground = if (state.unreadAlerts == 0) MintPale else CoralPale,
-                            title = "通知中心",
-                            subtitle = if (state.unreadAlerts == 0) "当前没有未读提醒" else "${state.unreadAlerts} 条未读提醒需要查看",
-                            onClick = onOpenNotifications,
-                            trailing = "查看",
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
-                        OperationsStatusRow(
-                            icon = Icons.Outlined.Wifi,
-                            iconTint = Ocean,
-                            iconBackground = Color(0xFFE0F2FE),
-                            title = "远程服务器连通性",
-                            subtitle = state.networkHealth.message
-                                ?: state.networkHealth.gatewayUrl.ifBlank { "测量 DNS 解析与 API 响应延迟" },
-                            busy = state.networkHealth.status == "measuring",
-                            onClick = onMeasureNetwork,
-                            trailing = networkStatusLabel(state.networkHealth.status),
-                        )
-                        if (state.networkHealth.checks.isNotEmpty()) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
-                            Column(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalArrangement = Arrangement.spacedBy(7.dp),
-                            ) {
-                                state.networkHealth.checks.forEach { check ->
-                                    Row(
+                            SectionHeader("检查与连通性", "测量 DNS 解析与 API 响应延迟")
+                            AppPanel {
+                                Column {
+                                    OperationsStatusRow(
+                                        icon = Icons.Outlined.NotificationsActive,
+                                        iconTint = if (state.unreadAlerts == 0) Forest else Coral,
+                                        iconBackground = if (state.unreadAlerts == 0) MintPale else CoralPale,
+                                        title = "通知中心",
+                                        subtitle = if (state.unreadAlerts == 0) "当前没有未读提醒" else "${state.unreadAlerts} 条未读提醒需要查看",
+                                        onClick = onOpenNotifications,
+                                        trailing = "查看",
+                                    )
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                                    OperationsStatusRow(
+                                        icon = Icons.Outlined.Wifi,
+                                        iconTint = Ocean,
+                                        iconBackground = Color(0xFFE0F2FE),
+                                        title = "远程服务器连通性",
+                                        subtitle = state.networkHealth.message
+                                            ?: state.networkHealth.gatewayUrl.ifBlank { "测量 DNS 解析与 API 响应延迟" },
+                                        busy = state.networkHealth.status == "measuring",
+                                        onClick = onMeasureNetwork,
+                                        trailing = networkStatusLabel(state.networkHealth.status),
+                                    )
+                                    if (state.networkHealth.checks.isNotEmpty()) {
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                                        Column(
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(7.dp),
+                                        ) {
+                                            state.networkHealth.checks.forEach { check ->
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (check.ok) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
+                                                        contentDescription = null,
+                                                        tint = if (check.ok) Forest else Coral,
+                                                        modifier = Modifier.size(16.dp),
+                                                    )
+                                                    Text(check.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                                                    Text(
+                                                        check.detail,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            SectionHeader("一键巡检", "系统健康与微服务状态体检")
+                            AppPanel {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    AppDialogPrimaryButton(
+                                        text = if (state.busyAction == "diagnostics") "巡检进行中..." else "立即运行一键巡检",
+                                        onClick = onRunDiagnostics,
+                                        enabled = state.busyAction == null,
                                         modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        Icon(
-                                            imageVector = if (check.ok) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
-                                            contentDescription = null,
-                                            tint = if (check.ok) Forest else Coral,
-                                            modifier = Modifier.size(16.dp),
+                                    )
+                                    state.diagnostics?.checks.orEmpty().take(4).forEach { check ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(check.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                            StatusBadge(check.status)
+                                        }
+                                    }
+                                }
+                            }
+
+                            SectionHeader("备份健康", "手机端可立即备份，恢复仍在桌面控制台完成")
+                            val backup = state.backup
+                            AppPanel {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        IconTile(
+                                            Icons.Outlined.Backup,
+                                            if (backup?.rpoState == "healthy") Forest else Amber,
+                                            if (backup?.rpoState == "healthy") MintPale else AmberPale,
                                         )
-                                        Text(check.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                                        Text(
-                                            check.detail,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(backup?.latestName ?: "尚无可恢复备份", style = MaterialTheme.typography.titleMedium)
+                                            Text(
+                                                backup?.ageHours?.let { "距今 ${"%.1f".format(it)} 小时 · RPO ${backup.rpoHours} 小时" }
+                                                    ?: "等待首次备份结果",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        StatusBadge(backup?.rpoState ?: "unknown")
+                                    }
+                                    if (canOperate && backup?.canBackup == true) {
+                                        AppDialogPrimaryButton(
+                                            text = if (state.busyAction == "backup") "备份提交中..." else "立即备份",
+                                            onClick = { confirmBackup = true },
+                                            enabled = state.busyAction == null,
+                                            modifier = Modifier.fillMaxWidth(),
                                         )
+                                    }
+                                }
+                            }
+                        }
+
+                        // 右列：正在处理的问题 + 资源与续期到期提醒
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            SectionHeader("正在处理的问题", "可以直接记录、静音或标记解决")
+                            val unresolvedIncidents = state.incidents.filter { it.status != "resolved" }
+                            if (unresolvedIncidents.isEmpty()) {
+                                EmptyBlock("当前没有进行中的问题", "平台所有服务与组件运行稳定。")
+                            } else {
+                                unresolvedIncidents.take(8).forEach { incident ->
+                                    AppPanel {
+                                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                                                IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale, modifier = Modifier.size(36.dp))
+                                                Column(Modifier.weight(1f)) {
+                                                    Text(incident.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                                    Text(
+                                                        incident.description.ifBlank { "${incident.source} · ${incident.severity}" },
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 2,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                    )
+                                                }
+                                                StatusBadge(incident.status)
+                                            }
+                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                TextButton(onClick = { noteTarget = incident; noteText = "" }, enabled = canOperate) {
+                                                    Icon(Icons.Outlined.EditNote, null, modifier = Modifier.size(17.dp))
+                                                    Text("记录")
+                                                }
+                                                TextButton(onClick = { onIncidentMute(incident.id) }, enabled = canOperate) {
+                                                    Icon(Icons.Outlined.VolumeOff, null, modifier = Modifier.size(17.dp))
+                                                    Text("静音 1 小时")
+                                                }
+                                                TextButton(onClick = { onIncidentResolve(incident.id, "已由移动端标记解决") }, enabled = canOperate) {
+                                                    Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
+                                                    Text("解决")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            SectionHeader("资源与续期", "域名、证书和个人资源的到期提醒")
+                            if (upcomingResources.isEmpty()) {
+                                EmptyBlock("近期没有资源到期", "资源接近提醒日期后会显示在这里。")
+                            } else {
+                                upcomingResources.take(8).forEach { (resource, days) ->
+                                    AppPanel {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        ) {
+                                            IconTile(
+                                                Icons.Outlined.ErrorOutline,
+                                                if (days <= 7) Coral else Amber,
+                                                if (days <= 7) CoralPale else AmberPale,
+                                            )
+                                            Column(Modifier.weight(1f)) {
+                                                Text(resource.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                                Text(resource.type, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            Text(
+                                                when {
+                                                    days < 0 -> "已过期 ${-days} 天"
+                                                    days == 0 -> "今天到期"
+                                                    else -> "$days 天后"
+                                                },
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = if (days <= 7) Coral else Amber,
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
-
-            if (state.incidents.any { it.status != "resolved" }) {
-                item(key = "incident-actions-title", contentType = "section") {
-                    SectionHeader("正在处理的问题", "可以直接记录、静音或标记解决")
-                }
-                items(
-                    items = state.incidents.filter { it.status != "resolved" }.take(6),
-                    key = { "incident-action:${it.id}" },
-                    contentType = { "incident-action" },
-                ) { incident ->
-                    AppPanel {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                                IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale, modifier = Modifier.size(36.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(incident.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                    Text(
-                                        incident.description.ifBlank { "${incident.source} · ${incident.severity}" },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                StatusBadge(incident.status)
-                            }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                TextButton(onClick = { noteTarget = incident; noteText = "" }, enabled = canOperate) {
-                                    Icon(Icons.Outlined.EditNote, null, modifier = Modifier.size(17.dp))
-                                    Text("记录")
-                                }
-                                TextButton(onClick = { onIncidentMute(incident.id) }, enabled = canOperate) {
-                                    Icon(Icons.Outlined.VolumeOff, null, modifier = Modifier.size(17.dp))
-                                    Text("静音 1 小时")
-                                }
-                                TextButton(onClick = { onIncidentResolve(incident.id, "已由手机端标记解决") }, enabled = canOperate) {
-                                    Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
-                                    Text("解决")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            item(key = "diagnostics", contentType = "card") {
-                AppPanel {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        AppDialogPrimaryButton(
-                            text = if (state.busyAction == "diagnostics") "巡检进行中..." else "立即运行一键巡检",
-                            onClick = onRunDiagnostics,
-                            enabled = state.busyAction == null,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        state.diagnostics?.checks.orEmpty().take(4).forEach { check ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(check.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                                StatusBadge(check.status)
-                            }
-                        }
-                    }
-                }
-            }
-
-            item(key = "resources-title", contentType = "section") {
-                SectionHeader("资源与续期", "域名、证书和个人资源的到期提醒")
-            }
-            if (upcomingResources.isEmpty()) {
-                item(key = "resources-empty", contentType = "empty") {
-                    EmptyBlock("近期没有资源到期", "资源接近提醒日期后会显示在这里。")
-                }
             } else {
-                items(
-                    items = upcomingResources.take(6),
-                    key = { "resource:${it.first.id}" },
-                    contentType = { "resource" },
-                ) { (resource, days) ->
+                // 手机单列流
+                item(key = "overview-title", contentType = "section") {
+                    SectionHeader("系统概览", "只保留日常需要关注的结论")
+                }
+                item(key = "overview", contentType = "card") {
                     AppPanel {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            IconTile(
-                                Icons.Outlined.ErrorOutline,
-                                if (days <= 7) Coral else Amber,
-                                if (days <= 7) CoralPale else AmberPale,
-                            )
-                            Column(Modifier.weight(1f)) {
-                                Text(resource.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                Text(resource.type, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Text(
-                                when {
-                                    days < 0 -> "已过期 ${-days} 天"
-                                    days == 0 -> "今天到期"
-                                    else -> "$days 天后"
-                                },
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (days <= 7) Coral else Amber,
-                            )
+                            MetricCell("健康服务", "$healthyServices/$monitoredServices", Modifier.weight(1f), if (state.overview != null && healthyServices == monitoredServices) Forest else Amber)
+                            MetricCell("活动问题", activeIncidents.toString(), Modifier.weight(1f), if (activeIncidents == 0) Forest else Coral)
+                            MetricCell("在线设备", "$onlineDevices/$totalDevices", Modifier.weight(1f), if (state.iot != null && onlineDevices == totalDevices) Forest else Amber)
+                            MetricCell("即将到期", upcomingResources.size.toString(), Modifier.weight(1f), if (upcomingResources.isEmpty()) Forest else Amber)
                         }
                     }
                 }
-            }
 
-            item(key = "backup-title", contentType = "section") {
-                SectionHeader("备份健康", "手机端可立即备份，恢复仍在桌面控制台完成")
-            }
-            item(key = "backup", contentType = "card") {
-                val backup = state.backup
-                AppPanel {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            IconTile(
-                                Icons.Outlined.Backup,
-                                if (backup?.rpoState == "healthy") Forest else Amber,
-                                if (backup?.rpoState == "healthy") MintPale else AmberPale,
+                item(key = "checks-title", contentType = "section") {
+                    SectionHeader("检查与提醒", "问题处理统一进入通知中心")
+                }
+                item(key = "checks", contentType = "card") {
+                    AppPanel {
+                        Column {
+                            OperationsStatusRow(
+                                icon = Icons.Outlined.NotificationsActive,
+                                iconTint = if (state.unreadAlerts == 0) Forest else Coral,
+                                iconBackground = if (state.unreadAlerts == 0) MintPale else CoralPale,
+                                title = "通知中心",
+                                subtitle = if (state.unreadAlerts == 0) "当前没有未读提醒" else "${state.unreadAlerts} 条未读提醒需要查看",
+                                onClick = onOpenNotifications,
+                                trailing = "查看",
                             )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(backup?.latestName ?: "尚无可恢复备份", style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    backup?.ageHours?.let { "距今 ${"%.1f".format(it)} 小时 · RPO ${backup.rpoHours} 小时" }
-                                        ?: "等待首次备份结果",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                            OperationsStatusRow(
+                                icon = Icons.Outlined.Wifi,
+                                iconTint = Ocean,
+                                iconBackground = Color(0xFFE0F2FE),
+                                title = "远程服务器连通性",
+                                subtitle = state.networkHealth.message
+                                    ?: state.networkHealth.gatewayUrl.ifBlank { "测量 DNS 解析与 API 响应延迟" },
+                                busy = state.networkHealth.status == "measuring",
+                                onClick = onMeasureNetwork,
+                                trailing = networkStatusLabel(state.networkHealth.status),
+                            )
+                            if (state.networkHealth.checks.isNotEmpty()) {
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(7.dp),
+                                ) {
+                                    state.networkHealth.checks.forEach { check ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            Icon(
+                                                imageVector = if (check.ok) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
+                                                contentDescription = null,
+                                                tint = if (check.ok) Forest else Coral,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                            Text(check.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                                            Text(
+                                                check.detail,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                    }
+                                }
                             }
-                            StatusBadge(backup?.rpoState ?: "unknown")
                         }
-                        if (canOperate && backup?.canBackup == true) {
+                    }
+                }
+
+                if (state.incidents.any { it.status != "resolved" }) {
+                    item(key = "incident-actions-title", contentType = "section") {
+                        SectionHeader("正在处理的问题", "可以直接记录、静音或标记解决")
+                    }
+                    items(
+                        items = state.incidents.filter { it.status != "resolved" }.take(6),
+                        key = { "incident-action:${it.id}" },
+                        contentType = { "incident-action" },
+                    ) { incident ->
+                        AppPanel {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                                    IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale, modifier = Modifier.size(36.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(incident.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            incident.description.ifBlank { "${incident.source} · ${incident.severity}" },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    StatusBadge(incident.status)
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    TextButton(onClick = { noteTarget = incident; noteText = "" }, enabled = canOperate) {
+                                        Icon(Icons.Outlined.EditNote, null, modifier = Modifier.size(17.dp))
+                                        Text("记录")
+                                    }
+                                    TextButton(onClick = { onIncidentMute(incident.id) }, enabled = canOperate) {
+                                        Icon(Icons.Outlined.VolumeOff, null, modifier = Modifier.size(17.dp))
+                                        Text("静音 1 小时")
+                                    }
+                                    TextButton(onClick = { onIncidentResolve(incident.id, "已由手机端标记解决") }, enabled = canOperate) {
+                                        Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
+                                        Text("解决")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                item(key = "diagnostics", contentType = "card") {
+                    AppPanel {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
                             AppDialogPrimaryButton(
-                                text = if (state.busyAction == "backup") "备份提交中..." else "立即备份",
-                                onClick = { confirmBackup = true },
+                                text = if (state.busyAction == "diagnostics") "巡检进行中..." else "立即运行一键巡检",
+                                onClick = onRunDiagnostics,
                                 enabled = state.busyAction == null,
                                 modifier = Modifier.fillMaxWidth(),
                             )
+                            state.diagnostics?.checks.orEmpty().take(4).forEach { check ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(check.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                    StatusBadge(check.status)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item(key = "resources-title", contentType = "section") {
+                    SectionHeader("资源与续期", "域名、证书和个人资源的到期提醒")
+                }
+                if (upcomingResources.isEmpty()) {
+                    item(key = "resources-empty", contentType = "empty") {
+                        EmptyBlock("近期没有资源到期", "资源接近提醒日期后会显示在这里。")
+                    }
+                } else {
+                    items(
+                        items = upcomingResources.take(6),
+                        key = { "resource:${it.first.id}" },
+                        contentType = { "resource" },
+                    ) { (resource, days) ->
+                        AppPanel {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                IconTile(
+                                    Icons.Outlined.ErrorOutline,
+                                    if (days <= 7) Coral else Amber,
+                                    if (days <= 7) CoralPale else AmberPale,
+                                )
+                                Column(Modifier.weight(1f)) {
+                                    Text(resource.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                    Text(resource.type, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text(
+                                    when {
+                                        days < 0 -> "已过期 ${-days} 天"
+                                        days == 0 -> "今天到期"
+                                        else -> "$days 天后"
+                                    },
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (days <= 7) Coral else Amber,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item(key = "backup-title", contentType = "section") {
+                    SectionHeader("备份健康", "手机端可立即备份，恢复仍在桌面控制台完成")
+                }
+                item(key = "backup", contentType = "card") {
+                    val backup = state.backup
+                    AppPanel {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                IconTile(
+                                    Icons.Outlined.Backup,
+                                    if (backup?.rpoState == "healthy") Forest else Amber,
+                                    if (backup?.rpoState == "healthy") MintPale else AmberPale,
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(backup?.latestName ?: "尚无可恢复备份", style = MaterialTheme.typography.titleMedium)
+                                    Text(
+                                        backup?.ageHours?.let { "距今 ${"%.1f".format(it)} 小时 · RPO ${backup.rpoHours} 小时" }
+                                            ?: "等待首次备份结果",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                StatusBadge(backup?.rpoState ?: "unknown")
+                            }
+                            if (canOperate && backup?.canBackup == true) {
+                                AppDialogPrimaryButton(
+                                    text = if (state.busyAction == "backup") "备份提交中..." else "立即备份",
+                                    onClick = { confirmBackup = true },
+                                    enabled = state.busyAction == null,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                     }
                 }

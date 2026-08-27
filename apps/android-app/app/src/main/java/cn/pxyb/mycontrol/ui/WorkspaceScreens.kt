@@ -210,6 +210,9 @@ fun TodayScreen(
             (resource to days).takeIf { days <= maxOf(60, resource.advanceNoticeDays) }
         }.sortedBy { it.second }
     }
+    val adaptive = LocalAdaptiveWindow.current
+    val isTablet = adaptive.isTabletOrExpanded
+
     WorkspacePage(
         title = "今日工作台",
         subtitle = listOfNotNull(
@@ -274,128 +277,253 @@ fun TodayScreen(
 
         when (campusSection) {
             CampusWorkspaceSection.Today -> {
-                item(key = "today-courses-title", contentType = "section") {
-                    SectionHeader("今天的课程", state.timetable?.currentCalendarText)
-                }
-                if (courses.isEmpty()) {
-                    item(key = "today-courses-empty", contentType = "empty") {
-                        EmptyBlock("今天没有课程", "可以把时间留给个人待办或需要处理的事项。")
-                    }
-                } else {
-                    items(courses, key = CampusCourse::id, contentType = { "course" }) { course ->
-                        CourseCard(course)
-                    }
-                }
-
-                // 🌟 明日课程预告
-                item(key = "tomorrow-courses-title", contentType = "section") {
-                    SectionHeader(
-                        title = "明日课程预告",
-                        subtitle = if (tomorrowCourses.isNotEmpty()) {
-                            "第${tomorrowWeek ?: currentWeek ?: 1}周 · $tomorrowDayName (共 ${tomorrowCourses.size} 节)"
-                        } else {
-                            "$tomorrowDayName 暂无排课"
-                        },
-                    )
-                }
-                if (tomorrowCourses.isEmpty()) {
-                    item(key = "tomorrow-courses-empty", contentType = "empty") {
-                        Surface(
+                if (isTablet) {
+                    // 平板双列布局：左列为今日与明日课程，右列为个人待办与到期提醒
+                    item(key = "tablet-today-layout", contentType = "tablet-today") {
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            // 左列：今日课程 + 明日课程预告
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                IconTile(
-                                    icon = Icons.Outlined.CheckCircle,
-                                    tint = Color(0xFF059669),
-                                    background = Color(0xFFECFDF5),
-                                    modifier = Modifier.size(34.dp),
+                                SectionHeader("今天的课程", state.timetable?.currentCalendarText)
+                                if (courses.isEmpty()) {
+                                    EmptyBlock("今天没有课程", "可以把时间留给个人待办或需要处理的事项。")
+                                } else {
+                                    courses.forEach { course ->
+                                        CourseCard(course)
+                                    }
+                                }
+
+                                SectionHeader(
+                                    title = "明日课程预告",
+                                    subtitle = if (tomorrowCourses.isNotEmpty()) {
+                                        "第${tomorrowWeek ?: currentWeek ?: 1}周 · $tomorrowDayName (共 ${tomorrowCourses.size} 节)"
+                                    } else {
+                                        "$tomorrowDayName 暂无排课"
+                                    },
                                 )
-                                Column {
-                                    Text(
-                                        "明天暂无排课",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                    )
-                                    Text(
-                                        "可以提前规划自主学习或处理个人待办",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                if (tomorrowCourses.isEmpty()) {
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        ) {
+                                            IconTile(
+                                                icon = Icons.Outlined.CheckCircle,
+                                                tint = Color(0xFF059669),
+                                                background = Color(0xFFECFDF5),
+                                                modifier = Modifier.size(34.dp),
+                                            )
+                                            Column {
+                                                Text(
+                                                    "明天暂无排课",
+                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                                )
+                                                Text(
+                                                    "可以提前规划自主学习或处理个人待办",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    tomorrowCourses.forEach { course ->
+                                        CourseCard(
+                                            course = course,
+                                            selectedWeek = tomorrowWeek,
+                                            tag = "明日",
+                                        )
+                                    }
+                                }
+                            }
+
+                            // 右列：个人待办 + 需要处理 + 即将到期
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                SectionHeader(
+                                    "个人待办",
+                                    "${activeTodos.size} 项未完成",
+                                    trailing = {
+                                        IconButton(onClick = { addingTodo = true }) {
+                                            Icon(Icons.Outlined.Add, contentDescription = "添加待办")
+                                        }
+                                    },
+                                )
+                                if (state.todoSnapshot.tasks.isEmpty()) {
+                                    AppPanel(onClick = { addingTodo = true }) {
+                                        Row(
+                                            modifier = Modifier.padding(18.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        ) {
+                                            IconTile(Icons.Outlined.Add, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
+                                            Column {
+                                                Text("添加第一项待办", style = MaterialTheme.typography.titleMedium)
+                                                Text("支持截止时间、优先级、重复和课程关联", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    state.todoSnapshot.tasks.forEach { task ->
+                                        TodoCard(task, onToggleTodo, { editingTodo = task }, onDeleteTodo)
+                                    }
+                                }
+
+                                SectionHeader("需要处理", "系统提醒统一进入通知中心")
+                                AttentionCard(
+                                    label = "系统通知",
+                                    value = state.unreadAlerts,
+                                    onClick = onOpenNotifications,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+
+                                if (expiringResources.isNotEmpty()) {
+                                    SectionHeader("即将到期", "脱敏资源摘要，不包含密码或连接凭据")
+                                    expiringResources.take(6).forEach { (resource, days) ->
+                                        ResourceExpiryCard(resource, days)
+                                    }
                                 }
                             }
                         }
                     }
                 } else {
-                    items(tomorrowCourses, key = { "tomorrow-${it.id}" }, contentType = { "course-tomorrow" }) { course ->
-                        CourseCard(
-                            course = course,
-                            selectedWeek = tomorrowWeek,
-                            tag = "明日",
+                    // 手机单列流
+                    item(key = "today-courses-title", contentType = "section") {
+                        SectionHeader("今天的课程", state.timetable?.currentCalendarText)
+                    }
+                    if (courses.isEmpty()) {
+                        item(key = "today-courses-empty", contentType = "empty") {
+                            EmptyBlock("今天没有课程", "可以把时间留给个人待办或需要处理的事项。")
+                        }
+                    } else {
+                        items(courses, key = CampusCourse::id, contentType = { "course" }) { course ->
+                            CourseCard(course)
+                        }
+                    }
+
+                    // 🌟 明日课程预告
+                    item(key = "tomorrow-courses-title", contentType = "section") {
+                        SectionHeader(
+                            title = "明日课程预告",
+                            subtitle = if (tomorrowCourses.isNotEmpty()) {
+                                "第${tomorrowWeek ?: currentWeek ?: 1}周 · $tomorrowDayName (共 ${tomorrowCourses.size} 节)"
+                            } else {
+                                "$tomorrowDayName 暂无排课"
+                            },
                         )
                     }
-                }
-
-                item(key = "todos-title", contentType = "section") {
-                    SectionHeader(
-                        "个人待办",
-                        "${activeTodos.size} 项未完成",
-                        trailing = {
-                            IconButton(onClick = { addingTodo = true }) {
-                                Icon(Icons.Outlined.Add, contentDescription = "添加待办")
-                            }
-                        },
-                    )
-                }
-                if (state.todoSnapshot.tasks.isEmpty()) {
-                    item(key = "todos-empty", contentType = "empty") {
-                        AppPanel(onClick = { addingTodo = true }) {
-                            Row(
-                                modifier = Modifier.padding(18.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    if (tomorrowCourses.isEmpty()) {
+                        item(key = "tomorrow-courses-empty", contentType = "empty") {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
                             ) {
-                                IconTile(Icons.Outlined.Add, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
-                                Column {
-                                    Text("添加第一项待办", style = MaterialTheme.typography.titleMedium)
-                                    Text("支持截止时间、优先级、重复和课程关联", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    IconTile(
+                                        icon = Icons.Outlined.CheckCircle,
+                                        tint = Color(0xFF059669),
+                                        background = Color(0xFFECFDF5),
+                                        modifier = Modifier.size(34.dp),
+                                    )
+                                    Column {
+                                        Text(
+                                            "明天暂无排课",
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                        )
+                                        Text(
+                                            "可以提前规划自主学习或处理个人待办",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 }
                             }
                         }
+                    } else {
+                        items(tomorrowCourses, key = { "tomorrow-${it.id}" }, contentType = { "course-tomorrow" }) { course ->
+                            CourseCard(
+                                course = course,
+                                selectedWeek = tomorrowWeek,
+                                tag = "明日",
+                            )
+                        }
                     }
-                } else {
-                    items(state.todoSnapshot.tasks, key = TodoTask::id, contentType = { "todo" }) { task ->
-                        TodoCard(task, onToggleTodo, { editingTodo = task }, onDeleteTodo)
-                    }
-                }
 
-                item(key = "attention-title", contentType = "section") {
-                    SectionHeader("需要处理", "系统提醒统一进入通知中心")
-                }
-                item(key = "attention-cards", contentType = "card") {
-                    AttentionCard(
-                        label = "系统通知",
-                        value = state.unreadAlerts,
-                        onClick = onOpenNotifications,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-
-                if (expiringResources.isNotEmpty()) {
-                    item(key = "expiring-title", contentType = "section") {
-                        SectionHeader("即将到期", "脱敏资源摘要，不包含密码或连接凭据")
+                    item(key = "todos-title", contentType = "section") {
+                        SectionHeader(
+                            "个人待办",
+                            "${activeTodos.size} 项未完成",
+                            trailing = {
+                                IconButton(onClick = { addingTodo = true }) {
+                                    Icon(Icons.Outlined.Add, contentDescription = "添加待办")
+                                }
+                            },
+                        )
                     }
-                    items(
-                        items = expiringResources.take(6),
-                        key = { it.first.id },
-                        contentType = { "resource-expiry" },
-                    ) { (resource, days) ->
-                        ResourceExpiryCard(resource, days)
+                    if (state.todoSnapshot.tasks.isEmpty()) {
+                        item(key = "todos-empty", contentType = "empty") {
+                            AppPanel(onClick = { addingTodo = true }) {
+                                Row(
+                                    modifier = Modifier.padding(18.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    IconTile(Icons.Outlined.Add, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
+                                    Column {
+                                        Text("添加第一项待办", style = MaterialTheme.typography.titleMedium)
+                                        Text("支持截止时间、优先级、重复和课程关联", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        items(state.todoSnapshot.tasks, key = TodoTask::id, contentType = { "todo" }) { task ->
+                            TodoCard(task, onToggleTodo, { editingTodo = task }, onDeleteTodo)
+                        }
+                    }
+
+                    item(key = "attention-title", contentType = "section") {
+                        SectionHeader("需要处理", "系统提醒统一进入通知中心")
+                    }
+                    item(key = "attention-cards", contentType = "card") {
+                        AttentionCard(
+                            label = "系统通知",
+                            value = state.unreadAlerts,
+                            onClick = onOpenNotifications,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    if (expiringResources.isNotEmpty()) {
+                        item(key = "expiring-title", contentType = "section") {
+                            SectionHeader("即将到期", "脱敏资源摘要，不包含密码或连接凭据")
+                        }
+                        items(
+                            items = expiringResources.take(6),
+                            key = { it.first.id },
+                            contentType = { "resource-expiry" },
+                        ) { (resource, days) ->
+                            ResourceExpiryCard(resource, days)
+                        }
                     }
                 }
             }
@@ -485,102 +613,276 @@ fun NotificationCenterScreen(
     val hasUnreadAlerts = unreadCount > 0
     val hasReadAlerts = remember(state.alerts) { state.alerts.any(AppAlertRecord::read) }
 
-    NotificationWorkspacePage(
-        title = "通知中心",
-        subtitle = if (unreadCount > 0) "$unreadCount 条未读消息" else "系统告警、任务与设备消息",
-        contentPadding = contentPadding,
-        refreshing = refreshing,
-        onRefresh = onRefresh,
-        onBack = onBack,
-        actions = {
-            if (hasUnreadAlerts) {
-                AppHeaderIconButton(
-                    icon = Icons.Outlined.DoneAll,
-                    contentDescription = "全部已读",
-                    onClick = onMarkAllRead,
-                    iconTint = Color(0xFF059669),
-                    containerColor = Color(0xFFECFDF5),
-                )
-            }
-            if (hasReadAlerts) {
-                AppHeaderIconButton(
-                    icon = Icons.Outlined.DeleteOutline,
-                    contentDescription = "清理已读",
-                    onClick = onClearRead,
-                    iconTint = Color(0xFFDC2626),
-                    containerColor = Color(0xFFFEF2F2),
-                )
-            }
-            AppHeaderIconButton(
-                icon = Icons.Outlined.Settings,
-                contentDescription = "提醒设置",
-                onClick = { settingsOpen = true },
-                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            )
-        },
-    ) {
-        // 1. 单行超紧凑滑轨 Chip 过滤栏
-        item(key = "filters", contentType = "filters") {
-            CompactNotificationFilterBar(
-                selectedTab = filterTab,
-                onTabSelect = { filterTab = it },
-                alerts = state.alerts,
-            )
-        }
-        if (pendingArchiveId != null) {
-            item(key = "archive-undo", contentType = "banner") {
-                AppPanel {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+    val adaptive = LocalAdaptiveWindow.current
+    val isTablet = adaptive.isTabletOrExpanded
+
+    if (isTablet) {
+        // 平板 / 大屏：经典自适应 List-Detail 双栏布局
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding),
+        ) {
+            // 左栏：列表与过滤 (占 45% 宽度)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column {
+                        Text("通知中心", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(if (unreadCount > 0) "$unreadCount 条未读消息" else "系统告警、任务与设备消息", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (hasUnreadAlerts) {
+                            AppHeaderIconButton(
+                                icon = Icons.Outlined.DoneAll,
+                                contentDescription = "全部已读",
+                                onClick = onMarkAllRead,
+                                iconTint = Color(0xFF059669),
+                                containerColor = Color(0xFFECFDF5),
+                            )
+                        }
+                        if (hasReadAlerts) {
+                            AppHeaderIconButton(
+                                icon = Icons.Outlined.DeleteOutline,
+                                contentDescription = "清理已读",
+                                onClick = onClearRead,
+                                iconTint = Color(0xFFDC2626),
+                                containerColor = Color(0xFFFEF2F2),
+                            )
+                        }
+                        AppHeaderIconButton(
+                            icon = Icons.Outlined.Settings,
+                            contentDescription = "提醒设置",
+                            onClick = { settingsOpen = true },
+                            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        )
+                    }
+                }
+
+                Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    CompactNotificationFilterBar(
+                        selectedTab = filterTab,
+                        onTabSelect = { filterTab = it },
+                        alerts = state.alerts,
+                    )
+                }
+
+                if (pendingArchiveId != null) {
+                    AppPanel(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("通知已归档", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            TextButton(onClick = { pendingArchiveId = null }) { Text("撤销") }
+                        }
+                    }
+                }
+
+                state.syncError?.let { error ->
+                    FeedbackBanner("通知同步失败：$error", error = true, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                }
+
+                PullToRefresh(
+                    isRefreshing = refreshing,
+                    onRefresh = onRefresh,
+                    atTop = { true },
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Text("通知已归档", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                        TextButton(onClick = { pendingArchiveId = null }) { Text("撤销") }
+                        if (visibleAlerts.isEmpty()) {
+                            item(key = "empty") {
+                                EmptyBlock(
+                                    if (filterTab == "unread") "全看完了，暂无未读通知" else "没有相关通知",
+                                    "新的系统告警、任务提醒与设备消息会集中显示在这里。"
+                                )
+                            }
+                        } else {
+                            items(visibleAlerts, key = ::notificationItemKey) { alert ->
+                                NotificationCard(
+                                    alert = alert,
+                                    onOpen = {
+                                        selectedAlert = alert
+                                        onMarkRead(alert.id)
+                                    },
+                                    onMarkRead = onMarkRead,
+                                    onArchive = ::queueArchive,
+                                    onSnooze = onSnooze,
+                                    selected = (selectedAlert?.id == alert.id),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+            )
+
+            // 右栏：详情面板 (占 55% 宽度)
+            Box(
+                modifier = Modifier
+                    .weight(1.2f)
+                    .fillMaxHeight()
+                    .padding(16.dp),
+            ) {
+                val currentSelected = selectedAlert ?: visibleAlerts.firstOrNull()
+                if (currentSelected != null) {
+                    NotificationDetailPane(
+                        alert = currentSelected,
+                        onAction = { onAction(currentSelected, it) },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(24.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Icon(
+                                Icons.Outlined.Notifications,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.size(48.dp),
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                "选择通知查看详情",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                "在左侧选择任意一条消息以查看完整内容与快捷操作",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            )
+                        }
                     }
                 }
             }
         }
-
-        // 2. Banner 提醒
-        state.syncError?.let { error ->
-            item(key = "sync-error", contentType = "banner") {
-                FeedbackBanner("通知同步失败：$error", error = true)
-            }
-        }
-        if (state.preferences.quietHoursEnabled) {
-            item(key = "quiet-hours", contentType = "banner") {
-                FeedbackBanner(
-                    "安静时段 ${hourLabel(state.preferences.quietStartHour)} - ${hourLabel(state.preferences.quietEndHour)}，通知自动静音。",
-                    error = false,
+    } else {
+        // 手机模式：原有 NotificationWorkspacePage
+        NotificationWorkspacePage(
+            title = "通知中心",
+            subtitle = if (unreadCount > 0) "$unreadCount 条未读消息" else "系统告警、任务与设备消息",
+            contentPadding = contentPadding,
+            refreshing = refreshing,
+            onRefresh = onRefresh,
+            onBack = onBack,
+            actions = {
+                if (hasUnreadAlerts) {
+                    AppHeaderIconButton(
+                        icon = Icons.Outlined.DoneAll,
+                        contentDescription = "全部已读",
+                        onClick = onMarkAllRead,
+                        iconTint = Color(0xFF059669),
+                        containerColor = Color(0xFFECFDF5),
+                    )
+                }
+                if (hasReadAlerts) {
+                    AppHeaderIconButton(
+                        icon = Icons.Outlined.DeleteOutline,
+                        contentDescription = "清理已读",
+                        onClick = onClearRead,
+                        iconTint = Color(0xFFDC2626),
+                        containerColor = Color(0xFFFEF2F2),
+                    )
+                }
+                AppHeaderIconButton(
+                    icon = Icons.Outlined.Settings,
+                    contentDescription = "提醒设置",
+                    onClick = { settingsOpen = true },
+                    iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                )
+            },
+        ) {
+            // 1. 单行超紧凑滑轨 Chip 过滤栏
+            item(key = "filters", contentType = "filters") {
+                CompactNotificationFilterBar(
+                    selectedTab = filterTab,
+                    onTabSelect = { filterTab = it },
+                    alerts = state.alerts,
                 )
             }
-        }
-
-        // 3. 通知列表
-        if (visibleAlerts.isEmpty()) {
-            item(key = "empty", contentType = "empty") {
-                EmptyBlock(
-                    if (filterTab == "unread") "全看完了，暂无未读通知" else "没有相关通知",
-                    "新的系统告警、任务提醒与设备消息会集中显示在这里。"
-                )
-            }
-        } else {
-            items(visibleAlerts, key = ::notificationItemKey, contentType = { "notification" }) { alert ->
-                NotificationCard(
-                    alert = alert,
-                    onOpen = {
-                        if (alert.contentBlocks.isNotEmpty()) {
-                            selectedAlert = alert
-                            onMarkRead(alert.id)
-                        } else {
-                            onOpen(alert)
+            if (pendingArchiveId != null) {
+                item(key = "archive-undo", contentType = "banner") {
+                    AppPanel {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("通知已归档", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            TextButton(onClick = { pendingArchiveId = null }) { Text("撤销") }
                         }
-                    },
-                    onMarkRead = onMarkRead,
-                    onArchive = ::queueArchive,
-                    onSnooze = onSnooze,
-                )
+                    }
+                }
+            }
+
+            // 2. Banner 提醒
+            state.syncError?.let { error ->
+                item(key = "sync-error", contentType = "banner") {
+                    FeedbackBanner("通知同步失败：$error", error = true)
+                }
+            }
+            if (state.preferences.quietHoursEnabled) {
+                item(key = "quiet-hours", contentType = "banner") {
+                    FeedbackBanner(
+                        "安静时段 ${hourLabel(state.preferences.quietStartHour)} - ${hourLabel(state.preferences.quietEndHour)}，通知自动静音。",
+                        error = false,
+                    )
+                }
+            }
+
+            // 3. 通知列表
+            if (visibleAlerts.isEmpty()) {
+                item(key = "empty", contentType = "empty") {
+                    EmptyBlock(
+                        if (filterTab == "unread") "全看完了，暂无未读通知" else "没有相关通知",
+                        "新的系统告警、任务提醒与设备消息会集中显示在这里。"
+                    )
+                }
+            } else {
+                items(visibleAlerts, key = ::notificationItemKey, contentType = { "notification" }) { alert ->
+                    NotificationCard(
+                        alert = alert,
+                        onOpen = {
+                            if (alert.contentBlocks.isNotEmpty()) {
+                                selectedAlert = alert
+                                onMarkRead(alert.id)
+                            } else {
+                                onOpen(alert)
+                            }
+                        },
+                        onMarkRead = onMarkRead,
+                        onArchive = ::queueArchive,
+                        onSnooze = onSnooze,
+                    )
+                }
             }
         }
     }
@@ -764,6 +1066,101 @@ private fun ModernNotificationFilterPill(
                         color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationDetailPane(
+    alert: AppAlertRecord,
+    onAction: (AppNotificationAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val (categoryLabel, categoryBg, categoryFg) = when {
+        alert.priority == "urgent" || alert.priority == "high" || alert.type == "incident" -> Triple("高危告警", Color(0xFFFEE2E2), Color(0xFF991B1B))
+        alert.type == "task" -> Triple("任务待办", Color(0xFFFEF3C7), Color(0xFF92400E))
+        alert.type == "iot" -> Triple("IoT设备", Color(0xFFD1FAE5), Color(0xFF065F46))
+        alert.type == "security" -> Triple("安全提醒", Color(0xFFEDE9FE), Color(0xFF5B21B6))
+        else -> Triple("系统通知", Color(0xFFDBEAFE), Color(0xFF1E40AF))
+    }
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        shadowElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Surface(
+                    color = categoryBg,
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text(
+                        categoryLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = categoryFg,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+                Text(
+                    formatMillis(alert.createdAt),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Text(
+                text = alert.title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+
+            if (alert.body.isNotBlank()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = alert.body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(14.dp),
+                    )
+                }
+            }
+
+            alert.contentBlocks.forEach { block ->
+                NotificationBlockView(block)
+            }
+
+            if (alert.actions.isNotEmpty()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Text("快捷操作", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                alert.actions.forEach { action ->
+                    Button(
+                        onClick = { onAction(action) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Icon(Icons.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(action.label)
+                    }
                 }
             }
         }
@@ -2670,6 +3067,7 @@ private fun NotificationCard(
     onMarkRead: (String) -> Unit,
     onArchive: (String) -> Unit,
     onSnooze: (String) -> Unit,
+    selected: Boolean = false,
 ) {
     var offsetX by remember(alert.id) { mutableFloatStateOf(0f) }
     val deleteThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() }
@@ -2768,14 +3166,15 @@ private fun NotificationCard(
                 }
                 .clickable { onOpen(alert) },
             shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.06f) else MaterialTheme.colorScheme.surface,
             border = BorderStroke(
-                if (!alert.read && isUrgent) 1.2.dp else 0.6.dp,
-                if (!alert.read && isUrgent) Color(0xFFF87171)
+                if (selected) 1.5.dp else if (!alert.read && isUrgent) 1.2.dp else 0.6.dp,
+                if (selected) MaterialTheme.colorScheme.primary
+                else if (!alert.read && isUrgent) Color(0xFFF87171)
                 else if (!alert.read) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
                 else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
             ),
-            shadowElevation = 0.dp,
+            shadowElevation = if (selected) 1.dp else 0.dp,
         ) {
             Column(
                 modifier = Modifier

@@ -167,6 +167,8 @@ fun GoogleAccountDeskScreen(
 
     val accounts = state.googleAccounts
     val aliases = accounts.flatMap { it.aliases }
+    val adaptive = LocalAdaptiveWindow.current
+    val isTablet = adaptive.isTabletOrExpanded
     val filteredAccounts = accounts.filter { account ->
         val matchesQuery = query.isBlank() ||
             account.primaryEmail.contains(query.trim(), ignoreCase = true) ||
@@ -389,6 +391,41 @@ fun GoogleAccountDeskScreen(
                         if (accounts.isEmpty()) "还没有邮箱记录" else "没有匹配的邮箱",
                         if (accounts.isEmpty()) "点击右上角添加一个 Google 主邮箱。" else "换一个筛选条件或搜索关键词。",
                     )
+                }
+            }
+        } else if (isTablet) {
+            // 平板双列卡片流
+            val rows = sortedAccounts.chunked(2)
+            items(rows, key = { it.first().id }, contentType = { "google-account-row" }) { rowAccounts ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    rowAccounts.forEach { account ->
+                        Box(modifier = Modifier.weight(1f)) {
+                            GoogleAccountRow(
+                                account = account,
+                                selected = account.id == selectedAccountId && !selectionMode,
+                                selectionMode = selectionMode,
+                                bulkSelected = account.id in selectedAccountIds,
+                                onClick = {
+                                    if (selectionMode) {
+                                        selectedAccountIds = if (account.id in selectedAccountIds) {
+                                            selectedAccountIds - account.id
+                                        } else {
+                                            selectedAccountIds + account.id
+                                        }
+                                    } else {
+                                        selectedAccountId = account.id
+                                        detailAccountId = account.id
+                                    }
+                                },
+                            )
+                        }
+                    }
+                    if (rowAccounts.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
         } else {

@@ -141,6 +141,9 @@ fun ProfileScreen(
         else -> "$otherSessionCount 台其他设备 · ${currentSession?.let { deviceLabel(it.userAgent) } ?: "当前设备"}"
     }
 
+    val adaptive = LocalAdaptiveWindow.current
+    val isTablet = adaptive.isTabletOrExpanded
+
     val listState = rememberLazyListState()
     PullToRefresh(
         isRefreshing = state.refreshing,
@@ -167,294 +170,609 @@ fun ProfileScreen(
                 item(key = "section-error") { FeedbackBanner("账号数据暂不可用：$message", error = true) }
             }
 
-            // 2. 个人资料卡片
-            item {
-                ModernProfileCard(
-                    username = user.username,
-                    role = user.role,
-                    versionStr = BuildConfig.VERSION_NAME,
-                )
-            }
-
-            // 3. 系统通知权限引导 (未开启时提示)
-            if (!notificationsEnabled) {
-                item(key = "notification-permission") {
-                    Surface(
+            if (isTablet) {
+                // 平板 / 大屏双列 Bento 布局
+                item(key = "tablet-profile-bento") {
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = Color(0xFFFFFBEB),
-                        border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
-                        ProfileActionRow(
-                            icon = Icons.Outlined.Notifications,
-                            iconTint = Color(0xFFD97706),
-                            iconBackground = Color(0xFFFEF3C7),
-                            title = "系统通知权限未开启",
-                            subtitle = "建议开启通知，及时接收系统异常与任务状态提醒",
-                            onClick = onRequestNotifications,
-                            showChevron = false,
-                            trailing = {
-                                Text(
-                                    "开启提醒",
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFFD97706),
-                                )
-                            },
-                        )
-                    }
-                }
-            }
+                        // 左列：个人资料 + 账号安全 + 设备与会话
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            ModernProfileCard(
+                                username = user.username,
+                                role = user.role,
+                                versionStr = BuildConfig.VERSION_NAME,
+                            )
 
-            // 4. 告警推送与免打扰偏好卡片 (全新)
-            item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 1.dp,
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        ProfileCardHeader(
-                            icon = Icons.Outlined.NotificationsActive,
-                            iconTint = Color(0xFFEA580C),
-                            iconBackground = Color(0xFFFFF7ED),
-                            title = "告警推送与免打扰",
-                            subtitle = if (state.alertPreferences.quietHoursEnabled) {
-                                "免打扰已开启 · ${state.alertPreferences.quietStartHour}:00 - ${state.alertPreferences.quietEndHour}:00"
-                            } else {
-                                "全天候接收 · 过滤级别: ${severityLabel(state.alertPreferences.severityFilter)}"
-                            },
-                            onClick = { showNotificationDialog = true },
-                            trailing = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    Surface(
-                                        color = if (state.alertPreferences.quietHoursEnabled) Color(0xFFF3E8FF) else Color(0xFFECFDF5),
-                                        shape = RoundedCornerShape(8.dp),
-                                        border = BorderStroke(0.5.dp, if (state.alertPreferences.quietHoursEnabled) Color(0xFFDDD6FE) else Color(0xFFA7F3D0)),
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                                shadowElevation = 1.dp,
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    ProfileCardHeader(
+                                        icon = Icons.Outlined.ManageAccounts,
+                                        iconTint = Color(0xFF2563EB),
+                                        iconBackground = Color(0xFFEFF6FF),
+                                        title = "账号安全",
+                                        subtitle = "密码、MFA、Passkey 与恢复码",
+                                        trailing = { StatusBadge(protectionStatus, protectionBadgeLabel) },
+                                    )
+                                    ProfileDivider()
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     ) {
-                                        Text(
-                                            text = if (state.alertPreferences.quietHoursEnabled) "夜间免打扰" else "全天提醒",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                            color = if (state.alertPreferences.quietHoursEnabled) Color(0xFF7C3AED) else Color(0xFF047857),
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        LightSecurityCell(
+                                            label = "动态验证",
+                                            value = if (totpEnabled) "已启用" else "未启用",
+                                            isGood = totpEnabled,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        LightSecurityCell(
+                                            label = "Passkey",
+                                            value = if (passkeyCount > 0) "$passkeyCount 个" else "未绑定",
+                                            isGood = passkeyCount > 0,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        LightSecurityCell(
+                                            label = "恢复码",
+                                            value = recoveryCodesRemaining?.let { "$it 个" } ?: "同步中",
+                                            isGood = (recoveryCodesRemaining ?: 0) > 0,
+                                            modifier = Modifier.weight(1f),
                                         )
                                     }
-                                    Icon(
-                                        Icons.Outlined.ChevronRight,
-                                        contentDescription = "打开通知偏好",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(19.dp),
+
+                                    ProfileDivider()
+                                    ProfileActionRow(
+                                        icon = Icons.Outlined.Security,
+                                        iconTint = Color(0xFF2563EB),
+                                        iconBackground = Color(0xFFEFF6FF),
+                                        title = "账号安全管理",
+                                        subtitle = "修改密码、绑定 MFA 与管理恢复码",
+                                        onClick = onOpenAccountManagement,
                                     )
                                 }
-                            },
-                        )
-                    }
-                }
-            }
+                            }
 
-            // 5. 账号安全
-            item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 1.dp,
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        ProfileCardHeader(
-                            icon = Icons.Outlined.ManageAccounts,
-                            iconTint = Color(0xFF2563EB),
-                            iconBackground = Color(0xFFEFF6FF),
-                            title = "账号安全",
-                            subtitle = "密码、MFA、Passkey 与恢复码",
-                            trailing = { StatusBadge(protectionStatus, protectionBadgeLabel) },
-                        )
-                        ProfileDivider()
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            LightSecurityCell(
-                                label = "动态验证",
-                                value = if (totpEnabled) "已启用" else "未启用",
-                                isGood = totpEnabled,
-                                modifier = Modifier.weight(1f),
-                            )
-                            LightSecurityCell(
-                                label = "Passkey",
-                                value = if (passkeyCount > 0) "$passkeyCount 个" else "未绑定",
-                                isGood = passkeyCount > 0,
-                                modifier = Modifier.weight(1f),
-                            )
-                            LightSecurityCell(
-                                label = "恢复码",
-                                value = recoveryCodesRemaining?.let { "$it 个" } ?: "同步中",
-                                isGood = (recoveryCodesRemaining ?: 0) > 0,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-
-                        ProfileDivider()
-                        ProfileActionRow(
-                            icon = Icons.Outlined.Security,
-                            iconTint = Color(0xFF2563EB),
-                            iconBackground = Color(0xFFEFF6FF),
-                            title = "账号安全管理",
-                            subtitle = "修改密码、绑定 MFA 与管理恢复码",
-                            onClick = onOpenAccountManagement,
-                        )
-                    }
-                }
-            }
-
-            // 6. 服务台账
-            item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 1.dp,
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        ProfileActionRow(
-                            icon = Icons.Outlined.Email,
-                            iconTint = Color(0xFF7C3AED),
-                            iconBackground = Color(0xFFF5F3FF),
-                            title = "Google 邮箱台账",
-                            subtitle = "管理主邮箱、别名和 OpenAI 使用状态",
-                            onClick = onOpenGoogleAccountDesk,
-                        )
-                    }
-                }
-            }
-
-            // 7. 设备与会话管理
-            item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 1.dp,
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        ProfileCardHeader(
-                            icon = Icons.Outlined.Devices,
-                            iconTint = Color(0xFF059669),
-                            iconBackground = Color(0xFFECFDF5),
-                            title = "设备与会话",
-                            subtitle = sessionSummary,
-                            onClick = if (security != null) {
-                                { showSessions = !showSessions }
-                            } else {
-                                null
-                            },
-                            trailing = {
-                                if (security != null) {
-                                    Text(
-                                        if (showSessions) "收起" else "管理会话",
-                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                        color = Color(0xFF059669),
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                                shadowElevation = 1.dp,
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    ProfileCardHeader(
+                                        icon = Icons.Outlined.Devices,
+                                        iconTint = Color(0xFF059669),
+                                        iconBackground = Color(0xFFECFDF5),
+                                        title = "设备与会话",
+                                        subtitle = sessionSummary,
+                                        onClick = if (security != null) {
+                                            { showSessions = !showSessions }
+                                        } else {
+                                            null
+                                        },
+                                        trailing = {
+                                            if (security != null) {
+                                                Text(
+                                                    if (showSessions) "收起" else "管理会话",
+                                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                                    color = Color(0xFF059669),
+                                                )
+                                            }
+                                        },
                                     )
-                                }
-                            },
-                        )
-                        ProfileDivider()
-                        ProfileActionRow(
-                            icon = Icons.Outlined.Laptop,
-                            iconTint = Color(0xFF2563EB),
-                            iconBackground = Color(0xFFEFF6FF),
-                            title = "电脑端快捷免密登录",
-                            subtitle = "生成单次使用、5 分钟内有效的登录链接",
-                            busy = state.busyAction == "desktop-magic-link",
-                            onClick = {
-                                onCreateDesktopMagicLink { url, error ->
-                                    if (url != null) {
-                                        showMagicLinkDialog = url
-                                    } else if (error != null) {
-                                        Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                                    ProfileDivider()
+                                    ProfileActionRow(
+                                        icon = Icons.Outlined.Laptop,
+                                        iconTint = Color(0xFF2563EB),
+                                        iconBackground = Color(0xFFEFF6FF),
+                                        title = "电脑端快捷免密登录",
+                                        subtitle = "生成单次使用、5 分钟内有效的登录链接",
+                                        busy = state.busyAction == "desktop-magic-link",
+                                        onClick = {
+                                            onCreateDesktopMagicLink { url, error ->
+                                                if (url != null) {
+                                                    showMagicLinkDialog = url
+                                                } else if (error != null) {
+                                                    Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        },
+                                    )
+                                    if (showSessions) {
+                                        ProfileDivider()
+                                        when {
+                                            security == null -> LoadingBlock("正在同步登录设备")
+                                            security.sessions.isEmpty() -> Text(
+                                                "暂无活动会话",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+                                            )
+                                            else -> security.sessions.forEachIndexed { index, session ->
+                                                if (index > 0) ProfileDivider()
+                                                SessionRow(
+                                                    session = session,
+                                                    busy = state.busyAction == "session",
+                                                    onRevoke = { revokeTarget = session },
+                                                )
+                                            }
+                                        }
                                     }
                                 }
-                            },
-                        )
-                        if (showSessions) {
-                            ProfileDivider()
-                            when {
-                                security == null -> LoadingBlock("正在同步登录设备")
-                                security.sessions.isEmpty() -> Text(
-                                    "暂无活动会话",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
-                                )
-                                else -> security.sessions.forEachIndexed { index, session ->
-                                    if (index > 0) ProfileDivider()
-                                    SessionRow(
-                                        session = session,
-                                        busy = state.busyAction == "session",
-                                        onRevoke = { revokeTarget = session },
+                            }
+                        }
+
+                        // 右列：通知偏好 + 服务台账 + 维护 + 退出
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            if (!notificationsEnabled) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = Color(0xFFFFFBEB),
+                                    border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                                ) {
+                                    ProfileActionRow(
+                                        icon = Icons.Outlined.Notifications,
+                                        iconTint = Color(0xFFD97706),
+                                        iconBackground = Color(0xFFFEF3C7),
+                                        title = "系统通知权限未开启",
+                                        subtitle = "建议开启通知，及时接收系统异常与任务状态提醒",
+                                        onClick = onRequestNotifications,
+                                        showChevron = false,
+                                        trailing = {
+                                            Text(
+                                                "开启提醒",
+                                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                                color = Color(0xFFD97706),
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                                shadowElevation = 1.dp,
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    ProfileCardHeader(
+                                        icon = Icons.Outlined.NotificationsActive,
+                                        iconTint = Color(0xFFEA580C),
+                                        iconBackground = Color(0xFFFFF7ED),
+                                        title = "告警推送与免打扰",
+                                        subtitle = if (state.alertPreferences.quietHoursEnabled) {
+                                            "免打扰已开启 · ${state.alertPreferences.quietStartHour}:00 - ${state.alertPreferences.quietEndHour}:00"
+                                        } else {
+                                            "全天候接收 · 过滤级别: ${severityLabel(state.alertPreferences.severityFilter)}"
+                                        },
+                                        onClick = { showNotificationDialog = true },
+                                        trailing = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            ) {
+                                                Surface(
+                                                    color = if (state.alertPreferences.quietHoursEnabled) Color(0xFFF3E8FF) else Color(0xFFECFDF5),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    border = BorderStroke(0.5.dp, if (state.alertPreferences.quietHoursEnabled) Color(0xFFDDD6FE) else Color(0xFFA7F3D0)),
+                                                ) {
+                                                    Text(
+                                                        text = if (state.alertPreferences.quietHoursEnabled) "夜间免打扰" else "全天提醒",
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                        color = if (state.alertPreferences.quietHoursEnabled) Color(0xFF7C3AED) else Color(0xFF047857),
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                    )
+                                                }
+                                                Icon(
+                                                    Icons.Outlined.ChevronRight,
+                                                    contentDescription = "打开通知偏好",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                    modifier = Modifier.size(19.dp),
+                                                )
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                                shadowElevation = 1.dp,
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    ProfileActionRow(
+                                        icon = Icons.Outlined.Email,
+                                        iconTint = Color(0xFF7C3AED),
+                                        iconBackground = Color(0xFFF5F3FF),
+                                        title = "Google 邮箱台账",
+                                        subtitle = "管理主邮箱、别名和 OpenAI 使用状态",
+                                        onClick = onOpenGoogleAccountDesk,
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                                shadowElevation = 1.dp,
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    ProfileCardHeader(
+                                        icon = Icons.Outlined.CleaningServices,
+                                        iconTint = Color(0xFF0D9488),
+                                        iconBackground = Color(0xFFF0FDFA),
+                                        title = "App 维护",
+                                        subtitle = "本地缓存与数据同步",
+                                        trailing = {
+                                            Text(
+                                                state.cacheStorageInfo.totalFormatted,
+                                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                                color = Color(0xFF0D9488),
+                                            )
+                                        },
+                                    )
+                                    ProfileDivider()
+                                    ProfileActionRow(
+                                        icon = Icons.Outlined.CloudSync,
+                                        iconTint = Color(0xFF2563EB),
+                                        iconBackground = Color(0xFFEFF6FF),
+                                        title = "强制全量重新同步",
+                                        subtitle = "重新拉取全部模块的最新数据",
+                                        onClick = {
+                                            onForceFullSync()
+                                            Toast.makeText(context, "正在全量重新同步数据...", Toast.LENGTH_SHORT).show()
+                                        },
+                                    )
+                                    ProfileDivider()
+                                    ProfileActionRow(
+                                        icon = Icons.Outlined.CleaningServices,
+                                        iconTint = Color(0xFF0D9488),
+                                        iconBackground = Color(0xFFF0FDFA),
+                                        title = "清理临时快照缓存",
+                                        subtitle = "释放 ${state.cacheStorageInfo.totalFormatted}，保留登录和个人设置",
+                                        onClick = { confirmClearCache = true },
+                                    )
+                                }
+                            }
+
+                            // 退出登录按钮
+                            Surface(
+                                onClick = { confirmLogout = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.25f)),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Outlined.Logout,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "退出当前登录",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.error,
                                     )
                                 }
                             }
                         }
                     }
                 }
-            }
+            } else {
+                // 手机单列流保持原有排列
+                item {
+                    ModernProfileCard(
+                        username = user.username,
+                        role = user.role,
+                        versionStr = BuildConfig.VERSION_NAME,
+                    )
+                }
 
-            // 8. App 维护
-            item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 1.dp,
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        ProfileCardHeader(
-                            icon = Icons.Outlined.CleaningServices,
-                            iconTint = Color(0xFF0D9488),
-                            iconBackground = Color(0xFFF0FDFA),
-                            title = "App 维护",
-                            subtitle = "本地缓存与数据同步",
-                            trailing = {
-                                Text(
-                                    state.cacheStorageInfo.totalFormatted,
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFF0D9488),
+                if (!notificationsEnabled) {
+                    item(key = "notification-permission") {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            color = Color(0xFFFFFBEB),
+                            border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                        ) {
+                            ProfileActionRow(
+                                icon = Icons.Outlined.Notifications,
+                                iconTint = Color(0xFFD97706),
+                                iconBackground = Color(0xFFFEF3C7),
+                                title = "系统通知权限未开启",
+                                subtitle = "建议开启通知，及时接收系统异常与任务状态提醒",
+                                onClick = onRequestNotifications,
+                                showChevron = false,
+                                trailing = {
+                                    Text(
+                                        "开启提醒",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = Color(0xFFD97706),
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        shadowElevation = 1.dp,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            ProfileCardHeader(
+                                icon = Icons.Outlined.NotificationsActive,
+                                iconTint = Color(0xFFEA580C),
+                                iconBackground = Color(0xFFFFF7ED),
+                                title = "告警推送与免打扰",
+                                subtitle = if (state.alertPreferences.quietHoursEnabled) {
+                                    "免打扰已开启 · ${state.alertPreferences.quietStartHour}:00 - ${state.alertPreferences.quietEndHour}:00"
+                                } else {
+                                    "全天候接收 · 过滤级别: ${severityLabel(state.alertPreferences.severityFilter)}"
+                                },
+                                onClick = { showNotificationDialog = true },
+                                trailing = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Surface(
+                                            color = if (state.alertPreferences.quietHoursEnabled) Color(0xFFF3E8FF) else Color(0xFFECFDF5),
+                                            shape = RoundedCornerShape(8.dp),
+                                            border = BorderStroke(0.5.dp, if (state.alertPreferences.quietHoursEnabled) Color(0xFFDDD6FE) else Color(0xFFA7F3D0)),
+                                        ) {
+                                            Text(
+                                                text = if (state.alertPreferences.quietHoursEnabled) "夜间免打扰" else "全天提醒",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                color = if (state.alertPreferences.quietHoursEnabled) Color(0xFF7C3AED) else Color(0xFF047857),
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            )
+                                        }
+                                        Icon(
+                                            Icons.Outlined.ChevronRight,
+                                            contentDescription = "打开通知偏好",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(19.dp),
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        shadowElevation = 1.dp,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            ProfileCardHeader(
+                                icon = Icons.Outlined.ManageAccounts,
+                                iconTint = Color(0xFF2563EB),
+                                iconBackground = Color(0xFFEFF6FF),
+                                title = "账号安全",
+                                subtitle = "密码、MFA、Passkey 与恢复码",
+                                trailing = { StatusBadge(protectionStatus, protectionBadgeLabel) },
+                            )
+                            ProfileDivider()
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                LightSecurityCell(
+                                    label = "动态验证",
+                                    value = if (totpEnabled) "已启用" else "未启用",
+                                    isGood = totpEnabled,
+                                    modifier = Modifier.weight(1f),
                                 )
-                            },
-                        )
-                        ProfileDivider()
-                        ProfileActionRow(
-                            icon = Icons.Outlined.CloudSync,
-                            iconTint = Color(0xFF2563EB),
-                            iconBackground = Color(0xFFEFF6FF),
-                            title = "强制全量重新同步",
-                            subtitle = "重新拉取全部模块的最新数据",
-                            onClick = {
-                                onForceFullSync()
-                                Toast.makeText(context, "正在全量重新同步数据...", Toast.LENGTH_SHORT).show()
-                            },
-                        )
-                        ProfileDivider()
-                        ProfileActionRow(
-                            icon = Icons.Outlined.CleaningServices,
-                            iconTint = Color(0xFF0D9488),
-                            iconBackground = Color(0xFFF0FDFA),
-                            title = "清理临时快照缓存",
-                            subtitle = "释放 ${state.cacheStorageInfo.totalFormatted}，保留登录和个人设置",
-                            onClick = { confirmClearCache = true },
-                        )
+                                LightSecurityCell(
+                                    label = "Passkey",
+                                    value = if (passkeyCount > 0) "$passkeyCount 个" else "未绑定",
+                                    isGood = passkeyCount > 0,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                LightSecurityCell(
+                                    label = "恢复码",
+                                    value = recoveryCodesRemaining?.let { "$it 个" } ?: "同步中",
+                                    isGood = (recoveryCodesRemaining ?: 0) > 0,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+
+                            ProfileDivider()
+                            ProfileActionRow(
+                                icon = Icons.Outlined.Security,
+                                iconTint = Color(0xFF2563EB),
+                                iconBackground = Color(0xFFEFF6FF),
+                                title = "账号安全管理",
+                                subtitle = "修改密码、绑定 MFA 与管理恢复码",
+                                onClick = onOpenAccountManagement,
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        shadowElevation = 1.dp,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            ProfileActionRow(
+                                icon = Icons.Outlined.Email,
+                                iconTint = Color(0xFF7C3AED),
+                                iconBackground = Color(0xFFF5F3FF),
+                                title = "Google 邮箱台账",
+                                subtitle = "管理主邮箱、别名和 OpenAI 使用状态",
+                                onClick = onOpenGoogleAccountDesk,
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        shadowElevation = 1.dp,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            ProfileCardHeader(
+                                icon = Icons.Outlined.Devices,
+                                iconTint = Color(0xFF059669),
+                                iconBackground = Color(0xFFECFDF5),
+                                title = "设备与会话",
+                                subtitle = sessionSummary,
+                                onClick = if (security != null) {
+                                    { showSessions = !showSessions }
+                                } else {
+                                    null
+                                },
+                                trailing = {
+                                    if (security != null) {
+                                        Text(
+                                            if (showSessions) "收起" else "管理会话",
+                                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                            color = Color(0xFF059669),
+                                        )
+                                    }
+                                },
+                            )
+                            ProfileDivider()
+                            ProfileActionRow(
+                                icon = Icons.Outlined.Laptop,
+                                iconTint = Color(0xFF2563EB),
+                                iconBackground = Color(0xFFEFF6FF),
+                                title = "电脑端快捷免密登录",
+                                subtitle = "生成单次使用、5 分钟内有效的登录链接",
+                                busy = state.busyAction == "desktop-magic-link",
+                                onClick = {
+                                    onCreateDesktopMagicLink { url, error ->
+                                        if (url != null) {
+                                            showMagicLinkDialog = url
+                                        } else if (error != null) {
+                                            Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                            )
+                            if (showSessions) {
+                                ProfileDivider()
+                                when {
+                                    security == null -> LoadingBlock("正在同步登录设备")
+                                    security.sessions.isEmpty() -> Text(
+                                        "暂无活动会话",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+                                    )
+                                    else -> security.sessions.forEachIndexed { index, session ->
+                                        if (index > 0) ProfileDivider()
+                                        SessionRow(
+                                            session = session,
+                                            busy = state.busyAction == "session",
+                                            onRevoke = { revokeTarget = session },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        shadowElevation = 1.dp,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            ProfileCardHeader(
+                                icon = Icons.Outlined.CleaningServices,
+                                iconTint = Color(0xFF0D9488),
+                                iconBackground = Color(0xFFF0FDFA),
+                                title = "App 维护",
+                                subtitle = "本地缓存与数据同步",
+                                trailing = {
+                                    Text(
+                                        state.cacheStorageInfo.totalFormatted,
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = Color(0xFF0D9488),
+                                    )
+                                },
+                            )
+                            ProfileDivider()
+                            ProfileActionRow(
+                                icon = Icons.Outlined.CloudSync,
+                                iconTint = Color(0xFF2563EB),
+                                iconBackground = Color(0xFFEFF6FF),
+                                title = "强制全量重新同步",
+                                subtitle = "重新拉取全部模块的最新数据",
+                                onClick = {
+                                    onForceFullSync()
+                                    Toast.makeText(context, "正在全量重新同步数据...", Toast.LENGTH_SHORT).show()
+                                },
+                            )
+                            ProfileDivider()
+                            ProfileActionRow(
+                                icon = Icons.Outlined.CleaningServices,
+                                iconTint = Color(0xFF0D9488),
+                                iconBackground = Color(0xFFF0FDFA),
+                                title = "清理临时快照缓存",
+                                subtitle = "释放 ${state.cacheStorageInfo.totalFormatted}，保留登录和个人设置",
+                                onClick = { confirmClearCache = true },
+                            )
+                        }
                     }
                 }
             }

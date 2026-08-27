@@ -2952,46 +2952,66 @@ private fun ReservationTimeRangePicker(
             }
         }
 
-        // 4. 全天常用黄金时段快速选择
+        // 4. 全天常用黄金时段快速选择（一行4个，紧凑行距）
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = "全天常用黄金时段",
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                listOf(
-                    "09:00 - 11:00" to ("09:00" to "11:00"),
-                    "10:00 - 12:00" to ("10:00" to "12:00"),
-                    "14:00 - 16:00" to ("14:00" to "16:00"),
-                    "14:30 - 17:30" to ("14:30" to "17:30"),
-                    "16:00 - 18:00" to ("16:00" to "18:00"),
-                    "19:00 - 21:00" to ("19:00" to "21:00"),
-                    "19:00 - 21:45" to ("19:00" to "21:45"),
-                ).forEach { (label, times) ->
-                    val isSelected = startTime == times.first && endTime == times.second
-                    Surface(
-                        onClick = {
-                            onStartTimeChange(times.first)
-                            onEndTimeChange(times.second)
-                        },
-                        shape = RoundedCornerShape(999.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                        ),
+            val goldenSlots = listOf(
+                "09:00-11:00" to ("09:00" to "11:00"),
+                "10:00-12:00" to ("10:00" to "12:00"),
+                "14:00-16:00" to ("14:00" to "16:00"),
+                "14:30-17:30" to ("14:30" to "17:30"),
+                "16:00-18:00" to ("16:00" to "18:00"),
+                "18:30-20:30" to ("18:30" to "20:30"),
+                "19:00-21:00" to ("19:00" to "21:00"),
+                "19:00-21:45" to ("19:00" to "21:45"),
+            )
+            val rows = goldenSlots.chunked(4)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                rows.forEach { rowSlots ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                        )
+                        rowSlots.forEach { (label, times) ->
+                            val isSelected = startTime == times.first && endTime == times.second
+                            Surface(
+                                onClick = {
+                                    onStartTimeChange(times.first)
+                                    onEndTimeChange(times.second)
+                                },
+                                shape = RoundedCornerShape(999.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                ),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(vertical = 4.5.dp, horizontal = 1.dp),
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 9.5.sp,
+                                            letterSpacing = (-0.2).sp,
+                                        ),
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
+                            }
+                        }
+                        repeat(4 - rowSlots.size) {
+                            Spacer(Modifier.weight(1f))
+                        }
                     }
                 }
             }

@@ -100,6 +100,10 @@ fun FreeClassroomScreen(
         onQuery(dayplus, selectedSections, building)
     }
 
+    val adaptive = LocalAdaptiveWindow.current
+    val isTablet = adaptive.isTabletOrExpanded
+    val roomColumns = if (isTablet) 4 else 2
+
     WorkspacePage(
         title = "空教室查询",
         subtitle = listOfNotNull(
@@ -195,7 +199,7 @@ fun FreeClassroomScreen(
                     FreeClassroomBuildingHeader(item)
                 }
                 items(
-                    items = item.rooms.chunked(2),
+                    items = item.rooms.chunked(roomColumns),
                     key = { rooms -> "rooms-${item.number}-${rooms.joinToString("-") { it.room }}" },
                     contentType = { "rooms" },
                 ) { rooms ->
@@ -206,7 +210,9 @@ fun FreeClassroomScreen(
                         rooms.forEach { room ->
                             FreeClassroomRoomCard(room, Modifier.weight(1f))
                         }
-                        if (rooms.size == 1) Spacer(Modifier.weight(1f))
+                        repeat(roomColumns - rooms.size) {
+                            Spacer(Modifier.weight(1f))
+                        }
                     }
                 }
             }

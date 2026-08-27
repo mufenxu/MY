@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -274,11 +275,20 @@ private fun QrConfirmationScreen(
     onReject: () -> Unit,
     onClose: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState()),
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        QrHeader("确认网页登录", onClose)
-        Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp, vertical = 20.dp)) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 540.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            QrHeader("确认网页登录", onClose)
+            Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp, vertical = 20.dp)) {
             Text("安全验证码", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
             Text(
                 target.verificationCode,
@@ -339,6 +349,7 @@ private fun QrConfirmationScreen(
         }
     }
 }
+}
 
 @Composable
 private fun QrDetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
@@ -370,9 +381,11 @@ private fun QrApprovedScreen(target: QrLoginTarget, onClose: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center,
     ) {
         Column(
             modifier = Modifier
+                .widthIn(max = 520.dp)
                 .fillMaxSize()
                 .navigationBarsPadding()
                 .padding(horizontal = 24.dp, vertical = 28.dp),

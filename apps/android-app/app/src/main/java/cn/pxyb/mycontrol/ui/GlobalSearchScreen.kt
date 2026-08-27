@@ -3,9 +3,11 @@ package cn.pxyb.mycontrol.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -60,6 +62,9 @@ fun GlobalSearchScreen(
         }
     }
 
+    val adaptive = LocalAdaptiveWindow.current
+    val isTablet = adaptive.isTabletOrExpanded
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = appPageContentPadding(contentPadding),
@@ -102,6 +107,24 @@ fun GlobalSearchScreen(
         if (results.isEmpty() && !state.refreshing) {
             item(key = "search-empty") {
                 AppPanel { EmptyBlock("没有匹配结果", "换个关键词试试") }
+            }
+        } else if (isTablet) {
+            // 平板双列卡片流
+            val rows = results.chunked(2)
+            items(rows, key = { it.first().id }, contentType = { "search-result-row" }) { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    rowItems.forEach { item ->
+                        Box(modifier = Modifier.weight(1f)) {
+                            SearchResultRow(item = item, onClick = { onSelect(item) })
+                        }
+                    }
+                    if (rowItems.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
         } else {
             items(results, key = GlobalSearchItem::id, contentType = { "search-result" }) { item ->

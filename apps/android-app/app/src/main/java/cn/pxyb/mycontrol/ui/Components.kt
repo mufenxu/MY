@@ -494,6 +494,8 @@ fun AppDialog(
                 sheetColor.copy(alpha = 0f),
             ),
         )
+        val adaptive = LocalAdaptiveWindow.current
+        val maxDialogWidth = if (adaptive.isTabletOrExpanded) 560.dp else 420.dp
 
         Box(
             modifier = Modifier
@@ -524,7 +526,7 @@ fun AppDialog(
             ) {
                 Box(
                     modifier = modifier
-                        .widthIn(max = 420.dp)
+                        .widthIn(max = maxDialogWidth)
                         .fillMaxWidth()
                         .shadow(
                             elevation = 28.dp,

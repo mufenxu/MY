@@ -54,11 +54,12 @@ internal fun resolveAuthenticatedShellInsets(
     safeEnd: Dp,
     safeBottom: Dp,
     isSubScreen: Boolean,
+    isTablet: Boolean = false,
 ): AuthenticatedShellInsets = AuthenticatedShellInsets(
     navigationTop = safeTop,
     navigationStart = safeStart,
     navigationEnd = safeEnd,
-    contentBottom = safeBottom + if (isSubScreen) 16.dp else 90.dp,
+    contentBottom = safeBottom + if (isTablet || isSubScreen) 16.dp else 90.dp,
 )
 
 internal fun appPageContentPadding(

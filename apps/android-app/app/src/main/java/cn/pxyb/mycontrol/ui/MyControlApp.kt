@@ -139,10 +139,10 @@ import cn.pxyb.mycontrol.data.AppThemePreference
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
-private data class TabItem(val tab: MainTab, val label: String, val icon: ImageVector)
+internal data class TabItem(val tab: MainTab, val label: String, val icon: ImageVector)
 private enum class SecondFactorMode { Totp, RecoveryCode }
 
-private object AppRoute {
+internal object AppRoute {
     const val Overview = "overview"
     const val Events = "events"
     const val Tools = "tools"
@@ -159,12 +159,14 @@ private object AppRoute {
     const val Scenes = "scenes"
 }
 
-private val tabs = listOf(
+internal val appNavigationTabs = listOf(
     TabItem(MainTab.Overview, "今日", Icons.Outlined.Home),
     TabItem(MainTab.Operations, "状态", Icons.Outlined.Settings),
     TabItem(MainTab.Tools, "设备", Icons.Outlined.Hub),
     TabItem(MainTab.Profile, "我的", Icons.Outlined.Person),
 )
+
+private val tabs = appNavigationTabs
 
 private fun MainTab.route(): String = when (this) {
     MainTab.Overview -> AppRoute.Overview
@@ -262,11 +264,12 @@ fun MyControlApp(
         else -> "app"
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    ProvideAdaptiveWindowContext {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
         // 底层：主应用内容层（在开屏平稳期后静默预热，退场时伴随细腻的弹性浮现）
         if (prewarmContent || !splashVisible) {
             Box(
@@ -319,6 +322,7 @@ fun MyControlApp(
             )
         }
     }
+}
 }
 
 @Composable
@@ -668,6 +672,9 @@ private fun LoginScreen(
         onLogin(username, password, factor, factorMode == SecondFactorMode.RecoveryCode)
     }
 
+    val adaptive = LocalAdaptiveWindow.current
+    val isExpanded = adaptive.isExpanded
+
     Box(modifier = Modifier.fillMaxSize()) {
         LoginAmbientBackground()
 
@@ -676,159 +683,314 @@ private fun LoginScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = if (isExpanded) 40.dp else 24.dp),
         ) {
             BoxWithConstraints(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .heightIn(min = maxHeight)
-                        .padding(vertical = 24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    LoginHeader()
-
-                    Spacer(Modifier.height(26.dp))
-
-                    Surface(
+                if (isExpanded) {
+                    Row(
                         modifier = Modifier
-                            .widthIn(max = 440.dp)
-                            .fillMaxWidth(),
-                        shape = AppCardShape,
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
-                        shadowElevation = 2.dp,
+                            .fillMaxSize()
+                            .padding(vertical = 24.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(48.dp, Alignment.CenterHorizontally),
                     ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp)
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            if (!state.message.isNullOrBlank()) {
-                                FeedbackBanner(state.message, error = false, modifier = Modifier.padding(bottom = 14.dp))
-                            }
-                            if (!state.error.isNullOrBlank()) {
-                                FeedbackBanner(state.error, error = true, modifier = Modifier.padding(bottom = 14.dp))
-                            }
+                            LoginHeader()
+                        }
 
-                            if (!state.secondFactorRequired) {
-                                PrototypeInputField(
-                                    value = username,
-                                    onValueChange = { username = it },
-                                    label = "账号",
-                                    placeholder = "请输入您的账号",
-                                    icon = Icons.Outlined.Person,
-                                    enabled = !state.loginBusy,
-                                    autofillType = AutofillType.Username,
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                                )
+                        Surface(
+                            modifier = Modifier
+                                .widthIn(max = 440.dp)
+                                .weight(1f),
+                            shape = AppCardShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
+                            shadowElevation = 2.dp,
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp)
+                            ) {
+                                if (!state.message.isNullOrBlank()) {
+                                    FeedbackBanner(state.message, error = false, modifier = Modifier.padding(bottom = 14.dp))
+                                }
+                                if (!state.error.isNullOrBlank()) {
+                                    FeedbackBanner(state.error, error = true, modifier = Modifier.padding(bottom = 14.dp))
+                                }
 
-                                Spacer(Modifier.height(14.dp))
-
-                                PrototypeInputField(
-                                    value = password,
-                                    onValueChange = { password = it },
-                                    label = "密码",
-                                    placeholder = "请输入您的密码",
-                                    icon = Icons.Outlined.Lock,
-                                    enabled = !state.loginBusy,
-                                    autofillType = AutofillType.Password,
-                                    trailingIcon = {
-                                        IconButton(
-                                            onClick = { passwordVisible = !passwordVisible },
-                                            modifier = Modifier.size(34.dp)
-                                        ) {
-                                            Icon(
-                                                if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                                                contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
-                                                tint = Color(0xFF94A3B8),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    },
-                                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                                )
-
-                                Spacer(Modifier.height(20.dp))
-
-                                PrimaryLoginButton(
-                                    text = "登录",
-                                    onClick = submit,
-                                    enabled = !state.loginBusy && username.isNotBlank() && password.isNotBlank(),
-                                    loading = state.loginBusy,
-                                )
-
-                                if (state.androidPasskeySupported) {
-                                    Spacer(Modifier.height(20.dp))
-                                    PasskeyLoginMethod(
+                                if (!state.secondFactorRequired) {
+                                    PrototypeInputField(
+                                        value = username,
+                                        onValueChange = { username = it },
+                                        label = "账号",
+                                        placeholder = "请输入您的账号",
+                                        icon = Icons.Outlined.Person,
                                         enabled = !state.loginBusy,
+                                        autofillType = AutofillType.Username,
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                    )
+
+                                    Spacer(Modifier.height(14.dp))
+
+                                    PrototypeInputField(
+                                        value = password,
+                                        onValueChange = { password = it },
+                                        label = "密码",
+                                        placeholder = "请输入您的密码",
+                                        icon = Icons.Outlined.Lock,
+                                        enabled = !state.loginBusy,
+                                        autofillType = AutofillType.Password,
+                                        trailingIcon = {
+                                            IconButton(
+                                                onClick = { passwordVisible = !passwordVisible },
+                                                modifier = Modifier.size(34.dp)
+                                            ) {
+                                                Icon(
+                                                    if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                                    contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
+                                                    tint = Color(0xFF94A3B8),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        },
+                                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                                    )
+
+                                    Spacer(Modifier.height(20.dp))
+
+                                    PrimaryLoginButton(
+                                        text = "登录",
+                                        onClick = submit,
+                                        enabled = !state.loginBusy && username.isNotBlank() && password.isNotBlank(),
+                                        loading = state.loginBusy,
+                                    )
+
+                                    if (state.androidPasskeySupported) {
+                                        Spacer(Modifier.height(20.dp))
+                                        PasskeyLoginMethod(
+                                            enabled = !state.loginBusy,
+                                            onClick = {
+                                                focusManager.clearFocus()
+                                                onPasskeyLogin(username)
+                                            },
+                                        )
+                                    }
+                                } else {
+                                    if (state.recoveryCodeAllowed) {
+                                        SecondFactorSelector(
+                                            selected = factorMode,
+                                            onSelect = {
+                                                factorMode = it
+                                                factor = ""
+                                            },
+                                        )
+                                        Spacer(Modifier.height(14.dp))
+                                    }
+                                    PrototypeInputField(
+                                        value = factor,
+                                        onValueChange = {
+                                            factor = if (factorMode == SecondFactorMode.Totp) {
+                                                it.filter(Char::isDigit).take(6)
+                                            } else {
+                                                it.take(64)
+                                            }
+                                        },
+                                        label = if (factorMode == SecondFactorMode.Totp) "动态验证码 (2FA)" else "恢复码",
+                                        placeholder = if (factorMode == SecondFactorMode.Totp) "请输入6位动态验证码" else "请输入一组恢复码",
+                                        icon = Icons.Outlined.Security,
+                                        enabled = !state.loginBusy,
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = if (factorMode == SecondFactorMode.Totp) KeyboardType.NumberPassword else KeyboardType.Password,
+                                            imeAction = ImeAction.Done,
+                                        ),
+                                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                                    )
+
+                                    Spacer(Modifier.height(20.dp))
+
+                                    PrimaryLoginButton(
+                                        text = "验证并登录",
+                                        onClick = submit,
+                                        enabled = !state.loginBusy && (
+                                            factorMode == SecondFactorMode.RecoveryCode && factor.isNotBlank()
+                                                || factorMode == SecondFactorMode.Totp && factor.length == 6
+                                            ),
+                                        loading = state.loginBusy,
+                                    )
+
+                                    TextButton(
                                         onClick = {
                                             focusManager.clearFocus()
-                                            onPasskeyLogin(username)
-                                        },
-                                    )
-                                }
-                            } else {
-                                if (state.recoveryCodeAllowed) {
-                                    SecondFactorSelector(
-                                        selected = factorMode,
-                                        onSelect = {
-                                            factorMode = it
                                             factor = ""
+                                            factorMode = SecondFactorMode.Totp
+                                            onBackFromSecondFactor()
                                         },
-                                    )
-                                    Spacer(Modifier.height(14.dp))
+                                        enabled = !state.loginBusy,
+                                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Text("返回账号登录", modifier = Modifier.padding(start = 6.dp))
+                                    }
                                 }
-                                PrototypeInputField(
-                                    value = factor,
-                                    onValueChange = {
-                                        factor = if (factorMode == SecondFactorMode.Totp) {
-                                            it.filter(Char::isDigit).take(6)
-                                        } else {
-                                            it.take(64)
-                                        }
-                                    },
-                                    label = if (factorMode == SecondFactorMode.Totp) "动态验证码 (2FA)" else "恢复码",
-                                    placeholder = if (factorMode == SecondFactorMode.Totp) "请输入6位动态验证码" else "请输入一组恢复码",
-                                    icon = Icons.Outlined.Security,
-                                    enabled = !state.loginBusy,
-                                    keyboardOptions = KeyboardOptions(
-                                        keyboardType = if (factorMode == SecondFactorMode.Totp) KeyboardType.NumberPassword else KeyboardType.Password,
-                                        imeAction = ImeAction.Done,
-                                    ),
-                                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                                )
+                            }
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .heightIn(min = maxHeight)
+                            .padding(vertical = 24.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        LoginHeader()
 
-                                Spacer(Modifier.height(20.dp))
+                        Spacer(Modifier.height(26.dp))
 
-                                PrimaryLoginButton(
-                                    text = "验证并登录",
-                                    onClick = submit,
-                                    enabled = !state.loginBusy && (
-                                        factorMode == SecondFactorMode.RecoveryCode && factor.isNotBlank()
-                                            || factorMode == SecondFactorMode.Totp && factor.length == 6
+                        Surface(
+                            modifier = Modifier
+                                .widthIn(max = 440.dp)
+                                .fillMaxWidth(),
+                            shape = AppCardShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
+                            shadowElevation = 2.dp,
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp)
+                            ) {
+                                if (!state.message.isNullOrBlank()) {
+                                    FeedbackBanner(state.message, error = false, modifier = Modifier.padding(bottom = 14.dp))
+                                }
+                                if (!state.error.isNullOrBlank()) {
+                                    FeedbackBanner(state.error, error = true, modifier = Modifier.padding(bottom = 14.dp))
+                                }
+
+                                if (!state.secondFactorRequired) {
+                                    PrototypeInputField(
+                                        value = username,
+                                        onValueChange = { username = it },
+                                        label = "账号",
+                                        placeholder = "请输入您的账号",
+                                        icon = Icons.Outlined.Person,
+                                        enabled = !state.loginBusy,
+                                        autofillType = AutofillType.Username,
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                    )
+
+                                    Spacer(Modifier.height(14.dp))
+
+                                    PrototypeInputField(
+                                        value = password,
+                                        onValueChange = { password = it },
+                                        label = "密码",
+                                        placeholder = "请输入您的密码",
+                                        icon = Icons.Outlined.Lock,
+                                        enabled = !state.loginBusy,
+                                        autofillType = AutofillType.Password,
+                                        trailingIcon = {
+                                            IconButton(
+                                                onClick = { passwordVisible = !passwordVisible },
+                                                modifier = Modifier.size(34.dp)
+                                            ) {
+                                                Icon(
+                                                    if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                                    contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
+                                                    tint = Color(0xFF94A3B8),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        },
+                                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                                    )
+
+                                    Spacer(Modifier.height(20.dp))
+
+                                    PrimaryLoginButton(
+                                        text = "登录",
+                                        onClick = submit,
+                                        enabled = !state.loginBusy && username.isNotBlank() && password.isNotBlank(),
+                                        loading = state.loginBusy,
+                                    )
+
+                                    if (state.androidPasskeySupported) {
+                                        Spacer(Modifier.height(20.dp))
+                                        PasskeyLoginMethod(
+                                            enabled = !state.loginBusy,
+                                            onClick = {
+                                                focusManager.clearFocus()
+                                                onPasskeyLogin(username)
+                                            },
+                                        )
+                                    }
+                                } else {
+                                    if (state.recoveryCodeAllowed) {
+                                        SecondFactorSelector(
+                                            selected = factorMode,
+                                            onSelect = {
+                                                factorMode = it
+                                                factor = ""
+                                            },
+                                        )
+                                        Spacer(Modifier.height(14.dp))
+                                    }
+                                    PrototypeInputField(
+                                        value = factor,
+                                        onValueChange = {
+                                            factor = if (factorMode == SecondFactorMode.Totp) {
+                                                it.filter(Char::isDigit).take(6)
+                                            } else {
+                                                it.take(64)
+                                            }
+                                        },
+                                        label = if (factorMode == SecondFactorMode.Totp) "动态验证码 (2FA)" else "恢复码",
+                                        placeholder = if (factorMode == SecondFactorMode.Totp) "请输入6位动态验证码" else "请输入一组恢复码",
+                                        icon = Icons.Outlined.Security,
+                                        enabled = !state.loginBusy,
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = if (factorMode == SecondFactorMode.Totp) KeyboardType.NumberPassword else KeyboardType.Password,
+                                            imeAction = ImeAction.Done,
                                         ),
-                                    loading = state.loginBusy,
-                                )
+                                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                                    )
 
-                                TextButton(
-                                    onClick = {
-                                        focusManager.clearFocus()
-                                        factor = ""
-                                        factorMode = SecondFactorMode.Totp
-                                        onBackFromSecondFactor()
-                                    },
-                                    enabled = !state.loginBusy,
-                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                ) {
-                                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Text("返回账号登录", modifier = Modifier.padding(start = 6.dp))
+                                    Spacer(Modifier.height(20.dp))
+
+                                    PrimaryLoginButton(
+                                        text = "验证并登录",
+                                        onClick = submit,
+                                        enabled = !state.loginBusy && (
+                                            factorMode == SecondFactorMode.RecoveryCode && factor.isNotBlank()
+                                                || factorMode == SecondFactorMode.Totp && factor.length == 6
+                                            ),
+                                        loading = state.loginBusy,
+                                    )
+
+                                    TextButton(
+                                        onClick = {
+                                            focusManager.clearFocus()
+                                            factor = ""
+                                            factorMode = SecondFactorMode.Totp
+                                            onBackFromSecondFactor()
+                                        },
+                                        enabled = !state.loginBusy,
+                                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Text("返回账号登录", modifier = Modifier.padding(start = 6.dp))
+                                    }
                                 }
                             }
                         }
@@ -1314,42 +1476,77 @@ private fun AuthenticatedShell(
         }
     }
     val layoutDirection = LocalLayoutDirection.current
+    val adaptive = LocalAdaptiveWindow.current
+    val isTablet = adaptive.isTabletOrExpanded
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets.safeDrawing,
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            val shellInsets = resolveAuthenticatedShellInsets(
-                safeTop = padding.calculateTopPadding(),
-                safeStart = if (layoutDirection == LayoutDirection.Ltr) {
-                    padding.calculateLeftPadding(layoutDirection)
-                } else {
-                    padding.calculateRightPadding(layoutDirection)
-                },
-                safeEnd = if (layoutDirection == LayoutDirection.Ltr) {
-                    padding.calculateRightPadding(layoutDirection)
-                } else {
-                    padding.calculateLeftPadding(layoutDirection)
-                },
-                safeBottom = padding.calculateBottomPadding(),
-                isSubScreen = isSubScreen,
-            )
-            val contentPadding = PaddingValues(
-                bottom = shellInsets.contentBottom,
-            )
-            NavHost(
-                navController = navController,
-                startDestination = initialRoute,
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (isTablet) {
+                AppNavigationRail(
+                    selectedTab = primaryTabForRoute(currentRoute) ?: state.selectedTab,
+                    onSelectTab = navigateToTab,
+                    unreadAlerts = settingsProfileState.unreadAlerts,
+                    onOpenNotifications = {
+                        viewModel.openWorkspace(WorkspaceDestination.Notifications)
+                        navController.navigate(AppRoute.Notifications) { launchSingleTop = true }
+                    },
+                    onOpenSearch = {
+                        viewModel.openGlobalSearch()
+                        navController.navigate(AppRoute.Search) { launchSingleTop = true }
+                    },
+                    onOpenQrLogin = viewModel::openQrScanner,
+                    onOpenSettings = { settingsOpen = true },
+                    themePreference = themePreference,
+                    onToggleTheme = {
+                        val next = when (themePreference) {
+                            AppThemePreference.System -> AppThemePreference.Dark
+                            AppThemePreference.Dark -> AppThemePreference.Light
+                            AppThemePreference.Light -> AppThemePreference.System
+                        }
+                        onThemePreferenceChange(next)
+                    },
+                )
+            }
+
+            Box(
                 modifier = Modifier
-                    .widthIn(max = 960.dp)
-                    .fillMaxSize()
-                    .align(Alignment.TopCenter)
-                    .padding(
-                        start = shellInsets.navigationStart,
-                        top = shellInsets.navigationTop,
-                        end = shellInsets.navigationEnd,
-                    ),
+                    .weight(1f)
+                    .fillMaxHeight(),
+            ) {
+                val shellInsets = resolveAuthenticatedShellInsets(
+                    safeTop = padding.calculateTopPadding(),
+                    safeStart = if (layoutDirection == LayoutDirection.Ltr) {
+                        padding.calculateLeftPadding(layoutDirection)
+                    } else {
+                        padding.calculateRightPadding(layoutDirection)
+                    },
+                    safeEnd = if (layoutDirection == LayoutDirection.Ltr) {
+                        padding.calculateRightPadding(layoutDirection)
+                    } else {
+                        padding.calculateLeftPadding(layoutDirection)
+                    },
+                    safeBottom = padding.calculateBottomPadding(),
+                    isSubScreen = isSubScreen,
+                    isTablet = isTablet,
+                )
+                val contentPadding = PaddingValues(
+                    bottom = shellInsets.contentBottom,
+                )
+                NavHost(
+                    navController = navController,
+                    startDestination = initialRoute,
+                    modifier = Modifier
+                        .widthIn(max = if (isTablet) 1440.dp else 960.dp)
+                        .fillMaxSize()
+                        .align(Alignment.TopCenter)
+                        .padding(
+                            start = shellInsets.navigationStart,
+                            top = shellInsets.navigationTop,
+                            end = shellInsets.navigationEnd,
+                        ),
                 enterTransition = {
                     fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
                     scaleIn(initialScale = 0.985f, animationSpec = tween(220, easing = FastOutSlowInEasing))
@@ -1629,12 +1826,13 @@ private fun AuthenticatedShell(
                 }
             }
 
-            AnimatedVisibility(
-                visible = !isSubScreen,
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !isTablet && !isSubScreen,
                 enter = slideInVertically(animationSpec = tween(160, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeIn(animationSpec = tween(160)),
                 exit = slideOutVertically(animationSpec = tween(140, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeOut(animationSpec = tween(120)),
-                modifier = Modifier.align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding(),
             ) {
                 AppBottomNavigation(
                     selected = primaryTabForRoute(currentRoute) ?: state.selectedTab,
@@ -1659,7 +1857,7 @@ private fun AuthenticatedShell(
                 )
             }
 
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = toastVisible,
                 enter = slideInVertically(animationSpec = tween(260, easing = FastOutSlowInEasing)) { -it } + fadeIn(animationSpec = tween(180)),
                 exit = slideOutVertically(animationSpec = tween(180, easing = FastOutSlowInEasing)) { -it } + fadeOut(animationSpec = tween(140)),
@@ -1707,6 +1905,7 @@ private fun AuthenticatedShell(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+        }
         }
     }
 }
