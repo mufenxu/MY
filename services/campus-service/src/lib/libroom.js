@@ -319,6 +319,76 @@ function upstreamMessage(payload, fallback) {
   return String(payload?.message || payload?.msg || payload?.error || fallback);
 }
 
+function firstString(value, keys, fallback = "") {
+  if (!value || typeof value !== "object") return fallback;
+  for (const key of keys) {
+    const raw = value[key];
+    if (raw === undefined || raw === null) continue;
+    const text = String(raw).trim();
+    if (text) return text;
+  }
+  return fallback;
+}
+
+function officialRecordDateTime(value) {
+  const text = String(value || "").trim();
+  const timestamp = /^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:[0-5]\d)(?::[0-5]\d)?$/.exec(text);
+  if (timestamp) {
+    const minutes = parseLooseTime(timestamp[2]);
+    return { date: timestamp[1], time: minutes === null ? timestamp[2] : formatTime(minutes) };
+  }
+  const minutes = parseLooseTime(text);
+  return { date: "", time: minutes === null ? "" : formatTime(minutes) };
+}
+
+function officialRecordShowTime(value) {
+  const match = /^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:[0-5]\d)(?::[0-5]\d)?-(\d{1,2}:[0-5]\d)(?::[0-5]\d)?$/.exec(String(value || "").trim());
+  if (!match) return { date: "", startTime: "", endTime: "" };
+  const start = parseLooseTime(match[2]);
+  const end = parseLooseTime(match[3]);
+  return {
+    date: match[1],
+    startTime: start === null ? match[2] : formatTime(start),
+    endTime: end === null ? match[3] : formatTime(end)
+  };
+}
+
+function activeOfficialReservation(record, statusText) {
+  const text = String(statusText || "").trim();
+  if (/已使用|取消|违约|结束|过期/.test(text)) return false;
+  if (/预约成功|待|生效/.test(text)) return true;
+  if (record?.cancel_ok !== undefined || record?.cancelOk !== undefined) {
+    return isTruthyFlag(record.cancel_ok ?? record.cancelOk);
+  }
+  return false;
+}
+
+export function normalizeLibroomMyReservationRecord(record, { activeOnly = true } = {}) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) return null;
+  const statusText = firstString(record, ["statusText", "status_text", "status_name", "statusName", "status"]);
+  if (activeOnly && !activeOfficialReservation(record, statusText)) return null;
+
+  const begin = officialRecordDateTime(firstString(record, ["begin_time", "beginTime", "start_time", "startTime"]));
+  const end = officialRecordDateTime(firstString(record, ["end_time", "endTime", "finish_time", "finishTime"]));
+  const show = officialRecordShowTime(firstString(record, ["show_time", "showTime"]));
+  const spaceId = Number(record.area_id ?? record.areaId ?? record.space_id ?? record.spaceId ?? record.seminar_id ?? record.seminarId ?? 0);
+
+  return {
+    id: firstString(record, ["id", "order_id", "orderId", "book_id", "bookId"]),
+    spaceId: Number.isInteger(spaceId) && spaceId > 0 ? spaceId : 0,
+    spaceName: firstString(record, ["spaceName", "nameMerge", "space_name", "areaName", "area_name", "room_name", "name"], "研讨间"),
+    date: firstString(record, ["date", "order_date", "reserve_date"], begin.date || end.date || show.date),
+    startTime: begin.time || show.startTime,
+    endTime: end.time || show.endTime,
+    title: firstString(record, ["title", "subject"], "个人预约研讨"),
+    statusText: statusText || "预约成功",
+    canCancel: record.cancel_ok !== undefined || record.cancelOk !== undefined
+      ? isTruthyFlag(record.cancel_ok ?? record.cancelOk)
+      : activeOfficialReservation(record, statusText),
+    createdAt: firstString(record, ["createdAt", "created_at", "create_time"])
+  };
+}
+
 export function libroomCasFromCallback(value) {
   try {
     const url = new URL(String(value || ""));
@@ -483,18 +553,16 @@ export function createLibroomClient({
   }
 
   async function getMyReservations(data = {}) {
-    const endpoints = ["/v4/order/list", "/v4/order/my_order", "/v4/seminar/my_order", "/v4/order/my"];
-    for (const endpoint of endpoints) {
-      try {
-        const result = await request(endpoint, { page: Number(data.page || 1), ...data });
-        if (Array.isArray(result)) return result;
-        if (Array.isArray(result?.data)) return result.data;
-        if (Array.isArray(result?.list)) return result.list;
-        if (Array.isArray(result?.rows)) return result.rows;
-      } catch {
-        // try next endpoint
-      }
-    }
+    const result = await request("/v4/seminar/books", {
+      ...data,
+      type: String(data.type || "1"),
+      page: Number(data.page || 1),
+      limit: Number(data.limit || 10)
+    });
+    if (Array.isArray(result)) return result;
+    if (Array.isArray(result?.data)) return result.data;
+    if (Array.isArray(result?.list)) return result.list;
+    if (Array.isArray(result?.rows)) return result.rows;
     return [];
   }
 

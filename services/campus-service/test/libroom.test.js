@@ -9,6 +9,7 @@ import {
   libroomRequiresCasTicket,
   resolveLibroomCasCallback,
   normalizeReservationInput,
+  normalizeLibroomMyReservationRecord,
   clearLibroomLastError,
   LIBROOM_SERVICE_URL,
   summarizeLibroomAvailability
@@ -217,6 +218,79 @@ test("loads space availability by the upstream space id", async () => {
 
   assert.match(requests[0].url, /\/v4\/seminar\/seminar$/);
   assert.deepEqual(JSON.parse(requests[0].options.body), { id: 9, date: "2026-08-26" });
+});
+
+test("loads my seminar reservations from the official books endpoint", async () => {
+  const calls = [];
+  const client = createLibroomClient({
+    token: "member-token",
+    requestImpl: async (pathname, data, { token }) => {
+      calls.push({ pathname, data, token });
+      if (pathname !== "/v4/seminar/books") throw new Error("unexpected endpoint");
+      return {
+        code: 0,
+        data: {
+          total: "1",
+          per_page: 10,
+          current_page: 1,
+          last_page: 1,
+          data: [{ id: "441", nameMerge: "图书馆-二楼-单人学习间14" }]
+        }
+      };
+    }
+  });
+
+  const result = await client.getMyReservations();
+
+  assert.deepEqual(calls, [{
+    pathname: "/v4/seminar/books",
+    data: { type: "1", page: 1, limit: 10 },
+    token: "member-token"
+  }]);
+  assert.deepEqual(result, [{ id: "441", nameMerge: "图书馆-二楼-单人学习间14" }]);
+});
+
+test("normalizes active official seminar reservation records for app display", () => {
+  const active = normalizeLibroomMyReservationRecord({
+    id: "441",
+    nameMerge: "图书馆-二楼-单人学习间14",
+    begin_time: "2026-08-29 08:00",
+    end_time: "2026-08-29 12:00",
+    show_time: "2026-08-29 08:00-12:00",
+    status_name: "预约成功",
+    cancel_ok: 1,
+    title: "个人课程研读与学习",
+    create_time: "2026-08-27 07:00:00"
+  });
+  const used = normalizeLibroomMyReservationRecord({
+    id: "440",
+    nameMerge: "图书馆-二楼-单人学习间16",
+    begin_time: "2026-08-27 19:30",
+    end_time: "2026-08-27 21:45",
+    status_name: "已使用",
+    cancel_ok: 0
+  });
+  const unknown = normalizeLibroomMyReservationRecord({
+    id: "439",
+    nameMerge: "图书馆-二楼-单人学习间17",
+    begin_time: "2026-08-26 19:00",
+    end_time: "2026-08-26 21:45"
+  });
+
+  assert.deepEqual(active, {
+    id: "441",
+    spaceId: 0,
+    spaceName: "图书馆-二楼-单人学习间14",
+    date: "2026-08-29",
+    startTime: "08:00",
+    endTime: "12:00",
+    title: "个人课程研读与学习",
+    statusText: "预约成功",
+    canCancel: true,
+    createdAt: "2026-08-27 07:00:00"
+  });
+  assert.equal(used, null);
+  assert.equal(unknown, null);
 });
 
 test("derives free reservation windows from occupied periods", () => {
