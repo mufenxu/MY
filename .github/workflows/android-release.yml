@@ -224,22 +224,35 @@ jobs:
           "${qshell_bin}" -L cdnrefresh -i "${refresh_file}"
 
           manifest_probe="${RUNNER_TEMP}/qiniu-latest.json"
-          for attempt in 1 2 3 4 5; do
+          manifest_expected_url="${DOWNLOAD_BASE_URL}/android/${APK_NAME}"
+          manifest_probe_base_url="${DOWNLOAD_BASE_URL}/android/latest.json"
+          manifest_ready=false
+          for attempt in {1..12}; do
+            observed_apk_url="<unreachable>"
+            manifest_probe_url="${manifest_probe_base_url}?release=${APK_NAME}&attempt=${attempt}"
             if curl -fsSL --connect-timeout 10 --max-time 30 \
-              "${DOWNLOAD_BASE_URL}/android/latest.json" -o "${manifest_probe}"; then
-              break
+              --header 'Cache-Control: no-cache' \
+              "${manifest_probe_url}" -o "${manifest_probe}"; then
+              if observed_apk_url="$(node -e '
+                const fs = require("node:fs");
+                const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+                process.stdout.write(typeof manifest.apkUrl === "string" ? manifest.apkUrl : "");
+              ' "${manifest_probe}" 2>/dev/null)"; then
+                if [[ "${observed_apk_url}" == "${manifest_expected_url}" ]]; then
+                  manifest_ready=true
+                  break
+                fi
+              else
+                observed_apk_url="<invalid JSON>"
+              fi
             fi
-            if [[ "${attempt}" == "5" ]]; then
-              echo "::error::Qiniu latest.json is not reachable over HTTPS after upload"
-              exit 1
+            echo "::notice::Waiting for Qiniu latest.json to reference ${manifest_expected_url} (observed: ${observed_apk_url}, attempt ${attempt}/12)"
+            if [[ "${attempt}" != "12" ]]; then
+              sleep 5
             fi
-            sleep 5
           done
-          node -e '
-            const fs = require("node:fs");
-            const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-            if (manifest.apkUrl !== `${process.env.DOWNLOAD_BASE_URL}/android/${process.env.APK_NAME}`) {
-              throw new Error("Qiniu manifest APK URL does not match the uploaded asset");
-            }
-          ' "${manifest_probe}"
+          if [[ "${manifest_ready}" != true ]]; then
+            echo "::error::Qiniu latest.json did not reference the uploaded APK after CDN propagation wait"
+            exit 1
+          fi
           popd >/dev/null
