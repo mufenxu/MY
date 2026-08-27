@@ -42,7 +42,8 @@ import {
   resolveLibroomCasCallback,
   clearLibroomLastError,
   normalizeReservationInput,
-  normalizeLibroomMyReservationRecord
+  normalizeLibroomMyReservationRecord,
+  summarizeLibroomAvailability
 } from "./src/lib/libroom.js";
 import {
   autoReservationNextScanDelay,
@@ -7002,50 +7003,47 @@ async function handleApi(req, res, url) {
       const client = await libroomClient();
 
       let spaces = [];
-      try {
-        if (date && startTime && endTime) {
-          try {
-            spaces = await client.listSpaces({ date, start_time: startTime, end_time: endTime });
-          } catch {
-            spaces = [];
-          }
+      if (date && startTime && endTime) {
+        try {
+          spaces = await client.listSpaces({ date, start_time: startTime, end_time: endTime });
+        } catch (err) {
+          logger.warn("libroom_list_spaces_time_query_failed", { error: err?.message });
         }
         if (!Array.isArray(spaces) || spaces.length === 0) {
-          spaces = await client.listSpaces({});
+          spaces = await client.listSpaces({ date });
         }
-      } catch {
-        spaces = await client.listSpaces({}).catch(() => []);
+      } else {
+        spaces = await client.listSpaces({});
       }
 
       if (date && startTime && endTime && Array.isArray(spaces) && spaces.length > 0) {
-        try {
-          const checkAvailability = async (space) => {
-            const spaceId = space?.id ?? space?.area_id ?? space?.areaId;
-            if (!spaceId) return null;
-            try {
-              const avail = await client.getAvailability({ spaceId, date });
-              const freeWindows = avail?.freeWindows || [];
-              const busyWindows = avail?.busyWindows || [];
-
-              const isFree = freeWindows.some((w) => String(w.start || "") <= startTime && String(w.end || "") >= endTime) &&
-                !busyWindows.some((b) => !(String(b.end || "") <= startTime || String(b.start || "") >= endTime));
-
-              if (isFree) {
-                return { ...space, availability: avail };
-              }
-              return null;
-            } catch {
-              return null;
+        const checkAvailability = async (space) => {
+          const spaceId = space?.id ?? space?.area_id ?? space?.areaId;
+          if (!spaceId) return null;
+          try {
+            let avail = summarizeLibroomAvailability(space, { date });
+            if (avail?.source === "unrecognized") {
+              avail = await client.getAvailability({ spaceId, date });
             }
-          };
+            const freeWindows = avail?.freeWindows || [];
+            const busyWindows = avail?.busyWindows || [];
 
-          const results = await Promise.all(spaces.map(checkAvailability));
-          const availableSpaces = results.filter(Boolean);
-          json(res, 200, { ok: true, data: availableSpaces });
-          return;
-        } catch {
-          // fallback to spaces
-        }
+            const isFree = freeWindows.some((w) => String(w.start || "") <= startTime && String(w.end || "") >= endTime) &&
+              !busyWindows.some((b) => !(String(b.end || "") <= startTime || String(b.start || "") >= endTime));
+
+            if (isFree) {
+              return { ...space, availability: avail };
+            }
+            return null;
+          } catch {
+            return null;
+          }
+        };
+
+        const results = await Promise.all(spaces.map(checkAvailability));
+        const availableSpaces = results.filter(Boolean);
+        json(res, 200, { ok: true, data: availableSpaces });
+        return;
       }
 
       json(res, 200, { ok: true, data: spaces });

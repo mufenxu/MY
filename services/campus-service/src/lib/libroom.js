@@ -138,6 +138,48 @@ function summarizeLibroomAxisAvailability(raw, { date = "", bookableWindows = LI
   };
 }
 
+function isOfficialSpaceListRecord(raw) {
+  return Boolean(raw && typeof raw === "object" && !Array.isArray(raw) && (
+    raw.id !== undefined
+    || raw.areaId !== undefined
+    || raw.area_id !== undefined
+    || raw.name !== undefined
+    || raw.nameMerge !== undefined
+  ));
+}
+
+function officialPeriodDate(period) {
+  const text = String(period?.begin_timestamp ?? period?.start_timestamp ?? period?.end_timestamp ?? "").trim();
+  const match = /^(\d{4}-\d{2}-\d{2})\s+/.exec(text);
+  return match?.[1] || "";
+}
+
+function summarizeLibroomListAvailability(raw, { date = "", bookableWindows = LIBROOM_DEFAULT_BOOKABLE_WINDOWS } = {}) {
+  const periods = Array.isArray(raw?.date) ? raw.date : null;
+  if (!periods || !isOfficialSpaceListRecord(raw)) return null;
+
+  const targetDate = String(date || "").trim();
+  const periodObjects = periods.filter((period) => period && typeof period === "object" && !Array.isArray(period));
+  if (periods.length > 0 && periodObjects.length === 0) return null;
+
+  const baseWindows = officialAxisBaseWindows(raw, bookableWindows);
+  const busyWindows = normalizeTimeWindows(periodObjects
+    .filter((period) => {
+      const periodDate = officialPeriodDate(period);
+      return !targetDate || !periodDate || periodDate === targetDate;
+    })
+    .map(officialAxisBusyWindow)
+    .filter(Boolean));
+
+  return {
+    freeWindows: subtractBusyWindows(baseWindows, busyWindows),
+    busyWindows,
+    source: "official-list-date",
+    detail: "根据学校空间列表返回的占用时段计算空闲时段。",
+    raw
+  };
+}
+
 function collectAvailabilityWindows(value, path = "", result = { free: [], busy: [] }, seen = new Set()) {
   if (!value || typeof value !== "object" || seen.has(value)) return result;
   seen.add(value);
@@ -187,6 +229,9 @@ function subtractBusyWindows(baseWindows, busyWindows) {
 export function summarizeLibroomAvailability(raw, { bookableWindows = LIBROOM_DEFAULT_BOOKABLE_WINDOWS, date = "" } = {}) {
   const axisAvailability = summarizeLibroomAxisAvailability(raw, { date, bookableWindows });
   if (axisAvailability) return axisAvailability;
+
+  const listAvailability = summarizeLibroomListAvailability(raw, { date, bookableWindows });
+  if (listAvailability) return listAvailability;
 
   const collected = collectAvailabilityWindows(raw);
   const explicitFreeWindows = normalizeTimeWindows(collected.free);

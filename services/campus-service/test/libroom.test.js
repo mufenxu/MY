@@ -416,6 +416,85 @@ test("derives availability from the official axis for the selected date", () => 
   );
 });
 
+test("derives availability from official seminar list occupied date blocks", () => {
+  assert.deepEqual(
+    summarizeLibroomAvailability({
+      id: "21",
+      name: "单人学习间14",
+      begin_num: 480,
+      end_num: 1305,
+      start_timestamp: "2026-08-29 08:00:00",
+      end_timestamp: "2026-08-29 21:45:00",
+      date: [
+        {
+          areaId: "21",
+          begin_timestamp: "2026-08-29 08:00:00",
+          end_timestamp: "2026-08-29 11:59:59",
+          begin_num: 480,
+          end_num: 719
+        },
+        {
+          areaId: "21",
+          begin_timestamp: "2026-08-29 13:15:00",
+          end_timestamp: "2026-08-29 17:15:00",
+          begin_num: 795,
+          end_num: 1035
+        },
+        {
+          areaId: "21",
+          begin_timestamp: "2026-08-29 17:15:00",
+          end_timestamp: "2026-08-29 21:15:00",
+          begin_num: 1035,
+          end_num: 1275
+        }
+      ]
+    }, { date: "2026-08-29" }),
+    {
+      freeWindows: [
+        { start: "12:00", end: "13:15" },
+        { start: "21:15", end: "21:45" }
+      ],
+      busyWindows: [
+        { start: "08:00", end: "12:00" },
+        { start: "13:15", end: "21:15" }
+      ],
+      source: "official-list-date",
+      detail: "根据学校空间列表返回的占用时段计算空闲时段。",
+      raw: {
+        id: "21",
+        name: "单人学习间14",
+        begin_num: 480,
+        end_num: 1305,
+        start_timestamp: "2026-08-29 08:00:00",
+        end_timestamp: "2026-08-29 21:45:00",
+        date: [
+          {
+            areaId: "21",
+            begin_timestamp: "2026-08-29 08:00:00",
+            end_timestamp: "2026-08-29 11:59:59",
+            begin_num: 480,
+            end_num: 719
+          },
+          {
+            areaId: "21",
+            begin_timestamp: "2026-08-29 13:15:00",
+            end_timestamp: "2026-08-29 17:15:00",
+            begin_num: 795,
+            end_num: 1035
+          },
+          {
+            areaId: "21",
+            begin_timestamp: "2026-08-29 17:15:00",
+            end_timestamp: "2026-08-29 21:15:00",
+            begin_num: 1035,
+            end_num: 1275
+          }
+        ]
+      }
+    }
+  );
+});
+
 test("refreshes the member token once after an upstream auth error", async () => {
   const requests = [];
   let tokenCalls = 0;

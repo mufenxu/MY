@@ -555,53 +555,7 @@ class PlatformApi(
         if (!endTime.isNullOrBlank()) queryParams.add("endTime=${Uri.encode(endTime.trim())}")
         val queryString = if (queryParams.isNotEmpty()) "?${queryParams.joinToString("&")}" else ""
         val response = execute("$CAMPUS_LIBROOM_SPACES_PATH$queryString")
-        val queue = ArrayDeque<Any>()
-        val foundArrays = mutableListOf<List<JSONObject>>()
-        val data = response.json.opt("data") ?: response.json
-        if (data is JSONObject || data is JSONArray) {
-            queue.add(data)
-        } else if (response.jsonArray.length() > 0) {
-            queue.add(response.jsonArray)
-        }
-
-        val seen = mutableSetOf<Any>()
-        while (queue.isNotEmpty()) {
-            val current = queue.removeFirst()
-            if (!seen.add(current)) continue
-            when (current) {
-                is JSONArray -> {
-                    val list = current.objects()
-                    if (list.any { it.optInt("id", it.optInt("area_id", it.optInt("areaId", 0))) > 0 }) {
-                        foundArrays.add(list)
-                    }
-                    for (i in 0 until current.length()) {
-                        current.opt(i)?.let { if (it is JSONObject || it is JSONArray) queue.add(it) }
-                    }
-                }
-                is JSONObject -> {
-                    val keys = current.keys()
-                    while (keys.hasNext()) {
-                        val key = keys.next()
-                        current.opt(key)?.let { if (it is JSONObject || it is JSONArray) queue.add(it) }
-                    }
-                }
-            }
-        }
-        val targetList = foundArrays.maxByOrNull { it.size } ?: emptyList()
-        targetList.mapNotNull { item ->
-            val id = item.optInt("id", item.optInt("area_id", item.optInt("areaId", 0)))
-            if (id <= 0) return@mapNotNull null
-            val name = item.displayString("name")
-                ?: item.displayString("area_name")
-                ?: item.displayString("areaName")
-                ?: item.displayString("title")
-                ?: item.displayString("room_name")
-                ?: "空间 $id"
-            CampusReservationSpace(
-                id = id,
-                name = name,
-            )
-        }
+        parseCampusReservationSpacesPayload(response.json, response.jsonArray)
     }
 
     suspend fun campusReservationRules(spaceId: Int): String = withContext(Dispatchers.IO) {
@@ -1563,6 +1517,73 @@ private fun JSONArray?.objects(): List<JSONObject> {
         for (index in 0 until length()) optJSONObject(index)?.let(::add)
     }
 }
+
+internal fun parseCampusReservationSpacesPayload(
+    json: JSONObject,
+    jsonArray: JSONArray = JSONArray(),
+): List<CampusReservationSpace> {
+    val payload = json.opt("data") ?: json.takeIf { it.length() > 0 } ?: jsonArray
+    val directList = when (payload) {
+        is JSONArray -> payload.objects().filter(JSONObject::isCampusReservationSpaceRow)
+        is JSONObject -> payload.optJSONArray("data").objects().filter(JSONObject::isCampusReservationSpaceRow)
+        else -> emptyList()
+    }
+    val targetList = directList.takeIf { it.isNotEmpty() } ?: findNestedCampusReservationSpaceRows(payload)
+    return targetList.mapNotNull(JSONObject::toCampusReservationSpace)
+}
+
+private fun findNestedCampusReservationSpaceRows(value: Any?): List<JSONObject> {
+    val queue = ArrayDeque<Any>()
+    val foundArrays = mutableListOf<List<JSONObject>>()
+    if (value is JSONObject || value is JSONArray) queue.add(value)
+
+    val seen = mutableSetOf<Any>()
+    while (queue.isNotEmpty()) {
+        val current = queue.removeFirst()
+        if (!seen.add(current)) continue
+        when (current) {
+            is JSONArray -> {
+                val list = current.objects().filter(JSONObject::isNamedCampusReservationSpaceRow)
+                if (list.isNotEmpty()) foundArrays.add(list)
+                for (i in 0 until current.length()) {
+                    current.opt(i)?.let { if (it is JSONObject || it is JSONArray) queue.add(it) }
+                }
+            }
+            is JSONObject -> {
+                val keys = current.keys()
+                while (keys.hasNext()) {
+                    current.opt(keys.next())?.let { if (it is JSONObject || it is JSONArray) queue.add(it) }
+                }
+            }
+        }
+    }
+    return foundArrays.maxByOrNull { it.size } ?: emptyList()
+}
+
+private fun JSONObject.toCampusReservationSpace(): CampusReservationSpace? {
+    val id = campusReservationSpaceId()
+    if (id <= 0) return null
+    return CampusReservationSpace(
+        id = id,
+        name = campusReservationSpaceName() ?: "空间 $id",
+    )
+}
+
+private fun JSONObject.isCampusReservationSpaceRow(): Boolean =
+    campusReservationSpaceId() > 0
+
+private fun JSONObject.isNamedCampusReservationSpaceRow(): Boolean =
+    isCampusReservationSpaceRow() && campusReservationSpaceName() != null
+
+private fun JSONObject.campusReservationSpaceId(): Int =
+    optInt("id", optInt("area_id", optInt("areaId", 0)))
+
+private fun JSONObject.campusReservationSpaceName(): String? =
+    displayString("name")
+        ?: displayString("area_name")
+        ?: displayString("areaName")
+        ?: displayString("title")
+        ?: displayString("room_name")
 
 private fun JSONArray?.strings(): List<String> {
     if (this == null) return emptyList()

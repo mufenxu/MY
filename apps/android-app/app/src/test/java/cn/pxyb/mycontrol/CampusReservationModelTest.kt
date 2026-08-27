@@ -10,6 +10,8 @@ import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.data.formatCampusReservationRulesForDisplay
+import cn.pxyb.mycontrol.data.parseCampusReservationSpacesPayload
+import org.json.JSONArray
 import org.json.JSONObject
 import cn.pxyb.mycontrol.ui.ReservationUiState
 import org.junit.Assert.assertEquals
@@ -65,6 +67,30 @@ class CampusReservationModelTest {
         assertEquals("查阅论文与撰写报告", request.content)
         assertEquals("13800138000", request.mobile)
         assertTrue(request.open)
+    }
+
+    @Test
+    fun `campus reservation spaces prefer top level data over occupied date blocks`() {
+        val response = JSONObject()
+            .put(
+                "data",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("id", 21)
+                            .put("name", "单人学习间14")
+                            .put(
+                                "date",
+                                JSONArray()
+                                    .put(JSONObject().put("areaId", 21).put("begin_timestamp", "2026-08-29 08:00:00"))
+                                    .put(JSONObject().put("areaId", 21).put("begin_timestamp", "2026-08-29 13:15:00"))
+                            )
+                    )
+            )
+
+        val spaces = parseCampusReservationSpacesPayload(response)
+
+        assertEquals(listOf(CampusReservationSpace(id = 21, name = "单人学习间14")), spaces)
     }
 
     @Test
