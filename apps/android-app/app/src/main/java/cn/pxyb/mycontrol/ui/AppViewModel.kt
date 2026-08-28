@@ -1424,6 +1424,32 @@ class AppViewModel(
         }
     }
 
+    fun openOfficialCampusReservation(onOpen: (String) -> Unit) {
+        if (mutableState.value.busyAction != null) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    busyAction = "official-campus-reservation",
+                    reservationError = null,
+                    reservationMessage = null,
+                )
+            }
+            try {
+                val url = createPlatformWebLoginUrl(officialCampusReservationRedirect())
+                mutableState.update { it.copy(busyAction = null) }
+                onOpen(url)
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        busyAction = null,
+                        reservationError = error.message ?: "学校官方预约入口打开失败，请稍后重试。",
+                    )
+                }
+            }
+        }
+    }
+
     suspend fun createExternalApplicationLaunch(applicationId: String): ExternalApplicationLaunch {
         val launch = api.launchExternalApplication(applicationId)
         if (launch.loginUrl.isBlank()) throw IllegalStateException("服务端未返回外部应用登录地址。")

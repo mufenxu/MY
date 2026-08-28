@@ -1939,7 +1939,7 @@ function upstreamUrlShape(value) {
   }
 }
 
-async function issueLibroomMemberToken(jar, credentials = {}) {
+async function resolveLibroomCasExchange(jar, credentials = {}) {
   let stage = "webvpn_session";
   try {
     await ensureWebvpnSession(jar, credentials);
@@ -1974,8 +1974,16 @@ async function issueLibroomMemberToken(jar, credentials = {}) {
       }
     });
     if (!callbackCas) throw new HttpError(502, "图书馆预约系统未返回身份转换凭据。", null, "LIBROOM_CALLBACK_CAS_REQUIRED");
+    return callbackCas;
+  } catch (error) {
+    throw tagLibroomStage(error, stage);
+  }
+}
 
-    stage = "member_token";
+async function issueLibroomMemberToken(jar, credentials = {}) {
+  try {
+    const callbackCas = await resolveLibroomCasExchange(jar, credentials);
+
     const token = await exchangeLibroomMemberToken({
       cas: callbackCas,
       requestImpl: (pathname, data, options) => requestLibroomJsonWithWebvpn(jar, pathname, data, options)
@@ -1991,7 +1999,7 @@ async function issueLibroomMemberToken(jar, credentials = {}) {
     if (jar.meta.cas) jar.meta.cas.lastError = null;
     return token;
   } catch (error) {
-    throw tagLibroomStage(error, stage);
+    throw tagLibroomStage(error, "member_token");
   }
 }
 
@@ -2014,6 +2022,30 @@ async function getLibroomMemberToken({ force = false } = {}) {
         lastError: isCasLoginRequiredError(error)
           ? casLoginRequiredMessage(error)
           : (error.message || "空间预约会话已过期，请重新登录学校账号。")
+      };
+      await saveSessionJar(jar).catch(() => {});
+      throw error;
+    }
+  });
+}
+
+async function getLibroomOfficialLoginUrl() {
+  return libroomSessionQueue.run(currentUserId(), async () => {
+    const jar = await readSessionJar();
+    try {
+      const callbackCas = await resolveLibroomCasExchange(jar);
+      await saveSessionJar(jar);
+      const officialUrl = new URL("/h5/index.html", LIBROOM_ORIGIN);
+      officialUrl.hash = `#/cas/?cas=${encodeURIComponent(callbackCas)}`;
+      return officialUrl.href;
+    } catch (error) {
+      logger.warn("libroom_official_login_failed", { userId: currentUserId(), ...libroomFailureLog(error) });
+      markCasFailureIfNeeded(jar, error);
+      jar.meta ||= {};
+      jar.meta.libroom = {
+        lastError: isCasLoginRequiredError(error)
+          ? casLoginRequiredMessage(error)
+          : (error.message || "空间预约官方入口打开失败，请重新登录学校账号。")
       };
       await saveSessionJar(jar).catch(() => {});
       throw error;
@@ -7072,6 +7104,10 @@ async function handleApi(req, res, url) {
         json(res, 200, { ok: true, data: null });
         return;
       }
+    }
+    if (url.pathname === "/api/campus/libroom/official-login" && req.method === "GET") {
+      redirect(res, await getLibroomOfficialLoginUrl());
+      return;
     }
     if (url.pathname === "/api/campus/libroom/spaces" && req.method === "GET") {
       const date = url.searchParams.get("date") || "";

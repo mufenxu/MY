@@ -146,6 +146,9 @@ private enum class CampusWorkspaceSection { Today, Timetable, Campus }
 
 internal fun campusReservationRedirect(): String = "/apps/campus/#reservation"
 
+internal fun officialCampusReservationRedirect(): String =
+    "/apps/campus/api/campus/libroom/official-login"
+
 @Composable
 fun TodayScreen(
     state: TodayUiState,

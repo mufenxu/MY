@@ -122,6 +122,7 @@ fun ReservationScreen(
     onRefresh: () -> Unit,
     onLoadSpaces: () -> Unit,
     onLoadMyReservations: () -> Unit,
+    onOpenOfficialReservation: () -> Unit,
     onCancelMyReservation: (String) -> Unit,
     onQueryRulesAndAvailability: (Int, String) -> Unit,
     onQuerySpacesByTime: (String, String, String) -> Unit,
@@ -208,6 +209,28 @@ fun ReservationScreen(
                         }
                     }
                 }
+            }
+        }
+
+        item(key = "official-reservation-entry", contentType = "action") {
+            OutlinedButton(
+                onClick = onOpenOfficialReservation,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Public,
+                    contentDescription = null,
+                    modifier = Modifier.size(17.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "打开学校官方预约",
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                )
             }
         }
 

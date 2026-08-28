@@ -1899,6 +1899,7 @@ private fun AuthenticatedShell(
                 }
                 composable(AppRoute.Reservation) {
                     val reservationState by viewModel.reservationState.collectAsStateWithLifecycle()
+                    val context = LocalContext.current
                     ReservationScreen(
                         state = reservationState,
                         contentPadding = contentPadding,
@@ -1906,6 +1907,11 @@ private fun AuthenticatedShell(
                         onRefresh = viewModel::refreshReservation,
                         onLoadSpaces = viewModel::loadReservationSpaces,
                         onLoadMyReservations = viewModel::loadMyReservations,
+                        onOpenOfficialReservation = {
+                            viewModel.openOfficialCampusReservation { url ->
+                                openPlatformWebLink(context, url, "空间预约")
+                            }
+                        },
                         onCancelMyReservation = viewModel::cancelMyReservation,
                         onQueryRulesAndAvailability = viewModel::queryReservationRulesAndAvailability,
                         onQuerySpacesByTime = viewModel::queryAvailableSpacesByTime,
