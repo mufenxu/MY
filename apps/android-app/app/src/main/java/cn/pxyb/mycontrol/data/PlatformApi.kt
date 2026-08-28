@@ -138,6 +138,54 @@ class PlatformApi(
         ).json.toQrLoginTarget()
     }
 
+    suspend fun createQrLoginRequest(confirmationMethod: String): QrLoginRequest = withContext(Dispatchers.IO) {
+        val json = execute(
+            "/api/auth/qr/requests",
+            "POST",
+            JSONObject()
+                .put("clientKind", "android")
+                .put("confirmationMethod", confirmationMethod),
+            authenticated = false,
+        ).json
+        QrLoginRequest(
+            requestId = json.optString("requestId"),
+            requesterVerifier = json.optString("requesterVerifier"),
+            qrDataUrl = json.optString("qrDataUrl"),
+            expiresAt = json.optString("expiresAt"),
+        )
+    }
+
+    suspend fun qrLoginRequestStatus(
+        requestId: String,
+        requesterVerifier: String,
+    ): QrLoginRequestStatus = withContext(Dispatchers.IO) {
+        val json = execute(
+            "/api/auth/qr/requests/${encodePath(requestId)}/status",
+            "POST",
+            JSONObject().put("requesterVerifier", requesterVerifier),
+            authenticated = false,
+        ).json
+        QrLoginRequestStatus(
+            requestId = json.optString("requestId"),
+            status = json.optString("status"),
+            expiresAt = json.optString("expiresAt"),
+        )
+    }
+
+    suspend fun consumeQrLoginRequest(
+        requestId: String,
+        requesterVerifier: String,
+    ): LoginResult = withContext(Dispatchers.IO) {
+        val response = execute(
+            "/api/auth/qr/requests/${encodePath(requestId)}/consume",
+            "POST",
+            JSONObject().put("requesterVerifier", requesterVerifier),
+            authenticated = false,
+        )
+        val user = response.json.optJSONObject("user").toPlatformUser()
+        response.toLoginResult(user, response.json.optJSONArray("recoveryCodes").toStringList())
+    }
+
     suspend fun beginQrPasskey(requestId: String): QrPasskeyChallenge = withContext(Dispatchers.IO) {
         val json = execute(
             "/api/auth/qr/requests/${encodePath(requestId)}/passkey/options",

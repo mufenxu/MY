@@ -135,6 +135,10 @@ data class AppUiState(
     val recoveryCodeAllowed: Boolean = false,
     val androidPasskeySupported: Boolean = false,
     val suggestedUsername: String = "",
+    val deviceLoginBusy: Boolean = false,
+    val deviceLoginMethod: String? = null,
+    val deviceLoginQrDataUrl: String? = null,
+    val deviceLoginError: String? = null,
     val refreshing: Boolean = false,
     val busyAction: String? = null,
     val overview: OverviewData? = null,
@@ -273,6 +277,7 @@ class AppViewModel(
     val scenesState = deriveState(AppUiState::toScenesUiState)
     private var pendingQrLogin: Pair<String, String>? = null
     private var pollJob: Job? = null
+    private var deviceLoginJob: Job? = null
     private var appInForeground = false
     private val refreshJobs = mutableMapOf<DataSection, Job>()
     private val lastRefreshElapsedMs = mutableMapOf<DataSection, Long>()
@@ -465,6 +470,82 @@ class AppViewModel(
                 val result = api.completePasskeyLogin(challenge, requestCredential(challenge.optionsJson))
                 protectLogin(result, authorizeSession)
             }.onSuccess(::completeLogin).onFailure(::handleLoginFailure)
+        }
+    }
+
+    fun startDeviceQrLogin(
+        confirmationMethod: String,
+        authorizeSession: suspend () -> Boolean,
+    ) {
+        val current = mutableState.value
+        if (current.user != null || current.deviceLoginBusy) return
+        if (confirmationMethod == "passkey" && !current.androidPasskeySupported) {
+            mutableState.update {
+                it.copy(deviceLoginError = "服务器尚未关联当前 Android App 的签名证书。")
+            }
+            return
+        }
+        deviceLoginJob = viewModelScope.launch {
+            try {
+                mutableState.update {
+                    it.copy(
+                        deviceLoginBusy = true,
+                        deviceLoginMethod = confirmationMethod,
+                        deviceLoginQrDataUrl = null,
+                        deviceLoginError = null,
+                        error = null,
+                        message = null,
+                    )
+                }
+                val request = api.createQrLoginRequest(confirmationMethod)
+                mutableState.update {
+                    it.copy(
+                        deviceLoginQrDataUrl = request.qrDataUrl,
+                    )
+                }
+                while (true) {
+                    delay(2_000)
+                    val status = api.qrLoginRequestStatus(request.requestId, request.requesterVerifier)
+                    when (status.status) {
+                        "approved" -> {
+                            val result = api.consumeQrLoginRequest(request.requestId, request.requesterVerifier)
+                            completeLogin(protectLogin(result, authorizeSession))
+                            return@launch
+                        }
+                        "rejected" -> throw IllegalStateException("已登录设备拒绝了本次登录。")
+                        "expired" -> throw IllegalStateException("登录二维码已过期，请重新发起。")
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                handleLoginFailure(error)
+                mutableState.update {
+                    it.copy(deviceLoginError = error.message ?: "跨设备登录失败，请稍后重试。")
+                }
+            } finally {
+                deviceLoginJob = null
+                mutableState.update {
+                    it.copy(
+                        deviceLoginBusy = false,
+                        deviceLoginMethod = null,
+                        deviceLoginQrDataUrl = null,
+                    )
+                }
+            }
+        }
+    }
+
+    fun cancelDeviceQrLogin() {
+        deviceLoginJob?.cancel()
+        deviceLoginJob = null
+        mutableState.update {
+            it.copy(
+                deviceLoginBusy = false,
+                deviceLoginMethod = null,
+                deviceLoginQrDataUrl = null,
+                deviceLoginError = null,
+            )
         }
     }
 

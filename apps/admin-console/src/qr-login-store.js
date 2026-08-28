@@ -61,7 +61,13 @@ export function createMemoryQrLoginStore({
   }
 
   return {
-    async create({ browserIp = '', browserUserAgent = '' } = {}) {
+    async create({
+      browserIp = '',
+      browserUserAgent = '',
+      clientKind = 'browser',
+      requestedConfirmationMethod = 'biometric',
+      requesterDeviceId = '',
+    } = {}) {
       const secrets = requestSecrets({ idFactory, secretFactory, codeFactory });
       const createdAt = now();
       const record = {
@@ -72,6 +78,9 @@ export function createMemoryQrLoginStore({
         verificationCode: secrets.verificationCode,
         browserIp: String(browserIp).slice(0, 128),
         browserUserAgent: String(browserUserAgent).slice(0, 256),
+        clientKind,
+        requestedConfirmationMethod,
+        requesterDeviceId: String(requesterDeviceId).slice(0, 128),
         scannedBy: null,
         scannedAt: null,
         approvedBy: null,
@@ -88,6 +97,15 @@ export function createMemoryQrLoginStore({
     async getForBrowser(requestId, browserVerifier) {
       const record = readActive(requestId);
       return record && tokenMatches(browserVerifier, record.browserVerifierHash) ? publicRecord(record, now().getTime()) : null;
+    },
+    async getForRequester(requestId, requesterVerifier, requesterDeviceId) {
+      const record = readActive(requestId);
+      return record &&
+        record.clientKind === 'android' &&
+        record.requesterDeviceId === requesterDeviceId &&
+        tokenMatches(requesterVerifier, record.browserVerifierHash)
+        ? publicRecord(record, now().getTime())
+        : null;
     },
     async scan(requestId, scanToken, username) {
       const record = readActive(requestId);
@@ -127,9 +145,14 @@ export function createMemoryQrLoginStore({
       record.rejectedAt = now().toISOString();
       return publicRecord(record, now().getTime());
     },
-    async consume(requestId, browserVerifier) {
+    async consume(requestId, browserVerifier, requesterDeviceId = '') {
       const record = readActive(requestId);
-      if (!record || record.status !== 'approved' || !tokenMatches(browserVerifier, record.browserVerifierHash)) return null;
+      if (
+        !record ||
+        record.status !== 'approved' ||
+        !tokenMatches(browserVerifier, record.browserVerifierHash) ||
+        (record.clientKind === 'android' && record.requesterDeviceId !== requesterDeviceId)
+      ) return null;
       record.status = 'consumed';
       record.consumedAt = now().toISOString();
       return publicRecord(record, now().getTime());
@@ -160,7 +183,13 @@ export async function createMongoQrLoginStore({
   }
 
   return {
-    async create({ browserIp = '', browserUserAgent = '' } = {}) {
+    async create({
+      browserIp = '',
+      browserUserAgent = '',
+      clientKind = 'browser',
+      requestedConfirmationMethod = 'biometric',
+      requesterDeviceId = '',
+    } = {}) {
       const secrets = requestSecrets({
         idFactory: () => crypto.randomUUID(),
         secretFactory: () => crypto.randomBytes(32).toString('base64url'),
@@ -175,6 +204,9 @@ export async function createMongoQrLoginStore({
         verificationCode: secrets.verificationCode,
         browserIp: String(browserIp).slice(0, 128),
         browserUserAgent: String(browserUserAgent).slice(0, 256),
+        clientKind,
+        requestedConfirmationMethod,
+        requesterDeviceId: String(requesterDeviceId).slice(0, 128),
         scannedBy: null,
         scannedAt: null,
         approvedBy: null,
@@ -191,6 +223,14 @@ export async function createMongoQrLoginStore({
     async getForBrowser(requestId, browserVerifier) {
       const record = await requests.findOne(activeFilter(requestId));
       return record && tokenMatches(browserVerifier, record.browserVerifierHash) ? serialize(record) : null;
+    },
+    async getForRequester(requestId, requesterVerifier, requesterDeviceId) {
+      const record = await requests.findOne({
+        ...activeFilter(requestId),
+        clientKind: 'android',
+        requesterDeviceId,
+      });
+      return record && tokenMatches(requesterVerifier, record.browserVerifierHash) ? serialize(record) : null;
     },
     async scan(requestId, scanToken, username) {
       const record = await requests.findOne(activeFilter(requestId));
@@ -229,9 +269,13 @@ export async function createMongoQrLoginStore({
         { returnDocument: 'after' },
       ));
     },
-    async consume(requestId, browserVerifier) {
+    async consume(requestId, browserVerifier, requesterDeviceId = '') {
       const record = await requests.findOne(activeFilter(requestId));
-      if (!record || !tokenMatches(browserVerifier, record.browserVerifierHash)) return null;
+      if (
+        !record ||
+        !tokenMatches(browserVerifier, record.browserVerifierHash) ||
+        (record.clientKind === 'android' && record.requesterDeviceId !== requesterDeviceId)
+      ) return null;
       return serialize(await requests.findOneAndUpdate(
         { ...activeFilter(requestId), status: 'approved' },
         { $set: { status: 'consumed', consumedAt: new Date() } },

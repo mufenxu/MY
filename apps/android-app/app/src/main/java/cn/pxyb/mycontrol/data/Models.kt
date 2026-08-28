@@ -55,6 +55,21 @@ data class QrPasskeyChallenge(
 )
 
 @Immutable
+data class QrLoginRequest(
+    val requestId: String,
+    val requesterVerifier: String,
+    val qrDataUrl: String,
+    val expiresAt: String,
+)
+
+@Immutable
+data class QrLoginRequestStatus(
+    val requestId: String,
+    val status: String,
+    val expiresAt: String,
+)
+
+@Immutable
 data class WebLoginLink(
     val loginUrl: String,
     val redirect: String,

@@ -1,7 +1,9 @@
 package cn.pxyb.mycontrol.ui
 
+import android.graphics.BitmapFactory
 import android.Manifest
 import android.content.pm.PackageManager
+import android.util.Base64
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,6 +24,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -58,6 +61,7 @@ import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Hub
@@ -103,9 +107,11 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -116,6 +122,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -292,6 +299,10 @@ fun MyControlApp(
                         onPasskeyLogin = { username ->
                             viewModel.loginWithPasskey(username, onPasskeyRequest, onSessionProtection)
                         },
+                        onStartDeviceLogin = { method ->
+                            viewModel.startDeviceQrLogin(method, onSessionProtection)
+                        },
+                        onCancelDeviceLogin = viewModel::cancelDeviceQrLogin,
                         onBackFromSecondFactor = viewModel::resetSecondFactor,
                     )
                     else -> AuthenticatedShell(
@@ -659,6 +670,8 @@ private fun LoginScreen(
     state: AppEntryUiState,
     onLogin: (String, String, String, Boolean) -> Unit,
     onPasskeyLogin: (String) -> Unit,
+    onStartDeviceLogin: (String) -> Unit,
+    onCancelDeviceLogin: () -> Unit,
     onBackFromSecondFactor: () -> Unit,
 ) {
     var username by remember(state.suggestedUsername) { mutableStateOf(state.suggestedUsername) }
@@ -783,6 +796,11 @@ private fun LoginScreen(
                                             },
                                         )
                                     }
+                                    DeviceLoginSection(
+                                        state = state,
+                                        onStartDeviceLogin = onStartDeviceLogin,
+                                        onCancelDeviceLogin = onCancelDeviceLogin,
+                                    )
                                 } else {
                                     if (state.recoveryCodeAllowed) {
                                         SecondFactorSelector(
@@ -935,6 +953,11 @@ private fun LoginScreen(
                                             },
                                         )
                                     }
+                                    DeviceLoginSection(
+                                        state = state,
+                                        onStartDeviceLogin = onStartDeviceLogin,
+                                        onCancelDeviceLogin = onCancelDeviceLogin,
+                                    )
                                 } else {
                                     if (state.recoveryCodeAllowed) {
                                         SecondFactorSelector(
@@ -1181,6 +1204,105 @@ private fun SecondFactorSelector(selected: SecondFactorMode, onSelect: (SecondFa
 }
 
 @Composable
+private fun DeviceLoginSection(
+    state: AppEntryUiState,
+    onStartDeviceLogin: (String) -> Unit,
+    onCancelDeviceLogin: () -> Unit,
+) {
+    if (!state.deviceLoginQrDataUrl.isNullOrBlank()) {
+        val qrBitmap = remember(state.deviceLoginQrDataUrl) {
+            decodeQrDataUrl(state.deviceLoginQrDataUrl.orEmpty())
+        }
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    "等待已登录设备确认",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                )
+                Text(
+                    if (state.deviceLoginMethod == "passkey") {
+                        "对方设备将使用 Passkey 验证，确认后本机自动登录"
+                    } else {
+                        "对方设备将完成生物识别确认，确认后本机自动登录"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(14.dp))
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color.White,
+                ) {
+                    if (qrBitmap != null) {
+                        Image(
+                            bitmap = qrBitmap,
+                            contentDescription = "跨设备登录二维码",
+                            modifier = Modifier.size(204.dp).padding(8.dp),
+                        )
+                    } else {
+                        Text(
+                            "二维码加载失败",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.size(204.dp).padding(8.dp),
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "二维码 90 秒内有效，仅可用于本次登录",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = onCancelDeviceLogin) {
+                    Text("取消跨设备登录")
+                }
+            }
+        }
+        return
+    }
+
+    if (!state.deviceLoginError.isNullOrBlank()) {
+        Text(
+            state.deviceLoginError,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+
+    Spacer(Modifier.height(10.dp))
+    OutlinedButton(
+        onClick = { onStartDeviceLogin("passkey") },
+        enabled = state.androidPasskeySupported && !state.loginBusy && !state.deviceLoginBusy,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(Icons.Outlined.Fingerprint, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Passkey 跨设备登录")
+    }
+    Spacer(Modifier.height(8.dp))
+    OutlinedButton(
+        onClick = { onStartDeviceLogin("biometric") },
+        enabled = !state.loginBusy && !state.deviceLoginBusy,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(Icons.Outlined.Devices, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("受信任设备配对登录")
+    }
+}
+
+@Composable
 private fun PasskeyLoginMethod(enabled: Boolean, onClick: () -> Unit) {
     val primaryColor = MaterialTheme.colorScheme.primary
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -1333,6 +1455,7 @@ private fun PrimaryLoginButton(
                         modifier = Modifier.size(19.dp)
                     )
                 }
+
                 Text(
                     text,
                     color = contentColor,
@@ -1343,6 +1466,15 @@ private fun PrimaryLoginButton(
             }
         }
     }
+}
+
+private fun decodeQrDataUrl(dataUrl: String): ImageBitmap? {
+    val base64 = dataUrl.substringAfter(',', "")
+    if (base64.isBlank()) return null
+    return runCatching {
+        val bytes = Base64.decode(base64, Base64.DEFAULT)
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+    }.getOrNull()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

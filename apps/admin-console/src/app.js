@@ -444,19 +444,29 @@ export function createApp({
 
   function appQrResponse(record, role) {
     const androidPasskeyConfigured = (config.androidAppCertFingerprints || []).length > 0;
+    const clientKind = record.clientKind || 'browser';
+    let confirmationMethod;
+    if (clientKind === 'android') {
+      confirmationMethod = record.requestedConfirmationMethod === 'passkey'
+        ? (androidPasskeyConfigured ? 'passkey' : 'unavailable')
+        : (role === 'super_admin' ? 'unavailable' : 'biometric');
+    } else {
+      confirmationMethod = role === 'super_admin'
+        ? (androidPasskeyConfigured ? 'passkey' : 'unavailable')
+        : 'biometric';
+    }
     return {
       requestId: record.id,
       status: record.status,
       verificationCode: record.verificationCode,
+      clientKind,
       browser: {
         label: userAgentLabel(record.browserUserAgent),
         ip: record.browserIp || '未知 IP',
         userAgent: record.browserUserAgent || '未知设备',
       },
       expiresAt: record.expiresAt,
-      confirmationMethod: role === 'super_admin'
-        ? (androidPasskeyConfigured ? 'passkey' : 'unavailable')
-        : 'biometric',
+      confirmationMethod,
     };
   }
 
@@ -1351,26 +1361,54 @@ export function createApp({
       return res.status(400).json({ error: '本地免登录模式不需要扫码登录。', code: 'QR_LOGIN_DISABLED' });
     }
     try {
+      const clientKind = String(req.body?.clientKind || 'browser');
+      const requestedConfirmationMethod = String(req.body?.confirmationMethod || 'biometric');
+      const androidRequester = clientKind === 'android';
+      if (!['browser', 'android'].includes(clientKind)) {
+        return res.status(400).json({ error: '二维码请求来源无效。', code: 'QR_LOGIN_INVALID_CLIENT' });
+      }
+      if (androidRequester && !isAndroidAppRequest(req)) {
+        return res.status(403).json({ error: 'Android 登录二维码仅允许官方 App 创建。', code: 'QR_LOGIN_INVALID_CLIENT' });
+      }
+      if (androidRequester && !['biometric', 'passkey'].includes(requestedConfirmationMethod)) {
+        return res.status(400).json({ error: '二维码确认方式无效。', code: 'QR_LOGIN_INVALID_CONFIRMATION' });
+      }
+      if (androidRequester && requestedConfirmationMethod === 'passkey' && (config.androidAppCertFingerprints || []).length === 0) {
+        return res.status(503).json({ error: 'Android Passkey 尚未配置应用签名证书。', code: 'QR_ANDROID_PASSKEY_UNAVAILABLE' });
+      }
+      const requesterDeviceId = androidRequester ? requestDeviceId(req) : '';
+      if (androidRequester && !requesterDeviceId) {
+        return res.status(400).json({ error: 'Android 登录二维码缺少设备标识。', code: 'QR_LOGIN_DEVICE_MISSING' });
+      }
       const created = await qrLogins.create({
         browserIp: req.ip,
         browserUserAgent: req.get('user-agent'),
+        clientKind,
+        requestedConfirmationMethod,
+        requesterDeviceId,
       });
       const loginUrl = new URL('/app/qr-login', publicUrl.origin);
       loginUrl.searchParams.set('requestId', created.requestId);
       loginUrl.hash = new URLSearchParams({ scanToken: created.scanToken }).toString();
-      res.cookie(
-        qrLoginCookieName(config, created.requestId),
-        created.browserVerifier,
-        qrLoginCookieOptions(config),
-      );
-      return res.status(201).json({
+      const responseBody = {
         ...browserQrResponse(created.record),
+        clientKind,
         qrDataUrl: await QRCode.toDataURL(loginUrl.toString(), {
           errorCorrectionLevel: 'M',
           margin: 1,
           width: 280,
         }),
-      });
+      };
+      if (androidRequester) {
+        responseBody.requesterVerifier = created.browserVerifier;
+      } else {
+        res.cookie(
+          qrLoginCookieName(config, created.requestId),
+          created.browserVerifier,
+          qrLoginCookieOptions(config),
+        );
+      }
+      return res.status(201).json(responseBody);
     } catch (error) {
       next(error);
       return undefined;
@@ -1385,11 +1423,23 @@ export function createApp({
     return res.json(browserQrResponse(record));
   });
 
+  app.post('/api/auth/qr/requests/:id/status', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
+    const requestId = validQrRequestId(req.params.id);
+    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
+    const requesterVerifier = String(req.body?.requesterVerifier || '');
+    const record = await qrLogins.getForRequester(requestId, requesterVerifier, requestDeviceId(req));
+    if (!record) return res.status(410).json({ error: '二维码已过期，请重新发起登录。', code: 'QR_LOGIN_EXPIRED' });
+    return res.json(browserQrResponse(record));
+  });
+
   app.post('/api/auth/qr/requests/:id/consume', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
     const requestId = validQrRequestId(req.params.id);
     if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
-    const browserVerifier = readQrBrowserVerifier(req, requestId);
-    const record = await qrLogins.getForBrowser(requestId, browserVerifier);
+    const requesterVerifier = String(req.body?.requesterVerifier || '');
+    let record = await qrLogins.getForRequester(requestId, requesterVerifier, requestDeviceId(req));
+    const androidRequester = Boolean(record);
+    const browserVerifier = androidRequester ? requesterVerifier : readQrBrowserVerifier(req, requestId);
+    if (!record) record = await qrLogins.getForBrowser(requestId, browserVerifier);
     if (!record) return res.status(410).json({ error: '二维码已过期，请刷新后重试。', code: 'QR_LOGIN_EXPIRED' });
     if (record.status !== 'approved') {
       return res.status(409).json({ error: 'App 尚未完成登录确认。', code: 'QR_LOGIN_NOT_APPROVED', details: { status: record.status } });
@@ -1398,10 +1448,17 @@ export function createApp({
     if (!account?.active || (config.requireMfa && !strongFactorEnabled(account))) {
       return res.status(403).json({ error: '批准账号当前不可用于登录。', code: 'QR_LOGIN_ACCOUNT_UNAVAILABLE' });
     }
-    const consumed = await qrLogins.consume(requestId, browserVerifier);
+    const consumed = await qrLogins.consume(
+      requestId,
+      browserVerifier,
+      androidRequester ? requestDeviceId(req) : '',
+    );
     if (!consumed) return res.status(409).json({ error: '二维码已被使用。', code: 'QR_LOGIN_ALREADY_USED' });
-    clearQrBrowserVerifier(res, requestId);
-    return issueAuthenticatedSession(req, res, account, `qr_app_${consumed.confirmationMethod || 'biometric'}`);
+    if (!androidRequester) clearQrBrowserVerifier(res, requestId);
+    const authenticationMethod = androidRequester
+      ? `qr_android_${consumed.confirmationMethod || 'biometric'}`
+      : `qr_app_${consumed.confirmationMethod || 'biometric'}`;
+    return issueAuthenticatedSession(req, res, account, authenticationMethod);
   });
 
   app.delete('/api/auth/qr/requests/:id', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
@@ -1762,7 +1819,8 @@ export function createApp({
     if (!record || record.status !== 'scanned') {
       return res.status(409).json({ error: '扫码请求当前不可确认。', code: 'QR_LOGIN_NOT_SCANNED' });
     }
-    if (req.consoleUser.role !== 'super_admin') {
+    const androidPasskeyRequest = record.clientKind === 'android' && record.requestedConfirmationMethod === 'passkey';
+    if (!androidPasskeyRequest && req.consoleUser.role !== 'super_admin') {
       return res.status(400).json({ error: '当前账号使用设备生物识别确认。', code: 'QR_PASSKEY_NOT_REQUIRED' });
     }
     if ((config.androidAppCertFingerprints || []).length === 0) {
@@ -1783,8 +1841,9 @@ export function createApp({
       return res.status(409).json({ error: '扫码请求当前不可确认。', code: 'QR_LOGIN_NOT_SCANNED' });
     }
 
+    const androidPasskeyRequest = record.clientKind === 'android' && record.requestedConfirmationMethod === 'passkey';
     let confirmationMethod = 'biometric';
-    if (req.consoleUser.role === 'super_admin') {
+    if (androidPasskeyRequest || req.consoleUser.role === 'super_admin') {
       if ((config.androidAppCertFingerprints || []).length === 0) {
         return res.status(503).json({ error: 'Android Passkey 尚未配置应用签名证书。', code: 'QR_ANDROID_PASSKEY_UNAVAILABLE' });
       }
