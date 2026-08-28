@@ -606,6 +606,21 @@ class PlatformApi(
         parseCampusReservationSpacesPayload(response.json, response.jsonArray)
     }
 
+    suspend fun campusReservationOfficialWebSession(): PlatformWebSession = withContext(Dispatchers.IO) {
+        val response = execute(CAMPUS_LIBROOM_OFFICIAL_WEBVIEW_LOGIN_PATH)
+        val data = response.json.optJSONObject("data") ?: response.json
+        val url = data.optString("url").takeIf { it.isNotBlank() }
+            ?: throw ApiException("服务端未返回学校官方预约地址。", 500, "LIBROOM_OFFICIAL_URL_MISSING")
+        PlatformWebSession(
+            url = url,
+            cookies = data.optJSONArray("cookies").objects().mapNotNull { item ->
+                val cookieUrl = item.optString("url").takeIf { it.startsWith("https://") } ?: return@mapNotNull null
+                val cookieValue = item.optString("value").takeIf { "=" in it } ?: return@mapNotNull null
+                PlatformWebCookie(cookieUrl, cookieValue)
+            },
+        )
+    }
+
     suspend fun campusReservationRules(spaceId: Int): String = withContext(Dispatchers.IO) {
         val response = execute("$CAMPUS_LIBROOM_RULES_PATH?spaceId=$spaceId")
         val data = response.json.opt("data") ?: response.json

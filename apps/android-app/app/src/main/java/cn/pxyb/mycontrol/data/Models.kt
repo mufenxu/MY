@@ -77,6 +77,18 @@ data class WebLoginLink(
 )
 
 @Immutable
+data class PlatformWebCookie(
+    val url: String,
+    val value: String,
+)
+
+@Immutable
+data class PlatformWebSession(
+    val url: String,
+    val cookies: List<PlatformWebCookie>,
+)
+
+@Immutable
 data class ExternalApplicationHealth(
     val state: String,
     val httpStatus: Int?,

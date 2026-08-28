@@ -1890,8 +1890,13 @@ private fun AuthenticatedShell(
                         onLoadSpaces = viewModel::loadReservationSpaces,
                         onLoadMyReservations = viewModel::loadMyReservations,
                         onOpenOfficialReservation = {
-                            viewModel.openOfficialCampusReservation { url ->
-                                openPlatformWebLink(context, url, "空间预约")
+                            viewModel.openOfficialCampusReservation { session ->
+                                openPlatformWebLink(
+                                    context,
+                                    session.url,
+                                    "空间预约",
+                                    initialCookies = session.cookies,
+                                )
                             }
                         },
                         onCancelMyReservation = viewModel::cancelMyReservation,

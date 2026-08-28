@@ -2053,6 +2053,70 @@ async function getLibroomOfficialLoginUrl() {
   });
 }
 
+const LIBROOM_OFFICIAL_WEBVIEW_COOKIE_HOSTS = new Set([
+  "cas.hgu.edu.cn",
+  "webvpn.hgu.edu.cn",
+  "libroom.hgu.edu.cn"
+]);
+
+function officialWebViewCookieApplies(cookie) {
+  if (!cookie || isCookieExpired(cookie)) return false;
+  const domain = String(cookie.domain || "").toLowerCase();
+  if (domain === "hgu.edu.cn") return !cookie.hostOnly;
+  return LIBROOM_OFFICIAL_WEBVIEW_COOKIE_HOSTS.has(domain);
+}
+
+function serializeOfficialWebViewCookie(cookie) {
+  const pieces = [`${cookie.name}=${cookie.value}`, `Path=${cookie.path || "/"}`];
+  if (!cookie.hostOnly) pieces.push(`Domain=${cookie.domain}`);
+  const expiresAt = Date.parse(cookie.expiresAt || "");
+  if (Number.isFinite(expiresAt)) pieces.push(`Expires=${new Date(expiresAt).toUTCString()}`);
+  if (cookie.secure) pieces.push("Secure");
+  if (cookie.httpOnly) pieces.push("HttpOnly");
+  return pieces.join("; ");
+}
+
+function officialWebViewCookies(jar) {
+  const cookies = [];
+  for (const domainCookies of Object.values(jar.cookies || {})) {
+    for (const cookie of Object.values(domainCookies || {})) {
+      if (!officialWebViewCookieApplies(cookie)) continue;
+      cookies.push({
+        url: `https://${String(cookie.domain || "").toLowerCase()}/`,
+        value: serializeOfficialWebViewCookie(cookie)
+      });
+    }
+  }
+  return cookies.sort((a, b) => a.url.localeCompare(b.url));
+}
+
+async function getLibroomOfficialWebViewLogin() {
+  return libroomSessionQueue.run(currentUserId(), async () => {
+    const jar = await readSessionJar();
+    try {
+      const callbackCas = await resolveLibroomCasExchange(jar);
+      await saveSessionJar(jar);
+      const officialUrl = new URL("/h5/index.html", LIBROOM_ORIGIN);
+      officialUrl.hash = `#/cas/?cas=${encodeURIComponent(callbackCas)}`;
+      return {
+        url: officialUrl.href,
+        cookies: officialWebViewCookies(jar)
+      };
+    } catch (error) {
+      logger.warn("libroom_official_webview_login_failed", { userId: currentUserId(), ...libroomFailureLog(error) });
+      markCasFailureIfNeeded(jar, error);
+      jar.meta ||= {};
+      jar.meta.libroom = {
+        lastError: isCasLoginRequiredError(error)
+          ? casLoginRequiredMessage(error)
+          : (error.message || "空间预约官方入口打开失败，请重新登录学校账号。")
+      };
+      await saveSessionJar(jar).catch(() => {});
+      throw error;
+    }
+  });
+}
+
 async function libroomClient() {
   const jar = await readSessionJar();
   return createLibroomClient({
@@ -7107,6 +7171,10 @@ async function handleApi(req, res, url) {
     }
     if (url.pathname === "/api/campus/libroom/official-login" && req.method === "GET") {
       redirect(res, await getLibroomOfficialLoginUrl());
+      return;
+    }
+    if (url.pathname === "/api/campus/libroom/official-webview-login" && req.method === "GET") {
+      json(res, 200, { ok: true, data: await getLibroomOfficialWebViewLogin() });
       return;
     }
     if (url.pathname === "/api/campus/libroom/spaces" && req.method === "GET") {

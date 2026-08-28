@@ -3,15 +3,17 @@ package cn.pxyb.mycontrol.ui
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import cn.pxyb.mycontrol.data.PlatformWebCookie
 
 internal fun openPlatformWebLink(
     context: Context,
     url: String,
     title: String? = null,
     trustedDownloadUrl: String? = null,
+    initialCookies: List<PlatformWebCookie> = emptyList(),
 ) {
     try {
-        val intent = PlatformWebActivity.createIntent(context, url, title, trustedDownloadUrl).apply {
+        val intent = PlatformWebActivity.createIntent(context, url, title, trustedDownloadUrl, initialCookies).apply {
             if (context !is android.app.Activity) {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }

@@ -11,6 +11,7 @@ internal const val CAMPUS_LIBROOM_RULES_PATH = "$CAMPUS_API_PATH/campus/libroom/
 internal const val CAMPUS_LIBROOM_AVAILABILITY_PATH = "$CAMPUS_API_PATH/campus/libroom/availability"
 internal const val CAMPUS_LIBROOM_RESERVATIONS_PATH = "$CAMPUS_API_PATH/campus/libroom/reservations"
 internal const val CAMPUS_LIBROOM_AUTO_RESERVATIONS_PATH = "$CAMPUS_API_PATH/campus/libroom/auto-reservations"
+internal const val CAMPUS_LIBROOM_OFFICIAL_WEBVIEW_LOGIN_PATH = "$CAMPUS_API_PATH/campus/libroom/official-webview-login"
 
 internal fun shouldInvalidatePlatformSession(status: Int, code: String): Boolean =
     status == 401 && code in setOf(

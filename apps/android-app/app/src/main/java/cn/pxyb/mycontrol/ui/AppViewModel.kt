@@ -54,6 +54,7 @@ import cn.pxyb.mycontrol.data.PlatformPasskey
 import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.PlatformTask
 import cn.pxyb.mycontrol.data.PlatformUser
+import cn.pxyb.mycontrol.data.PlatformWebSession
 import cn.pxyb.mycontrol.data.QuickScenePreference
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.ReleaseData
@@ -1408,7 +1409,7 @@ class AppViewModel(
         }
     }
 
-    fun openOfficialCampusReservation(onOpen: (String) -> Unit) {
+    fun openOfficialCampusReservation(onOpen: (PlatformWebSession) -> Unit) {
         if (mutableState.value.busyAction != null) return
         viewModelScope.launch {
             mutableState.update {
@@ -1419,9 +1420,9 @@ class AppViewModel(
                 )
             }
             try {
-                val url = createPlatformWebLoginUrl(officialCampusReservationRedirect())
+                val session = api.campusReservationOfficialWebSession()
                 mutableState.update { it.copy(busyAction = null) }
-                onOpen(url)
+                onOpen(session)
             } catch (error: Throwable) {
                 if (error is CancellationException) throw error
                 mutableState.update {

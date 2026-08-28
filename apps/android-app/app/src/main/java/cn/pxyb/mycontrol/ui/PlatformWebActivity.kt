@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import cn.pxyb.mycontrol.data.PlatformWebCookie
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 
 class PlatformWebActivity : ComponentActivity() {
@@ -68,6 +69,11 @@ class PlatformWebActivity : ComponentActivity() {
         val initialUrl = intent.getStringExtra(EXTRA_URL).orEmpty()
         val initialTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "管理后台" }
         val trustedDownloadUrl = intent.getStringExtra(EXTRA_TRUSTED_DOWNLOAD_URL)
+        val initialCookies = intent.getStringArrayListExtra(EXTRA_INITIAL_COOKIE_URLS).orEmpty()
+            .zip(intent.getStringArrayListExtra(EXTRA_INITIAL_COOKIE_VALUES).orEmpty())
+            .mapNotNull { (url, value) ->
+                if (url.startsWith("https://") && "=" in value) PlatformWebCookie(url, value) else null
+            }
 
         setContent {
             MYControlTheme {
@@ -75,6 +81,7 @@ class PlatformWebActivity : ComponentActivity() {
                     initialUrl = initialUrl,
                     initialTitle = initialTitle,
                     trustedDownloadUrl = trustedDownloadUrl,
+                    initialCookies = initialCookies,
                     webDownloadSupport = webDownloadSupport,
                     onFinish = { finish() },
                     onWebViewCreated = { webViewInstance = it },
@@ -128,17 +135,24 @@ class PlatformWebActivity : ComponentActivity() {
         const val EXTRA_URL = "extra_url"
         const val EXTRA_TITLE = "extra_title"
         private const val EXTRA_TRUSTED_DOWNLOAD_URL = "extra_trusted_download_url"
+        private const val EXTRA_INITIAL_COOKIE_URLS = "extra_initial_cookie_urls"
+        private const val EXTRA_INITIAL_COOKIE_VALUES = "extra_initial_cookie_values"
 
         fun createIntent(
             context: Context,
             url: String,
             title: String? = null,
             trustedDownloadUrl: String? = null,
+            initialCookies: List<PlatformWebCookie> = emptyList(),
         ): Intent {
             return Intent(context, PlatformWebActivity::class.java).apply {
                 putExtra(EXTRA_URL, url)
                 putExtra(EXTRA_TITLE, title)
                 trustedDownloadUrl?.let { putExtra(EXTRA_TRUSTED_DOWNLOAD_URL, it) }
+                if (initialCookies.isNotEmpty()) {
+                    putStringArrayListExtra(EXTRA_INITIAL_COOKIE_URLS, ArrayList(initialCookies.map { it.url }))
+                    putStringArrayListExtra(EXTRA_INITIAL_COOKIE_VALUES, ArrayList(initialCookies.map { it.value }))
+                }
             }
         }
     }
@@ -150,6 +164,7 @@ private fun PlatformWebScreen(
     initialUrl: String,
     initialTitle: String,
     trustedDownloadUrl: String?,
+    initialCookies: List<PlatformWebCookie>,
     webDownloadSupport: PlatformWebDownloadSupport,
     onFinish: () -> Unit,
     onWebViewCreated: (WebView) -> Unit,
@@ -162,6 +177,7 @@ private fun PlatformWebScreen(
     var pageLoading by remember { mutableStateOf(true) }
     var loadProgress by remember { mutableFloatStateOf(0f) }
     var canGoBack by remember { mutableStateOf(false) }
+    var restoredInitialHash by remember { mutableStateOf(false) }
 
     BackHandler {
         if (webView?.canGoBack() == true) {
@@ -198,6 +214,10 @@ private fun PlatformWebScreen(
                             CookieManager.getInstance().let { cm ->
                                 cm.setAcceptCookie(true)
                                 cm.setAcceptThirdPartyCookies(this, true)
+                                initialCookies.forEach { cookie ->
+                                    cm.setCookie(cookie.url, cookie.value)
+                                }
+                                cm.flush()
                             }
 
                             settings.apply {
@@ -227,6 +247,11 @@ private fun PlatformWebScreen(
 
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     super.onPageFinished(view, url)
+                                    if (shouldRestoreInitialHash(initialUrl, url, restoredInitialHash)) {
+                                        restoredInitialHash = true
+                                        view?.loadUrl(initialUrl)
+                                        return
+                                    }
                                     pageLoading = false
                                     canGoBack = view?.canGoBack() == true
                                 }
@@ -288,4 +313,11 @@ private fun PlatformWebScreen(
             }
         }
     }
+}
+
+private fun shouldRestoreInitialHash(initialUrl: String, currentUrl: String?, alreadyRestored: Boolean): Boolean {
+    if (alreadyRestored || currentUrl.isNullOrBlank()) return false
+    val initialHashIndex = initialUrl.indexOf('#')
+    if (initialHashIndex <= 0 || '#' in currentUrl) return false
+    return currentUrl == initialUrl.substring(0, initialHashIndex)
 }
