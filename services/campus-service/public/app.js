@@ -84,8 +84,10 @@ const nodes = {
   usernameInput: document.querySelector("#usernameInput"),
   passwordInput: document.querySelector("#passwordInput"),
   rememberInput: document.querySelector("#rememberInput"),
+  autoReloginInput: document.querySelector("#autoReloginInput"),
   loginButton: document.querySelector("#loginButton"),
   logoutButton: document.querySelector("#logoutButton"),
+  authNote: document.querySelector("#authNote"),
   status: document.querySelector("#status"),
   overviewStudyText: document.querySelector("#overviewStudyText"),
   overviewStudyMeta: document.querySelector("#overviewStudyMeta"),
@@ -850,7 +852,8 @@ async function login() {
       body: {
         username,
         password,
-        rememberMe: nodes.rememberInput.checked
+        rememberMe: nodes.rememberInput.checked,
+        autoRelogin: nodes.autoReloginInput.checked
       }
     });
     nodes.passwordInput.value = "";
@@ -2637,11 +2640,18 @@ function renderAuth(error) {
   const loginHint = loginMessage
     ? `<span class="auth-login-hint">${escapeHtml(loginMessage)} 请在本系统重新登录，学校网页里的登录状态不会自动同步到这里。</span>`
     : "";
+  const autoReloginHint = auth.autoRelogin?.enabled
+    ? '<span class="auth-login-hint calm">已开启过期自动重登；学校密码变更后需重新登录一次。</span>'
+    : "";
   nodes.authStatusText.innerHTML = `
     <span class="auth-status-lede ${authProblem ? "needs-login" : ""}">${escapeHtml(authProblem ? "需要处理" : source)}，${escapeHtml(name)}</span>
     ${loginHint}
+    ${autoReloginHint}
     <span class="auth-session-grid">${authSessionEntries(auth).map(authSessionChip).join("")}</span>
   `;
+  nodes.authNote.textContent = auth.autoRelogin?.enabled
+    ? "已开启过期自动重登。统一身份认证密码会加密保存在本系统，仅用于学校会话过期后重新登录。"
+    : "未开启自动重登时，密码只用于本次 CAS 登录，不会写入磁盘。部署到公网时请务必使用 HTTPS。";
   renderOverview();
 }
 

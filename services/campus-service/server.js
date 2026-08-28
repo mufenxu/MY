@@ -263,6 +263,9 @@ let libroomAutoReservationRescheduleRequested = false;
 const academicSessionQueue = new KeyedSerialQueue();
 const campusSessionQueue = new KeyedSerialQueue();
 const libroomSessionQueue = new KeyedSerialQueue();
+const schoolReloginQueue = new KeyedSerialQueue();
+const schoolReloginFailedAt = new Map();
+const SCHOOL_RELOGIN_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
 const logger = createLogger({ service: "hgu-campus-hub", environment: NODE_ENV });
 const CONFIGURED_DATA_ENCRYPTION_KEY = String(process.env.HGU_DATA_ENCRYPTION_KEY || "").trim();
 const DERIVED_DATA_ENCRYPTION_KEY = deriveDataEncryptionKey(APP_SESSION_SECRET);
@@ -1366,6 +1369,59 @@ async function clearSessionJar() {
   setRequestMemo(userContextStorage.getStore(), `school-session:${userId}`, emptyJar());
 }
 
+function savedSchoolReloginCredentials(jar) {
+  const settings = jar.meta?.autoRelogin;
+  if (!settings?.enabled || !settings.username || !settings.password) return null;
+  return {
+    username: settings.username,
+    password: settings.password,
+    rememberMe: settings.rememberMe !== false
+  };
+}
+
+function autoReloginSummary(jar) {
+  return { enabled: Boolean(savedSchoolReloginCredentials(jar)) };
+}
+
+function schoolReloginLog(value) {
+  return {
+    status: value?.status || null,
+    code: value?.code || null,
+    message: value?.message || value?.loginRequiredMessage || null
+  };
+}
+
+async function reloginWithSavedCredentials(reason) {
+  const userId = currentUserId();
+  const failedAt = schoolReloginFailedAt.get(userId) || 0;
+  if (Date.now() - failedAt < SCHOOL_RELOGIN_FAILURE_COOLDOWN_MS) return false;
+
+  return schoolReloginQueue.run(userId, async () => {
+    const jar = await loadSessionJarForUser(userId);
+    const current = storedSessionSummary(jar);
+    if (!current.needsLogin && current.sessions.cas.status !== "expired") return false;
+    const credentials = savedSchoolReloginCredentials(jar);
+    if (!credentials) return false;
+    try {
+      await loginWithCasFull({ ...credentials, saveCredentials: true });
+      schoolReloginFailedAt.delete(userId);
+      logger.info("school_session_auto_relogin", {
+        userId,
+        reason: schoolReloginLog(reason)
+      });
+      return true;
+    } catch (error) {
+      schoolReloginFailedAt.set(userId, Date.now());
+      logger.warn("school_session_auto_relogin_failed", {
+        userId,
+        reason: schoolReloginLog(reason),
+        error: schoolReloginLog(error)
+      });
+      return false;
+    }
+  });
+}
+
 function academicSessionSummary(jar) {
   const academicCookie = validCookieForDomain(jar, "newjwxs.hgu.edu.cn");
   const capturedAt = academicCookie ? (jar.meta?.academicCapturedAt || jar.updatedAt || null) : null;
@@ -1482,6 +1538,7 @@ function storedSessionSummary(jar) {
     ownerName: energy.ownerName || jar.meta?.ownerName || null,
     schoolAccount,
     hasSchoolAccount: Boolean(schoolAccount),
+    autoRelogin: autoReloginSummary(jar),
     needsLogin,
     loginRequiredMessage,
     sessions,
@@ -1493,7 +1550,15 @@ function storedSessionSummary(jar) {
 
 async function refreshStoredSessionsIfNeeded(jar) {
   const before = storedSessionSummary(jar);
-  if (!before.hasStoredSession || refreshBlockedByCas(before.sessions.cas)) return jar;
+  if (!before.hasStoredSession) return jar;
+  if (before.needsLogin || before.sessions.cas.status === "expired") {
+    const relogined = await reloginWithSavedCredentials(before);
+    if (relogined) {
+      Object.assign(jar, await loadSessionJarForUser(currentUserId()));
+      return jar;
+    }
+  }
+  if (refreshBlockedByCas(before.sessions.cas)) return jar;
 
   let touched = false;
   if (before.sessions.cas.canRefreshServices && jar.meta?.cas?.lastError) {
@@ -2089,12 +2154,21 @@ async function runAutoReservationTask(task, user, now = new Date()) {
   return result;
 }
 
-async function loginWithCasFull({ username, password, rememberMe = true }) {
+async function loginWithCasFull({ username, password, rememberMe = true, saveCredentials = false }) {
   const jar = emptyJar();
   await loginCasService({ jar, username, password, rememberMe, serviceUrl: SERVICE_URL });
 
   const view = await getViewData(jar);
   jar.meta.schoolAccount = normalizeSchoolLoginAccount(username);
+  jar.meta.autoRelogin = saveCredentials
+    ? {
+        enabled: true,
+        username: normalizeSchoolLoginAccount(username),
+        password,
+        rememberMe: rememberMe !== false,
+        savedAt: new Date().toISOString()
+      }
+    : null;
   jar.meta.account = view.account || null;
   jar.meta.ownerName = view.ownerName || null;
   jar.meta.lastValidatedAt = new Date().toISOString();
@@ -6868,6 +6942,9 @@ async function handleApi(req, res, url) {
     }
     if (url.pathname === "/api/auth/login" && req.method === "POST") {
       const body = await readBodyJson(req);
+      if (body.autoRelogin === true && !sensitiveJson.encrypted) {
+        throw new HttpError(503, "请先配置 HGU_DATA_ENCRYPTION_KEY，再开启学校会话自动重登。");
+      }
       const schoolLoginLimit = schoolLoginLimiter.check(currentUserId());
       if (!schoolLoginLimit.allowed) {
         throw new HttpError(
@@ -6879,7 +6956,7 @@ async function handleApi(req, res, url) {
       }
       let data;
       try {
-        data = await loginWithCas(body);
+        data = await loginWithCas({ ...body, saveCredentials: body.autoRelogin === true });
         schoolLoginLimiter.reset(currentUserId());
         logger.info("audit_school_account_connected", { actorUserId: currentUserId() });
       } catch (error) {

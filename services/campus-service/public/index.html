@@ -219,12 +219,16 @@
           <input id="rememberInput" type="checkbox" checked>
           <span>7天内自动登录</span>
         </label>
+        <label class="remember">
+          <input id="autoReloginInput" type="checkbox">
+          <span>会话过期后自动重新登录</span>
+        </label>
         <button id="loginButton" type="submit">登录并保存会话</button>
       </form>
       <div class="auth-actions">
         <button id="logoutButton" type="button" class="ghost">退出学校会话</button>
       </div>
-      <p class="auth-note">密码只用于本次 CAS 登录，不会写入磁盘。部署到公网时请务必使用 HTTPS。</p>
+      <p id="authNote" class="auth-note">未开启自动重登时，密码只用于本次 CAS 登录，不会写入磁盘。部署到公网时请务必使用 HTTPS。</p>
     </section>
 
     <section id="study" class="app-section academic-section">
