@@ -136,7 +136,6 @@ data class AppUiState(
     val androidPasskeySupported: Boolean = false,
     val suggestedUsername: String = "",
     val deviceLoginBusy: Boolean = false,
-    val deviceLoginMethod: String? = null,
     val deviceLoginQrDataUrl: String? = null,
     val deviceLoginError: String? = null,
     val refreshing: Boolean = false,
@@ -473,13 +472,10 @@ class AppViewModel(
         }
     }
 
-    fun startDeviceQrLogin(
-        confirmationMethod: String,
-        authorizeSession: suspend () -> Boolean,
-    ) {
+    fun startDeviceQrLogin(authorizeSession: suspend () -> Boolean) {
         val current = mutableState.value
         if (current.user != null || current.deviceLoginBusy) return
-        if (confirmationMethod == "passkey" && !current.androidPasskeySupported) {
+        if (!current.androidPasskeySupported) {
             mutableState.update {
                 it.copy(deviceLoginError = "服务器尚未关联当前 Android App 的签名证书。")
             }
@@ -490,14 +486,13 @@ class AppViewModel(
                 mutableState.update {
                     it.copy(
                         deviceLoginBusy = true,
-                        deviceLoginMethod = confirmationMethod,
                         deviceLoginQrDataUrl = null,
                         deviceLoginError = null,
                         error = null,
                         message = null,
                     )
                 }
-                val request = api.createQrLoginRequest(confirmationMethod)
+                val request = api.createQrLoginRequest()
                 mutableState.update {
                     it.copy(
                         deviceLoginQrDataUrl = request.qrDataUrl,
@@ -528,7 +523,6 @@ class AppViewModel(
                 mutableState.update {
                     it.copy(
                         deviceLoginBusy = false,
-                        deviceLoginMethod = null,
                         deviceLoginQrDataUrl = null,
                     )
                 }
@@ -542,7 +536,6 @@ class AppViewModel(
         mutableState.update {
             it.copy(
                 deviceLoginBusy = false,
-                deviceLoginMethod = null,
                 deviceLoginQrDataUrl = null,
                 deviceLoginError = null,
             )

@@ -445,16 +445,9 @@ export function createApp({
   function appQrResponse(record, role) {
     const androidPasskeyConfigured = (config.androidAppCertFingerprints || []).length > 0;
     const clientKind = record.clientKind || 'browser';
-    let confirmationMethod;
-    if (clientKind === 'android') {
-      confirmationMethod = record.requestedConfirmationMethod === 'passkey'
-        ? (androidPasskeyConfigured ? 'passkey' : 'unavailable')
-        : (role === 'super_admin' ? 'unavailable' : 'biometric');
-    } else {
-      confirmationMethod = role === 'super_admin'
-        ? (androidPasskeyConfigured ? 'passkey' : 'unavailable')
-        : 'biometric';
-    }
+    const confirmationMethod = clientKind === 'android' || role === 'super_admin'
+      ? (androidPasskeyConfigured ? 'passkey' : 'unavailable')
+      : 'biometric';
     return {
       requestId: record.id,
       status: record.status,
@@ -1362,7 +1355,6 @@ export function createApp({
     }
     try {
       const clientKind = String(req.body?.clientKind || 'browser');
-      const requestedConfirmationMethod = String(req.body?.confirmationMethod || 'biometric');
       const androidRequester = clientKind === 'android';
       if (!['browser', 'android'].includes(clientKind)) {
         return res.status(400).json({ error: '二维码请求来源无效。', code: 'QR_LOGIN_INVALID_CLIENT' });
@@ -1370,10 +1362,10 @@ export function createApp({
       if (androidRequester && !isAndroidAppRequest(req)) {
         return res.status(403).json({ error: 'Android 登录二维码仅允许官方 App 创建。', code: 'QR_LOGIN_INVALID_CLIENT' });
       }
-      if (androidRequester && !['biometric', 'passkey'].includes(requestedConfirmationMethod)) {
+      if (androidRequester && String(req.body?.confirmationMethod || 'passkey') !== 'passkey') {
         return res.status(400).json({ error: '二维码确认方式无效。', code: 'QR_LOGIN_INVALID_CONFIRMATION' });
       }
-      if (androidRequester && requestedConfirmationMethod === 'passkey' && (config.androidAppCertFingerprints || []).length === 0) {
+      if (androidRequester && (config.androidAppCertFingerprints || []).length === 0) {
         return res.status(503).json({ error: 'Android Passkey 尚未配置应用签名证书。', code: 'QR_ANDROID_PASSKEY_UNAVAILABLE' });
       }
       const requesterDeviceId = androidRequester ? requestDeviceId(req) : '';
@@ -1384,7 +1376,6 @@ export function createApp({
         browserIp: req.ip,
         browserUserAgent: req.get('user-agent'),
         clientKind,
-        requestedConfirmationMethod,
         requesterDeviceId,
       });
       const loginUrl = new URL('/app/qr-login', publicUrl.origin);
@@ -1819,7 +1810,7 @@ export function createApp({
     if (!record || record.status !== 'scanned') {
       return res.status(409).json({ error: '扫码请求当前不可确认。', code: 'QR_LOGIN_NOT_SCANNED' });
     }
-    const androidPasskeyRequest = record.clientKind === 'android' && record.requestedConfirmationMethod === 'passkey';
+    const androidPasskeyRequest = record.clientKind === 'android';
     if (!androidPasskeyRequest && req.consoleUser.role !== 'super_admin') {
       return res.status(400).json({ error: '当前账号使用设备生物识别确认。', code: 'QR_PASSKEY_NOT_REQUIRED' });
     }
@@ -1841,7 +1832,7 @@ export function createApp({
       return res.status(409).json({ error: '扫码请求当前不可确认。', code: 'QR_LOGIN_NOT_SCANNED' });
     }
 
-    const androidPasskeyRequest = record.clientKind === 'android' && record.requestedConfirmationMethod === 'passkey';
+    const androidPasskeyRequest = record.clientKind === 'android';
     let confirmationMethod = 'biometric';
     if (androidPasskeyRequest || req.consoleUser.role === 'super_admin') {
       if ((config.androidAppCertFingerprints || []).length === 0) {

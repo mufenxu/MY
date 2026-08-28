@@ -138,13 +138,13 @@ class PlatformApi(
         ).json.toQrLoginTarget()
     }
 
-    suspend fun createQrLoginRequest(confirmationMethod: String): QrLoginRequest = withContext(Dispatchers.IO) {
+    suspend fun createQrLoginRequest(): QrLoginRequest = withContext(Dispatchers.IO) {
         val json = execute(
             "/api/auth/qr/requests",
             "POST",
             JSONObject()
                 .put("clientKind", "android")
-                .put("confirmationMethod", confirmationMethod),
+                .put("confirmationMethod", "passkey"),
             authenticated = false,
         ).json
         QrLoginRequest(

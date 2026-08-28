@@ -61,7 +61,6 @@ import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Hub
@@ -299,8 +298,8 @@ fun MyControlApp(
                         onPasskeyLogin = { username ->
                             viewModel.loginWithPasskey(username, onPasskeyRequest, onSessionProtection)
                         },
-                        onStartDeviceLogin = { method ->
-                            viewModel.startDeviceQrLogin(method, onSessionProtection)
+                        onStartDeviceLogin = {
+                            viewModel.startDeviceQrLogin(onSessionProtection)
                         },
                         onCancelDeviceLogin = viewModel::cancelDeviceQrLogin,
                         onBackFromSecondFactor = viewModel::resetSecondFactor,
@@ -1228,11 +1227,7 @@ private fun DeviceLoginSection(
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 )
                 Text(
-                    if (state.deviceLoginMethod == "passkey") {
-                        "对方设备将使用 Passkey 验证，确认后本机自动登录"
-                    } else {
-                        "对方设备将完成生物识别确认，确认后本机自动登录"
-                    },
+                    "对方设备将使用 Passkey 验证，确认后本机自动登录",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -1289,16 +1284,6 @@ private fun DeviceLoginSection(
         Icon(Icons.Outlined.Fingerprint, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Text("Passkey 跨设备登录")
-    }
-    Spacer(Modifier.height(8.dp))
-    OutlinedButton(
-        onClick = { onStartDeviceLogin("biometric") },
-        enabled = !state.loginBusy && !state.deviceLoginBusy,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Icon(Icons.Outlined.Devices, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
-        Text("受信任设备配对登录")
     }
 }
 

@@ -19,7 +19,7 @@ async function withServer(app, callback) {
   }
 }
 
-test('Android QR login uses a device-bound requester verifier and trusted-device confirmation', async () => {
+test('Android QR login requires Passkey confirmation and a device-bound requester verifier', async () => {
   const password = 'android-qr-login-security-password';
   const passwordHash = await createPasswordHash(password, Buffer.alloc(16, 6));
   const encryptionKey = Buffer.alloc(32, 7).toString('base64url');
@@ -49,6 +49,7 @@ test('Android QR login uses a device-bound requester verifier and trusted-device
     metricsToken: 'm'.repeat(32),
     webauthnRpName: 'MY Platform',
     webauthnRpId: 'pxyb.cn',
+    androidAppCertFingerprints: ['test-certificate-fingerprint'],
   };
   const app = createApp({ config, authStore, qrLoginStore });
 
@@ -62,7 +63,7 @@ test('Android QR login uses a device-bound requester verifier and trusted-device
     const createdResponse = await fetch(`${origin}/api/auth/qr/requests`, {
       method: 'POST',
       headers: jsonHeaders,
-      body: JSON.stringify({ clientKind: 'android', confirmationMethod: 'biometric' }),
+      body: JSON.stringify({ clientKind: 'android', confirmationMethod: 'passkey' }),
     });
     assert.equal(createdResponse.status, 201);
     const created = await createdResponse.json();
@@ -85,6 +86,14 @@ test('Android QR login uses a device-bound requester verifier and trusted-device
     });
     assert.equal(wrongDevice.status, 410);
 
+    const biometric = await fetch(`${origin}/api/auth/qr/requests`, {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ clientKind: 'android', confirmationMethod: 'biometric' }),
+    });
+    assert.equal(biometric.status, 400);
+    assert.equal((await biometric.json()).code, 'QR_LOGIN_INVALID_CONFIRMATION');
+
     const loginResponse = await fetch(`${origin}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
@@ -101,37 +110,6 @@ test('Android QR login uses a device-bound requester verifier and trusted-device
     assert.equal(scanResponse.status, 200);
     const scanned = await scanResponse.json();
     assert.equal(scanned.clientKind, 'android');
-    assert.equal(scanned.confirmationMethod, 'biometric');
-
-    const approvedResponse = await fetch(`${origin}/api/auth/qr/requests/${created.requestId}/approve`, {
-      method: 'POST',
-      headers: { ...jsonHeaders, Cookie: appCookie },
-      body: JSON.stringify({ localConfirmation: true }),
-    });
-    assert.equal(approvedResponse.status, 200);
-
-    const consumeResponse = await fetch(`${origin}/api/auth/qr/requests/${created.requestId}/consume`, {
-      method: 'POST',
-      headers: jsonHeaders,
-      body: JSON.stringify({ requesterVerifier: created.requesterVerifier }),
-    });
-    assert.equal(consumeResponse.status, 200);
-    assert.equal((await consumeResponse.json()).user.username, 'operator');
-    assert.match(consumeResponse.headers.get('set-cookie'), /my_platform_session=/);
-
-    const reused = await fetch(`${origin}/api/auth/qr/requests/${created.requestId}/consume`, {
-      method: 'POST',
-      headers: jsonHeaders,
-      body: JSON.stringify({ requesterVerifier: created.requesterVerifier }),
-    });
-    assert.equal(reused.status, 409);
-
-    const passkeyUnavailable = await fetch(`${origin}/api/auth/qr/requests`, {
-      method: 'POST',
-      headers: jsonHeaders,
-      body: JSON.stringify({ clientKind: 'android', confirmationMethod: 'passkey' }),
-    });
-    assert.equal(passkeyUnavailable.status, 503);
-    assert.equal((await passkeyUnavailable.json()).code, 'QR_ANDROID_PASSKEY_UNAVAILABLE');
+    assert.equal(scanned.confirmationMethod, 'passkey');
   });
 });

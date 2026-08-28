@@ -86,6 +86,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -2877,14 +2879,18 @@ private fun <T> WheelPicker(
         }
     }
 
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress) {
-            if (centerIndex in items.indices && centerIndex != selectedIndex) {
-                onSelectedIndexChanged(centerIndex)
+    // 实时感知当前处于正中心的项，无延迟通知外层更新
+    LaunchedEffect(listState) {
+        snapshotFlow { centerIndex }
+            .distinctUntilChanged()
+            .collect { index ->
+                if (index in items.indices && index != selectedIndex) {
+                    onSelectedIndexChanged(index)
+                }
             }
-        }
     }
 
+    // 仅当外部主动变更 selectedIndex 时，且滚轮未在滑动中，执行平滑滚动定位
     LaunchedEffect(selectedIndex) {
         if (!listState.isScrollInProgress && centerIndex != selectedIndex && selectedIndex in items.indices) {
             listState.animateScrollToItem(selectedIndex)
@@ -2921,10 +2927,12 @@ private fun <T> WheelPicker(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                         ) {
-                            coroutineScope.launch {
-                                listState.animateScrollToItem(index)
+                            if (index in items.indices) {
+                                onSelectedIndexChanged(index)
+                                coroutineScope.launch {
+                                    listState.animateScrollToItem(index)
+                                }
                             }
-                            onSelectedIndexChanged(index)
                         },
                     contentAlignment = Alignment.Center,
                 ) {
