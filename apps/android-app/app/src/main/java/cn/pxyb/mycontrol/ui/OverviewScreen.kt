@@ -1351,13 +1351,6 @@ private fun homeQuickActionSpec(
         accentPale = Color(0xFFFFF1F2),
     ) { onOpenWorkspace(WorkspaceDestination.Notifications) }
 
-    HomeQuickAction.Insights -> HomeQuickActionSpec(
-        icon = Icons.Outlined.BarChart,
-        label = "趋势周报",
-        accent = Color(0xFF059669),
-        accentPale = Color(0xFFECFDF5),
-    ) { onOpenWorkspace(WorkspaceDestination.Insights) }
-
     HomeQuickAction.Scenes -> HomeQuickActionSpec(
         icon = Icons.Outlined.Tune,
         label = "智能场景",
@@ -1540,7 +1533,6 @@ private fun QuickActionsDialog(
 private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action) {
     HomeQuickAction.Today -> "今日工作台"
     HomeQuickAction.Notifications -> "通知中心"
-    HomeQuickAction.Insights -> "趋势周报"
     HomeQuickAction.Scenes -> "智能场景"
     HomeQuickAction.Reservation -> "研讨间预约"
     HomeQuickAction.FreeClassrooms -> "空闲教室"

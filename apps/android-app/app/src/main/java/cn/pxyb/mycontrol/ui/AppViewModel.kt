@@ -66,9 +66,7 @@ import cn.pxyb.mycontrol.data.TotpEnrollment
 import cn.pxyb.mycontrol.data.TodoMutation
 import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.TodoTask
-import cn.pxyb.mycontrol.data.TrendSample
 import cn.pxyb.mycontrol.data.WebLoginLink
-import cn.pxyb.mycontrol.data.todayTrendSample
 import cn.pxyb.mycontrol.data.mergeRemoteAlerts
 import cn.pxyb.mycontrol.data.mergeHydratedAlerts
 import cn.pxyb.mycontrol.flushNotificationMutations
@@ -111,7 +109,7 @@ import java.security.cert.X509Certificate
 
 enum class MainTab { Overview, Notifications, Operations, Tools, Profile }
 
-enum class WorkspaceDestination { Today, Notifications, Insights, Scenes }
+enum class WorkspaceDestination { Today, Notifications, Scenes }
 
 enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, FreeClassrooms, Resources, Notifications, Reservation }
 
@@ -182,7 +180,6 @@ data class AppUiState(
     val resourceExpiries: List<ResourceExpiry> = emptyList(),
     val alerts: List<AppAlertRecord> = emptyList(),
     val alertPreferences: AlertPreferences = AlertPreferences(),
-    val trendSamples: List<TrendSample> = emptyList(),
     val networkHealth: NetworkHealth = NetworkHealth(),
     val cacheStorageInfo: CacheStorageInfo = CacheStorageInfo(),
     val webLoginLink: WebLoginLink? = null,
@@ -255,7 +252,6 @@ class AppViewModel(
             pendingTodoMutations = 0,
             alerts = emptyList(),
             alertPreferences = AlertPreferences(),
-            trendSamples = emptyList(),
         ),
     )
     val state: StateFlow<AppUiState> = mutableState.asStateFlow()
@@ -272,7 +268,6 @@ class AppViewModel(
     val freeClassroomState = deriveState(AppUiState::toFreeClassroomUiState)
     val reservationState = deriveState(AppUiState::toReservationUiState)
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
-    val insightsState = deriveState(AppUiState::toInsightsUiState)
     val scenesState = deriveState(AppUiState::toScenesUiState)
     private var pendingQrLogin: Pair<String, String>? = null
     private var pollJob: Job? = null
@@ -284,7 +279,6 @@ class AppViewModel(
     private var initialIncidentsLoaded = false
     private var initialTasksLoaded = false
     private var operationalEffectsJob: Job? = null
-    private var trendSampleJob: Job? = null
 
     private fun <T> deriveState(transform: (AppUiState) -> T): StateFlow<T> = mutableState
         .map(transform)
@@ -314,7 +308,6 @@ class AppViewModel(
             val pending = personalStore.readPendingTodoMutations()
             val alerts = personalStore.readAlerts()
             val alertPreferences = personalStore.readAlertPreferences()
-            val trendSamples = personalStore.readTrendSamples()
             val assistantSnapshot = personalStore.readAssistantSnapshot()
             val quickScene = personalStore.readQuickScene()
             mutableState.update { current ->
@@ -326,7 +319,6 @@ class AppViewModel(
                         pendingTodoMutations = pending.size,
                         alerts = mergeHydratedAlerts(alerts, current.alerts),
                         alertPreferences = alertPreferences,
-                        trendSamples = trendSamples,
                         assistantSnapshot = assistantSnapshot,
                         quickScene = quickScene,
                     )
@@ -886,7 +878,6 @@ class AppViewModel(
         when (destination) {
             WorkspaceDestination.Today -> refreshToday()
             WorkspaceDestination.Notifications -> reloadPersonalState()
-            WorkspaceDestination.Insights -> reloadPersonalState()
             WorkspaceDestination.Scenes -> refreshIot()
         }
     }
@@ -1567,10 +1558,6 @@ class AppViewModel(
                 syncRemoteNotifications(force)
                 reloadPersonalState()
             }
-            workspaceDestination == WorkspaceDestination.Insights -> {
-                refreshOverview(force)
-                reloadPersonalState()
-            }
             googleAccountDeskOpen -> {
                 loadGoogleAccounts()
             }
@@ -1639,7 +1626,6 @@ class AppViewModel(
         val overview = api.overview(force)
         mutableState.update { it.copy(overview = overview) }
         publishWidget()
-        recordTrendSample()
     }
 
     private fun refreshExternalApplications(force: Boolean = false) =
@@ -1653,7 +1639,6 @@ class AppViewModel(
         initialIncidentsLoaded = true
         publishWidget()
         evaluateAlerts()
-        recordTrendSample()
     }
 
     private fun refreshTasks(force: Boolean = false) = launchRefresh(DataSection.Tasks, force) {
@@ -1661,7 +1646,6 @@ class AppViewModel(
         mutableState.update { it.copy(tasks = tasks) }
         initialTasksLoaded = true
         evaluateAlerts()
-        recordTrendSample()
     }
 
     private fun refreshReleases(force: Boolean = false) = launchRefresh(DataSection.Releases, force) {
@@ -1678,7 +1662,6 @@ class AppViewModel(
         val iot = api.iot()
         mutableState.update { it.copy(iot = iot) }
         publishWidget()
-        recordTrendSample()
     }
 
     private fun refreshToday(force: Boolean = false) {
@@ -2809,18 +2792,16 @@ class AppViewModel(
 
     private fun reloadPersonalState() {
         viewModelScope.launch {
-            val (alerts, preferences, trends) = withContext(Dispatchers.IO) {
-                Triple(
+            val (alerts, preferences) = withContext(Dispatchers.IO) {
+                Pair(
                     personalStore.readAlerts(),
                     personalStore.readAlertPreferences(),
-                    personalStore.readTrendSamples(),
                 )
             }
             mutableState.update { current ->
                 current.copy(
                     alerts = mergeHydratedAlerts(alerts, current.alerts),
                     alertPreferences = preferences,
-                    trendSamples = trends,
                 )
             }
             syncRemoteNotifications()
@@ -2885,7 +2866,6 @@ class AppViewModel(
             when (destination) {
                 "today" -> openWorkspace(WorkspaceDestination.Today)
                 "notifications" -> openWorkspace(WorkspaceDestination.Notifications)
-                "insights" -> openWorkspace(WorkspaceDestination.Insights)
                 "scenes" -> {
                     uri.getQueryParameter(DeepLinks.EXTRA_SCENE_ID)
                         ?.takeIf(String::isNotBlank)
@@ -2902,20 +2882,6 @@ class AppViewModel(
             return true
         }
         return false
-    }
-
-    private fun recordTrendSample() {
-        trendSampleJob?.cancel()
-        trendSampleJob = viewModelScope.launch {
-            delay(120)
-            val current = mutableState.value
-            val sample = todayTrendSample(current.overview, current.incidents, current.tasks, current.iot) ?: return@launch
-            val trends = withContext(Dispatchers.IO) {
-                personalStore.upsertTrendSample(sample)
-                personalStore.readTrendSamples()
-            }
-            mutableState.update { it.copy(trendSamples = trends) }
-        }
     }
 
     private suspend fun evaluatePersonalReminders() {

@@ -287,17 +287,6 @@ data class QuickScenePreference(
     val sceneName: String,
 )
 
-@Immutable
-data class TrendSample(
-    val day: String,
-    val serviceTotal: Int,
-    val healthyServices: Int,
-    val activeIncidents: Int,
-    val pendingTasks: Int,
-    val deviceTotal: Int,
-    val onlineDevices: Int,
-)
-
 class PersonalWorkspaceStore(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
     private val codec = EncryptedPreferenceCodec(preferences, KEY_ALIAS)
@@ -429,19 +418,6 @@ class PersonalWorkspaceStore(context: Context) {
         }
     }
 
-    fun readTrendSamples(): List<TrendSample> = scopedKey(KEY_TRENDS)?.let { key -> codec.read(key) }
-        ?.let(::parseArray)
-        .objects()
-        .mapNotNull(JSONObject::toTrendSample)
-        .sortedBy(TrendSample::day)
-
-    fun upsertTrendSample(sample: TrendSample) {
-        val samples = readTrendSamples().associateBy(TrendSample::day).toMutableMap()
-        samples[sample.day] = sample
-        val normalized = samples.values.sortedBy(TrendSample::day).takeLast(MAX_TREND_DAYS)
-        scopedKey(KEY_TRENDS)?.let { key -> codec.write(key, JSONArray().apply { normalized.forEach { put(it.toJson()) } }.toString()) }
-    }
-
     fun sizeInBytes(): Long {
         val scope = accountScope ?: return 0L
         val prefix = "account_${scope}_"
@@ -486,13 +462,11 @@ class PersonalWorkspaceStore(context: Context) {
         const val KEY_IOT_ALERTS = "iot_alerts"
         const val KEY_CAMPUS_ALERTS = "campus_alerts"
         const val KEY_BACKUP_ALERTS = "backup_alerts"
-        const val KEY_TRENDS = "trends"
         const val KEY_ASSISTANT_SNAPSHOT = "assistant_snapshot"
         const val KEY_NOTIFICATION_QUEUE = "notification_queue"
         const val KEY_QUICK_SCENE = "quick_scene"
         const val MAX_PENDING_MUTATIONS = 100
         const val MAX_ALERTS = 200
-        const val MAX_TREND_DAYS = 45
     }
 }
 
@@ -500,26 +474,6 @@ fun newTodoTask(title: String): TodoTask = TodoTask(
     id = UUID.randomUUID().toString(),
     title = title.trim(),
 )
-
-fun todayTrendSample(
-    overview: OverviewData?,
-    incidents: List<IncidentInfo>,
-    tasks: List<PlatformTask>,
-    iot: IotData?,
-): TrendSample? {
-    if (overview == null && incidents.isEmpty() && tasks.isEmpty() && iot == null) return null
-    val services = overview?.services.orEmpty()
-    val devices = iot?.devices.orEmpty()
-    return TrendSample(
-        day = LocalDate.now().toString(),
-        serviceTotal = services.size,
-        healthyServices = services.count { it.state == "healthy" },
-        activeIncidents = incidents.count { it.status != "resolved" },
-        pendingTasks = tasks.count { it.status in setOf("action_required", "failed", "pending") },
-        deviceTotal = devices.size,
-        onlineDevices = devices.count(DeviceInfo::online),
-    )
-}
 
 internal fun TodoTask.toJson(): JSONObject = JSONObject()
     .put("id", id)
@@ -558,15 +512,6 @@ private fun AppAlertRecord.toJson(): JSONObject = JSONObject()
     .put("contentKind", contentKind)
     .put("contentBlocks", JSONArray().apply { contentBlocks.forEach { put(it.toJson()) } })
     .put("actions", JSONArray().apply { actions.forEach { put(it.toJson()) } })
-
-private fun TrendSample.toJson(): JSONObject = JSONObject()
-    .put("day", day)
-    .put("serviceTotal", serviceTotal)
-    .put("healthyServices", healthyServices)
-    .put("activeIncidents", activeIncidents)
-    .put("pendingTasks", pendingTasks)
-    .put("deviceTotal", deviceTotal)
-    .put("onlineDevices", onlineDevices)
 
 private fun PersonalAssistantSnapshot.toJson(): JSONObject = JSONObject()
     .put("nextAction", JSONObject()
@@ -690,20 +635,6 @@ private fun JSONObject.toAppNotificationAction(): AppNotificationAction? {
     val label = optString("label").trim()
     val deepLink = optString("deepLink").trim()
     return if (id.isBlank() || label.isBlank() || deepLink.isBlank()) null else AppNotificationAction(id, label, deepLink)
-}
-
-private fun JSONObject.toTrendSample(): TrendSample? {
-    val day = optString("day")
-    if (day.isBlank()) return null
-    return TrendSample(
-        day = day,
-        serviceTotal = optInt("serviceTotal"),
-        healthyServices = optInt("healthyServices"),
-        activeIncidents = optInt("activeIncidents"),
-        pendingTasks = optInt("pendingTasks"),
-        deviceTotal = optInt("deviceTotal"),
-        onlineDevices = optInt("onlineDevices"),
-    )
 }
 
 private fun JSONObject.toAssistantSnapshot(): PersonalAssistantSnapshot? {

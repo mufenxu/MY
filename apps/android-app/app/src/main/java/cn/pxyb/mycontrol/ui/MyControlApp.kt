@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -161,7 +162,6 @@ internal object AppRoute {
     const val FreeClassrooms = "free-classrooms"
     const val Reservation = "reservation"
     const val Notifications = "notifications"
-    const val Insights = "insights"
     const val Scenes = "scenes"
 }
 
@@ -185,7 +185,6 @@ private fun MainTab.route(): String = when (this) {
 private fun AppEntryUiState.requestedRoute(): String = when {
     workspaceDestination == WorkspaceDestination.Today -> AppRoute.Today
     workspaceDestination == WorkspaceDestination.Notifications -> AppRoute.Notifications
-    workspaceDestination == WorkspaceDestination.Insights -> AppRoute.Insights
     workspaceDestination == WorkspaceDestination.Scenes -> AppRoute.Scenes
     globalSearchOpen -> AppRoute.Search
     googleAccountDeskOpen -> AppRoute.GoogleAccounts
@@ -199,7 +198,6 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Today,
     AppRoute.FreeClassrooms,
     AppRoute.Reservation,
-    AppRoute.Insights,
     AppRoute.Scenes -> MainTab.Overview
     AppRoute.Notifications -> MainTab.Overview
     AppRoute.Operations -> MainTab.Operations
@@ -217,7 +215,6 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Today,
     AppRoute.FreeClassrooms,
     AppRoute.Reservation,
-    AppRoute.Insights,
     AppRoute.Scenes -> MainTab.Overview
     else -> null
 }
@@ -244,22 +241,22 @@ fun MyControlApp(
     var prewarmContent by remember { mutableStateOf(false) }
     val state by viewModel.entryState.collectAsStateWithLifecycle()
 
-    // 在开屏动画展开平稳后的 400ms 再开启底层主界面挂载预热，确保冷启动前 400ms 黄金期 100% 满帧无卡顿
+    // 底层主界面在开屏初期（180ms）静默启动并行预热，确保退场揭幕时 100% 满帧 0 掉帧
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(400)
+        kotlinx.coroutines.delay(180)
         prewarmContent = true
     }
 
-    // 主内容在开屏退场时的丝滑微缩放与淡入动效 (0.96f -> 1.0f, 0.85f -> 1.0f)
+    // 主内容在开屏退场时的沉浸式景深聚焦渐入 (0.95f -> 1.0f, 0.75f -> 1.0f)
     val mainContentAlpha by animateFloatAsState(
-        targetValue = if (splashExiting || !splashVisible) 1f else 0.85f,
-        animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
+        targetValue = if (splashExiting || !splashVisible) 1f else 0.75f,
+        animationSpec = tween(durationMillis = 360, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
         label = "mainContentAlpha",
     )
 
     val mainContentScale by animateFloatAsState(
-        targetValue = if (splashExiting || !splashVisible) 1f else 0.96f,
-        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        targetValue = if (splashExiting || !splashVisible) 1f else 0.95f,
+        animationSpec = tween(durationMillis = 360, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
         label = "mainContentScale",
     )
 
@@ -276,7 +273,7 @@ fun MyControlApp(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
-        // 底层：主应用内容层（在开屏平稳期后静默预热，退场时伴随细腻的弹性浮现）
+        // 底层：主应用内容层（静默预热挂载，退场时伴随极致丝滑的景深微弹浮现）
         if (prewarmContent || !splashVisible) {
             Box(
                 modifier = Modifier
@@ -323,9 +320,10 @@ fun MyControlApp(
             }
         }
 
-        // 顶层：基于 Animatable 零重组、纯 GPU 渲染的超丝滑开屏过渡浮层
+        // 顶层：自适应智能感知就绪、纯 GPU 渲染的次世代极光流光开屏动效系统
         if (splashVisible) {
             ModernAnimatedSplashScreen(
+                isDataReady = !state.booting,
                 isExiting = splashExiting,
                 onSplashFinished = { splashExiting = true },
                 onSplashExitFinished = { splashVisible = false },
@@ -1572,7 +1570,6 @@ private fun AuthenticatedShell(
             AppRoute.Today -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
             AppRoute.FreeClassrooms -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.Reservation -> viewModel.syncNavigationDestination(MainTab.Overview)
-            AppRoute.Insights -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Insights)
             AppRoute.Scenes -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Scenes)
         }
     }
@@ -1906,14 +1903,6 @@ private fun AuthenticatedShell(
                         onToggleAutoTask = viewModel::toggleAutoReservationTask,
                         onDeleteAutoTask = viewModel::deleteAutoReservationTask,
                         onClearFeedback = viewModel::clearReservationFeedback,
-                    )
-                }
-                composable(AppRoute.Insights) {
-                    val insightsState by viewModel.insightsState.collectAsStateWithLifecycle()
-                    InsightsScreen(
-                        state = insightsState,
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
                     )
                 }
                 composable(AppRoute.Scenes) {

@@ -479,31 +479,78 @@ fun ProfileScreen(
                                 }
                             }
 
-                            // 退出登录按钮
+                            // 5. 关于应用（平板右列）
                             Surface(
-                                onClick = { confirmLogout = true },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.25f)),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                                shadowElevation = 1.dp,
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    ProfileActionRow(
+                                        icon = Icons.Outlined.SystemUpdate,
+                                        iconTint = Color(0xFF2563EB),
+                                        iconBackground = Color(0xFFEFF6FF),
+                                        title = "关于 MY Control",
+                                        subtitle = "当前版本 v${BuildConfig.VERSION_NAME} · 查看版本与更新",
+                                        busy = state.busyAction == "check-updates",
+                                        onClick = {
+                                            onCheckUpdates()
+                                            showUpdateDialog = true
+                                        },
+                                        trailing = {
+                                            Text(
+                                                "查看",
+                                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                                color = Color(0xFF2563EB),
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+
+                            // 6. 退出登录按钮（平板右列唯一样式）
+                            val tabletLogoutInteraction = remember { MutableInteractionSource() }
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .pressFeedback(tabletLogoutInteraction)
+                                    .clickable(
+                                        enabled = state.busyAction == null,
+                                        onClick = { confirmLogout = true },
+                                    ),
+                                shape = RoundedCornerShape(22.dp),
+                                color = Color(0xFFFEF2F2),
+                                border = BorderStroke(1.dp, Color(0xFFFCA5A5).copy(alpha = 0.6f)),
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 14.dp, horizontal = 16.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center,
                                 ) {
-                                    Icon(
-                                        Icons.AutoMirrored.Outlined.Logout,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        "退出当前登录",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.error,
-                                    )
+                                    if (state.busyAction == "logout") {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = Color(0xFFDC2626),
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Outlined.Logout,
+                                            contentDescription = null,
+                                            tint = Color(0xFFDC2626),
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                        Spacer(Modifier.size(8.dp))
+                                        Text(
+                                            "退出当前账号",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = Color(0xFFDC2626),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -795,84 +842,82 @@ fun ProfileScreen(
                         }
                     }
                 }
-            }
 
-            // 9. 关于应用
-            item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    shadowElevation = 1.dp,
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        ProfileActionRow(
-                            icon = Icons.Outlined.SystemUpdate,
-                            iconTint = Color(0xFF2563EB),
-                            iconBackground = Color(0xFFEFF6FF),
-                            title = "关于 MY Control",
-                            subtitle = "当前版本 v${BuildConfig.VERSION_NAME} · 查看版本与更新",
-                            busy = state.busyAction == "check-updates",
-                            onClick = {
-                                onCheckUpdates()
-                                showUpdateDialog = true
-                            },
-                            trailing = {
-                                Text(
-                                    "查看",
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFF2563EB),
-                                )
-                            },
-                        )
+                // 关于应用（手机单列）
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        shadowElevation = 1.dp,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            ProfileActionRow(
+                                icon = Icons.Outlined.SystemUpdate,
+                                iconTint = Color(0xFF2563EB),
+                                iconBackground = Color(0xFFEFF6FF),
+                                title = "关于 MY Control",
+                                subtitle = "当前版本 v${BuildConfig.VERSION_NAME} · 查看版本与更新",
+                                busy = state.busyAction == "check-updates",
+                                onClick = {
+                                    onCheckUpdates()
+                                    showUpdateDialog = true
+                                },
+                                trailing = {
+                                    Text(
+                                        "查看",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = Color(0xFF2563EB),
+                                    )
+                                },
+                            )
+                        }
                     }
                 }
-            }
 
-            // 10. 退出当前账号
-            item {
-                val interactionSource = remember { MutableInteractionSource() }
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .pressFeedback(interactionSource)
-                        .clickable(
-                            enabled = state.busyAction == null,
-                            onClick = { confirmLogout = true },
-                        ),
-                    shape = RoundedCornerShape(22.dp),
-                    color = Color(0xFFFEF2F2),
-                    border = BorderStroke(1.dp, Color(0xFFFCA5A5).copy(alpha = 0.6f)),
-                ) {
-                    Row(
+                // 退出当前账号（手机单列）
+                item {
+                    val interactionSource = remember { MutableInteractionSource() }
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 14.dp, horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
+                            .pressFeedback(interactionSource)
+                            .clickable(
+                                enabled = state.busyAction == null,
+                                onClick = { confirmLogout = true },
+                            ),
+                        shape = RoundedCornerShape(22.dp),
+                        color = Color(0xFFFEF2F2),
+                        border = BorderStroke(1.dp, Color(0xFFFCA5A5).copy(alpha = 0.6f)),
                     ) {
-                        if (state.busyAction == "logout") {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = Color(0xFFDC2626),
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.Logout,
-                                contentDescription = null,
-                                tint = Color(0xFFDC2626),
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Spacer(Modifier.size(8.dp))
-                            Text(
-                                "退出当前账号",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 14.dp, horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            if (state.busyAction == "logout") {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
                                     color = Color(0xFFDC2626),
-                                ),
-                            )
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.Logout,
+                                    contentDescription = null,
+                                    tint = Color(0xFFDC2626),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(Modifier.size(8.dp))
+                                Text(
+                                    "退出当前账号",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color(0xFFDC2626),
+                                )
+                            }
                         }
                     }
                 }

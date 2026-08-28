@@ -16,7 +16,6 @@ import cn.pxyb.mycontrol.data.ResponseSnapshotStore
 import cn.pxyb.mycontrol.data.SessionStore
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.mergeRemoteAlerts
-import cn.pxyb.mycontrol.data.todayTrendSample
 import cn.pxyb.mycontrol.assistant.buildPersonalAssistantSnapshot
 import cn.pxyb.mycontrol.assistant.buildGuardianAlerts
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
@@ -112,7 +111,6 @@ class OperationalSyncWorker(
             alertNotifier.evaluate(incidents = incidents, tasks = tasks)
             alertNotifier.evaluatePersonal(syncedTodo, timetable)
             alertNotifier.evaluateResourceExpiries(resources)
-            todayTrendSample(overview, incidents, tasks, iot)?.let(personalStore::upsertTrendSample)
             Result.success()
         } catch (error: Throwable) {
             if (error is CancellationException) throw error

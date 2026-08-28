@@ -314,6 +314,7 @@ fun ReservationScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SingleReservationPanel(
     spaces: List<CampusReservationSpace>,
@@ -439,112 +440,10 @@ private fun SingleReservationPanel(
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        // 当前已有预约提示（若有）
-        if (myReservations.isNotEmpty()) {
-            val latest = myReservations.first()
-            Surface(
-                onClick = onNavigateToMyReservations,
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Outlined.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Text(
-                                text = "您当前已预约：${latest.spaceName}",
-                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false),
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = Color(0xFFDCFCE7),
-                                border = BorderStroke(0.5.dp, Color(0xFF86EFAC)),
-                            ) {
-                                Text(
-                                    text = latest.statusText.ifBlank { "预约成功" },
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
-                                    color = Color(0xFF15803D),
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
-                                )
-                            }
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Icon(
-                                Icons.Outlined.AccessTime,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(12.dp),
-                            )
-                            Text(
-                                text = "${latest.date}  ${latest.startTime} - ${latest.endTime}",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text(
-                            text = if (myReservations.size > 1) "共${myReservations.size}条" else "查看",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Icon(
-                            Icons.Outlined.ArrowForward,
-                            contentDescription = null,
-                            modifier = Modifier.size(12.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            }
-        }
+    val adaptive = LocalAdaptiveWindow.current
+    val isTablet = adaptive.isTabletOrExpanded
 
-        // 卡片一：空间与时段设置
+    val cardSpaceAndTime = @Composable {
         AppPanel {
             Column(
                 modifier = Modifier.padding(14.dp),
@@ -570,7 +469,6 @@ private fun SingleReservationPanel(
                     },
                 )
 
-                // 空间选择卡片
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         text = "预约空间",
@@ -658,7 +556,6 @@ private fun SingleReservationPanel(
                     }
                 }
 
-                // 日期选择 (单行圆角 Chip + 滚轮选择弹窗)
                 var singleDatePickerOpen by remember { mutableStateOf(false) }
                 if (singleDatePickerOpen) {
                     WheelDatePickerModal(
@@ -702,57 +599,54 @@ private fun SingleReservationPanel(
                                 Icon(
                                     Icons.Outlined.CalendarMonth,
                                     contentDescription = "滑动选择更多日期",
-                                    modifier = Modifier.size(13.dp),
                                     tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(12.dp),
                                 )
                                 Text(
-                                    text = if (dayOffset in 0..3) "滑动选日期" else "$selectedDate (${weekdayName(today.plusDays(dayOffset.toLong()))})",
+                                    text = "滑动选日期",
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                    fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold,
                                 )
                             }
                         }
                     }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        listOf("今天", "明天", "后天", "大后天").forEachIndexed { index, label ->
-                            val targetDate = today.plusDays(index.toLong())
+                        val offsets = listOf(0 to "今天", 1 to "明天", 2 to "后天", 3 to "大后天")
+                        offsets.forEach { (offset, name) ->
+                            val targetDate = today.plusDays(offset.toLong())
+                            val isSelected = dayOffset == offset
                             val wk = weekdayName(targetDate)
-                            val isSelected = dayOffset == index
                             Surface(
                                 onClick = {
-                                    dayOffset = index
+                                    dayOffset = offset
                                     onClearFeedback()
                                 },
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                                 border = BorderStroke(
                                     1.dp,
-                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f),
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(36.dp),
+                                    .height(38.dp),
                             ) {
                                 Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 2.dp),
                                     contentAlignment = Alignment.Center,
+                                    modifier = Modifier.fillMaxSize(),
                                 ) {
                                     Text(
-                                        text = "$label($wk)",
+                                        text = "$name($wk)",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontSize = 11.5.sp,
-                                            letterSpacing = (-0.3).sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                         ),
                                         color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 1,
                                     )
                                 }
                             }
@@ -760,135 +654,160 @@ private fun SingleReservationPanel(
                     }
                 }
 
-                // 空闲时段流式展示区（支持一键点击填入）
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Surface(
+                    onClick = {
+                        if (selectedSpaceId > 0) {
+                            onQuery(selectedSpaceId, selectedDate)
+                            onClearFeedback()
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
                     ) {
-                        Text(
-                            text = "可预约空闲时段",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        if (currentFreeWindows.isNotEmpty()) {
+                        if (queryLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(6.dp))
                             Text(
-                                text = "点击时段可直接填入",
-                                style = MaterialTheme.typography.labelSmall,
+                                "正在查询该空间空闲时段...",
+                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
                                 color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        } else {
+                            Icon(
+                                Icons.Outlined.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                if (isQueriedCurrent) "刷新当前空间空闲时段" else "查询该空间开放规则与空闲时段",
+                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
                             )
                         }
                     }
+                }
 
-                    if (queryLoading) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "可预约空闲时段",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+
+                    if (isQueriedCurrent) {
+                        if (currentFreeWindows.isNotEmpty()) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                currentFreeWindows.forEach { win ->
+                                    val isPicked = startTime == win.start && endTime == win.end
+                                    Surface(
+                                        onClick = {
+                                            startTime = win.start
+                                            endTime = win.end
+                                            onClearFeedback()
+                                        },
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (isPicked) Color(0xFFDCFCE7) else Color(0xFFF0FDF4),
+                                        border = BorderStroke(1.dp, if (isPicked) Color(0xFF16A34A) else Color(0xFFBBF7D0)),
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        ) {
+                                            Icon(
+                                                Icons.Outlined.CheckCircle,
+                                                contentDescription = null,
+                                                tint = Color(0xFF15803D),
+                                                modifier = Modifier.size(13.dp),
+                                            )
+                                            Text(
+                                                text = "${win.start} - ${win.end}",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF15803D),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.EventBusy,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Text(
+                                        text = "该空间在所选日期无空闲时段或已被全部约满",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            }
+                        }
+                    } else {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                         ) {
                             Row(
-                                modifier = Modifier.padding(12.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = "正在查询该空间空闲时段与开放规则...",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    } else if (currentFreeWindows.isNotEmpty()) {
-                        FreeWindowList(
-                            windows = currentFreeWindows,
-                            selectedStart = startTime,
-                            selectedEnd = endTime,
-                            onSelectWindow = { win ->
-                                startTime = win.start
-                                endTime = win.end
-                                onClearFeedback()
-                            },
-                        )
-                    } else {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 Icon(
                                     Icons.Outlined.Info,
                                     contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(14.dp),
                                 )
                                 Text(
-                                    text = if (!isQueriedCurrent) "选择空间和日期后，点击下方按钮查询空间空闲与已预约时段" else "该空间在选定日期暂无可预约空闲时段",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    text = "选择空间和日期后，点击下方按钮查询空间空闲与已预约时段",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
-                    }
-                }
-
-                // 已预约/已占用时段展示区（同步展示官网已预约状态）
-                if (isQueriedCurrent && currentBusyWindows.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Icon(
-                                    Icons.Outlined.EventBusy,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                                Text(
-                                    text = "当前已被预约/占用时段 (${currentBusyWindows.size} 个)",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                            Text(
-                                text = "不可重叠",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        BusyWindowList(windows = currentBusyWindows)
                     }
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                // 全新美观快捷时段选择器
                 ReservationTimeRangePicker(
                     startTime = startTime,
                     endTime = endTime,
-                    onStartTimeChange = {
-                        startTime = it
-                        onClearFeedback()
-                    },
-                    onEndTimeChange = {
-                        endTime = it
-                        onClearFeedback()
-                    },
+                    onStartTimeChange = { startTime = it; onClearFeedback() },
+                    onEndTimeChange = { endTime = it; onClearFeedback() },
                 )
 
                 // 双向查询操作栏
@@ -960,148 +879,9 @@ private fun SingleReservationPanel(
                 }
             }
         }
+    }
 
-        // 卡片二：预约申请信息
-        AppPanel {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                SectionHeader(
-                    title = "预约申请信息",
-                    subtitle = "填写研讨间用途与申请人联系方式",
-                )
-
-                // 申请主题
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it; onClearFeedback() },
-                    label = { Text("申请主题 *") },
-                    placeholder = { Text("例如：小组课程研讨 / 论文开题讨论") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.EditNote, contentDescription = null, modifier = Modifier.size(20.dp))
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-
-                // 联系电话
-                OutlinedTextField(
-                    value = mobile,
-                    onValueChange = { mobile = it; onClearFeedback() },
-                    label = { Text("联系电话 *") },
-                    placeholder = { Text("11 位手机号码") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Phone, contentDescription = null, modifier = Modifier.size(18.dp))
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-
-                // 申请用途
-                OutlinedTextField(
-                    value = content,
-                    onValueChange = { content = it; onClearFeedback() },
-                    label = { Text("申请用途 / 说明 *") },
-                    placeholder = { Text("简要说明使用研讨间的具体用途与参与人数（最多 500 字）") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Description, contentDescription = null, modifier = Modifier.size(18.dp))
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
-                    maxLines = 5,
-                )
-
-                // 公开申请开关项
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                Icons.Outlined.Public,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Column {
-                                Text("公开本次申请", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                Text("在系统中公开展示申请主题与预约时段", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        Switch(checked = open, onCheckedChange = { open = it; onClearFeedback() })
-                    }
-                }
-
-                formValidationNotice?.let { notice ->
-                    FeedbackBanner(message = notice, error = true)
-                }
-
-                // 提交核对大按钮
-                Button(
-                    onClick = {
-                        if (selectedSpaceId <= 0) {
-                            formValidationNotice = "请选择预约空间"
-                            return@Button
-                        }
-                        if (currentFreeWindows.isEmpty()) {
-                            formValidationNotice = "请先点击上方“查询该空间开放规则与空闲时段”"
-                            return@Button
-                        }
-                        if (!isReservationTimeValid(startTime, endTime, currentFreeWindows)) {
-                            formValidationNotice = "预约时段需落在已查询空闲时段内，且为 1 至 4 小时"
-                            return@Button
-                        }
-                        if (title.isBlank()) {
-                            formValidationNotice = "请填写申请主题"
-                            return@Button
-                        }
-                        if (!Regex("^\\d{11}$").matches(mobile.trim())) {
-                            formValidationNotice = "请填写正确的 11 位手机号码"
-                            return@Button
-                        }
-                        if (content.isBlank()) {
-                            formValidationNotice = "请填写申请用途/说明"
-                            return@Button
-                        }
-                        formValidationNotice = null
-                        showConfirmDialog = true
-                    },
-                    enabled = !submitLoading,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                ) {
-                    if (submitLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                        Spacer(Modifier.width(8.dp))
-                    } else {
-                        Icon(Icons.Outlined.FactCheck, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                    }
-                    Text("核对并提交预约", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
-            }
-        }
-
-        // 卡片三：规则与可用性展示
+    val cardRulesAndAvailability = @Composable {
         if (rules != null || availability != null) {
             AppPanel {
                 Column(
@@ -1149,6 +929,169 @@ private fun SingleReservationPanel(
                     }
                 }
             }
+        }
+    }
+
+    val cardApplicationInfo = @Composable {
+        AppPanel {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                SectionHeader(
+                    title = "预约申请信息",
+                    subtitle = "填写研讨间用途与申请人联系方式",
+                )
+
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it; onClearFeedback() },
+                    label = { Text("申请主题 *") },
+                    placeholder = { Text("例如：小组课程研讨 / 论文开题讨论") },
+                    leadingIcon = {
+                        Icon(Icons.Outlined.EditNote, contentDescription = null, modifier = Modifier.size(20.dp))
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+
+                OutlinedTextField(
+                    value = mobile,
+                    onValueChange = { mobile = it; onClearFeedback() },
+                    label = { Text("联系电话 *") },
+                    placeholder = { Text("11 位手机号码") },
+                    leadingIcon = {
+                        Icon(Icons.Outlined.Phone, contentDescription = null, modifier = Modifier.size(18.dp))
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+
+                OutlinedTextField(
+                    value = content,
+                    onValueChange = { content = it; onClearFeedback() },
+                    label = { Text("申请用途 / 说明 *") },
+                    placeholder = { Text("简要说明使用研讨间的具体用途与参与人数（最多 500 字）") },
+                    leadingIcon = {
+                        Icon(Icons.Outlined.Description, contentDescription = null, modifier = Modifier.size(18.dp))
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    maxLines = 5,
+                )
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(
+                                Icons.Outlined.Public,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Column {
+                                Text("公开本次申请", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                Text("在系统中公开展示申请主题与预约时段", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Switch(checked = open, onCheckedChange = { open = it; onClearFeedback() })
+                    }
+                }
+
+                formValidationNotice?.let { notice ->
+                    FeedbackBanner(message = notice, error = true)
+                }
+
+                Button(
+                    onClick = {
+                        if (selectedSpaceId <= 0) {
+                            formValidationNotice = "请选择预约空间"
+                            return@Button
+                        }
+                        if (currentFreeWindows.isEmpty()) {
+                            formValidationNotice = "请先点击上方“查询该空间开放规则与空闲时段”"
+                            return@Button
+                        }
+                        if (!isDurationValid) {
+                            formValidationNotice = "预约时段需为 1 至 4 小时"
+                            return@Button
+                        }
+                        if (title.isBlank()) {
+                            formValidationNotice = "请填写申请主题"
+                            return@Button
+                        }
+                        if (mobile.isBlank()) {
+                            formValidationNotice = "请填写联系电话"
+                            return@Button
+                        }
+                        if (content.isBlank()) {
+                            formValidationNotice = "请填写申请用途说明"
+                            return@Button
+                        }
+                        formValidationNotice = null
+                        showConfirmDialog = true
+                    },
+                    enabled = !submitLoading,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                ) {
+                    if (submitLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                        Spacer(Modifier.width(8.dp))
+                    } else {
+                        Icon(Icons.Outlined.FactCheck, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text("核对并提交预约", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+            }
+        }
+    }
+
+    if (isTablet) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                cardSpaceAndTime()
+                cardRulesAndAvailability()
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                cardApplicationInfo()
+            }
+        }
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            cardSpaceAndTime()
+            cardApplicationInfo()
+            cardRulesAndAvailability()
         }
     }
 }
@@ -1568,148 +1511,190 @@ private fun MyReservationsPanel(
                     }
                 }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    reservations.forEach { reservation ->
-                        val isCancelling = cancellingId == reservation.id
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                val adaptive = LocalAdaptiveWindow.current
+                val isTablet = adaptive.isTabletOrExpanded
+
+                if (isTablet) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        reservations.chunked(2).forEach { rowReservations ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(MaterialTheme.colorScheme.primaryContainer),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(
-                                                Icons.Outlined.MeetingRoom,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp),
-                                            )
-                                        }
-                                        Column {
-                                            Text(
-                                                text = reservation.spaceName,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                            )
-                                            if (reservation.id.isNotBlank() && !reservation.id.startsWith("local_") && !reservation.id.startsWith("remote_")) {
-                                                Text(
-                                                    text = "单号：${reservation.id}",
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = Color(0xFFDCFCE7),
-                                        border = BorderStroke(1.dp, Color(0xFF86EFAC)),
-                                    ) {
-                                        Text(
-                                            text = reservation.statusText,
-                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                            color = Color(0xFF15803D),
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                rowReservations.forEach { reservation ->
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        ReservationCard(
+                                            reservation = reservation,
+                                            isCancelling = cancellingId == reservation.id,
+                                            onCancel = { cancellingTarget = reservation },
                                         )
                                     }
                                 }
-
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Icon(
-                                            Icons.Outlined.CalendarMonth,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                        Text(
-                                            text = "${reservation.date}   ${reservation.startTime} - ${reservation.endTime}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                        )
-                                    }
-
-                                    if (reservation.title.isNotBlank()) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            Icon(
-                                                Icons.Outlined.Description,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(16.dp),
-                                            )
-                                            Text(
-                                                text = reservation.title,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                        }
-                                    }
-                                }
-
-                                if (reservation.canCancel) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.End,
-                                    ) {
-                                        OutlinedButton(
-                                            onClick = { cancellingTarget = reservation },
-                                            enabled = !isCancelling,
-                                            shape = RoundedCornerShape(8.dp),
-                                            colors = ButtonDefaults.outlinedButtonColors(
-                                                contentColor = MaterialTheme.colorScheme.error,
-                                            ),
-                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                            modifier = Modifier.height(34.dp),
-                                        ) {
-                                            if (isCancelling) {
-                                                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.error)
-                                                Spacer(Modifier.width(6.dp))
-                                            } else {
-                                                Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
-                                                Spacer(Modifier.width(4.dp))
-                                            }
-                                            Text("取消预约", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
+                                if (rowReservations.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
                                 }
                             }
                         }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        reservations.forEach { reservation ->
+                            ReservationCard(
+                                reservation = reservation,
+                                isCancelling = cancellingId == reservation.id,
+                                onCancel = { cancellingTarget = reservation },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReservationCard(
+    reservation: CampusMyReservation,
+    isCancelling: Boolean,
+    onCancel: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Outlined.MeetingRoom,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = reservation.spaceName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (reservation.id.isNotBlank() && !reservation.id.startsWith("local_") && !reservation.id.startsWith("remote_")) {
+                            Text(
+                                text = "单号：${reservation.id}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFFDCFCE7),
+                    border = BorderStroke(1.dp, Color(0xFF86EFAC)),
+                ) {
+                    Text(
+                        text = reservation.statusText,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        color = Color(0xFF15803D),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Outlined.CalendarMonth,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        text = "${reservation.date}   ${reservation.startTime} - ${reservation.endTime}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+
+                if (reservation.title.isNotBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Outlined.Description,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = reservation.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
+            if (reservation.canCancel) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    OutlinedButton(
+                        onClick = onCancel,
+                        enabled = !isCancelling,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(34.dp),
+                    ) {
+                        if (isCancelling) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.error)
+                            Spacer(Modifier.width(6.dp))
+                        } else {
+                            Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text("取消预约", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1873,19 +1858,57 @@ private fun AutoReservationPanel(
                     }
                 }
 
-                tasks.forEach { task ->
-                    AutoTaskCard(
-                        task = task,
-                        spaces = spaces,
-                        isDeleting = deletingTaskId == task.id,
-                        onToggle = { onToggleTask(task) },
-                        onEdit = {
-                            editingTask = task
-                            isEditing = true
-                            onClearFeedback()
-                        },
-                        onDelete = { taskToDelete = task },
-                    )
+                val adaptive = LocalAdaptiveWindow.current
+                val isTablet = adaptive.isTabletOrExpanded
+
+                if (tasks.isNotEmpty()) {
+                    if (isTablet) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            tasks.chunked(2).forEach { rowTasks ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    rowTasks.forEach { task ->
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            AutoTaskCard(
+                                                task = task,
+                                                spaces = spaces,
+                                                isDeleting = deletingTaskId == task.id,
+                                                onToggle = { onToggleTask(task) },
+                                                onEdit = {
+                                                    editingTask = task
+                                                    isEditing = true
+                                                    onClearFeedback()
+                                                },
+                                                onDelete = { taskToDelete = task },
+                                            )
+                                        }
+                                    }
+                                    if (rowTasks.size == 1) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            tasks.forEach { task ->
+                                AutoTaskCard(
+                                    task = task,
+                                    spaces = spaces,
+                                    isDeleting = deletingTaskId == task.id,
+                                    onToggle = { onToggleTask(task) },
+                                    onEdit = {
+                                        editingTask = task
+                                        isEditing = true
+                                        onClearFeedback()
+                                    },
+                                    onDelete = { taskToDelete = task },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -2702,12 +2725,15 @@ private fun CandidateEditRow(
                 WheelTimePickerModal(
                     title = if (isStart) "选择候选开始时间" else "选择候选结束时间",
                     currentTime = if (isStart) candidate.startTime else candidate.endTime,
+                    minTime = if (isStart) CAMPUS_LIBROOM_MIN_START_TIME else CAMPUS_LIBROOM_MIN_END_TIME,
+                    maxTime = if (isStart) CAMPUS_LIBROOM_MAX_START_TIME else CAMPUS_LIBROOM_MAX_END_TIME,
+                    minuteStep = CAMPUS_LIBROOM_TIME_STEP_MINUTES,
                     onDismiss = { pickingTimeTarget = null },
                     onConfirm = { chosen ->
                         if (isStart) {
                             val newStartMin = reservationTimeMinutes(chosen)
                             val currEndMin = reservationTimeMinutes(candidate.endTime)
-                            val autoEnd = if (newStartMin != null && (currEndMin == null || currEndMin <= newStartMin || (currEndMin - newStartMin) > 240)) {
+                            val autoEnd = if (newStartMin != null && (currEndMin == null || currEndMin <= newStartMin || (currEndMin - newStartMin) > 240 || (currEndMin - newStartMin) < 60)) {
                                 formatMinutesToTime((newStartMin + 120).coerceAtMost(1305))
                             } else {
                                 candidate.endTime
@@ -2813,6 +2839,12 @@ private fun reservationWindowText(windows: List<CampusReservationTimeWindow>?): 
         .ifBlank { "暂无可预约空闲时段" }
 }
 
+private const val CAMPUS_LIBROOM_MIN_START_TIME = "08:00"
+private const val CAMPUS_LIBROOM_MAX_START_TIME = "20:45"
+private const val CAMPUS_LIBROOM_MIN_END_TIME = "08:15"
+private const val CAMPUS_LIBROOM_MAX_END_TIME = "21:45"
+private const val CAMPUS_LIBROOM_TIME_STEP_MINUTES = 15
+
 private fun reservationTimeMinutes(value: String): Int? {
     val match = Regex("^(\\d{1,2}):([0-5]\\d)$").matchEntire(value.trim()) ?: return null
     val minutes = match.groupValues[1].toInt() * 60 + match.groupValues[2].toInt()
@@ -2826,6 +2858,7 @@ private fun isReservationTimeValid(
 ): Boolean {
     val start = reservationTimeMinutes(startTime) ?: return false
     val end = reservationTimeMinutes(endTime) ?: return false
+    if (start < 480 || end > 1305 || start >= end) return false
     if (end - start !in 60..240) return false
     return windows.orEmpty().any { window ->
         val windowStart = reservationTimeMinutes(window.start) ?: return@any false
@@ -2844,7 +2877,7 @@ private fun formatMinutesToTime(minutes: Int): String {
 private fun isReservationDurationValid(startTime: String, endTime: String): Boolean {
     val start = reservationTimeMinutes(startTime) ?: return false
     val end = reservationTimeMinutes(endTime) ?: return false
-    return end - start in 60..240
+    return start in 480..1305 && end in 480..1305 && (end - start in 60..240)
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -2985,18 +3018,61 @@ private fun WheelTimePickerModal(
     currentTime: String,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
+    minTime: String = "00:00",
+    maxTime: String = "23:59",
+    minuteStep: Int = 1,
 ) {
-    val parts = currentTime.split(":")
-    val initH = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 9
-    val initM = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+    val minMin = (reservationTimeMinutes(minTime) ?: 0).coerceIn(0, 1439)
+    val maxMin = (reservationTimeMinutes(maxTime) ?: 1439).coerceIn(minMin, 1439)
+    val clampedCurrentMin = (reservationTimeMinutes(currentTime) ?: minMin).coerceIn(minMin, maxMin)
 
-    val hours = remember { (0..23).map { String.format(Locale.ROOT, "%02d", it) } }
-    val minutes = remember { (0..59).map { String.format(Locale.ROOT, "%02d", it) } }
+    val currentH = clampedCurrentMin / 60
+    val currentM = clampedCurrentMin % 60
 
-    var selectedHourIndex by remember { mutableIntStateOf(initH) }
-    var selectedMinuteIndex by remember { mutableIntStateOf(initM) }
+    val minH = minMin / 60
+    val maxH = maxMin / 60
 
-    val formattedTime = "${hours.getOrElse(selectedHourIndex) { "09" }}:${minutes.getOrElse(selectedMinuteIndex) { "00" }}"
+    val hours = remember(minH, maxH) {
+        (minH..maxH).map { String.format(Locale.ROOT, "%02d", it) }
+    }
+
+    val initHourIndex = remember(hours, currentH) {
+        val found = hours.indexOfFirst { it.toIntOrNull() == currentH }
+        if (found >= 0) found else 0
+    }
+    var selectedHourIndex by remember { mutableIntStateOf(initHourIndex) }
+
+    val safeHourIndex = selectedHourIndex.coerceIn(0, (hours.size - 1).coerceAtLeast(0))
+    val selectedHour = hours.getOrElse(safeHourIndex) { hours.firstOrNull() ?: "08" }.toIntOrNull() ?: minH
+
+    val minutesForHour = remember(selectedHour, minMin, maxMin, minuteStep) {
+        val list = mutableListOf<String>()
+        val startM = if (selectedHour == minH) minMin % 60 else 0
+        val endM = if (selectedHour == maxH) maxMin % 60 else 59
+        val step = minuteStep.coerceAtLeast(1)
+        for (m in 0..59 step step) {
+            if (m in startM..endM) {
+                list.add(String.format(Locale.ROOT, "%02d", m))
+            }
+        }
+        if (list.isEmpty()) {
+            list.add(String.format(Locale.ROOT, "%02d", startM.coerceIn(0, 59)))
+        }
+        list
+    }
+
+    val initMinuteIndex = remember(minutesForHour, currentM) {
+        val found = minutesForHour.indexOfFirst { (it.toIntOrNull() ?: 0) >= currentM }
+        if (found >= 0) found else (minutesForHour.size - 1).coerceAtLeast(0)
+    }
+    var selectedMinuteIndex by remember(minutesForHour) { mutableIntStateOf(initMinuteIndex) }
+
+    val safeMinuteIndex = selectedMinuteIndex.coerceIn(0, (minutesForHour.size - 1).coerceAtLeast(0))
+    val chosenHourStr = hours.getOrElse(safeHourIndex) { hours.firstOrNull() ?: "08" }
+    val chosenMinuteStr = minutesForHour.getOrElse(safeMinuteIndex) { minutesForHour.firstOrNull() ?: "00" }
+    val formattedTime = "$chosenHourStr:$chosenMinuteStr"
+
+    val rangeHint = if (minTime != "00:00" || maxTime != "23:59") "（开放范围 $minTime - $maxTime）" else ""
 
     AppDialog(
         onDismissRequest = onDismiss,
@@ -3004,7 +3080,7 @@ private fun WheelTimePickerModal(
         iconTint = MaterialTheme.colorScheme.primary,
         iconBackground = MaterialTheme.colorScheme.primaryContainer,
         title = title,
-        subtitle = "当前选择：$formattedTime",
+        subtitle = "当前选择：$formattedTime$rangeHint",
         footer = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -3035,14 +3111,14 @@ private fun WheelTimePickerModal(
         ) {
             WheelPicker(
                 items = hours,
-                selectedIndex = selectedHourIndex,
+                selectedIndex = safeHourIndex,
                 onSelectedIndexChanged = { selectedHourIndex = it },
                 unitText = "时",
                 modifier = Modifier.weight(1f),
             )
             WheelPicker(
-                items = minutes,
-                selectedIndex = selectedMinuteIndex,
+                items = minutesForHour,
+                selectedIndex = safeMinuteIndex,
                 onSelectedIndexChanged = { selectedMinuteIndex = it },
                 unitText = "分",
                 modifier = Modifier.weight(1f),
@@ -3148,6 +3224,9 @@ private fun ReservationTimeRangePicker(
         WheelTimePickerModal(
             title = if (isStart) "选择开始时间" else "选择结束时间",
             currentTime = if (isStart) startTime else endTime,
+            minTime = if (isStart) CAMPUS_LIBROOM_MIN_START_TIME else CAMPUS_LIBROOM_MIN_END_TIME,
+            maxTime = if (isStart) CAMPUS_LIBROOM_MAX_START_TIME else CAMPUS_LIBROOM_MAX_END_TIME,
+            minuteStep = CAMPUS_LIBROOM_TIME_STEP_MINUTES,
             onDismiss = { pickingTarget = null },
             onConfirm = { chosen ->
                 if (isStart) {
@@ -3155,7 +3234,7 @@ private fun ReservationTimeRangePicker(
                     val newStartMin = reservationTimeMinutes(chosen)
                     if (newStartMin != null) {
                         val currEndMin = reservationTimeMinutes(endTime)
-                        if (currEndMin == null || currEndMin <= newStartMin || (currEndMin - newStartMin) > 240) {
+                        if (currEndMin == null || currEndMin <= newStartMin || (currEndMin - newStartMin) > 240 || (currEndMin - newStartMin) < 60) {
                             val autoEndMin = (newStartMin + 120).coerceAtMost(1305)
                             onEndTimeChange(formatMinutesToTime(autoEndMin))
                         }

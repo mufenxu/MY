@@ -30,7 +30,6 @@ import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.SecurityData
 import cn.pxyb.mycontrol.data.TotpEnrollment
 import cn.pxyb.mycontrol.data.TodoSnapshot
-import cn.pxyb.mycontrol.data.TrendSample
 import cn.pxyb.mycontrol.data.WebLoginLink
 import cn.pxyb.mycontrol.update.AppUpdateUiState
 
@@ -254,9 +253,6 @@ data class NotificationCenterUiState(
     val preferences: AlertPreferences,
     val syncError: String?,
 )
-
-@Immutable
-data class InsightsUiState(val samples: List<TrendSample>)
 
 @Immutable
 data class ScenesUiState(
@@ -585,8 +581,6 @@ internal fun AppUiState.toNotificationCenterUiState() = NotificationCenterUiStat
     preferences = alertPreferences,
     syncError = sectionLoadStates[DataSection.Notifications]?.error,
 )
-
-internal fun AppUiState.toInsightsUiState() = InsightsUiState(samples = trendSamples)
 
 internal fun AppUiState.toScenesUiState() = ScenesUiState(
     refreshing = isRefreshing(DataSection.Iot),
