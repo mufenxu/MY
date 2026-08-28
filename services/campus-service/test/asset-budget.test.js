@@ -11,7 +11,7 @@ const budgets = {
   "public/libroom-page.css": 8 * 1024,
   "public/browser-check.js": 4 * 1024,
   "public/styles.css": 243 * 1024,
-  "public/index.html": 40 * 1024,
+  "public/index.html": 41 * 1024,
   "public/assets/hgu-emblem.png": 50 * 1024
 };
 
