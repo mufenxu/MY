@@ -2242,7 +2242,7 @@ async function issueLibrarySeatMemberToken(jar, credentials = {}) {
     if (!response.ok || (payload?.code !== undefined && Number(payload.code) !== 200 && payload.status !== true) || !token) {
       throw new HttpError(
         response.ok ? 401 : response.status,
-        upstreamMessage(payload, "座位预约身份转换失败。"),
+        payload?.message || payload?.msg || payload?.error || "座位预约身份转换失败。",
         null,
         "LIBRARY_SEAT_AUTH_EXPIRED"
       );

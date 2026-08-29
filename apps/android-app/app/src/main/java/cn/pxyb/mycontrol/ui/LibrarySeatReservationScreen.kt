@@ -334,9 +334,15 @@ fun LibrarySeatReservationScreen(
                     Button(
                         onClick = {
                             val venue = selectedVenue
-                            val start = timeTextToMinute(startTime)
-                            val end = timeTextToMinute(endTime)
-                            if (venue == null || selectedDate.isBlank() || start == null || end == null || end <= start) {
+                            val startMinute = timeTextToMinute(startTime) ?: run {
+                                queryHint = "请先选择有效的场馆、日期和时间。"
+                                return@Button
+                            }
+                            val endMinute = timeTextToMinute(endTime) ?: run {
+                                queryHint = "请先选择有效的场馆、日期和时间。"
+                                return@Button
+                            }
+                            if (venue == null || selectedDate.isBlank() || endMinute <= startMinute) {
                                 queryHint = "请先选择有效的场馆、日期和时间。"
                                 return@Button
                             }
@@ -345,8 +351,8 @@ fun LibrarySeatReservationScreen(
                             onQueryAreas(
                                 venue.id,
                                 selectedDate,
-                                start,
-                                end,
+                                startMinute,
+                                endMinute,
                                 selectedFloorId.takeIf(String::isNotBlank),
                                 50,
                                 wantPower,
@@ -382,11 +388,10 @@ fun LibrarySeatReservationScreen(
                             onClick = {
                                 selectedAreaId = area.id
                                 selectedSeatId = ""
-                                val start = timeTextToMinute(startTime)
-                                val end = timeTextToMinute(endTime)
-                                if (start != null && end != null && end > start) {
-                                    onLoadSeats(area.id, selectedDate, start, end, 0)
-                                }
+                                val startMinute = timeTextToMinute(startTime) ?: return@onClick
+                                val endMinute = timeTextToMinute(endTime) ?: return@onClick
+                                if (endMinute <= startMinute) return@onClick
+                                onLoadSeats(area.id, selectedDate, startMinute, endMinute, 0)
                             },
                         )
                     }
@@ -433,39 +438,38 @@ fun LibrarySeatReservationScreen(
     }
 
     if (showConfirmDialog && selectedArea != null) {
-        val start = timeTextToMinute(startTime)
-        val end = timeTextToMinute(endTime)
+        val startMinute = timeTextToMinute(startTime) ?: return
+        val endMinute = timeTextToMinute(endTime) ?: return
         val seat = selectedSeats.firstOrNull { it.id == selectedSeatId }
-        if (start != null && end != null && end > start && seat != null) {
-            AppConfirmDialog(
-                title = "提交座位预约",
-                detail = listOf(
-                    "阅览区：${selectedArea.name}",
-                    "座位：${seat.label} · ${seat.name}",
-                    "日期：${formatSeatDateLabel(selectedDate)}",
-                    "时段：${timeRangeLabel(startTime, endTime)}",
-                ).joinToString("\n"),
-                confirmLabel = "确认提交",
-                onDismiss = { showConfirmDialog = false },
-                onConfirm = {
-                    onSubmitReservation(
-                        LibrarySeatReservationRequest(
-                            seatId = seat.id,
-                            date = selectedDate,
-                            startMinute = start,
-                            endMinute = end,
-                        ),
-                    ) {
-                        showConfirmDialog = false
-                        selectedSeatId = ""
-                        queryHint = "预约已提交，正在刷新座位状态。"
-                        onLoadSeats(selectedArea.id, selectedDate, start, end, 0)
-                    }
-                },
-                icon = Icons.Outlined.Chair,
-                busy = state.submitLoading,
-            )
-        }
+        if (endMinute <= startMinute || seat == null) return
+        AppConfirmDialog(
+            title = "提交座位预约",
+            detail = listOf(
+                "阅览区：${selectedArea.name}",
+                "座位：${seat.label} · ${seat.name}",
+                "日期：${formatSeatDateLabel(selectedDate)}",
+                "时段：${timeRangeLabel(startTime, endTime)}",
+            ).joinToString("\n"),
+            confirmLabel = "确认提交",
+            onDismiss = { showConfirmDialog = false },
+            onConfirm = {
+                onSubmitReservation(
+                    LibrarySeatReservationRequest(
+                        seatId = seat.id,
+                        date = selectedDate,
+                        startMinute = startMinute,
+                        endMinute = endMinute,
+                    ),
+                ) {
+                    showConfirmDialog = false
+                    selectedSeatId = ""
+                    queryHint = "预约已提交，正在刷新座位状态。"
+                    onLoadSeats(selectedArea.id, selectedDate, startMinute, endMinute, 0)
+                }
+            },
+            icon = Icons.Outlined.Chair,
+            busy = state.submitLoading,
+        )
     }
 }
 
