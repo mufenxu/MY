@@ -14,6 +14,69 @@ function hashToken(value) {
   return crypto.createHash('sha256').update(String(value || '')).digest('base64url');
 }
 
+function decodeEncryptionKey(value) {
+  const source = String(value || '').trim();
+  let key;
+  if (/^[a-f0-9]{64}$/i.test(source)) key = Buffer.from(source, 'hex');
+  else {
+    try {
+      key = Buffer.from(source, 'base64url');
+    } catch {
+      key = Buffer.alloc(0);
+    }
+  }
+  if (key.length !== 32) {
+    throw new Error('PLATFORM_AUTH_ENCRYPTION_KEY must encode exactly 32 random bytes.');
+  }
+  return key;
+}
+
+function createSecretProtector(secret) {
+  const key = decodeEncryptionKey(secret);
+  return {
+    encrypt(value) {
+      const iv = crypto.randomBytes(12);
+      const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+      const ciphertext = Buffer.concat([
+        cipher.update(JSON.stringify(value), 'utf8'),
+        cipher.final(),
+      ]);
+      return ['v1', iv.toString('base64url'), cipher.getAuthTag().toString('base64url'), ciphertext.toString('base64url')].join('.');
+    },
+    decrypt(value) {
+      const [version, ivValue, tagValue, ciphertextValue, extra] = String(value || '').split('.');
+      if (version !== 'v1' || !ivValue || !tagValue || !ciphertextValue || extra) {
+        throw new Error('Stored external application auto-login secret is invalid.');
+      }
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivValue, 'base64url'));
+      decipher.setAuthTag(Buffer.from(tagValue, 'base64url'));
+      const plaintext = Buffer.concat([
+        decipher.update(Buffer.from(ciphertextValue, 'base64url')),
+        decipher.final(),
+      ]);
+      return JSON.parse(plaintext.toString('utf8'));
+    },
+  };
+}
+
+function missingEncryptionKey() {
+  throw new Error('PLATFORM_AUTH_ENCRYPTION_KEY is required to store auto-login secrets.');
+}
+
+function autoLoginRecord(input, encryptSecret, existingPassword = '') {
+  if (input === null || input === undefined) return null;
+  const password = String(input.password || '');
+  if (!password && !existingPassword) {
+    throw new TypeError('自动登录密码不能为空。');
+  }
+  return {
+    loginUrl: String(input.loginUrl || '').trim(),
+    username: String(input.username || '').trim(),
+    homeUrl: String(input.homeUrl || '').trim() || null,
+    password: password ? encryptSecret(password) : existingPassword,
+  };
+}
+
 async function hashSecret(secret, salt = crypto.randomBytes(16).toString('base64url')) {
   const derived = await scrypt(String(secret || ''), salt, 32);
   return `scrypt$${salt}$${Buffer.from(derived).toString('base64url')}`;
@@ -43,6 +106,14 @@ function publicApplication(record) {
   const result = serializeDates(record);
   if (!result) return null;
   delete result.clientSecretHash;
+  if (result.autoLogin) {
+    result.autoLogin = {
+      loginUrl: result.autoLogin.loginUrl,
+      username: result.autoLogin.username,
+      homeUrl: result.autoLogin.homeUrl,
+      hasPassword: Boolean(result.autoLogin.password),
+    };
+  }
   return result;
 }
 
@@ -60,6 +131,7 @@ function applicationRecord(input, {
   clientSecretHint,
   createdAt,
   updatedAt,
+  encryptSecret,
 }) {
   return {
     id,
@@ -74,6 +146,7 @@ function applicationRecord(input, {
     requiredRole: String(input.requiredRole || 'viewer'),
     openMode: String(input.openMode || 'webview'),
     enabled: input.enabled !== false,
+    autoLogin: autoLoginRecord(input.autoLogin, encryptSecret),
     createdAt,
     createdBy: String(input.actor || 'system'),
     updatedAt,
@@ -81,13 +154,18 @@ function applicationRecord(input, {
   };
 }
 
-function applicationPatch(input, updatedAt) {
+function applicationPatch(input, updatedAt, { encryptSecret, existingAutoLogin } = {}) {
   const patch = { updatedAt, updatedBy: String(input.actor || 'system') };
   for (const key of ['name', 'description', 'launchUrl', 'healthUrl', 'requiredRole', 'openMode']) {
     if (key in input) patch[key] = String(input[key] || '').trim() || (key === 'healthUrl' ? null : '');
   }
   if ('redirectUris' in input) patch.redirectUris = clone(input.redirectUris || []);
   if ('enabled' in input) patch.enabled = input.enabled !== false;
+  if ('autoLogin' in input) {
+    patch.autoLogin = input.autoLogin === null
+      ? null
+      : autoLoginRecord(input.autoLogin, encryptSecret, existingAutoLogin?.password || '');
+  }
   return patch;
 }
 
@@ -98,10 +176,14 @@ export function createMemoryExternalApplicationStore({
   secretFactory = () => crypto.randomBytes(32).toString('base64url'),
   codeFactory = () => crypto.randomBytes(32).toString('base64url'),
   codeTtlMs = EXTERNAL_AUTHORIZATION_CODE_TTL_MS,
+  encryptionKey = null,
 } = {}) {
   const applications = new Map();
   const clientIndex = new Map();
   const authorizationCodes = new Map();
+  const protector = encryptionKey ? createSecretProtector(encryptionKey) : null;
+  const encryptSecret = protector ? (value) => protector.encrypt(value) : missingEncryptionKey;
+  const decryptSecret = protector ? (value) => protector.decrypt(value) : missingEncryptionKey;
 
   return {
     async createApplication(input) {
@@ -116,6 +198,7 @@ export function createMemoryExternalApplicationStore({
         clientSecretHint: secretHint(clientSecret),
         createdAt: timestamp,
         updatedAt: timestamp,
+        encryptSecret,
       });
       applications.set(id, record);
       clientIndex.set(clientId, id);
@@ -132,6 +215,20 @@ export function createMemoryExternalApplicationStore({
       return publicApplication(applications.get(String(id)) || null);
     },
 
+    async revealApplicationSecrets(id) {
+      const record = applications.get(String(id));
+      if (!record) return null;
+      const result = publicApplication(record);
+      if (!result || !record.autoLogin?.password) return result;
+      result.autoLogin = {
+        loginUrl: record.autoLogin.loginUrl,
+        username: record.autoLogin.username,
+        homeUrl: record.autoLogin.homeUrl,
+        password: decryptSecret(record.autoLogin.password),
+      };
+      return result;
+    },
+
     async findApplicationByClientId(clientId) {
       const id = clientIndex.get(String(clientId));
       return publicApplication(id ? applications.get(id) : null);
@@ -140,7 +237,10 @@ export function createMemoryExternalApplicationStore({
     async updateApplication(id, input) {
       const record = applications.get(String(id));
       if (!record) return null;
-      Object.assign(record, applicationPatch(input, now().toISOString()));
+      Object.assign(record, applicationPatch(input, now().toISOString(), {
+        encryptSecret,
+        existingAutoLogin: record.autoLogin,
+      }));
       return publicApplication(record);
     },
 
@@ -215,6 +315,7 @@ export async function createMongoExternalApplicationStore({
   uri,
   databaseName = process.env.PLATFORM_MONGODB_DATABASE || 'platform_app',
   codeTtlMs = EXTERNAL_AUTHORIZATION_CODE_TTL_MS,
+  encryptionKey = null,
 } = {}) {
   if (!uri) throw new Error('PLATFORM_MONGODB_URI is required.');
   const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
@@ -222,6 +323,9 @@ export async function createMongoExternalApplicationStore({
   const db = client.db(databaseName);
   const applications = db.collection('external_applications');
   const authorizationCodes = db.collection('external_authorization_codes');
+  const protector = encryptionKey ? createSecretProtector(encryptionKey) : null;
+  const encryptSecret = protector ? (value) => protector.encrypt(value) : missingEncryptionKey;
+  const decryptSecret = protector ? (value) => protector.decrypt(value) : missingEncryptionKey;
   await Promise.all([
     applications.createIndex({ id: 1 }, { unique: true }),
     applications.createIndex({ clientId: 1 }, { unique: true }),
@@ -334,3 +438,4 @@ export async function createMongoExternalApplicationStore({
     async close() { await client.close(); },
   };
 }
+

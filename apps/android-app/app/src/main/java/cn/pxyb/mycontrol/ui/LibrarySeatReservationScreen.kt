@@ -389,9 +389,9 @@ fun LibrarySeatReservationScreen(
                             onClick = {
                                 selectedAreaId = area.id
                                 selectedSeatId = ""
-                                val startMinute = timeTextToMinute(startTime) ?: return@onClick
-                                val endMinute = timeTextToMinute(endTime) ?: return@onClick
-                                if (endMinute <= startMinute) return@onClick
+                                val startMinute = timeTextToMinute(startTime) ?: return@AreaCard
+                                val endMinute = timeTextToMinute(endTime) ?: return@AreaCard
+                                if (endMinute <= startMinute) return@AreaCard
                                 onLoadSeats(area.id, selectedDate, startMinute, endMinute, 0)
                             },
                         )
