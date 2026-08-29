@@ -2181,17 +2181,16 @@ async function requestLibrarySeatJson(jar, pathname, data = {}, { token = "" } =
 async function resolveLibrarySeatEntrance(jar, credentials = {}) {
   await ensureWebvpnSession(jar, credentials);
 
-  // 与浏览器一致：从官方入口进入，跟随 aTrust 校验/统一认证/换票整条 302 链，
-  // 最终落在 https://libic.hgu.edu.cn/jsq-v/?token=<JWT>#/login
-  const entryUrl = new URL("/jsq-v/", LIBRARY_SEAT_ORIGIN).href;
-  let currentUrl = entryUrl;
-  let currentReferer = `${LIBRARY_SEAT_ORIGIN}/jsq-v/`;
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const followed = await followRedirectsWithJar(currentUrl, jar, {
+  // 与 SPA 系统配置（CASSSERVICE）一致：走官方“统一登录”入口换票，
+  // 最终落在 https://libic.hgu.edu.cn/jsq-v/#/login?token=<JWT>，
+  // token 位于 URL 片段中，SPA 从 location.href 读取后换取成员令牌。
+  const loginUrl = LIBRARY_SEAT_CAS_SERVICE_URL;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const followed = await followRedirectsWithJar(loginUrl, jar, {
       method: "GET",
       headers: {
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        referer: currentReferer
+        referer: `${CAS_ORIGIN}/cas/login`
       }
     });
     const finalUrl = followed.url;
@@ -2204,9 +2203,14 @@ async function resolveLibrarySeatEntrance(jar, credentials = {}) {
 
     const verifyUrl = extractWebvpnVerifyUrl(html, finalUrl);
     if (verifyUrl) {
-      await ensureWebvpnSession(jar, credentials);
-      currentReferer = finalUrl;
-      currentUrl = verifyUrl;
+      // 网关先返回 locationUrl=verify 壳页：跟随 verify 建立站点会话后重试。
+      await followRedirectsWithJar(verifyUrl, jar, {
+        method: "GET",
+        headers: {
+          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          referer: finalUrl
+        }
+      });
       continue;
     }
 
@@ -2214,8 +2218,6 @@ async function resolveLibrarySeatEntrance(jar, credentials = {}) {
       const serviceUrl = new URL(finalUrl).searchParams.get("service") || LIBRARY_SEAT_CAS_SERVICE_URL;
       const logged = await loginCasService({ jar, ...credentials, serviceUrl });
       await discardUpstreamResponse(logged.response).catch(() => {});
-      currentReferer = finalUrl;
-      currentUrl = logged.url;
       continue;
     }
 
