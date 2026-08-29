@@ -104,6 +104,7 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
+import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.InetAddress
@@ -3179,13 +3180,15 @@ class AppViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val snapshotBytes = snapshotStore.sizeInBytes()
             val workspaceBytes = personalStore.sizeInBytes()
-            val total = snapshotBytes + workspaceBytes
+            val cacheDirBytes = directorySize(getApplication<Application>().cacheDir)
+            val total = snapshotBytes + workspaceBytes + cacheDirBytes
             val formatted = formatBytes(total)
             mutableState.update {
                 it.copy(
                     cacheStorageInfo = CacheStorageInfo(
                         snapshotSizeBytes = snapshotBytes,
                         workspaceSizeBytes = workspaceBytes,
+                        cacheDirSizeBytes = cacheDirBytes,
                         totalFormatted = formatted,
                         lastCleanedAtMillis = it.cacheStorageInfo.lastCleanedAtMillis,
                     )
@@ -3223,18 +3226,21 @@ class AppViewModel(
     fun clearLocalCache() {
         viewModelScope.launch(Dispatchers.IO) {
             snapshotStore.clear()
+            getApplication<Application>().cacheDir?.deleteRecursively()
             val snapshotBytes = snapshotStore.sizeInBytes()
             val workspaceBytes = personalStore.sizeInBytes()
-            val total = snapshotBytes + workspaceBytes
+            val cacheDirBytes = directorySize(getApplication<Application>().cacheDir)
+            val total = snapshotBytes + workspaceBytes + cacheDirBytes
             mutableState.update {
                 it.copy(
                     cacheStorageInfo = CacheStorageInfo(
                         snapshotSizeBytes = snapshotBytes,
                         workspaceSizeBytes = workspaceBytes,
+                        cacheDirSizeBytes = cacheDirBytes,
                         totalFormatted = formatBytes(total),
                         lastCleanedAtMillis = System.currentTimeMillis(),
                     ),
-                    message = "本地临时快照已清理完毕",
+                    message = "本地缓存已清理完毕",
                 )
             }
         }
@@ -3410,6 +3416,10 @@ private fun formatBytes(bytes: Long): String = when {
     bytes < 1024L * 1024L -> String.format(java.util.Locale.US, "%.1f KB", bytes.toDouble() / 1024.0)
     else -> String.format(java.util.Locale.US, "%.2f MB", bytes.toDouble() / (1024.0 * 1024.0))
 }
+
+private fun directorySize(directory: File?): Long = runCatching {
+    directory?.walkTopDown()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L
+}.getOrDefault(0L)
 
 private data class AssistantInputs(
     val username: String?,

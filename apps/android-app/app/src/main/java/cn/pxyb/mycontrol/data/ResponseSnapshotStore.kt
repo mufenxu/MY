@@ -32,6 +32,7 @@ class ResponseSnapshotStore(context: Context) {
         val key = scopedPathKey(path) ?: return
         codec.write("${key}_body", body)
         preferences.edit().putLong("${key}_saved_at", savedAtMillis).apply()
+        evictExpiredSnapshots()
     }
 
     fun sizeInBytes(): Long {
@@ -64,8 +65,28 @@ class ResponseSnapshotStore(context: Context) {
         )
     }
 
+    private fun evictExpiredSnapshots() {
+        val scope = accountScope ?: return
+        val now = System.currentTimeMillis()
+        val expiredKeys = preferences.all.entries
+            .filter { (key, _) -> key.startsWith("account_${scope}_") && key.endsWith("_saved_at") }
+            .filter { (_, value) ->
+                val savedAt = (value as? Long) ?: return@filter false
+                now - savedAt > SNAPSHOT_TTL_MILLIS
+            }
+            .map { (key, _) -> key.removeSuffix("_saved_at") }
+        if (expiredKeys.isEmpty()) return
+        preferences.edit().apply {
+            expiredKeys.forEach { key ->
+                remove("${key}_body")
+                remove("${key}_saved_at")
+            }
+        }.apply()
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "operational_response_snapshots"
         const val KEY_ALIAS = "my_control_response_snapshots_v1"
+        const val SNAPSHOT_TTL_MILLIS = 7L * 24 * 60 * 60 * 1000
     }
 }

@@ -131,6 +131,7 @@ data class NetworkCheckResult(
 data class CacheStorageInfo(
     val snapshotSizeBytes: Long = 0L,
     val workspaceSizeBytes: Long = 0L,
+    val cacheDirSizeBytes: Long = 0L,
     val totalFormatted: String = "0 B",
     val lastCleanedAtMillis: Long? = null,
 )

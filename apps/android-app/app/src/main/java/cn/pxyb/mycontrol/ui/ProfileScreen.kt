@@ -472,8 +472,8 @@ fun ProfileScreen(
                                         icon = Icons.Outlined.CleaningServices,
                                         iconTint = Color(0xFF0D9488),
                                         iconBackground = Color(0xFFF0FDFA),
-                                        title = "清理临时快照缓存",
-                                        subtitle = "释放 ${state.cacheStorageInfo.totalFormatted}，保留登录和个人设置",
+                                        title = "清理本地缓存",
+                                        subtitle = "释放 ${state.cacheStorageInfo.totalFormatted}，保留登录、个人设置与外部系统登录态",
                                         onClick = { confirmClearCache = true },
                                     )
                                 }
@@ -835,8 +835,8 @@ fun ProfileScreen(
                                 icon = Icons.Outlined.CleaningServices,
                                 iconTint = Color(0xFF0D9488),
                                 iconBackground = Color(0xFFF0FDFA),
-                                title = "清理临时快照缓存",
-                                subtitle = "释放 ${state.cacheStorageInfo.totalFormatted}，保留登录和个人设置",
+                                title = "清理本地缓存",
+                                subtitle = "释放 ${state.cacheStorageInfo.totalFormatted}，保留登录、个人设置与外部系统登录态",
                                 onClick = { confirmClearCache = true },
                             )
                         }
@@ -1199,14 +1199,14 @@ fun ProfileScreen(
 
     if (confirmClearCache) {
         AppConfirmDialog(
-            title = "清理本地临时缓存？",
-            detail = "将清理离线响应快照与临时缓存，登录凭据、账号配置和个人设置不受影响。",
+            title = "清理本地缓存？",
+            detail = "将清理离线快照、WebView 页面缓存与已下载更新包，登录凭据、个人设置和外部系统登录态不受影响。",
             confirmLabel = "确认清理",
             onDismiss = { confirmClearCache = false },
             onConfirm = {
                 confirmClearCache = false
                 onClearCache()
-                Toast.makeText(context, "本地快照缓存已清理", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "本地缓存已清理", Toast.LENGTH_SHORT).show()
             },
             icon = Icons.Outlined.CleaningServices,
         )
