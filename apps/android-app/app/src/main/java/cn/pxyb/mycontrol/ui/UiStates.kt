@@ -28,6 +28,10 @@ import cn.pxyb.mycontrol.data.QrLoginTarget
 import cn.pxyb.mycontrol.data.ReleaseData
 import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.SecurityData
+import cn.pxyb.mycontrol.data.LibrarySeatArea
+import cn.pxyb.mycontrol.data.LibrarySeatOverview
+import cn.pxyb.mycontrol.data.LibrarySeatStatus
+import cn.pxyb.mycontrol.data.LibrarySeatVenue
 import cn.pxyb.mycontrol.data.TotpEnrollment
 import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.WebLoginLink
@@ -242,6 +246,27 @@ data class ReservationUiState(
     val myReservations: List<CampusMyReservation> = emptyList(),
     val myReservationsLoading: Boolean = false,
     val cancellingReservationId: String? = null,
+    val error: String? = null,
+    val message: String? = null,
+)
+
+@Immutable
+data class LibrarySeatUiState(
+    val refreshing: Boolean = false,
+    val overview: LibrarySeatOverview = LibrarySeatOverview(),
+    val overviewLoading: Boolean = false,
+    val venues: List<LibrarySeatVenue> = emptyList(),
+    val dates: List<String> = emptyList(),
+    val areas: List<LibrarySeatArea> = emptyList(),
+    val areasLoading: Boolean = false,
+    val seats: List<LibrarySeatStatus> = emptyList(),
+    val seatsLoading: Boolean = false,
+    val submitLoading: Boolean = false,
+    val selectedVenueId: String? = null,
+    val selectedDate: String? = null,
+    val selectedFloorId: String? = null,
+    val selectedAreaId: String? = null,
+    val selectedSeatId: String? = null,
     val error: String? = null,
     val message: String? = null,
 )
@@ -573,6 +598,26 @@ internal fun AppUiState.toReservationUiState() = ReservationUiState(
     cancellingReservationId = reservationCancellingReservationId,
     error = sectionError(DataSection.Reservation) ?: reservationError,
     message = reservationMessage,
+)
+
+internal fun AppUiState.toLibrarySeatUiState() = LibrarySeatUiState(
+    refreshing = librarySeatOverviewLoading || librarySeatAreasLoading || librarySeatSeatsLoading || librarySeatSubmitLoading,
+    overview = librarySeatOverview,
+    overviewLoading = librarySeatOverviewLoading,
+    venues = librarySeatOverview.venues,
+    dates = librarySeatOverview.dates,
+    areas = librarySeatAreas,
+    areasLoading = librarySeatAreasLoading,
+    seats = librarySeatSeats,
+    seatsLoading = librarySeatSeatsLoading,
+    submitLoading = librarySeatSubmitLoading,
+    selectedVenueId = librarySeatSelectedVenueId,
+    selectedDate = librarySeatSelectedDate,
+    selectedFloorId = librarySeatSelectedFloorId,
+    selectedAreaId = librarySeatSelectedAreaId,
+    selectedSeatId = librarySeatSelectedSeatId,
+    error = librarySeatError,
+    message = librarySeatMessage,
 )
 
 internal fun AppUiState.toNotificationCenterUiState() = NotificationCenterUiState(

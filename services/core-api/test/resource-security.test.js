@@ -21,6 +21,7 @@ const {
     resolveReminderOwner,
     shouldScanAllResourceOwners
 } = require('../services/dueReminder');
+const { userResourceSchema } = require('../schemas/resourceSchemas');
 const ResourceConfig = require('../models/ResourceConfig');
 
 test('resource passwords and nested secrets are encrypted, masked and recoverable', () => {
@@ -216,3 +217,30 @@ test('bulk restore writes also encrypt ResourceConfig secrets at rest', async ()
         ResourceConfig.collection.insertMany = originalInsertMany;
     }
 });
+
+test('userResourceSchema accepts and normalizes advanceNoticeDays with units like "7天" or numbers', () => {
+    const payload = {
+        servers: [
+            { name: 'Server 1', advanceNoticeDays: '7天' },
+            { name: 'Server 2', advanceNoticeDays: ' 15 天 ' },
+            { name: 'Server 3', advanceNoticeDays: 30 },
+            { name: 'Server 4', advanceNoticeDays: '60' },
+            { name: 'Server 5', advanceNoticeDays: '' },
+            { name: 'Server 6', advanceNoticeDays: null }
+        ],
+        domains: [
+            { host: 'test.com', advanceNoticeDays: '3天' }
+        ]
+    };
+
+    const { error, value } = userResourceSchema.validate(payload);
+    assert.equal(error, undefined);
+    assert.equal(value.servers[0].advanceNoticeDays, 7);
+    assert.equal(value.servers[1].advanceNoticeDays, 15);
+    assert.equal(value.servers[2].advanceNoticeDays, 30);
+    assert.equal(value.servers[3].advanceNoticeDays, 60);
+    assert.equal(value.servers[4].advanceNoticeDays, '');
+    assert.equal(value.servers[5].advanceNoticeDays, null);
+    assert.equal(value.domains[0].advanceNoticeDays, 3);
+});
+

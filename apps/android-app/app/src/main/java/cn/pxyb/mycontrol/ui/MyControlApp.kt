@@ -161,6 +161,7 @@ internal object AppRoute {
     const val Today = "today"
     const val FreeClassrooms = "free-classrooms"
     const val Reservation = "reservation"
+    const val LibrarySeatReservation = "library-seat-reservation"
     const val Notifications = "notifications"
     const val Scenes = "scenes"
 }
@@ -198,6 +199,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Today,
     AppRoute.FreeClassrooms,
     AppRoute.Reservation,
+    AppRoute.LibrarySeatReservation,
     AppRoute.Scenes -> MainTab.Overview
     AppRoute.Notifications -> MainTab.Overview
     AppRoute.Operations -> MainTab.Operations
@@ -215,6 +217,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Today,
     AppRoute.FreeClassrooms,
     AppRoute.Reservation,
+    AppRoute.LibrarySeatReservation,
     AppRoute.Scenes -> MainTab.Overview
     else -> null
 }
@@ -1570,6 +1573,7 @@ private fun AuthenticatedShell(
             AppRoute.Today -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
             AppRoute.FreeClassrooms -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.Reservation -> viewModel.syncNavigationDestination(MainTab.Overview)
+            AppRoute.LibrarySeatReservation -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.Scenes -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Scenes)
         }
     }
@@ -1867,6 +1871,9 @@ private fun AuthenticatedShell(
                         onOpenReservation = {
                             navController.navigate(AppRoute.Reservation) { launchSingleTop = true }
                         },
+                        onOpenLibrarySeatReservation = {
+                            navController.navigate(AppRoute.LibrarySeatReservation) { launchSingleTop = true }
+                        },
                         onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
                     )
                 }
@@ -1908,6 +1915,43 @@ private fun AuthenticatedShell(
                         onToggleAutoTask = viewModel::toggleAutoReservationTask,
                         onDeleteAutoTask = viewModel::deleteAutoReservationTask,
                         onClearFeedback = viewModel::clearReservationFeedback,
+                    )
+                }
+                composable(AppRoute.LibrarySeatReservation) {
+                    val librarySeatState by viewModel.librarySeatState.collectAsStateWithLifecycle()
+                    val context = LocalContext.current
+                    LibrarySeatReservationScreen(
+                        state = librarySeatState,
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onRefresh = viewModel::refreshLibrarySeat,
+                        onLoadOverview = { force -> viewModel.loadLibrarySeatOverview(force) },
+                        onQueryAreas = { venueId, date, startMinute, endMinute, floorId, pageSize, power, window ->
+                            viewModel.queryLibrarySeatAreas(
+                                venueId = venueId,
+                                date = date,
+                                startMinute = startMinute,
+                                endMinute = endMinute,
+                                floorId = floorId,
+                                pageSize = pageSize,
+                                currentPage = 1,
+                                power = power,
+                                window = window,
+                            )
+                        },
+                        onLoadSeats = viewModel::loadLibrarySeatSeats,
+                        onSubmitReservation = viewModel::submitLibrarySeatReservation,
+                        onOpenOfficialReservation = {
+                            viewModel.openOfficialLibrarySeatReservation { session ->
+                                openPlatformWebLink(
+                                    context,
+                                    session.url,
+                                    "座位预约",
+                                    initialCookies = session.cookies,
+                                )
+                            }
+                        },
+                        onClearFeedback = viewModel::clearLibrarySeatFeedback,
                     )
                 }
                 composable(AppRoute.Scenes) {

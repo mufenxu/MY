@@ -12,6 +12,48 @@ interface GroupItem<T> { data: T; index: number; display: Record<string, string>
 interface Group<T> { group: string; items: Array<GroupItem<T>>; collapsed: boolean }
 interface ReminderStatus { enabled: boolean; running: boolean; schedule: string; dueCount: number; channelText: string; stateText: string; ownerMatched: boolean }
 
+function normalizeAdvanceNoticeDays(val: any): string | undefined {
+  if (val === undefined || val === null || val === '') return undefined
+  if (typeof val === 'number') {
+    return Number.isFinite(val) ? String(Math.max(0, Math.min(3650, Math.round(val)))) : undefined
+  }
+  const str = String(val).trim()
+  if (!str) return undefined
+  const match = str.match(/\d+/)
+  if (match) {
+    const num = parseInt(match[0], 10)
+    return Number.isFinite(num) ? String(Math.max(0, Math.min(3650, num))) : undefined
+  }
+  return undefined
+}
+
+function normalizeResourceItem<T extends Record<string, any>>(item: T): T {
+  if (!item || typeof item !== 'object') return item
+  const clean: any = { ...item }
+  if (clean.advanceNoticeDays !== undefined && clean.advanceNoticeDays !== null && clean.advanceNoticeDays !== '') {
+    const normalized = normalizeAdvanceNoticeDays(clean.advanceNoticeDays)
+    clean.advanceNoticeDays = normalized !== undefined ? normalized : ''
+  }
+  return clean
+}
+
+function sanitizeResourceForUpload<T extends Record<string, any>>(item: T): T {
+  if (!item || typeof item !== 'object') return item
+  const clean: any = { ...item }
+  if (clean.__display) {
+    delete clean.__display
+  }
+  if (clean.advanceNoticeDays !== undefined && clean.advanceNoticeDays !== null && clean.advanceNoticeDays !== '') {
+    const normalized = normalizeAdvanceNoticeDays(clean.advanceNoticeDays)
+    if (normalized !== undefined) {
+      clean.advanceNoticeDays = normalized
+    } else {
+      delete clean.advanceNoticeDays
+    }
+  }
+  return clean
+}
+
 // 说明性：数据结构见 data 定义
 const RESOURCE_CACHE_KEY = 'resource_config_cache'
 const RESOURCE_CACHE_VERSION = 2
@@ -64,8 +106,8 @@ Page({
     }
     const cache = this.readResourceCache()
     if (cache && Date.now() - cache.timestamp < RESOURCE_CACHE_TTL) {
-      const servers = cache.servers
-      const domains = cache.domains
+      const servers = (cache.servers || []).map((it: any) => normalizeResourceItem(it))
+      const domains = (cache.domains || []).map((it: any) => normalizeResourceItem(it))
       this.setData({
         servers,
         domains,
@@ -91,7 +133,9 @@ Page({
       const cache: any = wx.getStorageSync(RESOURCE_CACHE_KEY)
       if (!cache || !Array.isArray(cache.servers) || !Array.isArray(cache.domains)) return null
 
-      const safeCache = this.buildSafeResourceCache(cache.servers, cache.domains, Number(cache.timestamp || 0))
+      const servers = cache.servers.map((it: any) => normalizeResourceItem(it))
+      const domains = cache.domains.map((it: any) => normalizeResourceItem(it))
+      const safeCache = this.buildSafeResourceCache(servers, domains, Number(cache.timestamp || 0))
       this.persistSafeResourceCache(safeCache)
       return safeCache
     } catch (err) {
@@ -180,8 +224,8 @@ Page({
       const ret = await request('/resources')
       const result = ret && ret.result
       if (result) {
-        const servers = result.servers || []
-        const domains = result.domains || []
+        const servers = (result.servers || []).map((it: any) => normalizeResourceItem(it))
+        const domains = (result.domains || []).map((it: any) => normalizeResourceItem(it))
         this.setData({
           servers,
           domains,
@@ -207,8 +251,8 @@ Page({
       wx.showToast({ icon: 'none', title: '加载失败' })
       const cache = this.readResourceCache()
       if (cache) {
-        const servers = cache.servers
-        const domains = cache.domains
+        const servers = (cache.servers || []).map((it: any) => normalizeResourceItem(it))
+        const domains = (cache.domains || []).map((it: any) => normalizeResourceItem(it))
         this.setData({
           servers,
           domains,
@@ -357,7 +401,9 @@ Page({
   async commitToCloud(servers: ServerItem[], domains: DomainItem[]) {
     await this.ensureAuthorized()
 
-    const doc = { servers, domains, updatedAt: Date.now() }
+    const safeServers = (servers || []).map((it) => sanitizeResourceForUpload(it))
+    const safeDomains = (domains || []).map((it) => sanitizeResourceForUpload(it))
+    const doc = { servers: safeServers, domains: safeDomains, updatedAt: Date.now() }
     const ret = await request('/resources', 'POST', doc)
 
     if (!ret.success) {
@@ -386,24 +432,26 @@ Page({
         if (!s) return
         const n = (s.registrar || '').trim()
         if (!n) return
+        const advanceNoticeDays = normalizeAdvanceNoticeDays(s.advanceNoticeDays) as any
         const ex = map.get(n)
         if (ex) {
           if (!ex.siteUrl && s.siteUrl) ex.siteUrl = s.siteUrl
-          if (!ex.advanceNoticeDays && s.advanceNoticeDays) ex.advanceNoticeDays = s.advanceNoticeDays
+          if (!ex.advanceNoticeDays && advanceNoticeDays) ex.advanceNoticeDays = advanceNoticeDays
           if (!ex.renewPeriod && s.renewPeriod) ex.renewPeriod = s.renewPeriod
           if (!ex.config && s.config) ex.config = s.config
-        } else map.set(n, { name: n, siteUrl: s.siteUrl, advanceNoticeDays: s.advanceNoticeDays, renewPeriod: s.renewPeriod, config: s.config })
+        } else map.set(n, { name: n, siteUrl: s.siteUrl, advanceNoticeDays, renewPeriod: s.renewPeriod, config: s.config })
       })
       ; (domains || []).forEach((d) => {
         if (!d) return
         const n = (d.registrar || '').trim()
         if (!n) return
+        const advanceNoticeDays = normalizeAdvanceNoticeDays(d.advanceNoticeDays) as any
         const ex = map.get(n)
         if (ex) {
           if (!ex.siteUrl && d.siteUrl) ex.siteUrl = d.siteUrl
-          if (!ex.advanceNoticeDays && d.advanceNoticeDays) ex.advanceNoticeDays = d.advanceNoticeDays
+          if (!ex.advanceNoticeDays && advanceNoticeDays) ex.advanceNoticeDays = advanceNoticeDays
           if (!ex.renewPeriod && d.renewPeriod) ex.renewPeriod = d.renewPeriod
-        } else map.set(n, { name: n, siteUrl: d.siteUrl, advanceNoticeDays: d.advanceNoticeDays, renewPeriod: d.renewPeriod })
+        } else map.set(n, { name: n, siteUrl: d.siteUrl, advanceNoticeDays, renewPeriod: d.renewPeriod })
       })
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
   },
@@ -424,7 +472,7 @@ Page({
     const n = (this.data.modalData || {}) as any
     const merged: any = { ...n, registrar: opt.name }
     if (opt.siteUrl && !n.siteUrl) merged.siteUrl = opt.siteUrl
-    if (opt.advanceNoticeDays && !n.advanceNoticeDays) merged.advanceNoticeDays = opt.advanceNoticeDays
+    if (opt.advanceNoticeDays && !n.advanceNoticeDays) merged.advanceNoticeDays = normalizeAdvanceNoticeDays(opt.advanceNoticeDays) || opt.advanceNoticeDays
     if (opt.renewPeriod && !n.renewPeriod) merged.renewPeriod = opt.renewPeriod
     if ((opt as any).config && !n.config) merged.config = (opt as any).config
     this.setData({ modalData: merged })
@@ -455,8 +503,8 @@ Page({
   },
   onSwitchTab(e: WechatMiniprogram.TouchEvent) { this.setData({ activeTab: (e.currentTarget.dataset as any).tab }) },
   onOpenAddDomain() { if (!this.ensureFreshResourceData()) return; this.setData({ showModal: true, modalTitle: '新增域名', modalType: 'domain', modalIndex: -1, modalData: { host: '', pointsTo: '', note: '', advanceNoticeDays: '7', renewPeriod: '12个月' } }) },
-  onEditServer(e: WechatMiniprogram.TouchEvent) { if (!this.ensureFreshResourceData()) return; const i = (e.currentTarget.dataset as any).index; const base = (((this.data.servers as any)[i]) || {}); this.setData({ showModal: true, modalTitle: '编辑服务器', modalType: 'server', modalIndex: i, modalData: { ...base } as any }) },
-  onEditDomain(e: WechatMiniprogram.TouchEvent) { if (!this.ensureFreshResourceData()) return; const i = (e.currentTarget.dataset as any).index; const base = (((this.data.domains as any)[i]) || {}); this.setData({ showModal: true, modalTitle: '编辑域名', modalType: 'domain', modalIndex: i, modalData: { ...base } as any }) },
+  onEditServer(e: WechatMiniprogram.TouchEvent) { if (!this.ensureFreshResourceData()) return; const i = (e.currentTarget.dataset as any).index; const base = (((this.data.servers as any)[i]) || {}); this.setData({ showModal: true, modalTitle: '编辑服务器', modalType: 'server', modalIndex: i, modalData: normalizeResourceItem({ ...base }) as any }) },
+  onEditDomain(e: WechatMiniprogram.TouchEvent) { if (!this.ensureFreshResourceData()) return; const i = (e.currentTarget.dataset as any).index; const base = (((this.data.domains as any)[i]) || {}); this.setData({ showModal: true, modalTitle: '编辑域名', modalType: 'domain', modalIndex: i, modalData: normalizeResourceItem({ ...base }) as any }) },
   onModalInput(e: WechatMiniprogram.Input) { const f = (e.currentTarget.dataset as any).field; const v = e.detail.value; this.setData({ modalData: { ...(this.data.modalData || {}), [f]: v } as any }) },
   onModalDateChange(e: WechatMiniprogram.PickerChange) { const f = (e.currentTarget.dataset as any).field; const v = e.detail.value; this.setData({ modalData: { ...(this.data.modalData || {}), [f]: v } as any }) },
   onModalCancel() { this.setData({ showModal: false }) },
@@ -465,20 +513,26 @@ Page({
   async onModalSave() {
     if (!this.ensureFreshResourceData()) return
     const { modalType, modalIndex, modalData } = this.data
-    const noticeDays = String((modalData as any).advanceNoticeDays || '').trim()
-    if (noticeDays && !/^\d+$/.test(noticeDays)) {
+    const rawNoticeDays = (modalData as any).advanceNoticeDays
+    const normalizedDays = normalizeAdvanceNoticeDays(rawNoticeDays)
+    const noticeDaysStr = rawNoticeDays !== undefined && rawNoticeDays !== null ? String(rawNoticeDays).trim() : ''
+    if (noticeDaysStr && normalizedDays === undefined) {
       wx.showToast({ icon: 'none', title: '提前通知天数须为非负整数' })
       return
     }
+    const cleanModalData: any = {
+      ...modalData,
+      advanceNoticeDays: normalizedDays !== undefined ? normalizedDays : ''
+    }
     if (modalType === 'server') {
       const list: any[] = (this.data.servers.slice() as any[])
-      if (modalIndex > -1) list[modalIndex] = modalData
-      else list.push(modalData)
+      if (modalIndex > -1) list[modalIndex] = cleanModalData
+      else list.push(cleanModalData)
       this.setData({ servers: list, serverGroups: this.buildGroups(list, this.data.serverCollapsed), registrarOptions: this.rebuildRegistrarOptions(list, this.data.domains) } as any)
     } else {
       const list: any[] = (this.data.domains.slice() as any[])
-      if (modalIndex > -1) list[modalIndex] = modalData
-      else list.push(modalData)
+      if (modalIndex > -1) list[modalIndex] = cleanModalData
+      else list.push(cleanModalData)
       this.setData({ domains: list, domainGroups: this.buildGroups(list, this.data.domainCollapsed), registrarOptions: this.rebuildRegistrarOptions(this.data.servers, list) } as any)
     }
     this.setData({ showModal: false })

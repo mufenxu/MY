@@ -46,6 +46,15 @@ import {
   summarizeLibroomAvailability
 } from "./src/lib/libroom.js";
 import {
+  createLibrarySeatClient,
+  cachedLibrarySeatToken,
+  librarySeatTokenFromOfficialUrl,
+  LIBRARY_SEAT_API_BASE,
+  LIBRARY_SEAT_CAS_SERVICE_URL,
+  LIBRARY_SEAT_ORIGIN,
+  normalizeLibrarySeatReservationInput
+} from "./src/lib/library-seat.js";
+import {
   autoReservationNextScanDelay,
   autoReservationRunPlan,
   executeAutoReservationCandidates,
@@ -263,6 +272,7 @@ let libroomAutoReservationRescheduleRequested = false;
 const academicSessionQueue = new KeyedSerialQueue();
 const campusSessionQueue = new KeyedSerialQueue();
 const libroomSessionQueue = new KeyedSerialQueue();
+const librarySeatSessionQueue = new KeyedSerialQueue();
 const schoolReloginQueue = new KeyedSerialQueue();
 const schoolReloginFailedAt = new Map();
 const SCHOOL_RELOGIN_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
@@ -1470,12 +1480,33 @@ function libroomSessionSummary(jar) {
   });
 }
 
+function librarySeatSessionSummary(jar) {
+  const librarySeat = jar.meta?.librarySeat || {};
+  return serviceSessionSummary({
+    key: "librarySeat",
+    label: "座位预约",
+    connected: Boolean(librarySeat.token),
+    capturedAt: librarySeat.capturedAt || null,
+    expiresAt: librarySeat.expiresAt || null,
+    lastError: librarySeat.lastError || null,
+    detail: {
+      hasToken: Boolean(librarySeat.token)
+    }
+  });
+}
+
 function isCasLoginRequiredError(error) {
   const message = error?.message || "";
   const code = error?.code || "";
   return Boolean(
     error?.status === 401
-    && (/统一身份认证|CAS|重新登录学校账号/.test(message) || code === "LIBROOM_AUTH_EXPIRED" || code === "LIBROOM_CAS_TICKET_REQUIRED")
+    && (
+      /统一身份认证|CAS|重新登录学校账号/.test(message)
+      || code === "LIBROOM_AUTH_EXPIRED"
+      || code === "LIBROOM_CAS_TICKET_REQUIRED"
+      || code === "LIBRARY_SEAT_AUTH_EXPIRED"
+      || code === "LIBRARY_SEAT_CAS_TOKEN_REQUIRED"
+    )
   );
 }
 
@@ -1506,17 +1537,18 @@ function storedSessionSummary(jar) {
   const academic = academicSessionSummary(jar);
   const portal = portalSessionSummary(jar);
   const libroom = libroomSessionSummary(jar);
-  const hasStoredSession = Boolean(cas.connected || energy.connected || campus.connected || academic.connected || portal.connected || libroom.connected || libroom.lastError);
+  const librarySeat = librarySeatSessionSummary(jar);
+  const hasStoredSession = Boolean(cas.connected || energy.connected || campus.connected || academic.connected || portal.connected || libroom.connected || libroom.lastError || librarySeat.connected || librarySeat.lastError);
   const schoolAccount = normalizeSchoolLoginAccount(jar.meta?.schoolAccount || jar.meta?.loginUsername);
   const primaryRefreshableSessions = [energy, campus, academic];
-  const globalLoginSessions = [energy, academic, libroom];
+  const globalLoginSessions = [energy, academic, libroom, librarySeat];
   const needsLogin = hasStoredSession && (
     (refreshBlockedByCas(cas) && primaryRefreshableSessions.some(sessionNeedsRefresh))
     || globalLoginSessions.some(sessionHasLoginRequiredError)
   );
   const loginRequiredMessage = needsLogin ? "统一身份认证会话已过期，请重新登录学校账号。" : null;
 
-  const sessions = { cas, energy, campus, academic, portal, libroom };
+  const sessions = { cas, energy, campus, academic, portal, libroom, librarySeat };
   if (loginRequiredMessage) {
     for (const session of primaryRefreshableSessions) {
       if (sessionNeedsRefresh(session)) {
@@ -2056,7 +2088,8 @@ async function getLibroomOfficialLoginUrl() {
 const LIBROOM_OFFICIAL_WEBVIEW_COOKIE_HOSTS = new Set([
   "cas.hgu.edu.cn",
   "webvpn.hgu.edu.cn",
-  "libroom.hgu.edu.cn"
+  "libroom.hgu.edu.cn",
+  "libic.hgu.edu.cn"
 ]);
 
 function officialWebViewCookieApplies(cookie) {
@@ -2113,6 +2146,188 @@ async function getLibroomOfficialWebViewLogin() {
       };
       await saveSessionJar(jar).catch(() => {});
       throw error;
+    }
+  });
+}
+
+async function requestLibrarySeatJson(jar, pathname, data = {}, { token = "" } = {}) {
+  const response = await fetchWithJar(`${LIBRARY_SEAT_API_BASE}${pathname}`, {
+    jar,
+    method: "POST",
+    headers: {
+      accept: "application/json, text/plain, */*",
+      "content-type": "application/json;charset=UTF-8",
+      "x-requested-with": "XMLHttpRequest",
+      loginType: "PC",
+      origin: LIBRARY_SEAT_ORIGIN,
+      referer: `${LIBRARY_SEAT_ORIGIN}/jsq-v/`,
+      ...(token ? { token } : {})
+    },
+    body: JSON.stringify(data || {})
+  });
+  const text = await readUpstreamText(response);
+  let payload;
+  try {
+    payload = parseJsonLike(text || "{}");
+  } catch {
+    throw new HttpError(502, "座位预约系统返回的 JSON 结构不符合预期。", {
+      endpoint: pathname,
+      sample: normalizeHtmlText(text).slice(0, 200)
+    });
+  }
+  return { payload, status: response.status, ok: response.ok };
+}
+
+async function followLibrarySeatSimpleRedirects(jar, startUrl, { referer = `${LIBRARY_SEAT_ORIGIN}/jsq-v/` } = {}) {
+  let currentUrl = startUrl;
+  let currentReferer = referer;
+  let finalUrl = startUrl;
+  let html = "";
+  for (let i = 0; i < 6; i += 1) {
+    const { response, url } = await followRedirectsWithJar(currentUrl, jar, {
+      method: "GET",
+      headers: {
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        referer: currentReferer
+      }
+    });
+    finalUrl = url;
+    html = await readUpstreamText(response);
+    const redirectUrl = extractSimpleLocationRedirectUrl(html, finalUrl);
+    if (!redirectUrl) return { finalUrl, html };
+    currentReferer = finalUrl;
+    currentUrl = redirectUrl;
+  }
+  return { finalUrl, html };
+}
+
+async function resolveLibrarySeatEntrance(jar, credentials = {}) {
+  const callbackUrl = await getCasTicketRedirect({ jar, ...credentials, serviceUrl: LIBRARY_SEAT_CAS_SERVICE_URL });
+  let entranceUrl = callbackUrl;
+  let entranceToken = librarySeatTokenFromOfficialUrl(entranceUrl);
+  if (!entranceToken) {
+    const followed = await followLibrarySeatSimpleRedirects(jar, callbackUrl, { referer: `${CAS_ORIGIN}/cas/login` });
+    entranceUrl = followed.finalUrl;
+    entranceToken = librarySeatTokenFromOfficialUrl(entranceUrl);
+    if (!entranceToken) {
+      const simpleRedirect = extractSimpleLocationRedirectUrl(followed.html, entranceUrl);
+      if (simpleRedirect) {
+        const redirected = await followLibrarySeatSimpleRedirects(jar, simpleRedirect, { referer: entranceUrl });
+        entranceUrl = redirected.finalUrl;
+        entranceToken = librarySeatTokenFromOfficialUrl(entranceUrl);
+      }
+    }
+  }
+  if (!entranceToken) {
+    throw new HttpError(401, "座位预约官方入口未返回登录票据，请重新登录学校账号。", null, "LIBRARY_SEAT_CAS_TOKEN_REQUIRED");
+  }
+  return { callbackUrl, entranceUrl, entranceToken };
+}
+
+async function issueLibrarySeatMemberToken(jar, credentials = {}) {
+  try {
+    const { entranceToken } = await resolveLibrarySeatEntrance(jar, credentials);
+    const response = await requestLibrarySeatJson(jar, `/static/public/auth/cas/${encodeURIComponent(entranceToken)}`, {
+      token: entranceToken,
+      loginType: "PC"
+    });
+    const payload = response.payload || {};
+    const token = String(
+      payload?.data?.token
+      || payload?.data?.accessToken
+      || payload?.token
+      || payload?.data?.userInfo?.token
+      || ""
+    ).trim();
+    if (!response.ok || (payload?.code !== undefined && Number(payload.code) !== 200 && payload.status !== true) || !token) {
+      throw new HttpError(
+        response.ok ? 401 : response.status,
+        upstreamMessage(payload, "座位预约身份转换失败。"),
+        null,
+        "LIBRARY_SEAT_AUTH_EXPIRED"
+      );
+    }
+    const capturedAt = Date.now();
+    jar.meta ||= {};
+    jar.meta.librarySeat = {
+      token,
+      capturedAt: new Date(capturedAt).toISOString(),
+      expiresAt: new Date(capturedAt + 10 * 60 * 1000).toISOString()
+    };
+    if (jar.meta.cas) jar.meta.cas.lastError = null;
+    return token;
+  } catch (error) {
+    throw tagLibroomStage(error, "library_seat_member_token");
+  }
+}
+
+async function getLibrarySeatMemberToken({ force = false } = {}) {
+  return librarySeatSessionQueue.run(currentUserId(), async () => {
+    const jar = await readSessionJar();
+    if (!force) {
+      const cached = cachedLibrarySeatToken(jar);
+      if (cached) return cached;
+    }
+    try {
+      const credentials = savedSchoolReloginCredentials(jar) || {};
+      const token = await issueLibrarySeatMemberToken(jar, credentials);
+      await saveSessionJar(jar);
+      return token;
+    } catch (error) {
+      logger.warn("library_seat_member_token_failed", { userId: currentUserId(), error: libroomFailureLog(error) });
+      markCasFailureIfNeeded(jar, error);
+      jar.meta ||= {};
+      jar.meta.librarySeat = {
+        lastError: isCasLoginRequiredError(error)
+          ? casLoginRequiredMessage(error)
+          : (error.message || "座位预约会话已过期，请重新登录学校账号。")
+      };
+      await saveSessionJar(jar).catch(() => {});
+      throw error;
+    }
+  });
+}
+
+async function getLibrarySeatOfficialWebViewLogin() {
+  return librarySeatSessionQueue.run(currentUserId(), async () => {
+    const jar = await readSessionJar();
+    try {
+      const credentials = savedSchoolReloginCredentials(jar) || {};
+      const { entranceUrl } = await resolveLibrarySeatEntrance(jar, credentials);
+      await saveSessionJar(jar);
+      return {
+        url: entranceUrl,
+        cookies: officialWebViewCookies(jar)
+      };
+    } catch (error) {
+      logger.warn("library_seat_official_webview_login_failed", { userId: currentUserId(), error: libroomFailureLog(error) });
+      markCasFailureIfNeeded(jar, error);
+      jar.meta ||= {};
+      jar.meta.librarySeat = {
+        lastError: isCasLoginRequiredError(error)
+          ? casLoginRequiredMessage(error)
+          : (error.message || "座位预约官方入口打开失败，请重新登录学校账号。")
+      };
+      await saveSessionJar(jar).catch(() => {});
+      throw error;
+    }
+  });
+}
+
+async function librarySeatClient() {
+  const jar = await readSessionJar();
+  return createLibrarySeatClient({
+    token: cachedLibrarySeatToken(jar),
+    getMemberToken: () => getLibrarySeatMemberToken({ force: true }),
+    requestImpl: async (pathname, data, options) => {
+      const latestJar = await readSessionJar();
+      Object.assign(jar, mergeSessionJars(latestJar, jar));
+      const result = await requestLibrarySeatJson(jar, pathname, data, options);
+      if (result?.payload?.code === undefined || Number(result.payload.code) === 200 || result.payload.status === true) {
+        if (jar.meta?.librarySeat?.lastError) jar.meta.librarySeat.lastError = null;
+      }
+      await saveSessionJar(jar);
+      return result;
     }
   });
 }
@@ -7289,6 +7504,73 @@ async function handleApi(req, res, url) {
         date: normalized.date,
         startTime: normalized.startTime,
         endTime: normalized.endTime
+      });
+      json(res, 201, { ok: true, data: result });
+      return;
+    }
+
+    if (url.pathname === "/api/campus/library-seat/official-webview-login" && req.method === "GET") {
+      json(res, 200, { ok: true, data: await getLibrarySeatOfficialWebViewLogin() });
+      return;
+    }
+    if (url.pathname === "/api/campus/library-seat/overview" && req.method === "GET") {
+      const client = await librarySeatClient();
+      json(res, 200, { ok: true, data: await client.getOverview() });
+      return;
+    }
+    if (url.pathname === "/api/campus/library-seat/areas" && req.method === "GET") {
+      const venueId = url.searchParams.get("venueId") || url.searchParams.get("buildingId") || "";
+      const date = url.searchParams.get("date") || "";
+      const startMinute = url.searchParams.get("startMinute") || url.searchParams.get("beginMinute") || "";
+      const endMinute = url.searchParams.get("endMinute") || "";
+      const floorId = url.searchParams.get("floorId") || "";
+      const pageSize = url.searchParams.get("pageSize") || "";
+      const currentPage = url.searchParams.get("currentPage") || "";
+      const client = await librarySeatClient();
+      const data = await client.listAreas({
+        venueId,
+        date,
+        startMinute: Number(startMinute),
+        endMinute: endMinute === "" ? "" : Number(endMinute),
+        floorId,
+        pageSize: pageSize === "" ? undefined : Number(pageSize),
+        currentPage: currentPage === "" ? undefined : Number(currentPage),
+        power: url.searchParams.get("power") === "true",
+        window: url.searchParams.get("window") === "true" || url.searchParams.get("windows") === "true"
+      });
+      json(res, 200, { ok: true, data });
+      return;
+    }
+    if (url.pathname === "/api/campus/library-seat/seats" && req.method === "GET") {
+      const roomId = url.searchParams.get("roomId") || url.searchParams.get("areaId") || "";
+      const date = url.searchParams.get("date") || "";
+      const client = await librarySeatClient();
+      const data = await client.getSeats({
+        roomId,
+        date,
+        startMinute: Number(url.searchParams.get("startMinute") || 0),
+        endMinute: Number(url.searchParams.get("endMinute") || 0),
+        amPm: Number(url.searchParams.get("amPm") || 0)
+      });
+      json(res, 200, { ok: true, data });
+      return;
+    }
+    if (url.pathname === "/api/campus/library-seat/reservations" && req.method === "GET") {
+      const client = await librarySeatClient();
+      json(res, 200, { ok: true, data: await client.getMyReservations() });
+      return;
+    }
+    if (url.pathname === "/api/campus/library-seat/reservations" && req.method === "POST") {
+      const body = await readBodyJson(req);
+      const normalized = normalizeLibrarySeatReservationInput(body);
+      const client = await librarySeatClient();
+      const result = await client.submitReservation(body);
+      logger.info("audit_library_seat_reservation_submitted", {
+        actorUserId: currentUserId(),
+        seatId: normalized.seatId,
+        date: normalized.date,
+        startMinute: normalized.startMinute,
+        endMinute: normalized.endMinute
       });
       json(res, 201, { ok: true, data: result });
       return;

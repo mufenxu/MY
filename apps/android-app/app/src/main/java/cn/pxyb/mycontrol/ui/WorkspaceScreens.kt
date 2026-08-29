@@ -52,6 +52,7 @@ import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.Chair
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -159,6 +160,7 @@ fun TodayScreen(
     onOpenNotifications: () -> Unit,
     onOpenFreeClassrooms: () -> Unit,
     onOpenReservation: () -> Unit,
+    onOpenLibrarySeatReservation: () -> Unit,
     onConsumeSharedDraft: () -> Unit,
 ) {
     var editingTodo by remember { mutableStateOf<TodoTask?>(null) }
@@ -535,7 +537,7 @@ fun TodayScreen(
                 )
             }
             CampusWorkspaceSection.Campus -> item(key = "campus-overview", contentType = "workspace") {
-                CampusOverviewSection(state.campusOverview, onOpenFreeClassrooms, onOpenReservation)
+                CampusOverviewSection(state.campusOverview, onOpenFreeClassrooms, onOpenReservation, onOpenLibrarySeatReservation)
             }
         }
     }
@@ -2226,6 +2228,7 @@ private fun CampusOverviewSection(
     overview: CampusOverview?,
     onOpenFreeClassrooms: () -> Unit,
     onOpenReservation: () -> Unit,
+    onOpenLibrarySeatReservation: () -> Unit,
 ) {
     if (overview == null) {
         Column(
@@ -2235,6 +2238,7 @@ private fun CampusOverviewSection(
             CampusQuickToolsGrid(
                 onOpenFreeClassrooms = onOpenFreeClassrooms,
                 onOpenReservation = onOpenReservation,
+                onOpenLibrarySeatReservation = onOpenLibrarySeatReservation,
             )
             EmptyBlock("校园信息正在同步", "连接学校账号后，会显示成绩、空教室、一卡通和宿舍能耗。")
         }
@@ -2268,6 +2272,7 @@ private fun CampusOverviewSection(
         CampusQuickToolsGrid(
             onOpenFreeClassrooms = onOpenFreeClassrooms,
             onOpenReservation = onOpenReservation,
+            onOpenLibrarySeatReservation = onOpenLibrarySeatReservation,
         )
     }
 }
@@ -2546,6 +2551,7 @@ private fun AcademicGpaCard(
 private fun CampusQuickToolsGrid(
     onOpenFreeClassrooms: () -> Unit,
     onOpenReservation: () -> Unit,
+    onOpenLibrarySeatReservation: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SectionHeader("校园快捷服务", "常用教务与生活服务指南")
@@ -2571,6 +2577,14 @@ private fun CampusQuickToolsGrid(
                     accentPale = Color(0xFFEFF6FF),
                     modifier = Modifier.weight(1f),
                     onClick = onOpenReservation,
+                )
+                QuickToolItem(
+                    icon = Icons.Outlined.Chair,
+                    label = "座位预约",
+                    accent = Color(0xFF0F766E),
+                    accentPale = Color(0xFFCCFBF1),
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenLibrarySeatReservation,
                 )
                 QuickToolItem(
                     icon = Icons.Outlined.School,

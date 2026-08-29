@@ -45,8 +45,23 @@ function stripClientOnlyFields(value) {
     return value;
 }
 
+function sanitizeResourceItem(item) {
+    if (!item || typeof item !== 'object') return item;
+    const clean = stripClientOnlyFields(item);
+    if (clean.advanceNoticeDays !== undefined && clean.advanceNoticeDays !== null && clean.advanceNoticeDays !== '') {
+        const match = String(clean.advanceNoticeDays).trim().match(/\d+/);
+        if (match) {
+            const num = parseInt(match[0], 10);
+            if (num >= 0 && num <= 3650) {
+                clean.advanceNoticeDays = String(num);
+            }
+        }
+    }
+    return clean;
+}
+
 function sanitizeResourceList(list) {
-    return Array.isArray(list) ? stripClientOnlyFields(list) : [];
+    return Array.isArray(list) ? list.map(sanitizeResourceItem) : [];
 }
 
 function toExpirySummary(type, item, index) {

@@ -9,7 +9,18 @@ const dateText = Joi.string()
 
 const noticeDays = Joi.alternatives().try(
     Joi.number().integer().min(0).max(3650),
-    Joi.string().allow('', null).pattern(/^\d{1,4}$/)
+    Joi.string().allow('', null).custom((value, helpers) => {
+        if (value === '' || value === null || value === undefined) return value;
+        const text = String(value).trim();
+        const match = text.match(/\d+/);
+        if (match) {
+            const num = parseInt(match[0], 10);
+            if (num >= 0 && num <= 3650) {
+                return num;
+            }
+        }
+        return helpers.error('string.pattern.base');
+    })
 );
 
 const resourceItemSchema = Joi.object({

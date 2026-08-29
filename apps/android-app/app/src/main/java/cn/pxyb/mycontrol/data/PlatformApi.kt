@@ -621,6 +621,77 @@ class PlatformApi(
         )
     }
 
+    suspend fun librarySeatOfficialWebSession(): PlatformWebSession = withContext(Dispatchers.IO) {
+        val response = execute(CAMPUS_LIBRARY_SEAT_OFFICIAL_WEBVIEW_LOGIN_PATH)
+        val data = response.json.optJSONObject("data") ?: response.json
+        val url = data.optString("url").takeIf { it.isNotBlank() }
+            ?: throw ApiException("服务端未返回学校座位预约地址。", 500, "LIBRARY_SEAT_OFFICIAL_URL_MISSING")
+        PlatformWebSession(
+            url = url,
+            cookies = data.optJSONArray("cookies").objects().mapNotNull { item ->
+                val cookieUrl = item.optString("url").takeIf { it.startsWith("https://") } ?: return@mapNotNull null
+                val cookieValue = item.optString("value").takeIf { "=" in it } ?: return@mapNotNull null
+                PlatformWebCookie(cookieUrl, cookieValue)
+            },
+        )
+    }
+
+    suspend fun librarySeatOverview(): LibrarySeatOverview = withContext(Dispatchers.IO) {
+        parseLibrarySeatOverviewPayload(execute(CAMPUS_LIBRARY_SEAT_OVERVIEW_PATH).json)
+    }
+
+    suspend fun librarySeatAreas(
+        venueId: String,
+        date: String,
+        startMinute: Int,
+        endMinute: Int = 0,
+        floorId: String? = null,
+        pageSize: Int = 50,
+        currentPage: Int = 1,
+        power: Boolean = false,
+        window: Boolean = false,
+    ): List<LibrarySeatArea> = withContext(Dispatchers.IO) {
+        val query = buildList {
+            add("venueId=${encodePath(venueId)}")
+            add("date=${encodePath(date)}")
+            add("startMinute=$startMinute")
+            add("endMinute=$endMinute")
+            add("pageSize=$pageSize")
+            add("currentPage=$currentPage")
+            add("power=$power")
+            add("window=$window")
+            floorId?.takeIf(String::isNotBlank)?.let { add("floorId=${encodePath(it)}") }
+        }.joinToString("&", prefix = "?")
+        parseLibrarySeatAreasPayload(execute("$CAMPUS_LIBRARY_SEAT_AREAS_PATH$query").json)
+    }
+
+    suspend fun librarySeatSeats(
+        roomId: String,
+        date: String,
+        startMinute: Int,
+        endMinute: Int,
+        amPm: Int = 0,
+    ): List<LibrarySeatStatus> = withContext(Dispatchers.IO) {
+        val query = buildList {
+            add("roomId=${encodePath(roomId)}")
+            add("date=${encodePath(date)}")
+            add("startMinute=$startMinute")
+            add("endMinute=$endMinute")
+            add("amPm=$amPm")
+        }.joinToString("&", prefix = "?")
+        parseLibrarySeatSeatsPayload(execute("$CAMPUS_LIBRARY_SEAT_SEATS_PATH$query").json)
+    }
+
+    suspend fun submitLibrarySeatReservation(request: LibrarySeatReservationRequest): Unit = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("seatId", request.seatId)
+            .put("date", request.date)
+            .put("startMinute", request.startMinute)
+            .put("endMinute", request.endMinute)
+            .put("capToken", request.capToken)
+        execute(CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH, method = "POST", body = body)
+    }
+
     suspend fun campusReservationRules(spaceId: Int): String = withContext(Dispatchers.IO) {
         val response = execute("$CAMPUS_LIBROOM_RULES_PATH?spaceId=$spaceId")
         val data = response.json.opt("data") ?: response.json
@@ -1595,6 +1666,128 @@ internal fun parseCampusReservationSpacesPayload(
     return targetList.mapNotNull(JSONObject::toCampusReservationSpace)
 }
 
+internal fun parseLibrarySeatOverviewPayload(
+    json: JSONObject,
+    jsonArray: JSONArray = JSONArray(),
+): LibrarySeatOverview {
+    val payload = json.opt("data") ?: json.takeIf { it.length() > 0 } ?: jsonArray
+    val root = when (payload) {
+        is JSONObject -> payload
+        is JSONArray -> JSONObject().put("buildings", payload)
+        else -> JSONObject()
+    }
+    val venuesSource = root.optJSONArray("buildings")
+        ?: root.optJSONArray("venues")
+        ?: root.optJSONArray("list")
+        ?: root.optJSONArray("data")
+        ?: JSONArray()
+    val venues = venuesSource.objects().mapNotNull { row ->
+        val id = row.seatString("id", "buildingId", "value")
+        val name = row.seatString("name", "buildingName", "label").ifBlank { if (id.isNotBlank()) "场馆 $id" else "" }
+        if (id.isBlank() || name.isBlank()) return@mapNotNull null
+        val floorsSource = row.optJSONArray("floors")
+            ?: row.optJSONArray("floorList")
+            ?: row.optJSONArray("children")
+            ?: JSONArray()
+        LibrarySeatVenue(
+            id = id,
+            name = name,
+            floors = floorsSource.objects().mapNotNull { floor ->
+                val floorId = floor.seatString("id", "floorId", "value")
+                val floorName = floor.seatString("name", "floorName", "label").ifBlank { if (floorId.isNotBlank()) "楼层 $floorId" else "" }
+                if (floorId.isBlank() || floorName.isBlank()) null else LibrarySeatFloor(floorId, floorName)
+            }
+        )
+    }
+    val dates = (root.optJSONArray("dates")
+        ?: root.optJSONObject("data")?.optJSONArray("dates")
+        ?: json.optJSONArray("dates")
+        ?: jsonArray).strings()
+    return LibrarySeatOverview(venues = venues, dates = dates)
+}
+
+internal fun parseLibrarySeatAreasPayload(
+    json: JSONObject,
+    jsonArray: JSONArray = JSONArray(),
+): List<LibrarySeatArea> {
+    val payload = json.opt("data") ?: json.takeIf { it.length() > 0 } ?: jsonArray
+    val rows = when (payload) {
+        is JSONArray -> payload.objects()
+        is JSONObject -> payload.optJSONArray("pageList")?.objects()
+            ?: payload.optJSONArray("list")?.objects()
+            ?: payload.optJSONArray("rows")?.objects()
+            ?: payload.optJSONArray("records")?.objects()
+            ?: payload.optJSONObject("data")?.optJSONArray("pageList")?.objects()
+            ?: payload.optJSONObject("data")?.optJSONArray("list")?.objects()
+            ?: payload.optJSONObject("data")?.optJSONArray("rows")?.objects()
+            ?: payload.optJSONObject("data")?.optJSONArray("records")?.objects()
+            ?: emptyList()
+        else -> emptyList()
+    }
+    return rows.mapNotNull { row ->
+        val id = row.seatString("id", "roomId", "areaId", "area_id")
+        if (id.isBlank()) return@mapNotNull null
+        LibrarySeatArea(
+            id = id,
+            venueId = row.seatString("buildingId", "venueId"),
+            floorId = row.seatString("floorId"),
+            name = row.seatString("name", "roomName").ifBlank { "阅览区 $id" },
+            nameE = row.seatString("nameE", "englishName"),
+            buildingName = row.seatString("buildingName", "venueName"),
+            floorName = row.seatString("floorName"),
+            seatTotal = row.optionalSeatInt("seatTotal", "total"),
+            seatFree = row.optionalSeatInt("seatFree", "free"),
+            seatLock = row.optionalSeatInt("seatLock", "locked"),
+            seatScene = row.optionalSeatInt("seatScene", "scene"),
+            maxMinute = row.optionalSeatInt("maxMinute"),
+            type = row.seatString("type"),
+            markMode = row.optionalSeatInt("markMode"),
+        )
+    }
+}
+
+internal fun parseLibrarySeatSeatsPayload(
+    json: JSONObject,
+    jsonArray: JSONArray = JSONArray(),
+): List<LibrarySeatStatus> {
+    val payload = json.opt("data") ?: json.takeIf { it.length() > 0 } ?: jsonArray
+    val rows = when (payload) {
+        is JSONArray -> payload.objects()
+        is JSONObject -> {
+            val direct = mutableListOf<JSONObject>()
+            val keys = payload.keys()
+            while (keys.hasNext()) {
+                val value = payload.opt(keys.next())
+                when (value) {
+                    is JSONObject -> direct.add(value)
+                    is JSONArray -> direct.addAll(value.objects())
+                }
+            }
+            direct
+        }
+        else -> emptyList()
+    }
+    return rows.mapNotNull { row ->
+        val id = row.seatString("id", "seatId")
+        if (id.isBlank()) return@mapNotNull null
+        val status = row.seatString("status")
+        LibrarySeatStatus(
+            id = id,
+            label = row.seatString("label", "seatNo", "no").ifBlank { id },
+            name = row.seatString("name", "seatName").ifBlank { "座位 $id" },
+            status = status,
+            statusText = when (status.uppercase()) {
+                "FREE" -> "可预约"
+                "IN_USE" -> "已占用"
+                "LOCK", "LOCKED" -> "锁定"
+                "BROKEN" -> "不可用"
+                else -> status.ifBlank { "未知" }
+            },
+            isFree = status.equals("FREE", ignoreCase = true),
+        )
+    }.sortedWith(compareBy<LibrarySeatStatus> { it.label.toIntOrNull() ?: Int.MAX_VALUE }.thenBy { it.label })
+}
+
 private fun findNestedCampusReservationSpaceRows(value: Any?): List<JSONObject> {
     val queue = ArrayDeque<Any>()
     val foundArrays = mutableListOf<List<JSONObject>>()
@@ -1621,6 +1814,28 @@ private fun findNestedCampusReservationSpaceRows(value: Any?): List<JSONObject> 
         }
     }
     return foundArrays.maxByOrNull { it.size } ?: emptyList()
+}
+
+private fun JSONObject.seatString(vararg keys: String): String {
+    for (key in keys) {
+        if (!has(key) || isNull(key)) continue
+        val text = opt(key)?.toString()?.trim().orEmpty()
+        if (text.isNotBlank()) return text
+    }
+    return ""
+}
+
+private fun JSONObject.optionalSeatInt(vararg keys: String): Int {
+    for (key in keys) {
+        if (!has(key) || isNull(key)) continue
+        val value = opt(key)
+        val number = when (value) {
+            is Number -> value.toInt()
+            else -> value?.toString()?.trim()?.toIntOrNull()
+        }
+        if (number != null) return number
+    }
+    return 0
 }
 
 private fun JSONObject.toCampusReservationSpace(): CampusReservationSpace? {

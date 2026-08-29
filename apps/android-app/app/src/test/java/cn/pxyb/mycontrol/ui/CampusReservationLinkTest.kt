@@ -8,4 +8,9 @@ class CampusReservationLinkTest {
     fun opensCampusReservationSectionInsideManagedCampusApp() {
         assertEquals("/apps/campus/#reservation", campusReservationRedirect())
     }
+
+    @Test
+    fun librarySeatReservationBelongsToOverviewSubScreen() {
+        assertEquals(MainTab.Overview, parentTabForSubScreen(AppRoute.LibrarySeatReservation, null))
+    }
 }

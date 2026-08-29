@@ -5,14 +5,27 @@ import cn.pxyb.mycontrol.data.CAMPUS_LIBROOM_AVAILABILITY_PATH
 import cn.pxyb.mycontrol.data.CAMPUS_LIBROOM_RESERVATIONS_PATH
 import cn.pxyb.mycontrol.data.CAMPUS_LIBROOM_RULES_PATH
 import cn.pxyb.mycontrol.data.CAMPUS_LIBROOM_SPACES_PATH
+import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_AREAS_PATH
+import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_OFFICIAL_WEBVIEW_LOGIN_PATH
+import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_OVERVIEW_PATH
+import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH
+import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_SEATS_PATH
 import cn.pxyb.mycontrol.data.CampusAutoReservationCandidate
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusReservationSpace
+import cn.pxyb.mycontrol.data.LibrarySeatArea
+import cn.pxyb.mycontrol.data.LibrarySeatFloor
+import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
+import cn.pxyb.mycontrol.data.LibrarySeatVenue
 import cn.pxyb.mycontrol.data.formatCampusReservationRulesForDisplay
 import cn.pxyb.mycontrol.data.parseCampusReservationSpacesPayload
+import cn.pxyb.mycontrol.data.parseLibrarySeatAreasPayload
+import cn.pxyb.mycontrol.data.parseLibrarySeatOverviewPayload
+import cn.pxyb.mycontrol.data.parseLibrarySeatSeatsPayload
 import org.json.JSONArray
 import org.json.JSONObject
+import cn.pxyb.mycontrol.ui.LibrarySeatUiState
 import cn.pxyb.mycontrol.ui.ReservationUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,6 +40,11 @@ class CampusReservationModelTest {
         assertEquals("/apps/campus/api/campus/libroom/availability", CAMPUS_LIBROOM_AVAILABILITY_PATH)
         assertEquals("/apps/campus/api/campus/libroom/reservations", CAMPUS_LIBROOM_RESERVATIONS_PATH)
         assertEquals("/apps/campus/api/campus/libroom/auto-reservations", CAMPUS_LIBROOM_AUTO_RESERVATIONS_PATH)
+        assertEquals("/apps/campus/api/campus/library-seat/overview", CAMPUS_LIBRARY_SEAT_OVERVIEW_PATH)
+        assertEquals("/apps/campus/api/campus/library-seat/areas", CAMPUS_LIBRARY_SEAT_AREAS_PATH)
+        assertEquals("/apps/campus/api/campus/library-seat/seats", CAMPUS_LIBRARY_SEAT_SEATS_PATH)
+        assertEquals("/apps/campus/api/campus/library-seat/reservations", CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH)
+        assertEquals("/apps/campus/api/campus/library-seat/official-webview-login", CAMPUS_LIBRARY_SEAT_OFFICIAL_WEBVIEW_LOGIN_PATH)
     }
 
     @Test
@@ -122,6 +140,145 @@ class CampusReservationModelTest {
         assertEquals(2, task.candidates[1].areaId)
         assertEquals("succeeded", task.lastStatus)
         assertEquals(0, task.lastCandidateIndex)
+    }
+
+    @Test
+    fun `library seat overview parses venue floors and dates`() {
+        val response = JSONObject()
+            .put(
+                "data",
+                JSONObject()
+                    .put(
+                        "buildings",
+                        JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("id", "1744276833606668288")
+                                    .put("name", "图书馆")
+                                    .put(
+                                        "floors",
+                                        JSONArray()
+                                            .put(JSONObject().put("id", "1935932081147318272").put("name", "二层"))
+                                    )
+                            )
+                    )
+                    .put("dates", JSONArray().put("2026-08-29").put("2026-08-30"))
+            )
+
+        val overview = parseLibrarySeatOverviewPayload(response)
+
+        assertEquals(
+            listOf(
+                LibrarySeatVenue(
+                    id = "1744276833606668288",
+                    name = "图书馆",
+                    floors = listOf(LibrarySeatFloor(id = "1935932081147318272", name = "二层"))
+                )
+            ),
+            overview.venues,
+        )
+        assertEquals(listOf("2026-08-29", "2026-08-30"), overview.dates)
+    }
+
+    @Test
+    fun `library seat areas parse long ids and availability counts`() {
+        val response = JSONObject()
+            .put(
+                "data",
+                JSONObject()
+                    .put(
+                        "pageList",
+                        JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("id", "1935932990019440640")
+                                    .put("buildingId", "1744276833606668288")
+                                    .put("floorId", "1935932081147318272")
+                                    .put("name", "二层电子阅览区")
+                                    .put("buildingName", "图书馆")
+                                    .put("floorName", "二层")
+                                    .put("seatTotal", 188)
+                                    .put("seatFree", 7)
+                                    .put("maxMinute", 240)
+                            )
+                    )
+            )
+
+        val areas = parseLibrarySeatAreasPayload(response)
+
+        assertEquals(
+            listOf(
+                LibrarySeatArea(
+                    id = "1935932990019440640",
+                    venueId = "1744276833606668288",
+                    floorId = "1935932081147318272",
+                    name = "二层电子阅览区",
+                    buildingName = "图书馆",
+                    floorName = "二层",
+                    seatTotal = 188,
+                    seatFree = 7,
+                    maxMinute = 240,
+                )
+            ),
+            areas,
+        )
+    }
+
+    @Test
+    fun `library seat status parses free and occupied seats`() {
+        val response = JSONObject()
+            .put(
+                "data",
+                JSONObject()
+                    .put(
+                        "1935965539382956032",
+                        JSONObject()
+                            .put("id", "1935965539382956032")
+                            .put("label", "1")
+                            .put("name", "1行1列")
+                            .put("status", "IN_USE")
+                    )
+                    .put(
+                        "1935965539382956037",
+                        JSONObject()
+                            .put("id", "1935965539382956037")
+                            .put("label", "6")
+                            .put("name", "1行6列")
+                            .put("status", "FREE")
+                    )
+            )
+
+        val seats = parseLibrarySeatSeatsPayload(response)
+
+        assertEquals(2, seats.size)
+        assertFalse(seats[0].isFree)
+        assertTrue(seats[1].isFree)
+        assertEquals("可预约", seats[1].statusText)
+    }
+
+    @Test
+    fun `library seat reservation request holds expected values`() {
+        val request = LibrarySeatReservationRequest(
+            seatId = "1935965539382956037",
+            date = "2026-08-29",
+            startMinute = 480,
+            endMinute = 600,
+        )
+
+        assertEquals("1935965539382956037", request.seatId)
+        assertEquals("2026-08-29", request.date)
+        assertEquals(480, request.startMinute)
+        assertEquals(600, request.endMinute)
+    }
+
+    @Test
+    fun `library seat ui state defaults correctly`() {
+        val state = LibrarySeatUiState()
+        assertFalse(state.refreshing)
+        assertTrue(state.venues.isEmpty())
+        assertTrue(state.areas.isEmpty())
+        assertTrue(state.seats.isEmpty())
+        assertFalse(state.submitLoading)
     }
 
     @Test

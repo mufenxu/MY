@@ -198,6 +198,62 @@ data class CampusReservationRequest(
 )
 
 @Immutable
+data class LibrarySeatFloor(
+    val id: String,
+    val name: String,
+)
+
+@Immutable
+data class LibrarySeatVenue(
+    val id: String,
+    val name: String,
+    val floors: List<LibrarySeatFloor> = emptyList(),
+)
+
+@Immutable
+data class LibrarySeatOverview(
+    val venues: List<LibrarySeatVenue> = emptyList(),
+    val dates: List<String> = emptyList(),
+)
+
+@Immutable
+data class LibrarySeatArea(
+    val id: String,
+    val venueId: String = "",
+    val floorId: String = "",
+    val name: String,
+    val nameE: String = "",
+    val buildingName: String = "",
+    val floorName: String = "",
+    val seatTotal: Int = 0,
+    val seatFree: Int = 0,
+    val seatLock: Int = 0,
+    val seatScene: Int = 0,
+    val maxMinute: Int = 0,
+    val type: String = "",
+    val markMode: Int = 0,
+)
+
+@Immutable
+data class LibrarySeatStatus(
+    val id: String,
+    val label: String = "",
+    val name: String = "",
+    val status: String = "",
+    val statusText: String = "未知",
+    val isFree: Boolean = false,
+)
+
+@Immutable
+data class LibrarySeatReservationRequest(
+    val seatId: String,
+    val date: String,
+    val startMinute: Int,
+    val endMinute: Int,
+    val capToken: String = "",
+)
+
+@Immutable
 data class CampusMyReservation(
     val id: String = "",
     val spaceId: Int = 0,

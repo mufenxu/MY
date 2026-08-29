@@ -55,6 +55,10 @@ import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.PlatformTask
 import cn.pxyb.mycontrol.data.PlatformUser
 import cn.pxyb.mycontrol.data.PlatformWebSession
+import cn.pxyb.mycontrol.data.LibrarySeatArea
+import cn.pxyb.mycontrol.data.LibrarySeatOverview
+import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
+import cn.pxyb.mycontrol.data.LibrarySeatStatus
 import cn.pxyb.mycontrol.data.QuickScenePreference
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.ReleaseData
@@ -210,6 +214,20 @@ data class AppUiState(
     val reservationCancellingReservationId: String? = null,
     val reservationError: String? = null,
     val reservationMessage: String? = null,
+    val librarySeatOverview: LibrarySeatOverview = LibrarySeatOverview(),
+    val librarySeatOverviewLoading: Boolean = false,
+    val librarySeatAreas: List<LibrarySeatArea> = emptyList(),
+    val librarySeatAreasLoading: Boolean = false,
+    val librarySeatSeats: List<LibrarySeatStatus> = emptyList(),
+    val librarySeatSeatsLoading: Boolean = false,
+    val librarySeatSubmitLoading: Boolean = false,
+    val librarySeatSelectedVenueId: String? = null,
+    val librarySeatSelectedDate: String? = null,
+    val librarySeatSelectedFloorId: String? = null,
+    val librarySeatSelectedAreaId: String? = null,
+    val librarySeatSelectedSeatId: String? = null,
+    val librarySeatError: String? = null,
+    val librarySeatMessage: String? = null,
 ) {
     val activeIncidents: List<IncidentInfo>
         get() = incidents.filter { it.status != "resolved" }
@@ -268,6 +286,7 @@ class AppViewModel(
     val todayState = deriveState(AppUiState::toTodayUiState)
     val freeClassroomState = deriveState(AppUiState::toFreeClassroomUiState)
     val reservationState = deriveState(AppUiState::toReservationUiState)
+    val librarySeatState = deriveState(AppUiState::toLibrarySeatUiState)
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
     val scenesState = deriveState(AppUiState::toScenesUiState)
     private var pendingQrLogin: Pair<String, String>? = null
@@ -1911,6 +1930,174 @@ class AppViewModel(
         }
     }
 
+    fun refreshLibrarySeat() {
+        loadLibrarySeatOverview(force = true)
+    }
+
+    fun loadLibrarySeatOverview(force: Boolean = false) {
+        if (mutableState.value.librarySeatOverviewLoading && !force) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(librarySeatOverviewLoading = true, librarySeatError = null, librarySeatMessage = null) }
+            try {
+                val overview = api.librarySeatOverview()
+                mutableState.update { current ->
+                    val venueId = current.librarySeatSelectedVenueId.takeIf { selected ->
+                        overview.venues.any { it.id == selected }
+                    } ?: overview.venues.firstOrNull()?.id
+                    val date = current.librarySeatSelectedDate.takeIf { selected ->
+                        overview.dates.contains(selected)
+                    } ?: overview.dates.firstOrNull()
+                    current.copy(
+                        librarySeatOverview = overview,
+                        librarySeatOverviewLoading = false,
+                        librarySeatSelectedVenueId = venueId,
+                        librarySeatSelectedDate = date,
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        librarySeatOverviewLoading = false,
+                        librarySeatError = error.message ?: "座位场馆加载失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun queryLibrarySeatAreas(
+        venueId: String,
+        date: String,
+        startMinute: Int,
+        endMinute: Int,
+        floorId: String? = null,
+        pageSize: Int = 50,
+        currentPage: Int = 1,
+        power: Boolean = false,
+        window: Boolean = false,
+    ) {
+        if (
+            venueId.isBlank() ||
+            date.isBlank() ||
+            startMinute < 0 ||
+            endMinute <= startMinute ||
+            mutableState.value.librarySeatAreasLoading
+        ) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    librarySeatAreasLoading = true,
+                    librarySeatAreas = emptyList(),
+                    librarySeatError = null,
+                    librarySeatMessage = null,
+                    librarySeatSelectedVenueId = venueId,
+                    librarySeatSelectedDate = date,
+                    librarySeatSelectedFloorId = floorId,
+                    librarySeatSelectedAreaId = null,
+                    librarySeatSelectedSeatId = null,
+                    librarySeatSeats = emptyList(),
+                )
+            }
+            try {
+                val areas = api.librarySeatAreas(
+                    venueId = venueId,
+                    date = date,
+                    startMinute = startMinute,
+                    endMinute = endMinute,
+                    floorId = floorId,
+                    pageSize = pageSize,
+                    currentPage = currentPage,
+                    power = power,
+                    window = window,
+                )
+                mutableState.update {
+                    it.copy(
+                        librarySeatAreas = areas,
+                        librarySeatAreasLoading = false,
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        librarySeatAreasLoading = false,
+                        librarySeatError = error.message ?: "阅览区查询失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun loadLibrarySeatSeats(
+        roomId: String,
+        date: String,
+        startMinute: Int,
+        endMinute: Int,
+        amPm: Int = 0,
+    ) {
+        if (roomId.isBlank() || date.isBlank() || endMinute <= startMinute || mutableState.value.librarySeatSeatsLoading) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    librarySeatSeatsLoading = true,
+                    librarySeatSeats = emptyList(),
+                    librarySeatError = null,
+                    librarySeatMessage = null,
+                    librarySeatSelectedAreaId = roomId,
+                    librarySeatSelectedDate = date,
+                    librarySeatSelectedSeatId = null,
+                )
+            }
+            try {
+                val seats = api.librarySeatSeats(roomId, date, startMinute, endMinute, amPm)
+                mutableState.update {
+                    it.copy(
+                        librarySeatSeats = seats,
+                        librarySeatSeatsLoading = false,
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        librarySeatSeatsLoading = false,
+                        librarySeatError = error.message ?: "座位列表加载失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun submitLibrarySeatReservation(request: LibrarySeatReservationRequest, onSuccess: () -> Unit = {}) {
+        if (mutableState.value.librarySeatSubmitLoading) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(librarySeatSubmitLoading = true, librarySeatError = null, librarySeatMessage = null) }
+            try {
+                api.submitLibrarySeatReservation(request)
+                mutableState.update {
+                    it.copy(
+                        librarySeatSubmitLoading = false,
+                        librarySeatMessage = "座位预约已提交成功，请以学校预约系统记录为准。",
+                    )
+                }
+                onSuccess()
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        librarySeatSubmitLoading = false,
+                        librarySeatError = error.message ?: "座位预约提交失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearLibrarySeatFeedback() {
+        mutableState.update { it.copy(librarySeatError = null, librarySeatMessage = null) }
+    }
+
     fun loadAutoReservationTasks(force: Boolean = false) {
         if (mutableState.value.reservationAutoTasksLoading) return
         viewModelScope.launch {
@@ -3003,6 +3190,32 @@ class AppViewModel(
                         lastCleanedAtMillis = it.cacheStorageInfo.lastCleanedAtMillis,
                     )
                 )
+            }
+        }
+    }
+
+    fun openOfficialLibrarySeatReservation(onOpen: (PlatformWebSession) -> Unit) {
+        if (mutableState.value.busyAction != null) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    busyAction = "official-library-seat-reservation",
+                    librarySeatError = null,
+                    librarySeatMessage = null,
+                )
+            }
+            try {
+                val session = api.librarySeatOfficialWebSession()
+                mutableState.update { it.copy(busyAction = null) }
+                onOpen(session)
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        busyAction = null,
+                        librarySeatError = error.message ?: "学校官方座位预约入口打开失败，请稍后重试。",
+                    )
+                }
             }
         }
     }
