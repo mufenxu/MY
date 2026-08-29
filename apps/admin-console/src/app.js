@@ -1719,24 +1719,32 @@ export function createApp({
       if (!roleCanAccessExternalApplication(req.consoleUser.role, application)) {
         return res.status(403).json({ error: '当前账号没有进入该应用的权限。', code: 'INSUFFICIENT_ROLE' });
       }
-      const redirect = new URL(`/oauth/external-launch/${encodeURIComponent(application.id)}`, publicUrl.origin).toString();
-      let loginUrl = redirect;
+      let loginUrl;
       let expiresAt = null;
-      if (isAndroidAppRequest(req) && !config.authDisabled) {
-        const created = await webLoginTickets.create({
-          username: req.consoleUser.username,
-          role: req.consoleUser.role,
-          redirect,
-          appSessionNonce: req.consoleSession?.nonce,
-          appIp: req.ip,
-          appUserAgent: req.get('user-agent'),
-          sessionKind: application.openMode === 'webview' ? 'embedded_web' : 'browser',
-        });
-        const ticketUrl = new URL('/console/app-login', publicUrl.origin);
-        ticketUrl.searchParams.set('ticket', created.ticket);
-        ticketUrl.searchParams.set('redirect', redirect);
-        loginUrl = ticketUrl.toString();
-        expiresAt = created.record.expiresAt;
+      let autoLogin = null;
+      if (application.autoLogin) {
+        const secrets = await externalApplications.revealApplicationSecrets(application.id);
+        autoLogin = secrets?.autoLogin || null;
+        loginUrl = application.autoLogin.loginUrl;
+      } else {
+        const redirect = new URL(`/oauth/external-launch/${encodeURIComponent(application.id)}`, publicUrl.origin).toString();
+        loginUrl = redirect;
+        if (isAndroidAppRequest(req) && !config.authDisabled) {
+          const created = await webLoginTickets.create({
+            username: req.consoleUser.username,
+            role: req.consoleUser.role,
+            redirect,
+            appSessionNonce: req.consoleSession?.nonce,
+            appIp: req.ip,
+            appUserAgent: req.get('user-agent'),
+            sessionKind: application.openMode === 'webview' ? 'embedded_web' : 'browser',
+          });
+          const ticketUrl = new URL('/console/app-login', publicUrl.origin);
+          ticketUrl.searchParams.set('ticket', created.ticket);
+          ticketUrl.searchParams.set('redirect', redirect);
+          loginUrl = ticketUrl.toString();
+          expiresAt = created.record.expiresAt;
+        }
       }
       await recordAudit(req, {
         action: 'external_application.launch_requested',
@@ -1744,7 +1752,7 @@ export function createApp({
         targetId: application.id,
         details: { android: isAndroidAppRequest(req), openMode: application.openMode },
       });
-      return res.status(201).json({ loginUrl, openMode: application.openMode, expiresAt });
+      return res.status(201).json({ loginUrl, openMode: application.openMode, expiresAt, autoLogin });
     } catch (error) {
       next(error);
       return undefined;

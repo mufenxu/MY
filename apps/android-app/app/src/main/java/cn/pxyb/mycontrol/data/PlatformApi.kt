@@ -1495,6 +1495,14 @@ internal fun parseExternalApplicationLaunch(json: JSONObject) = ExternalApplicat
     loginUrl = json.optString("loginUrl"),
     openMode = json.optString("openMode", "webview"),
     expiresAt = json.nullableString("expiresAt"),
+    autoLogin = json.optJSONObject("autoLogin")?.let { autoLogin ->
+        ExternalApplicationAutoLogin(
+            loginUrl = autoLogin.optString("loginUrl"),
+            username = autoLogin.optString("username"),
+            password = autoLogin.optString("password"),
+            homeUrl = autoLogin.nullableString("homeUrl"),
+        )
+    },
 )
 
 private fun JSONObject?.toPlatformUser(): PlatformUser {

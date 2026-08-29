@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import cn.pxyb.mycontrol.data.ExternalApplicationAutoLogin
 import cn.pxyb.mycontrol.data.PlatformWebCookie
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 
@@ -69,6 +70,14 @@ class PlatformWebActivity : ComponentActivity() {
         val initialUrl = intent.getStringExtra(EXTRA_URL).orEmpty()
         val initialTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "管理后台" }
         val trustedDownloadUrl = intent.getStringExtra(EXTRA_TRUSTED_DOWNLOAD_URL)
+        val autoLogin = intent.getStringExtra(EXTRA_AUTO_LOGIN_LOGIN_URL)?.takeIf { it.isNotBlank() }?.let { loginUrl ->
+            ExternalApplicationAutoLogin(
+                loginUrl = loginUrl,
+                username = intent.getStringExtra(EXTRA_AUTO_LOGIN_USERNAME).orEmpty(),
+                password = intent.getStringExtra(EXTRA_AUTO_LOGIN_PASSWORD).orEmpty(),
+                homeUrl = intent.getStringExtra(EXTRA_AUTO_LOGIN_HOME_URL)?.takeIf { it.isNotBlank() },
+            )
+        }
         val initialCookies = intent.getStringArrayListExtra(EXTRA_INITIAL_COOKIE_URLS).orEmpty()
             .zip(intent.getStringArrayListExtra(EXTRA_INITIAL_COOKIE_VALUES).orEmpty())
             .mapNotNull { (url, value) ->
@@ -82,6 +91,7 @@ class PlatformWebActivity : ComponentActivity() {
                     initialTitle = initialTitle,
                     trustedDownloadUrl = trustedDownloadUrl,
                     initialCookies = initialCookies,
+                    autoLogin = autoLogin,
                     webDownloadSupport = webDownloadSupport,
                     onFinish = { finish() },
                     onWebViewCreated = { webViewInstance = it },
@@ -137,6 +147,10 @@ class PlatformWebActivity : ComponentActivity() {
         private const val EXTRA_TRUSTED_DOWNLOAD_URL = "extra_trusted_download_url"
         private const val EXTRA_INITIAL_COOKIE_URLS = "extra_initial_cookie_urls"
         private const val EXTRA_INITIAL_COOKIE_VALUES = "extra_initial_cookie_values"
+        private const val EXTRA_AUTO_LOGIN_LOGIN_URL = "extra_auto_login_login_url"
+        private const val EXTRA_AUTO_LOGIN_USERNAME = "extra_auto_login_username"
+        private const val EXTRA_AUTO_LOGIN_PASSWORD = "extra_auto_login_password"
+        private const val EXTRA_AUTO_LOGIN_HOME_URL = "extra_auto_login_home_url"
 
         fun createIntent(
             context: Context,
@@ -144,11 +158,18 @@ class PlatformWebActivity : ComponentActivity() {
             title: String? = null,
             trustedDownloadUrl: String? = null,
             initialCookies: List<PlatformWebCookie> = emptyList(),
+            autoLogin: ExternalApplicationAutoLogin? = null,
         ): Intent {
             return Intent(context, PlatformWebActivity::class.java).apply {
                 putExtra(EXTRA_URL, url)
                 putExtra(EXTRA_TITLE, title)
                 trustedDownloadUrl?.let { putExtra(EXTRA_TRUSTED_DOWNLOAD_URL, it) }
+                autoLogin?.let {
+                    putExtra(EXTRA_AUTO_LOGIN_LOGIN_URL, it.loginUrl)
+                    putExtra(EXTRA_AUTO_LOGIN_USERNAME, it.username)
+                    putExtra(EXTRA_AUTO_LOGIN_PASSWORD, it.password)
+                    it.homeUrl?.let { homeUrl -> putExtra(EXTRA_AUTO_LOGIN_HOME_URL, homeUrl) }
+                }
                 if (initialCookies.isNotEmpty()) {
                     putStringArrayListExtra(EXTRA_INITIAL_COOKIE_URLS, ArrayList(initialCookies.map { it.url }))
                     putStringArrayListExtra(EXTRA_INITIAL_COOKIE_VALUES, ArrayList(initialCookies.map { it.value }))
@@ -165,6 +186,7 @@ private fun PlatformWebScreen(
     initialTitle: String,
     trustedDownloadUrl: String?,
     initialCookies: List<PlatformWebCookie>,
+    autoLogin: ExternalApplicationAutoLogin?,
     webDownloadSupport: PlatformWebDownloadSupport,
     onFinish: () -> Unit,
     onWebViewCreated: (WebView) -> Unit,
@@ -252,6 +274,12 @@ private fun PlatformWebScreen(
                                         view?.loadUrl(initialUrl)
                                         return
                                     }
+                                    if (autoLogin != null && isAutoLoginPage(url, autoLogin.loginUrl)) {
+                                        view?.evaluateJavascript(
+                                            buildAutoLoginScript(autoLogin),
+                                            null,
+                                        )
+                                    }
                                     pageLoading = false
                                     canGoBack = view?.canGoBack() == true
                                 }
@@ -320,4 +348,55 @@ private fun shouldRestoreInitialHash(initialUrl: String, currentUrl: String?, al
     val initialHashIndex = initialUrl.indexOf('#')
     if (initialHashIndex <= 0 || '#' in currentUrl) return false
     return currentUrl == initialUrl.substring(0, initialHashIndex)
+}
+
+private fun isAutoLoginPage(currentUrl: String?, loginUrl: String): Boolean {
+    if (currentUrl.isNullOrBlank()) return false
+    return runCatching {
+        val current = Uri.parse(currentUrl)
+        val target = Uri.parse(loginUrl)
+        current.host.equals(target.host, ignoreCase = true) && current.path == target.path
+    }.getOrDefault(false)
+}
+
+private fun escapeAutoLoginValue(value: String): String = value
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+    .replace("\r", "\\r")
+    .replace("\n", "\\n")
+
+private fun buildAutoLoginScript(autoLogin: ExternalApplicationAutoLogin): String {
+    val username = escapeAutoLoginValue(autoLogin.username)
+    val password = escapeAutoLoginValue(autoLogin.password)
+    val homeUrl = autoLogin.homeUrl?.let { escapeAutoLoginValue(it) }
+    return buildString {
+        append("(function () {")
+        append("if (window.__my_auto_login_done) return;")
+        append("var alreadyLoggedIn = document.cookie.indexOf('admin_token') !== -1;")
+        append("if (alreadyLoggedIn) {")
+        if (homeUrl != null) {
+            append("if (/login/i.test(location.pathname)) location.href = \"$homeUrl\";")
+        }
+        append("return;")
+        append("}")
+        append("window.__my_auto_login_done = true;")
+        append("var body = new URLSearchParams();")
+        append("body.set('user', \"$username\");")
+        append("body.set('pass', \"$password\");")
+        append("fetch('/apisub.php?act=login', {")
+        append("method: 'POST',")
+        append("headers: { 'Content-Type': 'application/x-www-form-urlencoded' },")
+        append("body: body.toString(),")
+        append("credentials: 'include'")
+        append("}).then(function (r) { return r.json(); }).then(function (d) {")
+        append("if (d && d.code === 1) {")
+        if (homeUrl != null) {
+            append("location.href = \"$homeUrl\";")
+        } else {
+            append("location.reload();")
+        }
+        append("} else { window.__my_auto_login_done = false; }")
+        append("}).catch(function () { window.__my_auto_login_done = false; });")
+        append("})();")
+    }
 }

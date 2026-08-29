@@ -207,14 +207,24 @@ fun OverviewScreen(
         scope.launch {
             runCatching {
                 val launch = requestExternalApplicationLaunch(application.id)
-                when (launch.openMode) {
-                    "browser" -> openBrowserLink(context, launch.loginUrl)
-                    else -> openPlatformWebLink(
+                if (launch.autoLogin != null) {
+                    openPlatformWebLink(
                         context = context,
                         url = launch.loginUrl,
                         title = application.name,
                         trustedDownloadUrl = application.launchUrl,
+                        autoLogin = launch.autoLogin,
                     )
+                } else {
+                    when (launch.openMode) {
+                        "browser" -> openBrowserLink(context, launch.loginUrl)
+                        else -> openPlatformWebLink(
+                            context = context,
+                            url = launch.loginUrl,
+                            title = application.name,
+                            trustedDownloadUrl = application.launchUrl,
+                        )
+                    }
                 }
             }
                 .onSuccess {

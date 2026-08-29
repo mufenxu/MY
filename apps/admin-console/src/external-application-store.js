@@ -345,6 +345,7 @@ export async function createMongoExternalApplicationStore({
         clientSecretHint: secretHint(clientSecret),
         createdAt: timestamp,
         updatedAt: timestamp,
+        encryptSecret,
       });
       await applications.insertOne(record);
       return { application: publicApplication(record), clientSecret };
@@ -358,14 +359,34 @@ export async function createMongoExternalApplicationStore({
       return publicApplication(await applications.findOne({ id: String(id || '') }));
     },
 
+    async revealApplicationSecrets(id) {
+      const record = await applications.findOne({ id: String(id || '') });
+      if (!record) return null;
+      const result = publicApplication(record);
+      if (!result || !record.autoLogin?.password) return result;
+      result.autoLogin = {
+        loginUrl: record.autoLogin.loginUrl,
+        username: record.autoLogin.username,
+        homeUrl: record.autoLogin.homeUrl,
+        password: decryptSecret(record.autoLogin.password),
+      };
+      return result;
+    },
+
     async findApplicationByClientId(clientId) {
       return publicApplication(await applications.findOne({ clientId: String(clientId || '') }));
     },
 
     async updateApplication(id, input) {
+      const existing = await applications.findOne({ id: String(id || '') });
+      if (!existing) return null;
+      const patch = applicationPatch(input, new Date(), {
+        encryptSecret,
+        existingAutoLogin: existing.autoLogin,
+      });
       return publicApplication(await applications.findOneAndUpdate(
         { id: String(id || '') },
-        { $set: applicationPatch(input, new Date()) },
+        { $set: patch },
         { returnDocument: 'after' },
       ));
     },

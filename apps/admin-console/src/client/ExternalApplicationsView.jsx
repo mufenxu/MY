@@ -29,6 +29,11 @@ const EMPTY_FORM = Object.freeze({
   requiredRole: 'viewer',
   openMode: 'webview',
   enabled: true,
+  autoLoginEnabled: false,
+  autoLoginLoginUrl: '',
+  autoLoginUsername: '',
+  autoLoginPassword: '',
+  autoLoginHomeUrl: '',
 });
 
 const ROLE_OPTIONS = [
@@ -60,6 +65,11 @@ function formFromApplication(application) {
     requiredRole: application.requiredRole || 'viewer',
     openMode: application.openMode || 'webview',
     enabled: application.enabled !== false,
+    autoLoginEnabled: Boolean(application.autoLogin),
+    autoLoginLoginUrl: application.autoLogin?.loginUrl || '',
+    autoLoginUsername: application.autoLogin?.username || '',
+    autoLoginPassword: '',
+    autoLoginHomeUrl: application.autoLogin?.homeUrl || '',
   };
 }
 
@@ -80,6 +90,12 @@ function ApplicationEditor({ application, busy, onClose, onSave }) {
       ...form,
       redirectUris: form.redirectUris.split(/\r?\n|,/).map((value) => value.trim()).filter(Boolean),
       healthUrl: form.healthUrl.trim() || null,
+      autoLogin: form.autoLoginEnabled ? {
+        loginUrl: form.autoLoginLoginUrl.trim(),
+        username: form.autoLoginUsername.trim(),
+        password: form.autoLoginPassword,
+        homeUrl: form.autoLoginHomeUrl.trim() || null,
+      } : null,
     });
   }
 
@@ -93,9 +109,18 @@ function ApplicationEditor({ application, busy, onClose, onSave }) {
         <form onSubmit={submit}>
           <div className="external-app-form-grid">
             <label><span>应用名称</span><input required maxLength={100} value={form.name} onChange={(event) => update('name', event.target.value)} /></label>
-            <label><span>启动地址</span><input required type="url" placeholder="https://app.example.com/auth/my/start" value={form.launchUrl} onChange={(event) => update('launchUrl', event.target.value)} /></label>
+            <label><span>启动地址</span><input required type="url" placeholder={form.autoLoginEnabled ? 'http://example.com/index/index.php（登录后首页）' : 'https://app.example.com/auth/my/start'} value={form.launchUrl} onChange={(event) => update('launchUrl', event.target.value)} /></label>
             <label className="wide"><span>应用说明</span><textarea maxLength={500} value={form.description} onChange={(event) => update('description', event.target.value)} /></label>
-            <label className="wide"><span>回调地址</span><textarea required placeholder="每行一个精确地址" value={form.redirectUris} onChange={(event) => update('redirectUris', event.target.value)} /></label>
+            <label className="wide"><span>回调地址</span><textarea required={!form.autoLoginEnabled} placeholder={form.autoLoginEnabled ? '自动登录站点不需要回调地址' : '每行一个精确地址'} value={form.redirectUris} onChange={(event) => update('redirectUris', event.target.value)} /></label>
+            <label className="wide external-app-toggle"><span><strong>第三方自动登录</strong><small>启用后 App 会用下方账号密码自动登录该站点，无需手动输入</small></span><input type="checkbox" checked={form.autoLoginEnabled} onChange={(event) => update('autoLoginEnabled', event.target.checked)} /></label>
+            {form.autoLoginEnabled && (
+              <>
+                <label><span>登录页地址</span><input required type="url" placeholder="http://example.com/index/login.php" value={form.autoLoginLoginUrl} onChange={(event) => update('autoLoginLoginUrl', event.target.value)} /></label>
+                <label><span>账号</span><input required maxLength={100} autoComplete="off" value={form.autoLoginUsername} onChange={(event) => update('autoLoginUsername', event.target.value)} /></label>
+                <label><span>密码</span><input required={!application} type="password" autoComplete="new-password" placeholder={application ? '已保存，留空则不修改' : '请输入该站点登录密码'} value={form.autoLoginPassword} onChange={(event) => update('autoLoginPassword', event.target.value)} /></label>
+                <label className="wide"><span>登录后首页（可选）</span><input type="url" placeholder="http://example.com/index/index.php" value={form.autoLoginHomeUrl} onChange={(event) => update('autoLoginHomeUrl', event.target.value)} /></label>
+              </>
+            )}
             <label><span>健康检查地址</span><input type="url" placeholder="https://app.example.com/healthz" value={form.healthUrl} onChange={(event) => update('healthUrl', event.target.value)} /></label>
             <label><span>最低访问角色</span><SelectControl value={form.requiredRole} options={ROLE_OPTIONS} onChange={(value) => update('requiredRole', value)} ariaLabel="最低访问角色" /></label>
             <label><span>Android 打开方式</span><SelectControl value={form.openMode} options={OPEN_MODE_OPTIONS} onChange={(value) => update('openMode', value)} ariaLabel="Android 打开方式" /></label>
@@ -247,6 +272,7 @@ export default function ExternalApplicationsView({ session }) {
                 <header><span className="external-app-icon"><AppWindow size={21} /></span><div><h3>{application.name}</h3><p>{application.description || '暂无说明'}</p></div><span className="external-health"><HealthIcon size={15} />{health.label}</span></header>
                 <dl>
                   <div><dt>访问范围</dt><dd>{roleLabel(application.requiredRole)}</dd></div>
+                  {application.autoLogin && <div><dt>登录方式</dt><dd>自动登录</dd></div>}
                   <div><dt>响应时间</dt><dd>{application.health?.latencyMs == null ? '--' : `${application.health.latencyMs} ms`}</dd></div>
                   <div><dt>打开方式</dt><dd>{application.openMode === 'browser' ? '系统浏览器' : 'App 内网页'}</dd></div>
                   {superAdmin && <div><dt>Client ID</dt><dd title={application.clientId}>{application.clientId}</dd></div>}

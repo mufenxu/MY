@@ -115,6 +115,15 @@ data class ExternalApplicationLaunch(
     val loginUrl: String,
     val openMode: String,
     val expiresAt: String?,
+    val autoLogin: ExternalApplicationAutoLogin? = null,
+)
+
+@Immutable
+data class ExternalApplicationAutoLogin(
+    val loginUrl: String,
+    val username: String,
+    val password: String,
+    val homeUrl: String?,
 )
 
 @Immutable
