@@ -48,6 +48,7 @@ import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CenterFocusWeak
+import androidx.compose.material.icons.outlined.Chair
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.CloudSync
@@ -137,6 +138,7 @@ fun OverviewScreen(
     onOpenNotifications: () -> Unit,
     onOpenReservation: () -> Unit = {},
     onOpenFreeClassrooms: () -> Unit = {},
+    onOpenSeatReservation: () -> Unit = {},
     onOpenAccountManagement: () -> Unit = {},
     onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
     requestWebLoginUrl: suspend (String) -> String,
@@ -600,6 +602,7 @@ fun OverviewScreen(
                                                     onOpenWorkspace = onOpenWorkspace,
                                                     onOpenReservation = onOpenReservation,
                                                     onOpenFreeClassrooms = onOpenFreeClassrooms,
+                                                    onOpenSeatReservation = onOpenSeatReservation,
                                                     onOpenSearch = onOpenSearch,
                                                     onOpenQrLogin = onOpenQrLogin,
                                                     onOpenAccountManagement = onOpenAccountManagement,
@@ -983,6 +986,7 @@ fun OverviewScreen(
                                             onOpenWorkspace = onOpenWorkspace,
                                             onOpenReservation = onOpenReservation,
                                             onOpenFreeClassrooms = onOpenFreeClassrooms,
+                                            onOpenSeatReservation = onOpenSeatReservation,
                                             onOpenSearch = onOpenSearch,
                                             onOpenQrLogin = onOpenQrLogin,
                                             onOpenAccountManagement = onOpenAccountManagement,
@@ -1343,6 +1347,7 @@ private fun homeQuickActionSpec(
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
     onOpenReservation: () -> Unit,
     onOpenFreeClassrooms: () -> Unit,
+    onOpenSeatReservation: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenQrLogin: () -> Unit,
     onOpenAccountManagement: () -> Unit,
@@ -1382,6 +1387,14 @@ private fun homeQuickActionSpec(
         accent = Color(0xFF0284C7),
         accentPale = Color(0xFFF0F9FF),
         onClick = onOpenFreeClassrooms,
+    )
+
+    HomeQuickAction.SeatReservation -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Chair,
+        label = "座位预约",
+        accent = Color(0xFF16A34A),
+        accentPale = Color(0xFFF0FDF4),
+        onClick = onOpenSeatReservation,
     )
 
     HomeQuickAction.Devices -> HomeQuickActionSpec(
@@ -1546,6 +1559,7 @@ private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action
     HomeQuickAction.Scenes -> "智能场景"
     HomeQuickAction.Reservation -> "研讨间预约"
     HomeQuickAction.FreeClassrooms -> "空闲教室"
+    HomeQuickAction.SeatReservation -> "座位预约"
     HomeQuickAction.Devices -> "设备控制"
     HomeQuickAction.Diagnostics -> "系统自检"
     HomeQuickAction.Backup -> "数据备份"

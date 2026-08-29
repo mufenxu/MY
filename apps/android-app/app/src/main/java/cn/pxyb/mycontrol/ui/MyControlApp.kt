@@ -1700,6 +1700,9 @@ private fun AuthenticatedShell(
                         onOpenFreeClassrooms = {
                             navController.navigate(AppRoute.FreeClassrooms) { launchSingleTop = true }
                         },
+                        onOpenSeatReservation = {
+                            navController.navigate(AppRoute.LibrarySeatReservation) { launchSingleTop = true }
+                        },
                         onOpenAccountManagement = viewModel::openAccountManagement,
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
                         requestWebLoginUrl = viewModel::createPlatformWebLoginUrl,

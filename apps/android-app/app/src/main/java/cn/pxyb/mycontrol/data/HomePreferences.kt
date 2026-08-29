@@ -10,6 +10,7 @@ enum class HomeQuickAction {
     Scenes,
     Reservation,
     FreeClassrooms,
+    SeatReservation,
     Devices,
     Diagnostics,
     Backup,

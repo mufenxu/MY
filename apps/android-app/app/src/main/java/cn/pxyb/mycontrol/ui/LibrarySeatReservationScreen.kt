@@ -41,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -556,7 +557,9 @@ private fun SeatChip(
                 else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
             },
         ),
-        modifier = Modifier.clickable(enabled = seat.isFree, onClick = onClick),
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = seat.isFree, onClick = onClick),
     ) {
         Column(
             modifier = Modifier.widthIn(min = 82.dp).padding(horizontal = 10.dp, vertical = 10.dp),
@@ -600,6 +603,7 @@ private fun SelectionSurface(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
                 .clickable(enabled = enabled) { onExpandedChange(true) },
         ) {
             Row(
