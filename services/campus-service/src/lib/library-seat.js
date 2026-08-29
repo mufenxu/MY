@@ -4,7 +4,7 @@ export const LIBRARY_SEAT_ORIGIN = "https://libic.hgu.edu.cn";
 export const LIBRARY_SEAT_API_BASE = `${LIBRARY_SEAT_ORIGIN}/jsq`;
 export const LIBRARY_SEAT_OFFICIAL_ENTRY_URL = `${LIBRARY_SEAT_ORIGIN}/jsq-v/#/login`;
 export const LIBRARY_SEAT_CAS_SERVICE_URL =
-  `${LIBRARY_SEAT_ORIGIN}/remote/static/sso/login?redirectUrl=${encodeURIComponent(LIBRARY_SEAT_OFFICIAL_ENTRY_URL)}`;
+  "https://webvpn.hgu.edu.cn:443/passport/v1/auth/cas?sfDomain=cas96624";
 
 const AUTH_ERROR_CODES = new Set([401, 403, 10001, 10002, 10003, 20003]);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;

@@ -12,11 +12,11 @@ import {
   LIBRARY_SEAT_OFFICIAL_ENTRY_URL
 } from "../src/lib/library-seat.js";
 
-test("uses the CAS service URL published by the seat reservation system", () => {
+test("uses the WebVPN CAS service URL of the seat reservation system", () => {
   assert.equal(LIBRARY_SEAT_API_BASE, "https://libic.hgu.edu.cn/jsq");
   assert.equal(
     LIBRARY_SEAT_CAS_SERVICE_URL,
-    "https://libic.hgu.edu.cn/remote/static/sso/login?redirectUrl=https%3A%2F%2Flibic.hgu.edu.cn%2Fjsq-v%2F%23%2Flogin"
+    "https://webvpn.hgu.edu.cn:443/passport/v1/auth/cas?sfDomain=cas96624"
   );
   assert.equal(LIBRARY_SEAT_OFFICIAL_ENTRY_URL, "https://libic.hgu.edu.cn/jsq-v/#/login");
 });

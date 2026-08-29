@@ -2178,50 +2178,51 @@ async function requestLibrarySeatJson(jar, pathname, data = {}, { token = "" } =
   return { payload, status: response.status, ok: response.ok };
 }
 
-async function followLibrarySeatSimpleRedirects(jar, startUrl, { referer = `${LIBRARY_SEAT_ORIGIN}/jsq-v/` } = {}) {
-  let currentUrl = startUrl;
-  let currentReferer = referer;
-  let finalUrl = startUrl;
-  let html = "";
-  for (let i = 0; i < 6; i += 1) {
-    const { response, url } = await followRedirectsWithJar(currentUrl, jar, {
+async function resolveLibrarySeatEntrance(jar, credentials = {}) {
+  await ensureWebvpnSession(jar, credentials);
+
+  // 与浏览器一致：从官方入口进入，跟随 aTrust 校验/统一认证/换票整条 302 链，
+  // 最终落在 https://libic.hgu.edu.cn/jsq-v/?token=<JWT>#/login
+  const entryUrl = new URL("/jsq-v/", LIBRARY_SEAT_ORIGIN).href;
+  let currentUrl = entryUrl;
+  let currentReferer = `${LIBRARY_SEAT_ORIGIN}/jsq-v/`;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const followed = await followRedirectsWithJar(currentUrl, jar, {
       method: "GET",
       headers: {
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         referer: currentReferer
       }
     });
-    finalUrl = url;
-    html = await readUpstreamText(response);
-    const redirectUrl = extractSimpleLocationRedirectUrl(html, finalUrl);
-    if (!redirectUrl) return { finalUrl, html };
-    currentReferer = finalUrl;
-    currentUrl = redirectUrl;
-  }
-  return { finalUrl, html };
-}
+    const finalUrl = followed.url;
+    const html = await readUpstreamText(followed.response);
 
-async function resolveLibrarySeatEntrance(jar, credentials = {}) {
-  const callbackUrl = await getCasTicketRedirect({ jar, ...credentials, serviceUrl: LIBRARY_SEAT_CAS_SERVICE_URL });
-  let entranceUrl = callbackUrl;
-  let entranceToken = librarySeatTokenFromOfficialUrl(entranceUrl);
-  if (!entranceToken) {
-    const followed = await followLibrarySeatSimpleRedirects(jar, callbackUrl, { referer: `${CAS_ORIGIN}/cas/login` });
-    entranceUrl = followed.finalUrl;
-    entranceToken = librarySeatTokenFromOfficialUrl(entranceUrl);
-    if (!entranceToken) {
-      const simpleRedirect = extractSimpleLocationRedirectUrl(followed.html, entranceUrl);
-      if (simpleRedirect) {
-        const redirected = await followLibrarySeatSimpleRedirects(jar, simpleRedirect, { referer: entranceUrl });
-        entranceUrl = redirected.finalUrl;
-        entranceToken = librarySeatTokenFromOfficialUrl(entranceUrl);
-      }
+    const entranceToken = librarySeatTokenFromOfficialUrl(finalUrl);
+    if (entranceToken) {
+      return { callbackUrl: finalUrl, entranceUrl: finalUrl, entranceToken };
     }
+
+    const verifyUrl = extractWebvpnVerifyUrl(html, finalUrl);
+    if (verifyUrl) {
+      await ensureWebvpnSession(jar, credentials);
+      currentReferer = finalUrl;
+      currentUrl = verifyUrl;
+      continue;
+    }
+
+    if (looksLikeCasLoginHtml(html, finalUrl)) {
+      const serviceUrl = new URL(finalUrl).searchParams.get("service") || LIBRARY_SEAT_CAS_SERVICE_URL;
+      const logged = await loginCasService({ jar, ...credentials, serviceUrl });
+      await discardUpstreamResponse(logged.response).catch(() => {});
+      currentReferer = finalUrl;
+      currentUrl = logged.url;
+      continue;
+    }
+
+    break;
   }
-  if (!entranceToken) {
-    throw new HttpError(401, "座位预约官方入口未返回登录票据，请重新登录学校账号。", null, "LIBRARY_SEAT_CAS_TOKEN_REQUIRED");
-  }
-  return { callbackUrl, entranceUrl, entranceToken };
+
+  throw new HttpError(401, "座位预约官方入口未返回登录票据，请重新登录学校账号。", null, "LIBRARY_SEAT_CAS_TOKEN_REQUIRED");
 }
 
 async function issueLibrarySeatMemberToken(jar, credentials = {}) {
