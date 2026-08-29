@@ -117,7 +117,7 @@ function ApplicationEditor({ application, busy, onClose, onSave }) {
               <>
                 <label><span>登录页地址</span><input required type="url" placeholder="http://example.com/index/login.php" value={form.autoLoginLoginUrl} onChange={(event) => update('autoLoginLoginUrl', event.target.value)} /></label>
                 <label><span>账号</span><input required maxLength={100} autoComplete="off" value={form.autoLoginUsername} onChange={(event) => update('autoLoginUsername', event.target.value)} /></label>
-                <label><span>密码</span><input required={!application} type="password" autoComplete="new-password" placeholder={application ? '已保存，留空则不修改' : '请输入该站点登录密码'} value={form.autoLoginPassword} onChange={(event) => update('autoLoginPassword', event.target.value)} /></label>
+                <label><span>密码</span><input required={!application?.autoLogin?.hasPassword} type="password" autoComplete="new-password" placeholder={application?.autoLogin?.hasPassword ? '已保存，留空则不修改' : (application ? '未保存，请填写' : '请输入该站点登录密码')} value={form.autoLoginPassword} onChange={(event) => update('autoLoginPassword', event.target.value)} /></label>
                 <label className="wide"><span>登录后首页（可选）</span><input type="url" placeholder="http://example.com/index/index.php" value={form.autoLoginHomeUrl} onChange={(event) => update('autoLoginHomeUrl', event.target.value)} /></label>
               </>
             )}

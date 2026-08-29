@@ -96,12 +96,23 @@ jobs:
           ORG_GRADLE_PROJECT_androidReleaseKeyAlias: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
           ORG_GRADLE_PROJECT_androidReleaseStorePassword: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
           ORG_GRADLE_PROJECT_androidReleaseKeyPassword: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        shell: bash
         run: |
+          set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew :app:assembleRelease \
-            -PappVersionName=${{ steps.version.outputs.version }} \
-            -PappVersionCode=${{ steps.version.outputs.version_code }} \
-            --console=plain --no-daemon
+          for attempt in 1 2 3; do
+            if ./gradlew :app:assembleRelease \
+              -PappVersionName=${{ steps.version.outputs.version }} \
+              -PappVersionCode=${{ steps.version.outputs.version_code }} \
+              --console=plain --no-daemon; then
+              exit 0
+            fi
+            echo "::warning::Gradle build attempt ${attempt} failed, retrying in 30s"
+            if [[ "${attempt}" != "3" ]]; then
+              sleep 30
+            fi
+          done
+          exit 1
 
       - name: Verify APK signature and prepare assets
         id: assets

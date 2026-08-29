@@ -372,13 +372,6 @@ private fun buildAutoLoginScript(autoLogin: ExternalApplicationAutoLogin): Strin
     return buildString {
         append("(function () {")
         append("if (window.__my_auto_login_done) return;")
-        append("var alreadyLoggedIn = document.cookie.indexOf('admin_token') !== -1;")
-        append("if (alreadyLoggedIn) {")
-        if (homeUrl != null) {
-            append("if (/login/i.test(location.pathname)) location.href = \"$homeUrl\";")
-        }
-        append("return;")
-        append("}")
         append("window.__my_auto_login_done = true;")
         append("var body = new URLSearchParams();")
         append("body.set('user', \"$username\");")
