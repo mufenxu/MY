@@ -677,17 +677,21 @@ fun OverviewScreen(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            if (state.externalApplications.isNotEmpty()) {
+                            if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
                                 OverviewSectionTitle("外部应用", "独立项目免密快捷直达")
                                 externalApplicationOpenError?.let { message ->
                                     FeedbackBanner(message, error = true)
                                 }
-                                state.externalApplications.forEach { application ->
-                                    ExternalApplicationRow(
-                                        application = application,
-                                        opening = openingExternalApplicationId == application.id,
-                                        onOpen = stableOpenExternalApplication,
-                                    )
+                                if (state.externalApplications.isEmpty()) {
+                                    ExternalApplicationsLoadingPlaceholder()
+                                } else {
+                                    state.externalApplications.forEach { application ->
+                                        ExternalApplicationRow(
+                                            application = application,
+                                            opening = openingExternalApplicationId == application.id,
+                                            onOpen = stableOpenExternalApplication,
+                                        )
+                                    }
                                 }
                             }
 
@@ -1062,7 +1066,7 @@ fun OverviewScreen(
                     }
                 }
 
-                if (state.externalApplications.isNotEmpty()) {
+                if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
                     item(key = "external-apps-title", contentType = "section") {
                         OverviewSectionTitle("外部应用", "独立项目免密快捷直达")
                     }
@@ -1071,16 +1075,22 @@ fun OverviewScreen(
                             FeedbackBanner(message, error = true)
                         }
                     }
-                    items(
-                        items = state.externalApplications,
-                        key = { "external-application-${it.id}" },
-                        contentType = { "external-application" },
-                    ) { application ->
-                        ExternalApplicationRow(
-                            application = application,
-                            opening = openingExternalApplicationId == application.id,
-                            onOpen = stableOpenExternalApplication,
-                        )
+                    if (state.externalApplications.isEmpty()) {
+                        item(key = "external-apps-loading", contentType = "loading") {
+                            ExternalApplicationsLoadingPlaceholder()
+                        }
+                    } else {
+                        items(
+                            items = state.externalApplications,
+                            key = { "external-application-${it.id}" },
+                            contentType = { "external-application" },
+                        ) { application ->
+                            ExternalApplicationRow(
+                                application = application,
+                                opening = openingExternalApplicationId == application.id,
+                                onOpen = stableOpenExternalApplication,
+                            )
+                        }
                     }
                 }
 
@@ -1964,6 +1974,69 @@ private fun ServiceRow(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExternalApplicationsLoadingPlaceholder() {
+    val transition = rememberInfiniteTransition(label = "external-apps-loading")
+    val pulse by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 720, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "external-apps-loading-pulse",
+    )
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        repeat(2) { index ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f * pulse)),
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(7.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(if (index == 0) 0.52f else 0.4f)
+                            .height(13.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f * pulse)),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.68f)
+                            .height(9.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f * pulse)),
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .width(46.dp)
+                        .height(20.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.16f * pulse)),
+                )
             }
         }
     }
