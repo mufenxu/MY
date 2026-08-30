@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Chair
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.OpenInNew
@@ -31,7 +30,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -80,6 +78,7 @@ fun LibrarySeatReservationScreen(
     var selectedAreaId by rememberSaveable { mutableStateOf("") }
     var selectedSeatId by rememberSaveable { mutableStateOf("") }
     var showConfirmDialog by remember { mutableStateOf(false) }
+    var selectedFloorSeat by remember { mutableStateOf<LibrarySeatFloorSeat?>(null) }
     var venueMenuOpen by remember { mutableStateOf(false) }
     var floorMenuOpen by remember { mutableStateOf(false) }
     var queryHint by remember { mutableStateOf<String?>(null) }
@@ -297,35 +296,29 @@ fun LibrarySeatReservationScreen(
                             )
                         }
                     }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        OutlinedTextField(
-                            value = startTime,
-                            onValueChange = {
-                                startTime = it.trim()
-                                selectedAreaId = ""
-                                selectedSeatId = ""
-                            },
-                            label = { Text("开始时间") },
-                            leadingIcon = { Icon(Icons.Outlined.AccessTime, contentDescription = null) },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                        OutlinedTextField(
-                            value = endTime,
-                            onValueChange = {
-                                endTime = it.trim()
-                                selectedAreaId = ""
-                                selectedSeatId = ""
-                            },
-                            label = { Text("结束时间") },
-                            leadingIcon = { Icon(Icons.Outlined.AccessTime, contentDescription = null) },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+                    ReservationTimeRangePicker(
+                        startTime = startTime,
+                        endTime = endTime,
+                        onStartTimeChange = {
+                            startTime = it
+                            selectedAreaId = ""
+                            selectedSeatId = ""
+                        },
+                        onEndTimeChange = {
+                            endTime = it
+                            selectedAreaId = ""
+                            selectedSeatId = ""
+                        },
+                        sectionTitle = "预约时段（开放 08:00 - 21:30）",
+                        minStartTime = "08:00",
+                        maxStartTime = "21:15",
+                        minEndTime = "08:15",
+                        maxEndTime = "21:30",
+                        minuteStep = 15,
+                        minDurationMinutes = null,
+                        maxDurationMinutes = null,
+                        quickDurationOptions = emptyList(),
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = wantWindow,
@@ -453,19 +446,25 @@ fun LibrarySeatReservationScreen(
                     } else if (selectedSeats.isEmpty()) {
                         EmptyBlock("暂无座位结果", "如果阅览区已选中，请尝试刷新或重新查询。")
                     } else {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            selectedSeats.forEach { seat ->
-                                SeatChip(
-                                    seat = seat,
-                                    selected = selectedSeatId == seat.id,
-                                    onClick = {
-                                        selectedSeatId = seat.id
-                                        showConfirmDialog = true
-                                    },
-                                )
+                        selectedSeats.chunked(4).forEach { rowSeats ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                val leadingSpacers = (4 - rowSeats.size) / 2
+                                repeat(leadingSpacers) { Spacer(Modifier.weight(1f)) }
+                                rowSeats.forEach { seat ->
+                                    SeatChip(
+                                        seat = seat,
+                                        selected = selectedSeatId == seat.id,
+                                        onClick = {
+                                            selectedSeatId = seat.id
+                                            showConfirmDialog = true
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                                repeat(4 - rowSeats.size - leadingSpacers) { Spacer(Modifier.weight(1f)) }
                             }
                         }
                     }
@@ -498,7 +497,15 @@ fun LibrarySeatReservationScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             state.floorSeats.forEach { floorSeat ->
-                                FloorSeatChip(floorSeat)
+                                FloorSeatChip(
+                                    floorSeat = floorSeat,
+                                    onClick = {
+                                        selectedFloorSeat = floorSeat
+                                        selectedAreaId = floorSeat.areaId
+                                        selectedSeatId = floorSeat.seat.id
+                                        showConfirmDialog = true
+                                    },
+                                )
                             }
                         }
                     }
@@ -507,21 +514,27 @@ fun LibrarySeatReservationScreen(
         }
     }
 
-    if (showConfirmDialog && selectedArea != null) {
+    if (showConfirmDialog) {
         val startMinute = timeTextToMinute(startTime) ?: return
         val endMinute = timeTextToMinute(endTime) ?: return
-        val seat = selectedSeats.firstOrNull { it.id == selectedSeatId }
-        if (endMinute <= startMinute || seat == null) return
+        if (endMinute <= startMinute) return
+        val floorSeat = selectedFloorSeat
+        val seat = floorSeat?.seat ?: selectedSeats.firstOrNull { it.id == selectedSeatId }
+        if (seat == null) return
+        val areaName = floorSeat?.areaName ?: selectedArea?.name ?: return
         AppConfirmDialog(
             title = "提交座位预约",
             detail = listOf(
-                "阅览区：${selectedArea.name}",
+                "阅览区：$areaName",
                 "座位：${seat.label} · ${seat.name}",
                 "日期：${formatSeatDateLabel(selectedDate)}",
                 "时段：${timeRangeLabel(startTime, endTime)}",
             ).joinToString("\n"),
             confirmLabel = "确认提交",
-            onDismiss = { showConfirmDialog = false },
+            onDismiss = {
+                showConfirmDialog = false
+                selectedFloorSeat = null
+            },
             onConfirm = {
                 onSubmitReservation(
                     LibrarySeatReservationRequest(
@@ -532,9 +545,16 @@ fun LibrarySeatReservationScreen(
                     ),
                 ) {
                     showConfirmDialog = false
+                    selectedFloorSeat = null
                     selectedSeatId = ""
                     queryHint = "预约已提交，正在刷新座位状态。"
-                    onLoadSeats(selectedArea.id, selectedDate, startMinute, endMinute, 0)
+                    val venue = selectedVenue
+                    val floor = secondFloor
+                    if (floorSeat != null && venue != null && floor != null) {
+                        onQueryFloorSeats(venue.id, floor.id, selectedDate, startMinute, endMinute)
+                    } else if (selectedArea != null) {
+                        onLoadSeats(selectedArea.id, selectedDate, startMinute, endMinute, 0)
+                    }
                 }
             },
             icon = Icons.Outlined.Chair,
@@ -605,6 +625,7 @@ private fun AreaCard(
 private fun SeatChip(
     seat: LibrarySeatStatus,
     selected: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val container = when {
@@ -625,12 +646,12 @@ private fun SeatChip(
                 else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
             },
         ),
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = seat.isFree, onClick = onClick),
     ) {
         Column(
-            modifier = Modifier.widthIn(min = 82.dp).padding(horizontal = 10.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -652,7 +673,10 @@ private fun SeatChip(
 }
 
 @Composable
-private fun FloorSeatChip(floorSeat: LibrarySeatFloorSeat) {
+private fun FloorSeatChip(
+    floorSeat: LibrarySeatFloorSeat,
+    onClick: () -> Unit,
+) {
     val seat = floorSeat.seat
     val container = when {
         seat.isFree -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
@@ -670,7 +694,10 @@ private fun FloorSeatChip(floorSeat: LibrarySeatFloorSeat) {
                 else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
             },
         ),
-        modifier = Modifier.widthIn(min = 96.dp),
+        modifier = Modifier
+            .widthIn(min = 96.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = seat.isFree, onClick = onClick),
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),

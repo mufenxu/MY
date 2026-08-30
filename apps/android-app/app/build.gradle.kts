@@ -96,6 +96,8 @@ android {
     lint {
         // Compose 1.6.1 的检测器无法读取 Kotlin 2.0.21 metadata，会在分析前直接崩溃。
         disable += "StateFlowValueCalledInComposition"
+        // 同类问题：ComposableCoroutineCreationDetector 读取 Kotlin 2.0.21 metadata 时崩溃。
+        disable += "CoroutineCreationDuringComposition"
     }
 }
 
