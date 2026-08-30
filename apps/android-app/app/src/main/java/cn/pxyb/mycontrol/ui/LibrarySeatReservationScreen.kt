@@ -89,6 +89,22 @@ fun LibrarySeatReservationScreen(
     var queryMode by rememberSaveable { mutableStateOf("areas") }
     var seatListExpanded by rememberSaveable { mutableStateOf(false) }
 
+    val isTablet = LocalAdaptiveWindow.current.isTabletOrExpanded
+    val onAreaClick: (LibrarySeatArea) -> Unit = { clickedArea ->
+        val isSameArea = selectedAreaId == clickedArea.id
+        selectedAreaId = if (isSameArea) "" else clickedArea.id
+        selectedSeatId = ""
+        queryMode = "areas"
+        seatListExpanded = !isSameArea
+        if (!isSameArea) {
+            val startMinute = timeTextToMinute(startTime)
+            val endMinute = timeTextToMinute(endTime)
+            if (startMinute != null && endMinute != null && endMinute > startMinute) {
+                onLoadSeats(clickedArea.id, selectedDate, startMinute, endMinute, 0)
+            }
+        }
+    }
+
     val selectedVenue = state.venues.firstOrNull { it.id == selectedVenueId } ?: state.venues.firstOrNull()
     val selectedFloor = selectedVenue?.floors?.firstOrNull { it.id == selectedFloorId }
     val secondFloor = selectedVenue?.floors?.firstOrNull { isSecondFloorName(it.name) }
@@ -101,6 +117,81 @@ fun LibrarySeatReservationScreen(
     val startMinute = timeTextToMinute(startTime)
     val endMinute = timeTextToMinute(endTime)
     val canQuery = selectedVenue != null && selectedDate.isNotBlank() && startMinute != null && endMinute != null && endMinute > startMinute
+
+    val queryAreasButton: @Composable (Modifier) -> Unit = { buttonModifier ->
+        Button(
+            onClick = {
+                val venue = selectedVenue
+                val startMinute = timeTextToMinute(startTime) ?: run {
+                    queryHint = "请先选择有效的场馆、日期和时间。"
+                    return@Button
+                }
+                val endMinute = timeTextToMinute(endTime) ?: run {
+                    queryHint = "请先选择有效的场馆、日期和时间。"
+                    return@Button
+                }
+                if (venue == null || selectedDate.isBlank() || endMinute <= startMinute) {
+                    queryHint = "请先选择有效的场馆、日期和时间。"
+                    return@Button
+                }
+                queryHint = null
+                onClearFeedback()
+                queryMode = "areas"
+                seatListExpanded = false
+                selectedAreaId = ""
+                selectedSeatId = ""
+                onQueryAreas(
+                    venue.id,
+                    selectedDate,
+                    startMinute,
+                    endMinute,
+                    selectedFloorId.takeIf(String::isNotBlank),
+                    50,
+                    wantPower,
+                    wantWindow,
+                )
+            },
+            modifier = buttonModifier,
+            enabled = canQuery && !state.areasLoading,
+        ) {
+            Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("查询阅览区", maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+    val queryFloorButton: @Composable (Modifier) -> Unit = { buttonModifier ->
+        FilledTonalButton(
+            onClick = {
+                val venue = selectedVenue
+                val floor = secondFloor
+                val startMinute = timeTextToMinute(startTime) ?: run {
+                    queryHint = "请先选择有效的场馆、日期和时间。"
+                    return@FilledTonalButton
+                }
+                val endMinute = timeTextToMinute(endTime) ?: run {
+                    queryHint = "请先选择有效的场馆、日期和时间。"
+                    return@FilledTonalButton
+                }
+                if (venue == null || floor == null || selectedDate.isBlank() || endMinute <= startMinute) {
+                    queryHint = "请先选择有效的场馆、日期和时间。"
+                    return@FilledTonalButton
+                }
+                queryHint = null
+                onClearFeedback()
+                selectedFloorId = floor.id
+                selectedAreaId = ""
+                selectedSeatId = ""
+                queryMode = "floor"
+                onQueryFloorSeats(venue.id, floor.id, selectedDate, startMinute, endMinute)
+            },
+            modifier = buttonModifier,
+            enabled = canQuery && secondFloor != null && !state.floorSeatsLoading,
+        ) {
+            Icon(Icons.Outlined.Chair, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("二层 1-45", maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
 
     LaunchedEffect(Unit) {
         onLoadOverview(false)
@@ -336,75 +427,12 @@ fun LibrarySeatReservationScreen(
                             label = { Text("电源") },
                         )
                     }
-                    Button(
-                        onClick = {
-                            val venue = selectedVenue
-                            val startMinute = timeTextToMinute(startTime) ?: run {
-                                queryHint = "请先选择有效的场馆、日期和时间。"
-                                return@Button
-                            }
-                            val endMinute = timeTextToMinute(endTime) ?: run {
-                                queryHint = "请先选择有效的场馆、日期和时间。"
-                                return@Button
-                            }
-                            if (venue == null || selectedDate.isBlank() || endMinute <= startMinute) {
-                                queryHint = "请先选择有效的场馆、日期和时间。"
-                                return@Button
-                            }
-                            queryHint = null
-                            onClearFeedback()
-                            queryMode = "areas"
-                            seatListExpanded = false
-                            selectedAreaId = ""
-                            selectedSeatId = ""
-                            onQueryAreas(
-                                venue.id,
-                                selectedDate,
-                                startMinute,
-                                endMinute,
-                                selectedFloorId.takeIf(String::isNotBlank),
-                                50,
-                                wantPower,
-                                wantWindow,
-                            )
-                        },
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = canQuery && !state.areasLoading,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("查询阅览区")
-                    }
-                    FilledTonalButton(
-                        onClick = {
-                            val venue = selectedVenue
-                            val floor = secondFloor
-                            val startMinute = timeTextToMinute(startTime) ?: run {
-                                queryHint = "请先选择有效的场馆、日期和时间。"
-                                return@FilledTonalButton
-                            }
-                            val endMinute = timeTextToMinute(endTime) ?: run {
-                                queryHint = "请先选择有效的场馆、日期和时间。"
-                                return@FilledTonalButton
-                            }
-                            if (venue == null || floor == null || selectedDate.isBlank() || endMinute <= startMinute) {
-                                queryHint = "请先选择有效的场馆、日期和时间。"
-                                return@FilledTonalButton
-                            }
-                            queryHint = null
-                            onClearFeedback()
-                            selectedFloorId = floor.id
-                            selectedAreaId = ""
-                            selectedSeatId = ""
-                            queryMode = "floor"
-                            onQueryFloorSeats(venue.id, floor.id, selectedDate, startMinute, endMinute)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = canQuery && secondFloor != null && !state.floorSeatsLoading,
-                    ) {
-                        Icon(Icons.Outlined.Chair, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("查询二层 1-45 号座位")
+                        queryAreasButton(Modifier.weight(1f))
+                        queryFloorButton(Modifier.weight(1f))
                     }
                 }
             }
@@ -420,23 +448,35 @@ fun LibrarySeatReservationScreen(
                     AppPanel { LoadingBlock("正在查询阅览区...") }
                 } else if (selectedAreas.isEmpty()) {
                     AppPanel { EmptyBlock("暂无阅览区结果", "请先查询，或调整日期与时段后重试。") }
+                } else if (isTablet) {
+                    // 平板 / 大屏：阅览区卡片双列网格
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        selectedAreas.chunked(2).forEach { rowAreas ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                rowAreas.forEach { area ->
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        AreaCard(
+                                            area = area,
+                                            selected = selectedAreaId == area.id,
+                                            onClick = { onAreaClick(area) },
+                                        )
+                                    }
+                                }
+                                if (rowAreas.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
                 } else {
                     selectedAreas.forEach { area ->
                         AreaCard(
                             area = area,
                             selected = selectedAreaId == area.id,
-                            onClick = {
-                                val isSameArea = selectedAreaId == area.id
-                                selectedAreaId = if (isSameArea) "" else area.id
-                                selectedSeatId = ""
-                                queryMode = "areas"
-                                seatListExpanded = !isSameArea
-                                if (isSameArea) return@AreaCard
-                                val startMinute = timeTextToMinute(startTime) ?: return@AreaCard
-                                val endMinute = timeTextToMinute(endTime) ?: return@AreaCard
-                                if (endMinute <= startMinute) return@AreaCard
-                                onLoadSeats(area.id, selectedDate, startMinute, endMinute, 0)
-                            },
+                            onClick = { onAreaClick(area) },
                         )
                     }
                 }
@@ -459,12 +499,13 @@ fun LibrarySeatReservationScreen(
                     } else if (selectedSeats.isEmpty()) {
                         EmptyBlock("暂无座位结果", "如果阅览区已选中，请尝试刷新或重新查询。")
                     } else {
-                        selectedSeats.chunked(4).forEach { rowSeats ->
+                        val seatsPerRow = if (isTablet) 8 else 4
+                        selectedSeats.chunked(seatsPerRow).forEach { rowSeats ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                val leadingSpacers = (4 - rowSeats.size) / 2
+                                val leadingSpacers = (seatsPerRow - rowSeats.size) / 2
                                 repeat(leadingSpacers) { Spacer(Modifier.weight(1f)) }
                                 rowSeats.forEach { seat ->
                                     SeatChip(
@@ -477,7 +518,7 @@ fun LibrarySeatReservationScreen(
                                         modifier = Modifier.weight(1f),
                                     )
                                 }
-                                repeat(4 - rowSeats.size - leadingSpacers) { Spacer(Modifier.weight(1f)) }
+                                repeat(seatsPerRow - rowSeats.size - leadingSpacers) { Spacer(Modifier.weight(1f)) }
                             }
                         }
                         }
@@ -702,7 +743,10 @@ private fun SecondFloorSeatMap(
     ) {
         for (row in 0 until 9) {
             if (row == 3 || row == 6) SecondFloorWallRow()
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 for (col in 0 until 5) {
                     val label = row * 5 + col + 1
                     val floorSeat = seatByLabel[label]
@@ -711,6 +755,7 @@ private fun SecondFloorSeatMap(
                         floorSeat = floorSeat,
                         faceDown = col % 2 == 0,
                         onClick = floorSeat?.let { seat -> { onSeatClick(seat) } },
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
@@ -726,6 +771,7 @@ private fun SecondFloorSeatCell(
     floorSeat: LibrarySeatFloorSeat?,
     faceDown: Boolean,
     onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
 ) {
     val seat = floorSeat?.seat
     val shape = RoundedCornerShape(7.dp)
@@ -746,8 +792,7 @@ private fun SecondFloorSeatCell(
         else -> MaterialTheme.colorScheme.outlineVariant
     }
     Column(
-        modifier = Modifier
-            .width(38.dp)
+        modifier = modifier
             .height(50.dp)
             .clip(shape)
             .background(background)
@@ -790,17 +835,20 @@ private fun SeatNumber(text: String, empty: Boolean) {
 
 @Composable
 private fun SecondFloorWallRow() {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         repeat(4) {
             Box(
                 modifier = Modifier
-                    .width(38.dp)
+                    .weight(1f)
                     .height(8.dp)
                     .clip(RoundedCornerShape(3.dp))
                     .background(MaterialTheme.colorScheme.error.copy(alpha = 0.30f)),
             )
         }
-        Spacer(Modifier.width(38.dp))
+        Spacer(Modifier.weight(1f))
     }
 }
 

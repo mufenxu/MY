@@ -40,6 +40,8 @@ internal val AppPageHorizontalPadding = 16.dp
 internal val AppPageTopSpacing = 6.dp
 internal val AppPageBottomSpacing = 16.dp
 internal val AppPageActionSize = 36.dp
+/** 平板 / 大屏二级页面内容最大宽度：避免超宽屏上单列内容过度拉伸 */
+internal val AppTabletContentMaxWidth = 1120.dp
 
 internal data class AuthenticatedShellInsets(
     val navigationTop: Dp,

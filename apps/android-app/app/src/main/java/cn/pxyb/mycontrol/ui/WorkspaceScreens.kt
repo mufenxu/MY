@@ -1508,27 +1508,34 @@ internal fun WorkspacePage(
                 listState.firstVisibleItemScrollOffset == 0
         },
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    start = AppPageHorizontalPadding,
-                    end = AppPageHorizontalPadding,
-                    top = contentPadding.calculateTopPadding() + AppPageTopSpacing,
-                ),
-            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter,
         ) {
-            item(key = "workspace-header", contentType = "header") {
-                AppSecondaryHeader(
-                    title = title,
-                    subtitle = subtitle,
-                    onBack = onBack,
-                    actions = actions,
-                )
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .widthIn(max = AppTabletContentMaxWidth)
+                    .fillMaxWidth()
+                    .padding(
+                        start = AppPageHorizontalPadding,
+                        end = AppPageHorizontalPadding,
+                        top = contentPadding.calculateTopPadding() + AppPageTopSpacing,
+                    ),
+                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "workspace-header", contentType = "header") {
+                    AppSecondaryHeader(
+                        title = title,
+                        subtitle = subtitle,
+                        onBack = onBack,
+                        actions = actions,
+                    )
+                }
+                content()
             }
-            content()
         }
     }
 }
@@ -1550,27 +1557,34 @@ private fun NotificationWorkspacePage(
         onRefresh = onRefresh,
         atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    start = AppPageHorizontalPadding,
-                    end = AppPageHorizontalPadding,
-                    top = contentPadding.calculateTopPadding() + AppPageTopSpacing,
-                ),
-            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter,
         ) {
-            item(key = "header", contentType = "header") {
-                AppSecondaryHeader(
-                    title = title,
-                    subtitle = subtitle,
-                    onBack = onBack,
-                    actions = actions,
-                )
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .widthIn(max = AppTabletContentMaxWidth)
+                    .fillMaxWidth()
+                    .padding(
+                        start = AppPageHorizontalPadding,
+                        end = AppPageHorizontalPadding,
+                        top = contentPadding.calculateTopPadding() + AppPageTopSpacing,
+                    ),
+                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "header", contentType = "header") {
+                    AppSecondaryHeader(
+                        title = title,
+                        subtitle = subtitle,
+                        onBack = onBack,
+                        actions = actions,
+                    )
+                }
+                content()
             }
-            content()
         }
     }
 }
