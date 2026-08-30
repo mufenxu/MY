@@ -56,6 +56,7 @@ import cn.pxyb.mycontrol.data.PlatformTask
 import cn.pxyb.mycontrol.data.PlatformUser
 import cn.pxyb.mycontrol.data.PlatformWebSession
 import cn.pxyb.mycontrol.data.LibrarySeatArea
+import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
 import cn.pxyb.mycontrol.data.LibrarySeatOverview
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
 import cn.pxyb.mycontrol.data.LibrarySeatStatus
@@ -221,6 +222,8 @@ data class AppUiState(
     val librarySeatAreasLoading: Boolean = false,
     val librarySeatSeats: List<LibrarySeatStatus> = emptyList(),
     val librarySeatSeatsLoading: Boolean = false,
+    val librarySeatFloorSeats: List<LibrarySeatFloorSeat> = emptyList(),
+    val librarySeatFloorSeatsLoading: Boolean = false,
     val librarySeatSubmitLoading: Boolean = false,
     val librarySeatSelectedVenueId: String? = null,
     val librarySeatSelectedDate: String? = null,
@@ -2064,6 +2067,76 @@ class AppViewModel(
                     it.copy(
                         librarySeatSeatsLoading = false,
                         librarySeatError = error.message ?: "座位列表加载失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun queryLibrarySeatFloorSeats(
+        venueId: String,
+        floorId: String,
+        date: String,
+        startMinute: Int,
+        endMinute: Int,
+        minLabel: Int = 1,
+        maxLabel: Int = 45,
+    ) {
+        if (
+            venueId.isBlank() ||
+            floorId.isBlank() ||
+            date.isBlank() ||
+            startMinute < 0 ||
+            endMinute <= startMinute ||
+            mutableState.value.librarySeatFloorSeatsLoading
+        ) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    librarySeatFloorSeatsLoading = true,
+                    librarySeatFloorSeats = emptyList(),
+                    librarySeatError = null,
+                    librarySeatMessage = null,
+                )
+            }
+            try {
+                val areas = api.librarySeatAreas(
+                    venueId = venueId,
+                    date = date,
+                    startMinute = startMinute,
+                    endMinute = endMinute,
+                    floorId = floorId,
+                    pageSize = 50,
+                    currentPage = 1,
+                    power = false,
+                    window = false,
+                )
+                val floorSeats = supervisorScope {
+                    areas.map { area ->
+                        async {
+                            api.librarySeatSeats(area.id, date, startMinute, endMinute, 0)
+                                .map { seat -> LibrarySeatFloorSeat(area.id, area.name, seat) }
+                        }
+                    }.flatMap { it.await() }
+                }.filter { floorSeat ->
+                    (floorSeat.seat.label.toIntOrNull() ?: -1) in minLabel..maxLabel
+                }.sortedWith(
+                    compareBy<LibrarySeatFloorSeat> { it.seat.label.toIntOrNull() ?: Int.MAX_VALUE }
+                        .thenBy { it.seat.label }
+                        .thenBy { it.areaName },
+                )
+                mutableState.update {
+                    it.copy(
+                        librarySeatFloorSeats = floorSeats,
+                        librarySeatFloorSeatsLoading = false,
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        librarySeatFloorSeatsLoading = false,
+                        librarySeatError = error.message ?: "二层座位查询失败，请重试。",
                     )
                 }
             }

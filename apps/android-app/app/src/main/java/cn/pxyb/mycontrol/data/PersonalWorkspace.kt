@@ -245,6 +245,13 @@ data class LibrarySeatStatus(
 )
 
 @Immutable
+data class LibrarySeatFloorSeat(
+    val areaId: String,
+    val areaName: String,
+    val seat: LibrarySeatStatus,
+)
+
+@Immutable
 data class LibrarySeatReservationRequest(
     val seatId: String,
     val date: String,

@@ -29,6 +29,7 @@ import cn.pxyb.mycontrol.data.ReleaseData
 import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.SecurityData
 import cn.pxyb.mycontrol.data.LibrarySeatArea
+import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
 import cn.pxyb.mycontrol.data.LibrarySeatOverview
 import cn.pxyb.mycontrol.data.LibrarySeatStatus
 import cn.pxyb.mycontrol.data.LibrarySeatVenue
@@ -263,6 +264,8 @@ data class LibrarySeatUiState(
     val areasLoading: Boolean = false,
     val seats: List<LibrarySeatStatus> = emptyList(),
     val seatsLoading: Boolean = false,
+    val floorSeats: List<LibrarySeatFloorSeat> = emptyList(),
+    val floorSeatsLoading: Boolean = false,
     val submitLoading: Boolean = false,
     val selectedVenueId: String? = null,
     val selectedDate: String? = null,
@@ -613,6 +616,8 @@ internal fun AppUiState.toLibrarySeatUiState() = LibrarySeatUiState(
     areasLoading = librarySeatAreasLoading,
     seats = librarySeatSeats,
     seatsLoading = librarySeatSeatsLoading,
+    floorSeats = librarySeatFloorSeats,
+    floorSeatsLoading = librarySeatFloorSeatsLoading,
     submitLoading = librarySeatSubmitLoading,
     selectedVenueId = librarySeatSelectedVenueId,
     selectedDate = librarySeatSelectedDate,

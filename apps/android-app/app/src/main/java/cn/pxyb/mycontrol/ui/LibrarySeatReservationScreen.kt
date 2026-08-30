@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.LibrarySeatArea
+import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
 import cn.pxyb.mycontrol.data.LibrarySeatStatus
 import java.time.LocalDate
@@ -63,6 +65,7 @@ fun LibrarySeatReservationScreen(
     onLoadOverview: (Boolean) -> Unit,
     onQueryAreas: (String, String, Int, Int, String?, Int, Boolean, Boolean) -> Unit,
     onLoadSeats: (String, String, Int, Int, Int) -> Unit,
+    onQueryFloorSeats: (String, String, String, Int, Int) -> Unit,
     onSubmitReservation: (LibrarySeatReservationRequest, () -> Unit) -> Unit,
     onOpenOfficialReservation: () -> Unit,
     onClearFeedback: () -> Unit,
@@ -84,6 +87,7 @@ fun LibrarySeatReservationScreen(
 
     val selectedVenue = state.venues.firstOrNull { it.id == selectedVenueId } ?: state.venues.firstOrNull()
     val selectedFloor = selectedVenue?.floors?.firstOrNull { it.id == selectedFloorId }
+    val secondFloor = selectedVenue?.floors?.firstOrNull { isSecondFloorName(it.name) }
     val selectedAreas = state.areas.filter { area ->
         (selectedVenue?.id.isNullOrBlank() || area.venueId.isBlank() || area.venueId == selectedVenue?.id) &&
             (selectedFloor?.id.isNullOrBlank() || area.floorId.isBlank() || area.floorId == selectedFloor?.id)
@@ -117,6 +121,7 @@ fun LibrarySeatReservationScreen(
         val floors = state.venues.firstOrNull { it.id == selectedVenueId }?.floors.orEmpty()
         if (floors.isNotEmpty() && (selectedFloorId.isBlank() || floors.none { it.id == selectedFloorId })) {
             selectedFloorId = state.selectedFloorId?.takeIf { id -> floors.any { it.id == id } }
+                ?: floors.firstOrNull { isSecondFloorName(it.name) }?.id
                 ?: floors.first().id
         }
     }
@@ -368,6 +373,36 @@ fun LibrarySeatReservationScreen(
                         Spacer(Modifier.width(6.dp))
                         Text("查询阅览区")
                     }
+                    FilledTonalButton(
+                        onClick = {
+                            val venue = selectedVenue
+                            val floor = secondFloor
+                            val startMinute = timeTextToMinute(startTime) ?: run {
+                                queryHint = "请先选择有效的场馆、日期和时间。"
+                                return@FilledTonalButton
+                            }
+                            val endMinute = timeTextToMinute(endTime) ?: run {
+                                queryHint = "请先选择有效的场馆、日期和时间。"
+                                return@FilledTonalButton
+                            }
+                            if (venue == null || floor == null || selectedDate.isBlank() || endMinute <= startMinute) {
+                                queryHint = "请先选择有效的场馆、日期和时间。"
+                                return@FilledTonalButton
+                            }
+                            queryHint = null
+                            onClearFeedback()
+                            selectedFloorId = floor.id
+                            selectedAreaId = ""
+                            selectedSeatId = ""
+                            onQueryFloorSeats(venue.id, floor.id, selectedDate, startMinute, endMinute)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = canQuery && secondFloor != null && !state.floorSeatsLoading,
+                    ) {
+                        Icon(Icons.Outlined.Chair, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("查询二层 1-45 号座位")
+                    }
                 }
             }
         }
@@ -431,6 +466,39 @@ fun LibrarySeatReservationScreen(
                                         showConfirmDialog = true
                                     },
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item(key = "floor-seat-list", contentType = "seats") {
+            AppPanel {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SectionHeader(
+                        "二层 1-45 号座位",
+                        "按当前日期与时段显示空闲状态",
+                    )
+                    if (state.floorSeatsLoading) {
+                        LoadingBlock("正在查询二层座位...")
+                    } else if (state.floorSeats.isEmpty()) {
+                        EmptyBlock("暂无 1-45 号座位结果", "请选择时段后点击上方按钮查询。")
+                    } else {
+                        Text(
+                            text = "共 ${state.floorSeats.size} 个座位 · ${state.floorSeats.count { it.seat.isFree }} 个可预约",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            state.floorSeats.forEach { floorSeat ->
+                                FloorSeatChip(floorSeat)
                             }
                         }
                     }
@@ -584,6 +652,56 @@ private fun SeatChip(
 }
 
 @Composable
+private fun FloorSeatChip(floorSeat: LibrarySeatFloorSeat) {
+    val seat = floorSeat.seat
+    val container = when {
+        seat.isFree -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        seat.status.equals("IN_USE", ignoreCase = true) -> MaterialTheme.colorScheme.surfaceVariant
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+    }
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = container,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(
+            1.dp,
+            when {
+                seat.isFree -> MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
+            },
+        ),
+        modifier = Modifier.widthIn(min = 96.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = seat.label,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = seat.statusText,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (seat.isFree) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = floorSeat.areaName,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
 private fun SelectionSurface(
     label: String,
     value: String,
@@ -674,6 +792,15 @@ private fun timeTextToMinute(value: String): Int? {
 private fun timeRangeLabel(start: String, end: String): String = listOf(start.trim(), end.trim())
     .filter(String::isNotBlank)
     .joinToString(" - ")
+
+private fun isSecondFloorName(name: String): Boolean {
+    val normalized = name.trim()
+    return normalized.contains("二层") ||
+        normalized.contains("二楼") ||
+        normalized.contains("2层") ||
+        normalized.contains("2楼") ||
+        normalized.startsWith("2")
+}
 
 private fun formatSeatDateLabel(value: String): String {
     val date = runCatching { LocalDate.parse(value) }.getOrNull() ?: return value

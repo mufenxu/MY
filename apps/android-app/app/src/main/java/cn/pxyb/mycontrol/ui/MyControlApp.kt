@@ -1943,6 +1943,7 @@ private fun AuthenticatedShell(
                             )
                         },
                         onLoadSeats = viewModel::loadLibrarySeatSeats,
+                        onQueryFloorSeats = viewModel::queryLibrarySeatFloorSeats,
                         onSubmitReservation = viewModel::submitLibrarySeatReservation,
                         onOpenOfficialReservation = {
                             viewModel.openOfficialLibrarySeatReservation { session ->
