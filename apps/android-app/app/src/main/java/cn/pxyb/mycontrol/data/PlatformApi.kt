@@ -1721,7 +1721,8 @@ internal fun parseLibrarySeatAreasPayload(
     val payload = json.opt("data") ?: json.takeIf { it.length() > 0 } ?: jsonArray
     val rows = when (payload) {
         is JSONArray -> payload.objects()
-        is JSONObject -> payload.optJSONArray("pageList")?.objects()
+        is JSONObject -> payload.optJSONArray("areas")?.objects()
+            ?: payload.optJSONArray("pageList")?.objects()
             ?: payload.optJSONArray("list")?.objects()
             ?: payload.optJSONArray("rows")?.objects()
             ?: payload.optJSONArray("records")?.objects()
