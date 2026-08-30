@@ -1,6 +1,8 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -83,6 +86,8 @@ fun LibrarySeatReservationScreen(
     var floorMenuOpen by remember { mutableStateOf(false) }
     var queryHint by remember { mutableStateOf<String?>(null) }
     var initialQueryDone by rememberSaveable { mutableStateOf(false) }
+    var queryMode by rememberSaveable { mutableStateOf("areas") }
+    var seatListExpanded by rememberSaveable { mutableStateOf(false) }
 
     val selectedVenue = state.venues.firstOrNull { it.id == selectedVenueId } ?: state.venues.firstOrNull()
     val selectedFloor = selectedVenue?.floors?.firstOrNull { it.id == selectedFloorId }
@@ -348,6 +353,10 @@ fun LibrarySeatReservationScreen(
                             }
                             queryHint = null
                             onClearFeedback()
+                            queryMode = "areas"
+                            seatListExpanded = false
+                            selectedAreaId = ""
+                            selectedSeatId = ""
                             onQueryAreas(
                                 venue.id,
                                 selectedDate,
@@ -387,6 +396,7 @@ fun LibrarySeatReservationScreen(
                             selectedFloorId = floor.id
                             selectedAreaId = ""
                             selectedSeatId = ""
+                            queryMode = "floor"
                             onQueryFloorSeats(venue.id, floor.id, selectedDate, startMinute, endMinute)
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -414,10 +424,14 @@ fun LibrarySeatReservationScreen(
                     selectedAreas.forEach { area ->
                         AreaCard(
                             area = area,
-                            selected = selectedArea?.id == area.id,
+                            selected = selectedAreaId == area.id,
                             onClick = {
-                                selectedAreaId = area.id
+                                val isSameArea = selectedAreaId == area.id
+                                selectedAreaId = if (isSameArea) "" else area.id
                                 selectedSeatId = ""
+                                queryMode = "areas"
+                                seatListExpanded = !isSameArea
+                                if (isSameArea) return@AreaCard
                                 val startMinute = timeTextToMinute(startTime) ?: return@AreaCard
                                 val endMinute = timeTextToMinute(endTime) ?: return@AreaCard
                                 if (endMinute <= startMinute) return@AreaCard
@@ -429,20 +443,19 @@ fun LibrarySeatReservationScreen(
             }
         }
 
-        item(key = "seat-list", contentType = "seats") {
-            AppPanel {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    SectionHeader(
-                        "座位列表",
-                        selectedArea?.let { "${it.name} · ${it.floorName.ifBlank { "未注明楼层" }}" } ?: "先选一个阅览区",
-                    )
+        if (queryMode == "areas" && seatListExpanded && selectedAreaId.isNotBlank()) {
+            item(key = "seat-list", contentType = "seats") {
+                AppPanel {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SectionHeader(
+                            "座位列表",
+                            selectedArea?.let { "${it.name} · ${it.floorName.ifBlank { "未注明楼层" }}" } ?: "先选一个阅览区",
+                        )
                     if (state.seatsLoading) {
                         LoadingBlock("正在加载座位...")
-                    } else if (selectedArea == null) {
-                        EmptyBlock("暂无座位", "先在上方选中一个阅览区。")
                     } else if (selectedSeats.isEmpty()) {
                         EmptyBlock("暂无座位结果", "如果阅览区已选中，请尝试刷新或重新查询。")
                     } else {
@@ -467,21 +480,23 @@ fun LibrarySeatReservationScreen(
                                 repeat(4 - rowSeats.size - leadingSpacers) { Spacer(Modifier.weight(1f)) }
                             }
                         }
+                        }
                     }
                 }
             }
         }
 
-        item(key = "floor-seat-list", contentType = "seats") {
-            AppPanel {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    SectionHeader(
-                        "二层 1-45 号座位",
-                        "按当前日期与时段显示空闲状态",
-                    )
+        if (queryMode == "floor") {
+            item(key = "floor-seat-list", contentType = "seats") {
+                AppPanel {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SectionHeader(
+                            "二层 1-45 号座位",
+                            "按当前日期与时段显示空闲状态",
+                        )
                     if (state.floorSeatsLoading) {
                         LoadingBlock("正在查询二层座位...")
                     } else if (state.floorSeats.isEmpty()) {
@@ -492,21 +507,20 @@ fun LibrarySeatReservationScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            state.floorSeats.forEach { floorSeat ->
-                                FloorSeatChip(
-                                    floorSeat = floorSeat,
-                                    onClick = {
-                                        selectedFloorSeat = floorSeat
-                                        selectedAreaId = floorSeat.areaId
-                                        selectedSeatId = floorSeat.seat.id
-                                        showConfirmDialog = true
-                                    },
-                                )
-                            }
+                        Text(
+                            text = "绿色 = 可预约 · 灰色 = 占用/不可用 · 顶部/底部色条 = 座位朝向",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        SecondFloorSeatMap(
+                            floorSeats = state.floorSeats,
+                            onSeatClick = { floorSeat ->
+                                selectedFloorSeat = floorSeat
+                                selectedAreaId = floorSeat.areaId
+                                selectedSeatId = floorSeat.seat.id
+                                showConfirmDialog = true
+                            },
+                        )
                         }
                     }
                 }
@@ -673,58 +687,120 @@ private fun SeatChip(
 }
 
 @Composable
-private fun FloorSeatChip(
-    floorSeat: LibrarySeatFloorSeat,
-    onClick: () -> Unit,
+private fun SecondFloorSeatMap(
+    floorSeats: List<LibrarySeatFloorSeat>,
+    onSeatClick: (LibrarySeatFloorSeat) -> Unit,
 ) {
-    val seat = floorSeat.seat
-    val container = when {
-        seat.isFree -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-        seat.status.equals("IN_USE", ignoreCase = true) -> MaterialTheme.colorScheme.surfaceVariant
-        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+    val seatByLabel = remember(floorSeats) {
+        floorSeats.groupBy { it.seat.label.toIntOrNull() }
+            .mapValues { (_, entries) -> entries.first() }
     }
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = container,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(
-            1.dp,
-            when {
-                seat.isFree -> MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
-            },
-        ),
-        modifier = Modifier
-            .widthIn(min = 96.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = seat.isFree, onClick = onClick),
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = seat.label,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = seat.statusText,
-                style = MaterialTheme.typography.labelSmall,
-                color = if (seat.isFree) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = floorSeat.areaName,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        for (row in 0 until 9) {
+            if (row == 3 || row == 6) SecondFloorWallRow()
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (col in 0 until 5) {
+                    val label = row * 5 + col + 1
+                    val floorSeat = seatByLabel[label]
+                    SecondFloorSeatCell(
+                        label = label,
+                        floorSeat = floorSeat,
+                        faceDown = col % 2 == 0,
+                        onClick = floorSeat?.let { seat -> { onSeatClick(seat) } },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val FreeSeatGreen = Color(0xFF2E7D32)
+
+@Composable
+private fun SecondFloorSeatCell(
+    label: Int,
+    floorSeat: LibrarySeatFloorSeat?,
+    faceDown: Boolean,
+    onClick: (() -> Unit)?,
+) {
+    val seat = floorSeat?.seat
+    val shape = RoundedCornerShape(7.dp)
+    val background = when {
+        seat == null -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f)
+        seat.isFree -> FreeSeatGreen.copy(alpha = 0.16f)
+        seat.status.equals("IN_USE", ignoreCase = true) -> MaterialTheme.colorScheme.surfaceVariant
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    }
+    val borderColor = when {
+        seat == null -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+        seat.isFree -> FreeSeatGreen.copy(alpha = 0.8f)
+        else -> MaterialTheme.colorScheme.outlineVariant
+    }
+    val backColor = when {
+        seat == null -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        seat.isFree -> FreeSeatGreen
+        else -> MaterialTheme.colorScheme.outlineVariant
+    }
+    Column(
+        modifier = Modifier
+            .width(38.dp)
+            .height(50.dp)
+            .clip(shape)
+            .background(background)
+            .border(1.dp, borderColor, shape)
+            .clickable(enabled = onClick != null, onClick = onClick ?: {}),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        if (faceDown) {
+            SeatBackBar(backColor)
+            SeatNumber(if (seat == null) label.toString() else seat.label, seat == null)
+        } else {
+            SeatNumber(if (seat == null) label.toString() else seat.label, seat == null)
+            SeatBackBar(backColor)
+        }
+    }
+}
+
+@Composable
+private fun SeatBackBar(color: Color) {
+    Box(
+        modifier = Modifier
+            .width(26.dp)
+            .height(10.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(color),
+    )
+}
+
+@Composable
+private fun SeatNumber(text: String, empty: Boolean) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+        color = if (empty) MaterialTheme.colorScheme.outlineVariant else MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        modifier = Modifier.padding(vertical = 2.dp),
+    )
+}
+
+@Composable
+private fun SecondFloorWallRow() {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        repeat(4) {
+            Box(
+                modifier = Modifier
+                    .width(38.dp)
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.30f)),
             )
         }
+        Spacer(Modifier.width(38.dp))
     }
 }
 

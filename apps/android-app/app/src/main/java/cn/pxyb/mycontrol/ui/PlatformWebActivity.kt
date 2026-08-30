@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.MimeTypeMap
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -43,9 +44,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
 import cn.pxyb.mycontrol.data.ExternalApplicationAutoLogin
 import cn.pxyb.mycontrol.data.PlatformWebCookie
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class PlatformWebActivity : ComponentActivity() {
 
@@ -57,9 +64,16 @@ class PlatformWebActivity : ComponentActivity() {
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         val callback = filePathCallback.also { filePathCallback = null } ?: return@registerForActivityResult
-        callback.onReceiveValue(
-            WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data),
-        )
+        val pickedUris = WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+        if (pickedUris.isNullOrEmpty()) {
+            callback.onReceiveValue(null)
+            return@registerForActivityResult
+        }
+        lifecycleScope.launch {
+            val cachedUris = withContext(Dispatchers.IO) { copyPickedUrisToCache(pickedUris) }
+            if (isFinishing || isDestroyed) return@launch
+            callback.onReceiveValue(cachedUris)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,17 +119,43 @@ class PlatformWebActivity : ComponentActivity() {
         callback: ValueCallback<Array<Uri>>?,
         params: WebChromeClient.FileChooserParams,
     ): Boolean {
-        filePathCallback?.onReceiveValue(null)
+        if (filePathCallback != null) {
+            // 已有文件选择器在等待结果，忽略重复触发，避免取消当前选择
+            return true
+        }
         filePathCallback = callback
 
         return runCatching {
             fileChooserLauncher.launch(params.createIntent())
             true
         }.getOrElse {
-            filePathCallback?.onReceiveValue(null)
             filePathCallback = null
             false
         }
+    }
+
+    /**
+     * 系统文件选择器（Android 13+ 照片选择器等）返回的 content:// URI 在部分设备/WebView
+     * 版本上无法被网页 FileReader 读取，统一复制到应用缓存并用 FileProvider 重新提供，
+     * 保证网页端能真正读到所选文件。
+     */
+    private fun copyPickedUrisToCache(uris: Array<Uri>): Array<Uri>? {
+        val uploadsDir = File(cacheDir, WEBVIEW_UPLOAD_CACHE_DIR).apply { mkdirs() }
+        uploadsDir.listFiles()?.forEach { it.delete() }
+        val cachedUris = uris.mapIndexedNotNull { index, uri ->
+            runCatching {
+                val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+                val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
+                    ?: mimeType.substringAfter('/', "").takeIf { it.matches(Regex("[a-zA-Z0-9]{1,10}")) }
+                    ?: "bin"
+                val target = File(uploadsDir, "upload-${System.currentTimeMillis()}-$index.$extension")
+                contentResolver.openInputStream(uri)?.use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                } ?: error("无法读取所选文件")
+                FileProvider.getUriForFile(this, "${packageName}.fileprovider", target)
+            }.getOrNull()
+        }
+        return cachedUris.takeIf { it.isNotEmpty() }?.toTypedArray()
     }
 
     override fun onResume() {
@@ -151,6 +191,7 @@ class PlatformWebActivity : ComponentActivity() {
         private const val EXTRA_AUTO_LOGIN_USERNAME = "extra_auto_login_username"
         private const val EXTRA_AUTO_LOGIN_PASSWORD = "extra_auto_login_password"
         private const val EXTRA_AUTO_LOGIN_HOME_URL = "extra_auto_login_home_url"
+        private const val WEBVIEW_UPLOAD_CACHE_DIR = "webview-uploads"
 
         fun createIntent(
             context: Context,
