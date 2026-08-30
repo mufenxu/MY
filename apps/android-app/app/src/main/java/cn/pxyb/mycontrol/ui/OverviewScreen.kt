@@ -212,7 +212,7 @@ fun OverviewScreen(
                 if (launch.autoLogin != null) {
                     openPlatformWebLink(
                         context = context,
-                        url = launch.loginUrl,
+                        url = application.launchUrl.ifBlank { launch.loginUrl },
                         title = application.name,
                         trustedDownloadUrl = application.launchUrl,
                         autoLogin = launch.autoLogin,
