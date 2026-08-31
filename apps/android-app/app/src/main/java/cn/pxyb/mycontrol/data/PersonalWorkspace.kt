@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 
 import android.content.Context
 import cn.pxyb.mycontrol.assistant.AssistantAction
+import cn.pxyb.mycontrol.core.security.EncryptedPreferenceCodec
 import cn.pxyb.mycontrol.assistant.AssistantDestination
 import cn.pxyb.mycontrol.assistant.AssistantPriority
 import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot

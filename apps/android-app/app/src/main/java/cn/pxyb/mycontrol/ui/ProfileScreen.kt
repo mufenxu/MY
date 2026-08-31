@@ -110,6 +110,7 @@ fun ProfileScreen(
     var showMagicLinkDialog by remember { mutableStateOf<String?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
     var confirmClearCache by remember { mutableStateOf(false) }
+    var showPrivacyPolicy by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -507,6 +508,21 @@ fun ProfileScreen(
                                             )
                                         },
                                     )
+                                    ProfileActionRow(
+                                        icon = Icons.Outlined.Security,
+                                        iconTint = Color(0xFF6D28D9),
+                                        iconBackground = Color(0xFFF5F3FF),
+                                        title = "隐私政策",
+                                        subtitle = "查看 MY Control 如何收集、存储与保护你的数据",
+                                        onClick = { showPrivacyPolicy = true },
+                                        trailing = {
+                                            Text(
+                                                "查看",
+                                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                                color = Color(0xFF2563EB),
+                                            )
+                                        },
+                                    )
                                 }
                             }
 
@@ -872,6 +888,21 @@ fun ProfileScreen(
                                     )
                                 },
                             )
+                            ProfileActionRow(
+                                icon = Icons.Outlined.Security,
+                                iconTint = Color(0xFF6D28D9),
+                                iconBackground = Color(0xFFF5F3FF),
+                                title = "隐私政策",
+                                subtitle = "查看 MY Control 如何收集、存储与保护你的数据",
+                                onClick = { showPrivacyPolicy = true },
+                                trailing = {
+                                    Text(
+                                        "查看",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = Color(0xFF2563EB),
+                                    )
+                                },
+                            )
                         }
                     }
                 }
@@ -1210,6 +1241,10 @@ fun ProfileScreen(
             },
             icon = Icons.Outlined.CleaningServices,
         )
+    }
+
+    if (showPrivacyPolicy) {
+        PrivacyPolicyDialog(onDismiss = { showPrivacyPolicy = false })
     }
 }
 

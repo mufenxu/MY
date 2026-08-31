@@ -1,4 +1,4 @@
-package cn.pxyb.mycontrol.data
+package cn.pxyb.mycontrol.core.security
 
 import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
@@ -11,7 +11,11 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-internal class EncryptedPreferenceCodec(
+/**
+ * 基于 Android Keystore 的 AES-GCM 加密偏好编解码器。
+ * 密钥只保存在设备安全硬件/Keystore 中，值以 "enc:v1:" 前缀落盘。
+ */
+class EncryptedPreferenceCodec(
     private val preferences: SharedPreferences,
     private val keyAlias: String,
 ) {

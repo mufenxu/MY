@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.MimeTypeMap
@@ -15,6 +16,7 @@ import android.webkit.WebSettings
 import android.webkit.ValueCallback
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -46,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
+import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.data.ExternalApplicationAutoLogin
 import cn.pxyb.mycontrol.data.PlatformWebCookie
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
@@ -65,13 +68,22 @@ class PlatformWebActivity : ComponentActivity() {
     ) { result ->
         val callback = filePathCallback.also { filePathCallback = null } ?: return@registerForActivityResult
         val pickedUris = WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+        // 临时诊断：确认选择器返回内容，验证完成后移除
+        val resultDesc = result.data?.let { it.data?.toString() ?: "URI为空" } ?: "无数据"
+        Toast.makeText(this@PlatformWebActivity, "选择器返回: code=${result.resultCode} $resultDesc", Toast.LENGTH_LONG).show()
         if (pickedUris.isNullOrEmpty()) {
+            logUpload("选择器未返回文件（resultCode=$result.resultCode）")
             callback.onReceiveValue(null)
             return@registerForActivityResult
         }
+        logUpload("选择器返回 ${pickedUris.size} 个文件: ${pickedUris.joinToString { "${it.scheme.orEmpty()}:${it.lastPathSegment}" }}")
         lifecycleScope.launch {
             val cachedUris = withContext(Dispatchers.IO) { copyPickedUrisToCache(pickedUris) }
             if (isFinishing || isDestroyed) return@launch
+            if (cachedUris == null) {
+                logUpload("所选文件复制到缓存失败，按取消处理")
+                Toast.makeText(this@PlatformWebActivity, "照片读取失败，请重试或更换图片来源", Toast.LENGTH_SHORT).show()
+            }
             callback.onReceiveValue(cachedUris)
         }
     }
@@ -120,18 +132,50 @@ class PlatformWebActivity : ComponentActivity() {
         params: WebChromeClient.FileChooserParams,
     ): Boolean {
         if (filePathCallback != null) {
+            logUpload("重复的文件选择请求被忽略")
             // 已有文件选择器在等待结果，忽略重复触发，避免取消当前选择
             return true
         }
+        logUpload("打开文件选择: accept=${params.acceptTypes.joinToString(",")}, capture=${params.isCaptureEnabled}, mode=${params.mode}")
         filePathCallback = callback
 
         return runCatching {
-            fileChooserLauncher.launch(params.createIntent())
+            fileChooserLauncher.launch(buildFileChooserIntent(params))
             true
         }.getOrElse {
             filePathCallback = null
+            logUpload("文件选择器启动失败")
             false
         }
+    }
+
+    /**
+     * MIUI/HyperOS 上 GET_CONTENT 会打开自带照片选择器（com.android.photopicker），
+     * 其结果在系统层投递时抛 NPE，网页端收不到所选文件（表现为点“完成”后无图）。
+     * 改用标准 DocumentsUI（ACTION_OPEN_DOCUMENT），返回结果稳定可解析；选中的
+     * content:// URI 由 copyPickedUrisToCache 复制到缓存后经 FileProvider 交给网页。
+     */
+    private fun buildFileChooserIntent(params: WebChromeClient.FileChooserParams): Intent {
+        val acceptTypes = params.acceptTypes?.filter { it.isNotBlank() }.orEmpty()
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            if (acceptTypes.size == 1) {
+                type = acceptTypes.first()
+            } else {
+                type = "*/*"
+                if (acceptTypes.isNotEmpty()) {
+                    putExtra(Intent.EXTRA_MIME_TYPES, acceptTypes.toTypedArray())
+                }
+            }
+            if (params.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) {
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            }
+        }
+        return intent.takeIf { it.resolveActivity(packageManager) != null } ?: params.createIntent()
+    }
+
+    private fun logUpload(message: String) {
+        Log.i(TAG_UPLOAD, message)
     }
 
     /**
@@ -192,6 +236,7 @@ class PlatformWebActivity : ComponentActivity() {
         private const val EXTRA_AUTO_LOGIN_PASSWORD = "extra_auto_login_password"
         private const val EXTRA_AUTO_LOGIN_HOME_URL = "extra_auto_login_home_url"
         private const val WEBVIEW_UPLOAD_CACHE_DIR = "webview-uploads"
+        private const val TAG_UPLOAD = "PlatformWebUpload"
 
         fun createIntent(
             context: Context,
@@ -265,102 +310,106 @@ private fun PlatformWebScreen(
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { context ->
-                        WebView(context).apply {
-                            layoutParams = ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                            )
-                            isVerticalScrollBarEnabled = true
-                            isHorizontalScrollBarEnabled = false
+                    WebView(context).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        )
+                        isVerticalScrollBarEnabled = true
+                        isHorizontalScrollBarEnabled = false
 
-                            // Cookie 管理器配置
-                            CookieManager.getInstance().let { cm ->
-                                cm.setAcceptCookie(true)
-                                cm.setAcceptThirdPartyCookies(this, true)
-                                initialCookies.forEach { cookie ->
-                                    cm.setCookie(cookie.url, cookie.value)
-                                }
-                                cm.flush()
+                        // Cookie 管理器配置
+                        CookieManager.getInstance().let { cm ->
+                            cm.setAcceptCookie(true)
+                            cm.setAcceptThirdPartyCookies(this, true)
+                            initialCookies.forEach { cookie ->
+                                cm.setCookie(cookie.url, cookie.value)
                             }
-
-                            settings.apply {
-                                javaScriptEnabled = true
-                                domStorageEnabled = true
-                                databaseEnabled = true
-                                useWideViewPort = true
-                                loadWithOverviewMode = true
-                                setSupportZoom(false)
-                                displayZoomControls = false
-                                builtInZoomControls = false
-                                allowFileAccess = false
-                                allowContentAccess = true
-                                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                                cacheMode = WebSettings.LOAD_DEFAULT
-                                defaultTextEncodingName = "UTF-8"
-                            }
-
-                            webDownloadSupport.attachTo(this, trustedDownloadUrl)
-
-                            webViewClient = object : WebViewClient() {
-                                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                                    super.onPageStarted(view, url, favicon)
-                                    pageLoading = true
-                                    canGoBack = view?.canGoBack() == true
-                                }
-
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    super.onPageFinished(view, url)
-                                    if (shouldRestoreInitialHash(initialUrl, url, restoredInitialHash)) {
-                                        restoredInitialHash = true
-                                        view?.loadUrl(initialUrl)
-                                        return
-                                    }
-                                    if (autoLogin != null && isAutoLoginPage(url, autoLogin.loginUrl)) {
-                                        view?.evaluateJavascript(
-                                            buildAutoLoginScript(autoLogin),
-                                            null,
-                                        )
-                                    }
-                                    pageLoading = false
-                                    canGoBack = view?.canGoBack() == true
-                                }
-
-                                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                    val uri = request?.url ?: return false
-                                    val scheme = uri.scheme?.lowercase() ?: return false
-                                    if (scheme == "http" || scheme == "https") {
-                                        return false // 在当前 WebView 内部直接加载
-                                    }
-                                    return runCatching {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                                        true
-                                    }.getOrDefault(false)
-                                }
-                            }
-
-                            webChromeClient = object : WebChromeClient() {
-                                override fun onShowFileChooser(
-                                    view: WebView?,
-                                    filePathCallback: ValueCallback<Array<Uri>>?,
-                                    fileChooserParams: WebChromeClient.FileChooserParams?,
-                                ): Boolean {
-                                    val params = fileChooserParams ?: return false
-                                    return onShowFileChooser(filePathCallback, params)
-                                }
-
-                                override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                    loadProgress = newProgress / 100f
-                                    if (newProgress >= 100) {
-                                        pageLoading = false
-                                    }
-                                    canGoBack = view?.canGoBack() == true
-                                }
-                            }
-
-                            webView = this
-                            onWebViewCreated(this)
-                            loadUrl(initialUrl)
+                            cm.flush()
                         }
+
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            databaseEnabled = true
+                            useWideViewPort = true
+                            loadWithOverviewMode = true
+                            setSupportZoom(false)
+                            displayZoomControls = false
+                            builtInZoomControls = false
+                            allowFileAccess = false
+                            allowContentAccess = true
+                            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                            cacheMode = WebSettings.LOAD_DEFAULT
+                            defaultTextEncodingName = "UTF-8"
+                        }
+
+                        if (BuildConfig.DEBUG) {
+                            WebView.setWebContentsDebuggingEnabled(true)
+                        }
+
+                        webDownloadSupport.attachTo(this, trustedDownloadUrl)
+
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                super.onPageStarted(view, url, favicon)
+                                pageLoading = true
+                                canGoBack = view?.canGoBack() == true
+                            }
+
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                super.onPageFinished(view, url)
+                                if (shouldRestoreInitialHash(initialUrl, url, restoredInitialHash)) {
+                                    restoredInitialHash = true
+                                    view?.loadUrl(initialUrl)
+                                    return
+                                }
+                                if (autoLogin != null && isAutoLoginPage(url, autoLogin.loginUrl)) {
+                                    view?.evaluateJavascript(
+                                        buildAutoLoginScript(autoLogin),
+                                        null,
+                                    )
+                                }
+                                pageLoading = false
+                                canGoBack = view?.canGoBack() == true
+                            }
+
+                            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                val uri = request?.url ?: return false
+                                val scheme = uri.scheme?.lowercase() ?: return false
+                                if (scheme == "http" || scheme == "https") {
+                                    return false // 在当前 WebView 内部直接加载
+                                }
+                                return runCatching {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                    true
+                                }.getOrDefault(false)
+                            }
+                        }
+
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onShowFileChooser(
+                                view: WebView?,
+                                filePathCallback: ValueCallback<Array<Uri>>?,
+                                fileChooserParams: WebChromeClient.FileChooserParams?,
+                            ): Boolean {
+                                val params = fileChooserParams ?: return false
+                                return onShowFileChooser(filePathCallback, params)
+                            }
+
+                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                loadProgress = newProgress / 100f
+                                if (newProgress >= 100) {
+                                    pageLoading = false
+                                }
+                                canGoBack = view?.canGoBack() == true
+                            }
+                        }
+
+                        webView = this
+                        onWebViewCreated(this)
+                        loadUrl(initialUrl)
+                    }
                     },
                 )
 

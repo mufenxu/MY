@@ -4,13 +4,14 @@ import android.net.Uri
 import android.util.Base64
 import android.os.Build
 import cn.pxyb.mycontrol.BuildConfig
+import cn.pxyb.mycontrol.core.network.HttpClientProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
+
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
@@ -41,12 +42,7 @@ class PlatformApi(
             "${uri.scheme}://${uri.authority}"
         }
     }
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
-        .build()
+    private val client = HttpClientProvider.client
     @Volatile private var offline = false
     @Volatile private var cachedAtMillis: Long? = null
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- mxwk.shop 目前仅提供 HTTP（HTTPS 不可用），保留明文豁免；qlogo.cn 支持 HTTPS，已不再豁免明文。 -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">mxwk.shop</domain>
-        <domain includeSubdomains="true">qlogo.cn</domain>
     </domain-config>
 </network-security-config>

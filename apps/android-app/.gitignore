@@ -2,4 +2,6 @@
 /local.properties
 /build/
 /app/build/
-
+/core/network/build/
+/core/security/build/
+/baselineprofile/build/

@@ -7,9 +7,10 @@ import android.net.Uri
 import android.os.Build
 import androidx.core.content.FileProvider
 import cn.pxyb.mycontrol.BuildConfig
+import cn.pxyb.mycontrol.core.network.HttpClientProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
+
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
@@ -43,7 +44,7 @@ sealed interface AppInstallResult {
 }
 
 class AppUpdateManager(private val context: Context) {
-    private val client = OkHttpClient.Builder()
+    private val client = HttpClientProvider.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
         .build()

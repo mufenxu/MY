@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.data
 import androidx.compose.runtime.Immutable
 
 import android.content.Context
+import cn.pxyb.mycontrol.core.security.EncryptedPreferenceCodec
 import android.util.Base64
 
 @Immutable

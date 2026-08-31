@@ -16,3 +16,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "MYControl"
 include(":app")
+include(":baselineprofile")
+include(":core:network")
+include(":core:security")

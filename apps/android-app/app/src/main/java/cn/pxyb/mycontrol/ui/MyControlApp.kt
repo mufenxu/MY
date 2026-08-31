@@ -1334,6 +1334,7 @@ private fun PasskeyLoginMethod(enabled: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun LoginFooter() {
+    var showPrivacyPolicy by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -1358,6 +1359,16 @@ private fun LoginFooter() {
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
             modifier = Modifier.padding(top = 3.dp)
         )
+        Text(
+            "登录即代表你已阅读并同意《隐私政策》",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f),
+            modifier = Modifier.padding(top = 6.dp).clickable { showPrivacyPolicy = true },
+        )
+    }
+
+    if (showPrivacyPolicy) {
+        PrivacyPolicyDialog(onDismiss = { showPrivacyPolicy = false })
     }
 }
 
