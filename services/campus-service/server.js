@@ -7563,6 +7563,15 @@ async function handleApi(req, res, url) {
       json(res, 200, { ok: true, data: await client.getMyReservations() });
       return;
     }
+    if (url.pathname === "/api/campus/library-seat/reservations/history" && req.method === "GET") {
+      const client = await librarySeatClient();
+      const data = await client.getMyReservationHistory({
+        page: url.searchParams.get("page"),
+        size: url.searchParams.get("size")
+      });
+      json(res, 200, { ok: true, data });
+      return;
+    }
     if (url.pathname === "/api/campus/library-seat/reservations" && req.method === "POST") {
       const body = await readBodyJson(req);
       const normalized = normalizeLibrarySeatReservationInput(body);

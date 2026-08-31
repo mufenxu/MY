@@ -30,6 +30,8 @@ import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.SecurityData
 import cn.pxyb.mycontrol.data.LibrarySeatArea
 import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
+import cn.pxyb.mycontrol.data.LibrarySeatReservationHistory
+import cn.pxyb.mycontrol.data.LibrarySeatReservationRecord
 import cn.pxyb.mycontrol.data.LibrarySeatOverview
 import cn.pxyb.mycontrol.data.LibrarySeatStatus
 import cn.pxyb.mycontrol.data.LibrarySeatVenue
@@ -267,6 +269,10 @@ data class LibrarySeatUiState(
     val floorSeats: List<LibrarySeatFloorSeat> = emptyList(),
     val floorSeatsLoading: Boolean = false,
     val submitLoading: Boolean = false,
+    val reservations: List<LibrarySeatReservationRecord> = emptyList(),
+    val reservationsLoading: Boolean = false,
+    val historyReservations: LibrarySeatReservationHistory = LibrarySeatReservationHistory(),
+    val historyReservationsLoading: Boolean = false,
     val selectedVenueId: String? = null,
     val selectedDate: String? = null,
     val selectedFloorId: String? = null,
@@ -607,7 +613,8 @@ internal fun AppUiState.toReservationUiState() = ReservationUiState(
 )
 
 internal fun AppUiState.toLibrarySeatUiState() = LibrarySeatUiState(
-    refreshing = librarySeatOverviewLoading || librarySeatAreasLoading || librarySeatSeatsLoading || librarySeatSubmitLoading,
+    refreshing = librarySeatOverviewLoading || librarySeatAreasLoading || librarySeatSeatsLoading || librarySeatSubmitLoading ||
+        librarySeatReservationsLoading || librarySeatHistoryReservationsLoading,
     overview = librarySeatOverview,
     overviewLoading = librarySeatOverviewLoading,
     venues = librarySeatOverview.venues,
@@ -619,6 +626,10 @@ internal fun AppUiState.toLibrarySeatUiState() = LibrarySeatUiState(
     floorSeats = librarySeatFloorSeats,
     floorSeatsLoading = librarySeatFloorSeatsLoading,
     submitLoading = librarySeatSubmitLoading,
+    reservations = librarySeatReservations,
+    reservationsLoading = librarySeatReservationsLoading,
+    historyReservations = librarySeatHistoryReservations,
+    historyReservationsLoading = librarySeatHistoryReservationsLoading,
     selectedVenueId = librarySeatSelectedVenueId,
     selectedDate = librarySeatSelectedDate,
     selectedFloorId = librarySeatSelectedFloorId,

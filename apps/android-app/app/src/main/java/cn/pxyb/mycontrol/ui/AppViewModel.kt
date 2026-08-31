@@ -58,6 +58,8 @@ import cn.pxyb.mycontrol.data.PlatformWebSession
 import cn.pxyb.mycontrol.data.LibrarySeatArea
 import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
 import cn.pxyb.mycontrol.data.LibrarySeatOverview
+import cn.pxyb.mycontrol.data.LibrarySeatReservationHistory
+import cn.pxyb.mycontrol.data.LibrarySeatReservationRecord
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
 import cn.pxyb.mycontrol.data.LibrarySeatStatus
 import cn.pxyb.mycontrol.data.QuickScenePreference
@@ -225,6 +227,10 @@ data class AppUiState(
     val librarySeatFloorSeats: List<LibrarySeatFloorSeat> = emptyList(),
     val librarySeatFloorSeatsLoading: Boolean = false,
     val librarySeatSubmitLoading: Boolean = false,
+    val librarySeatReservations: List<LibrarySeatReservationRecord> = emptyList(),
+    val librarySeatReservationsLoading: Boolean = false,
+    val librarySeatHistoryReservations: LibrarySeatReservationHistory = LibrarySeatReservationHistory(),
+    val librarySeatHistoryReservationsLoading: Boolean = false,
     val librarySeatSelectedVenueId: String? = null,
     val librarySeatSelectedDate: String? = null,
     val librarySeatSelectedFloorId: String? = null,
@@ -1936,6 +1942,7 @@ class AppViewModel(
 
     fun refreshLibrarySeat() {
         loadLibrarySeatOverview(force = true)
+        loadLibrarySeatReservations(force = true)
     }
 
     fun loadLibrarySeatOverview(force: Boolean = false) {
@@ -2155,6 +2162,7 @@ class AppViewModel(
                         librarySeatMessage = "座位预约已提交成功，请以学校预约系统记录为准。",
                     )
                 }
+                loadLibrarySeatReservations()
                 onSuccess()
             } catch (error: Throwable) {
                 if (error is CancellationException) throw error
@@ -2162,6 +2170,54 @@ class AppViewModel(
                     it.copy(
                         librarySeatSubmitLoading = false,
                         librarySeatError = error.message ?: "座位预约提交失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun loadLibrarySeatReservations(force: Boolean = false) {
+        if (mutableState.value.librarySeatReservationsLoading && !force) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(librarySeatReservationsLoading = true) }
+            try {
+                val records = api.librarySeatReservations()
+                mutableState.update {
+                    it.copy(
+                        librarySeatReservations = records,
+                        librarySeatReservationsLoading = false,
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        librarySeatReservationsLoading = false,
+                        librarySeatError = error.message ?: "座位预约记录加载失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun loadLibrarySeatReservationHistory(force: Boolean = false) {
+        if (mutableState.value.librarySeatHistoryReservationsLoading && !force) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(librarySeatHistoryReservationsLoading = true) }
+            try {
+                val history = api.librarySeatReservationHistory(page = 0, size = 20)
+                mutableState.update {
+                    it.copy(
+                        librarySeatHistoryReservations = history,
+                        librarySeatHistoryReservationsLoading = false,
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        librarySeatHistoryReservationsLoading = false,
+                        librarySeatError = error.message ?: "历史预约记录加载失败，请重试。",
                     )
                 }
             }

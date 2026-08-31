@@ -262,6 +262,32 @@ data class LibrarySeatReservationRequest(
 )
 
 @Immutable
+data class LibrarySeatReservationRecord(
+    val id: String = "",
+    val seatId: String = "",
+    val seatLabel: String = "",
+    val receipt: String = "",
+    val date: String = "",
+    val startTime: String = "",
+    val endTime: String = "",
+    val actualTime: String = "",
+    val location: String = "",
+    val buildName: String = "",
+    val floorName: String = "",
+    val roomName: String = "",
+    val status: String = "",
+    val statusText: String = "未知",
+    val message: String = "",
+    val awayRange: String = "",
+)
+
+@Immutable
+data class LibrarySeatReservationHistory(
+    val total: Int = 0,
+    val records: List<LibrarySeatReservationRecord> = emptyList(),
+)
+
+@Immutable
 data class CampusMyReservation(
     val id: String = "",
     val spaceId: Int = 0,

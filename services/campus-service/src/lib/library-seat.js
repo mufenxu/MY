@@ -88,6 +88,19 @@ function seatSortKey(seat) {
   return Number.isFinite(label) ? label : Number.MAX_SAFE_INTEGER;
 }
 
+function librarySeatReservationStatusText(status) {
+  const normalized = stringValue(status).toUpperCase();
+  if (normalized === "RESERVE") return "预约";
+  if (normalized === "CHECK_IN") return "履约中";
+  if (normalized === "AWAY") return "暂离";
+  if (normalized === "LEAVE_EARLY") return "早退";
+  if (normalized === "STOP") return "已结束";
+  if (normalized === "MISS") return "失约";
+  if (normalized === "CANCEL") return "已取消";
+  if (normalized === "NO_STOP") return "未签退";
+  return stringValue(status, "未知");
+}
+
 export function librarySeatTokenFromOfficialUrl(value) {
   try {
     const url = new URL(String(value || ""), LIBRARY_SEAT_ORIGIN);
@@ -170,6 +183,33 @@ export function normalizeLibrarySeatSeatsPayload(payload) {
       isFree: status.toUpperCase() === "FREE"
     };
   }).filter(Boolean).sort((a, b) => seatSortKey(a) - seatSortKey(b) || a.label.localeCompare(b.label));
+}
+
+export function normalizeLibrarySeatReservationRecord(record) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) return null;
+  const status = firstString(record, ["status"]).toUpperCase();
+  return {
+    id: firstString(record, ["id"]),
+    seatId: firstString(record, ["seatId"]),
+    seatLabel: firstString(record, ["seatLabel", "seatNo"], ""),
+    receipt: firstString(record, ["receipt"]),
+    date: firstString(record, ["makeDateStr", "makeDate"], ""),
+    startTime: firstString(record, ["makeBeginStr"], ""),
+    endTime: firstString(record, ["makeEndStr"], ""),
+    actualTime: firstString(record, ["actualStr"], ""),
+    location: firstString(record, ["location"], ""),
+    buildName: firstString(record, ["buildName"], ""),
+    floorName: firstString(record, ["floorName"], ""),
+    roomName: firstString(record, ["roomName"], ""),
+    status,
+    statusText: librarySeatReservationStatusText(status),
+    message: firstString(record, ["message"], ""),
+    awayRange: firstString(record, ["awayRange"], "")
+  };
+}
+
+function normalizeLibrarySeatReservationRecords(rows = []) {
+  return asArray(rows).map(normalizeLibrarySeatReservationRecord).filter(Boolean);
 }
 
 export function normalizeLibrarySeatReservationInput(input = {}) {
@@ -296,7 +336,16 @@ export function createLibrarySeatClient({
       });
       return normalizeLibrarySeatSeatsPayload(seats);
     },
-    getMyReservations: async () => request("/static/frontApi/user/lastMake", {}),
+    getMyReservations: async () => normalizeLibrarySeatReservationRecords(
+      await request("/static/frontApi/user/lastMake", {})
+    ),
+    getMyReservationHistory: async (input = {}) => {
+      const page = Math.max(0, intValue(input.page, 0));
+      const size = Math.min(50, Math.max(1, intValue(input.size, 10)));
+      const payload = await request("/static/frontApi/user/history/" + page + "/" + size, {});
+      const list = normalizeLibrarySeatReservationRecords(Array.isArray(payload) ? payload : payload?.list);
+      return { total: intValue(payload?.count, list.length), records: list };
+    },
     submitReservation: async (input = {}) => {
       const normalized = normalizeLibrarySeatReservationInput(input);
       return request(

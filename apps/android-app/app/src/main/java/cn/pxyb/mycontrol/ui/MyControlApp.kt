@@ -1956,6 +1956,8 @@ private fun AuthenticatedShell(
                         onLoadSeats = viewModel::loadLibrarySeatSeats,
                         onQueryFloorSeats = viewModel::queryLibrarySeatFloorSeats,
                         onSubmitReservation = viewModel::submitLibrarySeatReservation,
+                        onLoadReservations = viewModel::loadLibrarySeatReservations,
+                        onLoadReservationHistory = viewModel::loadLibrarySeatReservationHistory,
                         onOpenOfficialReservation = {
                             viewModel.openOfficialLibrarySeatReservation { session ->
                                 openPlatformWebLink(

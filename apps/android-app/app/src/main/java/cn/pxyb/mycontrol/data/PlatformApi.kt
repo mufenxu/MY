@@ -688,6 +688,18 @@ class PlatformApi(
         execute(CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH, method = "POST", body = body)
     }
 
+    suspend fun librarySeatReservations(): List<LibrarySeatReservationRecord> = withContext(Dispatchers.IO) {
+        parseLibrarySeatReservationRecordsPayload(execute(CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH).json)
+    }
+
+    suspend fun librarySeatReservationHistory(page: Int = 0, size: Int = 10): LibrarySeatReservationHistory =
+        withContext(Dispatchers.IO) {
+            val query = "?page=$page&size=$size"
+            parseLibrarySeatReservationHistoryPayload(
+                execute("$CAMPUS_LIBRARY_SEAT_RESERVATIONS_HISTORY_PATH$query").json,
+            )
+        }
+
     suspend fun campusReservationRules(spaceId: Int): String = withContext(Dispatchers.IO) {
         val response = execute("$CAMPUS_LIBROOM_RULES_PATH?spaceId=$spaceId")
         val data = response.json.opt("data") ?: response.json
@@ -1791,6 +1803,75 @@ internal fun parseLibrarySeatSeatsPayload(
             isFree = status.equals("FREE", ignoreCase = true),
         )
     }.sortedWith(compareBy<LibrarySeatStatus> { it.label.toIntOrNull() ?: Int.MAX_VALUE }.thenBy { it.label })
+}
+
+internal fun parseLibrarySeatReservationRecordsPayload(
+    json: JSONObject,
+    jsonArray: JSONArray = JSONArray(),
+): List<LibrarySeatReservationRecord> {
+    val payload = json.opt("data") ?: json.takeIf { it.length() > 0 } ?: jsonArray
+    val rows = when (payload) {
+        is JSONArray -> payload.objects()
+        is JSONObject -> payload.optJSONArray("list")?.objects()
+            ?: payload.optJSONArray("records")?.objects()
+            ?: payload.optJSONArray("pageList")?.objects()
+            ?: emptyList()
+        else -> emptyList()
+    }
+    return rows.mapNotNull { parseLibrarySeatReservationRecord(it) }
+}
+
+internal fun parseLibrarySeatReservationHistoryPayload(
+    json: JSONObject,
+    jsonArray: JSONArray = JSONArray(),
+): LibrarySeatReservationHistory {
+    val payload = json.opt("data") ?: json.takeIf { it.length() > 0 } ?: jsonArray
+    val rows = when (payload) {
+        is JSONArray -> payload.objects()
+        is JSONObject -> payload.optJSONArray("list")?.objects()
+            ?: payload.optJSONArray("records")?.objects()
+            ?: emptyList()
+        else -> emptyList()
+    }
+    val total = if (payload is JSONObject) payload.optInt("total", payload.optInt("count", rows.size)) else rows.size
+    return LibrarySeatReservationHistory(
+        total = total,
+        records = rows.mapNotNull { parseLibrarySeatReservationRecord(it) },
+    )
+}
+
+internal fun parseLibrarySeatReservationRecord(row: JSONObject): LibrarySeatReservationRecord? {
+    val id = row.seatString("id")
+    if (id.isBlank()) return null
+    val status = row.seatString("status")
+    return LibrarySeatReservationRecord(
+        id = id,
+        seatId = row.seatString("seatId"),
+        seatLabel = row.seatString("seatLabel", "seatNo"),
+        receipt = row.seatString("receipt"),
+        date = row.seatString("makeDateStr", "makeDate"),
+        startTime = row.seatString("makeBeginStr"),
+        endTime = row.seatString("makeEndStr"),
+        actualTime = row.seatString("actualStr"),
+        location = row.seatString("location"),
+        buildName = row.seatString("buildName"),
+        floorName = row.seatString("floorName"),
+        roomName = row.seatString("roomName"),
+        status = status,
+        statusText = when (status.uppercase()) {
+            "RESERVE" -> "预约"
+            "CHECK_IN" -> "履约中"
+            "AWAY" -> "暂离"
+            "LEAVE_EARLY" -> "早退"
+            "STOP" -> "已结束"
+            "MISS" -> "失约"
+            "CANCEL" -> "已取消"
+            "NO_STOP" -> "未签退"
+            else -> status.ifBlank { "未知" }
+        },
+        message = row.seatString("message"),
+        awayRange = row.seatString("awayRange"),
+    )
 }
 
 private fun findNestedCampusReservationSpaceRows(value: Any?): List<JSONObject> {

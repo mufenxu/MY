@@ -16,6 +16,7 @@ internal const val CAMPUS_LIBRARY_SEAT_OVERVIEW_PATH = "$CAMPUS_API_PATH/campus/
 internal const val CAMPUS_LIBRARY_SEAT_AREAS_PATH = "$CAMPUS_API_PATH/campus/library-seat/areas"
 internal const val CAMPUS_LIBRARY_SEAT_SEATS_PATH = "$CAMPUS_API_PATH/campus/library-seat/seats"
 internal const val CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH = "$CAMPUS_API_PATH/campus/library-seat/reservations"
+internal const val CAMPUS_LIBRARY_SEAT_RESERVATIONS_HISTORY_PATH = "$CAMPUS_API_PATH/campus/library-seat/reservations/history"
 internal const val CAMPUS_LIBRARY_SEAT_OFFICIAL_WEBVIEW_LOGIN_PATH = "$CAMPUS_API_PATH/campus/library-seat/official-webview-login"
 
 internal fun shouldInvalidatePlatformSession(status: Int, code: String): Boolean =

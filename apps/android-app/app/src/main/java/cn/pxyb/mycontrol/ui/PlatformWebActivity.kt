@@ -1,6 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -67,12 +68,12 @@ class PlatformWebActivity : ComponentActivity() {
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         val callback = filePathCallback.also { filePathCallback = null } ?: return@registerForActivityResult
-        val pickedUris = WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+        val pickedUris = parsePickedUris(result.resultCode, result.data)
         // 临时诊断：确认选择器返回内容，验证完成后移除
         val resultDesc = result.data?.let { it.data?.toString() ?: "URI为空" } ?: "无数据"
         Toast.makeText(this@PlatformWebActivity, "选择器返回: code=${result.resultCode} $resultDesc", Toast.LENGTH_LONG).show()
         if (pickedUris.isNullOrEmpty()) {
-            logUpload("选择器未返回文件（resultCode=$result.resultCode）")
+            logUpload("选择器未返回文件（resultCode=${result.resultCode}）")
             callback.onReceiveValue(null)
             return@registerForActivityResult
         }
@@ -154,6 +155,9 @@ class PlatformWebActivity : ComponentActivity() {
      * 其结果在系统层投递时抛 NPE，网页端收不到所选文件（表现为点“完成”后无图）。
      * 改用标准 DocumentsUI（ACTION_OPEN_DOCUMENT），返回结果稳定可解析；选中的
      * content:// URI 由 copyPickedUrisToCache 复制到缓存后经 FileProvider 交给网页。
+     * 注意：Android 11+ 包可见性过滤会拦截对 documentsui 的解析，必须在
+     * AndroidManifest.xml 的 <queries> 中声明本 intent，否则 resolveActivity
+     * 返回空并回退到 GET_CONTENT。
      */
     private fun buildFileChooserIntent(params: WebChromeClient.FileChooserParams): Intent {
         val acceptTypes = params.acceptTypes?.filter { it.isNotBlank() }.orEmpty()
@@ -176,6 +180,21 @@ class PlatformWebActivity : ComponentActivity() {
 
     private fun logUpload(message: String) {
         Log.i(TAG_UPLOAD, message)
+    }
+
+    /**
+     * 部分系统（MIUI/HyperOS）选择器只通过 clipData 返回所选文件，
+     * FileChooserParams.parseResult 解析为空，这里同时兼容 data 单文件和
+     * clipData 多文件两种返回形式。
+     */
+    private fun parsePickedUris(resultCode: Int, data: Intent?): Array<Uri>? {
+        if (resultCode != Activity.RESULT_OK || data == null) return null
+        data.data?.let { return arrayOf(it) }
+        val clip = data.clipData ?: return null
+        val uris = (0 until clip.itemCount)
+            .mapNotNull { clip.getItemAt(it).uri }
+            .toTypedArray()
+        return uris.takeIf { it.isNotEmpty() }
     }
 
     /**
