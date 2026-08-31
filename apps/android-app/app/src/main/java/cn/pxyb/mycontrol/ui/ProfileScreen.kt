@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -166,6 +167,7 @@ fun ProfileScreen(
     val isTablet = adaptive.isTabletOrExpanded
 
     val listState = rememberLazyListState()
+    val dark = isSystemInDarkTheme()
     PullToRefresh(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,
@@ -173,9 +175,11 @@ fun ProfileScreen(
     ) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .auroraBackdrop(dark),
             contentPadding = appPageContentPadding(contentPadding, topSpacing = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // 1. 通透极简顶栏
             item {
@@ -201,7 +205,7 @@ fun ProfileScreen(
                         // 左列：个人资料 + 账号安全 + 设备与会话
                         Column(
                             modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             ModernProfileCard(
                                 username = user.username,
@@ -209,12 +213,14 @@ fun ProfileScreen(
                                 versionStr = BuildConfig.VERSION_NAME,
                             )
 
+                            ProfileSectionTitle("账号与安全", "密码、MFA 与登录设备")
+
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                                shadowElevation = 1.dp,
+                                shape = RoundedCornerShape(20.dp),
+                                color = glassCardColor(),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                                shadowElevation = 0.dp,
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileCardHeader(
@@ -267,10 +273,10 @@ fun ProfileScreen(
 
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                                shadowElevation = 1.dp,
+                                shape = RoundedCornerShape(20.dp),
+                                color = glassCardColor(),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                                shadowElevation = 0.dp,
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileCardHeader(
@@ -339,12 +345,14 @@ fun ProfileScreen(
                         // 右列：通知偏好 + 服务台账 + 维护 + 退出
                         Column(
                             modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
+                            ProfileSectionTitle("通知与提醒", "告警推送与免打扰设置")
+
                             if (!notificationsEnabled) {
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(24.dp),
+                                    shape = RoundedCornerShape(20.dp),
                                     color = Color(0xFFFFFBEB),
                                     border = BorderStroke(1.dp, Color(0xFFFDE68A)),
                                 ) {
@@ -369,10 +377,10 @@ fun ProfileScreen(
 
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                                shadowElevation = 1.dp,
+                                shape = RoundedCornerShape(20.dp),
+                                color = glassCardColor(),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                                shadowElevation = 0.dp,
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileCardHeader(
@@ -415,12 +423,14 @@ fun ProfileScreen(
                                 }
                             }
 
+                            ProfileSectionTitle("服务与维护", "账号服务、缓存与版本")
+
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                                shadowElevation = 1.dp,
+                                shape = RoundedCornerShape(20.dp),
+                                color = glassCardColor(),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                                shadowElevation = 0.dp,
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileActionRow(
@@ -436,10 +446,10 @@ fun ProfileScreen(
 
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                                shadowElevation = 1.dp,
+                                shape = RoundedCornerShape(20.dp),
+                                color = glassCardColor(),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                                shadowElevation = 0.dp,
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileCardHeader(
@@ -483,10 +493,10 @@ fun ProfileScreen(
                             // 5. 关于应用（平板右列）
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                                shadowElevation = 1.dp,
+                                shape = RoundedCornerShape(20.dp),
+                                color = glassCardColor(),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                                shadowElevation = 0.dp,
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileActionRow(
@@ -536,7 +546,7 @@ fun ProfileScreen(
                                         enabled = state.busyAction == null,
                                         onClick = { confirmLogout = true },
                                     ),
-                                shape = RoundedCornerShape(22.dp),
+                                shape = RoundedCornerShape(20.dp),
                                 color = Color(0xFFFEF2F2),
                                 border = BorderStroke(1.dp, Color(0xFFFCA5A5).copy(alpha = 0.6f)),
                             ) {
@@ -573,7 +583,7 @@ fun ProfileScreen(
                     }
                 }
             } else {
-                // 手机单列流保持原有排列
+                // 手机单列流：与首页一致的卡片节奏与分组标题
                 item {
                     ModernProfileCard(
                         username = user.username,
@@ -582,11 +592,15 @@ fun ProfileScreen(
                     )
                 }
 
+                item(key = "profile-section-notifications") {
+                    ProfileSectionTitle("通知与提醒", "告警推送与免打扰设置")
+                }
+
                 if (!notificationsEnabled) {
                     item(key = "notification-permission") {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(24.dp),
+                            shape = RoundedCornerShape(20.dp),
                             color = Color(0xFFFFFBEB),
                             border = BorderStroke(1.dp, Color(0xFFFDE68A)),
                         ) {
@@ -613,10 +627,10 @@ fun ProfileScreen(
                 item {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                        shadowElevation = 1.dp,
+                        shape = RoundedCornerShape(20.dp),
+                        color = glassCardColor(),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                        shadowElevation = 0.dp,
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileCardHeader(
@@ -660,13 +674,17 @@ fun ProfileScreen(
                     }
                 }
 
+                item(key = "profile-section-account") {
+                    ProfileSectionTitle("账号与安全", "密码、MFA 与登录设备")
+                }
+
                 item {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                        shadowElevation = 1.dp,
+                        shape = RoundedCornerShape(20.dp),
+                        color = glassCardColor(),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                        shadowElevation = 0.dp,
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileCardHeader(
@@ -721,10 +739,10 @@ fun ProfileScreen(
                 item {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                        shadowElevation = 1.dp,
+                        shape = RoundedCornerShape(20.dp),
+                        color = glassCardColor(),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                        shadowElevation = 0.dp,
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileActionRow(
@@ -742,10 +760,10 @@ fun ProfileScreen(
                 item {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                        shadowElevation = 1.dp,
+                        shape = RoundedCornerShape(20.dp),
+                        color = glassCardColor(),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                        shadowElevation = 0.dp,
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileCardHeader(
@@ -811,13 +829,17 @@ fun ProfileScreen(
                     }
                 }
 
+                item(key = "profile-section-misc") {
+                    ProfileSectionTitle("通用与维护", "缓存、同步与版本信息")
+                }
+
                 item {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                        shadowElevation = 1.dp,
+                        shape = RoundedCornerShape(20.dp),
+                        color = glassCardColor(),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                        shadowElevation = 0.dp,
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileCardHeader(
@@ -863,10 +885,10 @@ fun ProfileScreen(
                 item {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                        shadowElevation = 1.dp,
+                        shape = RoundedCornerShape(20.dp),
+                        color = glassCardColor(),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                        shadowElevation = 0.dp,
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileActionRow(
@@ -918,7 +940,7 @@ fun ProfileScreen(
                                 enabled = state.busyAction == null,
                                 onClick = { confirmLogout = true },
                             ),
-                        shape = RoundedCornerShape(22.dp),
+                        shape = RoundedCornerShape(20.dp),
                         color = Color(0xFFFEF2F2),
                         border = BorderStroke(1.dp, Color(0xFFFCA5A5).copy(alpha = 0.6f)),
                     ) {
@@ -1303,7 +1325,7 @@ private fun AppUpdateStatusPanel(
 // 极简通透现代化 UI 组件
 // ------------------------------------------------------------------------------------------------
 
-/** 通透顶栏 */
+/** 通透顶栏：与首页「工作台」一致的标题节奏，毛玻璃面板 */
 @Composable
 private fun ModernProfileHeader(
     onOpenQrLogin: () -> Unit,
@@ -1311,40 +1333,91 @@ private fun ModernProfileHeader(
     onOpenNotifications: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    val glass = rememberGlassPalette(radius = 20.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassPanel(glass)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "我的",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 22.sp,
+                        letterSpacing = (-0.2).sp,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    ),
+                )
+                Text(
+                    text = "账号、安全与设备中心",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AppNotificationButton(
+                    unreadCount = unreadCount,
+                    onClick = onOpenNotifications,
+                )
+                ModernHeaderIconButton(
+                    icon = Icons.Outlined.Settings,
+                    contentDescription = "应用设置",
+                    onClick = onOpenSettings,
+                )
+                ModernHeaderIconButton(
+                    icon = Icons.Outlined.CenterFocusWeak,
+                    contentDescription = "扫码登录",
+                    onClick = onOpenQrLogin,
+                )
+            }
+        }
+    }
+}
+/** 分组标题：与首页「工作台」一致的节奏 */
+@Composable
+private fun ProfileSectionTitle(
+    title: String,
+    subtitle: String,
+    trailing: (@Composable () -> Unit)? = null,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .padding(horizontal = 2.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = "我的",
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontWeight = FontWeight.ExtraBold,
+        Column {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                ),
                 color = MaterialTheme.colorScheme.onBackground,
-            ),
-        )
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            AppNotificationButton(
-                unreadCount = unreadCount,
-                onClick = onOpenNotifications,
             )
-            ModernHeaderIconButton(
-                icon = Icons.Outlined.Settings,
-                contentDescription = "应用设置",
-                onClick = onOpenSettings,
-            )
-            ModernHeaderIconButton(
-                icon = Icons.Outlined.CenterFocusWeak,
-                contentDescription = "扫码登录",
-                onClick = onOpenQrLogin,
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 11.sp,
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        trailing?.invoke()
     }
 }
 
@@ -1355,14 +1428,13 @@ private fun ModernProfileCard(
     role: String,
     versionStr: String,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(26.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shadowElevation = 1.dp,
+    val glass = rememberGlassPalette(radius = 20.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassPanel(glass),
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,

@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,9 +65,12 @@ fun GlobalSearchScreen(
 
     val adaptive = LocalAdaptiveWindow.current
     val isTablet = adaptive.isTabletOrExpanded
+    val dark = isSystemInDarkTheme()
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .auroraBackdrop(dark),
         contentPadding = appPageContentPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

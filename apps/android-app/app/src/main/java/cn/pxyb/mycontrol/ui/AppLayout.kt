@@ -83,14 +83,21 @@ fun AppSecondaryHeader(
     modifier: Modifier = Modifier,
     actions: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    Row(
+    val glass = rememberGlassPalette(radius = 16.dp)
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 44.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .glassPanel(glass)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
-        AppHeaderIconButton(
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 40.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            AppHeaderIconButton(
             icon = Icons.AutoMirrored.Outlined.ArrowBack,
             contentDescription = "返回",
             onClick = onBack,
@@ -120,11 +127,12 @@ fun AppSecondaryHeader(
                 )
             }
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            actions?.invoke(this)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                actions?.invoke(this)
+            }
         }
     }
 }

@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -204,8 +205,12 @@ fun GoogleAccountDeskScreen(
         )
     }
 
+    val dark = isSystemInDarkTheme()
+
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .auroraBackdrop(dark),
         contentPadding = appPageContentPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -662,7 +667,7 @@ private fun DeskStatCard(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
         border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         shadowElevation = 0.dp,
     ) {
@@ -726,7 +731,7 @@ private fun ModernDeskSearchBar(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
         border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f)),
         shadowElevation = 0.5.dp,
     ) {
@@ -952,7 +957,7 @@ private fun GoogleAccountRow(
             .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
         border = BorderStroke(
             if (bulkSelected || selected) 1.2.dp else 0.6.dp,
             if (bulkSelected || selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),

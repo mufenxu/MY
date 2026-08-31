@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -164,6 +165,7 @@ fun ToolsScreen(
     val isTablet = adaptive.isTabletOrExpanded
 
     val listState = rememberLazyListState()
+    val dark = isSystemInDarkTheme()
     PullToRefresh(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,
@@ -176,6 +178,7 @@ fun ToolsScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .auroraBackdrop(dark)
                 .padding(
                     start = AppPageHorizontalPadding,
                     end = AppPageHorizontalPadding,
@@ -276,7 +279,7 @@ fun ToolsScreen(
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(24.dp),
-                                    color = MaterialTheme.colorScheme.surface,
+                                    color = glassCardColor(),
                                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                                     shadowElevation = 1.dp,
                                 ) {
@@ -374,7 +377,7 @@ fun ToolsScreen(
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.surface,
+                                color = glassCardColor(),
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                                 shadowElevation = 1.dp,
                             ) {
@@ -456,7 +459,7 @@ private fun TelemetryInsightPanel(insight: DeviceTelemetryInsight) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         shadowElevation = 0.dp,
     ) {
@@ -591,7 +594,7 @@ private fun TelemetryInsightUnavailable() {
 // 清新通透现代化组件
 // ------------------------------------------------------------------------------------------------
 
-/** 极简通透 Header Banner (根据用户反馈：无黑色卡片背景，无刷新按钮) */
+/** 玻璃 Header Banner（与「我的」页一致） */
 @Composable
 private fun LightweightHeaderBanner(
     mqttConnected: Boolean,
@@ -614,52 +617,60 @@ private fun LightweightHeaderBanner(
         1f
     }
 
-    Row(
+    val glass = rememberGlassPalette(radius = 20.dp)
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .glassPanel(glass)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = if (mqttConnected) Color(0xFFECFDF5) else Color(0xFFFEF2F2),
-                border = BorderStroke(0.5.dp, if (mqttConnected) Color(0xFFA7F3D0) else Color(0xFFFECACA)),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (mqttConnected) Color(0xFFECFDF5) else Color(0xFFFEF2F2),
+                    border = BorderStroke(0.5.dp, if (mqttConnected) Color(0xFFA7F3D0) else Color(0xFFFECACA)),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .graphicsLayer { alpha = dotAlpha }
-                            .background(
-                                color = if (mqttConnected) Color(0xFF10B981) else Color(0xFFEF4444),
-                                shape = CircleShape,
-                            )
-                    )
-                    Text(
-                        text = if (mqttConnected) "LIVE · 智控中心" else "OFFLINE · 离线模式",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = if (mqttConnected) Color(0xFF047857) else Color(0xFFB91C1C),
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .graphicsLayer { alpha = dotAlpha }
+                                .background(
+                                    color = if (mqttConnected) Color(0xFF10B981) else Color(0xFFEF4444),
+                                    shape = CircleShape,
+                                )
+                        )
+                        Text(
+                            text = if (mqttConnected) "LIVE · 智控中心" else "OFFLINE · 离线模式",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (mqttConnected) Color(0xFF047857) else Color(0xFFB91C1C),
+                        )
+                    }
                 }
+                Text(
+                    text = "设备与自动化",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 22.sp,
+                        letterSpacing = (-0.2).sp,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    ),
+                )
             }
-            Text(
-                text = "设备与自动化",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                ),
+            AppNotificationButton(
+                unreadCount = unreadCount,
+                onClick = onOpenNotifications,
             )
         }
-        AppNotificationButton(
-            unreadCount = unreadCount,
-            onClick = onOpenNotifications,
-        )
     }
 }
 
@@ -711,7 +722,7 @@ private fun ModernMqttStatusPanel(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         shadowElevation = 0.dp,
     ) {
@@ -846,7 +857,7 @@ private fun ModernEnvironmentCard(device: DeviceInfo?) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         shadowElevation = 1.dp,
     ) {
@@ -1155,7 +1166,7 @@ private fun ModernCt8Panel(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         shadowElevation = 1.dp,
     ) {

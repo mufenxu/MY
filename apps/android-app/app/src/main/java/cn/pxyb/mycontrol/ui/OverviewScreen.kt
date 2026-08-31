@@ -249,6 +249,7 @@ fun OverviewScreen(
     val openTodayWorkspace = remember { { onOpenWorkspace(WorkspaceDestination.Today) } }
     val openNotificationsWorkspace = remember { { onOpenWorkspace(WorkspaceDestination.Notifications) } }
     val startCustomizingQuickActions = remember { { customizingQuickActions = true } }
+    val dark = isSystemInDarkTheme()
     PullToRefresh(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,
@@ -261,6 +262,7 @@ fun OverviewScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .auroraBackdrop(dark)
                 .padding(
                     start = AppPageHorizontalPadding,
                     end = AppPageHorizontalPadding,
@@ -349,7 +351,7 @@ fun OverviewScreen(
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(20.dp),
-                                color = MaterialTheme.colorScheme.surface,
+                                color = glassCardColor(),
                                 shadowElevation = 0.dp,
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                             ) {
@@ -453,7 +455,7 @@ fun OverviewScreen(
                                     .fillMaxWidth()
                                     .pressFeedback(campusInteractionSource, pressedScale = 0.985f),
                                 shape = RoundedCornerShape(20.dp),
-                                color = MaterialTheme.colorScheme.surface,
+                                color = glassCardColor(),
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                                 shadowElevation = 0.dp,
                             ) {
@@ -578,7 +580,7 @@ fun OverviewScreen(
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(20.dp),
-                                color = MaterialTheme.colorScheme.surface,
+                                color = glassCardColor(),
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                                 shadowElevation = 0.dp,
                             ) {
@@ -727,7 +729,7 @@ fun OverviewScreen(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surface,
+                        color = glassCardColor(),
                         shadowElevation = 0.dp,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                     ) {
@@ -837,7 +839,7 @@ fun OverviewScreen(
                             .fillMaxWidth()
                             .pressFeedback(campusInteractionSource, pressedScale = 0.985f),
                         shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surface,
+                        color = glassCardColor(),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                         shadowElevation = 0.dp,
                     ) {
@@ -966,7 +968,7 @@ fun OverviewScreen(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surface,
+                        color = glassCardColor(),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                         shadowElevation = 0.dp,
                     ) {
@@ -1145,7 +1147,7 @@ fun OverviewScreen(
 // 极简通透 Overview 组件
 // ------------------------------------------------------------------------------------------------
 
-/** 顶部通透 Header */
+/** 顶部玻璃 Header：与「我的」页一致的毛玻璃顶栏 */
 @Composable
 private fun ModernOverviewHeader(
     onOpenQrLogin: () -> Unit,
@@ -1153,61 +1155,66 @@ private fun ModernOverviewHeader(
     unreadCount: Int,
     onOpenNotifications: () -> Unit,
 ) {
-    Row(
+    val glass = rememberGlassPalette(radius = 20.dp)
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .glassPanel(glass)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = "工作台",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 22.sp,
-                    letterSpacing = (-0.2).sp,
-                    color = MaterialTheme.colorScheme.onBackground,
-                ),
-            )
-            Text(
-                text = "系统与校园日常综合控制台",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-            )
-        }
-
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            AppNotificationButton(
-                unreadCount = unreadCount,
-                onClick = onOpenNotifications,
-            )
-            ModernHeaderIconButton(
-                icon = Icons.Outlined.Search,
-                contentDescription = "全局搜索",
-                onClick = onOpenSearch,
-                size = 38.dp,
-                iconSize = 19.dp,
-                shape = RoundedCornerShape(12.dp),
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "工作台",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 22.sp,
+                        letterSpacing = (-0.2).sp,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    ),
+                )
+                Text(
+                    text = "系统与校园日常综合控制台",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                )
+            }
 
-            ModernHeaderIconButton(
-                icon = Icons.Outlined.CenterFocusWeak,
-                contentDescription = "扫码登录",
-                onClick = onOpenQrLogin,
-                size = 38.dp,
-                iconSize = 19.dp,
-                shape = RoundedCornerShape(12.dp),
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AppNotificationButton(
+                    unreadCount = unreadCount,
+                    onClick = onOpenNotifications,
+                )
+                ModernHeaderIconButton(
+                    icon = Icons.Outlined.Search,
+                    contentDescription = "全局搜索",
+                    onClick = onOpenSearch,
+                    size = 38.dp,
+                    iconSize = 19.dp,
+                    shape = RoundedCornerShape(12.dp),
+                )
+
+                ModernHeaderIconButton(
+                    icon = Icons.Outlined.CenterFocusWeak,
+                    contentDescription = "扫码登录",
+                    onClick = onOpenQrLogin,
+                    size = 38.dp,
+                    iconSize = 19.dp,
+                    shape = RoundedCornerShape(12.dp),
+                )
+            }
         }
     }
 }
-
 /** 分组标题 */
 @Composable
 private fun OverviewSectionTitle(

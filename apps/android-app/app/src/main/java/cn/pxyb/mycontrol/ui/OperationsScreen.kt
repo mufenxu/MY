@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -82,6 +83,7 @@ fun OperationsScreen(
         }.sortedBy { it.second }
     }
     val listState = rememberLazyListState()
+    val dark = isSystemInDarkTheme()
 
     val adaptive = LocalAdaptiveWindow.current
     val isTablet = adaptive.isTabletOrExpanded
@@ -93,7 +95,9 @@ fun OperationsScreen(
     ) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .auroraBackdrop(dark),
             contentPadding = appPageContentPadding(contentPadding),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {

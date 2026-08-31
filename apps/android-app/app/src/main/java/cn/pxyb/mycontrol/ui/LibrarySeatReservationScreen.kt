@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -21,8 +22,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Chair
+import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -48,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.LibrarySeatArea
 import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
 import cn.pxyb.mycontrol.data.LibrarySeatReservationHistory
@@ -57,6 +60,16 @@ import cn.pxyb.mycontrol.data.LibrarySeatStatus
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
+
+private enum class LibrarySeatTab(val label: String) {
+    Book("查询座位"),
+    My("我的预约"),
+}
+
+private val activeSeatReservationStatuses = setOf("RESERVE", "CHECK_IN", "AWAY", "LEAVE_EARLY")
+
+private fun isActiveSeatReservation(record: LibrarySeatReservationRecord): Boolean =
+    record.status.uppercase() in activeSeatReservationStatuses
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -92,6 +105,7 @@ fun LibrarySeatReservationScreen(
     var initialQueryDone by rememberSaveable { mutableStateOf(false) }
     var queryMode by rememberSaveable { mutableStateOf("areas") }
     var seatListExpanded by rememberSaveable { mutableStateOf(false) }
+    var selectedTab by rememberSaveable { mutableStateOf(LibrarySeatTab.Book) }
 
     val isTablet = LocalAdaptiveWindow.current.isTabletOrExpanded
     val onAreaClick: (LibrarySeatArea) -> Unit = { clickedArea ->
@@ -254,18 +268,83 @@ fun LibrarySeatReservationScreen(
         onBack = onBack,
         refreshing = state.refreshing || state.overviewLoading || state.areasLoading || state.seatsLoading || state.submitLoading,
         onRefresh = onRefresh,
-    ) {
-        item(key = "official-entry", contentType = "action") {
-            OutlinedButton(
+        actions = {
+            AppHeaderIconButton(
+                icon = Icons.Outlined.Public,
+                contentDescription = "打开官方座位系统",
                 onClick = onOpenOfficialReservation,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(42.dp),
-                shape = RoundedCornerShape(10.dp),
+            )
+        },
+    ) {
+        item(key = "seat-tabs", contentType = "tab") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(Icons.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("打开官方座位系统", maxLines = 1)
+                LibrarySeatTab.entries.forEach { tab ->
+                    val isSelected = selectedTab == tab
+                    val badgeCount = if (tab == LibrarySeatTab.My) {
+                        state.reservations.count(::isActiveSeatReservation)
+                    } else {
+                        0
+                    }
+                    Surface(
+                        onClick = {
+                            if (selectedTab != tab) {
+                                selectedTab = tab
+                                if (tab == LibrarySeatTab.My) onLoadReservations()
+                            }
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(
+                                imageVector = if (tab == LibrarySeatTab.Book) {
+                                    Icons.Outlined.Search
+                                } else {
+                                    Icons.Outlined.EventAvailable
+                                },
+                                contentDescription = null,
+                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(5.dp))
+                            Text(
+                                text = tab.label,
+                                style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.sp),
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            )
+                            if (badgeCount > 0) {
+                                Spacer(Modifier.width(4.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                                ) {
+                                    Text(
+                                        text = "$badgeCount",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -292,6 +371,7 @@ fun LibrarySeatReservationScreen(
             }
         }
 
+        if (selectedTab == LibrarySeatTab.Book) {
         item(key = "seat-overview", contentType = "summary") {
             AppPanel {
                 Column(
@@ -575,15 +655,18 @@ fun LibrarySeatReservationScreen(
             }
         }
 
-        item(key = "seat-reservations", contentType = "reservations") {
-            MySeatReservationsPanel(
-                reservations = state.reservations,
-                loading = state.reservationsLoading,
-                history = state.historyReservations,
-                historyLoading = state.historyReservationsLoading,
-                onLoadReservations = onLoadReservations,
-                onLoadHistory = onLoadReservationHistory,
-            )
+        } else {
+            item(key = "my-reservations-panel", contentType = "my") {
+                MySeatReservationsPanel(
+                    reservations = state.reservations,
+                    loading = state.reservationsLoading,
+                    history = state.historyReservations,
+                    historyLoading = state.historyReservationsLoading,
+                    onLoadReservations = onLoadReservations,
+                    onLoadHistory = onLoadReservationHistory,
+                    onGoToBookSeat = { selectedTab = LibrarySeatTab.Book },
+                )
+            }
         }
     }
 
@@ -644,6 +727,7 @@ private fun MySeatReservationsPanel(
     historyLoading: Boolean,
     onLoadReservations: () -> Unit,
     onLoadHistory: () -> Unit,
+    onGoToBookSeat: () -> Unit,
 ) {
     var showHistory by rememberSaveable { mutableStateOf(false) }
     AppPanel {
@@ -677,7 +761,15 @@ private fun MySeatReservationsPanel(
                     label = { Text("历史预约") },
                 )
             }
-            val records = if (showHistory) history.records else reservations
+            val records = if (showHistory) {
+                history.records
+            } else {
+                reservations.sortedWith(
+                    compareByDescending<LibrarySeatReservationRecord> { isActiveSeatReservation(it) }
+                        .thenBy { it.date }
+                        .thenBy { it.startTime },
+                )
+            }
             val recordsLoading = if (showHistory) historyLoading else loading
             when {
                 recordsLoading -> LoadingBlock("正在加载预约记录...")
@@ -699,6 +791,17 @@ private fun MySeatReservationsPanel(
                         }
                     }
                 }
+            }
+            OutlinedButton(
+                onClick = onGoToBookSeat,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(5.dp))
+                Text("返回查询座位", maxLines = 1)
             }
         }
     }
@@ -731,7 +834,7 @@ private fun SeatReservationRecordCard(record: LibrarySeatReservationRecord) {
                 Text(
                     text = record.statusText,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = if (record.status == "RESERVE" || record.status == "CHECK_IN") {
+                    color = if (isActiveSeatReservation(record)) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant

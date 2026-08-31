@@ -1091,7 +1091,7 @@ private fun NotificationDetailPane(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         shadowElevation = 1.dp,
     ) {
@@ -1499,6 +1499,7 @@ internal fun WorkspacePage(
     content: LazyListScope.() -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val dark = isSystemInDarkTheme()
     PullToRefresh(
         isRefreshing = refreshing,
         onRefresh = onRefresh,
@@ -1518,6 +1519,7 @@ internal fun WorkspacePage(
                     .fillMaxHeight()
                     .widthIn(max = AppTabletContentMaxWidth)
                     .fillMaxWidth()
+                    .auroraBackdrop(dark)
                     .padding(
                         start = AppPageHorizontalPadding,
                         end = AppPageHorizontalPadding,
@@ -1552,6 +1554,7 @@ private fun NotificationWorkspacePage(
     content: LazyListScope.() -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val dark = isSystemInDarkTheme()
     PullToRefresh(
         isRefreshing = refreshing,
         onRefresh = onRefresh,
@@ -1567,6 +1570,7 @@ private fun NotificationWorkspacePage(
                     .fillMaxHeight()
                     .widthIn(max = AppTabletContentMaxWidth)
                     .fillMaxWidth()
+                    .auroraBackdrop(dark)
                     .padding(
                         start = AppPageHorizontalPadding,
                         end = AppPageHorizontalPadding,
