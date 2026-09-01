@@ -996,7 +996,7 @@ private fun SingleReservationPanel(
                                 Text("在系统中公开展示申请主题与预约时段", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
-                        Switch(checked = open, onCheckedChange = { open = it; onClearFeedback() })
+                        AppSwitch(checked = open, onCheckedChange = { open = it; onClearFeedback() })
                     }
                 }
 
@@ -1958,7 +1958,7 @@ private fun AutoTaskCard(
                     }
                 }
 
-                Switch(
+                AppSwitch(
                     checked = task.enabled,
                     onCheckedChange = { onToggle() },
                 )
@@ -2315,7 +2315,7 @@ private fun AutoReservationEditDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("启用此自动任务", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    Switch(checked = enabled, onCheckedChange = { enabled = it })
+                    AppSwitch(checked = enabled, onCheckedChange = { enabled = it })
                 }
             }
 
@@ -2584,7 +2584,7 @@ private fun AutoReservationEditDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("公开本次申请", style = MaterialTheme.typography.bodyMedium)
-                    Switch(checked = open, onCheckedChange = { open = it })
+                    AppSwitch(checked = open, onCheckedChange = { open = it })
                 }
             }
 

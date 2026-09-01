@@ -1043,16 +1043,13 @@ private fun ModernRelayCard(
                     )
                 }
 
-                Switch(
+                AppSwitch(
                     checked = isOn,
                     onCheckedChange = if (switchEnabled) {
                         { enabled -> onControlRelay(target.deviceId, target.relayId, enabled) }
                     } else null,
                     enabled = switchEnabled,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = target.activeAccent,
-                    ),
+                    tint = target.activeAccent,
                 )
             }
 

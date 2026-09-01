@@ -3394,7 +3394,7 @@ private fun QuietHoursDialog(preferences: AlertPreferences, onDismiss: () -> Uni
                 Text("启用安静时段", style = MaterialTheme.typography.titleMedium)
                 Text("适合睡眠和专注时间", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Switch(checked = enabled, onCheckedChange = { enabled = it })
+            AppSwitch(checked = enabled, onCheckedChange = { enabled = it })
         }
         if (enabled) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -3442,7 +3442,7 @@ private fun SceneEditorDialog(
                                     Text(deviceName, style = MaterialTheme.typography.titleSmall)
                                     Text(relayId, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Switch(
+                                AppSwitch(
                                     checked = current != null,
                                     onCheckedChange = { checked ->
                                         actions = if (checked) actions + IotSceneAction(deviceId, relayId, "ON")
@@ -3521,7 +3521,7 @@ private fun AutomationRuleCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Switch(checked = rule.enabled, onCheckedChange = onToggle, enabled = !busy)
+                AppSwitch(checked = rule.enabled, onCheckedChange = onToggle, enabled = !busy)
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatusBadge(

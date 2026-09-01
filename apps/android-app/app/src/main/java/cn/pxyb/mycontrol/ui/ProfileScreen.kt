@@ -1610,10 +1610,10 @@ private fun NotificationPreferencesDialog(
                                     Text("时段内静音普通告警 (保留 P0 致命提醒)", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
-                            Switch(
+                            AppSwitch(
                                 checked = quietEnabled,
                                 onCheckedChange = { quietEnabled = it },
-                                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF7C3AED)),
+                                tint = Color(0xFF7C3AED),
                             )
                         }
 
@@ -1760,11 +1760,9 @@ private fun PreferenceToggleRow(label: String, checked: Boolean, onCheckedChange
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp))
-        Switch(
+        AppSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            modifier = Modifier.size(36.dp),
-            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF2563EB)),
         )
     }
 }

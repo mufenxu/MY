@@ -239,13 +239,9 @@ fun AccountManagementScreen(
                                             overflow = TextOverflow.Ellipsis,
                                         )
                                     }
-                                    Switch(
+                                    AppSwitch(
                                         checked = state.appLockEnabled,
                                         onCheckedChange = onSetAppLockEnabled,
-                                        colors = SwitchDefaults.colors(
-                                            checkedThumbColor = Color.White,
-                                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                        ),
                                     )
                                 }
                             }
@@ -452,13 +448,9 @@ fun AccountManagementScreen(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            Switch(
+                            AppSwitch(
                                 checked = state.appLockEnabled,
                                 onCheckedChange = onSetAppLockEnabled,
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                ),
                             )
                         }
                     }
