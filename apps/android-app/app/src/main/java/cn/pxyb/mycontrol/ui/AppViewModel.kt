@@ -49,8 +49,11 @@ import cn.pxyb.mycontrol.data.HomePreferences
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.DEFAULT_HIDDEN_HOME_QUICK_ACTIONS
 import cn.pxyb.mycontrol.data.IncidentInfo
+import cn.pxyb.mycontrol.data.AssistantChatTurn
 import cn.pxyb.mycontrol.data.IotData
 import cn.pxyb.mycontrol.data.IotSceneAction
+import org.json.JSONArray
+import org.json.JSONObject
 import cn.pxyb.mycontrol.data.OverviewData
 import cn.pxyb.mycontrol.data.PlatformPasskey
 import cn.pxyb.mycontrol.data.PlatformApi
@@ -168,6 +171,7 @@ data class AppUiState(
     val accountManagementOpen: Boolean = false,
     val googleAccountDeskOpen: Boolean = false,
     val globalSearchOpen: Boolean = false,
+    val assistantOpen: Boolean = false,
     val workspaceDestination: WorkspaceDestination? = null,
     val googleAccounts: List<GoogleAccountRecord> = emptyList(),
     val googleAccountsLoaded: Boolean = false,
@@ -296,6 +300,8 @@ class AppViewModel(
     val googleAccountDeskState = deriveState(AppUiState::toGoogleAccountDeskUiState)
     val qrLoginState = deriveState(AppUiState::toQrLoginUiState)
     val globalSearchState = deriveState(AppUiState::toGlobalSearchUiState)
+    private val assistantChatMutable = MutableStateFlow(AssistantChatUiState())
+    val assistantChatState: StateFlow<AssistantChatUiState> = assistantChatMutable.asStateFlow()
     val todayState = deriveState(AppUiState::toTodayUiState)
     val freeClassroomState = deriveState(AppUiState::toFreeClassroomUiState)
     val reservationState = deriveState(AppUiState::toReservationUiState)
@@ -808,6 +814,7 @@ class AppViewModel(
         accountManagementOpen: Boolean = false,
         googleAccountDeskOpen: Boolean = false,
         globalSearchOpen: Boolean = false,
+        assistantOpen: Boolean = false,
         workspaceDestination: WorkspaceDestination? = null,
         autoRefresh: Boolean = true,
     ) {
@@ -815,6 +822,7 @@ class AppViewModel(
             mutableState.value.accountManagementOpen != accountManagementOpen ||
             mutableState.value.googleAccountDeskOpen != googleAccountDeskOpen ||
             mutableState.value.globalSearchOpen != globalSearchOpen ||
+            mutableState.value.assistantOpen != assistantOpen ||
             mutableState.value.workspaceDestination != workspaceDestination
 
         mutableState.update { current ->
@@ -826,6 +834,7 @@ class AppViewModel(
                     accountManagementOpen = accountManagementOpen,
                     googleAccountDeskOpen = googleAccountDeskOpen,
                     globalSearchOpen = globalSearchOpen,
+                    assistantOpen = assistantOpen,
                     workspaceDestination = workspaceDestination,
                 )
             }
@@ -837,6 +846,7 @@ class AppViewModel(
                 accountManagementOpen = accountManagementOpen,
                 googleAccountDeskOpen = googleAccountDeskOpen,
                 globalSearchOpen = globalSearchOpen,
+                assistantOpen = assistantOpen,
                 workspaceDestination = workspaceDestination,
                 force = false,
             )
@@ -966,6 +976,101 @@ class AppViewModel(
 
     fun closeGlobalSearch() {
         mutableState.update { it.copy(globalSearchOpen = false) }
+    }
+
+    fun openAssistant() {
+        mutableState.update {
+            it.copy(
+                assistantOpen = true,
+                accountManagementOpen = false,
+                googleAccountDeskOpen = false,
+                globalSearchOpen = false,
+                workspaceDestination = null,
+                error = null,
+                message = null,
+            )
+        }
+    }
+
+    fun sendAssistantMessage(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || assistantChatMutable.value.sending) return
+        val current = mutableState.value
+        if (current.user == null || current.locked) {
+            assistantChatMutable.update { it.copy(error = "请先登录后再使用 AI 助手。") }
+            return
+        }
+        val userTurn = AssistantChatMessageUi(role = "user", content = trimmed)
+        val history = (assistantChatMutable.value.messages + userTurn).takeLast(12)
+        assistantChatMutable.update { it.copy(messages = history, sending = true, error = null) }
+        viewModelScope.launch {
+            val context = buildAssistantContext(current)
+            val turns = history.map { AssistantChatTurn(role = it.role, content = it.content) }
+            runCatching { api.assistantChat(turns, context) }
+                .onSuccess { reply ->
+                    assistantChatMutable.update { state ->
+                        state.copy(
+                            messages = state.messages + AssistantChatMessageUi(
+                                role = "assistant",
+                                content = reply.reply,
+                                suggestions = reply.suggestions,
+                            ),
+                            sending = false,
+                            error = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    val message = when {
+                        error is ApiException && error.code == "AI_RATE_LIMITED" -> "AI 助手请求过于频繁，请稍后再试。"
+                        error is ApiException && error.code == "AI_NOT_CONFIGURED" -> "AI 助手服务未配置，请联系管理员。"
+                        error is ApiException && error.code == "PLATFORM_SESSION_REQUIRED" -> "登录会话已失效，请重新登录。"
+                        error is ApiException -> error.message
+                        else -> "网络异常，请稍后再试。"
+                    }
+                    assistantChatMutable.update { it.copy(sending = false, error = message) }
+                }
+        }
+    }
+
+    private fun buildAssistantContext(state: AppUiState): JSONObject = JSONObject().apply {
+        put("date", LocalDate.now().toString())
+        put("generatedAt", System.currentTimeMillis())
+        state.assistantSnapshot?.let { snapshot ->
+            put("nextActionTitle", snapshot.nextAction.title)
+            put("nextActionDetail", snapshot.nextAction.detail)
+            put("nextActionDestination", snapshot.nextAction.destination.deepLinkValue)
+            put("morningBrief", snapshot.morningBrief)
+            put("eveningBrief", snapshot.eveningBrief)
+        }
+        val pendingTodos = state.todoSnapshot.tasks.filter { !it.completed }
+        if (pendingTodos.isNotEmpty()) {
+            put("pendingTodoCount", pendingTodos.size)
+            put("pendingTodos", pendingTodos.take(8).joinToString("；") { it.title })
+        }
+        val courses = state.campusTimetable?.courses.orEmpty()
+        if (courses.isNotEmpty()) {
+            put("timetable", courses.take(12).joinToString("；") { course ->
+                "${course.dayName} ${course.timeRange} ${course.courseName} @ ${course.location}"
+            })
+        }
+        val activeIncidents = state.activeIncidents
+        if (activeIncidents.isNotEmpty()) {
+            put("incidents", activeIncidents.take(6).joinToString("；") { "${it.severity} ${it.title}" })
+        }
+        val unreadAlerts = state.alerts.count { !it.read }
+        put("unreadAlertCount", unreadAlerts)
+        if (unreadAlerts > 0) {
+            put("recentAlerts", state.alerts.filter { !it.read }.take(6).joinToString("；") { it.title })
+        }
+        state.resourceExpiries.takeIf { it.isNotEmpty() }?.let { expiries ->
+            put("resourceExpiries", expiries.take(6).joinToString("；") { "${it.type} ${it.name} 于 ${it.expiresAt} 到期" })
+        }
+        state.backup?.let { backup ->
+            put("backupAgeHours", backup.ageHours?.toString() ?: "未知")
+            put("backupRpoState", backup.rpoState)
+            put("backupValidCount", backup.validBackups)
+        }
     }
 
     fun openGlobalSearchResult(item: GlobalSearchItem) {
@@ -1596,6 +1701,7 @@ class AppViewModel(
             accountManagementOpen = current.accountManagementOpen,
             googleAccountDeskOpen = current.googleAccountDeskOpen,
             globalSearchOpen = current.globalSearchOpen,
+            assistantOpen = current.assistantOpen,
             workspaceDestination = current.workspaceDestination,
             force = force,
         )
@@ -1606,11 +1712,15 @@ class AppViewModel(
         accountManagementOpen: Boolean = false,
         googleAccountDeskOpen: Boolean = false,
         globalSearchOpen: Boolean = false,
+        assistantOpen: Boolean = false,
         workspaceDestination: WorkspaceDestination? = null,
         force: Boolean = false,
     ) {
         if (mutableState.value.user == null || mutableState.value.locked) return
         when {
+            assistantOpen -> {
+                // AI 助手使用现有工作台状态作为上下文，无需额外拉取。
+            }
             workspaceDestination == WorkspaceDestination.Today -> refreshToday(force)
             workspaceDestination == WorkspaceDestination.Scenes -> refreshIot(force)
             workspaceDestination == WorkspaceDestination.Notifications -> {

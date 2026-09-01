@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.ui
 import androidx.compose.runtime.Immutable
 import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot
 
+import cn.pxyb.mycontrol.data.AssistantSuggestion
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AppAlertRecord
@@ -58,9 +59,24 @@ data class AppEntryUiState(
     val accountManagementOpen: Boolean,
     val googleAccountDeskOpen: Boolean,
     val globalSearchOpen: Boolean,
+    val assistantOpen: Boolean,
     val workspaceDestination: WorkspaceDestination?,
     val error: String?,
     val message: String?,
+)
+
+@Immutable
+data class AssistantChatMessageUi(
+    val role: String,
+    val content: String,
+    val suggestions: List<AssistantSuggestion> = emptyList(),
+)
+
+@Immutable
+data class AssistantChatUiState(
+    val messages: List<AssistantChatMessageUi> = emptyList(),
+    val sending: Boolean = false,
+    val error: String? = null,
 )
 
 @Immutable
@@ -318,6 +334,7 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     accountManagementOpen = accountManagementOpen,
     googleAccountDeskOpen = googleAccountDeskOpen,
     globalSearchOpen = globalSearchOpen,
+    assistantOpen = assistantOpen,
     workspaceDestination = workspaceDestination,
     error = error,
     message = message,

@@ -9,6 +9,15 @@ import {
   isSafeHttpMethod,
   issueInternalIdentity,
 } from './internal-auth.mjs';
+import {
+  createAssistantRateLimiter,
+  normalizeChatMessages,
+  normalizeContextText,
+  readAiAssistantConfig,
+  readJsonBody,
+  runAssistantChat,
+  writeJsonError,
+} from './ai-assistant.mjs';
 
 const PROXY_CONTEXT = Symbol('platformProxyContext');
 const PROXY_TIMEOUT_MIN_MS = 1_000;
@@ -255,6 +264,9 @@ export function createPlatformRouter({
     mqtt: parseHosts(mqttHosts),
   };
   const upstreamTimeout = boundedProxyTimeout(proxyTimeoutMs);
+  const assistantLimiter = createAssistantRateLimiter({
+    limit: readAiAssistantConfig().rateLimitPerMinute,
+  });
   const proxy = httpProxy.createProxyServer({
     xfwd: true,
     ws: true,
@@ -386,6 +398,64 @@ export function createPlatformRouter({
     return true;
   }
 
+  async function handleAssistantChat(req, res) {
+    if (req.method !== 'POST') {
+      writeJsonError(res, 405, '仅支持 POST 请求。', 'METHOD_NOT_ALLOWED');
+      return;
+    }
+    const session = await getPlatformSession(req);
+    if (!session) {
+      writeJsonError(res, 401, '登录会话已失效，请重新登录。', 'PLATFORM_SESSION_REQUIRED');
+      return;
+    }
+    if (!managedWriteAllowed(req, platformPublicOrigin)) {
+      rejectCrossSiteWrite(res);
+      return;
+    }
+    if (session.role === 'viewer') {
+      writeJsonError(res, 403, '当前账号为只读角色，无法使用 AI 助手。', 'READ_ONLY_ROLE');
+      return;
+    }
+    const config = readAiAssistantConfig();
+    if (!config.enabled) {
+      writeJsonError(res, 503, 'AI 助手服务未配置，请联系管理员。', 'AI_NOT_CONFIGURED');
+      return;
+    }
+    const subject = String(session.sub || session.username || session.nonce || 'anonymous');
+    if (!assistantLimiter.allow(subject)) {
+      writeJsonError(res, 429, 'AI 助手请求过于频繁，请稍后再试。', 'AI_RATE_LIMITED');
+      return;
+    }
+    const body = await readJsonBody(req);
+    if (!body) {
+      writeJsonError(res, 400, '请求体格式不正确。', 'INVALID_JSON');
+      return;
+    }
+    const messages = normalizeChatMessages(body.messages);
+    if (messages.length === 0) {
+      writeJsonError(res, 400, '缺少对话内容。', 'MISSING_MESSAGES');
+      return;
+    }
+    try {
+      const result = await runAssistantChat({
+        config,
+        messages,
+        context: normalizeContextText(body.context),
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      const status = Number.isInteger(error?.status) ? error.status : 502;
+      const code = typeof error?.code === 'string' ? error.code : 'AI_UPSTREAM_ERROR';
+      writeJsonError(
+        res,
+        status,
+        error?.message || 'AI 助手暂时不可用，请稍后再试。',
+        code,
+      );
+    }
+  }
+
   async function handler(req, res) {
     // 外部请求永远不能自行传入内部身份票据。
     stripExternalIdentityHeaders(req);
@@ -458,6 +528,9 @@ export function createPlatformRouter({
     if (requestUrl.pathname === '/api/iot' || requestUrl.pathname.startsWith('/api/iot/')) {
       rewriteServicePrefix(req, '/api/iot', { apiByDefault: true, preserve: ['/api-docs'] });
       return proxyRequest(req, res, mqttTarget, 'iot');
+    }
+    if (requestUrl.pathname === '/api/assistant/chat') {
+      return handleAssistantChat(req, res);
     }
 
     if (requestUrl.pathname === '/core' || requestUrl.pathname.startsWith('/core/')) {

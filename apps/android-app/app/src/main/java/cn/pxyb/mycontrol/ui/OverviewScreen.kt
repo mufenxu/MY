@@ -134,6 +134,7 @@ fun OverviewScreen(
     onOpenQrLogin: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenAssistant: () -> Unit = {},
     onOpenReservation: () -> Unit = {},
     onOpenFreeClassrooms: () -> Unit = {},
     onOpenSeatReservation: () -> Unit = {},
@@ -314,6 +315,29 @@ fun OverviewScreen(
                             }
                             Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                         }
+                    }
+                }
+            }
+            item(key = "assistant-chat-entry", contentType = "assistant-entry") {
+                AppPanel(
+                    onClick = onOpenAssistant,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        IconTile(
+                            Icons.Outlined.AutoAwesome,
+                            MaterialTheme.colorScheme.tertiary,
+                            MaterialTheme.colorScheme.tertiaryContainer,
+                            modifier = Modifier.size(36.dp),
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text("AI 助手", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, fontSize = 14.5.sp)
+                            Text("问问今天的安排、待办、告警或备份状态", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     }
                 }
             }

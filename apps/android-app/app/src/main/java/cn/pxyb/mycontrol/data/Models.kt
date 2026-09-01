@@ -448,3 +448,20 @@ class ApiException(
     val code: String,
     val details: org.json.JSONObject? = null,
 ) : Exception(message)
+
+@Immutable
+data class AssistantSuggestion(
+    val title: String,
+    val destination: String,
+)
+
+@Immutable
+data class AssistantChatReply(
+    val reply: String,
+    val suggestions: List<AssistantSuggestion> = emptyList(),
+)
+
+data class AssistantChatTurn(
+    val role: String,
+    val content: String,
+)

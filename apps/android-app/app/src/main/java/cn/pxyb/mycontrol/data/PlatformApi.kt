@@ -1243,6 +1243,41 @@ class PlatformApi(
         Unit
     }
 
+    suspend fun assistantChat(
+        messages: List<AssistantChatTurn>,
+        context: JSONObject,
+    ): AssistantChatReply = withContext(Dispatchers.IO) {
+        val messageArray = JSONArray()
+        messages.forEach { turn ->
+            messageArray.put(
+                JSONObject()
+                    .put("role", turn.role)
+                    .put("content", turn.content),
+            )
+        }
+        val body = JSONObject()
+            .put("messages", messageArray)
+            .put("context", context)
+        val json = execute("/api/assistant/chat", "POST", body, timeoutSeconds = 60).json
+        val suggestionArray = json.optJSONArray("suggestions")
+        val suggestions = buildList {
+            if (suggestionArray != null) {
+                for (i in 0 until suggestionArray.length()) {
+                    val item = suggestionArray.optJSONObject(i) ?: continue
+                    val title = item.optString("title").trim()
+                    val destination = item.optString("destination").trim()
+                    if (title.isNotEmpty() && destination.isNotEmpty()) {
+                        add(AssistantSuggestion(title = title, destination = destination))
+                    }
+                }
+            }
+        }
+        AssistantChatReply(
+            reply = json.optString("reply"),
+            suggestions = suggestions,
+        )
+    }
+
     suspend fun googleAccounts(): GoogleAccountSnapshot = withContext(Dispatchers.IO) {
         execute("/api/google-accounts").json.toGoogleAccountSnapshot()
     }

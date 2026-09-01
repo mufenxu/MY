@@ -158,6 +158,7 @@ internal object AppRoute {
     const val Account = "account"
     const val GoogleAccounts = "google-accounts"
     const val Search = "search"
+    const val Assistant = "assistant"
     const val Today = "today"
     const val FreeClassrooms = "free-classrooms"
     const val Reservation = "reservation"
@@ -190,12 +191,14 @@ private fun AppEntryUiState.requestedRoute(): String = when {
     globalSearchOpen -> AppRoute.Search
     googleAccountDeskOpen -> AppRoute.GoogleAccounts
     accountManagementOpen -> AppRoute.Account
+    assistantOpen -> AppRoute.Assistant
     else -> selectedTab.route()
 }
 
 private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Overview,
     AppRoute.Search,
+    AppRoute.Assistant,
     AppRoute.Today,
     AppRoute.FreeClassrooms,
     AppRoute.Reservation,
@@ -212,6 +215,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
 internal fun parentTabForSubScreen(route: String?, previousRoute: String?): MainTab? = when (route) {
     AppRoute.GoogleAccounts -> primaryTabForRoute(previousRoute) ?: MainTab.Profile
     AppRoute.Account -> MainTab.Profile
+    AppRoute.Assistant -> MainTab.Overview
     AppRoute.Notifications,
     AppRoute.Search,
     AppRoute.Today,
@@ -1560,7 +1564,7 @@ private fun AuthenticatedShell(
     val onRefresh = remember(viewModel) { { viewModel.refreshCurrentTab(true) } }
 
     // 仅响应由外部或 ViewModel 显式打开的非 Tab 二级子界面（如全局搜索、Google 桌面等）
-    LaunchedEffect(state.accountManagementOpen, state.googleAccountDeskOpen, state.globalSearchOpen, state.workspaceDestination) {
+    LaunchedEffect(state.accountManagementOpen, state.googleAccountDeskOpen, state.globalSearchOpen, state.assistantOpen, state.workspaceDestination) {
         val targetRoute = state.requestedRoute()
         if (targetRoute != currentRoute && targetRoute !in setOf(AppRoute.Overview, AppRoute.Operations, AppRoute.Tools, AppRoute.Profile)) {
             navController.navigate(targetRoute) { launchSingleTop = true }
@@ -1581,6 +1585,7 @@ private fun AuthenticatedShell(
             AppRoute.Account -> viewModel.syncNavigationDestination(MainTab.Profile, accountManagementOpen = true)
             AppRoute.GoogleAccounts -> viewModel.syncNavigationDestination(MainTab.Profile, googleAccountDeskOpen = true)
             AppRoute.Search -> viewModel.syncNavigationDestination(MainTab.Overview, globalSearchOpen = true)
+            AppRoute.Assistant -> viewModel.syncNavigationDestination(MainTab.Overview, assistantOpen = true)
             AppRoute.Today -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
             AppRoute.FreeClassrooms -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.Reservation -> viewModel.syncNavigationDestination(MainTab.Overview)
@@ -1707,6 +1712,7 @@ private fun AuthenticatedShell(
                         onOpenQrLogin = viewModel::openQrScanner,
                         onOpenWorkspace = viewModel::openWorkspace,
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
+                        onOpenAssistant = viewModel::openAssistant,
                         onOpenReservation = { navController.navigate(AppRoute.Reservation) },
                         onOpenFreeClassrooms = {
                             navController.navigate(AppRoute.FreeClassrooms) { launchSingleTop = true }
@@ -1843,6 +1849,18 @@ private fun AuthenticatedShell(
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
                         onSelect = viewModel::openGlobalSearchResult,
+                    )
+                }
+                composable(AppRoute.Assistant) {
+                    val assistantChatState by viewModel.assistantChatState.collectAsStateWithLifecycle()
+                    AssistantScreen(
+                        state = assistantChatState,
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onOpenWorkspace = viewModel::openWorkspace,
+                        onOpenOperations = { navigateToTab(MainTab.Operations) },
+                        onSelectTab = navigateToTab,
+                        onSend = viewModel::sendAssistantMessage,
                     )
                 }
                 composable(AppRoute.Today) {
