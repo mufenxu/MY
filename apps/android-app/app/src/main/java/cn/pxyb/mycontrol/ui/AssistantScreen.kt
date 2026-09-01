@@ -26,7 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -49,14 +49,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.AssistantActionItem
 import cn.pxyb.mycontrol.data.AssistantSuggestion
-import android.util.Log
-import androidx.compose.foundation.layout.WindowInsets
 
 @Composable
 fun AssistantScreen(
@@ -74,10 +71,6 @@ fun AssistantScreen(
     var pendingAction by remember { mutableStateOf<AssistantActionItem?>(null) }
     val listState = rememberLazyListState()
     val dark = isSystemInDarkTheme()
-    val debugDensity = LocalDensity.current
-    val debugIme = WindowInsets.ime
-    val debugImeBottom = debugIme.getBottom(debugDensity)
-    Log.d("IMEDBG", "imeBottomPx=$debugImeBottom dark=$dark")
 
     LaunchedEffect(state.messages.size, state.sending) {
         if (state.messages.isNotEmpty()) {
@@ -440,14 +433,14 @@ private fun AssistantInputBar(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Outlined.Send,
+                Icons.AutoMirrored.Filled.Send,
                 contentDescription = "发送",
                 tint = if (canSend) {
                     Color.White
                 } else {
                     onSurfaceVariant.copy(alpha = 0.4f)
                 },
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(21.dp),
             )
         }
     }

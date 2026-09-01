@@ -776,11 +776,11 @@ const pickRepository = (repo) => {
 };
 
 exports.listRepositories = async () => {
-    const { GH_TOKEN, GH_OWNER } = getGhOptions();
+    const { GH_TOKEN } = getGhOptions();
     if (!GH_TOKEN) {
         throw createGithubConfigurationError('列出仓库');
     }
-    const url = `https://api.github.com/users/${encodeURIComponent(GH_OWNER)}/repos?per_page=100&type=all&sort=updated`;
+    const url = `https://api.github.com/user/repos?visibility=all&per_page=100&sort=updated`;
     try {
         const resp = await axios.get(url, {
             headers: {
