@@ -637,7 +637,7 @@ fun OverviewScreen(
                                             .fillMaxWidth()
                                             .pressFeedback(incidentInteractionSource),
                                         shape = incidentCardShape,
-                                        color = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.20f) else Color(0xFFFEF2F2),
+                                        color = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.20f) else Color(0xFFFEF2F2).copy(alpha = 0.6f),
                                         border = BorderStroke(0.5.dp, if (isDark) Color(0xFF991B1B).copy(alpha = 0.4f) else Color(0xFFFECACA)),
                                     ) {
                                         Row(
@@ -1032,7 +1032,7 @@ fun OverviewScreen(
                                 .fillMaxWidth()
                                 .pressFeedback(incidentInteractionSource),
                             shape = incidentCardShape,
-                            color = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.20f) else Color(0xFFFEF2F2),
+                            color = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.20f) else Color(0xFFFEF2F2).copy(alpha = 0.6f),
                             border = BorderStroke(0.5.dp, if (isDark) Color(0xFF991B1B).copy(alpha = 0.4f) else Color(0xFFFECACA)),
                         ) {
                             Row(
@@ -1262,7 +1262,7 @@ private fun ModernOverviewMetric(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        color = bgColor,
+        color = bgColor.copy(alpha = 0.55f),
         border = BorderStroke(0.5.dp, accent.copy(alpha = 0.25f)),
     ) {
         Column(
@@ -1635,10 +1635,10 @@ private fun OfflineSnapshotNotice(cachedAtMillis: Long?) {
 private fun OverviewSyncPanel(refreshing: Boolean) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.primaryContainer,
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         shape = AppCardShape,
-        shadowElevation = 3.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
@@ -1683,7 +1683,7 @@ private fun HeroMetric(label: String, value: String, modifier: Modifier = Modifi
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {

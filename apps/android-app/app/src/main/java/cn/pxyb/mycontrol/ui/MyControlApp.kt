@@ -2313,9 +2313,9 @@ private fun AppBottomNavigation(
             .widthIn(max = 420.dp)
             .fillMaxWidth()
             .height(62.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
         shape = RoundedCornerShape(31.dp),
-        shadowElevation = 10.dp,
+        shadowElevation = 0.dp,
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(

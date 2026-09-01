@@ -281,7 +281,7 @@ fun ToolsScreen(
                                     shape = RoundedCornerShape(24.dp),
                                     color = glassCardColor(),
                                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                                    shadowElevation = 1.dp,
+                                    shadowElevation = 0.dp,
                                 ) {
                                     Column {
                                         iot!!.scenes.forEachIndexed { index, scene ->
@@ -379,7 +379,7 @@ fun ToolsScreen(
                                 shape = RoundedCornerShape(24.dp),
                                 color = glassCardColor(),
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                                shadowElevation = 1.dp,
+                                shadowElevation = 0.dp,
                             ) {
                                 Column {
                                     iot!!.scenes.forEachIndexed { index, scene ->
@@ -805,7 +805,7 @@ private fun LightBentoMetricCard(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(18.dp),
-        color = bgColor,
+        color = bgColor.copy(alpha = 0.55f),
         border = BorderStroke(0.5.dp, borderColor),
     ) {
         Column(
@@ -859,7 +859,7 @@ private fun ModernEnvironmentCard(device: DeviceInfo?) {
         shape = RoundedCornerShape(24.dp),
         color = glassCardColor(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shadowElevation = 1.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -928,7 +928,7 @@ private fun ModernSensorCell(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(18.dp),
-        color = bgColor,
+        color = bgColor.copy(alpha = 0.55f),
         border = BorderStroke(0.5.dp, accentColor.copy(alpha = 0.2f)),
     ) {
         Row(
@@ -980,7 +980,7 @@ private fun ModernRelayCard(
 
     val interactionSource = remember { MutableInteractionSource() }
 
-    val targetBg = if (isOn) target.activeBgGradient.first else MaterialTheme.colorScheme.surface
+    val targetBg = if (isOn) target.activeBgGradient.first.copy(alpha = 0.55f) else glassCardColor()
     val animatedBg by animateColorAsState(
         targetValue = targetBg,
         animationSpec = tween(300, easing = FastOutSlowInEasing),
@@ -1004,7 +1004,7 @@ private fun ModernRelayCard(
         shape = RoundedCornerShape(24.dp),
         color = animatedBg,
         border = BorderStroke(1.dp, animatedBorder),
-        shadowElevation = if (isOn) 2.dp else 1.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1018,7 +1018,7 @@ private fun ModernRelayCard(
                     modifier = Modifier
                         .size(44.dp)
                         .background(
-                            color = if (isOn) target.activeAccent else MaterialTheme.colorScheme.surfaceVariant,
+                            color = if (isOn) target.activeAccent else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                             shape = RoundedCornerShape(14.dp),
                         ),
                     contentAlignment = Alignment.Center,
@@ -1168,7 +1168,7 @@ private fun ModernCt8Panel(
         shape = RoundedCornerShape(24.dp),
         color = glassCardColor(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shadowElevation = 1.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(16.dp),

@@ -159,7 +159,7 @@ fun ReservationScreen(
                     Surface(
                         onClick = { selectedTab = tab },
                         shape = RoundedCornerShape(10.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                         border = BorderStroke(
                             1.dp,
                             if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
@@ -602,7 +602,7 @@ private fun SingleReservationPanel(
                                     onClearFeedback()
                                 },
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                 border = BorderStroke(
                                     1.dp,
                                     if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f),
@@ -699,7 +699,7 @@ private fun SingleReservationPanel(
                                             onClearFeedback()
                                         },
                                         shape = RoundedCornerShape(6.dp),
-                                        color = if (isPicked) Color(0xFFDCFCE7) else Color(0xFFF0FDF4),
+                                        color = if (isPicked) Color(0xFFDCFCE7).copy(alpha = 0.55f) else Color(0xFFF0FDF4).copy(alpha = 0.55f),
                                         border = BorderStroke(1.dp, if (isPicked) Color(0xFF16A34A) else Color(0xFFBBF7D0)),
                                     ) {
                                         Row(
@@ -1126,7 +1126,7 @@ private fun FreeWindowList(
                     1.dp,
                     if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                 ),
-                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -1286,13 +1286,13 @@ private fun AvailableSpacesByTimeBlock(
                         Surface(
                             onClick = { onSelectSpace(space) },
                             shape = RoundedCornerShape(8.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                             contentColor = if (isSelected) Color.White else Color(0xFF1E293B),
                             border = BorderStroke(
                                 1.dp,
                                 if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFFBBF7D0),
                             ),
-                            shadowElevation = if (isSelected) 2.dp else 0.5.dp,
+                            shadowElevation = 0.dp,
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -1544,7 +1544,7 @@ private fun ReservationCard(
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -1597,7 +1597,7 @@ private fun ReservationCard(
 
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFFDCFCE7),
+                    color = Color(0xFFDCFCE7).copy(alpha = 0.6f),
                     border = BorderStroke(1.dp, Color(0xFF86EFAC)),
                 ) {
                     Text(
@@ -1921,7 +1921,7 @@ private fun AutoTaskCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f)),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -2616,7 +2616,7 @@ private fun CandidateEditRow(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
     ) {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(

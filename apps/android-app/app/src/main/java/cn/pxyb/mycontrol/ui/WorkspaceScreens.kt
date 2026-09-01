@@ -1026,12 +1026,12 @@ private fun ModernNotificationFilterPill(
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        color = if (selected) activeColor.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+        color = if (selected) activeColor.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
         border = BorderStroke(
             if (selected) 1.dp else 0.5.dp,
             if (selected) activeColor.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
         ),
-        shadowElevation = if (selected) 0.5.dp else 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.5.dp),
@@ -1093,7 +1093,7 @@ private fun NotificationDetailPane(
         shape = RoundedCornerShape(24.dp),
         color = glassCardColor(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shadowElevation = 1.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier
@@ -1869,7 +1869,7 @@ private fun TermTimetable(
                     }
 
                     Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                         shape = RoundedCornerShape(14.dp),
                     ) {
                         Row(modifier = Modifier.padding(3.dp)) {
@@ -2182,13 +2182,13 @@ private fun CourseGridMatrix(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(6.dp))
                                     .clickable { onCourseClick(course) },
-                                color = if (isThisWeek) colorScheme.background else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                color = if (isThisWeek) colorScheme.background.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                 shape = RoundedCornerShape(6.dp),
                                 border = BorderStroke(
                                     0.5.dp,
                                     if (isThisWeek) colorScheme.accentColor.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
                                 ),
-                                shadowElevation = if (isThisWeek) 0.5.dp else 0.dp,
+                                shadowElevation = 0.dp,
                             ) {
                                 Column(
                                     modifier = Modifier
@@ -2458,7 +2458,7 @@ private fun DormEnergyCard(
                     if (isWarning) Color(0xFFFEF3C7) else Color(0xFFE0F2FE),
                 )
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                     shape = RoundedCornerShape(8.dp),
                 ) {
                     Text(
@@ -2680,7 +2680,7 @@ private fun CourseCard(
         ) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = if (isThisWeek) colorScheme.background else MaterialTheme.colorScheme.surfaceVariant,
+                color = if (isThisWeek) colorScheme.background.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 contentColor = if (isThisWeek) colorScheme.contentColor else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(42.dp),
             ) {
@@ -2729,7 +2729,7 @@ private fun CourseCard(
                     }
                     if (!isThisWeek) {
                         Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                             shape = RoundedCornerShape(6.dp),
                         ) {
                             Text(
@@ -3011,7 +3011,7 @@ private fun NotificationCard(
                 }
                 .clickable { onOpen(alert) },
             shape = RoundedCornerShape(18.dp),
-            color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.06f) else MaterialTheme.colorScheme.surface,
+            color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.06f) else glassCardColor(),
             border = BorderStroke(
                 if (selected) 1.5.dp else if (!alert.read && isUrgent) 1.2.dp else 0.6.dp,
                 if (selected) MaterialTheme.colorScheme.primary
@@ -3019,7 +3019,7 @@ private fun NotificationCard(
                 else if (!alert.read) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
                 else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
             ),
-            shadowElevation = if (selected) 1.dp else 0.dp,
+            shadowElevation = 0.dp,
         ) {
             Column(
                 modifier = Modifier

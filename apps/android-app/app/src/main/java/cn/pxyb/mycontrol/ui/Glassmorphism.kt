@@ -50,7 +50,10 @@ fun rememberGlassPalette(radius: Dp = 20.dp): GlassPalette {
 
 /** 卡片底色：半透明磨砂白，让极光背景透出一层淡彩（与白色纯卡形成统一质感） */
 @Composable
-fun glassCardColor(): Color = MaterialTheme.colorScheme.surface.copy(alpha = 0.74f)
+fun glassCardColor(): Color {
+    val dark = isSystemInDarkTheme()
+    return MaterialTheme.colorScheme.surface.copy(alpha = if (dark) 0.5f else 0.55f)
+}
 
 /** 将组件渲染为毛玻璃面板：半透明底色 + 顶部高光 + 发丝描边 */
 fun Modifier.glassPanel(palette: GlassPalette): Modifier = this

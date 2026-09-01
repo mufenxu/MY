@@ -733,7 +733,7 @@ private fun ModernDeskSearchBar(
         shape = RoundedCornerShape(20.dp),
         color = glassCardColor(),
         border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f)),
-        shadowElevation = 0.5.dp,
+        shadowElevation = 0.dp,
     ) {
         Row(
             modifier = Modifier
@@ -824,10 +824,10 @@ private fun StatusFilterRow(
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { onSelect(value) },
-                    color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                    color = if (isSelected) glassCardColor() else Color.Transparent,
                     shape = RoundedCornerShape(12.dp),
                     border = if (isSelected) BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)) else null,
-                    shadowElevation = if (isSelected) 1.5.dp else 0.dp,
+                    shadowElevation = 0.dp,
                 ) {
                     Row(
                         modifier = Modifier.padding(vertical = 8.dp),
@@ -918,7 +918,7 @@ private fun ModernOpenAiStatusBadge(status: String) {
     }
 
     Surface(
-        color = bg,
+        color = bg.copy(alpha = 0.6f),
         contentColor = fg,
         shape = RoundedCornerShape(10.dp),
         border = BorderStroke(0.6.dp, border),
@@ -962,7 +962,7 @@ private fun GoogleAccountRow(
             if (bulkSelected || selected) 1.2.dp else 0.6.dp,
             if (bulkSelected || selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
         ),
-        shadowElevation = 0.8.dp,
+        shadowElevation = 0.dp,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),

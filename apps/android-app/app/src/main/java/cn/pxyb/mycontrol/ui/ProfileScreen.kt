@@ -353,7 +353,7 @@ fun ProfileScreen(
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(20.dp),
-                                    color = Color(0xFFFFFBEB),
+                                    color = Color(0xFFFFFBEB).copy(alpha = 0.6f),
                                     border = BorderStroke(1.dp, Color(0xFFFDE68A)),
                                 ) {
                                     ProfileActionRow(
@@ -547,7 +547,7 @@ fun ProfileScreen(
                                         onClick = { confirmLogout = true },
                                     ),
                                 shape = RoundedCornerShape(20.dp),
-                                color = Color(0xFFFEF2F2),
+                                color = Color(0xFFFEF2F2).copy(alpha = 0.6f),
                                 border = BorderStroke(1.dp, Color(0xFFFCA5A5).copy(alpha = 0.6f)),
                             ) {
                                 Row(
@@ -601,7 +601,7 @@ fun ProfileScreen(
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(20.dp),
-                            color = Color(0xFFFFFBEB),
+                            color = Color(0xFFFFFBEB).copy(alpha = 0.6f),
                             border = BorderStroke(1.dp, Color(0xFFFDE68A)),
                         ) {
                             ProfileActionRow(
@@ -941,7 +941,7 @@ fun ProfileScreen(
                                 onClick = { confirmLogout = true },
                             ),
                         shape = RoundedCornerShape(20.dp),
-                        color = Color(0xFFFEF2F2),
+                        color = Color(0xFFFEF2F2).copy(alpha = 0.6f),
                         border = BorderStroke(1.dp, Color(0xFFFCA5A5).copy(alpha = 0.6f)),
                     ) {
                         Row(
@@ -1477,7 +1477,7 @@ private fun ModernProfileCard(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Surface(
-                            color = Color(0xFFEFF6FF),
+                            color = Color(0xFFEFF6FF).copy(alpha = 0.6f),
                             shape = RoundedCornerShape(8.dp),
                             border = BorderStroke(0.5.dp, Color(0xFFBFDBFE)),
                         ) {
@@ -1522,7 +1522,7 @@ private fun LightSecurityCell(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
-        color = bgColor,
+        color = bgColor.copy(alpha = 0.55f),
         border = BorderStroke(0.5.dp, borderColor),
     ) {
         Column(

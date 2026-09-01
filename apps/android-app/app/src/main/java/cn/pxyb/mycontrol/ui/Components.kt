@@ -1114,7 +1114,7 @@ internal fun ReservationTimeRangePicker(
                 val mins = durationMin % 60
                 val durationText = "${if (hours > 0) "${hours}小时" else ""}${if (mins > 0) "${mins}分钟" else ""}"
                 val statusColor = if (isDurationValid) Color(0xFF15803D) else MaterialTheme.colorScheme.error
-                val statusBg = if (isDurationValid) Color(0xFFDCFCE7) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+                val statusBg = if (isDurationValid) Color(0xFFDCFCE7).copy(alpha = 0.55f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
                 val ruleText = when {
                     minDurationMinutes != null && maxDurationMinutes != null ->
                         "需${minDurationMinutes / 60}~${maxDurationMinutes / 60}小时"
@@ -1270,7 +1270,7 @@ internal fun ReservationTimeRangePicker(
                                 onEndTimeChange(formatMinutesToTime(targetEndMin))
                             },
                             shape = RoundedCornerShape(8.dp),
-                            color = if (isCurrentDuration) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            color = if (isCurrentDuration) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                             border = BorderStroke(
                                 1.dp,
                                 if (isCurrentDuration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),

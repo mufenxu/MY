@@ -81,9 +81,9 @@ fun AppNavigationRail(
         modifier = modifier
             .fillMaxHeight()
             .width(88.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = glassCardColor(),
         border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shadowElevation = 1.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier
@@ -101,8 +101,8 @@ fun AppNavigationRail(
             ) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 2.dp,
+                    color = glassCardColor(),
+                    shadowElevation = 0.dp,
                     border = BorderStroke(0.6.dp, primaryColor.copy(alpha = 0.2f)),
                 ) {
                     Image(
