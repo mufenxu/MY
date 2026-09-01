@@ -56,7 +56,7 @@ Configure the platform without enabling manual build triggers first:
 
 ```text
 PLATFORM_GITHUB_REPOSITORY=mufenxu/MY
-PLATFORM_GITHUB_TOKEN=<GitHub token>
+GH_TOKEN=<GitHub token>
 PLATFORM_GITHUB_WORKFLOW=aliyun-acr.yml
 PLATFORM_GITHUB_REF=main
 PLATFORM_RELEASE_ACTIONS_ENABLED=false

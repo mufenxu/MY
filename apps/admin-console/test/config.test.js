@@ -134,7 +134,7 @@ test('production release writes require callback and image allowlist controls', 
     PLATFORM_MONGODB_URI: 'mongodb://platform.example/platform_app',
     PLATFORM_METRICS_TOKEN: 'm'.repeat(32),
     PLATFORM_RELEASE_ACTIONS_ENABLED: 'true',
-    PLATFORM_GITHUB_TOKEN: 'github-token',
+    GH_TOKEN: 'github-token',
   };
   assert.throws(() => loadConfig(base), /PLATFORM_RELEASE_CALLBACK_TOKEN/);
   const configured = loadConfig({

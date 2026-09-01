@@ -222,7 +222,7 @@ export function loadConfig(env = process.env) {
     offsiteBackupStatusUrl: parseHttpUrl(env.PLATFORM_OFFSITE_BACKUP_STATUS_URL),
     offsiteBackupStatusToken: env.PLATFORM_OFFSITE_BACKUP_STATUS_TOKEN || '',
     githubRepository: parseRepository(env.PLATFORM_GITHUB_REPOSITORY || 'mufenxu/MY'),
-    githubToken: env.PLATFORM_GITHUB_TOKEN || '',
+    githubToken: env.GH_TOKEN || '',
     githubWorkflow: String(env.PLATFORM_GITHUB_WORKFLOW || 'aliyun-acr.yml').trim(),
     githubRef: String(env.PLATFORM_GITHUB_REF || 'main').trim(),
     releaseActionsEnabled: parseBoolean(env.PLATFORM_RELEASE_ACTIONS_ENABLED, false),
@@ -285,7 +285,7 @@ export function loadConfig(env = process.env) {
       missing.push('PLATFORM_TURNSTILE_SITE_KEY_AND_SECRET_KEY');
     }
     if (config.releaseActionsEnabled && (!config.githubToken || !config.githubRepository)) {
-      missing.push('PLATFORM_GITHUB_TOKEN');
+      missing.push('GH_TOKEN');
     }
     if (config.releaseActionsEnabled && (config.releaseCallbackToken.length < 32 || isTemplatePlaceholder(config.releaseCallbackToken))) {
       missing.push('PLATFORM_RELEASE_CALLBACK_TOKEN');

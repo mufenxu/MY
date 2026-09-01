@@ -115,4 +115,4 @@ npm run dev
 
 ### 发布安全
 
-`PLATFORM_RELEASE_ACTIONS_ENABLED` 默认是 `false`。触发镜像构建需要 `PLATFORM_GITHUB_TOKEN`、专用回调令牌和允许的 ACR 仓库。平台容器不会挂载 Docker Socket，也不会直接执行宿主机命令；生产镜像仍由运维人员通过 Compose 显式更新。完整配置见 [`docs/release-center.md`](../../docs/release-center.md)。
+`PLATFORM_RELEASE_ACTIONS_ENABLED` 默认是 `false`。触发镜像构建需要 `GH_TOKEN`、专用回调令牌和允许的 ACR 仓库。平台容器不会挂载 Docker Socket，也不会直接执行宿主机命令；生产镜像仍由运维人员通过 Compose 显式更新。完整配置见 [`docs/release-center.md`](../../docs/release-center.md)。

@@ -53,7 +53,6 @@ const policies = new Map([
 ]);
 const optionalPolicies = new Map([
   ['PLATFORM_BACKUP_STORAGE_ENCRYPTION_KEY', 43],
-  ['PLATFORM_GITHUB_TOKEN', 20],
   ['PLATFORM_RELEASE_CALLBACK_TOKEN', 32],
   ['GH_TOKEN', 20],
   ['GH_WEBHOOK_SECRET', 16],
@@ -94,7 +93,7 @@ if (backupStorageEncryptionKey && (
 }
 
 if (String(values.get('PLATFORM_RELEASE_ACTIONS_ENABLED') || '').toLowerCase() === 'true') {
-  for (const key of ['PLATFORM_GITHUB_TOKEN', 'PLATFORM_RELEASE_CALLBACK_TOKEN', 'PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY']) {
+  for (const key of ['GH_TOKEN', 'PLATFORM_RELEASE_CALLBACK_TOKEN', 'PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY']) {
     if (!values.get(key)) errors.push(`${key} is required when release actions are enabled`);
   }
 }
