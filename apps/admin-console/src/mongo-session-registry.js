@@ -36,6 +36,7 @@ export async function createMongoSessionRegistry({
       ip = '',
       userAgent = '',
       deviceId = '',
+      deviceName = '',
       sessionKind = 'browser',
       parentSessionNonce = '',
       replaceExisting = false,
@@ -55,6 +56,7 @@ export async function createMongoSessionRegistry({
       const normalizedKind = String(sessionKind || 'browser').slice(0, 32);
       const normalizedParentNonce = String(parentSessionNonce || '').slice(0, 160);
       const normalizedDeviceId = String(deviceId || '').slice(0, 128);
+      const normalizedDeviceName = String(deviceName || '').replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 96);
       const normalizedIp = String(ip || '').slice(0, 128);
       const normalizedUserAgent = String(userAgent || '').slice(0, 256);
       await sessions.insertOne({
@@ -64,6 +66,7 @@ export async function createMongoSessionRegistry({
         ip: normalizedIp,
         userAgent: normalizedUserAgent,
         deviceId: normalizedDeviceId,
+        deviceName: normalizedDeviceName,
         sessionKind: normalizedKind,
         parentSessionNonce: normalizedParentNonce,
         idleTimeoutMinutes: Math.max(Number(sessionIdleTimeoutMinutes) || defaultIdleTimeoutMinutes, 1),
