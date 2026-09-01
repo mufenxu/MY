@@ -70,10 +70,8 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -1354,6 +1352,27 @@ private data class HomeQuickActionSpec(
     val onClick: () -> Unit,
 )
 
+private data class QuickActionVisual(
+    val icon: ImageVector,
+    val accent: Color,
+)
+
+private fun homeQuickActionVisual(action: HomeQuickAction): QuickActionVisual = when (action) {
+    HomeQuickAction.Today -> QuickActionVisual(Icons.Outlined.CalendarMonth, Color(0xFF2563EB))
+    HomeQuickAction.Notifications -> QuickActionVisual(Icons.Outlined.Notifications, Color(0xFFE11D48))
+    HomeQuickAction.Scenes -> QuickActionVisual(Icons.Outlined.Tune, Color(0xFF7C3AED))
+    HomeQuickAction.Reservation -> QuickActionVisual(Icons.Outlined.MeetingRoom, Color(0xFF2563EB))
+    HomeQuickAction.FreeClassrooms -> QuickActionVisual(Icons.Outlined.School, Color(0xFF0284C7))
+    HomeQuickAction.SeatReservation -> QuickActionVisual(Icons.Outlined.Chair, Color(0xFF16A34A))
+    HomeQuickAction.Devices -> QuickActionVisual(Icons.Outlined.Hub, Color(0xFF0284C7))
+    HomeQuickAction.Diagnostics -> QuickActionVisual(Icons.Outlined.Speed, Color(0xFFD97706))
+    HomeQuickAction.Backup -> QuickActionVisual(Icons.Outlined.Backup, Color(0xFF0D9488))
+    HomeQuickAction.GoogleAccounts -> QuickActionVisual(Icons.Outlined.Email, Color(0xFF4F46E5))
+    HomeQuickAction.Operations -> QuickActionVisual(Icons.Outlined.Settings, Color(0xFF64748B))
+    HomeQuickAction.Search -> QuickActionVisual(Icons.Outlined.Search, Color(0xFFEA580C))
+    HomeQuickAction.QrScanner -> QuickActionVisual(Icons.Outlined.CenterFocusWeak, Color(0xFF0EA5E9))
+    HomeQuickAction.Account -> QuickActionVisual(Icons.Outlined.Security, Color(0xFF059669))
+}
 private fun homeQuickActionSpec(
     action: HomeQuickAction,
     onSelectTab: (MainTab) -> Unit,
@@ -1487,11 +1506,13 @@ private fun QuickActionsDialog(
 ) {
     var localOrder by remember(order) { mutableStateOf(order) }
     var localHidden by remember(hidden) { mutableStateOf(hidden) }
+    val visibleCount = localOrder.count { it !in localHidden }
+    val dark = isSystemInDarkTheme()
     AppDialog(
         onDismissRequest = onDismiss,
         icon = Icons.Outlined.Edit,
         title = "调整快捷操作",
-        subtitle = "选择显示项目并调整顺序",
+        subtitle = "已显示 $visibleCount 项 · 开关控制显示，箭头调整顺序",
         modifier = Modifier.heightIn(max = 700.dp),
         footer = {
             Row(
@@ -1512,56 +1533,91 @@ private fun QuickActionsDialog(
         },
     ) {
         Column(
-            modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 520.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             localOrder.forEachIndexed { index, action ->
-                val visibleCount = localOrder.count { it !in localHidden }
                 val isChecked = action !in localHidden
+                val visual = homeQuickActionVisual(action)
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (isChecked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f)
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                    shape = RoundedCornerShape(16.dp),
+                    color = glassCardColor(),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Checkbox(
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(visual.accent.copy(alpha = if (dark) 0.20f else 0.12f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = visual.icon,
+                                contentDescription = null,
+                                tint = visual.accent,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = homeQuickActionLabel(action),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 14.5.sp,
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = if (isChecked) "已显示" else "已隐藏",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                color = if (isChecked) MaterialTheme.colorScheme.onSurfaceVariant
+                                        else MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                        AppSwitch(
                             checked = isChecked,
-                            enabled = !isChecked || visibleCount > 1,
+                            enabled = isChecked || visibleCount > 1,
                             onCheckedChange = { checked ->
                                 localHidden = if (checked) localHidden - action else localHidden + action
                             },
+                            tint = visual.accent,
                         )
-                        Text(
-                            text = homeQuickActionLabel(action),
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(
-                            onClick = {
-                                localOrder = localOrder.toMutableList().also {
-                                    val item = it.removeAt(index)
-                                    it.add(index - 1, item)
-                                }
-                            },
-                            enabled = index > 0,
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
-                            Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "上移", modifier = Modifier.size(20.dp))
-                        }
-                        IconButton(
-                            onClick = {
-                                localOrder = localOrder.toMutableList().also {
-                                    val item = it.removeAt(index)
-                                    it.add(index + 1, item)
-                                }
-                            },
-                            enabled = index < localOrder.lastIndex,
-                        ) {
-                            Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "下移", modifier = Modifier.size(20.dp))
+                            QuickActionArrowButton(
+                                up = true,
+                                enabled = index > 0,
+                                onClick = {
+                                    localOrder = localOrder.toMutableList().also {
+                                        val item = it.removeAt(index)
+                                        it.add(index - 1, item)
+                                    }
+                                },
+                            )
+                            QuickActionArrowButton(
+                                up = false,
+                                enabled = index < localOrder.lastIndex,
+                                onClick = {
+                                    localOrder = localOrder.toMutableList().also {
+                                        val item = it.removeAt(index)
+                                        it.add(index + 1, item)
+                                    }
+                                },
+                            )
                         }
                     }
                 }
@@ -1570,6 +1626,39 @@ private fun QuickActionsDialog(
     }
 }
 
+@Composable
+private fun QuickActionArrowButton(
+    up: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .size(26.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(
+                if (enabled) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                else Color.Transparent
+            )
+            .pressFeedback(interactionSource, pressedScale = 0.88f)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (up) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+            contentDescription = if (up) "上移" else "下移",
+            tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
+                   else MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
 private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action) {
     HomeQuickAction.Today -> "今日工作台"
     HomeQuickAction.Notifications -> "通知中心"

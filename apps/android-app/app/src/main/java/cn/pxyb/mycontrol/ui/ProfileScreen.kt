@@ -159,8 +159,8 @@ fun ProfileScreen(
     val otherSessionCount = visibleSessions?.count { !it.current }
     val sessionSummary = when {
         security == null -> "正在同步登录设备"
-        otherSessionCount == 0 -> "${currentSession?.let { deviceLabel(it.userAgent) } ?: "当前设备"} · 扫码登录网页端"
-        else -> "$otherSessionCount 个其他登录会话 · ${currentSession?.let { deviceLabel(it.userAgent) } ?: "当前设备"}"
+        otherSessionCount == 0 -> "${currentSession?.let { sessionTitle(it) } ?: "当前设备"} · 扫码登录网页端"
+        else -> "$otherSessionCount 个其他登录会话 · ${currentSession?.let { sessionTitle(it) } ?: "当前设备"}"
     }
 
     val adaptive = LocalAdaptiveWindow.current
@@ -1230,7 +1230,7 @@ fun ProfileScreen(
     revokeTarget?.let { session ->
         AppConfirmDialog(
             title = "撤销远程会话？",
-            detail = "${deviceLabel(session.userAgent)} · ${session.ip}\n该设备将立即失去权限并需要重新登录。",
+            detail = "${sessionTitle(session)} · ${session.ip}\n该设备将立即失去权限并需要重新登录。",
             confirmLabel = "确认撤销",
             onDismiss = { revokeTarget = null },
             onConfirm = { revokeTarget = null; onRevokeSession(session.nonce) },
@@ -1915,7 +1915,7 @@ private fun SessionRow(session: SecuritySession, busy: Boolean, onRevoke: () -> 
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text(
-                    deviceLabel(session.userAgent),
+                    sessionTitle(session),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -1958,3 +1958,6 @@ private fun deviceLabel(userAgent: String): String = when {
     userAgent.contains("Edge", ignoreCase = true) -> "Edge 浏览器"
     else -> userAgent.take(32).ifBlank { "未知设备" }
 }
+
+private fun sessionTitle(session: SecuritySession): String =
+    session.deviceName.trim().ifBlank { deviceLabel(session.userAgent) }

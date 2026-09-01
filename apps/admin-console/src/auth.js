@@ -114,6 +114,7 @@ export function createSessionRegistry({
     ip = '',
     userAgent = '',
     deviceId = '',
+    deviceName = '',
     sessionKind = 'browser',
     parentSessionNonce = '',
     replaceExisting = false,
@@ -128,6 +129,7 @@ export function createSessionRegistry({
     const normalizedKind = String(sessionKind || 'browser').slice(0, 32);
     const normalizedParentNonce = String(parentSessionNonce || '').slice(0, 160);
     const normalizedDeviceId = String(deviceId || '').slice(0, 128);
+    const normalizedDeviceName = String(deviceName || '').replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 96);
     const normalizedIp = String(ip || '').slice(0, 128);
     const normalizedUserAgent = String(userAgent || '').slice(0, 256);
     if (replaceExisting && (normalizedParentNonce || normalizedDeviceId)) {
@@ -147,6 +149,7 @@ export function createSessionRegistry({
       ip: normalizedIp,
       userAgent: normalizedUserAgent,
       deviceId: normalizedDeviceId,
+      deviceName: normalizedDeviceName,
       sessionKind: normalizedKind,
       parentSessionNonce: normalizedParentNonce,
       idleTimeoutMinutes: Math.max(Number(sessionIdleTimeoutMinutes) || defaultIdleTimeoutMinutes, 1),
@@ -228,6 +231,7 @@ export function createSessionRegistry({
         sessionKind: legacySessionKind(session),
         parentSessionNonce: session.parentSessionNonce || '',
         deviceId: session.deviceId || '',
+        deviceName: session.deviceName || '',
         createdAt: session.createdAt,
         lastSeenAt: new Date(session.lastSeenAt).toISOString(),
         idleExpiresAt: new Date(Math.min(

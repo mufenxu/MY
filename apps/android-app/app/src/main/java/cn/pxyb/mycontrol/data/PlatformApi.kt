@@ -55,12 +55,14 @@ class PlatformApi(
         password: String,
         totp: String = "",
         recoveryCode: String = "",
+        deviceName: String = "",
     ): LoginResult = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("username", username.trim())
             .put("password", password)
         if (totp.isNotBlank()) body.put("totp", totp.trim())
         if (recoveryCode.isNotBlank()) body.put("recoveryCode", recoveryCode.trim())
+        if (deviceName.isNotBlank()) body.put("deviceName", deviceName)
 
         val response = execute("/api/auth/login", "POST", body, authenticated = false)
         val user = response.json.optJSONObject("user").toPlatformUser()
@@ -88,19 +90,24 @@ class PlatformApi(
         )
     }
 
-    suspend fun completePasskeyLogin(challenge: PasskeyChallenge, responseJson: String): LoginResult =
-        withContext(Dispatchers.IO) {
-            val response = execute(
-                "/api/auth/passkey/verify",
-                "POST",
-                JSONObject()
-                    .put("username", challenge.username)
-                    .put("challengeId", challenge.challengeId)
-                    .put("response", JSONObject(responseJson)),
-                authenticated = false,
-            )
-            response.toLoginResult(response.json.optJSONObject("user").toPlatformUser())
-        }
+    suspend fun completePasskeyLogin(
+        challenge: PasskeyChallenge,
+        responseJson: String,
+        deviceName: String = "",
+    ): LoginResult = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("username", challenge.username)
+            .put("challengeId", challenge.challengeId)
+            .put("response", JSONObject(responseJson))
+        if (deviceName.isNotBlank()) body.put("deviceName", deviceName)
+        val response = execute(
+            "/api/auth/passkey/verify",
+            "POST",
+            body,
+            authenticated = false,
+        )
+        response.toLoginResult(response.json.optJSONObject("user").toPlatformUser())
+    }
 
     suspend fun persistLogin(result: LoginResult): Unit = withContext(Dispatchers.IO) {
         sessionStore.writeCookie(
@@ -875,6 +882,7 @@ class PlatformApi(
                     role = item.optString("role", "viewer"),
                     ip = item.optString("ip", "--"),
                     userAgent = item.optString("userAgent", "未知设备"),
+                    deviceName = item.optString("deviceName"),
                     createdAt = item.nullableString("createdAt"),
                     lastSeenAt = item.nullableString("lastSeenAt"),
                     expiresAt = item.nullableString("expiresAt"),

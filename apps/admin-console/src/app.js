@@ -75,6 +75,11 @@ function requestDeviceId(req) {
   return /^[A-Za-z0-9._:-]{8,128}$/.test(value) ? value : '';
 }
 
+function requestDeviceName(req) {
+  const value = String(req.body?.deviceName || '').trim();
+  return value ? value.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 96) : '';
+}
+
 function sessionPolicyForRequest(req, config) {
   const androidApp = String(req.get('user-agent') || '').startsWith(ANDROID_APP_USER_AGENT_PREFIX);
   return androidApp
@@ -568,6 +573,7 @@ export function createApp({
     const policy = options.policy || sessionPolicyForRequest(req, config);
     const sessionKind = options.sessionKind || (isAndroidAppRequest(req) ? 'native_app' : 'browser');
     const deviceId = options.deviceId || requestDeviceId(req);
+    const deviceName = options.deviceName || requestDeviceName(req);
     const now = Date.now();
     const token = await sessions.issue({
       username: account.username,
@@ -579,6 +585,7 @@ export function createApp({
       sessionKind,
       parentSessionNonce: options.parentSessionNonce || '',
       deviceId,
+      deviceName,
       replaceExisting: options.replaceExisting ?? (sessionKind === 'native_app' && Boolean(deviceId)),
       now,
     });

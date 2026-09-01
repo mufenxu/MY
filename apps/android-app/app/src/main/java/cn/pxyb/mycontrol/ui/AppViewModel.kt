@@ -5,7 +5,9 @@ import androidx.compose.runtime.Immutable
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
+import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
@@ -473,6 +475,7 @@ class AppViewModel(
                     password,
                     totp = factor.takeUnless { useRecoveryCode }.orEmpty(),
                     recoveryCode = factor.takeIf { useRecoveryCode }.orEmpty(),
+                    deviceName = currentDeviceName(),
                 )
                 protectLogin(result, authorizeSession)
             }.onSuccess(::completeLogin).onFailure(::handleLoginFailure)
@@ -488,9 +491,27 @@ class AppViewModel(
             mutableState.update { it.copy(loginBusy = true, error = null, message = null) }
             runCatching {
                 val challenge = api.beginPasskeyLogin(username)
-                val result = api.completePasskeyLogin(challenge, requestCredential(challenge.optionsJson))
+                val result = api.completePasskeyLogin(
+                    challenge,
+                    requestCredential(challenge.optionsJson),
+                    deviceName = currentDeviceName(),
+                )
                 protectLogin(result, authorizeSession)
             }.onSuccess(::completeLogin).onFailure(::handleLoginFailure)
+        }
+    }
+
+    private fun currentDeviceName(): String {
+        val custom = runCatching {
+            Settings.Global.getString(getApplication<Application>().contentResolver, Settings.Global.DEVICE_NAME)
+        }.getOrNull()?.trim().orEmpty()
+        if (custom.isNotBlank()) return custom
+        val manufacturer = Build.MANUFACTURER?.trim().orEmpty()
+        val model = Build.MODEL?.trim().orEmpty()
+        return when {
+            model.isBlank() && manufacturer.isBlank() -> "Android 设备"
+            manufacturer.isBlank() || model.equals(manufacturer, ignoreCase = true) -> model
+            else -> "$manufacturer $model"
         }
     }
 

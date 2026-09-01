@@ -366,6 +366,7 @@ data class SecuritySession(
     val role: String,
     val ip: String,
     val userAgent: String,
+    val deviceName: String = "",
     val createdAt: String?,
     val lastSeenAt: String?,
     val expiresAt: String?,
