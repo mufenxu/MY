@@ -115,7 +115,6 @@ fun ReservationScreen(
     onLoadSpaces: () -> Unit,
     onLoadMyReservations: () -> Unit,
     onOpenOfficialReservation: () -> Unit,
-    onCancelMyReservation: (String) -> Unit,
     onQueryRulesAndAvailability: (Int, String) -> Unit,
     onQuerySpacesByTime: (String, String, String) -> Unit,
     onSubmitReservation: (CampusReservationRequest, () -> Unit) -> Unit,
@@ -262,9 +261,7 @@ fun ReservationScreen(
                     MyReservationsPanel(
                         reservations = state.myReservations,
                         loading = state.myReservationsLoading,
-                        cancellingId = state.cancellingReservationId,
                         onRefresh = onLoadMyReservations,
-                        onCancelReservation = onCancelMyReservation,
                         onGoToSingleReservation = { selectedTab = ReservationTab.Single },
                     )
                 }
@@ -1329,64 +1326,24 @@ private fun AvailableSpacesByTimeBlock(
 private fun MyReservationsPanel(
     reservations: List<CampusMyReservation>,
     loading: Boolean,
-    cancellingId: String?,
     onRefresh: () -> Unit,
-    onCancelReservation: (String) -> Unit,
     onGoToSingleReservation: () -> Unit,
 ) {
-    var cancellingTarget by remember { mutableStateOf<CampusMyReservation?>(null) }
-
-    if (cancellingTarget != null) {
-        val target = cancellingTarget!!
-        AppDialog(
-            onDismissRequest = { cancellingTarget = null },
-            icon = Icons.Outlined.WarningAmber,
-            iconTint = MaterialTheme.colorScheme.error,
-            iconBackground = MaterialTheme.colorScheme.errorContainer,
-            title = "取消预约确认",
-            subtitle = "确定要取消【${target.spaceName}】在 ${target.date} ${target.startTime}-${target.endTime} 的预约吗？",
-            footer = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    AppDialogSecondaryButton(
-                        text = "保留预约",
-                        onClick = { cancellingTarget = null },
-                        modifier = Modifier.weight(1f),
-                    )
-                    AppDialogPrimaryButton(
-                        text = "确认取消",
-                        onClick = {
-                            val id = target.id
-                            cancellingTarget = null
-                            onCancelReservation(id)
-                        },
-                        modifier = Modifier.weight(1f),
-                        busy = cancellingId == target.id,
-                    )
-                }
-            },
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    DetailRow("预约空间", target.spaceName)
-                    DetailRow("预约日期", target.date)
-                    DetailRow("预约时段", "${target.startTime} - ${target.endTime}")
-                    if (target.title.isNotBlank()) {
-                        DetailRow("预约主题", target.title)
-                    }
-                }
-            }
-        }
+    val sortedReservations = remember(reservations) {
+        val today = LocalDate.now()
+        reservations.sortedWith(
+            compareBy<CampusMyReservation>(
+                { reservation ->
+                    val date = runCatching {
+                        LocalDate.parse(reservation.date.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
+                    }.getOrNull()
+                    date?.let { kotlin.math.abs(java.time.temporal.ChronoUnit.DAYS.between(today, it)) }
+                        ?: Long.MAX_VALUE
+                },
+                { it.date },
+                { it.startTime },
+            )
+        )
     }
 
     AppPanel {
@@ -1438,7 +1395,7 @@ private fun MyReservationsPanel(
                 }
             }
 
-            if (reservations.isEmpty() && !loading) {
+            if (sortedReservations.isEmpty() && !loading) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -1500,7 +1457,7 @@ private fun MyReservationsPanel(
 
                 if (isTablet) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        reservations.chunked(2).forEach { rowReservations ->
+                        sortedReservations.chunked(2).forEach { rowReservations ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1509,8 +1466,6 @@ private fun MyReservationsPanel(
                                     Box(modifier = Modifier.weight(1f)) {
                                         ReservationCard(
                                             reservation = reservation,
-                                            isCancelling = cancellingId == reservation.id,
-                                            onCancel = { cancellingTarget = reservation },
                                         )
                                     }
                                 }
@@ -1522,11 +1477,9 @@ private fun MyReservationsPanel(
                     }
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        reservations.forEach { reservation ->
+                        sortedReservations.forEach { reservation ->
                             ReservationCard(
                                 reservation = reservation,
-                                isCancelling = cancellingId == reservation.id,
-                                onCancel = { cancellingTarget = reservation },
                             )
                         }
                     }
@@ -1539,8 +1492,6 @@ private fun MyReservationsPanel(
 @Composable
 private fun ReservationCard(
     reservation: CampusMyReservation,
-    isCancelling: Boolean,
-    onCancel: () -> Unit,
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -1655,33 +1606,6 @@ private fun ReservationCard(
                 }
             }
 
-            if (reservation.canCancel) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    OutlinedButton(
-                        onClick = onCancel,
-                        enabled = !isCancelling,
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error,
-                        ),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        modifier = Modifier.height(34.dp),
-                    ) {
-                        if (isCancelling) {
-                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.error)
-                            Spacer(Modifier.width(6.dp))
-                        } else {
-                            Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                        }
-                        Text("取消预约", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
         }
     }
 }

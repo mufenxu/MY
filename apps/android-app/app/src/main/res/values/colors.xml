@@ -7,4 +7,18 @@
     <color name="widget_text_secondary">#667085</color>
     <color name="widget_status_healthy">#18794E</color>
     <color name="widget_status_attention">#B54708</color>
+    <color name="widget_accent">#2563EB</color>
+    <color name="widget_text_on_accent">#FFFFFF</color>
+    <color name="widget_course_0">#2563EB</color>
+    <color name="widget_course_0_light">#E8F0FE</color>
+    <color name="widget_course_1">#188038</color>
+    <color name="widget_course_1_light">#E6F4EA</color>
+    <color name="widget_course_2">#E8710A</color>
+    <color name="widget_course_2_light">#FEF7E0</color>
+    <color name="widget_course_3">#D93025</color>
+    <color name="widget_course_3_light">#FCE8E6</color>
+    <color name="widget_course_4">#8430CE</color>
+    <color name="widget_course_4_light">#F3E8FD</color>
+    <color name="widget_course_5">#007B83</color>
+    <color name="widget_course_5_light">#E0F4F4</color>
 </resources>

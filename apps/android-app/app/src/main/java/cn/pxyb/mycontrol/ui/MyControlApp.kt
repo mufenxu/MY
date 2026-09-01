@@ -1920,7 +1920,6 @@ private fun AuthenticatedShell(
                                 )
                             }
                         },
-                        onCancelMyReservation = viewModel::cancelMyReservation,
                         onQueryRulesAndAvailability = viewModel::queryReservationRulesAndAvailability,
                         onQuerySpacesByTime = viewModel::queryAvailableSpacesByTime,
                         onSubmitReservation = viewModel::submitReservation,

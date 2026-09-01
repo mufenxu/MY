@@ -17,4 +17,7 @@
     <string name="shortcut_notifications_long">打开通知中心</string>
     <string name="tile_device_control">设备控制</string>
     <string name="tile_device_control_subtitle">打开安全控制页</string>
+    <string name="course_widget_name">周课表</string>
+    <string name="course_widget_description">本学期周课表，突出显示当前周次与当前星期</string>
+    <string name="course_widget_open_app">打开今日课表</string>
 </resources>

@@ -18,6 +18,7 @@ import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.mergeRemoteAlerts
 import cn.pxyb.mycontrol.assistant.buildPersonalAssistantSnapshot
 import cn.pxyb.mycontrol.assistant.buildGuardianAlerts
+import cn.pxyb.mycontrol.widget.CourseWidgetProvider
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -29,6 +30,7 @@ class OperationalSyncWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         MyControlWidgetProvider.refresh(applicationContext)
+        CourseWidgetProvider.refresh(applicationContext)
         if (OperationalSyncScheduler.isAppForeground(applicationContext)) return Result.success()
 
         val sessionStore = SessionStore(applicationContext)
@@ -65,6 +67,7 @@ class OperationalSyncWorker(
             personalStore.writeTodoSnapshot(syncedTodo)
             if (pending.isNotEmpty()) personalStore.writePendingTodoMutations(emptyList())
             val timetable = api.campusTimetable()
+            CourseWidgetProvider.publish(applicationContext, timetable)
             if (api.isOffline()) return Result.retry()
             val resources = api.resourceExpiries()
             if (api.isOffline()) return Result.retry()

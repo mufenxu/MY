@@ -81,6 +81,7 @@ import cn.pxyb.mycontrol.data.mergeRemoteAlerts
 import cn.pxyb.mycontrol.data.mergeHydratedAlerts
 import cn.pxyb.mycontrol.flushNotificationMutations
 import cn.pxyb.mycontrol.data.shouldInvalidatePlatformSession
+import cn.pxyb.mycontrol.widget.CourseWidgetProvider
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
 import cn.pxyb.mycontrol.update.AppInstallResult
 import cn.pxyb.mycontrol.update.AppUpdateManager
@@ -323,7 +324,10 @@ class AppViewModel(
                 mutableState.update { it.copy(androidPasskeySupported = capabilities.androidPasskeySupported) }
             }
         }
-        if (!hasSavedSession) MyControlWidgetProvider.clear(getApplication())
+        if (!hasSavedSession) {
+            MyControlWidgetProvider.clear(getApplication())
+            CourseWidgetProvider.clear(getApplication())
+        }
         if (hasSavedSession && !lockEnabled) unlockSession()
         viewModelScope.launch {
             mutableState
@@ -385,6 +389,7 @@ class AppViewModel(
                     )
                 }
                 MyControlWidgetProvider.clear(getApplication())
+                CourseWidgetProvider.clear(getApplication())
                 return@launch
             }
             runCatching { api.authStatus() }
@@ -405,6 +410,7 @@ class AppViewModel(
                             )
                         }
                         MyControlWidgetProvider.clear(getApplication())
+                        CourseWidgetProvider.clear(getApplication())
                     } else {
                         setAccountScope(user.username)
                         mutableState.update {
@@ -454,6 +460,7 @@ class AppViewModel(
         sessionStore.clear()
         mutableState.update { it.copy(booting = false, locked = false, user = null, error = null) }
         MyControlWidgetProvider.clear(getApplication())
+        CourseWidgetProvider.clear(getApplication())
     }
 
     fun login(
@@ -653,6 +660,7 @@ class AppViewModel(
                     )
                 }
                 MyControlWidgetProvider.clear(getApplication())
+                CourseWidgetProvider.clear(getApplication())
             }
         }
     }
@@ -787,6 +795,7 @@ class AppViewModel(
                 )
             }
             MyControlWidgetProvider.clear(getApplication())
+            CourseWidgetProvider.clear(getApplication())
         }
     }
 
@@ -1749,6 +1758,7 @@ class AppViewModel(
                 freeClassroomResult = it.freeClassroomResult ?: campus.overview.freeClassrooms,
             )
         }
+        publishWidget()
         evaluatePersonalReminders()
     }
 
@@ -2925,6 +2935,7 @@ class AppViewModel(
                 assistant = current.assistantSnapshot,
                 quickScene = current.quickScene,
             )
+            CourseWidgetProvider.publish(getApplication(), current.campusTimetable)
         }
     }
 
@@ -3014,6 +3025,7 @@ class AppViewModel(
                             hiddenHomeQuickActions = current.hiddenHomeQuickActions,
                         )
                         MyControlWidgetProvider.clear(getApplication())
+                        CourseWidgetProvider.clear(getApplication())
                     } else {
                         mutableState.update {
                             it.copy(busyAction = null, error = error.message ?: "操作失败，请稍后重试。")
@@ -3052,6 +3064,7 @@ class AppViewModel(
             hiddenHomeQuickActions = current.hiddenHomeQuickActions,
         )
         MyControlWidgetProvider.clear(getApplication())
+        CourseWidgetProvider.clear(getApplication())
     }
 
     private fun enqueueTodoMutation(mutation: TodoMutation) {
