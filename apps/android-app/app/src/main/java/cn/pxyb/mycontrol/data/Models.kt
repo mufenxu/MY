@@ -472,3 +472,17 @@ data class AssistantChatTurn(
     val role: String,
     val content: String,
 )
+
+@Immutable
+data class GitHubRepositoryRecord(
+    val name: String,
+    val fullName: String,
+    val description: String?,
+    val visibility: String,
+    val isPrivate: Boolean,
+    val htmlUrl: String?,
+    val language: String?,
+    val defaultBranch: String?,
+    val updatedAt: String?,
+    val archived: Boolean,
+)

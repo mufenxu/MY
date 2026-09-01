@@ -18,6 +18,7 @@ import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
 import cn.pxyb.mycontrol.data.ExternalApplication
+import cn.pxyb.mycontrol.data.GitHubRepositoryRecord
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
@@ -59,6 +60,10 @@ data class AppEntryUiState(
     val qrLoginOpen: Boolean,
     val accountManagementOpen: Boolean,
     val googleAccountDeskOpen: Boolean,
+    val githubProjectsOpen: Boolean,
+    val githubRepositories: List<GitHubRepositoryRecord> = emptyList(),
+    val githubRepositoriesLoaded: Boolean = false,
+    val githubVisibilityBusy: Boolean = false,
     val globalSearchOpen: Boolean,
     val assistantOpen: Boolean,
     val assistantButtonVisible: Boolean,
@@ -337,6 +342,10 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     qrLoginOpen = qrLoginOpen,
     accountManagementOpen = accountManagementOpen,
     googleAccountDeskOpen = googleAccountDeskOpen,
+    githubProjectsOpen = githubProjectsOpen,
+    githubRepositories = githubRepositories,
+    githubRepositoriesLoaded = githubRepositoriesLoaded,
+    githubVisibilityBusy = busyAction?.startsWith("github-visibility:") == true,
     globalSearchOpen = globalSearchOpen,
     assistantOpen = assistantOpen,
     assistantButtonVisible = assistantButtonVisible,

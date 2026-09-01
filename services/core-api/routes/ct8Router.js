@@ -8,7 +8,9 @@ const {
     handleCallback,
     getStatus,
     updateSecret,
-    manageSecretCache
+    manageSecretCache,
+    listRepositories,
+    updateRepositoryVisibility
 } = require('../controllers/githubController');
 
 const CALLBACK_PATHS = ['/callback', '/webhook', '/result', '/results'];
@@ -41,6 +43,9 @@ function createCt8Router({ legacy = false } = {}) {
     router.get('/status', auth.verifyToken, ct8ViewAccess, getStatus);
     router.post('/secret/update', auth.verifyToken, ct8ManageAccess, updateSecret);
     router.post('/secret/cache', auth.verifyToken, ct8ManageAccess, manageSecretCache);
+
+    router.get('/repos', auth.verifyToken, ct8ViewAccess, listRepositories);
+    router.patch('/repos/:owner/:repo/visibility', auth.verifyToken, ct8ManageAccess, updateRepositoryVisibility);
 
     router.get('/stats', auth.verifyToken, ct8ViewAccess, ct8Controller.getCt8Stats);
     router.get('/runs', auth.verifyToken, ct8ViewAccess, ct8Controller.getRunHistory);

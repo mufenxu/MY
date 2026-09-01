@@ -176,6 +176,7 @@ internal object AppRoute {
     const val Operations = "operations"
     const val Account = "account"
     const val GoogleAccounts = "google-accounts"
+    const val GitHubProjects = "github-projects"
     const val Search = "search"
     const val Assistant = "assistant"
     const val Today = "today"
@@ -209,6 +210,7 @@ private fun AppEntryUiState.requestedRoute(): String = when {
     workspaceDestination == WorkspaceDestination.Scenes -> AppRoute.Scenes
     globalSearchOpen -> AppRoute.Search
     googleAccountDeskOpen -> AppRoute.GoogleAccounts
+    githubProjectsOpen -> AppRoute.GitHubProjects
     accountManagementOpen -> AppRoute.Account
     assistantOpen -> AppRoute.Assistant
     else -> selectedTab.route()
@@ -228,6 +230,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Tools -> MainTab.Tools
     AppRoute.Profile,
     AppRoute.Account -> MainTab.Profile
+    AppRoute.GitHubProjects -> MainTab.Profile
     else -> null
 }
 
@@ -235,6 +238,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.GoogleAccounts -> primaryTabForRoute(previousRoute) ?: MainTab.Profile
     AppRoute.Account -> MainTab.Profile
     AppRoute.Assistant -> MainTab.Overview
+    AppRoute.GitHubProjects -> MainTab.Profile
     AppRoute.Notifications,
     AppRoute.Search,
     AppRoute.Today,
@@ -1584,7 +1588,7 @@ private fun AuthenticatedShell(
     val onRefresh = remember(viewModel) { { viewModel.refreshCurrentTab(true) } }
 
     // 仅响应由外部或 ViewModel 显式打开的非 Tab 二级子界面（如全局搜索、Google 桌面等）
-    LaunchedEffect(state.accountManagementOpen, state.googleAccountDeskOpen, state.globalSearchOpen, state.assistantOpen, state.workspaceDestination) {
+    LaunchedEffect(state.accountManagementOpen, state.googleAccountDeskOpen, state.githubProjectsOpen, state.globalSearchOpen, state.assistantOpen, state.workspaceDestination) {
         val targetRoute = state.requestedRoute()
         if (targetRoute != currentRoute && targetRoute !in setOf(AppRoute.Overview, AppRoute.Operations, AppRoute.Tools, AppRoute.Profile)) {
             navController.navigate(targetRoute) { launchSingleTop = true }
@@ -1604,6 +1608,7 @@ private fun AuthenticatedShell(
             AppRoute.Operations -> viewModel.syncNavigationDestination(MainTab.Operations)
             AppRoute.Account -> viewModel.syncNavigationDestination(MainTab.Profile, accountManagementOpen = true)
             AppRoute.GoogleAccounts -> viewModel.syncNavigationDestination(MainTab.Profile, googleAccountDeskOpen = true)
+            AppRoute.GitHubProjects -> viewModel.syncNavigationDestination(MainTab.Profile, githubProjectsOpen = true)
             AppRoute.Search -> viewModel.syncNavigationDestination(MainTab.Overview, globalSearchOpen = true)
             AppRoute.Assistant -> viewModel.syncNavigationDestination(MainTab.Overview, assistantOpen = true)
             AppRoute.Today -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
@@ -1810,6 +1815,7 @@ private fun AuthenticatedShell(
                         onForceFullSync = viewModel::forceFullSync,
                         onOpenAccountManagement = viewModel::openAccountManagement,
                         onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
+                        onOpenGitHubProjects = viewModel::openGitHubProjects,
                         notificationsEnabled = notificationsEnabled,
                         onRequestNotifications = onRequestNotifications,
                         onCreateDesktopMagicLink = viewModel::createDesktopMagicLink,
@@ -1862,6 +1868,19 @@ private fun AuthenticatedShell(
                         onDeleteAlias = viewModel::deleteGoogleAlias,
                         onUploadLocalAccounts = viewModel::uploadLocalGoogleAccounts,
                         onDiscardLocalAccounts = viewModel::discardLocalGoogleAccounts,
+                    )
+                }
+                composable(AppRoute.GitHubProjects) {
+                    GitHubProjectsScreen(
+                        repositories = state.githubRepositories,
+                        loaded = state.githubRepositoriesLoaded,
+                        busy = state.githubVisibilityBusy,
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onRefresh = viewModel::loadGitHubRepositories,
+                        onUpdateVisibility = { owner, repo, visibility ->
+                            viewModel.updateGitHubVisibility(owner, repo, visibility, onSensitiveActionConfirmation)
+                        },
                     )
                 }
                 composable(AppRoute.Search) {

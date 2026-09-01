@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -48,11 +49,14 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.AssistantActionItem
 import cn.pxyb.mycontrol.data.AssistantSuggestion
+import android.util.Log
+import androidx.compose.foundation.layout.WindowInsets
 
 @Composable
 fun AssistantScreen(
@@ -70,6 +74,10 @@ fun AssistantScreen(
     var pendingAction by remember { mutableStateOf<AssistantActionItem?>(null) }
     val listState = rememberLazyListState()
     val dark = isSystemInDarkTheme()
+    val debugDensity = LocalDensity.current
+    val debugIme = WindowInsets.ime
+    val debugImeBottom = debugIme.getBottom(debugDensity)
+    Log.d("IMEDBG", "imeBottomPx=$debugImeBottom dark=$dark")
 
     LaunchedEffect(state.messages.size, state.sending) {
         if (state.messages.isNotEmpty()) {

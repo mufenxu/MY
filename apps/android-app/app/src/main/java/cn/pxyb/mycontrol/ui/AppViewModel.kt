@@ -43,6 +43,7 @@ import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
 import cn.pxyb.mycontrol.data.ExternalApplication
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
+import cn.pxyb.mycontrol.data.GitHubRepositoryRecord
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAccountStore
 import cn.pxyb.mycontrol.data.GoogleAliasRecord
@@ -165,6 +166,8 @@ data class AppUiState(
     val backup: BackupQuality? = null,
     val iot: IotData? = null,
     val ct8: Ct8Data? = null,
+    val githubRepositories: List<GitHubRepositoryRecord> = emptyList(),
+    val githubRepositoriesLoaded: Boolean = false,
     val diagnostics: DiagnosticData? = null,
     val security: SecurityData? = null,
     val qrLoginOpen: Boolean = false,
@@ -173,6 +176,7 @@ data class AppUiState(
     val qrLoginError: String? = null,
     val accountManagementOpen: Boolean = false,
     val googleAccountDeskOpen: Boolean = false,
+    val githubProjectsOpen: Boolean = false,
     val globalSearchOpen: Boolean = false,
     val assistantOpen: Boolean = false,
     val assistantButtonVisible: Boolean = true,
@@ -566,7 +570,7 @@ class AppViewModel(
                     val status = api.qrLoginRequestStatus(request.requestId, request.requesterVerifier)
                     when (status.status) {
                         "approved" -> {
-                            val result = api.consumeQrLoginRequest(request.requestId, request.requesterVerifier)
+                            val result = api.consumeQrLoginRequest(request.requestId, request.requesterVerifier, currentDeviceName())
                             completeLogin(protectLogin(result, authorizeSession))
                             return@launch
                         }
@@ -820,6 +824,7 @@ class AppViewModel(
         tab: MainTab,
         accountManagementOpen: Boolean = false,
         googleAccountDeskOpen: Boolean = false,
+        githubProjectsOpen: Boolean = false,
         globalSearchOpen: Boolean = false,
         assistantOpen: Boolean = false,
         workspaceDestination: WorkspaceDestination? = null,
@@ -828,6 +833,7 @@ class AppViewModel(
         val destinationChanged = mutableState.value.selectedTab != tab ||
             mutableState.value.accountManagementOpen != accountManagementOpen ||
             mutableState.value.googleAccountDeskOpen != googleAccountDeskOpen ||
+            mutableState.value.githubProjectsOpen != githubProjectsOpen ||
             mutableState.value.globalSearchOpen != globalSearchOpen ||
             mutableState.value.assistantOpen != assistantOpen ||
             mutableState.value.workspaceDestination != workspaceDestination
@@ -840,6 +846,7 @@ class AppViewModel(
                     selectedTab = tab,
                     accountManagementOpen = accountManagementOpen,
                     googleAccountDeskOpen = googleAccountDeskOpen,
+                    githubProjectsOpen = githubProjectsOpen,
                     globalSearchOpen = globalSearchOpen,
                     assistantOpen = assistantOpen,
                     workspaceDestination = workspaceDestination,
@@ -852,6 +859,7 @@ class AppViewModel(
                 tab = tab,
                 accountManagementOpen = accountManagementOpen,
                 googleAccountDeskOpen = googleAccountDeskOpen,
+                githubProjectsOpen = githubProjectsOpen,
                 globalSearchOpen = globalSearchOpen,
                 assistantOpen = assistantOpen,
                 workspaceDestination = workspaceDestination,
@@ -1173,6 +1181,57 @@ class AppViewModel(
 
     fun closeGoogleAccountDesk() {
         mutableState.update { it.copy(googleAccountDeskOpen = false) }
+    }
+    fun openGitHubProjects() {
+        val changedTab = mutableState.value.selectedTab != MainTab.Profile
+        mutableState.update {
+            it.copy(
+                selectedTab = MainTab.Profile,
+                accountManagementOpen = false,
+                googleAccountDeskOpen = false,
+                githubProjectsOpen = true,
+                globalSearchOpen = false,
+                error = null,
+                message = null,
+            )
+        }
+        if (changedTab) refreshForTab(MainTab.Profile)
+        loadGitHubRepositories()
+    }
+
+    fun closeGitHubProjects() {
+        mutableState.update { it.copy(githubProjectsOpen = false) }
+    }
+
+    fun loadGitHubRepositories() {
+        if (mutableState.value.user == null) return
+        viewModelScope.launch {
+            runCatching { api.githubRepositories() }
+                .onSuccess { repositories ->
+                    mutableState.update {
+                        it.copy(
+                            githubRepositories = repositories,
+                            githubRepositoriesLoaded = true,
+                            error = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(githubRepositoriesLoaded = true, error = error.message ?: "GitHub 仓库加载失败。")
+                    }
+                }
+        }
+    }
+
+    fun updateGitHubVisibility(
+        owner: String,
+        repo: String,
+        visibility: String,
+        confirmation: suspend () -> Boolean,
+    ) = runAction("github-visibility:$owner:$repo", "仓库可见性已更新。", confirmation) {
+        api.updateGitHubVisibility(owner, repo, visibility)
+        mutableState.update { it.copy(githubRepositories = api.githubRepositories()) }
     }
 
     fun addGoogleAccount(
@@ -1766,6 +1825,7 @@ class AppViewModel(
         tab: MainTab,
         accountManagementOpen: Boolean = false,
         googleAccountDeskOpen: Boolean = false,
+        githubProjectsOpen: Boolean = false,
         globalSearchOpen: Boolean = false,
         assistantOpen: Boolean = false,
         workspaceDestination: WorkspaceDestination? = null,
@@ -1785,6 +1845,9 @@ class AppViewModel(
             }
             googleAccountDeskOpen -> {
                 loadGoogleAccounts()
+            }
+            githubProjectsOpen -> {
+                loadGitHubRepositories()
             }
             accountManagementOpen -> {
                 refreshSecurity(force)

@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Laptop
@@ -94,6 +95,7 @@ fun ProfileScreen(
     onForceFullSync: () -> Unit,
     onOpenAccountManagement: () -> Unit,
     onOpenGoogleAccountDesk: () -> Unit,
+    onOpenGitHubProjects: () -> Unit,
     notificationsEnabled: Boolean,
     onRequestNotifications: () -> Unit,
     onCreateDesktopMagicLink: ((String?, String?) -> Unit) -> Unit,
@@ -455,6 +457,24 @@ fun ProfileScreen(
                                 shadowElevation = 0.dp,
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
+                                    ProfileActionRow(
+                                        icon = Icons.Outlined.Code,
+                                        iconTint = Color(0xFF0284C7),
+                                        iconBackground = Color(0xFFE0F2FE),
+                                        title = "GitHub 项目",
+                                        subtitle = "管理仓库公开性",
+                                        onClick = onOpenGitHubProjects,
+                                    )
+                                }
+                            }
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                color = glassCardColor(),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                                shadowElevation = 0.dp,
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileCardHeader(
                                         icon = Icons.Outlined.AutoAwesome,
                                         iconTint = Color(0xFF7C3AED),
@@ -792,6 +812,26 @@ fun ProfileScreen(
                     }
                 }
 
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        color = glassCardColor(),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                        shadowElevation = 0.dp,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            ProfileActionRow(
+                                icon = Icons.Outlined.Code,
+                                iconTint = Color(0xFF0284C7),
+                                iconBackground = Color(0xFFE0F2FE),
+                                title = "GitHub 项目",
+                                subtitle = "管理仓库公开性",
+                                onClick = onOpenGitHubProjects,
+                            )
+                        }
+                    }
+                }
                 item {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),

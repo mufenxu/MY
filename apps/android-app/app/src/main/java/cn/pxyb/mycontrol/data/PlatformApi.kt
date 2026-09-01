@@ -178,11 +178,14 @@ class PlatformApi(
     suspend fun consumeQrLoginRequest(
         requestId: String,
         requesterVerifier: String,
+        deviceName: String = "",
     ): LoginResult = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("requesterVerifier", requesterVerifier)
+        if (deviceName.isNotBlank()) body.put("deviceName", deviceName)
         val response = execute(
             "/api/auth/qr/requests/${encodePath(requestId)}/consume",
             "POST",
-            JSONObject().put("requesterVerifier", requesterVerifier),
+            body,
             authenticated = false,
         )
         val user = response.json.optJSONObject("user").toPlatformUser()
@@ -1164,6 +1167,26 @@ class PlatformApi(
         Unit
     }
 
+    suspend fun githubRepositories(): List<GitHubRepositoryRecord> = withContext(Dispatchers.IO) {
+        execute("/apps/core/api/ct8/repos").json
+            .optJSONArray("repositories")
+            .objects()
+            .map { it.toGitHubRepositoryRecord() }
+    }
+
+    suspend fun updateGitHubVisibility(
+        owner: String,
+        repo: String,
+        visibility: String,
+    ): GitHubRepositoryRecord = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("visibility", visibility)
+        val repository = execute(
+            "/apps/core/api/ct8/repos/${encodePath(owner)}/${encodePath(repo)}/visibility",
+            "PATCH",
+            body,
+        ).json.optJSONObject("repository")
+        repository.toGitHubRepositoryRecord()
+    }
     suspend fun runIotScene(id: String): Unit = withContext(Dispatchers.IO) {
         execute("/apps/iot/api/automations/scenes/${encodePath(id)}/run", "POST", JSONObject(), timeoutSeconds = 45)
         Unit
@@ -2021,6 +2044,18 @@ private fun JSONArray?.toStringList(): List<String> {
 
 private fun JSONObject?.optStringOr(key: String, fallback: String): String = this?.optString(key, fallback) ?: fallback
 
+private fun JSONObject.toGitHubRepositoryRecord(): GitHubRepositoryRecord = GitHubRepositoryRecord(
+    name = optString("name"),
+    fullName = optString("full_name", optString("fullName", optString("name"))),
+    description = nullableString("description"),
+    visibility = optString("visibility", if (optBoolean("private")) "private" else "public"),
+    isPrivate = optBoolean("private"),
+    htmlUrl = nullableString("html_url") ?: nullableString("htmlUrl"),
+    language = nullableString("language"),
+    defaultBranch = nullableString("default_branch") ?: nullableString("defaultBranch"),
+    updatedAt = nullableString("updated_at") ?: nullableString("updatedAt"),
+    archived = optBoolean("archived"),
+)
 private fun JSONObject.nullableString(key: String): String? =
     takeIf { has(key) && !isNull(key) }?.optString(key)?.takeIf { it.isNotBlank() }
 

@@ -760,3 +760,66 @@ exports.manageSecretCache = async (action, secret_name, secret_value, updated_by
         throw new AppError('Invalid action', 400);
     }
 };
+
+const GITHUB_REPOSITORY_FIELDS = [
+    'name', 'full_name', 'description', 'private', 'visibility', 'html_url',
+    'fork', 'archived', 'language', 'default_branch', 'updated_at'
+];
+
+const pickRepository = (repo) => {
+    if (!repo || typeof repo !== 'object') return null;
+    const picked = {};
+    for (const field of GITHUB_REPOSITORY_FIELDS) {
+        if (repo[field] !== undefined) picked[field] = repo[field];
+    }
+    return picked;
+};
+
+exports.listRepositories = async () => {
+    const { GH_TOKEN, GH_OWNER } = getGhOptions();
+    if (!GH_TOKEN) {
+        throw createGithubConfigurationError('列出仓库');
+    }
+    const url = `https://api.github.com/users/${encodeURIComponent(GH_OWNER)}/repos?per_page=100&type=all&sort=updated`;
+    try {
+        const resp = await axios.get(url, {
+            headers: {
+                'Accept': 'application/vnd.github+json',
+                'Authorization': `Bearer ${GH_TOKEN}`,
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
+        });
+        return Array.isArray(resp.data) ? resp.data.map(pickRepository).filter(Boolean) : [];
+    } catch (err) {
+        throw createGithubUpstreamError(err, '列出仓库');
+    }
+};
+
+const REPOSITORY_VISIBILITY_VALUES = new Set(['public', 'private', 'internal']);
+
+exports.updateRepositoryVisibility = async (owner, repo, visibility) => {
+    if (!owner || !repo) {
+        throw new AppError('仓库参数不完整', 400);
+    }
+    const normalized = String(visibility || '').trim().toLowerCase();
+    if (!REPOSITORY_VISIBILITY_VALUES.has(normalized)) {
+        throw new AppError('visibility 仅支持 public / private / internal', 400);
+    }
+    const { GH_TOKEN } = getGhOptions();
+    if (!GH_TOKEN) {
+        throw createGithubConfigurationError('更新仓库可见性');
+    }
+    const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+    try {
+        const resp = await axios.patch(url, { visibility: normalized }, {
+            headers: {
+                'Accept': 'application/vnd.github+json',
+                'Authorization': `Bearer ${GH_TOKEN}`,
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
+        });
+        return pickRepository(resp.data);
+    } catch (err) {
+        throw createGithubUpstreamError(err, '更新仓库可见性');
+    }
+};

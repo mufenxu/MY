@@ -234,3 +234,23 @@ exports.manageSecretCache = async (req, res, next) => {
         next(err);
     }
 };
+
+exports.listRepositories = async (req, res, next) => {
+    try {
+        const repositories = await githubService.listRepositories();
+        res.json({ ok: true, repositories });
+    } catch (err) {
+        next(err);
+    }
+};
+
+exports.updateRepositoryVisibility = async (req, res, next) => {
+    try {
+        const { owner, repo } = req.params;
+        const visibility = String((req.body && req.body.visibility) || '').trim();
+        const repository = await githubService.updateRepositoryVisibility(owner, repo, visibility);
+        res.json({ ok: true, repository });
+    } catch (err) {
+        next(err);
+    }
+};
