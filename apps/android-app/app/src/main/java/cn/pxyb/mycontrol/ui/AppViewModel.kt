@@ -22,6 +22,7 @@ import cn.pxyb.mycontrol.assistant.buildGuardianAlerts
 import cn.pxyb.mycontrol.assistant.buildPersonalAssistantSnapshot
 import cn.pxyb.mycontrol.assistant.sharedTodoTitle
 import cn.pxyb.mycontrol.data.ApiException
+import cn.pxyb.mycontrol.data.AssistantPreferences
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AndroidCalendarSync
@@ -174,6 +175,7 @@ data class AppUiState(
     val googleAccountDeskOpen: Boolean = false,
     val globalSearchOpen: Boolean = false,
     val assistantOpen: Boolean = false,
+    val assistantButtonVisible: Boolean = true,
     val workspaceDestination: WorkspaceDestination? = null,
     val googleAccounts: List<GoogleAccountRecord> = emptyList(),
     val googleAccountsLoaded: Boolean = false,
@@ -260,6 +262,7 @@ class AppViewModel(
     private val sessionStore = SessionStore(application)
     private val googleAccountStore = GoogleAccountStore(application)
     private val homePreferences = HomePreferences(application)
+    private val assistantPreferences = AssistantPreferences(application)
     private val personalStore = PersonalWorkspaceStore(application)
     private val snapshotStore = ResponseSnapshotStore(application)
     private val api = PlatformApi(sessionStore, snapshotStore)
@@ -269,6 +272,7 @@ class AppViewModel(
     private val hasSavedSession = sessionStore.hasSession()
     private val lockEnabled = sessionStore.isLockEnabled()
     private val savedHomePreferences = homePreferences.read()
+    private val savedAssistantPreferences = assistantPreferences.read()
     private val appInstallationId = application.getSharedPreferences("app_notification_device", 0)
         .let { preferences ->
             preferences.getString("installation_id", null) ?: UUID.randomUUID().toString().also { id ->
@@ -285,6 +289,7 @@ class AppViewModel(
             appLockEnabled = lockEnabled,
             homeQuickActionOrder = savedHomePreferences.order,
             hiddenHomeQuickActions = savedHomePreferences.hidden,
+            assistantButtonVisible = savedAssistantPreferences.visible,
             workspaceDestination = restoredWorkspaceDestination(savedStateHandle[SAVED_WORKSPACE_DESTINATION]),
             todoSnapshot = TodoSnapshot(),
             pendingTodoMutations = 0,
@@ -980,6 +985,12 @@ class AppViewModel(
         mutableState.update { it.copy(globalSearchOpen = false) }
     }
 
+    fun setAssistantButtonVisible(visible: Boolean) {
+        if (mutableState.value.assistantButtonVisible == visible) return
+        assistantPreferences.write(assistantPreferences.read().copy(visible = visible))
+        mutableState.update { it.copy(assistantButtonVisible = visible) }
+    }
+
     fun openAssistant() {
         mutableState.update {
             it.copy(
@@ -992,7 +1003,6 @@ class AppViewModel(
                 message = null,
             )
         }
-        startAssistantOverview()
     }
 
     fun sendAssistantMessage(text: String) {
@@ -1009,40 +1019,6 @@ class AppViewModel(
         viewModelScope.launch {
             val context = buildAssistantContext(current)
             val turns = history.map { AssistantChatTurn(role = it.role, content = it.content) }
-            runCatching { api.assistantChat(turns, context) }
-                .onSuccess { reply ->
-                    assistantChatMutable.update { state ->
-                        state.copy(
-                            messages = state.messages + AssistantChatMessageUi(
-                                role = "assistant",
-                                content = reply.reply,
-                                suggestions = reply.suggestions,
-                                actions = reply.actions,
-                            ),
-                            sending = false,
-                            error = null,
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    assistantChatMutable.update { it.copy(sending = false, error = mapAssistantError(error)) }
-                }
-        }
-    }
-
-    private fun startAssistantOverview() {
-        val current = mutableState.value
-        if (current.user == null || current.locked) return
-        if (assistantChatMutable.value.sending || assistantChatMutable.value.messages.isNotEmpty()) return
-        assistantChatMutable.update { it.copy(sending = true, error = null) }
-        viewModelScope.launch {
-            val context = buildAssistantContext(current)
-            val turns = listOf(
-                AssistantChatTurn(
-                    role = "user",
-                    content = "请基于工作台上下文生成一份今日概览：简洁总结今天的课程、待办、未读告警和备份状态，并给出最值得先做的 1-2 件事。",
-                ),
-            )
             runCatching { api.assistantChat(turns, context) }
                 .onSuccess { reply ->
                     assistantChatMutable.update { state ->

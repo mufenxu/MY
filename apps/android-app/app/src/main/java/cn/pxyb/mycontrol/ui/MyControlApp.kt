@@ -11,8 +11,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -23,9 +27,12 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -44,6 +51,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -58,6 +66,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudSync
@@ -89,6 +98,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -99,6 +109,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.autofill.AutofillNode
 import androidx.compose.ui.autofill.AutofillType
 import androidx.compose.ui.draw.clip
@@ -115,6 +128,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalAutofill
 import androidx.compose.ui.platform.LocalAutofillTree
@@ -143,8 +157,11 @@ import androidx.navigation.compose.rememberNavController
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.data.AppThemePreference
+import cn.pxyb.mycontrol.data.AssistantButtonPreferences
+import cn.pxyb.mycontrol.data.AssistantPreferences
 import kotlinx.coroutines.delay
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 internal data class TabItem(val tab: MainTab, val label: String, val icon: ImageVector)
 private enum class SecondFactorMode { Totp, RecoveryCode }
@@ -1513,6 +1530,7 @@ private fun AuthenticatedShell(
     var toastDragOffset by remember { mutableFloatStateOf(0f) }
     var toastDragging by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
+    var assistantAnchorSize by remember { mutableStateOf(IntSize.Zero) }
     var initialSetupOpen by remember(showInitialSetup, state.user) {
         mutableStateOf(showInitialSetup && state.user != null)
     }
@@ -1649,7 +1667,8 @@ private fun AuthenticatedShell(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .onSizeChanged { assistantAnchorSize = it },
             ) {
                 val shellInsets = resolveAuthenticatedShellInsets(
                     safeTop = padding.calculateTopPadding(),
@@ -1712,7 +1731,6 @@ private fun AuthenticatedShell(
                         onOpenQrLogin = viewModel::openQrScanner,
                         onOpenWorkspace = viewModel::openWorkspace,
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
-                        onOpenAssistant = viewModel::openAssistant,
                         onOpenReservation = { navController.navigate(AppRoute.Reservation) },
                         onOpenFreeClassrooms = {
                             navController.navigate(AppRoute.FreeClassrooms) { launchSingleTop = true }
@@ -1800,6 +1818,8 @@ private fun AuthenticatedShell(
                         onOpenReleases = viewModel::openAppReleasesPage,
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
                         onOpenSettings = { settingsOpen = true },
+                        assistantButtonVisible = profileState.assistantButtonVisible,
+                        onAssistantButtonVisibleChange = viewModel::setAssistantButtonVisible,
                     )
                 }
                 composable(AppRoute.Account) {
@@ -2018,10 +2038,19 @@ private fun AuthenticatedShell(
                         },
                         onWriteNfc = onWriteNfcScene,
                         onSetQuickScene = viewModel::setQuickScene,
-                        onConsumePendingScene = viewModel::consumePendingScene,
+                    onConsumePendingScene = viewModel::consumePendingScene,
                     )
                 }
             }
+
+            FloatingAssistantButton(
+                anchorSize = assistantAnchorSize,
+                visible = state.assistantButtonVisible,
+                hidden = state.assistantOpen || settingsOpen,
+                bottomInset = shellInsets.contentBottom,
+                modifier = Modifier.align(Alignment.TopStart),
+                onOpen = viewModel::openAssistant,
+            )
 
             androidx.compose.animation.AnimatedVisibility(
                 visible = !isTablet && !isSubScreen,
@@ -2103,6 +2132,238 @@ private fun AuthenticatedShell(
                 )
             }
         }
+        }
+    }
+}
+
+@Composable
+private fun FloatingAssistantButton(
+    anchorSize: IntSize,
+    visible: Boolean,
+    hidden: Boolean,
+    bottomInset: Dp,
+    modifier: Modifier = Modifier,
+    onOpen: () -> Unit,
+) {
+    if (!visible || hidden || anchorSize.width == 0 || anchorSize.height == 0) return
+
+    val context = LocalContext.current
+    val preferences = remember { AssistantPreferences(context) }
+    val initial = remember { preferences.read() }
+
+    val density = LocalDensity.current
+    val buttonSizePx = with(density) { 54.dp.toPx() }
+    val handleWidthPx = with(density) { 7.dp.toPx() }
+    val handleHeightPx = with(density) { 46.dp.toPx() }
+    val marginPx = with(density) { 14.dp.toPx() }
+    val edgeSnapPx = with(density) { 44.dp.toPx() }
+    val slopPx = with(density) { 6.dp.toPx() }
+    val bottomInsetPx = with(density) { bottomInset.toPx() }
+
+    val boxW = anchorSize.width.toFloat()
+    val boxH = anchorSize.height.toFloat()
+
+    var xRatio by remember { mutableFloatStateOf(0f) }
+    var yRatio by remember { mutableFloatStateOf(0f) }
+    var collapsedSide by remember { mutableIntStateOf(initial.collapsedSide) }
+    var initialized by remember { mutableStateOf(false) }
+
+    LaunchedEffect(anchorSize) {
+        if (!initialized && anchorSize.width > 0 && anchorSize.height > 0) {
+            xRatio = if (initial.xRatio >= 1f) {
+                ((boxW - marginPx - buttonSizePx / 2f) / boxW).coerceIn(0.02f, 0.98f)
+            } else {
+                initial.xRatio
+            }
+            yRatio = if (initial.yRatio >= 1f) {
+                ((boxH - bottomInsetPx - buttonSizePx / 2f - marginPx) / boxH).coerceIn(0.02f, 0.98f)
+            } else {
+                initial.yRatio
+            }
+            initialized = true
+        }
+    }
+    if (!initialized) return
+
+    fun currentCenterX(): Float = when (collapsedSide) {
+        1 -> handleWidthPx / 2f
+        2 -> boxW - handleWidthPx / 2f
+        else -> (xRatio * boxW).coerceIn(handleWidthPx, boxW - handleWidthPx)
+    }
+
+    fun currentCenterY(): Float =
+        (yRatio * boxH).coerceIn(handleHeightPx / 2f + marginPx, boxH - handleHeightPx / 2f - marginPx)
+
+    fun persistPosition() {
+        preferences.write(
+            AssistantButtonPreferences(
+                visible = visible,
+                xRatio = xRatio,
+                yRatio = yRatio,
+                collapsedSide = collapsedSide,
+            ),
+        )
+    }
+
+    fun expandFromEdge() {
+        val side = collapsedSide
+        collapsedSide = 0
+        xRatio = when (side) {
+            1 -> ((handleWidthPx + buttonSizePx / 2f + marginPx) / boxW).coerceIn(0.02f, 0.98f)
+            else -> ((boxW - handleWidthPx - buttonSizePx / 2f - marginPx) / boxW).coerceIn(0.02f, 0.98f)
+        }
+        persistPosition()
+    }
+
+    fun snapAndPersist() {
+        val currentX = currentCenterX()
+        val nextCollapsed = when {
+            currentX <= edgeSnapPx -> 1
+            currentX >= boxW - edgeSnapPx -> 2
+            else -> 0
+        }
+        collapsedSide = nextCollapsed
+        persistPosition()
+    }
+
+    val gestureModifier = Modifier.pointerInput(anchorSize) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            var totalDrag = 0f
+            var isDrag = false
+            while (true) {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) {
+                    if (!isDrag) {
+                        if (collapsedSide != 0) {
+                            expandFromEdge()
+                        } else {
+                            onOpen()
+                        }
+                    } else {
+                        snapAndPersist()
+                    }
+                    break
+                }
+                if (!isDrag) {
+                    totalDrag += abs(change.position.x - change.previousPosition.x) +
+                        abs(change.position.y - change.previousPosition.y)
+                    if (totalDrag > slopPx) {
+                        isDrag = true
+                        if (collapsedSide != 0) {
+                            val side = collapsedSide
+                            collapsedSide = 0
+                            xRatio = when (side) {
+                                1 -> ((handleWidthPx + buttonSizePx / 2f + marginPx) / boxW).coerceIn(0.02f, 0.98f)
+                                else -> ((boxW - handleWidthPx - buttonSizePx / 2f - marginPx) / boxW).coerceIn(0.02f, 0.98f)
+                            }
+                        }
+                    }
+                }
+                if (isDrag) {
+                    change.consume()
+                    xRatio = ((change.position.x + currentCenterX() - buttonSizePx / 2f) / boxW).coerceIn(0.02f, 0.98f)
+                    yRatio = ((change.position.y + currentCenterY() - buttonSizePx / 2f) / boxH).coerceIn(0.02f, 0.98f)
+                }
+            }
+        }
+    }
+
+    val centerX = currentCenterX()
+    val centerY = currentCenterY()
+
+    val pulse = rememberInfiniteTransition(label = "assistantButtonPulse")
+    val pulseProgress by pulse.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "assistantButtonPulseProgress",
+    )
+
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+
+    Box(
+        modifier = modifier
+            .zIndex(1f)
+            .offset {
+                IntOffset(
+                    (centerX - buttonSizePx / 2f).roundToInt(),
+                    (centerY - buttonSizePx / 2f).roundToInt(),
+                )
+            }
+            .size(54.dp)
+            .then(gestureModifier),
+    ) {
+        if (collapsedSide != 0) {
+            // 边缘收纳：与主按钮同色系的渐变胶囊把手，带星芒图标
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 18.dp, height = 42.dp)
+                        .shadow(4.dp, RoundedCornerShape(50), clip = false)
+                        .background(
+                            Brush.linearGradient(listOf(primary, secondary)),
+                            RoundedCornerShape(50),
+                        )
+                        .border(0.8.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(50)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AutoAwesome,
+                        contentDescription = "展开 AI 小助手",
+                        tint = Color.White.copy(alpha = 0.95f),
+                        modifier = Modifier.size(13.dp),
+                    )
+                }
+            }
+        } else {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                // 柔光呼吸（蓝色系，与工作台主色调一致）
+                Box(
+                    modifier = Modifier
+                        .size(54.dp)
+                        .graphicsLayer {
+                            val glowScale = 1f + pulseProgress * 0.16f
+                            scaleX = glowScale
+                            scaleY = glowScale
+                            alpha = 0.4f * (1f - pulseProgress * 0.55f)
+                        }
+                        .background(
+                            Brush.radialGradient(
+                                listOf(primary.copy(alpha = 0.55f), Color.Transparent),
+                            ),
+                            CircleShape,
+                        ),
+                )
+                Box(
+                    modifier = Modifier
+                        .size(54.dp)
+                        .graphicsLayer {
+                            val buttonScale = 1f + pulseProgress * 0.035f
+                            scaleX = buttonScale
+                            scaleY = buttonScale
+                        }
+                        .shadow(8.dp, CircleShape, clip = false)
+                        .background(
+                            Brush.linearGradient(listOf(primary, secondary)),
+                            CircleShape,
+                        )
+                        .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AutoAwesome,
+                        contentDescription = "AI 小助手",
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+            }
         }
     }
 }

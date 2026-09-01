@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -103,6 +104,8 @@ fun ProfileScreen(
     onOpenReleases: (String?) -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenSettings: () -> Unit,
+    assistantButtonVisible: Boolean,
+    onAssistantButtonVisibleChange: (Boolean) -> Unit,
 ) {
     var revokeTarget by remember { mutableStateOf<SecuritySession?>(null) }
     var confirmLogout by remember { mutableStateOf(false) }
@@ -440,6 +443,38 @@ fun ProfileScreen(
                                         title = "Google 邮箱台账",
                                         subtitle = "管理主邮箱、别名和 OpenAI 使用状态",
                                         onClick = onOpenGoogleAccountDesk,
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                color = glassCardColor(),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                                shadowElevation = 0.dp,
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    ProfileCardHeader(
+                                        icon = Icons.Outlined.AutoAwesome,
+                                        iconTint = Color(0xFF7C3AED),
+                                        iconBackground = Color(0xFFF5F3FF),
+                                        title = "AI 小助手",
+                                        subtitle = "悬浮助手按钮与快捷入口",
+                                        trailing = {
+                                            AppSwitch(
+                                                checked = assistantButtonVisible,
+                                                onCheckedChange = onAssistantButtonVisibleChange,
+                                                tint = Color(0xFF7C3AED),
+                                            )
+                                        },
+                                    )
+                                    ProfileDivider()
+                                    Text(
+                                        "在页面显示可自由拖动的 AI 小助手按钮，拖到屏幕边缘会自动收纳成细条，不影响内容浏览",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                                     )
                                 }
                             }
@@ -831,6 +866,40 @@ fun ProfileScreen(
 
                 item(key = "profile-section-misc") {
                     ProfileSectionTitle("通用与维护", "缓存、同步与版本信息")
+                }
+
+                item(key = "profile-assistant-button") {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        color = glassCardColor(),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                        shadowElevation = 0.dp,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            ProfileCardHeader(
+                                icon = Icons.Outlined.AutoAwesome,
+                                iconTint = Color(0xFF7C3AED),
+                                iconBackground = Color(0xFFF5F3FF),
+                                title = "AI 小助手",
+                                subtitle = "悬浮助手按钮与快捷入口",
+                                trailing = {
+                                    AppSwitch(
+                                        checked = assistantButtonVisible,
+                                        onCheckedChange = onAssistantButtonVisibleChange,
+                                        tint = Color(0xFF7C3AED),
+                                    )
+                                },
+                            )
+                            ProfileDivider()
+                            Text(
+                                "在页面显示可自由拖动的 AI 小助手按钮，拖到屏幕边缘会自动收纳成细条，不影响内容浏览",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            )
+                        }
+                    }
                 }
 
                 item {

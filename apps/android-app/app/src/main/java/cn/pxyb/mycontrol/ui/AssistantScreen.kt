@@ -1,29 +1,32 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -39,6 +42,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,8 +79,7 @@ fun AssistantScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .auroraBackdrop(dark)
-            .imePadding(),
+            .auroraBackdrop(dark),
     ) {
         LazyColumn(
             state = listState,
@@ -188,7 +195,7 @@ private fun AssistantWelcomeCard() {
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                     )
                     Text(
-                        "打开即自动生成今日概览，也可以直接提问，或点下方快捷指令",
+                        "可以直接提问，或点下方快捷指令生成今日概览",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.5.sp,
@@ -386,19 +393,51 @@ private fun AssistantInputBar(
                 unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
             ),
         )
-        IconButton(
-            onClick = onSend,
-            enabled = enabled && value.isNotBlank(),
-            modifier = Modifier.size(44.dp),
+        val canSend = enabled && value.isNotBlank()
+        val primary = MaterialTheme.colorScheme.primary
+        val secondary = MaterialTheme.colorScheme.secondary
+        val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+        val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+        val outlineVariant = MaterialTheme.colorScheme.outlineVariant
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .shadow(
+                    elevation = if (canSend) 6.dp else 0.dp,
+                    shape = CircleShape,
+                    clip = false,
+                    ambientColor = primary.copy(alpha = 0.35f),
+                    spotColor = primary.copy(alpha = 0.35f),
+                )
+                .clip(CircleShape)
+                .background(
+                    if (canSend) {
+                        Brush.linearGradient(listOf(primary, secondary))
+                    } else {
+                        SolidColor(surfaceVariant.copy(alpha = 0.6f))
+                    },
+                )
+                .border(
+                    1.dp,
+                    if (canSend) {
+                        Color.White.copy(alpha = 0.4f)
+                    } else {
+                        outlineVariant.copy(alpha = 0.6f)
+                    },
+                    CircleShape,
+                )
+                .clickable(enabled = canSend, onClick = onSend),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Outlined.Send,
                 contentDescription = "发送",
-                tint = if (value.isNotBlank()) {
-                    MaterialTheme.colorScheme.primary
+                tint = if (canSend) {
+                    Color.White
                 } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    onSurfaceVariant.copy(alpha = 0.4f)
                 },
+                modifier = Modifier.size(20.dp),
             )
         }
     }
