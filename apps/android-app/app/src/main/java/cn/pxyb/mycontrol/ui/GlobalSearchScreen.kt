@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -70,7 +71,8 @@ fun GlobalSearchScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .auroraBackdrop(dark),
+            .auroraBackdrop(dark)
+            .imePadding(),
         contentPadding = appPageContentPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
