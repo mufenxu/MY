@@ -2,6 +2,8 @@ package cn.pxyb.mycontrol.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,18 +29,20 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cn.pxyb.mycontrol.data.AssistantActionItem
 import cn.pxyb.mycontrol.data.AssistantSuggestion
 
 @Composable
@@ -49,9 +54,11 @@ fun AssistantScreen(
     onOpenOperations: () -> Unit,
     onSelectTab: (MainTab) -> Unit,
     onSend: (String) -> Unit,
+    onExecuteAction: (AssistantActionItem) -> Unit,
 ) {
     BackHandler(onBack = onBack)
     var input by rememberSaveable { mutableStateOf("") }
+    var pendingAction by remember { mutableStateOf<AssistantActionItem?>(null) }
     val listState = rememberLazyListState()
     val dark = isSystemInDarkTheme()
 
@@ -84,9 +91,7 @@ fun AssistantScreen(
             }
             if (state.messages.isEmpty()) {
                 item(key = "assistant-welcome") {
-                    AssistantWelcomeCard(
-                        onExample = { example -> onSend(example) },
-                    )
+                    AssistantWelcomeCard()
                 }
             } else {
                 itemsIndexed(
@@ -104,6 +109,7 @@ fun AssistantScreen(
                                 "profile" -> onSelectTab(MainTab.Profile)
                             }
                         },
+                        onActionClick = { action -> pendingAction = action },
                     )
                 }
             }
@@ -118,6 +124,9 @@ fun AssistantScreen(
                 }
             }
         }
+        QuickCommandRow(
+            onCommand = { command -> onSend(command) },
+        )
         AssistantInputBar(
             value = input,
             enabled = !state.sending,
@@ -129,10 +138,32 @@ fun AssistantScreen(
             },
         )
     }
+    pendingAction?.let { action ->
+        AlertDialog(
+            onDismissRequest = { pendingAction = null },
+            title = { Text("确认操作") },
+            text = { Text("确认要执行：${assistantActionLabel(action)}？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onExecuteAction(action)
+                        pendingAction = null
+                    },
+                ) {
+                    Text("确认")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingAction = null }) {
+                    Text("取消")
+                }
+            },
+        )
+    }
 }
 
 @Composable
-private fun AssistantWelcomeCard(onExample: (String) -> Unit) {
+private fun AssistantWelcomeCard() {
     AppPanel {
         Column(
             modifier = Modifier
@@ -157,36 +188,48 @@ private fun AssistantWelcomeCard(onExample: (String) -> Unit) {
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                     )
                     Text(
-                        "可以结合课表、待办、告警和备份状态回答你的问题",
+                        "打开即自动生成今日概览，也可以直接提问，或点下方快捷指令",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.5.sp,
                     )
                 }
             }
-            val examples = listOf(
-                "我今天有什么安排？",
-                "我还有哪些待办没完成？",
-                "帮我总结一下未读告警",
-                "系统备份和资源到期情况怎么样？",
-            )
-            examples.forEach { example ->
-                Surface(
-                    onClick = { onExample(example) },
-                    shape = AppSearchFieldShape,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        example,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+        }
+    }
+}
+
+@Composable
+private fun QuickCommandRow(onCommand: (String) -> Unit) {
+    val commands = listOf(
+        "今天怎么安排？",
+        "还有哪些待办？",
+        "汇总未读告警",
+        "备份和资源到期情况",
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = AppPageHorizontalPadding)
+            .padding(top = 4.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        commands.forEach { command ->
+            Surface(
+                onClick = { onCommand(command) },
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ) {
+                Text(
+                    command,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -196,6 +239,7 @@ private fun AssistantWelcomeCard(onExample: (String) -> Unit) {
 private fun AssistantMessageBubble(
     message: AssistantChatMessageUi,
     onSuggestionClick: (String) -> Unit,
+    onActionClick: (AssistantActionItem) -> Unit,
 ) {
     val isUser = message.role == "user"
     Column(
@@ -243,7 +287,51 @@ private fun AssistantMessageBubble(
                 }
             }
         }
+        if (message.actions.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                message.actions.forEach { action ->
+                    ActionChip(
+                        action = action,
+                        onClick = { onActionClick(action) },
+                    )
+                }
+            }
+        }
     }
+}
+
+@Composable
+private fun ActionChip(
+    action: AssistantActionItem,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+    ) {
+        Text(
+            assistantActionLabel(action),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelMedium,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private fun assistantActionLabel(action: AssistantActionItem): String = when (action.type) {
+    "create_todo" -> "创建待办「${action.title}」"
+    "complete_todo" -> "完成待办「${action.title}」"
+    "mark_alerts_read" -> "通知全部标为已读"
+    else -> action.title.ifBlank { "执行操作" }
 }
 
 @Composable

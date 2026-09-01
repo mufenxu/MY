@@ -1861,6 +1861,7 @@ private fun AuthenticatedShell(
                         onOpenOperations = { navigateToTab(MainTab.Operations) },
                         onSelectTab = navigateToTab,
                         onSend = viewModel::sendAssistantMessage,
+                        onExecuteAction = viewModel::performAssistantAction,
                     )
                 }
                 composable(AppRoute.Today) {

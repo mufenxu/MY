@@ -49,9 +49,11 @@ import cn.pxyb.mycontrol.data.HomePreferences
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.DEFAULT_HIDDEN_HOME_QUICK_ACTIONS
 import cn.pxyb.mycontrol.data.IncidentInfo
+import cn.pxyb.mycontrol.data.AssistantActionItem
 import cn.pxyb.mycontrol.data.AssistantChatTurn
 import cn.pxyb.mycontrol.data.IotData
 import cn.pxyb.mycontrol.data.IotSceneAction
+import cn.pxyb.mycontrol.data.newTodoTask
 import org.json.JSONArray
 import org.json.JSONObject
 import cn.pxyb.mycontrol.data.OverviewData
@@ -990,6 +992,7 @@ class AppViewModel(
                 message = null,
             )
         }
+        startAssistantOverview()
     }
 
     fun sendAssistantMessage(text: String) {
@@ -1014,6 +1017,7 @@ class AppViewModel(
                                 role = "assistant",
                                 content = reply.reply,
                                 suggestions = reply.suggestions,
+                                actions = reply.actions,
                             ),
                             sending = false,
                             error = null,
@@ -1021,16 +1025,91 @@ class AppViewModel(
                     }
                 }
                 .onFailure { error ->
-                    val message = when {
-                        error is ApiException && error.code == "AI_RATE_LIMITED" -> "AI 助手请求过于频繁，请稍后再试。"
-                        error is ApiException && error.code == "AI_NOT_CONFIGURED" -> "AI 助手服务未配置，请联系管理员。"
-                        error is ApiException && error.code == "PLATFORM_SESSION_REQUIRED" -> "登录会话已失效，请重新登录。"
-                        error is ApiException -> error.message
-                        else -> "网络异常，请稍后再试。"
-                    }
-                    assistantChatMutable.update { it.copy(sending = false, error = message) }
+                    assistantChatMutable.update { it.copy(sending = false, error = mapAssistantError(error)) }
                 }
         }
+    }
+
+    private fun startAssistantOverview() {
+        val current = mutableState.value
+        if (current.user == null || current.locked) return
+        if (assistantChatMutable.value.sending || assistantChatMutable.value.messages.isNotEmpty()) return
+        assistantChatMutable.update { it.copy(sending = true, error = null) }
+        viewModelScope.launch {
+            val context = buildAssistantContext(current)
+            val turns = listOf(
+                AssistantChatTurn(
+                    role = "user",
+                    content = "请基于工作台上下文生成一份今日概览：简洁总结今天的课程、待办、未读告警和备份状态，并给出最值得先做的 1-2 件事。",
+                ),
+            )
+            runCatching { api.assistantChat(turns, context) }
+                .onSuccess { reply ->
+                    assistantChatMutable.update { state ->
+                        state.copy(
+                            messages = state.messages + AssistantChatMessageUi(
+                                role = "assistant",
+                                content = reply.reply,
+                                suggestions = reply.suggestions,
+                                actions = reply.actions,
+                            ),
+                            sending = false,
+                            error = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    assistantChatMutable.update { it.copy(sending = false, error = mapAssistantError(error)) }
+                }
+        }
+    }
+
+    fun performAssistantAction(action: AssistantActionItem): String {
+        val current = mutableState.value
+        val result = when (action.type) {
+            "create_todo" -> {
+                val title = action.title.trim()
+                if (title.isEmpty()) {
+                    "待办标题为空，无法创建。"
+                } else {
+                    saveTodo(newTodoTask(title))
+                    "已创建待办「$title」。"
+                }
+            }
+            "complete_todo" -> {
+                val title = action.title.trim()
+                val task = current.todoSnapshot.tasks.firstOrNull { it.title.trim() == title }
+                when {
+                    task == null -> "未找到匹配的待办「$title」。"
+                    task.completed -> "待办「$title」已完成。"
+                    else -> {
+                        toggleTodo(task.id)
+                        "已将待办「$title」标记为完成。"
+                    }
+                }
+            }
+            "mark_alerts_read" -> {
+                markAllAlertsRead()
+                "已将通知全部标为已读。"
+            }
+            else -> ""
+        }
+        if (result.isNotEmpty()) {
+            assistantChatMutable.update { state ->
+                state.copy(
+                    messages = state.messages + AssistantChatMessageUi(role = "assistant", content = result),
+                )
+            }
+        }
+        return result
+    }
+
+    private fun mapAssistantError(error: Throwable): String = when {
+        error is ApiException && error.code == "AI_RATE_LIMITED" -> "AI 助手请求过于频繁，请稍后再试。"
+        error is ApiException && error.code == "AI_NOT_CONFIGURED" -> "AI 助手服务未配置，请联系管理员。"
+        error is ApiException && error.code == "PLATFORM_SESSION_REQUIRED" -> "登录会话已失效，请重新登录。"
+        error is ApiException -> error.message ?: "请求失败，请稍后再试。"
+        else -> "网络异常，请稍后再试。"
     }
 
     private fun buildAssistantContext(state: AppUiState): JSONObject = JSONObject().apply {

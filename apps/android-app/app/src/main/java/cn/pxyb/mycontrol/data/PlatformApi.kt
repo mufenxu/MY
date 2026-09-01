@@ -1272,9 +1272,22 @@ class PlatformApi(
                 }
             }
         }
+        val actionArray = json.optJSONArray("actions")
+        val actions = buildList {
+            if (actionArray != null) {
+                for (i in 0 until actionArray.length()) {
+                    val item = actionArray.optJSONObject(i) ?: continue
+                    val type = item.optString("type").trim()
+                    if (type.isNotEmpty()) {
+                        add(AssistantActionItem(type = type, title = item.optString("title").trim()))
+                    }
+                }
+            }
+        }
         AssistantChatReply(
             reply = json.optString("reply"),
             suggestions = suggestions,
+            actions = actions,
         )
     }
 

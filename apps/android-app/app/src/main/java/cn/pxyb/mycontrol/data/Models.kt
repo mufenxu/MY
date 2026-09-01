@@ -456,9 +456,16 @@ data class AssistantSuggestion(
 )
 
 @Immutable
+data class AssistantActionItem(
+    val type: String,
+    val title: String = "",
+)
+
+@Immutable
 data class AssistantChatReply(
     val reply: String,
     val suggestions: List<AssistantSuggestion> = emptyList(),
+    val actions: List<AssistantActionItem> = emptyList(),
 )
 
 data class AssistantChatTurn(

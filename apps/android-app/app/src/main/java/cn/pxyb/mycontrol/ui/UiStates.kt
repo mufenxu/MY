@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.ui
 import androidx.compose.runtime.Immutable
 import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot
 
+import cn.pxyb.mycontrol.data.AssistantActionItem
 import cn.pxyb.mycontrol.data.AssistantSuggestion
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
@@ -70,6 +71,7 @@ data class AssistantChatMessageUi(
     val role: String,
     val content: String,
     val suggestions: List<AssistantSuggestion> = emptyList(),
+    val actions: List<AssistantActionItem> = emptyList(),
 )
 
 @Immutable
