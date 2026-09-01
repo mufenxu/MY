@@ -1877,9 +1877,17 @@ private fun AuthenticatedShell(
                         repositories = state.githubRepositories,
                         loaded = state.githubRepositoriesLoaded,
                         busy = state.githubVisibilityBusy,
+                        releases = state.githubReleases,
+                        releasesLoaded = state.githubReleasesLoaded,
+                        releasesRepoFullName = state.githubReleasesRepoFullName,
+                        releasesBusy = state.githubReleasesBusy,
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
                         onRefresh = viewModel::loadGitHubRepositories,
+                        onLoadReleases = { owner, repo -> viewModel.loadGitHubReleases(owner, repo) },
+                        onCreateRelease = { owner, repo, tag, name, body, draft, prerelease ->
+                            viewModel.createGitHubRelease(owner, repo, tag, name, body, draft, prerelease, onSensitiveActionConfirmation)
+                        },
                         onUpdateVisibility = { owner, repo, visibility ->
                             viewModel.updateGitHubVisibility(owner, repo, visibility, onSensitiveActionConfirmation)
                         },

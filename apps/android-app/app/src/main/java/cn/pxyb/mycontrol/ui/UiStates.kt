@@ -18,6 +18,7 @@ import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.DiagnosticData
 import cn.pxyb.mycontrol.data.ExternalApplication
+import cn.pxyb.mycontrol.data.GitHubReleaseRecord
 import cn.pxyb.mycontrol.data.GitHubRepositoryRecord
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.HomeQuickAction
@@ -63,6 +64,10 @@ data class AppEntryUiState(
     val githubProjectsOpen: Boolean,
     val githubRepositories: List<GitHubRepositoryRecord> = emptyList(),
     val githubRepositoriesLoaded: Boolean = false,
+    val githubReleases: List<GitHubReleaseRecord> = emptyList(),
+    val githubReleasesLoaded: Boolean = false,
+    val githubReleasesRepoFullName: String? = null,
+    val githubReleasesBusy: Boolean = false,
     val githubVisibilityBusy: Boolean = false,
     val globalSearchOpen: Boolean,
     val assistantOpen: Boolean,
@@ -345,6 +350,10 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     githubProjectsOpen = githubProjectsOpen,
     githubRepositories = githubRepositories,
     githubRepositoriesLoaded = githubRepositoriesLoaded,
+    githubReleases = githubReleases,
+    githubReleasesLoaded = githubReleasesLoaded,
+    githubReleasesRepoFullName = githubReleasesRepoFullName,
+    githubReleasesBusy = busyAction?.startsWith("github-release:") == true,
     githubVisibilityBusy = busyAction?.startsWith("github-visibility:") == true,
     globalSearchOpen = globalSearchOpen,
     assistantOpen = assistantOpen,

@@ -79,6 +79,9 @@ function createGithubUpstreamError(error, operation) {
     } else if (upstreamStatus === 404) {
         message = 'GitHub 仓库不存在，或当前 GH_TOKEN 无权访问该仓库';
         code = 'GITHUB_REPOSITORY_UNAVAILABLE';
+    } else if (upstreamStatus === 422) {
+        message = 'GitHub 校验失败：标签可能已存在，或请求参数不合法';
+        code = 'GITHUB_VALIDATION_FAILED';
     }
 
     const appError = new AppError(message, 502);
@@ -821,5 +824,80 @@ exports.updateRepositoryVisibility = async (owner, repo, visibility) => {
         return pickRepository(resp.data);
     } catch (err) {
         throw createGithubUpstreamError(err, '更新仓库可见性');
+    }
+};
+const GITHUB_RELEASE_FIELDS = [
+    'tag_name', 'name', 'body', 'draft', 'prerelease',
+    'published_at', 'created_at', 'html_url', 'target_commitish'
+];
+
+const pickRelease = (release) => {
+    if (!release || typeof release !== 'object') return null;
+    const picked = { assets_count: Array.isArray(release.assets) ? release.assets.length : 0 };
+    for (const field of GITHUB_RELEASE_FIELDS) {
+        if (release[field] !== undefined) picked[field] = release[field];
+    }
+    if (release.author && typeof release.author === 'object' && release.author.login) {
+        picked.author_login = release.author.login;
+    }
+    return picked;
+};
+
+exports.listReleases = async (owner, repo) => {
+    if (!owner || !repo) {
+        throw new AppError('仓库参数不完整', 400);
+    }
+    const { GH_TOKEN } = getGhOptions();
+    if (!GH_TOKEN) {
+        throw createGithubConfigurationError('列出 Releases');
+    }
+    const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/releases?per_page=30`;
+    try {
+        const resp = await axios.get(url, {
+            headers: {
+                'Accept': 'application/vnd.github+json',
+                'Authorization': `Bearer ${GH_TOKEN}`,
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
+        });
+        return Array.isArray(resp.data) ? resp.data.map(pickRelease).filter(Boolean) : [];
+    } catch (err) {
+        throw createGithubUpstreamError(err, '列出 Releases');
+    }
+};
+
+exports.createRelease = async (owner, repo, payload = {}) => {
+    if (!owner || !repo) {
+        throw new AppError('仓库参数不完整', 400);
+    }
+    const tag = String(payload.tag || '').trim();
+    if (!tag) {
+        throw new AppError('请填写 Release 标签（tag）', 400);
+    }
+    const { GH_TOKEN } = getGhOptions();
+    if (!GH_TOKEN) {
+        throw createGithubConfigurationError('创建 Release');
+    }
+    const body = {
+        tag_name: tag,
+        name: String(payload.name || '').trim() || tag,
+        draft: payload.draft === true,
+        prerelease: payload.prerelease === true,
+    };
+    const target = String(payload.target || '').trim();
+    if (target) body.target_commitish = target;
+    if (String(payload.body || '').trim()) body.body = String(payload.body).trim();
+    const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/releases`;
+    try {
+        const resp = await axios.post(url, body, {
+            headers: {
+                'Accept': 'application/vnd.github+json',
+                'Authorization': `Bearer ${GH_TOKEN}`,
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
+        });
+        return pickRelease(resp.data);
+    } catch (err) {
+        throw createGithubUpstreamError(err, '创建 Release');
     }
 };

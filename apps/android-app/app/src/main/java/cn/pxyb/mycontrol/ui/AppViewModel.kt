@@ -44,6 +44,7 @@ import cn.pxyb.mycontrol.data.DiagnosticData
 import cn.pxyb.mycontrol.data.ExternalApplication
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
 import cn.pxyb.mycontrol.data.GitHubRepositoryRecord
+import cn.pxyb.mycontrol.data.GitHubReleaseRecord
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAccountStore
 import cn.pxyb.mycontrol.data.GoogleAliasRecord
@@ -168,6 +169,9 @@ data class AppUiState(
     val ct8: Ct8Data? = null,
     val githubRepositories: List<GitHubRepositoryRecord> = emptyList(),
     val githubRepositoriesLoaded: Boolean = false,
+    val githubReleases: List<GitHubReleaseRecord> = emptyList(),
+    val githubReleasesLoaded: Boolean = false,
+    val githubReleasesRepoFullName: String? = null,
     val diagnostics: DiagnosticData? = null,
     val security: SecurityData? = null,
     val qrLoginOpen: Boolean = false,
@@ -1234,6 +1238,45 @@ class AppViewModel(
         mutableState.update { it.copy(githubRepositories = api.githubRepositories()) }
     }
 
+    fun loadGitHubReleases(owner: String, repo: String) {
+        if (mutableState.value.user == null) return
+        val fullName = "$owner/$repo"
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(githubReleasesRepoFullName = fullName, githubReleasesLoaded = false)
+            }
+            runCatching { api.githubReleases(owner, repo) }
+                .onSuccess { releases ->
+                    mutableState.update {
+                        it.copy(
+                            githubReleases = releases,
+                            githubReleasesLoaded = true,
+                            githubReleasesRepoFullName = fullName,
+                            error = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update {
+                        it.copy(githubReleasesLoaded = true, error = error.message ?: "GitHub Releases 加载失败。")
+                    }
+                }
+        }
+    }
+
+    fun createGitHubRelease(
+        owner: String,
+        repo: String,
+        tag: String,
+        name: String,
+        body: String,
+        draft: Boolean,
+        prerelease: Boolean,
+        confirmation: suspend () -> Boolean,
+    ) = runAction("github-release:$owner:$repo", "Release 已创建。", confirmation) {
+        api.createGitHubRelease(owner, repo, tag, name, body, draft, prerelease)
+        loadGitHubReleases(owner, repo)
+    }
     fun addGoogleAccount(
         primaryEmail: String,
         displayName: String,

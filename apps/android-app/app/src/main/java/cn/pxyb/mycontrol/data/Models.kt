@@ -486,3 +486,17 @@ data class GitHubRepositoryRecord(
     val updatedAt: String?,
     val archived: Boolean,
 )
+
+@Immutable
+data class GitHubReleaseRecord(
+    val tagName: String,
+    val name: String?,
+    val body: String?,
+    val draft: Boolean,
+    val prerelease: Boolean,
+    val publishedAt: String?,
+    val htmlUrl: String?,
+    val targetCommitish: String?,
+    val assetsCount: Int,
+)
+

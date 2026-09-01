@@ -254,3 +254,22 @@ exports.updateRepositoryVisibility = async (req, res, next) => {
         next(err);
     }
 };
+exports.listRepositoryReleases = async (req, res, next) => {
+    try {
+        const { owner, repo } = req.params;
+        const releases = await githubService.listReleases(owner, repo);
+        res.json({ ok: true, releases });
+    } catch (err) {
+        next(err);
+    }
+};
+
+exports.createRepositoryRelease = async (req, res, next) => {
+    try {
+        const { owner, repo } = req.params;
+        const release = await githubService.createRelease(owner, repo, req.body || {});
+        res.json({ ok: true, release });
+    } catch (err) {
+        next(err);
+    }
+};

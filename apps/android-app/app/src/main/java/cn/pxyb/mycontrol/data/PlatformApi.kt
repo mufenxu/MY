@@ -1187,6 +1187,36 @@ class PlatformApi(
         ).json.optJSONObject("repository")
         repository.toGitHubRepositoryRecord()
     }
+
+    suspend fun githubReleases(owner: String, repo: String): List<GitHubReleaseRecord> = withContext(Dispatchers.IO) {
+        execute("/apps/core/api/ct8/repos/${encodePath(owner)}/${encodePath(repo)}/releases").json
+            .optJSONArray("releases")
+            .objects()
+            .map { it.toGitHubReleaseRecord() }
+    }
+
+    suspend fun createGitHubRelease(
+        owner: String,
+        repo: String,
+        tag: String,
+        name: String,
+        body: String,
+        draft: Boolean,
+        prerelease: Boolean,
+    ): GitHubReleaseRecord = withContext(Dispatchers.IO) {
+        val payload = JSONObject()
+            .put("tag", tag)
+            .put("name", name)
+            .put("body", body)
+            .put("draft", draft)
+            .put("prerelease", prerelease)
+        val release = execute(
+            "/apps/core/api/ct8/repos/${encodePath(owner)}/${encodePath(repo)}/releases",
+            "POST",
+            payload,
+        ).json.optJSONObject("release")
+        release.toGitHubReleaseRecord()
+    }
     suspend fun runIotScene(id: String): Unit = withContext(Dispatchers.IO) {
         execute("/apps/iot/api/automations/scenes/${encodePath(id)}/run", "POST", JSONObject(), timeoutSeconds = 45)
         Unit
@@ -2055,6 +2085,17 @@ private fun JSONObject.toGitHubRepositoryRecord(): GitHubRepositoryRecord = GitH
     defaultBranch = nullableString("default_branch") ?: nullableString("defaultBranch"),
     updatedAt = nullableString("updated_at") ?: nullableString("updatedAt"),
     archived = optBoolean("archived"),
+)
+private fun JSONObject.toGitHubReleaseRecord(): GitHubReleaseRecord = GitHubReleaseRecord(
+    tagName = optString("tag_name"),
+    name = nullableString("name"),
+    body = nullableString("body"),
+    draft = optBoolean("draft"),
+    prerelease = optBoolean("prerelease"),
+    publishedAt = nullableString("published_at") ?: nullableString("created_at"),
+    htmlUrl = nullableString("html_url"),
+    targetCommitish = nullableString("target_commitish"),
+    assetsCount = optInt("assets_count", 0),
 )
 private fun JSONObject.nullableString(key: String): String? =
     takeIf { has(key) && !isNull(key) }?.optString(key)?.takeIf { it.isNotBlank() }
