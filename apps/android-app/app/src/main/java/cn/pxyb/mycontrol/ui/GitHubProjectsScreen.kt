@@ -4,8 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -26,7 +26,6 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RocketLaunch
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -77,6 +76,7 @@ fun GitHubProjectsScreen(
     var createOpen by remember { mutableStateOf(false) }
 
     val activeRepo = selectedRepo
+    val dark = isSystemInDarkTheme()
     BackHandler(enabled = activeRepo != null) { selectedRepo = null }
 
     if (activeRepo != null) {
@@ -94,35 +94,33 @@ fun GitHubProjectsScreen(
             onCreateRelease = { createOpen = true },
         )
     } else {
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(appPageContentPadding(contentPadding)),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .auroraBackdrop(dark),
+            contentPadding = appPageContentPadding(contentPadding),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            AppSecondaryHeader(
-                title = "GitHub 项目",
-                subtitle = "仓库可见性管理",
-                onBack = onBack,
-                actions = {
-                    IconButton(onClick = onRefresh, enabled = !busy) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                    }
-                },
-            )
-
+            item(key = "github-projects-header") {
+                AppSecondaryHeader(
+                    title = "GitHub 项目",
+                    subtitle = "仓库可见性管理",
+                    onBack = onBack,
+                    actions = {
+                        IconButton(onClick = onRefresh, enabled = !busy) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
+                        }
+                    },
+                )
+            }
             when {
-                !loaded -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
+                !loaded -> item(key = "github-projects-loading") {
+                    LoadingBlock("正在加载仓库")
                 }
-                repositories.isEmpty() -> GitHubEmptyState(onRefresh = onRefresh)
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
+                repositories.isEmpty() -> item(key = "github-projects-empty") {
+                    GitHubEmptyState(onRefresh = onRefresh)
+                }
+                else -> {
                     items(repositories, key = { it.fullName }) { repository ->
                         GitHubRepositoryCard(
                             repository = repository,
@@ -195,38 +193,37 @@ private fun GitHubReleasesPane(
     onRefresh: () -> Unit,
     onCreateRelease: () -> Unit,
 ) {
-    Column(
+    val dark = isSystemInDarkTheme()
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(appPageContentPadding(contentPadding)),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .auroraBackdrop(dark),
+        contentPadding = appPageContentPadding(contentPadding),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        AppSecondaryHeader(
-            title = repo.fullName,
-            subtitle = "Releases 管理",
-            onBack = onBack,
-            actions = {
-                IconButton(onClick = onRefresh, enabled = !busy) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                }
-                IconButton(onClick = onCreateRelease, enabled = !busy) {
-                    Icon(Icons.Outlined.Add, contentDescription = "新建 Release")
-                }
-            },
-        )
-
+        item(key = "github-releases-header") {
+            AppSecondaryHeader(
+                title = repo.fullName,
+                subtitle = "Releases 管理",
+                onBack = onBack,
+                actions = {
+                    IconButton(onClick = onRefresh, enabled = !busy) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
+                    }
+                    IconButton(onClick = onCreateRelease, enabled = !busy) {
+                        Icon(Icons.Outlined.Add, contentDescription = "新建 Release")
+                    }
+                },
+            )
+        }
         when {
-            !loaded -> Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
+            !loaded -> item(key = "github-releases-loading") {
+                LoadingBlock("正在加载 Releases")
             }
-            releases.isEmpty() -> GitHubReleasesEmptyState(onCreate = onCreateRelease)
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
+            releases.isEmpty() -> item(key = "github-releases-empty") {
+                GitHubReleasesEmptyState(onCreate = onCreateRelease)
+            }
+            else -> {
                 items(releases, key = { it.tagName }) { release ->
                     GitHubReleaseCard(release)
                 }
@@ -438,40 +435,40 @@ private fun ReleaseBadge(release: GitHubReleaseRecord) {
 
 @Composable
 private fun GitHubEmptyState(onRefresh: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "没有可展示的仓库",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            TextButton(onClick = onRefresh) {
-                Text("重新加载")
-            }
+        Text(
+            text = "没有可展示的仓库",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        TextButton(onClick = onRefresh) {
+            Text("重新加载")
         }
     }
 }
 
 @Composable
 private fun GitHubReleasesEmptyState(onCreate: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "还没有 Release",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            TextButton(onClick = onCreate) {
-                Text("新建 Release")
-            }
+        Text(
+            text = "还没有 Release",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        TextButton(onClick = onCreate) {
+            Text("新建 Release")
         }
     }
 }
