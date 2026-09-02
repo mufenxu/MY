@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -72,7 +73,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -99,6 +99,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.AuditInfo
@@ -351,8 +352,8 @@ fun OverviewScreen(
                 }
             }
             if (overview == null) {
-                item(key = "overview-sync", contentType = "sync") {
-                    OverviewSyncPanel(refreshing = state.refreshing)
+                item(key = "overview-loading", contentType = "loading") {
+                    OverviewLoadingSkeleton(refreshing = state.refreshing)
                 }
             } else {
                 if (isTablet) {
@@ -1753,76 +1754,193 @@ private fun OfflineSnapshotNotice(cachedAtMillis: Long?) {
     }
 }
 
+// 首页预加载骨架：overview 数据到达前，按真实区块同构渲染呼吸脉冲占位
 @Composable
-private fun OverviewSyncPanel(refreshing: Boolean) {
-    Surface(
+private fun OverviewLoadingSkeleton(refreshing: Boolean) {
+    val transition = rememberInfiniteTransition(label = "overview-loading")
+    val pulse by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 720, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "overview-loading-pulse",
+    )
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        shape = AppCardShape,
-        shadowElevation = 0.dp,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
-                Surface(
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.08f),
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    shape = MaterialTheme.shapes.medium,
-                ) {
-                    Icon(Icons.Outlined.CloudSync, contentDescription = null, modifier = Modifier.padding(10.dp).size(26.dp))
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(if (refreshing) "正在同步平台状态" else "等待平台状态", style = MaterialTheme.typography.titleLarge)
-                    Text(
-                        "聚合服务、通知和任务数据",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.68f),
-                    )
-                }
-            }
-            if (refreshing) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f),
-                )
-            }
-            HorizontalDivider(modifier = Modifier.padding(top = 18.dp), color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f))
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                HeroMetric("服务可用", "--", Modifier.weight(1f))
-                HeroMetric("平均响应", "--", Modifier.weight(1f))
-                HeroMetric("待关注", "--", Modifier.weight(1f))
-            }
-        }
+        Text(
+            text = if (refreshing) "正在同步平台状态" else "等待平台状态",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp),
+        )
+        SkeletonHeroCard(pulse)
+        SkeletonCampusCard(pulse)
+        SkeletonSectionTitle(pulse)
+        SkeletonQuickActionsCard(pulse)
+        SkeletonSectionTitle(pulse)
+        SkeletonListRowsCard(rows = 2, pulse = pulse)
+        SkeletonSectionTitle(pulse)
+        SkeletonListRowsCard(rows = 3, pulse = pulse)
     }
 }
 
 @Composable
-private fun HeroMetric(label: String, value: String, modifier: Modifier = Modifier) {
+private fun SkeletonGlassCard(content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = glassCardColor(),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun SkeletonBlock(modifier: Modifier, pulse: Float, corner: Dp = 6.dp) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(corner))
+            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f * pulse)),
+    )
+}
+
+@Composable
+private fun SkeletonMetric(pulse: Float, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                value,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(top = 2.dp)
-            )
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            SkeletonBlock(Modifier.fillMaxWidth(0.62f).height(9.dp), pulse = pulse)
+            SkeletonBlock(Modifier.fillMaxWidth(0.45f).height(16.dp), pulse = pulse)
+        }
+    }
+}
+
+@Composable
+private fun SkeletonSectionTitle(pulse: Float) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        SkeletonBlock(Modifier.width(88.dp).height(15.dp), pulse = pulse)
+        SkeletonBlock(Modifier.width(152.dp).height(10.dp), pulse = pulse)
+    }
+}
+
+@Composable
+private fun SkeletonHeroCard(pulse: Float) {
+    SkeletonGlassCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SkeletonBlock(Modifier.size(42.dp), pulse = pulse, corner = 21.dp)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                SkeletonBlock(Modifier.fillMaxWidth(0.55f).height(15.dp), pulse = pulse)
+                SkeletonBlock(Modifier.fillMaxWidth(0.7f).height(10.dp), pulse = pulse)
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SkeletonMetric(pulse = pulse, modifier = Modifier.weight(1f))
+            SkeletonMetric(pulse = pulse, modifier = Modifier.weight(1f))
+            SkeletonMetric(pulse = pulse, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun SkeletonCampusCard(pulse: Float) {
+    SkeletonGlassCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            SkeletonBlock(Modifier.size(34.dp), pulse = pulse, corner = 10.dp)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                SkeletonBlock(Modifier.fillMaxWidth(0.42f).height(13.dp), pulse = pulse)
+                SkeletonBlock(Modifier.fillMaxWidth(0.6f).height(9.dp), pulse = pulse)
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SkeletonMetric(pulse = pulse, modifier = Modifier.weight(1f))
+            SkeletonMetric(pulse = pulse, modifier = Modifier.weight(1f))
+            SkeletonMetric(pulse = pulse, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun SkeletonQuickActionsCard(pulse: Float) {
+    SkeletonGlassCard {
+        repeat(2) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                repeat(4) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(7.dp),
+                    ) {
+                        SkeletonBlock(Modifier.size(46.dp), pulse = pulse, corner = 14.dp)
+                        SkeletonBlock(Modifier.width(32.dp).height(8.dp), pulse = pulse)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SkeletonListRowsCard(rows: Int, pulse: Float) {
+    SkeletonGlassCard {
+        repeat(rows) { index ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                SkeletonBlock(Modifier.size(36.dp), pulse = pulse, corner = 11.dp)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(7.dp),
+                ) {
+                    SkeletonBlock(
+                        Modifier.fillMaxWidth(if (index % 2 == 0) 0.5f else 0.38f).height(12.dp),
+                        pulse = pulse,
+                    )
+                    SkeletonBlock(Modifier.fillMaxWidth(0.62f).height(9.dp), pulse = pulse)
+                }
+                SkeletonBlock(Modifier.width(42.dp).height(18.dp), pulse = pulse, corner = 9.dp)
+            }
         }
     }
 }
