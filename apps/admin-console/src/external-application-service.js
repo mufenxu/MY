@@ -1,5 +1,6 @@
 const ROLE_LEVELS = Object.freeze({ viewer: 1, operator: 2, super_admin: 3 });
 const OPEN_MODES = new Set(['webview', 'browser']);
+const ACCESS_KINDS = new Set(['oidc', 'direct']);
 
 function isLoopback(hostname) {
   return ['localhost', '127.0.0.1', '::1'].includes(String(hostname || '').toLowerCase());
@@ -46,12 +47,16 @@ export function normalizeExternalApplicationInput(input, { isProduction = true }
   if (!input || typeof input !== 'object') throw new TypeError('外部应用参数无效。');
   const name = String(input.name || '').trim();
   if (!name || name.length > 100) throw new TypeError('应用名称必须为 1 到 100 个字符。');
-  const autoLogin = normalizeAutoLogin(input.autoLogin, { isProduction });
-  const redirectUris = [...new Set((Array.isArray(input.redirectUris) ? input.redirectUris : [])
+  const kind = String(input.kind || 'oidc').trim().toLowerCase();
+  if (!ACCESS_KINDS.has(kind)) throw new TypeError('接入方式无效。');
+  const direct = kind === 'direct';
+  if (direct && input.autoLogin) throw new TypeError('直接打开类型不支持第三方自动登录。');
+  const autoLogin = direct ? null : normalizeAutoLogin(input.autoLogin, { isProduction });
+  const redirectUris = direct ? [] : [...new Set((Array.isArray(input.redirectUris) ? input.redirectUris : [])
     .map((value) => String(value || '').trim())
     .filter(Boolean))];
   if (redirectUris.length > 10) throw new TypeError('回调地址最多 10 个。');
-  if (redirectUris.length === 0 && !autoLogin) throw new TypeError('至少需要一个回调地址。');
+  if (redirectUris.length === 0 && !autoLogin && !direct) throw new TypeError('至少需要一个回调地址。');
   if (redirectUris.some((value) => value.includes('*'))) throw new TypeError('回调地址禁止使用通配符。');
   const normalizedRedirects = redirectUris.map((value) => secureHttpUrl(value, '回调地址', { isProduction }));
   const requiredRole = String(input.requiredRole || 'viewer').trim().toLowerCase();
@@ -59,6 +64,7 @@ export function normalizeExternalApplicationInput(input, { isProduction = true }
   const openMode = String(input.openMode || 'webview').trim().toLowerCase();
   if (!OPEN_MODES.has(openMode)) throw new TypeError('打开方式无效。');
   return {
+    kind,
     name,
     description: String(input.description || '').trim().slice(0, 500),
     redirectUris: normalizedRedirects,

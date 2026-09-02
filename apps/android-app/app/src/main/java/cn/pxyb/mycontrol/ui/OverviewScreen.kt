@@ -152,12 +152,16 @@ fun OverviewScreen(
     val overview = state.overview
     val activeIncidents = remember(state.incidents) { state.incidents.filter { it.status != "resolved" } }
     val visibleIncidents = remember(activeIncidents) { activeIncidents.take(3) }
-    val sortedServices = remember(overview?.services) {
-        overview?.services.orEmpty().sortedWith(compareBy<ServiceInfo> { servicePriority(it.state) }.thenBy { it.name })
+    // 通知服务(notify)与 CT8 自动化(ct8-automation)没有管理后台入口，首页“服务监控”不展示这两项
+    val homeServices = remember(overview?.services) {
+        overview?.services.orEmpty().filterNot { it.id == "notify" || it.id == "ct8-automation" }
+    }
+    val sortedServices = remember(homeServices) {
+        homeServices.sortedWith(compareBy<ServiceInfo> { servicePriority(it.state) }.thenBy { it.name })
     }
     val recentAudits = remember(overview?.audits) { overview?.audits.orEmpty().take(5) }
-    val (healthyCount, monitoredCount, averageLatencyMs) = remember(overview?.services) {
-        val services = overview?.services.orEmpty()
+    val (healthyCount, monitoredCount, averageLatencyMs) = remember(homeServices) {
+        val services = homeServices
         val monitored = services.count { it.state != "unmonitored" }
         val healthy = services.count { it.state == "healthy" }
         val average = services.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
@@ -202,6 +206,35 @@ fun OverviewScreen(
 
     fun openExternalApplication(application: ExternalApplication) {
         if (!application.canAccess || openingExternalApplicationId != null) return
+        // 直接打开类型不需要平台统一认证：跳过登录票据生成，仅打开网址本身。
+        if (application.kind == "direct") {
+            openingExternalApplicationId = application.id
+            externalApplicationOpenError = null
+            val targetUrl = application.launchUrl.ifBlank { null }
+            if (targetUrl == null) {
+                openingExternalApplicationId = null
+                externalApplicationOpenError = "该外部应用未配置访问网址。"
+            } else {
+                try {
+                    if (application.openMode == "browser") {
+                        openBrowserLink(context, targetUrl)
+                    } else {
+                        openPlatformWebLink(
+                            context = context,
+                            url = targetUrl,
+                            title = application.name,
+                            trustedDownloadUrl = targetUrl,
+                        )
+                    }
+                } catch (error: Exception) {
+                    externalApplicationOpenError = error.message?.takeIf { it.isNotBlank() }
+                        ?: "打开外部应用失败，请稍后重试。"
+                } finally {
+                    openingExternalApplicationId = null
+                }
+            }
+            return
+        }
         openingExternalApplicationId = application.id
         externalApplicationOpenError = null
         scope.launch {
@@ -2053,7 +2086,10 @@ private fun ServiceRow(
             if (opening) {
                 ServiceJumpIndicator()
             } else {
-                StatusBadge(service.state)
+                // 未配置健康检查（unmonitored）时不再显示“正常/异常/未确认”，避免误导。
+                if (service.state != "unmonitored") {
+                    StatusBadge(service.state)
+                }
                 if (hasAdminUrl) {
                     Box(
                         modifier = Modifier
@@ -2233,7 +2269,11 @@ private fun ExternalApplicationRow(
                         }
                     }
                     Text(
-                        text = if (application.canAccess) "最低权限 ${externalRoleLabel(application.requiredRole)}" else "当前账号无权访问",
+                        text = when {
+                            !application.canAccess -> "当前账号无权访问"
+                            application.kind == "direct" -> "无需平台登录 · 直接打开"
+                            else -> "最低权限 ${externalRoleLabel(application.requiredRole)}"
+                        },
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -2245,7 +2285,10 @@ private fun ExternalApplicationRow(
             if (opening) {
                 ServiceJumpIndicator()
             } else {
-                StatusBadge(application.health.state)
+                // 外部应用未设置健康检查地址时不显示在线状态角标。
+                if (!application.healthUrl.isNullOrBlank() && application.health.state != "unmonitored") {
+                    StatusBadge(application.health.state)
+                }
                 if (application.canAccess) {
                     Box(
                         modifier = Modifier

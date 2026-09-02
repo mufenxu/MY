@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,10 +19,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.ForkRight
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
@@ -42,10 +46,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
+import cn.pxyb.mycontrol.data.GitHubProfileRecord
 import cn.pxyb.mycontrol.data.GitHubReleaseRecord
 import cn.pxyb.mycontrol.data.GitHubRepositoryRecord
 import cn.pxyb.mycontrol.ui.theme.Amber
@@ -60,6 +71,8 @@ fun GitHubProjectsScreen(
     repositories: List<GitHubRepositoryRecord>,
     loaded: Boolean,
     busy: Boolean,
+    profile: GitHubProfileRecord?,
+    profileLoaded: Boolean,
     releases: List<GitHubReleaseRecord>,
     releasesLoaded: Boolean,
     releasesRepoFullName: String?,
@@ -104,7 +117,7 @@ fun GitHubProjectsScreen(
             item(key = "github-projects-header") {
                 AppSecondaryHeader(
                     title = "GitHub 项目",
-                    subtitle = "仓库可见性管理",
+                    subtitle = "账号与仓库管理",
                     onBack = onBack,
                     actions = {
                         IconButton(onClick = onRefresh, enabled = !busy) {
@@ -112,6 +125,17 @@ fun GitHubProjectsScreen(
                         }
                     },
                 )
+            }
+            when {
+                !profileLoaded && profile == null -> item(key = "github-account-loading") {
+                    LoadingBlock("正在加载账号信息")
+                }
+                profile != null -> item(key = "github-account-profile") {
+                    GitHubAccountCard(profile = profile)
+                }
+                repositories.isNotEmpty() -> item(key = "github-account-summary") {
+                    GitHubRepositoriesSummaryCard(repositories = repositories)
+                }
             }
             when {
                 !loaded -> item(key = "github-projects-loading") {
@@ -345,11 +369,16 @@ private fun GitHubRepositoryCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 VisibilityBadge(repository.visibility)
+                if (repository.archived) {
+                    StatusBadge(label = "已归档", foreground = Amber, background = AmberPale)
+                }
                 repository.language?.let { language ->
                     Text(
                         text = language,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
@@ -359,6 +388,35 @@ private fun GitHubRepositoryCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+            if (repository.starCount > 0 || repository.forkCount > 0 || repository.fork) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (repository.starCount > 0) {
+                        GitHubMetricItem(
+                            icon = Icons.Filled.Star,
+                            tint = Amber,
+                            text = repository.starCount.toString(),
+                        )
+                    }
+                    if (repository.forkCount > 0) {
+                        GitHubMetricItem(
+                            icon = Icons.Outlined.ForkRight,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = repository.forkCount.toString(),
+                        )
+                    }
+                    if (repository.fork) {
+                        Text(
+                            text = "Fork 仓库",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
@@ -391,6 +449,177 @@ private fun GitHubRepositoryCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun GitHubMetricItem(icon: ImageVector, tint: Color, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(14.dp),
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun GitHubAccountCard(profile: GitHubProfileRecord) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = glassCardColor(),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+        shadowElevation = 0.dp,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                GitHubAvatar(name = profile.login, avatarUrl = profile.avatarUrl, size = 46.dp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = profile.name?.takeIf { it.isNotBlank() } ?: profile.login,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "@${profile.login} · 当前 GitHub 账号",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    profile.bio?.takeIf { it.isNotBlank() }?.let { bio ->
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = bio,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                MetricCell(
+                    label = "公开仓库",
+                    value = profile.publicRepos?.toString() ?: "--",
+                    modifier = Modifier.weight(1f),
+                )
+                MetricCell(
+                    label = "粉丝",
+                    value = profile.followers?.toString() ?: "--",
+                    modifier = Modifier.weight(1f),
+                )
+                MetricCell(
+                    label = "关注",
+                    value = profile.following?.toString() ?: "--",
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GitHubRepositoriesSummaryCard(repositories: List<GitHubRepositoryRecord>) {
+    val owner = repositories.first().ownerName()
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = glassCardColor(),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+        shadowElevation = 0.dp,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                GitHubAvatar(name = owner, avatarUrl = null, size = 46.dp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = owner,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "GitHub 账号资料暂不可用，以下为仓库列表统计",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                MetricCell(
+                    label = "仓库",
+                    value = repositories.size.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+                MetricCell(
+                    label = "公开",
+                    value = repositories.count { !it.isPrivate }.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+                MetricCell(
+                    label = "私有",
+                    value = repositories.count { it.isPrivate }.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GitHubAvatar(name: String, avatarUrl: String?, size: Dp) {
+    if (avatarUrl.isNullOrBlank()) {
+        GitHubInitialAvatar(name = name, size = size)
+        return
+    }
+    SubcomposeAsyncImage(
+        model = avatarUrl,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape),
+    ) {
+        when (painter.state) {
+            is AsyncImagePainter.State.Success -> SubcomposeAsyncImageContent()
+            else -> GitHubInitialAvatar(name = name, size = size)
+        }
+    }
+}
+
+@Composable
+private fun GitHubInitialAvatar(name: String, size: Dp) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(OceanPale),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = name.take(1).uppercase(),
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = Ocean,
+        )
     }
 }
 

@@ -10,6 +10,7 @@ const {
     updateSecret,
     manageSecretCache,
     listRepositories,
+    getProfile,
     updateRepositoryVisibility,
     listRepositoryReleases,
     createRepositoryRelease
@@ -47,6 +48,7 @@ function createCt8Router({ legacy = false } = {}) {
     router.post('/secret/cache', auth.verifyToken, ct8ManageAccess, manageSecretCache);
 
     router.get('/repos', auth.verifyToken, ct8ViewAccess, listRepositories);
+    router.get('/profile', auth.verifyToken, ct8ViewAccess, getProfile);
     router.get('/repos/:owner/:repo/releases', auth.verifyToken, ct8ViewAccess, listRepositoryReleases);
     router.post('/repos/:owner/:repo/releases', auth.verifyToken, ct8ManageAccess, createRepositoryRelease);
     router.patch('/repos/:owner/:repo/visibility', auth.verifyToken, ct8ManageAccess, updateRepositoryVisibility);

@@ -51,6 +51,31 @@ test('development permits loopback HTTP but rejects public HTTP', () => {
   }, { isProduction: false }), /HTTPS/);
 });
 
+test('direct applications need only a name and URL and reject auto-login', () => {
+  const normalized = normalizeExternalApplicationInput({
+    kind: 'direct',
+    name: '直接打开站点',
+    description: '无需登录的公开页面',
+    launchUrl: 'https://docs.example.com',
+    requiredRole: 'viewer',
+    openMode: 'webview',
+    enabled: true,
+  }, { isProduction: true });
+  assert.equal(normalized.kind, 'direct');
+  assert.deepEqual(normalized.redirectUris, []);
+  assert.equal(normalized.autoLogin, null);
+  assert.equal(normalized.launchUrl, 'https://docs.example.com/');
+  assert.throws(() => normalizeExternalApplicationInput({
+    ...normalized,
+    autoLogin: {
+      loginUrl: 'https://docs.example.com/login',
+      username: 'account',
+      password: 'secret',
+      homeUrl: null,
+    },
+  }, { isProduction: true }), /直接打开类型/);
+});
+
 test('role access follows existing viewer operator super-admin order', () => {
   const application = { requiredRole: 'operator', enabled: true };
   assert.equal(roleCanAccessExternalApplication('viewer', application), false);

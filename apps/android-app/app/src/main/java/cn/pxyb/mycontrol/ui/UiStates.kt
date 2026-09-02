@@ -20,6 +20,7 @@ import cn.pxyb.mycontrol.data.DiagnosticData
 import cn.pxyb.mycontrol.data.ExternalApplication
 import cn.pxyb.mycontrol.data.GitHubReleaseRecord
 import cn.pxyb.mycontrol.data.GitHubRepositoryRecord
+import cn.pxyb.mycontrol.data.GitHubProfileRecord
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
@@ -64,6 +65,8 @@ data class AppEntryUiState(
     val githubProjectsOpen: Boolean,
     val githubRepositories: List<GitHubRepositoryRecord> = emptyList(),
     val githubRepositoriesLoaded: Boolean = false,
+    val githubProfile: GitHubProfileRecord? = null,
+    val githubProfileLoaded: Boolean = false,
     val githubReleases: List<GitHubReleaseRecord> = emptyList(),
     val githubReleasesLoaded: Boolean = false,
     val githubReleasesRepoFullName: String? = null,
@@ -350,6 +353,8 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     githubProjectsOpen = githubProjectsOpen,
     githubRepositories = githubRepositories,
     githubRepositoriesLoaded = githubRepositoriesLoaded,
+    githubProfile = githubProfile,
+    githubProfileLoaded = githubProfileLoaded,
     githubReleases = githubReleases,
     githubReleasesLoaded = githubReleasesLoaded,
     githubReleasesRepoFullName = githubReleasesRepoFullName,

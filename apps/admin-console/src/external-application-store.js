@@ -105,6 +105,7 @@ function serializeDates(record) {
 function publicApplication(record) {
   const result = serializeDates(record);
   if (!result) return null;
+  if (result.kind !== 'direct') result.kind = result.kind || 'oidc';
   delete result.clientSecretHash;
   if (result.autoLogin) {
     result.autoLogin = {
@@ -135,6 +136,7 @@ function applicationRecord(input, {
 }) {
   return {
     id,
+    kind: String(input.kind || 'oidc'),
     name: String(input.name || '').trim(),
     description: String(input.description || '').trim(),
     clientId,
@@ -156,6 +158,7 @@ function applicationRecord(input, {
 
 function applicationPatch(input, updatedAt, { encryptSecret, existingAutoLogin } = {}) {
   const patch = { updatedAt, updatedBy: String(input.actor || 'system') };
+  if ('kind' in input) patch.kind = String(input.kind || 'oidc');
   for (const key of ['name', 'description', 'launchUrl', 'healthUrl', 'requiredRole', 'openMode']) {
     if (key in input) patch[key] = String(input[key] || '').trim() || (key === 'healthUrl' ? null : '');
   }
@@ -189,20 +192,22 @@ export function createMemoryExternalApplicationStore({
     async createApplication(input) {
       const id = idFactory();
       const clientId = clientIdFactory();
-      const clientSecret = secretFactory();
+      const clientSecret = input.kind === 'direct' ? null : secretFactory();
       const timestamp = now().toISOString();
       const record = applicationRecord(input, {
         id,
         clientId,
-        clientSecretHash: await hashSecret(clientSecret),
-        clientSecretHint: secretHint(clientSecret),
+        clientSecretHash: clientSecret ? await hashSecret(clientSecret) : null,
+        clientSecretHint: clientSecret ? secretHint(clientSecret) : null,
         createdAt: timestamp,
         updatedAt: timestamp,
         encryptSecret,
       });
       applications.set(id, record);
       clientIndex.set(clientId, id);
-      return { application: publicApplication(record), clientSecret };
+      return clientSecret
+        ? { application: publicApplication(record), clientSecret }
+        : { application: publicApplication(record) };
     },
 
     async listApplications() {
@@ -336,19 +341,21 @@ export async function createMongoExternalApplicationStore({
 
   return {
     async createApplication(input) {
-      const clientSecret = crypto.randomBytes(32).toString('base64url');
+      const clientSecret = input.kind === 'direct' ? null : crypto.randomBytes(32).toString('base64url');
       const timestamp = new Date();
       const record = applicationRecord(input, {
         id: crypto.randomUUID(),
         clientId: `my_${crypto.randomBytes(18).toString('base64url')}`,
-        clientSecretHash: await hashSecret(clientSecret),
-        clientSecretHint: secretHint(clientSecret),
+        clientSecretHash: clientSecret ? await hashSecret(clientSecret) : null,
+        clientSecretHint: clientSecret ? secretHint(clientSecret) : null,
         createdAt: timestamp,
         updatedAt: timestamp,
         encryptSecret,
       });
       await applications.insertOne(record);
-      return { application: publicApplication(record), clientSecret };
+      return clientSecret
+        ? { application: publicApplication(record), clientSecret }
+        : { application: publicApplication(record) };
     },
 
     async listApplications() {

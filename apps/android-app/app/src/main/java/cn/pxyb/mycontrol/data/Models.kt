@@ -99,6 +99,7 @@ data class ExternalApplicationHealth(
 @Immutable
 data class ExternalApplication(
     val id: String,
+    val kind: String,
     val name: String,
     val description: String,
     val launchUrl: String,
@@ -484,7 +485,22 @@ data class GitHubRepositoryRecord(
     val language: String?,
     val defaultBranch: String?,
     val updatedAt: String?,
+    val starCount: Int = 0,
+    val forkCount: Int = 0,
+    val fork: Boolean = false,
     val archived: Boolean,
+)
+
+@Immutable
+data class GitHubProfileRecord(
+    val login: String,
+    val name: String?,
+    val avatarUrl: String?,
+    val htmlUrl: String?,
+    val bio: String?,
+    val publicRepos: Int?,
+    val followers: Int?,
+    val following: Int?,
 )
 
 @Immutable

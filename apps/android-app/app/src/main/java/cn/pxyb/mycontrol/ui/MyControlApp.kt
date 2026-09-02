@@ -105,6 +105,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -163,6 +164,7 @@ import cn.pxyb.mycontrol.data.AppThemePreference
 import cn.pxyb.mycontrol.data.AssistantButtonPreferences
 import cn.pxyb.mycontrol.data.AssistantPreferences
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -338,6 +340,7 @@ fun MyControlApp(
                         onPasskeyRequest,
                         onPasskeyRegistrationRequest,
                         onBiometricConfirmation,
+                        onSessionProtection,
                         onSensitiveActionConfirmation,
                         notificationsEnabled,
                         onRequestNotifications,
@@ -1511,6 +1514,7 @@ private fun AuthenticatedShell(
     onPasskeyRequest: suspend (String) -> String,
     onPasskeyRegistrationRequest: suspend (String) -> String,
     onBiometricConfirmation: suspend () -> Boolean,
+    onSessionProtection: suspend () -> Boolean,
     onSensitiveActionConfirmation: suspend () -> Boolean,
     notificationsEnabled: Boolean,
     onRequestNotifications: () -> Unit,
@@ -1834,6 +1838,7 @@ private fun AuthenticatedShell(
                 }
                 composable(AppRoute.Account) {
                     val accountState by viewModel.accountManagementState.collectAsStateWithLifecycle()
+                    val accountScope = rememberCoroutineScope()
                     AccountManagementScreen(
                         state = accountState,
                         contentPadding = contentPadding,
@@ -1849,7 +1854,16 @@ private fun AuthenticatedShell(
                         onRegisterPasskey = viewModel::registerPasskey,
                         onDeletePasskey = viewModel::deletePasskey,
                         onRegisterPasskeyRequest = onPasskeyRegistrationRequest,
-                        onSetAppLockEnabled = viewModel::setAppLockEnabled,
+                        onSetAppLockEnabled = { enabled ->
+                            if (enabled) {
+                                // 开启“打开应用时验证身份”前，先完成一次设备身份验证并把会话绑定到认证密钥
+                                accountScope.launch {
+                                    if (onSessionProtection()) viewModel.setAppLockEnabled(true)
+                                }
+                            } else {
+                                viewModel.setAppLockEnabled(false)
+                            }
+                        },
                     )
                 }
                 composable(AppRoute.GoogleAccounts) {
@@ -1877,13 +1891,15 @@ private fun AuthenticatedShell(
                         repositories = state.githubRepositories,
                         loaded = state.githubRepositoriesLoaded,
                         busy = state.githubVisibilityBusy,
+                        profile = state.githubProfile,
+                        profileLoaded = state.githubProfileLoaded,
                         releases = state.githubReleases,
                         releasesLoaded = state.githubReleasesLoaded,
                         releasesRepoFullName = state.githubReleasesRepoFullName,
                         releasesBusy = state.githubReleasesBusy,
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
-                        onRefresh = viewModel::loadGitHubRepositories,
+                        onRefresh = viewModel::refreshGitHubProjects,
                         onLoadReleases = { owner, repo -> viewModel.loadGitHubReleases(owner, repo) },
                         onCreateRelease = { owner, repo, tag, name, body, draft, prerelease ->
                             viewModel.createGitHubRelease(owner, repo, tag, name, body, draft, prerelease, onSensitiveActionConfirmation)

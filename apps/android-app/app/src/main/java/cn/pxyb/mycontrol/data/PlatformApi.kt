@@ -1174,6 +1174,12 @@ class PlatformApi(
             .map { it.toGitHubRepositoryRecord() }
     }
 
+    suspend fun githubProfile(): GitHubProfileRecord? = withContext(Dispatchers.IO) {
+        execute("/apps/core/api/ct8/profile").json
+            .optJSONObject("profile")
+            ?.toGitHubProfileRecord()
+    }
+
     suspend fun updateGitHubVisibility(
         owner: String,
         repo: String,
@@ -1591,6 +1597,7 @@ internal fun parseExternalApplications(json: JSONObject): List<ExternalApplicati
         val health = item.optJSONObject("health") ?: JSONObject()
         ExternalApplication(
             id = item.optString("id"),
+            kind = item.optString("kind", "oidc"),
             name = item.optString("name", "外部应用"),
             description = item.optString("description"),
             launchUrl = item.optString("launchUrl"),
@@ -2084,7 +2091,20 @@ private fun JSONObject.toGitHubRepositoryRecord(): GitHubRepositoryRecord = GitH
     language = nullableString("language"),
     defaultBranch = nullableString("default_branch") ?: nullableString("defaultBranch"),
     updatedAt = nullableString("updated_at") ?: nullableString("updatedAt"),
+    starCount = optInt("stargazers_count", 0),
+    forkCount = optInt("forks_count", 0),
+    fork = optBoolean("fork"),
     archived = optBoolean("archived"),
+)
+private fun JSONObject.toGitHubProfileRecord(): GitHubProfileRecord = GitHubProfileRecord(
+    login = optString("login"),
+    name = nullableString("name"),
+    avatarUrl = nullableString("avatar_url") ?: nullableString("avatarUrl"),
+    htmlUrl = nullableString("html_url") ?: nullableString("htmlUrl"),
+    bio = nullableString("bio"),
+    publicRepos = nullableInt("public_repos"),
+    followers = nullableInt("followers"),
+    following = nullableInt("following"),
 )
 private fun JSONObject.toGitHubReleaseRecord(): GitHubReleaseRecord = GitHubReleaseRecord(
     tagName = optString("tag_name"),
@@ -2099,6 +2119,9 @@ private fun JSONObject.toGitHubReleaseRecord(): GitHubReleaseRecord = GitHubRele
 )
 private fun JSONObject.nullableString(key: String): String? =
     takeIf { has(key) && !isNull(key) }?.optString(key)?.takeIf { it.isNotBlank() }
+
+private fun JSONObject.nullableInt(key: String): Int? =
+    takeIf { has(key) && !isNull(key) }?.optInt(key)
 
 private fun JSONObject.displayString(key: String): String? = opt(key)
     ?.takeUnless { it == JSONObject.NULL }

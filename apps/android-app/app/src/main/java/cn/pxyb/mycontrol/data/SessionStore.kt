@@ -27,6 +27,7 @@ class SessionStore(context: Context) {
         } else if (preferences.contains(KEY_COOKIE) && storedVersion != STORAGE_VERSION) {
             clearSessionData()
         }
+        preserveExistingLockDefault()
     }
 
     fun readCookie(): String? {
@@ -76,11 +77,12 @@ class SessionStore(context: Context) {
         val now = System.currentTimeMillis()
         val edit = preferences.edit()
             .putInt(KEY_STORAGE_VERSION, STORAGE_VERSION)
-            .putString(KEY_COOKIE, encryptCookie(cookie, keyAlias, userAuthenticationRequired = true))
             .putLong(KEY_EXPIRES_AT, expiresAtMillis)
             .putLong(KEY_LAST_USED_AT, now)
             .putLong(KEY_IDLE_TIMEOUT, idleTimeoutMinutes.coerceAtLeast(1) * 60_000L)
-        if (!isLockEnabled()) {
+        if (isLockEnabled()) {
+            edit.putString(KEY_COOKIE, encryptCookie(cookie, keyAlias, userAuthenticationRequired = true))
+        } else {
             edit.putString(
                 KEY_UNLOCKED_COOKIE,
                 encryptCookie(cookie, unlockedKeyAlias, userAuthenticationRequired = false),
@@ -154,24 +156,29 @@ class SessionStore(context: Context) {
         return sessionPresent
     }
 
-    fun isLockEnabled(): Boolean = preferences.getBoolean(KEY_LOCK_ENABLED, true)
+    fun isLockEnabled(): Boolean = preferences.getBoolean(KEY_LOCK_ENABLED, false)
 
     fun setLockEnabled(enabled: Boolean) {
-        val cookie = if (enabled) null else activeCookie ?: readCookie()
-        preferences.edit()
-            .putBoolean(KEY_LOCK_ENABLED, enabled)
-            .apply()
-        if (enabled) {
-            preferences.edit().remove(KEY_UNLOCKED_COOKIE).remove(KEY_PLAIN_COOKIE).apply()
-        } else if (!cookie.isNullOrBlank()) {
-            preferences.edit()
-                .putString(
-                    KEY_UNLOCKED_COOKIE,
-                    encryptCookie(cookie, unlockedKeyAlias, userAuthenticationRequired = false),
-                )
-                .remove(KEY_PLAIN_COOKIE)
-                .apply()
+        val cookie = activeCookie ?: readCookie()
+        if (cookie.isNullOrBlank()) {
+            preferences.edit().putBoolean(KEY_LOCK_ENABLED, enabled).apply()
+            return
         }
+        val edit = preferences.edit().putBoolean(KEY_LOCK_ENABLED, enabled)
+        if (enabled) {
+            // 开启“打开应用时验证身份”时，把会话改存到认证绑定密钥下；
+            // 调用方需先完成指纹/PIN 验证，否则加密会抛出 UserNotAuthenticatedException。
+            edit.putString(KEY_COOKIE, encryptCookie(cookie, keyAlias, userAuthenticationRequired = true))
+                .remove(KEY_UNLOCKED_COOKIE)
+                .remove(KEY_PLAIN_COOKIE)
+        } else {
+            edit.putString(
+                KEY_UNLOCKED_COOKIE,
+                encryptCookie(cookie, unlockedKeyAlias, userAuthenticationRequired = false),
+            )
+                .remove(KEY_PLAIN_COOKIE)
+        }
+        edit.apply()
     }
 
     private fun encryptCookie(cookie: String, alias: String, userAuthenticationRequired: Boolean): String {
@@ -205,6 +212,25 @@ class SessionStore(context: Context) {
             }.onSuccess { edit.putString(KEY_UNLOCKED_COOKIE, it) }
         }
         edit.remove(KEY_PLAIN_COOKIE).apply()
+    }
+
+    private fun preserveExistingLockDefault() {
+        // 新版默认关闭“打开应用时验证身份”。仅对从未改动过开关、且只存有认证绑定副本的
+        // 存量有效会话显式保留“开启”，避免升级后会话被判定失效；新安装走新默认（关闭）。
+        if (preferences.contains(KEY_LOCK_ENABLED)) return
+        if (preferences.getInt(KEY_STORAGE_VERSION, 0) != STORAGE_VERSION) return
+        val hasAuthBoundSession = !preferences.getString(KEY_COOKIE, null).isNullOrBlank()
+        val hasUnlockedCopy = !preferences.getString(KEY_UNLOCKED_COOKIE, null).isNullOrBlank()
+        if (!hasAuthBoundSession || hasUnlockedCopy) return
+        val expiresAt = preferences.getLong(KEY_EXPIRES_AT, 0L)
+        val lastUsedAt = preferences.getLong(KEY_LAST_USED_AT, 0L)
+        val idleTimeout = preferences.getLong(KEY_IDLE_TIMEOUT, 0L)
+        val now = System.currentTimeMillis()
+        val sessionValid = expiresAt > now && lastUsedAt > 0L && idleTimeout > 0L &&
+            lastUsedAt + idleTimeout > now
+        if (sessionValid) {
+            preferences.edit().putBoolean(KEY_LOCK_ENABLED, true).apply()
+        }
     }
 
     private fun getOrCreateKey(alias: String, userAuthenticationRequired: Boolean): SecretKey {

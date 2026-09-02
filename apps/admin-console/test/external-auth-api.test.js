@@ -211,6 +211,44 @@ test('external application OIDC flow registers, launches, exchanges, and rejects
   });
 });
 
+test('direct external applications launch straight to the configured URL without secrets', async () => {
+  const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
+  const externalApplicationStore = createMemoryExternalApplicationStore();
+  const app = createApp({ config, externalApplicationStore });
+
+  await withFetchServer(app, async (origin) => {
+    const createdResponse = await fetch(`${origin}/api/external-apps`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
+      body: JSON.stringify({
+        kind: 'direct',
+        name: '直接打开站点',
+        launchUrl: 'https://docs.example.com',
+        healthUrl: null,
+        requiredRole: 'viewer',
+        openMode: 'webview',
+        enabled: true,
+      }),
+    });
+    assert.equal(createdResponse.status, 201);
+    const created = await createdResponse.json();
+    assert.equal(created.application.kind, 'direct');
+    assert.equal('clientSecret' in created, false);
+    assert.deepEqual(created.application.redirectUris, []);
+
+    const launchResponse = await fetch(`${origin}/api/external-apps/${created.application.id}/launch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
+      body: '{}',
+    });
+    assert.equal(launchResponse.status, 201);
+    const launch = await launchResponse.json();
+    assert.equal(launch.loginUrl, 'https://docs.example.com/');
+    assert.equal(launch.openMode, 'webview');
+    assert.equal(launch.autoLogin, null);
+  });
+});
+
 test('unauthenticated OAuth authorization starts at the dedicated identity login page', async () => {
   const config = {
     ...loadConfig({ NODE_ENV: 'development' }),

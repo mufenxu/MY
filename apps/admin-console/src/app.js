@@ -1729,7 +1729,9 @@ export function createApp({
       let loginUrl;
       let expiresAt = null;
       let autoLogin = null;
-      if (application.autoLogin) {
+      if (application.kind === 'direct') {
+        loginUrl = application.launchUrl;
+      } else if (application.autoLogin) {
         const secrets = await externalApplications.revealApplicationSecrets(application.id);
         autoLogin = secrets?.autoLogin || null;
         loginUrl = application.autoLogin.loginUrl;

@@ -766,7 +766,8 @@ exports.manageSecretCache = async (action, secret_name, secret_value, updated_by
 
 const GITHUB_REPOSITORY_FIELDS = [
     'name', 'full_name', 'description', 'private', 'visibility', 'html_url',
-    'fork', 'archived', 'language', 'default_branch', 'updated_at'
+    'fork', 'archived', 'language', 'default_branch', 'updated_at',
+    'stargazers_count', 'forks_count'
 ];
 
 const pickRepository = (repo) => {
@@ -795,6 +796,40 @@ exports.listRepositories = async () => {
         return Array.isArray(resp.data) ? resp.data.map(pickRepository).filter(Boolean) : [];
     } catch (err) {
         throw createGithubUpstreamError(err, '列出仓库');
+    }
+};
+
+const GITHUB_PROFILE_FIELDS = [
+    'login', 'name', 'avatar_url', 'html_url', 'bio',
+    'public_repos', 'followers', 'following', 'created_at'
+];
+
+const pickProfile = (user) => {
+    if (!user || typeof user !== 'object') return null;
+    const picked = {};
+    for (const field of GITHUB_PROFILE_FIELDS) {
+        if (user[field] !== undefined) picked[field] = user[field];
+    }
+    return picked;
+};
+
+exports.getProfile = async () => {
+    const { GH_TOKEN } = getGhOptions();
+    if (!GH_TOKEN) {
+        throw createGithubConfigurationError('读取账号信息');
+    }
+    const url = 'https://api.github.com/user';
+    try {
+        const resp = await axios.get(url, {
+            headers: {
+                'Accept': 'application/vnd.github+json',
+                'Authorization': `Bearer ${GH_TOKEN}`,
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
+        });
+        return pickProfile(resp.data);
+    } catch (err) {
+        throw createGithubUpstreamError(err, '读取账号信息');
     }
 };
 

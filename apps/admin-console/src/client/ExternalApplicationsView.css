@@ -30,8 +30,11 @@
 .external-open-button:disabled, .external-admin-actions button:disabled { cursor: not-allowed; opacity: 0.5; }
 .external-app-empty { display: flex; grid-column: 1 / -1; min-height: 220px; align-items: center; justify-content: center; flex-direction: column; gap: 7px; color: var(--muted); border: 1px dashed var(--line-strong); border-radius: 8px; }
 .external-app-empty strong { color: var(--ink); }
-.external-app-dialog, .external-secret-dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; padding: 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow-strong); }
-.external-app-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.external-app-dialog, .external-secret-dialog { width: min(720px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 12px; background: var(--panel-solid); box-shadow: var(--shadow-strong); }
+.external-app-dialog { display: flex; max-height: min(680px, calc(100vh - 32px)); max-height: min(680px, calc(100dvh - 32px)); min-height: 0; flex-direction: column; overflow: hidden; padding: 0; }
+.external-app-dialog > header { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 16px; margin: 0; padding: 20px 20px 0; }
+.external-app-dialog > form { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: hidden; }
+.external-app-form-scroll { flex: 1 1 auto; min-height: 0; padding: 16px 20px 4px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .external-app-dialog > header > div { display: flex; align-items: center; gap: 10px; }
 .external-app-dialog > header > div > span { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 8px; background: var(--panel-muted); color: var(--blue); }
 .external-app-dialog h2, .external-app-dialog p { margin: 0; }
@@ -51,8 +54,15 @@
 .external-app-toggle > span { display: flex; flex-direction: column; gap: 2px; }
 .external-app-toggle small { color: var(--muted); font-weight: 500; }
 .external-app-toggle input { width: 20px; height: 20px; padding: 0; accent-color: var(--blue); }
-.external-app-dialog form > footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
-.external-secret-dialog { display: flex; width: min(520px, calc(100vw - 32px)); align-items: center; flex-direction: column; gap: 12px; text-align: center; }
+.external-app-kind-field { display: flex; grid-column: 1 / -1; min-width: 0; flex-direction: column; gap: 6px; color: var(--ink); font-size: var(--type-caption); font-weight: 700; }
+.external-app-kind-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.external-app-kind-options button { display: flex; align-items: flex-start; flex-direction: column; gap: 3px; padding: 10px 12px; color: var(--muted); background: var(--panel-muted); border: 1px solid var(--line); border-radius: 9px; cursor: pointer; text-align: left; }
+.external-app-kind-options button strong { color: inherit; font-size: var(--type-caption); font-weight: 800; }
+.external-app-kind-options button small { color: inherit; font-weight: 500; line-height: 1.45; opacity: 0.85; }
+.external-app-kind-options button:hover { color: var(--ink); border-color: var(--line-strong); }
+.external-app-kind-options button.active { color: var(--blue); background: color-mix(in srgb, var(--blue) 8%, var(--panel-solid)); border-color: color-mix(in srgb, var(--blue) 45%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue) 12%, transparent); }
+.external-app-dialog form > footer { display: flex; flex: 0 0 auto; justify-content: flex-end; gap: 8px; margin: 0; padding: 12px 20px 18px; }
+.external-secret-dialog { display: flex; width: min(520px, calc(100vw - 32px)); align-items: center; flex-direction: column; gap: 12px; padding: 20px; text-align: center; }
 .external-secret-dialog h2, .external-secret-dialog p { margin: 0; }
 .external-secret-dialog p { color: var(--muted); font-size: var(--type-body); }
 .external-secret-dialog > div { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) 42px; gap: 7px; }
@@ -67,6 +77,8 @@
   .external-applications-header > div:last-child { justify-content: flex-end; }
   .external-app-grid, .external-app-form-grid { grid-template-columns: minmax(0, 1fr); }
   .external-app-form-grid label.wide { grid-column: auto; }
+  .external-app-dialog { max-height: min(680px, calc(100vh - 32px)); max-height: min(680px, calc(100dvh - 32px)); }
+  .external-app-kind-options { grid-template-columns: minmax(0, 1fr); }
   .external-app-card > header { grid-template-columns: 40px minmax(0, 1fr); }
   .external-health { grid-column: 2; justify-self: start; }
   .external-app-card dl { grid-template-columns: minmax(0, 1fr); }

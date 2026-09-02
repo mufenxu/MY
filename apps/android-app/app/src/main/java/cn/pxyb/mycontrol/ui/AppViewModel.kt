@@ -44,6 +44,7 @@ import cn.pxyb.mycontrol.data.DiagnosticData
 import cn.pxyb.mycontrol.data.ExternalApplication
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
 import cn.pxyb.mycontrol.data.GitHubRepositoryRecord
+import cn.pxyb.mycontrol.data.GitHubProfileRecord
 import cn.pxyb.mycontrol.data.GitHubReleaseRecord
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAccountStore
@@ -145,7 +146,7 @@ data class SectionLoadState(
 data class AppUiState(
     val booting: Boolean = true,
     val locked: Boolean = false,
-    val appLockEnabled: Boolean = true,
+    val appLockEnabled: Boolean = false,
     val user: PlatformUser? = null,
     val selectedTab: MainTab = MainTab.Overview,
     val loginBusy: Boolean = false,
@@ -169,6 +170,8 @@ data class AppUiState(
     val ct8: Ct8Data? = null,
     val githubRepositories: List<GitHubRepositoryRecord> = emptyList(),
     val githubRepositoriesLoaded: Boolean = false,
+    val githubProfile: GitHubProfileRecord? = null,
+    val githubProfileLoaded: Boolean = false,
     val githubReleases: List<GitHubReleaseRecord> = emptyList(),
     val githubReleasesLoaded: Boolean = false,
     val githubReleasesRepoFullName: String? = null,
@@ -618,8 +621,10 @@ class AppViewModel(
         authorizeSession: suspend () -> Boolean,
     ): cn.pxyb.mycontrol.data.LoginResult {
         return try {
-            sessionStore.prepareProtection()
-            if (!authorizeSession()) throw IllegalStateException("未完成设备身份验证，登录会话未保存。")
+            if (sessionStore.isLockEnabled()) {
+                sessionStore.prepareProtection()
+                if (!authorizeSession()) throw IllegalStateException("未完成设备身份验证，登录会话未保存。")
+            }
             api.persistLogin(result)
             result
         } catch (error: Throwable) {
@@ -697,8 +702,11 @@ class AppViewModel(
     }
 
     fun setAppLockEnabled(enabled: Boolean) {
-        sessionStore.setLockEnabled(enabled)
-        mutableState.update { it.copy(appLockEnabled = enabled) }
+        runCatching { sessionStore.setLockEnabled(enabled) }
+            .onSuccess { mutableState.update { it.copy(appLockEnabled = enabled) } }
+            .onFailure {
+                mutableState.update { it.copy(error = "无法更新本地安全设置，请稍后重试。") }
+            }
     }
 
     fun updateHomeQuickActions(order: List<HomeQuickAction>, hidden: Set<HomeQuickAction>) {
@@ -1200,7 +1208,7 @@ class AppViewModel(
             )
         }
         if (changedTab) refreshForTab(MainTab.Profile)
-        loadGitHubRepositories()
+        refreshGitHubProjects()
     }
 
     fun closeGitHubProjects() {
@@ -1226,6 +1234,21 @@ class AppViewModel(
                     }
                 }
         }
+    }
+
+    fun loadGitHubProfile() {
+        if (mutableState.value.user == null) return
+        viewModelScope.launch {
+            val profile = runCatching { api.githubProfile() }.getOrNull()
+            mutableState.update {
+                it.copy(githubProfile = profile, githubProfileLoaded = true)
+            }
+        }
+    }
+
+    fun refreshGitHubProjects() {
+        loadGitHubProfile()
+        loadGitHubRepositories()
     }
 
     fun updateGitHubVisibility(
@@ -1890,7 +1913,7 @@ class AppViewModel(
                 loadGoogleAccounts()
             }
             githubProjectsOpen -> {
-                loadGitHubRepositories()
+                refreshGitHubProjects()
             }
             accountManagementOpen -> {
                 refreshSecurity(force)

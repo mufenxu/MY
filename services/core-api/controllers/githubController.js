@@ -244,6 +244,15 @@ exports.listRepositories = async (req, res, next) => {
     }
 };
 
+exports.getProfile = async (req, res, next) => {
+    try {
+        const profile = await githubService.getProfile();
+        res.json({ ok: true, profile });
+    } catch (err) {
+        next(err);
+    }
+};
+
 exports.updateRepositoryVisibility = async (req, res, next) => {
     try {
         const { owner, repo } = req.params;

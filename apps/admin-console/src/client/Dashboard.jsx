@@ -325,7 +325,7 @@ export function Dashboard({ session, onLogout }) {
   const viewMeta = {
     miniapp: { title: '业务入口', subtitle: '打开综合、考试、校园与设备服务' },
     service: { title: '服务状态', subtitle: '查看各服务是否正常' },
-    'external-apps': { title: '外部应用', subtitle: '其他项目的登录设置' },
+    'external-apps': { title: '外部应用', subtitle: '其他项目的登录与直达设置' },
     notification: { title: '消息通知', subtitle: '企业微信消息发送情况' },
     monitoring: { title: '运行趋势', subtitle: '查看服务最近的状态' },
     incidents: { title: '问题处理', subtitle: '发现并处理运行异常' },
