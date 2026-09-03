@@ -262,6 +262,44 @@ data class LibrarySeatReservationRequest(
 )
 
 @Immutable
+data class LibrarySeatWaitlistRequest(
+    val venueId: String,
+    val floorId: String,
+    val venueName: String,
+    val floorName: String,
+    val date: String,
+    val startMinute: Int,
+    val endMinute: Int,
+    val minLabel: Int,
+    val maxLabel: Int,
+)
+
+@Immutable
+data class LibrarySeatWaitlistTask(
+    val id: String = "",
+    val enabled: Boolean = false,
+    val venueId: String = "",
+    val venueName: String = "",
+    val floorId: String = "",
+    val floorName: String = "",
+    val date: String = "",
+    val startMinute: Int = 0,
+    val endMinute: Int = 0,
+    val minLabel: Int = 1,
+    val maxLabel: Int = 45,
+    val status: String = "listening",
+    val statusText: String = "监听中",
+    val lastMessage: String = "",
+    val lastAreaName: String = "",
+    val lastSeatLabel: String = "",
+    val lastSeatId: String = "",
+    val consecutiveFailures: Int = 0,
+    val createdAt: String = "",
+    val updatedAt: String = "",
+    val lastRunAt: String = "",
+)
+
+@Immutable
 data class LibrarySeatReservationRecord(
     val id: String = "",
     val seatId: String = "",

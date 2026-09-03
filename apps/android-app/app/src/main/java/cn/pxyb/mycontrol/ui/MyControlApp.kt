@@ -2070,6 +2070,16 @@ private fun AuthenticatedShell(
                                 )
                             }
                         },
+                        onLoadWaitlists = viewModel::loadLibrarySeatWaitlists,
+                        onCreateWaitlist = { request, onSuccess ->
+                            viewModel.createLibrarySeatWaitlist(request, onSuccess)
+                        },
+                        onSetWaitlistEnabled = { taskId, enabled, onSuccess ->
+                            viewModel.setLibrarySeatWaitlistEnabled(taskId, enabled, onSuccess)
+                        },
+                        onDeleteWaitlist = { taskId, onSuccess ->
+                            viewModel.deleteLibrarySeatWaitlist(taskId, onSuccess)
+                        },
                         onClearFeedback = viewModel::clearLibrarySeatFeedback,
                     )
                 }

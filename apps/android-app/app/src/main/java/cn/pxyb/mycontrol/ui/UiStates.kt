@@ -37,6 +37,7 @@ import cn.pxyb.mycontrol.data.LibrarySeatArea
 import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
 import cn.pxyb.mycontrol.data.LibrarySeatReservationHistory
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRecord
+import cn.pxyb.mycontrol.data.LibrarySeatWaitlistTask
 import cn.pxyb.mycontrol.data.LibrarySeatOverview
 import cn.pxyb.mycontrol.data.LibrarySeatStatus
 import cn.pxyb.mycontrol.data.LibrarySeatVenue
@@ -306,6 +307,10 @@ data class LibrarySeatUiState(
     val reservationsLoading: Boolean = false,
     val historyReservations: LibrarySeatReservationHistory = LibrarySeatReservationHistory(),
     val historyReservationsLoading: Boolean = false,
+    val waitlists: List<LibrarySeatWaitlistTask> = emptyList(),
+    val waitlistsLoading: Boolean = false,
+    val waitlistSaving: Boolean = false,
+    val waitlistDeletingId: String? = null,
     val selectedVenueId: String? = null,
     val selectedDate: String? = null,
     val selectedFloorId: String? = null,
@@ -676,6 +681,10 @@ internal fun AppUiState.toLibrarySeatUiState() = LibrarySeatUiState(
     reservationsLoading = librarySeatReservationsLoading,
     historyReservations = librarySeatHistoryReservations,
     historyReservationsLoading = librarySeatHistoryReservationsLoading,
+    waitlists = librarySeatWaitlists,
+    waitlistsLoading = librarySeatWaitlistsLoading,
+    waitlistSaving = librarySeatWaitlistSaving,
+    waitlistDeletingId = librarySeatWaitlistDeletingId,
     selectedVenueId = librarySeatSelectedVenueId,
     selectedDate = librarySeatSelectedDate,
     selectedFloorId = librarySeatSelectedFloorId,

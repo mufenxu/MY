@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Chair
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
@@ -34,8 +35,11 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,6 +61,10 @@ import cn.pxyb.mycontrol.data.LibrarySeatReservationHistory
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRecord
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
 import cn.pxyb.mycontrol.data.LibrarySeatStatus
+import cn.pxyb.mycontrol.data.LibrarySeatFloor
+import cn.pxyb.mycontrol.data.LibrarySeatVenue
+import cn.pxyb.mycontrol.data.LibrarySeatWaitlistRequest
+import cn.pxyb.mycontrol.data.LibrarySeatWaitlistTask
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
@@ -64,6 +72,7 @@ import java.util.Locale
 private enum class LibrarySeatTab(val label: String) {
     Book("查询座位"),
     My("我的预约"),
+    Waitlist("候补预约"),
 }
 
 private val activeSeatReservationStatuses = setOf("RESERVE", "CHECK_IN", "AWAY", "LEAVE_EARLY")
@@ -86,6 +95,10 @@ fun LibrarySeatReservationScreen(
     onLoadReservations: () -> Unit,
     onLoadReservationHistory: () -> Unit,
     onOpenOfficialReservation: () -> Unit,
+    onLoadWaitlists: () -> Unit,
+    onCreateWaitlist: (LibrarySeatWaitlistRequest, () -> Unit) -> Unit,
+    onSetWaitlistEnabled: (String, Boolean, () -> Unit) -> Unit,
+    onDeleteWaitlist: (String, () -> Unit) -> Unit,
     onClearFeedback: () -> Unit,
 ) {
     var selectedVenueId by rememberSaveable { mutableStateOf("") }
@@ -283,16 +296,20 @@ fun LibrarySeatReservationScreen(
             ) {
                 LibrarySeatTab.entries.forEach { tab ->
                     val isSelected = selectedTab == tab
-                    val badgeCount = if (tab == LibrarySeatTab.My) {
-                        state.reservations.count(::isActiveSeatReservation)
-                    } else {
-                        0
+                    val badgeCount = when (tab) {
+                        LibrarySeatTab.My -> state.reservations.count(::isActiveSeatReservation)
+                        LibrarySeatTab.Waitlist -> state.waitlists.count { it.enabled && it.status == "listening" }
+                        LibrarySeatTab.Book -> 0
                     }
                     Surface(
                         onClick = {
                             if (selectedTab != tab) {
                                 selectedTab = tab
-                                if (tab == LibrarySeatTab.My) onLoadReservations()
+                                when (tab) {
+                                    LibrarySeatTab.My -> onLoadReservations()
+                                    LibrarySeatTab.Waitlist -> onLoadWaitlists()
+                                    LibrarySeatTab.Book -> Unit
+                                }
                             }
                         },
                         shape = RoundedCornerShape(10.dp),
@@ -311,10 +328,10 @@ fun LibrarySeatReservationScreen(
                             horizontalArrangement = Arrangement.Center,
                         ) {
                             Icon(
-                                imageVector = if (tab == LibrarySeatTab.Book) {
-                                    Icons.Outlined.Search
-                                } else {
-                                    Icons.Outlined.EventAvailable
+                                imageVector = when (tab) {
+                                    LibrarySeatTab.Book -> Icons.Outlined.Search
+                                    LibrarySeatTab.My -> Icons.Outlined.EventAvailable
+                                    LibrarySeatTab.Waitlist -> Icons.Outlined.NotificationsActive
                                 },
                                 contentDescription = null,
                                 tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -655,7 +672,7 @@ fun LibrarySeatReservationScreen(
             }
         }
 
-        } else {
+        } else if (selectedTab == LibrarySeatTab.My) {
             item(key = "my-reservations-panel", contentType = "my") {
                 MySeatReservationsPanel(
                     reservations = state.reservations,
@@ -665,6 +682,39 @@ fun LibrarySeatReservationScreen(
                     onLoadReservations = onLoadReservations,
                     onLoadHistory = onLoadReservationHistory,
                     onGoToBookSeat = { selectedTab = LibrarySeatTab.Book },
+                )
+            }
+        } else {
+            item(key = "waitlist-panel", contentType = "waitlist") {
+                LibrarySeatWaitlistPanel(
+                    state = state,
+                    selectedVenue = selectedVenue,
+                    selectedFloor = selectedFloor,
+                    selectedDate = selectedDate,
+                    startTime = startTime,
+                    endTime = endTime,
+                    onStartTimeChange = { startTime = it },
+                    onEndTimeChange = { endTime = it },
+                    onVenueSelected = { venueId ->
+                        selectedVenueId = venueId
+                        selectedFloorId = ""
+                        selectedAreaId = ""
+                        selectedSeatId = ""
+                    },
+                    onFloorSelected = { floorId ->
+                        selectedFloorId = floorId
+                        selectedAreaId = ""
+                        selectedSeatId = ""
+                    },
+                    onDateSelected = { date ->
+                        selectedDate = date
+                        selectedAreaId = ""
+                        selectedSeatId = ""
+                    },
+                    onClearFeedback = onClearFeedback,
+                    onCreateWaitlist = { request -> onCreateWaitlist(request) {} },
+                    onSetWaitlistEnabled = { taskId, enabled -> onSetWaitlistEnabled(taskId, enabled) {} },
+                    onDeleteWaitlist = { taskId -> onDeleteWaitlist(taskId) {} },
                 )
             }
         }
@@ -1217,4 +1267,323 @@ private fun formatSeatDateLabel(value: String): String {
     val date = runCatching { LocalDate.parse(value) }.getOrNull() ?: return value
     val weekday = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.CHINA)
     return "${date.monthValue}月${date.dayOfMonth}日 $weekday"
+}
+
+@Composable
+private fun LibrarySeatWaitlistPanel(
+    state: LibrarySeatUiState,
+    selectedVenue: LibrarySeatVenue?,
+    selectedFloor: LibrarySeatFloor?,
+    selectedDate: String,
+    startTime: String,
+    endTime: String,
+    onStartTimeChange: (String) -> Unit,
+    onEndTimeChange: (String) -> Unit,
+    onVenueSelected: (String) -> Unit,
+    onFloorSelected: (String) -> Unit,
+    onDateSelected: (String) -> Unit,
+    onClearFeedback: () -> Unit,
+    onCreateWaitlist: (LibrarySeatWaitlistRequest) -> Unit,
+    onSetWaitlistEnabled: (String, Boolean) -> Unit,
+    onDeleteWaitlist: (String) -> Unit,
+) {
+    var venueMenuOpen by remember { mutableStateOf(false) }
+    var floorMenuOpen by remember { mutableStateOf(false) }
+    var minLabelText by rememberSaveable { mutableStateOf("1") }
+    var maxLabelText by rememberSaveable { mutableStateOf("45") }
+    var hint by remember { mutableStateOf<String?>(null) }
+
+    val startMinute = timeTextToMinute(startTime)
+    val endMinute = timeTextToMinute(endTime)
+    val minLabel = minLabelText.trim().toIntOrNull()
+    val maxLabel = maxLabelText.trim().toIntOrNull()
+    val formValid = selectedVenue != null && selectedFloor != null && selectedDate.isNotBlank()
+        && startMinute != null && endMinute != null && endMinute > startMinute
+        && minLabel != null && maxLabel != null && minLabel in 1..999 && maxLabel in 1..999 && minLabel <= maxLabel
+
+    AppPanel {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SectionHeader("新建候补任务", "座位被占时自动监听释放座位并立即预约")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                SelectionSurface(
+                    label = "场馆",
+                    value = selectedVenue?.name ?: "请选择",
+                    placeholder = "请选择场馆",
+                    modifier = Modifier.weight(1f),
+                    expanded = venueMenuOpen,
+                    enabled = state.venues.isNotEmpty(),
+                    onExpandedChange = { venueMenuOpen = it },
+                    options = state.venues.map { venue ->
+                        SelectionOption(venue.id, venue.name, if (venue.floors.isNotEmpty()) "${venue.floors.size} 层" else "暂无楼层")
+                    },
+                    onSelect = { option ->
+                        onVenueSelected(option.id)
+                    },
+                )
+                SelectionSurface(
+                    label = "楼层",
+                    value = selectedFloor?.name ?: "请选择",
+                    placeholder = "请选择楼层",
+                    modifier = Modifier.weight(1f),
+                    expanded = floorMenuOpen,
+                    enabled = selectedVenue != null && selectedVenue.floors.isNotEmpty(),
+                    onExpandedChange = { floorMenuOpen = it },
+                    options = selectedVenue?.floors.orEmpty().map { floor ->
+                        SelectionOption(floor.id, floor.name)
+                    },
+                    onSelect = { option ->
+                        onFloorSelected(option.id)
+                    },
+                )
+            }
+            Text(
+                text = "候补座位范围：${selectedFloor?.name?.takeIf(String::isNotBlank) ?: "未选楼层"} "
+                    + "$minLabelText-$maxLabelText 号座位",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ReservationTimeRangePicker(
+                startTime = startTime,
+                endTime = endTime,
+                onStartTimeChange = onStartTimeChange,
+                onEndTimeChange = onEndTimeChange,
+                sectionTitle = "候补时段（开放 08:00 - 21:30）",
+                minStartTime = "08:00",
+                maxStartTime = "21:15",
+                minEndTime = "08:15",
+                maxEndTime = "21:30",
+                minuteStep = 15,
+                minDurationMinutes = null,
+                maxDurationMinutes = null,
+                quickDurationOptions = emptyList(),
+            )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                state.dates.forEach { date ->
+                    FilterChip(
+                        selected = selectedDate == date,
+                        onClick = { onDateSelected(date) },
+                        label = { Text(formatSeatDateLabel(date), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedTextField(
+                    value = minLabelText,
+                    onValueChange = { value ->
+                        minLabelText = value.filter(Char::isDigit).take(3)
+                        hint = null
+                    },
+                    label = { Text("最小座位号") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedTextField(
+                    value = maxLabelText,
+                    onValueChange = { value ->
+                        maxLabelText = value.filter(Char::isDigit).take(3)
+                        hint = null
+                    },
+                    label = { Text("最大座位号") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Text(
+                text = "检测到范围内释放座位后会自动预约并发送 App 消息与企业微信提醒。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = {
+                    hint = null
+                    val venue = selectedVenue
+                    val floor = selectedFloor
+                    val start = startMinute
+                    val end = endMinute
+                    val min = minLabel
+                    val max = maxLabel
+                    when {
+                        venue == null || floor == null -> hint = "请先选择场馆与楼层（默认二层）。"
+                        selectedDate.isBlank() -> hint = "请先选择预约日期。"
+                        start == null || end == null || end <= start -> hint = "请选择有效的候补时段。"
+                        min == null || max == null || min !in 1..999 || max !in 1..999 || min > max ->
+                            hint = "座位号需为 1 至 999 的整数，且最小号不能大于最大号。"
+                        else -> {
+                            onClearFeedback()
+                            onCreateWaitlist(
+                                LibrarySeatWaitlistRequest(
+                                    venueId = venue.id,
+                                    floorId = floor.id,
+                                    venueName = venue.name,
+                                    floorName = floor.name,
+                                    date = selectedDate,
+                                    startMinute = start,
+                                    endMinute = end,
+                                    minLabel = min,
+                                    maxLabel = max,
+                                ),
+                            )
+                        }
+                    }
+                },
+                enabled = !state.waitlistSaving && state.venues.isNotEmpty(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Icon(Icons.Outlined.NotificationsActive, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (state.waitlistSaving) "正在开启..." else "开启候补监听", maxLines = 1)
+            }
+            hint?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            SectionHeader("我的候补任务", "开启后由服务端持续监听，成功即自动结束")
+            when {
+                state.waitlistsLoading && state.waitlists.isEmpty() -> LoadingBlock("正在加载候补任务...")
+                state.waitlists.isEmpty() -> EmptyBlock(
+                    "暂无候补任务",
+                    "选好日期、时段与座位范围后点击上方按钮开启监听。",
+                )
+                else -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        state.waitlists.forEach { task ->
+                            WaitlistTaskCard(
+                                task = task,
+                                busy = state.waitlistSaving,
+                                deleting = state.waitlistDeletingId == task.id,
+                                onStop = { onSetWaitlistEnabled(task.id, false) },
+                                onResume = { onSetWaitlistEnabled(task.id, true) },
+                                onDelete = { onDeleteWaitlist(task.id) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WaitlistTaskCard(
+    task: LibrarySeatWaitlistTask,
+    busy: Boolean,
+    deleting: Boolean,
+    onStop: () -> Unit,
+    onResume: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val listening = task.enabled && task.status == "listening"
+    val success = task.status == "success"
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = listOfNotNull(
+                        task.floorName.takeIf(String::isNotBlank),
+                        "${task.minLabel}-${task.maxLabel} 号座位",
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = task.statusText,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = if (success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = "${task.date}  ${formatMinutesToTime(task.startMinute)} - ${formatMinutesToTime(task.endMinute)}"
+                    .trim(),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (success && task.lastSeatLabel.isNotBlank()) {
+                Text(
+                    text = listOfNotNull(
+                        task.lastAreaName.takeIf(String::isNotBlank),
+                        "${task.lastSeatLabel} 号座位",
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            task.lastMessage.takeIf(String::isNotBlank)?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (listening) {
+                    OutlinedButton(
+                        onClick = onStop,
+                        enabled = !busy,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    ) {
+                        Text("停止监听", maxLines = 1)
+                    }
+                } else if (!deleting && (task.status == "stopped" || task.status == "failed")) {
+                    OutlinedButton(
+                        onClick = onResume,
+                        enabled = !busy,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    ) {
+                        Text("重新开启", maxLines = 1)
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(
+                    onClick = onDelete,
+                    enabled = !busy && !deleting,
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                ) {
+                    Text(if (deleting) "删除中..." else "删除", maxLines = 1)
+                }
+            }
+        }
+    }
 }

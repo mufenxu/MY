@@ -55,6 +55,9 @@ export class CampusRepository {
       this.db.collection("auto_reservation_tasks").createIndex({ id: 1 }, { unique: true }),
       this.db.collection("auto_reservation_tasks").createIndex({ user_id: 1, created_at: 1 }),
       this.db.collection("auto_reservation_tasks").createIndex({ enabled: 1, run_lock_until: 1 }),
+      this.db.collection("library_seat_waitlists").createIndex({ id: 1 }, { unique: true }),
+      this.db.collection("library_seat_waitlists").createIndex({ user_id: 1, created_at: 1 }),
+      this.db.collection("library_seat_waitlists").createIndex({ enabled: 1, updated_at: 1 }),
       this.db.collection("invites").createIndex({ id: 1 }, { unique: true }),
       this.db.collection("invites").createIndex({ code_hash: 1 }, { unique: true }),
       this.db.collection("invites").createIndex({ created_at: -1 })
@@ -169,6 +172,7 @@ export class CampusRepository {
         await this.db.collection("calendar_subscriptions").deleteMany({ user_id: id }, { session });
         await this.db.collection("reminder_preferences").deleteMany({ user_id: id }, { session });
         await this.db.collection("auto_reservation_tasks").deleteMany({ user_id: id }, { session });
+        await this.db.collection("library_seat_waitlists").deleteMany({ user_id: id }, { session });
         await this.db.collection("invites").updateMany(
           { created_by: id },
           { $set: { created_by: null } },
@@ -475,6 +479,63 @@ export class CampusRepository {
       }
     );
   }
+
+  async listLibrarySeatWaitlists(userId) {
+    return this.db.collection("library_seat_waitlists")
+      .find({ user_id: userId }, { projection: { _id: 0 } })
+      .sort({ created_at: 1 })
+      .toArray();
+  }
+
+  async getLibrarySeatWaitlist(userId, id) {
+    return this.db.collection("library_seat_waitlists").findOne({ id, user_id: userId }, { projection: { _id: 0 } });
+  }
+
+  async listEnabledLibrarySeatWaitlists(options = {}) {
+    const { offset, limit } = boundedWindow(options);
+    return this.db.collection("library_seat_waitlists")
+      .find({ enabled: true }, { projection: { _id: 0 } })
+      .sort({ updated_at: 1 })
+      .skip(offset)
+      .limit(limit)
+      .toArray();
+  }
+
+  async insertLibrarySeatWaitlist(row) {
+    await this.db.collection("library_seat_waitlists").insertOne({ _id: row.id, ...clone(row) });
+    return clone(row);
+  }
+
+  async updateLibrarySeatWaitlist(userId, id, changes, timestamp) {
+    await this.db.collection("library_seat_waitlists").updateOne(
+      { id, user_id: userId },
+      { $set: { ...clone(changes), updated_at: timestamp } }
+    );
+    return this.db.collection("library_seat_waitlists").findOne({ id, user_id: userId }, { projection: { _id: 0 } });
+  }
+
+  async deleteLibrarySeatWaitlist(userId, id) {
+    await this.db.collection("library_seat_waitlists").deleteOne({ id, user_id: userId });
+  }
+
+  async finishLibrarySeatWaitlist(userId, id, result, timestamp) {
+    await this.db.collection("library_seat_waitlists").updateOne(
+      { id, user_id: userId },
+      {
+        $set: {
+          enabled: false,
+          status: result.status,
+          last_message: result.message || null,
+          last_run_at: timestamp,
+          last_area_name: result.areaName || null,
+          last_seat_id: result.seatId || null,
+          last_seat_label: result.seatLabel || null,
+          consecutive_failures: 0,
+          updated_at: timestamp
+        }
+      }
+    );
+  }
 }
 
 export class MemoryCampusRepository {
@@ -486,6 +547,7 @@ export class MemoryCampusRepository {
     this.calendarSubscriptions = new Map();
     this.reminderPreferences = new Map();
     this.autoReservationTasks = new Map();
+    this.librarySeatWaitlists = new Map();
   }
 
   async initialize() {}
@@ -542,6 +604,7 @@ export class MemoryCampusRepository {
     this.calendarSubscriptions.delete(id);
     this.reminderPreferences.delete(id);
     for (const [taskId, task] of this.autoReservationTasks) if (task.user_id === id) this.autoReservationTasks.delete(taskId);
+    for (const [taskId, task] of this.librarySeatWaitlists) if (task.user_id === id) this.librarySeatWaitlists.delete(taskId);
   }
 
   async listInvites() {
@@ -684,6 +747,58 @@ export class MemoryCampusRepository {
       last_candidate_index: Number.isInteger(result.candidateIndex) ? result.candidateIndex : null,
       last_attempts: clone(result.attempts || []),
       last_reservation: clone(result.result || null),
+      updated_at: timestamp
+    });
+  }
+
+  async listLibrarySeatWaitlists(userId) {
+    return clone(Array.from(this.librarySeatWaitlists.values())
+      .filter((row) => row.user_id === userId)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at)));
+  }
+
+  async getLibrarySeatWaitlist(userId, id) {
+    const row = this.librarySeatWaitlists.get(id);
+    return row?.user_id === userId ? clone(row) : null;
+  }
+
+  async listEnabledLibrarySeatWaitlists(options = {}) {
+    const { offset, limit } = boundedWindow(options);
+    return clone(Array.from(this.librarySeatWaitlists.values())
+      .filter((row) => row.enabled)
+      .sort((a, b) => String(a.updated_at || "").localeCompare(String(b.updated_at || "")))
+      .slice(offset, offset + limit));
+  }
+
+  async insertLibrarySeatWaitlist(row) {
+    this.librarySeatWaitlists.set(row.id, clone(row));
+    return clone(row);
+  }
+
+  async updateLibrarySeatWaitlist(userId, id, changes, timestamp) {
+    const row = this.librarySeatWaitlists.get(id);
+    if (!row || row.user_id !== userId) return null;
+    Object.assign(row, clone(changes), { updated_at: timestamp });
+    return clone(row);
+  }
+
+  async deleteLibrarySeatWaitlist(userId, id) {
+    const row = this.librarySeatWaitlists.get(id);
+    if (row?.user_id === userId) this.librarySeatWaitlists.delete(id);
+  }
+
+  async finishLibrarySeatWaitlist(userId, id, result, timestamp) {
+    const row = this.librarySeatWaitlists.get(id);
+    if (!row || row.user_id !== userId) return;
+    Object.assign(row, {
+      enabled: false,
+      status: result.status,
+      last_message: result.message || null,
+      last_run_at: timestamp,
+      last_area_name: result.areaName || null,
+      last_seat_id: result.seatId || null,
+      last_seat_label: result.seatLabel || null,
+      consecutive_failures: 0,
       updated_at: timestamp
     });
   }

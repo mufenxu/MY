@@ -62,6 +62,13 @@ import {
   normalizeAutoReservationTaskInput
 } from "./src/lib/libroom-auto-reservation.js";
 import {
+  librarySeatWaitlistNextScanDelay,
+  librarySeatWaitlistRunPlan,
+  librarySeatWaitlistTimes,
+  normalizeLibrarySeatWaitlistInput,
+  scanLibrarySeatWaitlist
+} from "./src/lib/library-seat-waitlist.js";
+import {
   discardUpstreamResponse,
   releaseUpstreamResponse,
   trackUpstreamResponse
@@ -192,6 +199,14 @@ const CAMPUS_REMINDER_START_DELAY_MS = Number(process.env.CAMPUS_REMINDER_START_
 const LIBROOM_AUTO_RESERVATION_INTERVAL_MS = Number(process.env.CAMPUS_LIBROOM_AUTO_RESERVATION_INTERVAL_MS || 15 * 1000);
 const LIBROOM_AUTO_RESERVATION_START_DELAY_MS = Number(process.env.CAMPUS_LIBROOM_AUTO_RESERVATION_START_DELAY_MS || 0);
 const LIBROOM_AUTO_RESERVATION_LOCK_MS = 2 * 60 * 1000;
+const LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS = Number(process.env.CAMPUS_LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS || 20 * 1000);
+const LIBRARY_SEAT_WAITLIST_MEDIUM_INTERVAL_MS = Number(process.env.CAMPUS_LIBRARY_SEAT_WAITLIST_MEDIUM_INTERVAL_MS || 2 * 60 * 1000);
+const LIBRARY_SEAT_WAITLIST_SLOW_INTERVAL_MS = Number(process.env.CAMPUS_LIBRARY_SEAT_WAITLIST_SLOW_INTERVAL_MS || 10 * 60 * 1000);
+const LIBRARY_SEAT_WAITLIST_START_DELAY_MS = Number(process.env.CAMPUS_LIBRARY_SEAT_WAITLIST_START_DELAY_MS || 0);
+const LIBRARY_SEAT_WAITLIST_HOT_WINDOW_MS = Number(process.env.CAMPUS_LIBRARY_SEAT_WAITLIST_HOT_WINDOW_MS || 2 * 60 * 60 * 1000);
+const LIBRARY_SEAT_WAITLIST_MEDIUM_WINDOW_MS = Number(process.env.CAMPUS_LIBRARY_SEAT_WAITLIST_MEDIUM_WINDOW_MS || 24 * 60 * 60 * 1000);
+const LIBRARY_SEAT_WAITLIST_MAX_FAILURES = Math.min(50, Math.max(1, Number(process.env.CAMPUS_LIBRARY_SEAT_WAITLIST_MAX_FAILURES || 5)));
+const LIBRARY_SEAT_WAITLIST_MAX_SCAN_ATTEMPTS = 3;
 const CAMPUS_REMINDER_HORIZON_HOURS = Math.min(168, Math.max(1, Number(process.env.CAMPUS_REMINDER_HORIZON_HOURS || 24) || 24));
 const CAMPUS_REMINDER_BATCH_SIZE = Math.min(1_000, Math.max(1, Math.trunc(Number(process.env.CAMPUS_REMINDER_BATCH_SIZE || 100) || 100)));
 const BACKGROUND_USER_SCAN_LIMIT = 1_000;
@@ -269,6 +284,9 @@ const backgroundTasks = new Set();
 let libroomAutoReservationTimer = null;
 let libroomAutoReservationRunning = false;
 let libroomAutoReservationRescheduleRequested = false;
+let librarySeatWaitlistTimer = null;
+let librarySeatWaitlistRunning = false;
+let librarySeatWaitlistRescheduleRequested = false;
 const academicSessionQueue = new KeyedSerialQueue();
 const campusSessionQueue = new KeyedSerialQueue();
 const libroomSessionQueue = new KeyedSerialQueue();
@@ -2466,6 +2484,303 @@ async function runAutoReservationTask(task, user, now = new Date()) {
     candidateIndex: result.candidateIndex
   });
   return result;
+}
+
+function librarySeatWaitlistStringValue(value, fallback = "") {
+  if (value === undefined || value === null) return fallback;
+  const text = String(value).trim();
+  return text || fallback;
+}
+
+function librarySeatWaitlistStatusText(status) {
+  const normalized = librarySeatWaitlistStringValue(status);
+  if (normalized === "success") return "已预约成功";
+  if (normalized === "failed") return "已停止";
+  if (normalized === "stopped") return "已停止";
+  if (normalized === "expired") return "时段已结束";
+  return "监听中";
+}
+
+function librarySeatWaitlistTimeText(task) {
+  const { startTime, endTime } = librarySeatWaitlistTimes(
+    Number(task?.startMinute ?? task?.start_minute),
+    Number(task?.endMinute ?? task?.end_minute)
+  );
+  return `${startTime} - ${endTime}`;
+}
+
+function librarySeatWaitlistPublic(row) {
+  if (!row) return null;
+  const status = librarySeatWaitlistStringValue(row.status) || "listening";
+  return {
+    id: row.id,
+    enabled: Boolean(row.enabled),
+    venueId: row.venue_id || null,
+    venueName: row.venue_name || "",
+    floorId: row.floor_id || null,
+    floorName: row.floor_name || "",
+    date: row.date || null,
+    startMinute: Number.isInteger(row.start_minute) ? row.start_minute : null,
+    endMinute: Number.isInteger(row.end_minute) ? row.end_minute : null,
+    minLabel: Number.isInteger(row.min_label) ? row.min_label : 1,
+    maxLabel: Number.isInteger(row.max_label) ? row.max_label : 45,
+    status,
+    statusText: librarySeatWaitlistStatusText(status),
+    lastMessage: row.last_message || null,
+    lastAreaName: row.last_area_name || "",
+    lastSeatLabel: row.last_seat_label || "",
+    lastSeatId: row.last_seat_id || "",
+    consecutiveFailures: Number.isInteger(row.consecutive_failures) ? row.consecutive_failures : 0,
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+    lastRunAt: row.last_run_at || null
+  };
+}
+
+function librarySeatWaitlistRecord(userId, normalized, timestamp, targets, id = randomUUID()) {
+  return {
+    id,
+    user_id: userId,
+    venue_id: normalized.venueId,
+    venue_name: normalized.venueName,
+    floor_id: normalized.floorId,
+    floor_name: normalized.floorName,
+    date: normalized.date,
+    start_minute: normalized.startMinute,
+    end_minute: normalized.endMinute,
+    min_label: normalized.minLabel,
+    max_label: normalized.maxLabel,
+    enabled: Boolean(normalized.enabled),
+    status: "listening",
+    last_message: null,
+    last_area_name: "",
+    last_seat_id: "",
+    last_seat_label: "",
+    consecutive_failures: 0,
+    notify_app_id: String(targets?.appId || "").trim(),
+    notify_wecom_id: String(targets?.wecomId || "").trim(),
+    created_at: timestamp,
+    updated_at: timestamp,
+    last_run_at: null
+  };
+}
+
+function librarySeatWaitlistWindowsOverlap(left, right) {
+  if (!left || !right) return false;
+  const sameDate = String(left.date) === String(right.date);
+  if (!sameDate) return false;
+  const leftStart = Number(left.startMinute ?? left.start_minute);
+  const leftEnd = Number(left.endMinute ?? left.end_minute);
+  const rightStart = Number(right.startMinute ?? right.start_minute);
+  const rightEnd = Number(right.endMinute ?? right.end_minute);
+  return Number.isFinite(leftStart) && Number.isFinite(leftEnd)
+    && Number.isFinite(rightStart) && Number.isFinite(rightEnd)
+    && leftStart < rightEnd && rightStart < leftEnd;
+}
+
+async function saveLibrarySeatWaitlist(userId, body, existing = null, targets = {}) {
+  const normalized = normalizeLibrarySeatWaitlistInput(body);
+  const timestamp = nowIso();
+  if (!existing) {
+    const rows = await repository.listLibrarySeatWaitlists(userId);
+    const duplicate = rows.find((row) => row.enabled && librarySeatWaitlistWindowsOverlap(row, normalized));
+    if (duplicate) {
+      const error = new HttpError(
+        409,
+        "该日期时段已有正在监听的候补任务，请先停止或删除后再创建。",
+        null,
+        "LIBRARY_SEAT_WAITLIST_OVERLAP"
+      );
+      throw error;
+    }
+    const row = await repository.insertLibrarySeatWaitlist(librarySeatWaitlistRecord(userId, normalized, timestamp, targets));
+    return librarySeatWaitlistPublic(row);
+  }
+  const merged = { ...existing, ...normalized };
+  const rows = await repository.listLibrarySeatWaitlists(userId);
+  const duplicate = rows.find((row) =>
+    row.id !== existing.id && row.enabled && librarySeatWaitlistWindowsOverlap(row, merged)
+  );
+  if (duplicate) {
+    const error = new HttpError(
+      409,
+      "调整后的时段与另一条正在监听的候补任务重叠。",
+      null,
+      "LIBRARY_SEAT_WAITLIST_OVERLAP"
+    );
+    throw error;
+  }
+  const changes = {
+    venue_id: merged.venueId,
+    venue_name: merged.venueName,
+    floor_id: merged.floorId,
+    floor_name: merged.floorName,
+    date: merged.date,
+    start_minute: merged.startMinute,
+    end_minute: merged.endMinute,
+    min_label: merged.minLabel,
+    max_label: merged.maxLabel,
+    enabled: Boolean(merged.enabled)
+  };
+  if (!changes.enabled && existing.status === "listening") {
+    changes.status = "stopped";
+    changes.last_message = null;
+  }
+  if (changes.enabled && existing.status !== "listening") {
+    changes.status = "listening";
+    changes.consecutive_failures = 0;
+    changes.last_message = null;
+  }
+  const row = await repository.updateLibrarySeatWaitlist(userId, existing.id, changes, timestamp);
+  return librarySeatWaitlistPublic(row);
+}
+
+async function librarySeatWaitlistRequestTargets(userId, platformUserId = "") {
+  const preference = await repository.getReminderPreference(userId);
+  const preferenceRow = preference || {};
+  return {
+    appId: String(platformUserId || preferenceRow.app_recipient_id || "").trim(),
+    wecomId: String(preferenceRow.recipient_id || "").trim()
+  };
+}
+
+function librarySeatWaitlistFailureText(error) {
+  const message = librarySeatWaitlistStringValue(error?.message, "座位候补检测失败。");
+  const code = librarySeatWaitlistStringValue(error?.code);
+  if (code === "LIBRARY_SEAT_AUTH_REQUIRED" || code === "LIBRARY_SEAT_AUTH_EXPIRED") {
+    return "学校座位会话已失效，请重新登录学校账号后再次开启候补。";
+  }
+  return message;
+}
+
+async function notifyLibrarySeatWaitlist(user, task, result) {
+  const appId = librarySeatWaitlistStringValue(task?.notify_app_id);
+  const wecomId = librarySeatWaitlistStringValue(task?.notify_wecom_id);
+  if (!appId) return null;
+  const requestId = `library-seat-waitlist-${randomUUID()}`;
+  const date = librarySeatWaitlistStringValue(task?.date);
+  const timeText = librarySeatWaitlistTimeText(task);
+  const floorName = librarySeatWaitlistStringValue(task?.floor_name);
+  const kind = result?.status;
+  const isSuccess = kind === "success";
+  const seatLabel = librarySeatWaitlistStringValue(result?.seatLabel);
+  const areaName = librarySeatWaitlistStringValue(result?.areaName);
+  const items = [
+    { key: "日期", value: date },
+    { key: "时段", value: timeText },
+    { key: "楼层", value: floorName }
+  ];
+  if (isSuccess) {
+    items.unshift(
+      { key: "座位号", value: `${seatLabel} 号` },
+      { key: "阅览区", value: areaName }
+    );
+  }
+  const payload = {
+    idempotencyKey: `library-seat-waitlist-${task.id}-${kind}`,
+    audience: { users: [appId] },
+    channels: wecomId ? ["app", "wecom"] : ["app"],
+    priority: isSuccess ? "high" : "normal",
+    category: "campus.library-seat.waitlist",
+    content: {
+      kind: "text",
+      title: isSuccess ? "座位候补预约成功" : "座位候补已停止",
+      summary: isSuccess
+        ? `已自动预约 ${floorName} ${seatLabel} 号座位`
+        : librarySeatWaitlistStringValue(result?.message, "候补任务已停止。"),
+      blocks: [{ type: "keyValue", items }]
+    },
+    source: { service: "campus-service", entityType: "librarySeatWaitlist", entityId: task.id },
+    actions: [{ id: "open-today", label: "查看我的预约", deepLink: "mycontrol://open?destination=today" }],
+    ...(wecomId ? { wecom: { touser: wecomId } } : {})
+  };
+  if (!isSuccess) {
+    items.push({ key: "原因", value: librarySeatWaitlistStringValue(result?.message, "检测多次失败。") });
+    items.push({ key: "建议", value: "请打开座位预约重新开启候补或手动预约。" });
+  }
+  const sent = await sendCampusNotification(payload, { requestId });
+  logger.info("library_seat_waitlist_notified", {
+    userId: user?.id,
+    taskId: task.id,
+    kind,
+    wecom: Boolean(wecomId)
+  });
+  return sent;
+}
+
+async function runLibrarySeatWaitlistTask(task, user, now = new Date()) {
+  const runInput = {
+    venueId: task.venue_id || task.venueId || "",
+    floorId: task.floor_id || task.floorId || "",
+    venueName: task.venue_name || task.venueName || "",
+    floorName: task.floor_name || task.floorName || "",
+    date: task.date || task.reservationDate || "",
+    startMinute: Number(task.start_minute ?? task.startMinute ?? task.beginMinute),
+    endMinute: Number(task.end_minute ?? task.endMinute),
+    minLabel: Number(task.min_label ?? task.minLabel ?? 1),
+    maxLabel: Number(task.max_label ?? task.maxLabel ?? 45),
+    enabled: Boolean(task.enabled)
+  };
+  const plan = librarySeatWaitlistRunPlan(runInput, now);
+  const nowValue = now.toISOString();
+  if (!plan.due) {
+    const result = {
+      status: "expired",
+      message: "候补时段已结束，未能预约成功。",
+      areaName: null,
+      seatId: null,
+      seatLabel: null
+    };
+    await repository.finishLibrarySeatWaitlist(user.id, task.id, result, nowValue);
+    return result;
+  }
+  const client = await librarySeatClient();
+  const scanResult = await scanLibrarySeatWaitlist({
+    task: runInput,
+    client,
+    now,
+    maxAttemptsPerScan: LIBRARY_SEAT_WAITLIST_MAX_SCAN_ATTEMPTS
+  });
+  if (scanResult.status === "success") {
+    const seat = scanResult.seat;
+    const result = {
+      status: "success",
+      message: scanResult.message || "已自动预约成功。",
+      areaName: seat.areaName,
+      seatId: seat.seatId,
+      seatLabel: seat.seatLabel
+    };
+    await repository.finishLibrarySeatWaitlist(user.id, task.id, result, nowValue);
+    logger.info("audit_library_seat_waitlist_succeeded", {
+      actorUserId: user.id,
+      taskId: task.id,
+      seatId: seat.seatId,
+      seatLabel: seat.seatLabel,
+      areaName: seat.areaName
+    });
+    await notifyLibrarySeatWaitlist(user, task, result).catch((error) => {
+      logger.warn("library_seat_waitlist_notify_failed", { taskId: task.id, error: error?.message });
+    });
+    return result;
+  }
+  if (scanResult.status === "expired") {
+    const result = {
+      status: "expired",
+      message: "候补时段已结束，未能预约成功。",
+      areaName: null,
+      seatId: null,
+      seatLabel: null
+    };
+    await repository.finishLibrarySeatWaitlist(user.id, task.id, result, nowValue);
+    return result;
+  }
+  await repository.updateLibrarySeatWaitlist(user.id, task.id, {
+    status: "listening",
+    last_message: scanResult.message || null,
+    last_run_at: nowValue,
+    consecutive_failures: 0
+  }, nowValue);
+  return { status: "listening", message: scanResult.message || null };
 }
 
 async function loginWithCasFull({ username, password, rememberMe = true, saveCredentials = false }) {
@@ -7588,6 +7903,50 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    const librarySeatWaitlistPath = url.pathname.match(/^\/api\/campus\/library-seat\/waitlists(?:\/([^/]+))?$/);
+    if (librarySeatWaitlistPath) {
+      const userId = currentUserId();
+      const taskId = librarySeatWaitlistPath[1] ? decodeURIComponent(librarySeatWaitlistPath[1]) : "";
+      if (req.method === "GET" && !taskId) {
+        json(res, 200, {
+          ok: true,
+          data: (await repository.listLibrarySeatWaitlists(userId)).map(librarySeatWaitlistPublic)
+        });
+        return;
+      }
+      if (req.method === "POST" && !taskId) {
+        const body = await readBodyJson(req);
+        const targets = await librarySeatWaitlistRequestTargets(userId, appSession.platformUserId);
+        const data = await saveLibrarySeatWaitlist(userId, body, null, targets);
+        wakeLibrarySeatWaitlistScheduler("task_changed");
+        logger.info("audit_library_seat_waitlist_created", { actorUserId: userId, taskId: data.id });
+        json(res, 201, { ok: true, data });
+        return;
+      }
+      if (!taskId) {
+        throw new HttpError(400, "座位候补任务标识不正确。", null, "INVALID_LIBRARY_SEAT_WAITLIST_ID");
+      }
+      const existing = await repository.getLibrarySeatWaitlist(userId, taskId);
+      if (!existing) {
+        throw new HttpError(404, "座位候补任务不存在。", null, "LIBRARY_SEAT_WAITLIST_NOT_FOUND");
+      }
+      if (req.method === "PUT") {
+        const body = await readBodyJson(req);
+        const data = await saveLibrarySeatWaitlist(userId, { ...existing, ...body }, existing);
+        wakeLibrarySeatWaitlistScheduler("task_changed");
+        logger.info("audit_library_seat_waitlist_updated", { actorUserId: userId, taskId: data.id, enabled: data.enabled });
+        json(res, 200, { ok: true, data });
+        return;
+      }
+      if (req.method === "DELETE") {
+        await repository.deleteLibrarySeatWaitlist(userId, taskId);
+        wakeLibrarySeatWaitlistScheduler("task_changed");
+        logger.info("audit_library_seat_waitlist_deleted", { actorUserId: userId, taskId });
+        json(res, 200, { ok: true, data: null });
+        return;
+      }
+    }
+
     if (url.pathname === "/api/identity-card") {
       json(res, 200, { ok: true, data: await getIdentityCard() });
       return;
@@ -8057,6 +8416,117 @@ function startLibroomAutoReservationScheduler() {
   scheduleLibroomAutoReservationScan("startup", Math.max(0, LIBROOM_AUTO_RESERVATION_START_DELAY_MS));
 }
 
+function librarySeatWaitlistSchedulerEnabled() {
+  return Number.isFinite(LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS) && LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS > 0;
+}
+
+function scheduleLibrarySeatWaitlistScan(reason, delayMs) {
+  if (shuttingDown || !librarySeatWaitlistSchedulerEnabled()) return;
+  if (librarySeatWaitlistTimer) clearTimeout(librarySeatWaitlistTimer);
+  const delay = Math.max(0, Math.trunc(Number(delayMs) || 0));
+  librarySeatWaitlistTimer = setTimeout(() => {
+    librarySeatWaitlistTimer = null;
+    trackBackgroundTask(() => runLibrarySeatWaitlistScheduler(reason));
+  }, delay);
+}
+
+function wakeLibrarySeatWaitlistScheduler(reason) {
+  if (!librarySeatWaitlistSchedulerEnabled()) return;
+  if (librarySeatWaitlistRunning) {
+    librarySeatWaitlistRescheduleRequested = true;
+    return;
+  }
+  scheduleLibrarySeatWaitlistScan(reason, 0);
+}
+
+async function runLibrarySeatWaitlistScheduler(reason) {
+  if (shuttingDown) return;
+  if (librarySeatWaitlistRunning) {
+    librarySeatWaitlistRescheduleRequested = true;
+    return;
+  }
+  librarySeatWaitlistRunning = true;
+  let nextDelayMs = LIBRARY_SEAT_WAITLIST_SLOW_INTERVAL_MS;
+  try {
+    const rows = await repository.listEnabledLibrarySeatWaitlists({ limit: BACKGROUND_USER_SCAN_LIMIT + 1 });
+    const tasks = rows.slice(0, BACKGROUND_USER_SCAN_LIMIT);
+    const now = new Date();
+    await mapWithConcurrency(tasks, 2, async (task) => {
+      const plan = librarySeatWaitlistRunPlan(task, now);
+      const user = await repository.findUserById(task.user_id);
+      if (!user || user.disabled) {
+        if (plan.expired) {
+          await repository.finishLibrarySeatWaitlist(task.user_id, task.id, {
+            status: "expired",
+            message: "候补时段已结束，未能预约成功。",
+            areaName: null,
+            seatId: null,
+            seatLabel: null
+          }, now.toISOString());
+        }
+        return "skipped";
+      }
+      return userContextStorage.run(
+        { requestId: `library-seat-waitlist-${randomUUID()}`, user },
+        async () => {
+          try {
+            const result = await runLibrarySeatWaitlistTask(task, user, now);
+            return result?.status || "claimed";
+          } catch (error) {
+            const failures = Number(task.consecutive_failures || 0) + 1;
+            const message = librarySeatWaitlistFailureText(error);
+            const timestamp = now.toISOString();
+            if (failures >= LIBRARY_SEAT_WAITLIST_MAX_FAILURES) {
+              const result = {
+                status: "failed",
+                message: `候补已停止：${message}`,
+                areaName: null,
+                seatId: null,
+                seatLabel: null
+              };
+              await repository.finishLibrarySeatWaitlist(user.id, task.id, result, timestamp);
+              await notifyLibrarySeatWaitlist(user, task, result).catch((notifyError) => {
+                logger.warn("library_seat_waitlist_notify_failed", { taskId: task.id, error: notifyError?.message });
+              });
+            } else {
+              await repository.updateLibrarySeatWaitlist(user.id, task.id, {
+                status: "listening",
+                last_message: `第 ${failures} 次检测失败：${message}`,
+                consecutive_failures: failures,
+                last_run_at: timestamp
+              }, timestamp);
+            }
+            logger.warn("library_seat_waitlist_scan_task_failed", { userId: user.id, taskId: task.id, failures });
+            return "failed";
+          }
+        }
+      );
+    });
+    nextDelayMs = librarySeatWaitlistNextScanDelay(rows, new Date(), {
+      fastMs: LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS,
+      mediumMs: LIBRARY_SEAT_WAITLIST_MEDIUM_INTERVAL_MS,
+      slowMs: LIBRARY_SEAT_WAITLIST_SLOW_INTERVAL_MS,
+      hotWindowMs: LIBRARY_SEAT_WAITLIST_HOT_WINDOW_MS,
+      mediumWindowMs: LIBRARY_SEAT_WAITLIST_MEDIUM_WINDOW_MS
+    });
+    if (reason !== "interval" && tasks.length) {
+      logger.info("library_seat_waitlist_scan_completed", { reason, tasks: tasks.length });
+    }
+  } catch (error) {
+    logger.warn("library_seat_waitlist_scan_failed", { reason, error: error?.message });
+  } finally {
+    librarySeatWaitlistRunning = false;
+    const delay = librarySeatWaitlistRescheduleRequested ? 0 : nextDelayMs;
+    librarySeatWaitlistRescheduleRequested = false;
+    scheduleLibrarySeatWaitlistScan("interval", delay);
+  }
+}
+
+function startLibrarySeatWaitlistScheduler() {
+  if (!librarySeatWaitlistSchedulerEnabled()) return;
+  scheduleLibrarySeatWaitlistScan("startup", Math.max(0, LIBRARY_SEAT_WAITLIST_START_DELAY_MS));
+}
+
 const server = createServer((req, res) => {
   const incomingRequestId = String(req.headers["x-request-id"] || "");
   const requestId = /^[A-Za-z0-9._:-]{1,128}$/.test(incomingRequestId) ? incomingRequestId : randomUUID();
@@ -8118,6 +8588,7 @@ server.listen(PORT, HOST, () => {
   startAcademicAutoRefresh();
   startAcademicReminderScheduler();
   startLibroomAutoReservationScheduler();
+  startLibrarySeatWaitlistScheduler();
 });
 
 let shuttingDown = false;
@@ -8144,6 +8615,7 @@ function shutdown(signal) {
   if (academicReminderStartTimer) clearTimeout(academicReminderStartTimer);
   if (academicReminderInterval) clearInterval(academicReminderInterval);
   if (libroomAutoReservationTimer) clearTimeout(libroomAutoReservationTimer);
+  if (librarySeatWaitlistTimer) clearTimeout(librarySeatWaitlistTimer);
   for (const job of academicEvaluationAutoJobs.values()) {
     if (!activeAcademicEvaluationAutoStatus(job.status)) continue;
     job.cancelRequested = true;

@@ -710,6 +710,36 @@ class PlatformApi(
             )
         }
 
+    suspend fun librarySeatWaitlists(): List<LibrarySeatWaitlistTask> = withContext(Dispatchers.IO) {
+        val response = execute(CAMPUS_LIBRARY_SEAT_WAITLISTS_PATH)
+        val data = response.json.optJSONArray("data") ?: response.jsonArray
+        data.objects().mapNotNull { it.toLibrarySeatWaitlistTask() }
+    }
+
+    suspend fun createLibrarySeatWaitlist(request: LibrarySeatWaitlistRequest): Unit = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("venueId", request.venueId)
+            .put("floorId", request.floorId)
+            .put("venueName", request.venueName)
+            .put("floorName", request.floorName)
+            .put("date", request.date)
+            .put("startMinute", request.startMinute)
+            .put("endMinute", request.endMinute)
+            .put("minLabel", request.minLabel)
+            .put("maxLabel", request.maxLabel)
+        execute(CAMPUS_LIBRARY_SEAT_WAITLISTS_PATH, method = "POST", body = body)
+    }
+
+    suspend fun setLibrarySeatWaitlistEnabled(taskId: String, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
+        val path = "$CAMPUS_LIBRARY_SEAT_WAITLISTS_PATH/${encodePath(taskId)}"
+        execute(path, method = "PUT", body = JSONObject().put("enabled", enabled))
+    }
+
+    suspend fun deleteLibrarySeatWaitlist(taskId: String): Unit = withContext(Dispatchers.IO) {
+        val path = "$CAMPUS_LIBRARY_SEAT_WAITLISTS_PATH/${encodePath(taskId)}"
+        execute(path, method = "DELETE")
+    }
+
     suspend fun campusReservationRules(spaceId: Int): String = withContext(Dispatchers.IO) {
         val response = execute("$CAMPUS_LIBROOM_RULES_PATH?spaceId=$spaceId")
         val data = response.json.opt("data") ?: response.json
@@ -1987,6 +2017,41 @@ internal fun parseLibrarySeatReservationRecord(row: JSONObject): LibrarySeatRese
         },
         message = row.seatString("message"),
         awayRange = row.seatString("awayRange"),
+    )
+}
+
+internal fun JSONObject.toLibrarySeatWaitlistTask(): LibrarySeatWaitlistTask? {
+    val id = seatString("id")
+    if (id.isBlank()) return null
+    val status = seatString("status").ifBlank { "listening" }
+    return LibrarySeatWaitlistTask(
+        id = id,
+        enabled = optBoolean("enabled", false),
+        venueId = seatString("venueId"),
+        venueName = seatString("venueName"),
+        floorId = seatString("floorId"),
+        floorName = seatString("floorName"),
+        date = seatString("date"),
+        startMinute = optInt("startMinute", 0),
+        endMinute = optInt("endMinute", 0),
+        minLabel = optInt("minLabel", 1),
+        maxLabel = optInt("maxLabel", 45),
+        status = status,
+        statusText = when (status) {
+            "success" -> "已预约成功"
+            "failed" -> "已停止"
+            "stopped" -> "已停止"
+            "expired" -> "时段已结束"
+            else -> "监听中"
+        },
+        lastMessage = seatString("lastMessage"),
+        lastAreaName = seatString("lastAreaName"),
+        lastSeatLabel = seatString("lastSeatLabel"),
+        lastSeatId = seatString("lastSeatId"),
+        consecutiveFailures = optInt("consecutiveFailures", 0),
+        createdAt = seatString("createdAt"),
+        updatedAt = seatString("updatedAt"),
+        lastRunAt = seatString("lastRunAt"),
     )
 }
 

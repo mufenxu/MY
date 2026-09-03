@@ -73,6 +73,8 @@ import cn.pxyb.mycontrol.data.LibrarySeatReservationHistory
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRecord
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
 import cn.pxyb.mycontrol.data.LibrarySeatStatus
+import cn.pxyb.mycontrol.data.LibrarySeatWaitlistRequest
+import cn.pxyb.mycontrol.data.LibrarySeatWaitlistTask
 import cn.pxyb.mycontrol.data.QuickScenePreference
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.ReleaseData
@@ -253,6 +255,10 @@ data class AppUiState(
     val librarySeatReservationsLoading: Boolean = false,
     val librarySeatHistoryReservations: LibrarySeatReservationHistory = LibrarySeatReservationHistory(),
     val librarySeatHistoryReservationsLoading: Boolean = false,
+    val librarySeatWaitlists: List<LibrarySeatWaitlistTask> = emptyList(),
+    val librarySeatWaitlistsLoading: Boolean = false,
+    val librarySeatWaitlistSaving: Boolean = false,
+    val librarySeatWaitlistDeletingId: String? = null,
     val librarySeatSelectedVenueId: String? = null,
     val librarySeatSelectedDate: String? = null,
     val librarySeatSelectedFloorId: String? = null,
@@ -2268,6 +2274,7 @@ class AppViewModel(
     fun refreshLibrarySeat() {
         loadLibrarySeatOverview(force = true)
         loadLibrarySeatReservations(force = true)
+        loadLibrarySeatWaitlists(force = true)
     }
 
     fun loadLibrarySeatOverview(force: Boolean = false) {
@@ -2543,6 +2550,121 @@ class AppViewModel(
                     it.copy(
                         librarySeatHistoryReservationsLoading = false,
                         librarySeatError = error.message ?: "历史预约记录加载失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun loadLibrarySeatWaitlists(force: Boolean = false) {
+        if (mutableState.value.librarySeatWaitlistsLoading && !force) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(librarySeatWaitlistsLoading = true) }
+            try {
+                val tasks = api.librarySeatWaitlists()
+                mutableState.update {
+                    it.copy(
+                        librarySeatWaitlists = tasks,
+                        librarySeatWaitlistsLoading = false,
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        librarySeatWaitlistsLoading = false,
+                        librarySeatError = error.message ?: "候补任务加载失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun createLibrarySeatWaitlist(request: LibrarySeatWaitlistRequest, onSuccess: () -> Unit = {}) {
+        if (mutableState.value.librarySeatWaitlistSaving) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(librarySeatWaitlistSaving = true, librarySeatError = null, librarySeatMessage = null)
+            }
+            try {
+                api.createLibrarySeatWaitlist(request)
+                mutableState.update {
+                    it.copy(
+                        librarySeatWaitlistSaving = false,
+                        librarySeatMessage = "候补监听已开启，检测到释放座位将自动预约。",
+                    )
+                }
+                loadLibrarySeatWaitlists(force = true)
+                onSuccess()
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        librarySeatWaitlistSaving = false,
+                        librarySeatError = error.message ?: "候补任务创建失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun setLibrarySeatWaitlistEnabled(taskId: String, enabled: Boolean, onSuccess: () -> Unit = {}) {
+        if (mutableState.value.librarySeatWaitlistSaving) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(librarySeatWaitlistSaving = true, librarySeatError = null, librarySeatMessage = null)
+            }
+            try {
+                api.setLibrarySeatWaitlistEnabled(taskId, enabled)
+                mutableState.update {
+                    it.copy(
+                        librarySeatWaitlistSaving = false,
+                        librarySeatMessage = if (enabled) "候补监听已重新开启。" else "已停止候补监听。",
+                    )
+                }
+                loadLibrarySeatWaitlists(force = true)
+                onSuccess()
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        librarySeatWaitlistSaving = false,
+                        librarySeatError = error.message ?: "候补任务状态更新失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun deleteLibrarySeatWaitlist(taskId: String, onSuccess: () -> Unit = {}) {
+        if (taskId.isBlank() || mutableState.value.librarySeatWaitlistSaving) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(
+                    librarySeatWaitlistSaving = true,
+                    librarySeatWaitlistDeletingId = taskId,
+                    librarySeatError = null,
+                    librarySeatMessage = null,
+                )
+            }
+            try {
+                api.deleteLibrarySeatWaitlist(taskId)
+                mutableState.update {
+                    it.copy(
+                        librarySeatWaitlistSaving = false,
+                        librarySeatWaitlistDeletingId = null,
+                        librarySeatMessage = "候补任务已删除。",
+                    )
+                }
+                loadLibrarySeatWaitlists(force = true)
+                onSuccess()
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        librarySeatWaitlistSaving = false,
+                        librarySeatWaitlistDeletingId = null,
+                        librarySeatError = error.message ?: "候补任务删除失败，请重试。",
                     )
                 }
             }
