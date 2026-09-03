@@ -17,6 +17,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
 import android.provider.Settings
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -135,6 +136,18 @@ class MainActivity : ComponentActivity() {
         OperationalSyncScheduler.setAppForeground(this, true)
         appViewModel.setAppInForeground(true)
         notificationsEnabled.value = hasNotificationPermission()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 前台活跃时清除安全遮蔽，保证用户正常截屏与使用
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+
+    override fun onPause() {
+        // 切出到多任务界面或锁屏时自动加上安全标记，防止Recent Apps系统缩略图泄露敏感凭据与会话
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        super.onPause()
     }
 
     override fun onStop() {

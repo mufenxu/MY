@@ -443,9 +443,15 @@ fun IconTile(icon: ImageVector, tint: Color, background: Color, modifier: Modifi
 }
 
 @Composable
-fun FeedbackBanner(message: String, error: Boolean, modifier: Modifier = Modifier) {
+fun FeedbackBanner(
+    message: String,
+    error: Boolean,
+    modifier: Modifier = Modifier,
+    onRetry: (() -> Unit)? = null,
+) {
     val foreground = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer
     val background = if (error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer
+    val haptics = LocalHapticFeedback.current
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -461,6 +467,79 @@ fun FeedbackBanner(message: String, error: Boolean, modifier: Modifier = Modifie
             modifier = Modifier.size(18.dp),
         )
         Text(message, style = MaterialTheme.typography.bodyMedium, color = foreground, modifier = Modifier.weight(1f))
+        if (onRetry != null) {
+            Surface(
+                onClick = {
+                    AppHaptics.tick(haptics)
+                    onRetry()
+                },
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .pressFeedback(remember { MutableInteractionSource() }, pressedScale = 0.94f),
+                shape = RoundedCornerShape(8.dp),
+                color = foreground.copy(alpha = 0.14f),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(
+                        Icons.Outlined.Refresh,
+                        contentDescription = "重试",
+                        tint = foreground,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        "重试",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = foreground,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 标准毛玻璃微光骨架卡片 (GlassShimmerCard)
+ * 具备与 AppPanel 一致的 20.dp 圆角、发丝描边和毛玻璃底色，带有平滑扫过的流光动效
+ */
+@Composable
+fun GlassShimmerCard(
+    modifier: Modifier = Modifier,
+    height: Dp = 72.dp,
+    shape: RoundedCornerShape = RoundedCornerShape(20.dp),
+) {
+    val dark = isSystemInDarkTheme()
+    val glass = rememberGlassPalette(radius = 20.dp)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .glassPanel(glass)
+            .clip(shape)
+            .glassShimmer(dark),
+    )
+}
+
+/**
+ * 列表微光骨架屏 (GlassShimmerList)
+ * 一键生成指定数量的骨架卡片流，间距严格对齐 12.dp 规范，避免布局突兀跳动
+ */
+@Composable
+fun GlassShimmerList(
+    itemCount: Int = 3,
+    modifier: Modifier = Modifier,
+    itemHeight: Dp = 72.dp,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        repeat(itemCount) {
+            GlassShimmerCard(height = itemHeight)
+        }
     }
 }
 

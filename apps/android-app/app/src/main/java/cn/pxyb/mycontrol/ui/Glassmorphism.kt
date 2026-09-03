@@ -1,5 +1,11 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -7,6 +13,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.composed
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
@@ -121,4 +129,45 @@ private fun DrawScope.drawAuroraBlob(color: Color, alpha: Float, center: Offset,
         radius = radiusPx,
         center = center,
     )
+}
+
+/**
+ * 为毛玻璃组件增加优雅微光扫过（Shimmer）动效。
+ * 严格契合极光毛玻璃语言：使用半透明高光渐变带在卡片轮廓上平滑掠过，暗色与亮色自适应。
+ */
+fun Modifier.glassShimmer(dark: Boolean): Modifier = this.composed {
+    val transition = rememberInfiniteTransition(label = "glassShimmerTransition")
+    val progress by transition.animateFloat(
+        initialValue = -1f,
+        targetValue = 2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1350, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "glassShimmerProgress",
+    )
+
+    val baseAlpha = if (dark) 0.03f else 0.08f
+    val highlightAlpha = if (dark) 0.16f else 0.28f
+    val highlightColor = if (dark) Color(0xFF93C5FD) else Color.White
+
+    drawWithCache {
+        val width = size.width
+        val height = size.height
+        val xOffset = progress * width
+
+        val shimmerBrush = Brush.linearGradient(
+            colorStops = arrayOf(
+                0.0f to highlightColor.copy(alpha = baseAlpha),
+                0.5f to highlightColor.copy(alpha = highlightAlpha),
+                1.0f to highlightColor.copy(alpha = baseAlpha),
+            ),
+            start = Offset(xOffset, 0f),
+            end = Offset(xOffset + width * 0.7f, height),
+        )
+
+        onDrawBehind {
+            drawRect(brush = shimmerBrush)
+        }
+    }
 }

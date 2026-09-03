@@ -24,8 +24,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
@@ -1717,18 +1720,30 @@ private fun AuthenticatedShell(
                             end = shellInsets.navigationEnd,
                         ),
                 enterTransition = {
-                    fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
-                    scaleIn(initialScale = 0.985f, animationSpec = tween(220, easing = FastOutSlowInEasing))
+                    slideInHorizontally(
+                        initialOffsetX = { fullWidth -> (fullWidth * 0.08f).toInt() },
+                        animationSpec = MotionTokens.standardTween(),
+                    ) + fadeIn(animationSpec = MotionTokens.standardTween()) +
+                    scaleIn(initialScale = 0.97f, animationSpec = MotionTokens.standardTween())
                 },
                 exitTransition = {
-                    fadeOut(animationSpec = tween(140, easing = FastOutSlowInEasing))
+                    slideOutHorizontally(
+                        targetOffsetX = { fullWidth -> (-fullWidth * 0.04f).toInt() },
+                        animationSpec = MotionTokens.fastTween(),
+                    ) + fadeOut(animationSpec = MotionTokens.fastTween())
                 },
                 popEnterTransition = {
-                    fadeIn(animationSpec = tween(220, easing = FastOutSlowInEasing)) +
-                    scaleIn(initialScale = 0.985f, animationSpec = tween(220, easing = FastOutSlowInEasing))
+                    slideInHorizontally(
+                        initialOffsetX = { fullWidth -> (-fullWidth * 0.04f).toInt() },
+                        animationSpec = MotionTokens.standardTween(),
+                    ) + fadeIn(animationSpec = MotionTokens.standardTween()) +
+                    scaleIn(initialScale = 0.97f, animationSpec = MotionTokens.standardTween())
                 },
                 popExitTransition = {
-                    fadeOut(animationSpec = tween(140, easing = FastOutSlowInEasing))
+                    slideOutHorizontally(
+                        targetOffsetX = { fullWidth -> (fullWidth * 0.10f).toInt() },
+                        animationSpec = MotionTokens.fastTween(),
+                    ) + fadeOut(animationSpec = MotionTokens.fastTween())
                 },
             ) {
                 composable(AppRoute.Overview) {

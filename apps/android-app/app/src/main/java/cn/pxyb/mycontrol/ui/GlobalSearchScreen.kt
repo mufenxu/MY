@@ -92,7 +92,11 @@ fun GlobalSearchScreen(
                 ),
             )
         }
-        if (state.refreshing) {
+        if (state.refreshing && results.isEmpty()) {
+            item(key = "search-shimmer") {
+                GlassShimmerList(itemCount = if (isTablet) 6 else 4, itemHeight = 64.dp)
+            }
+        } else if (state.refreshing) {
             item(key = "search-loading") {
                 LoadingBlock("正在更新搜索数据")
             }

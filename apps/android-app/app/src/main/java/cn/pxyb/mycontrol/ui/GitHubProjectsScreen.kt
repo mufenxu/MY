@@ -136,8 +136,8 @@ fun GitHubProjectsScreen(
                 }
             }
             when {
-                !loaded -> item(key = "github-projects-loading") {
-                    LoadingBlock("正在加载仓库")
+                !loaded -> item(key = "github-projects-shimmer") {
+                    GlassShimmerList(itemCount = 3, itemHeight = 104.dp)
                 }
                 repositories.isEmpty() -> item(key = "github-projects-empty") {
                     GitHubEmptyState(onRefresh = onRefresh)
@@ -239,8 +239,8 @@ private fun GitHubReleasesPane(
         },
     ) {
         when {
-            !loaded -> item(key = "github-releases-loading") {
-                LoadingBlock("正在加载 Releases")
+            !loaded -> item(key = "github-releases-shimmer") {
+                GlassShimmerList(itemCount = 3, itemHeight = 84.dp)
             }
             releases.isEmpty() -> item(key = "github-releases-empty") {
                 GitHubReleasesEmptyState(onCreate = onCreateRelease)

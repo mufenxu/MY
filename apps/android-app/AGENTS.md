@@ -53,12 +53,28 @@
   - 二级页面骨架：`AppSubPage`
   - 卡片面板：`AppPanel`
   - 页头操作：`AppSecondaryHeader` / `AppHeaderIconButton`
+  - 骨架屏加载：`GlassShimmerCard` / `GlassShimmerList` / `Modifier.glassShimmer(dark)`（首屏/卡片流加载优先使用骨架微光，杜绝突兀布局跳变）
   - 弹窗：`AppDialog`（含 `AppDialogPrimaryButton`/`AppDialogSecondaryButton`/`AppDialogDangerButton`）
   - 开关：`AppSwitch`（内置 48dp 热区与微震动）
-  - 反馈条：`FeedbackBanner`
-  - 加载态与空状态：`LoadingBlock("文案")` / `EmptyBlock("标题", "说明")`
+  - 反馈与重试：`FeedbackBanner`（支持可选 `onRetry` 就地一键重试回调）
+  - 空状态：`EmptyBlock("标题", "说明")`
 
-## 6. 红线
+## 6. 加载与网络容错规范 (Loading & Resilience)
+
+- **骨架屏优先原则**：
+  - 页面初次加载或长列表异步拉取时，严禁使用突兀的居中大菊花。应采用 `GlassShimmerList` 预占位，数据到达后自然渲染；
+  - 微光动画必须使用 `Modifier.glassShimmer(dark)`，渐变光斑自适应深浅色，禁止生硬刺眼的白光。
+- **就地一键重试 (Inline Retry)**：
+  - 异步请求失败时，`FeedbackBanner(message, error = true, onRetry = { ... })` 必须尽可能传入重试操作，允许用户就地重新发起请求，严禁迫使用户只能退出重进或整页下拉。
+
+## 7. 隐私安全与系统集成 (Security & System)
+
+- **多任务后台防窥屏 (FLAG_SECURE)**：
+  - `MainActivity` 在 `onPause` 时自动追加 `FLAG_SECURE`，在用户切入 Recent Apps 多任务界面或分屏预览时遮蔽缩略图，防止临时录屏或系统截屏泄露凭据密码；`onResume` 前台恢复时自动解除，保障用户正常截屏与使用。
+- **预测性手势物理转场**：
+  - 路由栈切换采用 `slideInHorizontally` / `slideOutHorizontally` 水平推拉结合微缩放与淡入淡出，动效时长严格对齐 `MotionTokens`，呼应 Android 14/15 边缘手势的自然惯性。
+
+## 8. 红线
 
 - **严禁私造页面骨架**：二级页面必须统一接入 `AppSubPage`，不得自行拼凑带有未避让安全区的容器。
 - **严禁直角与彩色边框**：不新增直角面板、彩色粗边框或高饱和度投影。
@@ -66,7 +82,7 @@
 - **严禁混用状态跳转与路由栈**：二级路由必须登记在 `parentTabForSubScreen`。
 - **用户可见文案保持规范中文**（保留产品名、标准代码或国际协议字段原样）。
 
-## 7. 新增页面标准检查清单
+## 9. 新增页面标准检查清单
 
 1. **路由登记**：在 `parentTabForSubScreen` 中登记唯一父页面，返回由导航外壳调度。
 2. **骨架选型**：直接使用 `AppSubPage`。长信息流设置 `pinHeader = true`，短卡片设置 `pinHeader = false`。
