@@ -825,14 +825,17 @@ fun AppDialog(
 /** 弹窗主操作按钮：对齐 BrandBlue 官方科技蓝与 46dp 标准高度。 */
 // ---------------- 全 App 现代统一按钮体系 (方案 A：极光流光玻璃胶囊) ----------------
 
+// ---------------- 全 App 现代统一按钮体系 (方案 A：极光流光立体胶囊) ----------------
+
 /**
- * 全 App 现代主行动按钮 (Aurora Glass Pill)
+ * 全 App 现代主行动按钮 (Aurora Convex Glass Pill)
  *
- * 采用方案 A 极光流光全圆角胶囊：
- * 1. 形状：全圆角胶囊 RoundedCornerShape(50)；
- * 2. 材质：以 BrandBlue 为基准的主题主色，饱满圆润；
- * 3. 触感：内置 pressFeedback 物理弹性微缩放 + AppHaptics.tick 细腻微触感；
- * 4. 状态：支持可选图标 icon、loading 加载平滑 Spinner、enabled 禁用态。
+ * 方案 A 极光流光立体胶囊：
+ * 1. 饱满立体微凸光感：顶部受光海蓝 (#4F8EF7) -> 中间饱满科技蓝 (#2563EB) -> 底部阴影收边 (#1D4ED8)；
+ * 2. 顶部物理反光高光：0.0f~0.22f 的半透明白光反射发丝边缘；
+ * 3. 实体外切高光边框：顶部 0.45f 发丝受光切边，底部暗色收口；
+ * 4. 悬浮科技微辉光：4.dp 科技蓝软光晕立体阴影，从屏幕表面真实“浮起凸出”；
+ * 5. 极佳触控：全圆角 RoundedCornerShape(50) 胶囊 + pressFeedback 物理弹性微缩放 + AppHaptics.tick 细腻触觉。
  */
 @Composable
 fun AppButton(
@@ -848,6 +851,41 @@ fun AppButton(
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 
+    // 1. 三段式立体微凸圆弧渐变
+    val gradientBrush = if (enabled && !loading) {
+        Brush.verticalGradient(
+            listOf(
+                Color(0xFF4F8EF7), // 顶部受光亮蓝
+                Color(0xFF2563EB), // 中间饱满科技蓝
+                Color(0xFF1D4ED8), // 底部阴影收边深蓝
+            ),
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
+            ),
+        )
+    }
+
+    // 2. 顶部镜面反光发丝层
+    val topHighlight = Brush.verticalGradient(
+        colorStops = arrayOf(
+            0.0f to Color.White.copy(alpha = 0.42f),
+            0.22f to Color.White.copy(alpha = 0.05f),
+            1.0f to Color.Transparent,
+        ),
+    )
+
+    // 3. 顶部发丝高光受光边框
+    val borderBrush = Brush.verticalGradient(
+        listOf(
+            Color.White.copy(alpha = 0.45f),
+            Color.White.copy(alpha = 0.10f),
+        ),
+    )
+
     Button(
         onClick = {
             AppHaptics.tick(haptics)
@@ -855,6 +893,13 @@ fun AppButton(
         },
         modifier = modifier
             .height(height)
+            .shadow(
+                elevation = if (enabled && !loading) 4.dp else 0.dp,
+                shape = shape,
+                spotColor = Color(0xFF2563EB).copy(alpha = 0.48f),
+                ambientColor = Color.Black.copy(alpha = 0.20f),
+            )
+            .border(1.dp, borderBrush, shape)
             .pressFeedback(interactionSource),
         interactionSource = interactionSource,
         enabled = enabled && !loading,
@@ -867,47 +912,57 @@ fun AppButton(
             disabledElevation = 0.dp,
         ),
         colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
-            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f),
+            containerColor = Color.Transparent,
+            contentColor = Color.White,
+            disabledContainerColor = Color.Transparent,
+            disabledContentColor = Color.White.copy(alpha = 0.70f),
         ),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(0.dp),
     ) {
-        if (loading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.onPrimary,
-            )
-        } else {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (icon != null) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary,
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(gradientBrush)
+                .background(topHighlight)
+                .padding(horizontal = 20.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = Color.White,
+                )
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (icon != null) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = Color.White,
+                        )
+                    }
+                    Text(
+                        text = text,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.5.sp,
+                        letterSpacing = (-0.1).sp,
+                        color = Color.White,
                     )
                 }
-                Text(
-                    text = text,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.5.sp,
-                    letterSpacing = (-0.1).sp,
-                )
             }
         }
     }
 }
 
 /**
- * 全 App 现代次要行动按钮 (Frosted Glass Pill)
+ * 全 App 现代次要行动按钮 (Frosted Convex Glass Pill)
  *
- * 采用通透半透明磨砂质感 + 1dp 发丝描边 + 50% 胶囊圆角，悬浮在极光背景上，主次分明。
+ * 采用微凸磨砂白/深灰质感 + 顶部发丝受光边框 + 50% 胶囊全圆角，通透微立体。
  */
 @Composable
 fun AppSecondaryButton(
@@ -924,8 +979,36 @@ fun AppSecondaryButton(
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 
-    val bgColor = if (dark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-    val borderColor = if (dark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.08f)
+    val gradientBrush = if (dark) {
+        Brush.verticalGradient(
+            listOf(
+                Color.White.copy(alpha = 0.14f),
+                Color.White.copy(alpha = 0.07f),
+            ),
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(
+                Color.White.copy(alpha = 0.95f),
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.70f),
+            ),
+        )
+    }
+
+    val topHighlight = Brush.verticalGradient(
+        colorStops = arrayOf(
+            0.0f to (if (dark) Color.White.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.40f)),
+            0.25f to Color.Transparent,
+            1.0f to Color.Transparent,
+        ),
+    )
+
+    val borderBrush = Brush.verticalGradient(
+        listOf(
+            if (dark) Color.White.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.85f),
+            if (dark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f),
+        ),
+    )
 
     Button(
         onClick = {
@@ -934,54 +1017,69 @@ fun AppSecondaryButton(
         },
         modifier = modifier
             .height(height)
-            .pressFeedback(interactionSource)
-            .border(1.dp, borderColor, shape),
+            .shadow(
+                elevation = if (enabled && !loading) 2.dp else 0.dp,
+                shape = shape,
+                spotColor = Color.Black.copy(alpha = if (dark) 0.30f else 0.08f),
+                ambientColor = Color.Black.copy(alpha = 0.10f),
+            )
+            .border(1.dp, borderBrush, shape)
+            .pressFeedback(interactionSource),
         interactionSource = interactionSource,
         enabled = enabled && !loading,
         shape = shape,
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = bgColor,
+            containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onSurface,
-            disabledContainerColor = if (dark) Color.White.copy(alpha = 0.04f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            disabledContainerColor = Color.Transparent,
             disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
         ),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(0.dp),
     ) {
-        if (loading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (icon != null) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(gradientBrush)
+                .background(topHighlight)
+                .padding(horizontal = 20.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (icon != null) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = text,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.5.sp,
+                        letterSpacing = (-0.1).sp,
                     )
                 }
-                Text(
-                    text = text,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.5.sp,
-                    letterSpacing = (-0.1).sp,
-                )
             }
         }
     }
 }
 
 /**
- * 全 App 现代危险警示按钮 (Rose Glass Pill)
+ * 全 App 现代危险警示按钮 (Rose Convex Glass Pill)
  *
- * 柔和玫瑰浅底 + 珊瑚红文字与发丝描边，全圆角胶囊形态。
+ * 柔和珊瑚红立体微凸渐变 + 顶部受光高光 + 悬浮红色光晕，警示明确且现代质感强烈。
  */
 @Composable
 fun AppDangerButton(
@@ -996,10 +1094,29 @@ fun AppDangerButton(
 ) {
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
-    val dark = isSystemInDarkTheme()
 
-    val bgColor = if (dark) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
-    val borderColor = if (dark) MaterialTheme.colorScheme.error.copy(alpha = 0.35f) else MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
+    val gradientBrush = Brush.verticalGradient(
+        listOf(
+            Color(0xFFF87171), // 顶部受光珊瑚红
+            Color(0xFFEF4444), // 中间饱满警告红
+            Color(0xFFDC2626), // 底部阴影收边深红
+        ),
+    )
+
+    val topHighlight = Brush.verticalGradient(
+        colorStops = arrayOf(
+            0.0f to Color.White.copy(alpha = 0.40f),
+            0.22f to Color.White.copy(alpha = 0.05f),
+            1.0f to Color.Transparent,
+        ),
+    )
+
+    val borderBrush = Brush.verticalGradient(
+        listOf(
+            Color.White.copy(alpha = 0.40f),
+            Color.White.copy(alpha = 0.10f),
+        ),
+    )
 
     Button(
         onClick = {
@@ -1008,45 +1125,61 @@ fun AppDangerButton(
         },
         modifier = modifier
             .height(height)
-            .pressFeedback(interactionSource)
-            .border(1.dp, borderColor, shape),
+            .shadow(
+                elevation = if (enabled && !loading) 4.dp else 0.dp,
+                shape = shape,
+                spotColor = Color(0xFFEF4444).copy(alpha = 0.45f),
+                ambientColor = Color.Black.copy(alpha = 0.18f),
+            )
+            .border(1.dp, borderBrush, shape)
+            .pressFeedback(interactionSource),
         interactionSource = interactionSource,
         enabled = enabled && !loading,
         shape = shape,
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = bgColor,
-            contentColor = MaterialTheme.colorScheme.error,
-            disabledContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
-            disabledContentColor = MaterialTheme.colorScheme.error.copy(alpha = 0.45f),
+            containerColor = Color.Transparent,
+            contentColor = Color.White,
+            disabledContainerColor = Color.Transparent,
+            disabledContentColor = Color.White.copy(alpha = 0.70f),
         ),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(0.dp),
     ) {
-        if (loading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.error,
-            )
-        } else {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (icon != null) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.error,
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(gradientBrush)
+                .background(topHighlight)
+                .padding(horizontal = 20.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = Color.White,
+                )
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (icon != null) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = Color.White,
+                        )
+                    }
+                    Text(
+                        text = text,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.5.sp,
+                        letterSpacing = (-0.1).sp,
+                        color = Color.White,
                     )
                 }
-                Text(
-                    text = text,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.5.sp,
-                    letterSpacing = (-0.1).sp,
-                )
             }
         }
     }
