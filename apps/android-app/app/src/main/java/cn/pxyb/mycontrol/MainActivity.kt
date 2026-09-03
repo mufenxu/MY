@@ -138,18 +138,6 @@ class MainActivity : ComponentActivity() {
         notificationsEnabled.value = hasNotificationPermission()
     }
 
-    override fun onResume() {
-        super.onResume()
-        // 前台活跃时清除安全遮蔽，保证用户正常截屏与使用
-        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-    }
-
-    override fun onPause() {
-        // 切出到多任务界面或锁屏时自动加上安全标记，防止Recent Apps系统缩略图泄露敏感凭据与会话
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        super.onPause()
-    }
-
     override fun onStop() {
         activityStopped = true
         OperationalSyncScheduler.setAppForeground(this, false)
@@ -313,10 +301,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // 前台活跃时清除安全遮蔽，保证用户正常截屏与使用
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (pendingNfcScene != null) enableNfcForegroundDispatch()
     }
 
     override fun onPause() {
+        // 切出到多任务列表预览时自动加上安全标记，防止Recent Apps系统缩略图泄露敏感凭据与会话
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         runCatching { nfcAdapter?.disableForegroundDispatch(this) }
         super.onPause()
     }
