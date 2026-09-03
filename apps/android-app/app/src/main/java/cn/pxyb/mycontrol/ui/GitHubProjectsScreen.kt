@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
+import androidx.compose.material.icons.outlined.RocketLaunch
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -662,42 +665,24 @@ private fun ReleaseBadge(release: GitHubReleaseRecord) {
 
 @Composable
 private fun GitHubEmptyState(onRefresh: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = "没有可展示的仓库",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        TextButton(onClick = onRefresh) {
-            Text("重新加载")
-        }
-    }
+    AppEmptyState(
+        title = "没有可展示的仓库",
+        detail = "请检查网络或点击下方按钮重新加载",
+        icon = Icons.Outlined.Public,
+        actionText = "重新加载",
+        onAction = onRefresh,
+    )
 }
 
 @Composable
 private fun GitHubReleasesEmptyState(onCreate: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = "还没有 Release",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        TextButton(onClick = onCreate) {
-            Text("新建 Release")
-        }
-    }
+    AppEmptyState(
+        title = "还没有 Release",
+        detail = "当前仓库尚未发布任何版本发行包",
+        icon = Icons.Outlined.RocketLaunch,
+        actionText = "新建 Release",
+        onAction = onCreate,
+    )
 }
 
 @Composable

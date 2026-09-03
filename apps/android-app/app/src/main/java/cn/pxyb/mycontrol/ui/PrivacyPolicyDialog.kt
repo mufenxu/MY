@@ -92,12 +92,11 @@ fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
 
                 Spacer(Modifier.height(18.dp))
 
-                Button(
+                AppButton(
+                    text = "已知晓",
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("已知晓")
-                }
+                )
             }
         }
     }

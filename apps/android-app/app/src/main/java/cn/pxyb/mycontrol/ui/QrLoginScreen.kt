@@ -153,22 +153,24 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 6.dp),
                 )
-                Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }, modifier = Modifier.padding(top = 20.dp)) {
-                    Text(if (permissionRequested) "再次授权" else "授权相机")
-                }
+                AppButton(
+                    text = if (permissionRequested) "再次授权" else "授权相机",
+                    icon = Icons.Outlined.CenterFocusWeak,
+                    onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+                    modifier = Modifier.padding(top = 20.dp),
+                )
                 if (permissionRequested) {
-                    OutlinedButton(
+                    AppSecondaryButton(
+                        text = "打开系统设置",
                         onClick = {
                             context.startActivity(
-                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                     data = Uri.parse("package:${context.packageName}")
                                 },
                             )
                         },
                         modifier = Modifier.padding(top = 10.dp),
-                    ) {
-                        Text("打开系统设置")
-                    }
+                    )
                 }
             }
         }
@@ -324,28 +326,21 @@ private fun QrConfirmationScreen(
 
             if (error != null) FeedbackBanner(error, true, Modifier.padding(top = 20.dp))
             Spacer(Modifier.height(24.dp))
-            Button(
+            AppButton(
+                text = if (target.confirmationMethod == "unavailable") "暂不可用" else "确认登录",
+                icon = if (target.confirmationMethod == "passkey") Icons.Outlined.Fingerprint else Icons.Outlined.CheckCircle,
                 onClick = onApprove,
                 enabled = !busy && target.confirmationMethod != "unavailable",
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = MaterialTheme.shapes.medium,
-            ) {
-                if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                else Icon(if (target.confirmationMethod == "passkey") Icons.Outlined.Fingerprint else Icons.Outlined.CheckCircle, contentDescription = null)
-                Text(
-                    if (target.confirmationMethod == "unavailable") "暂不可用" else "确认登录",
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
+                loading = busy,
+                modifier = Modifier.fillMaxWidth(),
+            )
             Spacer(Modifier.height(10.dp))
-            OutlinedButton(
+            AppSecondaryButton(
+                text = "拒绝登录",
                 onClick = onReject,
                 enabled = !busy,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = MaterialTheme.shapes.medium,
-            ) {
-                Text("拒绝")
-            }
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -469,15 +464,11 @@ private fun QrApprovedScreen(target: QrLoginTarget, onClose: () -> Unit) {
             }
 
             Spacer(Modifier.height(34.dp))
-            Button(
+            AppButton(
+                text = "完成",
                 onClick = onClose,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 0.dp),
-            ) {
-                Text("完成", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-            }
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -534,10 +525,12 @@ private fun QrErrorScreen(error: String, onRetry: () -> Unit, onClose: () -> Uni
         ) {
             Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(44.dp))
             Text(error, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp))
-            Button(onClick = onRetry, modifier = Modifier.fillMaxWidth().padding(top = 24.dp), shape = MaterialTheme.shapes.medium) {
-                Icon(Icons.Outlined.CenterFocusWeak, contentDescription = null)
-                Text("重新扫码", modifier = Modifier.padding(start = 8.dp))
-            }
+            AppButton(
+                text = "重新扫码",
+                icon = Icons.Outlined.CenterFocusWeak,
+                onClick = onRetry,
+                modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+            )
         }
     }
 }

@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.components.input.AppSearchBar
+import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -76,20 +79,10 @@ fun GlobalSearchScreen(
         modifier = Modifier.imePadding(),
     ) {
         item(key = "search-input") {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("搜索名称、状态或内容") },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = "搜索") },
-                singleLine = true,
-                shape = AppSearchFieldShape,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f),
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                ),
+            AppSearchBar(
+                query = query,
+                onQueryChange = { query = it },
+                placeholder = "搜索名称、状态或内容",
             )
         }
         if (state.refreshing && results.isEmpty()) {
@@ -108,7 +101,13 @@ fun GlobalSearchScreen(
         }
         if (results.isEmpty() && !state.refreshing) {
             item(key = "search-empty") {
-                AppPanel { EmptyBlock("没有匹配结果", "换个关键词试试") }
+                AppPanel {
+                    AppEmptyState(
+                        title = "没有匹配结果",
+                        detail = "换个关键词试试",
+                        icon = Icons.Outlined.Search,
+                    )
+                }
             }
         } else if (isTablet) {
             // 平板双列卡片流

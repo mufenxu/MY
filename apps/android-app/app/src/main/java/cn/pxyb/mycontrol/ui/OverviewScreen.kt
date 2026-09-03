@@ -113,6 +113,7 @@ import cn.pxyb.mycontrol.ui.theme.AmberPale
 import cn.pxyb.mycontrol.ui.theme.Coral
 import cn.pxyb.mycontrol.ui.theme.CoralPale
 import cn.pxyb.mycontrol.ui.theme.Forest
+import cn.pxyb.mycontrol.ui.theme.Mint
 import cn.pxyb.mycontrol.ui.theme.MintPale
 import cn.pxyb.mycontrol.ui.theme.Ocean
 import cn.pxyb.mycontrol.ui.theme.OceanPale
@@ -479,7 +480,7 @@ fun OverviewScreen(
                             }
 
                             // 2. 校园智览卡片
-                            OverviewSectionTitle("校园工作台", "课表、成绩与校园日常")
+                            OverviewSectionTitle("校园工作台", "课表、成绩与校园日常", dotColor = Ocean)
                             Surface(
                                 onClick = openTodayWorkspace,
                                 interactionSource = campusInteractionSource,
@@ -576,6 +577,7 @@ fun OverviewScreen(
                             OverviewSectionTitle(
                                 title = "快捷中心",
                                 subtitle = "高频工具与常用入口一键直达",
+                                dotColor = Amber,
                                 trailing = {
                                     val editInteractionSource = remember { MutableInteractionSource() }
                                     Surface(
@@ -658,7 +660,7 @@ fun OverviewScreen(
 
                             // 4. 待处理事项
                             if (activeIncidents.isNotEmpty()) {
-                                OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知")
+                                OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知", dotColor = Coral)
                                 visibleIncidents.forEach { incident ->
                                     val incidentCardShape = RoundedCornerShape(16.dp)
                                     val incidentInteractionSource = remember(incident.id) { MutableInteractionSource() }
@@ -712,7 +714,7 @@ fun OverviewScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
-                                OverviewSectionTitle("外部应用", "独立项目免密快捷直达")
+                                OverviewSectionTitle("外部应用", "独立项目免密快捷直达", dotColor = Color(0xFF7C3AED))
                                 externalApplicationOpenError?.let { message ->
                                     FeedbackBanner(message, error = true)
                                 }
@@ -729,7 +731,7 @@ fun OverviewScreen(
                                 }
                             }
 
-                            OverviewSectionTitle("服务监控", "核心微服务运行指标与状态")
+                            OverviewSectionTitle("服务监控", "核心微服务运行指标与状态", dotColor = Mint)
                             serviceOpenError?.let { message ->
                                 FeedbackBanner(message, error = true)
                             }
@@ -858,7 +860,7 @@ fun OverviewScreen(
                 }
 
                 item(key = "campus-title", contentType = "section") {
-                    OverviewSectionTitle("校园工作台", "课表、成绩与校园日常")
+                    OverviewSectionTitle("校园工作台", "课表、成绩与校园日常", dotColor = Ocean)
                 }
                 item(key = "campus-card", contentType = "card") {
                     val campus = state.campusOverview
@@ -961,6 +963,7 @@ fun OverviewScreen(
                     OverviewSectionTitle(
                         title = "快捷中心",
                         subtitle = "高频工具与常用入口一键直达",
+                        dotColor = Amber,
                         trailing = {
                             val editInteractionSource = remember { MutableInteractionSource() }
                             Surface(
@@ -1047,7 +1050,7 @@ fun OverviewScreen(
 
                 if (activeIncidents.isNotEmpty()) {
                     item(key = "incident-title", contentType = "section") {
-                        OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知")
+                        OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知", dotColor = Coral)
                     }
                     items(
                         items = visibleIncidents,
@@ -1102,7 +1105,7 @@ fun OverviewScreen(
 
                 if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
                     item(key = "external-apps-title", contentType = "section") {
-                        OverviewSectionTitle("外部应用", "独立项目免密快捷直达")
+                        OverviewSectionTitle("外部应用", "独立项目免密快捷直达", dotColor = Color(0xFF7C3AED))
                     }
                     externalApplicationOpenError?.let { message ->
                         item(key = "external-apps-error", contentType = "banner") {
@@ -1129,7 +1132,7 @@ fun OverviewScreen(
                 }
 
                 item(key = "services-title", contentType = "section") {
-                    OverviewSectionTitle("服务监控", "核心微服务运行指标与状态")
+                    OverviewSectionTitle("服务监控", "核心微服务运行指标与状态", dotColor = Mint)
                 }
                 serviceOpenError?.let { message ->
                     item(key = "services-error", contentType = "banner") {
@@ -1247,37 +1250,76 @@ private fun ModernOverviewHeader(
         }
     }
 }
-/** 分组标题 */
+/** 分组标题：灵动微岛毛玻璃浮标 (Dynamic Floating Island Pill) */
 @Composable
 private fun OverviewSectionTitle(
     title: String,
     subtitle: String,
+    dotColor: Color = MaterialTheme.colorScheme.primary,
+    tag: String? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    val isDark = isSystemInDarkTheme()
+    val pillBgColor = if (isDark) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    } else {
+        Color.White.copy(alpha = 0.82f)
+    }
+    val pillBorderColor = if (isDark) {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+    } else {
+        Color.White.copy(alpha = 0.90f)
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 2.dp),
+            .padding(horizontal = 2.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                ),
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 11.sp,
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Surface(
+            shape = CircleShape,
+            color = pillBgColor,
+            border = BorderStroke(0.6.dp, pillBorderColor),
+            shadowElevation = 0.dp,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(dotColor)
+                )
+
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        letterSpacing = 0.1.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 10.5.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
+
         trailing?.invoke()
     }
 }
@@ -1834,9 +1876,16 @@ private fun SkeletonMetric(pulse: Float, modifier: Modifier = Modifier) {
 
 @Composable
 private fun SkeletonSectionTitle(pulse: Float) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        SkeletonBlock(Modifier.width(88.dp).height(15.dp), pulse = pulse)
-        SkeletonBlock(Modifier.width(152.dp).height(10.dp), pulse = pulse)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp, vertical = 5.dp)
+    ) {
+        SkeletonBlock(
+            modifier = Modifier.width(168.dp).height(28.dp),
+            pulse = pulse,
+            corner = 14.dp,
+        )
     }
 }
 

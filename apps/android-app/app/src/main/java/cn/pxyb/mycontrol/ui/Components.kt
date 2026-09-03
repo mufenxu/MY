@@ -1,5 +1,26 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.components.input.AppTextField
+import cn.pxyb.mycontrol.ui.components.input.AppSearchBar
+import cn.pxyb.mycontrol.ui.components.picker.AppWheelPicker
+import cn.pxyb.mycontrol.ui.components.picker.AppDatePickerModal
+import cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal
+import cn.pxyb.mycontrol.ui.components.picker.AppTimeRangePicker
+import cn.pxyb.mycontrol.ui.components.display.AppActionRow
+import cn.pxyb.mycontrol.ui.components.display.AppSwitchRow
+import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
+import cn.pxyb.mycontrol.ui.components.display.AppMetricCard
+import cn.pxyb.mycontrol.ui.components.display.AppMetricDashboard
+import cn.pxyb.mycontrol.ui.components.display.AppAvatar
+import cn.pxyb.mycontrol.ui.components.display.AppDivider
+import cn.pxyb.mycontrol.ui.components.display.AppGroupedCard
+import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
+import cn.pxyb.mycontrol.ui.components.feedback.AppErrorState
+import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
+import cn.pxyb.mycontrol.ui.components.filter.AppFilterBar
+import cn.pxyb.mycontrol.util.QrUtils
+import cn.pxyb.mycontrol.util.DateTimeUtils
+
 import androidx.compose.runtime.Immutable
 
 import android.graphics.drawable.ColorDrawable
@@ -358,41 +379,78 @@ fun AdaptiveMetricGrid(
     }
 }
 
+/**
+ * 现代灵动微岛子标题组件 (Dynamic Floating Island Pill)
+ */
 @Composable
 fun SectionHeader(
     title: String,
     subtitle: String? = null,
+    dotColor: Color = MaterialTheme.colorScheme.primary,
+    modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    val isDark = isSystemInDarkTheme()
+    val pillBgColor = if (isDark) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    } else {
+        Color.White.copy(alpha = 0.82f)
+    }
+    val pillBorderColor = if (isDark) {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+    } else {
+        Color.White.copy(alpha = 0.90f)
+    }
+
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
+        Surface(
+            shape = CircleShape,
+            color = pillBgColor,
+            border = BorderStroke(0.6.dp, pillBorderColor),
+            shadowElevation = 0.dp,
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (!subtitle.isNullOrBlank()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 11.5.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(dotColor)
                 )
+
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        letterSpacing = 0.1.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 10.5.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
+
         trailing?.invoke()
     }
 }
@@ -825,17 +883,15 @@ fun AppDialog(
 /** 弹窗主操作按钮：对齐 BrandBlue 官方科技蓝与 46dp 标准高度。 */
 // ---------------- 全 App 现代统一按钮体系 (方案 A：极光流光玻璃胶囊) ----------------
 
-// ---------------- 全 App 现代统一按钮体系 (方案 A：极光流光立体胶囊) ----------------
+// ---------------- 全 App 现代统一按钮体系 (方案 A：极光立体胶囊·纯净不泛白) ----------------
 
 /**
- * 全 App 现代主行动按钮 (Aurora Convex Glass Pill)
+ * 全 App 现代主行动按钮 (Pure Royal Convex Pill)
  *
- * 方案 A 极光流光立体胶囊：
- * 1. 饱满立体微凸光感：顶部受光海蓝 (#4F8EF7) -> 中间饱满科技蓝 (#2563EB) -> 底部阴影收边 (#1D4ED8)；
- * 2. 顶部物理反光高光：0.0f~0.22f 的半透明白光反射发丝边缘；
- * 3. 实体外切高光边框：顶部 0.45f 发丝受光切边，底部暗色收口；
- * 4. 悬浮科技微辉光：4.dp 科技蓝软光晕立体阴影，从屏幕表面真实“浮起凸出”；
- * 5. 极佳触控：全圆角 RoundedCornerShape(50) 胶囊 + pressFeedback 物理弹性微缩放 + AppHaptics.tick 细腻触觉。
+ * 1. 纯净深邃科技蓝：顶部 #2563EB -> 中部 #1D4ED8 -> 底部 #1E40AF 实体收口，无任何泛白白雾蒙层；
+ * 2. 真实物理立体悬浮：3.dp 纯正深蓝软光晕微阴影，让胶囊从画布自然“浮凸而起”；
+ * 3. 同色发丝微描边：顶部天蓝微反光 (#60A5FA 0.35f) 替代刺眼白光，边缘清晰锐利；
+ * 4. 触感与状态：全圆角胶囊 RoundedCornerShape(50) + pressFeedback 物理微缩放 + AppHaptics.tick 细腻触觉。
  */
 @Composable
 fun AppButton(
@@ -851,13 +907,12 @@ fun AppButton(
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 
-    // 1. 三段式立体微凸圆弧渐变
+    // 1. 清澈鲜活科技蓝立体微弧渐变（提亮纯度，消除深沉暗色，绝不泛白）
     val gradientBrush = if (enabled && !loading) {
         Brush.verticalGradient(
             listOf(
-                Color(0xFF4F8EF7), // 顶部受光亮蓝
-                Color(0xFF2563EB), // 中间饱满科技蓝
-                Color(0xFF1D4ED8), // 底部阴影收边深蓝
+                Color(0xFF3B82F6), // BrandCyan 鲜活明朗科技蓝（顶部）
+                Color(0xFF2563EB), // BrandBlue 经典品牌科技蓝（底部）
             ),
         )
     } else {
@@ -869,20 +924,11 @@ fun AppButton(
         )
     }
 
-    // 2. 顶部镜面反光发丝层
-    val topHighlight = Brush.verticalGradient(
-        colorStops = arrayOf(
-            0.0f to Color.White.copy(alpha = 0.42f),
-            0.22f to Color.White.copy(alpha = 0.05f),
-            1.0f to Color.Transparent,
-        ),
-    )
-
-    // 3. 顶部发丝高光受光边框
+    // 2. 清澈同色系柔光发丝切边
     val borderBrush = Brush.verticalGradient(
         listOf(
-            Color.White.copy(alpha = 0.45f),
-            Color.White.copy(alpha = 0.10f),
+            Color(0xFF93C5FD).copy(alpha = 0.40f), // 浅天蓝微光边
+            Color(0xFF2563EB).copy(alpha = 0.25f),
         ),
     )
 
@@ -894,10 +940,10 @@ fun AppButton(
         modifier = modifier
             .height(height)
             .shadow(
-                elevation = if (enabled && !loading) 4.dp else 0.dp,
+                elevation = if (enabled && !loading) 2.5.dp else 0.dp,
                 shape = shape,
-                spotColor = Color(0xFF2563EB).copy(alpha = 0.48f),
-                ambientColor = Color.Black.copy(alpha = 0.20f),
+                spotColor = Color(0xFF3B82F6).copy(alpha = 0.35f),
+                ambientColor = Color.Black.copy(alpha = 0.08f),
             )
             .border(1.dp, borderBrush, shape)
             .pressFeedback(interactionSource),
@@ -923,7 +969,6 @@ fun AppButton(
             modifier = Modifier
                 .fillMaxSize()
                 .background(gradientBrush)
-                .background(topHighlight)
                 .padding(horizontal = 20.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -960,9 +1005,9 @@ fun AppButton(
 }
 
 /**
- * 全 App 现代次要行动按钮 (Frosted Convex Glass Pill)
+ * 全 App 现代次要行动按钮 (Pure Frosted Pill)
  *
- * 采用微凸磨砂白/深灰质感 + 顶部发丝受光边框 + 50% 胶囊全圆角，通透微立体。
+ * 采用微凸磨砂底色 + 微弱深浅发丝切边 + 50% 胶囊全圆角，通透微立体，绝不发灰泛白。
  */
 @Composable
 fun AppSecondaryButton(
@@ -982,31 +1027,23 @@ fun AppSecondaryButton(
     val gradientBrush = if (dark) {
         Brush.verticalGradient(
             listOf(
-                Color.White.copy(alpha = 0.14f),
-                Color.White.copy(alpha = 0.07f),
+                Color.White.copy(alpha = 0.10f),
+                Color.White.copy(alpha = 0.05f),
             ),
         )
     } else {
         Brush.verticalGradient(
             listOf(
-                Color.White.copy(alpha = 0.95f),
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.70f),
+                Color(0xFFF8FAFC),
+                Color(0xFFE2E8F0),
             ),
         )
     }
 
-    val topHighlight = Brush.verticalGradient(
-        colorStops = arrayOf(
-            0.0f to (if (dark) Color.White.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.40f)),
-            0.25f to Color.Transparent,
-            1.0f to Color.Transparent,
-        ),
-    )
-
     val borderBrush = Brush.verticalGradient(
         listOf(
-            if (dark) Color.White.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.85f),
-            if (dark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f),
+            if (dark) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.10f),
+            if (dark) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.05f),
         ),
     )
 
@@ -1018,10 +1055,10 @@ fun AppSecondaryButton(
         modifier = modifier
             .height(height)
             .shadow(
-                elevation = if (enabled && !loading) 2.dp else 0.dp,
+                elevation = if (enabled && !loading) 1.5.dp else 0.dp,
                 shape = shape,
-                spotColor = Color.Black.copy(alpha = if (dark) 0.30f else 0.08f),
-                ambientColor = Color.Black.copy(alpha = 0.10f),
+                spotColor = Color.Black.copy(alpha = if (dark) 0.25f else 0.06f),
+                ambientColor = Color.Black.copy(alpha = 0.08f),
             )
             .border(1.dp, borderBrush, shape)
             .pressFeedback(interactionSource),
@@ -1041,7 +1078,6 @@ fun AppSecondaryButton(
             modifier = Modifier
                 .fillMaxSize()
                 .background(gradientBrush)
-                .background(topHighlight)
                 .padding(horizontal = 20.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -1077,9 +1113,9 @@ fun AppSecondaryButton(
 }
 
 /**
- * 全 App 现代危险警示按钮 (Rose Convex Glass Pill)
+ * 全 App 现代危险警示按钮 (Pure Rose Convex Pill)
  *
- * 柔和珊瑚红立体微凸渐变 + 顶部受光高光 + 悬浮红色光晕，警示明确且现代质感强烈。
+ * 纯正珊瑚红立体微凸渐变 + 悬浮深红微光晕，无泛白起雾，质感明确纯正。
  */
 @Composable
 fun AppDangerButton(
@@ -1097,24 +1133,16 @@ fun AppDangerButton(
 
     val gradientBrush = Brush.verticalGradient(
         listOf(
-            Color(0xFFF87171), // 顶部受光珊瑚红
-            Color(0xFFEF4444), // 中间饱满警告红
-            Color(0xFFDC2626), // 底部阴影收边深红
-        ),
-    )
-
-    val topHighlight = Brush.verticalGradient(
-        colorStops = arrayOf(
-            0.0f to Color.White.copy(alpha = 0.40f),
-            0.22f to Color.White.copy(alpha = 0.05f),
-            1.0f to Color.Transparent,
+            Color(0xFFEF4444), // 纯正警告红（顶部）
+            Color(0xFFDC2626), // 饱满深红（中部）
+            Color(0xFFB91C1C), // 底部阴影收边暗红
         ),
     )
 
     val borderBrush = Brush.verticalGradient(
         listOf(
-            Color.White.copy(alpha = 0.40f),
-            Color.White.copy(alpha = 0.10f),
+            Color(0xFFF87171).copy(alpha = 0.35f),
+            Color(0xFF991B1B).copy(alpha = 0.30f),
         ),
     )
 
@@ -1126,10 +1154,10 @@ fun AppDangerButton(
         modifier = modifier
             .height(height)
             .shadow(
-                elevation = if (enabled && !loading) 4.dp else 0.dp,
+                elevation = if (enabled && !loading) 3.dp else 0.dp,
                 shape = shape,
-                spotColor = Color(0xFFEF4444).copy(alpha = 0.45f),
-                ambientColor = Color.Black.copy(alpha = 0.18f),
+                spotColor = Color(0xFFDC2626).copy(alpha = 0.35f),
+                ambientColor = Color.Black.copy(alpha = 0.15f),
             )
             .border(1.dp, borderBrush, shape)
             .pressFeedback(interactionSource),
@@ -1149,7 +1177,6 @@ fun AppDangerButton(
             modifier = Modifier
                 .fillMaxSize()
                 .background(gradientBrush)
-                .background(topHighlight)
                 .padding(horizontal = 20.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -1260,7 +1287,6 @@ internal fun formatMinutesToTime(minutes: Int): String {
     return String.format(Locale.ROOT, "%02d:%02d", h, m)
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun <T> WheelPicker(
     items: List<T>,
@@ -1272,124 +1298,16 @@ internal fun <T> WheelPicker(
     unitText: String? = null,
     formatItem: (T) -> String = { it.toString() },
 ) {
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = selectedIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0)),
+    cn.pxyb.mycontrol.ui.components.picker.AppWheelPicker(
+        items = items,
+        selectedIndex = selectedIndex,
+        onSelectedIndexChanged = onSelectedIndexChanged,
+        modifier = modifier,
+        visibleItemCount = visibleItemCount,
+        itemHeight = itemHeight,
+        unitText = unitText,
+        formatItem = formatItem,
     )
-    val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
-    val coroutineScope = rememberCoroutineScope()
-
-    val centerIndex by remember(items) {
-        derivedStateOf {
-            val layoutInfo = listState.layoutInfo
-            val visibleItems = layoutInfo.visibleItemsInfo
-            if (visibleItems.isEmpty()) return@derivedStateOf selectedIndex
-            val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
-            val closest = visibleItems.minByOrNull { item ->
-                val itemCenter = item.offset + item.size / 2
-                kotlin.math.abs(itemCenter - viewportCenter)
-            }
-            closest?.index ?: selectedIndex
-        }
-    }
-
-    // 实时感知当前处于正中心的项，无延迟通知外层更新
-    LaunchedEffect(listState) {
-        snapshotFlow { centerIndex }
-            .distinctUntilChanged()
-            .collect { index ->
-                if (index in items.indices && index != selectedIndex) {
-                    onSelectedIndexChanged(index)
-                }
-            }
-    }
-
-    // 仅当外部主动变更 selectedIndex 时，且滚轮未在滑动中，执行平滑滚动定位
-    LaunchedEffect(selectedIndex) {
-        if (!listState.isScrollInProgress && centerIndex != selectedIndex && selectedIndex in items.indices) {
-            listState.animateScrollToItem(selectedIndex)
-        }
-    }
-
-    val verticalPadding = itemHeight * ((visibleItemCount - 1) / 2)
-
-    Box(
-        modifier = modifier.height(itemHeight * visibleItemCount),
-        contentAlignment = Alignment.Center,
-    ) {
-        LazyColumn(
-            state = listState,
-            flingBehavior = flingBehavior,
-            contentPadding = PaddingValues(vertical = verticalPadding),
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            itemsIndexed(items) { index, item ->
-                val isSelected = index == centerIndex
-                val distance = kotlin.math.abs(index - centerIndex)
-                val alpha = when (distance) {
-                    0 -> 1f
-                    1 -> 0.45f
-                    else -> 0.2f
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(itemHeight)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) {
-                            if (index in items.indices) {
-                                onSelectedIndexChanged(index)
-                                coroutineScope.launch {
-                                    listState.animateScrollToItem(index)
-                                }
-                            }
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            text = formatItem(item),
-                            style = if (isSelected) {
-                                MaterialTheme.typography.titleLarge.copy(
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            } else {
-                                MaterialTheme.typography.bodyLarge.copy(
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Normal,
-                                )
-                            },
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
-                            },
-                            textAlign = TextAlign.Center,
-                        )
-                        if (isSelected && !unitText.isNullOrBlank()) {
-                            Spacer(Modifier.width(2.dp))
-                            Text(
-                                text = unitText,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                ),
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(bottom = 6.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -1402,109 +1320,15 @@ internal fun WheelTimePickerModal(
     maxTime: String = "23:59",
     minuteStep: Int = 1,
 ) {
-    val minMin = (reservationTimeMinutes(minTime) ?: 0).coerceIn(0, 1439)
-    val maxMin = (reservationTimeMinutes(maxTime) ?: 1439).coerceIn(minMin, 1439)
-    val clampedCurrentMin = (reservationTimeMinutes(currentTime) ?: minMin).coerceIn(minMin, maxMin)
-
-    val currentH = clampedCurrentMin / 60
-    val currentM = clampedCurrentMin % 60
-
-    val minH = minMin / 60
-    val maxH = maxMin / 60
-
-    val hours = remember(minH, maxH) {
-        (minH..maxH).map { String.format(Locale.ROOT, "%02d", it) }
-    }
-
-    val initHourIndex = remember(hours, currentH) {
-        val found = hours.indexOfFirst { it.toIntOrNull() == currentH }
-        if (found >= 0) found else 0
-    }
-    var selectedHourIndex by remember { mutableIntStateOf(initHourIndex) }
-
-    val safeHourIndex = selectedHourIndex.coerceIn(0, (hours.size - 1).coerceAtLeast(0))
-    val selectedHour = hours.getOrElse(safeHourIndex) { hours.firstOrNull() ?: "08" }.toIntOrNull() ?: minH
-
-    val minutesForHour = remember(selectedHour, minMin, maxMin, minuteStep) {
-        val list = mutableListOf<String>()
-        val startM = if (selectedHour == minH) minMin % 60 else 0
-        val endM = if (selectedHour == maxH) maxMin % 60 else 59
-        val step = minuteStep.coerceAtLeast(1)
-        for (m in 0..59 step step) {
-            if (m in startM..endM) {
-                list.add(String.format(Locale.ROOT, "%02d", m))
-            }
-        }
-        if (list.isEmpty()) {
-            list.add(String.format(Locale.ROOT, "%02d", startM.coerceIn(0, 59)))
-        }
-        list
-    }
-
-    val initMinuteIndex = remember(minutesForHour, currentM) {
-        val found = minutesForHour.indexOfFirst { (it.toIntOrNull() ?: 0) >= currentM }
-        if (found >= 0) found else (minutesForHour.size - 1).coerceAtLeast(0)
-    }
-    var selectedMinuteIndex by remember(minutesForHour) { mutableIntStateOf(initMinuteIndex) }
-
-    val safeMinuteIndex = selectedMinuteIndex.coerceIn(0, (minutesForHour.size - 1).coerceAtLeast(0))
-    val chosenHourStr = hours.getOrElse(safeHourIndex) { hours.firstOrNull() ?: "08" }
-    val chosenMinuteStr = minutesForHour.getOrElse(safeMinuteIndex) { minutesForHour.firstOrNull() ?: "00" }
-    val formattedTime = "$chosenHourStr:$chosenMinuteStr"
-
-    val rangeHint = if (minTime != "00:00" || maxTime != "23:59") "（开放范围 $minTime - $maxTime）" else ""
-
-    AppDialog(
-        onDismissRequest = onDismiss,
-        icon = Icons.Outlined.AccessTime,
-        iconTint = MaterialTheme.colorScheme.primary,
-        iconBackground = MaterialTheme.colorScheme.primaryContainer,
+    cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal(
         title = title,
-        subtitle = "当前选择：$formattedTime$rangeHint",
-        footer = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                AppDialogSecondaryButton(
-                    text = "取消",
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
-                )
-                AppDialogPrimaryButton(
-                    text = "确定",
-                    onClick = {
-                        onConfirm(formattedTime)
-                        onDismiss()
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        },
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            WheelPicker(
-                items = hours,
-                selectedIndex = safeHourIndex,
-                onSelectedIndexChanged = { selectedHourIndex = it },
-                unitText = "时",
-                modifier = Modifier.weight(1f),
-            )
-            WheelPicker(
-                items = minutesForHour,
-                selectedIndex = safeMinuteIndex,
-                onSelectedIndexChanged = { selectedMinuteIndex = it },
-                unitText = "分",
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
+        currentTime = currentTime,
+        onDismiss = onDismiss,
+        onConfirm = onConfirm,
+        minTime = minTime,
+        maxTime = maxTime,
+        minuteStep = minuteStep,
+    )
 }
 
 @Composable
@@ -1524,255 +1348,22 @@ internal fun ReservationTimeRangePicker(
     quickDurationOptions: List<Int> = listOf(60, 90, 120, 180, 240),
     defaultAutoDurationMinutes: Int = 120,
 ) {
-    var pickingTarget by remember { mutableStateOf<String?>(null) }
-
-    val startMin = reservationTimeMinutes(startTime)
-    val endMin = reservationTimeMinutes(endTime)
-    val durationMin = if (startMin != null && endMin != null && endMin > startMin) endMin - startMin else null
-    val hasDurationRule = minDurationMinutes != null || maxDurationMinutes != null
-    val isDurationValid = durationMin != null && hasDurationRule &&
-        (minDurationMinutes == null || durationMin >= minDurationMinutes) &&
-        (maxDurationMinutes == null || durationMin <= maxDurationMinutes)
-    val maxEndMin = reservationTimeMinutes(maxEndTime) ?: 1290
-
-    if (pickingTarget != null) {
-        val isStart = pickingTarget == "start"
-        WheelTimePickerModal(
-            title = if (isStart) "选择开始时间" else "选择结束时间",
-            currentTime = if (isStart) startTime else endTime,
-            minTime = if (isStart) minStartTime else minEndTime,
-            maxTime = if (isStart) maxStartTime else maxEndTime,
-            minuteStep = minuteStep,
-            onDismiss = { pickingTarget = null },
-            onConfirm = { chosen ->
-                if (isStart) {
-                    onStartTimeChange(chosen)
-                    val newStartMin = reservationTimeMinutes(chosen)
-                    if (newStartMin != null) {
-                        val currEndMin = reservationTimeMinutes(endTime)
-                        val durationBroken = currEndMin == null || currEndMin <= newStartMin ||
-                            (minDurationMinutes != null && (currEndMin - newStartMin) < minDurationMinutes) ||
-                            (maxDurationMinutes != null && (currEndMin - newStartMin) > maxDurationMinutes)
-                        if (durationBroken) {
-                            val autoEndMin = (newStartMin + defaultAutoDurationMinutes).coerceAtMost(maxEndMin)
-                            onEndTimeChange(formatMinutesToTime(autoEndMin))
-                        }
-                    }
-                } else {
-                    onEndTimeChange(chosen)
-                }
-            },
-        )
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // 1. 顶部标题与时长标签
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = sectionTitle,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (hasDurationRule && durationMin != null) {
-                val hours = durationMin / 60
-                val mins = durationMin % 60
-                val durationText = "${if (hours > 0) "${hours}小时" else ""}${if (mins > 0) "${mins}分钟" else ""}"
-                val statusColor = if (isDurationValid) Color(0xFF15803D) else MaterialTheme.colorScheme.error
-                val statusBg = if (isDurationValid) Color(0xFFDCFCE7).copy(alpha = 0.55f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
-                val ruleText = when {
-                    minDurationMinutes != null && maxDurationMinutes != null ->
-                        "需${minDurationMinutes / 60}~${maxDurationMinutes / 60}小时"
-                    minDurationMinutes != null -> "至少${minDurationMinutes / 60}小时"
-                    else -> "至多${maxDurationMinutes!! / 60}小时"
-                }
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = statusBg,
-                    border = BorderStroke(1.dp, statusColor.copy(alpha = 0.3f)),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Icon(
-                            if (isDurationValid) Icons.Outlined.CheckCircle else Icons.Outlined.WarningAmber,
-                            contentDescription = null,
-                            tint = statusColor,
-                            modifier = Modifier.size(12.dp),
-                        )
-                        Text(
-                            text = if (isDurationValid) "时长 $durationText (合规)" else "时长 $durationText ($ruleText)",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                            color = statusColor,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-            }
-        }
-
-        // 2. 双联时间大卡片（点击直接唤起选择弹窗）
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // 开始时间卡片
-            Surface(
-                onClick = { pickingTarget = "start" },
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier.weight(1f),
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = "开始时间",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Icon(
-                            Icons.Outlined.AccessTime,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp),
-                        )
-                        Text(
-                            text = startTime,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 17.5.sp,
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-            }
-
-            // 中间箭头指示
-            Box(
-                modifier = Modifier
-                    .size(26.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Outlined.ArrowForward,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp),
-                )
-            }
-
-            // 结束时间卡片
-            Surface(
-                onClick = { pickingTarget = "end" },
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier.weight(1f),
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = "结束时间",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Icon(
-                            Icons.Outlined.AccessTime,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp),
-                        )
-                        Text(
-                            text = endTime,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 17.5.sp,
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-            }
-        }
-
-        // 3. 常用时长一键快速推算（从开始时间自动顺延）
-        if (quickDurationOptions.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "快捷时长推算（从开始时间自动顺延）",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    quickDurationOptions.forEach { durationMinutes ->
-                        val isCurrentDuration = durationMin == durationMinutes
-                        Surface(
-                            onClick = {
-                                val curStartMin = reservationTimeMinutes(startTime) ?: 540
-                                val targetEndMin = (curStartMin + durationMinutes).coerceAtMost(maxEndMin)
-                                onEndTimeChange(formatMinutesToTime(targetEndMin))
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isCurrentDuration) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                            border = BorderStroke(
-                                1.dp,
-                                if (isCurrentDuration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(32.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = durationQuickLabel(durationMinutes),
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                    fontWeight = if (isCurrentDuration) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isCurrentDuration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun durationQuickLabel(minutes: Int): String {
-    val hours = minutes / 60
-    val rem = minutes % 60
-    return when {
-        rem == 0 -> "${hours}小时"
-        rem == 30 -> "${hours}.5小时"
-        else -> "${minutes}分钟"
-    }
+    cn.pxyb.mycontrol.ui.components.picker.AppTimeRangePicker(
+        startTime = startTime,
+        endTime = endTime,
+        onStartTimeChange = onStartTimeChange,
+        onEndTimeChange = onEndTimeChange,
+        sectionTitle = sectionTitle,
+        minStartTime = minStartTime,
+        maxStartTime = maxStartTime,
+        minEndTime = minEndTime,
+        maxEndTime = maxEndTime,
+        minuteStep = minuteStep,
+        minDurationMinutes = minDurationMinutes,
+        maxDurationMinutes = maxDurationMinutes,
+        quickDurationOptions = quickDurationOptions,
+        defaultAutoDurationMinutes = defaultAutoDurationMinutes,
+    )
 }
 
 /** 弹窗统一输入框：浅填色 + 细描边。 */
@@ -1946,39 +1537,19 @@ fun AppToast(
 
 @Composable
 fun EmptyBlock(title: String, detail: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            Icons.Outlined.CheckCircle,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.secondary,
-            modifier = Modifier.size(28.dp),
-        )
-        Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
-        Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+    cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState(
+        title = title,
+        detail = detail,
+        modifier = modifier,
+    )
 }
 
 @Composable
 fun formatPlatformTime(value: String?): String = remember(value) {
-    formatPlatformTimeValue(value)
+    cn.pxyb.mycontrol.util.DateTimeUtils.formatPlatformTime(value)
 }
 
-private fun formatPlatformTimeValue(value: String?): String {
-    if (value.isNullOrBlank()) return "暂无"
-    val instant = runCatching { Instant.parse(value) }.getOrNull()
-        ?: runCatching { OffsetDateTime.parse(value).toInstant() }.getOrNull()
-        ?: return value.take(16)
-    return PlatformTimeFormatter.format(instant)
-}
-
-fun formatLastActive(value: Long?): String {
-    if (value == null) return "暂无数据"
-    val normalized = if (value < 10_000_000_000L) value * 1000 else value
-    return PlatformTimeFormatter.format(Instant.ofEpochMilli(normalized))
-}
+fun formatLastActive(value: Long?): String = cn.pxyb.mycontrol.util.DateTimeUtils.formatLastActive(value)
 
 /** 下拉刷新容器：列表位于顶部时下拉，带动指示器与内容位移动画。 */
 @Composable

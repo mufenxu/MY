@@ -53,14 +53,31 @@
   - 二级页面骨架：`AppSubPage`
   - 卡片面板：`AppPanel`
   - 页头操作：`AppSecondaryHeader` / `AppHeaderIconButton`
-  - 骨架屏加载：`GlassShimmerCard` / `GlassShimmerList` / `Modifier.glassShimmer(dark)`（首屏/卡片流加载优先使用骨架微光，杜绝突兀布局跳变）
-  - 按钮体系：`AppButton` / `AppSecondaryButton` / `AppDangerButton`（全 App 统一现代胶囊流光按钮族：全圆角 `RoundedCornerShape(50)`，内置 `pressFeedback` 物理弹性缩放 + `AppHaptics.tick` 细腻触觉，支持内置 `loading` 状态与图标。严禁业务页面随意裸写未经包装的默认 Material 3 `Button`）
-  - 弹窗体系：`AppDialog`（全 App 统一弹窗底座：手机端自适应为底部半模态流光抽屉，顶部 28dp 圆角 + 拖拽把手；大屏端自适应为居中卡片。配套 `AppDialogPrimaryButton`/`AppDialogSecondaryButton`/`AppDialogDangerButton`，统一 46dp 标准高度与 `AppHaptics` 触觉回馈）
-  - 开关：`AppSwitch`（内置 48dp 热区与微震动）
-  - 反馈与重试：`FeedbackBanner`（支持可选 `onRetry` 就地一键重试回调）
-  - 空状态：`EmptyBlock("标题", "说明")`
+## 6. 统一按钮体系与操作规范 (Button System Specification)
 
-## 6. 加载与网络容错规范 (Loading & Resilience)
+全 App 所有页面的按钮必须统一使用封装好的现代胶囊流光按钮族（位于 `ui/Components.kt`），**严禁在任何业务界面裸写 Material 3 原生 `Button`、`FilledTonalButton`、`OutlinedButton`**。
+
+- **三级按钮体系选型准则**：
+  1. **主行动按钮 (`AppButton`)**：
+     - **视觉形态**：全圆角胶囊 `RoundedCornerShape(50)`，标准高度 `46.dp`；
+     - **色彩渐变**：采用明媚活力的清澈科技蓝微渐变（顶部 `BrandCyan #3B82F6` $\rightarrow$ 底部 `BrandBlue #2563EB`），色彩纯净透亮，杜绝死暗深蓝与纯平单色；
+     - **立体光感**：外圈附带 `2.5.dp` 柔和天蓝微辉光立体阴影（`spotColor = #3B82F6 0.35f`）与浅天蓝同色发丝微描边，呈现自然微凸浮起的立体感；
+     - **纯净原则（坚决不泛白）**：**绝对禁止在按钮表面叠加半透明白色高光雾蒙层**，蓝白文字对比必须锋利纯正；
+     - **交互触觉**：内置 `pressFeedback` 物理弹性微缩放（按下 0.96 缩放）+ `AppHaptics.tick` 细腻物理微震动；
+     - **状态集成**：直接支持 `loading = true` 平滑加载转圈动画与 `icon` 矢量图标，无需外层手写 `CircularProgressIndicator` 样板代码。
+  2. **次要行动按钮 (`AppSecondaryButton`)**：
+     - 采用全圆角胶囊磨砂质感 + 顶部微弱发丝微切边 + 轻量微阴影，悬浮在界面背景上，用于“取消”、“查看说明”、“返回查询”、“写入 NFC”等次要操作，清爽通透，绝不发灰泛白。
+  3. **危险/破坏性按钮 (`AppDangerButton`)**：
+     - 采用珊瑚红立体微凸渐变（`#EF4444` $\rightarrow$ `#DC2626`）+ 红色微光晕投影，用于“删除”、“撤销”、“清空”、“重置”等不可逆高危操作，警示明确、质感高级。
+  4. **弹窗按钮配套**：
+     - 弹窗内的操作按钮统一使用 `AppDialogPrimaryButton`、`AppDialogSecondaryButton`、`AppDialogDangerButton`，底层已全量委托映射至上述三级胶囊按钮。
+
+- **按钮设计红线**：
+  - **严禁**使用直角、小圆角（如 8dp/10dp/12dp）或方形按钮，必须保持 `RoundedCornerShape(50)` 胶囊圆角；
+  - **严禁**在按钮表面覆盖白色渐变雾层导致表面泛白起雾；
+  - **严禁**在业务页面私自使用原生 `Button(...)`、`OutlinedButton(...)` 拼凑粗糙按钮。
+
+## 7. 加载与网络容错规范 (Loading & Resilience)
 
 - **骨架屏优先原则**：
   - 页面初次加载或长列表异步拉取时，严禁使用突兀的居中大菊花。应采用 `GlassShimmerList` 预占位，数据到达后自然渲染；
@@ -68,26 +85,43 @@
 - **就地一键重试 (Inline Retry)**：
   - 异步请求失败时，`FeedbackBanner(message, error = true, onRetry = { ... })` 必须尽可能传入重试操作，允许用户就地重新发起请求，严禁迫使用户只能退出重进或整页下拉。
 
-## 7. 隐私安全与系统集成 (Security & System)
+## 8. 隐私安全与系统集成 (Security & System)
 
 - **多任务后台防窥屏 (FLAG_SECURE)**：
   - `MainActivity` 在 `onPause` 时自动追加 `FLAG_SECURE`，在用户切入 Recent Apps 多任务界面或分屏预览时遮蔽缩略图，防止临时录屏或系统截屏泄露凭据密码；`onResume` 前台恢复时自动解除，保障用户正常截屏与使用。
 - **预测性手势物理转场**：
   - 路由栈切换采用 `slideInHorizontally` / `slideOutHorizontally` 水平推拉结合微缩放与淡入淡出，动效时长严格对齐 `MotionTokens`，呼应 Android 14/15 边缘手势的自然惯性。
 
-## 8. 红线
+## 9. 架构与设计红线
 
 - **严禁私造页面骨架**：二级页面必须统一接入 `AppSubPage`，不得自行拼凑带有未避让安全区的容器。
 - **严禁直角与彩色边框**：不新增直角面板、彩色粗边框或高饱和度投影。
+- **严禁私造与裸写按钮**：严禁在任何业务页面直接使用 Material 3 原生 `Button`、`FilledTonalButton`、`OutlinedButton`；严禁使用直角或方形按键，所有按钮必须统一引用 `AppButton`、`AppSecondaryButton` 或 `AppDangerButton`。
+- **严禁按钮表面泛白**：严禁在按钮上方覆盖半透明白色反光雾层，确保科技蓝纯净通透。
 - **严禁页面内部重复调用 `statusBarsPadding()`**。
 - **严禁混用状态跳转与路由栈**：二级路由必须登记在 `parentTabForSubScreen`。
 - **用户可见文案保持规范中文**（保留产品名、标准代码或国际协议字段原样）。
 
-## 9. 新增页面标准检查清单
+## 11. 标准公共组件库体系 (Component Library)
 
-1. **路由登记**：在 `parentTabForSubScreen` 中登记唯一父页面，返回由导航外壳调度。
-2. **骨架选型**：直接使用 `AppSubPage`。长信息流设置 `pinHeader = true`，短卡片设置 `pinHeader = false`。
-3. **触控与无障碍**：操作按钮必须使用 `AppHeaderIconButton`，图标注明中文 `contentDescription`。
-4. **令牌对齐**：使用 `Color.kt`、`AppTypography` 与 `12.dp` 列表垂直间距。
-5. **触感动效**：关键交互接入 `AppHaptics` 与 `MotionTokens`。
-6. **视觉回归对照**：与 `GlobalSearchScreen`、`GitHubProjectsScreen` 对照自查，确保毛玻璃与极光风格浑然一体。
+工程已全面完成公共组件模块化抽取，所有通用 UI 必须优先复用位于 `cn.pxyb.mycontrol.ui.components` 及 `cn.pxyb.mycontrol.util` 中的标准化组件，严禁在业务界面私自复制粘贴或手写重复实现：
+
+| 模块子包 | 组件名称 | 核心功能与设计亮点 |
+| :--- | :--- | :--- |
+| **`ui.components.input`** | `AppTextField` | 毛玻璃圆角输入框，自动带清空图标、密码眼睛显隐、Leading 图标与浮动错误避让 |
+| | `AppSearchBar` | 现代全圆角胶囊搜索栏，支持实时清空按键与回车键盘响应 |
+| **`ui.components.picker`** | `AppWheelPicker<T>` | 解耦的高性能惯性轮盘，集成触觉微震动反馈与正居中选中刻度指示 |
+| | `AppDatePickerModal` | 年月日标准滚轮弹窗，支持“今天/明天/周几”智能相对标签 |
+| | `AppTimePickerModal` | 时分滚轮弹窗，支持开放范围、步长限制与弹窗自适应联动 |
+| | `AppTimeRangePicker` | 起止双联时段卡片选择器，支持最短/最长时长合规校验与常用时长快速顺延推算 |
+| **`ui.components.display`** | `AppActionRow` | 标准单元格行，支持图标底衬、双行文案、自定义尾部与按压弹性缩放 |
+| | `AppSwitchRow` | 标准设置开关行，严格满足 48×48 dp 无障碍判定，自带振动反馈 |
+| | `AppDetailRow` | 键值详情行，支持单行/折行对齐与一键点击/长按复制到剪贴板 |
+| | `AppMetricCard` | 现代指标展示小卡片与自适应网格看板 (`AppMetricDashboard`) |
+| | `AppAvatar` | 支持网络加载、首字母自动散列双色极光渐变兜底与在线状态圆点 |
+| | `AppDivider` | 统一规范的发丝分割线，支持自定义起止内边距 |
+| **`ui.components.feedback`** | `AppEmptyState` | 标准居中空状态，带毛玻璃圆形底衬图标、主副说明文案与主次操作胶囊按键 |
+| | `AppErrorState` | 标准错误面板，集成就地一键重试机制 |
+| **`ui.components.filter`** | `AppFilterChip` / `AppFilterBar` | 胶囊形微凸毛玻璃多维筛选栏，支持横向平滑滚动 |
+| **`util`** | `QrUtils` | 集中统一的 Data URL Base64 二维码安全解析工具，杜绝各 Screen 私有重复实现 |
+| | `DateTimeUtils` | 集中统一的平台时间格式化与相对活跃/同步时间计算工具 |

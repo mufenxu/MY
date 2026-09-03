@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
+import cn.pxyb.mycontrol.ui.components.picker.AppDatePickerModal
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -1415,15 +1418,11 @@ private fun MyReservationsPanel(
                                 textAlign = TextAlign.Center,
                             )
                         }
-                        Button(
+                        AppButton(
+                            text = "前往单次预约",
+                            icon = Icons.Outlined.Add,
                             onClick = onGoToSingleReservation,
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        ) {
-                            Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("前往单次预约", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        }
+                        )
                     }
                 }
             } else {
@@ -2418,7 +2417,9 @@ private fun AutoReservationEditDialog(
             }
 
             if (candidates.size < 20) {
-                OutlinedButton(
+                AppSecondaryButton(
+                    text = "添加候选时段",
+                    icon = Icons.Outlined.Add,
                     onClick = {
                         val lastCandidate = candidates.lastOrNull()
                         candidates.add(
@@ -2430,12 +2431,7 @@ private fun AutoReservationEditDialog(
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("添加候选时段")
-                }
+                )
             }
 
             OutlinedTextField(
@@ -2682,26 +2678,7 @@ private fun CandidateEditRow(
 
 @Composable
 private fun DetailRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.widthIn(min = 72.dp),
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.End,
-            modifier = Modifier.padding(start = 8.dp),
-        )
-    }
+    AppDetailRow(label = label, value = value)
 }
 
 private fun weekdayName(date: LocalDate): String {
@@ -2759,70 +2736,12 @@ private fun WheelDatePickerModal(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
-    val dates = remember(today, daysCount) {
-        (-2 until daysCount).map { today.plusDays(it.toLong()) }
-    }
-    val currentLocalDate = remember(currentDate) {
-        try {
-            LocalDate.parse(currentDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
-        } catch (_: Exception) {
-            today
-        }
-    }
-    val initIndex = remember(dates, currentLocalDate) {
-        val found = dates.indexOfFirst { it == currentLocalDate }
-        if (found >= 0) found else dates.indexOfFirst { it == today }.coerceAtLeast(0)
-    }
-
-    var selectedIndex by remember { mutableIntStateOf(initIndex) }
-    val chosenDate = dates.getOrElse(selectedIndex) { today }
-    val chosenDateStr = chosenDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
-    val chosenWk = weekdayName(chosenDate)
-
-    AppDialog(
-        onDismissRequest = onDismiss,
-        icon = Icons.Outlined.CalendarMonth,
-        iconTint = MaterialTheme.colorScheme.primary,
-        iconBackground = MaterialTheme.colorScheme.primaryContainer,
+    AppDatePickerModal(
         title = title,
-        subtitle = "当前选择：$chosenDateStr ($chosenWk)",
-        footer = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                AppDialogSecondaryButton(
-                    text = "取消",
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
-                )
-                AppDialogPrimaryButton(
-                    text = "确定",
-                    onClick = {
-                        onConfirm(chosenDateStr)
-                        onDismiss()
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        },
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            WheelPicker(
-                items = dates,
-                selectedIndex = selectedIndex,
-                onSelectedIndexChanged = { selectedIndex = it },
-                formatItem = { d ->
-                    "${d.monthValue}月${d.dayOfMonth}日 ${weekdayName(d)}"
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
+        currentDate = currentDate,
+        today = today,
+        daysCount = daysCount,
+        onDismiss = onDismiss,
+        onConfirm = onConfirm,
+    )
 }

@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.DeviceInfo
@@ -674,39 +675,76 @@ private fun LightweightHeaderBanner(
     }
 }
 
-/** 分组标题 */
+/** 分组标题：灵动微岛毛玻璃浮标 (Dynamic Floating Island Pill) */
 @Composable
-private fun ToolSectionTitle(title: String, subtitle: String, accent: Color) {
+private fun ToolSectionTitle(
+    title: String,
+    subtitle: String,
+    accent: Color,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    val isDark = isSystemInDarkTheme()
+    val pillBgColor = if (isDark) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    } else {
+        Color.White.copy(alpha = 0.82f)
+    }
+    val pillBorderColor = if (isDark) {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+    } else {
+        Color.White.copy(alpha = 0.90f)
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
+            .padding(horizontal = 2.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Box(
-            modifier = Modifier
-                .width(3.5.dp)
-                .height(16.dp)
-                .background(accent, RoundedCornerShape(2.dp))
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                ),
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 11.5.sp,
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Surface(
+            shape = CircleShape,
+            color = pillBgColor,
+            border = BorderStroke(0.6.dp, pillBorderColor),
+            shadowElevation = 0.dp,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(accent)
+                )
+
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        letterSpacing = 0.1.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 10.5.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
+
+        trailing?.invoke()
     }
 }
 
@@ -1134,20 +1172,13 @@ private fun ModernSceneRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Button(
+        AppButton(
+            text = "触发场景",
+            icon = Icons.Outlined.PlayArrow,
             onClick = onRun,
             enabled = canOperate && enabled,
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-        ) {
-            if (busy) {
-                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
-            } else {
-                Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text("触发场景", modifier = Modifier.padding(start = 5.dp), style = MaterialTheme.typography.labelLarge)
-            }
-        }
+            loading = busy,
+        )
     }
 }
 
@@ -1199,21 +1230,14 @@ private fun ModernCt8Panel(
                 MetricCell("异常节点", ct8?.failedHosts?.toString() ?: "--", Modifier.weight(1f), Amber)
             }
 
-            Button(
+            AppButton(
+                text = "立即触发 GitHub Actions 任务",
+                icon = Icons.Outlined.PlayArrow,
                 onClick = onTrigger,
                 enabled = canOperate && enabled && ct8?.activeStatus !in setOf("running", "queued", "in_progress"),
+                loading = busy,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                contentPadding = PaddingValues(vertical = 10.dp),
-            ) {
-                if (busy) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
-                } else {
-                    Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(19.dp))
-                    Text("立即触发 GitHub Actions 任务", modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.titleSmall)
-                }
-            }
+            )
         }
     }
 }

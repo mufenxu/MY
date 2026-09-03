@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.util.QrUtils
+import cn.pxyb.mycontrol.util.DateTimeUtils
+
 import android.graphics.BitmapFactory
 import android.Manifest
 import android.content.pm.PackageManager
@@ -881,7 +884,10 @@ private fun LoginScreen(
                                         loading = state.loginBusy,
                                     )
 
-                                    TextButton(
+                                    Spacer(Modifier.height(10.dp))
+                                    AppSecondaryButton(
+                                        text = "返回账号登录",
+                                        icon = Icons.AutoMirrored.Outlined.ArrowBack,
                                         onClick = {
                                             focusManager.clearFocus()
                                             factor = ""
@@ -889,11 +895,8 @@ private fun LoginScreen(
                                             onBackFromSecondFactor()
                                         },
                                         enabled = !state.loginBusy,
-                                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Text("返回账号登录", modifier = Modifier.padding(start = 6.dp))
-                                    }
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
                                 }
                             }
                         }
@@ -1038,7 +1041,10 @@ private fun LoginScreen(
                                         loading = state.loginBusy,
                                     )
 
-                                    TextButton(
+                                    Spacer(Modifier.height(10.dp))
+                                    AppSecondaryButton(
+                                        text = "返回账号登录",
+                                        icon = Icons.AutoMirrored.Outlined.ArrowBack,
                                         onClick = {
                                             focusManager.clearFocus()
                                             factor = ""
@@ -1046,11 +1052,8 @@ private fun LoginScreen(
                                             onBackFromSecondFactor()
                                         },
                                         enabled = !state.loginBusy,
-                                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Text("返回账号登录", modifier = Modifier.padding(start = 6.dp))
-                                    }
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
                                 }
                             }
                         }
@@ -1248,7 +1251,7 @@ private fun DeviceLoginSection(
 ) {
     if (!state.deviceLoginQrDataUrl.isNullOrBlank()) {
         val qrBitmap = remember(state.deviceLoginQrDataUrl) {
-            decodeQrDataUrl(state.deviceLoginQrDataUrl.orEmpty())
+            QrUtils.decodeDataUrlToBitmap(state.deviceLoginQrDataUrl)
         }
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -1314,20 +1317,17 @@ private fun DeviceLoginSection(
     }
 
     Spacer(Modifier.height(10.dp))
-    OutlinedButton(
+    AppSecondaryButton(
+        text = "Passkey 跨设备登录",
+        icon = Icons.Outlined.Fingerprint,
         onClick = { onStartDeviceLogin("passkey") },
         enabled = state.androidPasskeySupported && !state.loginBusy && !state.deviceLoginBusy,
         modifier = Modifier.fillMaxWidth(),
-    ) {
-        Icon(Icons.Outlined.Fingerprint, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
-        Text("Passkey 跨设备登录")
-    }
+    )
 }
 
 @Composable
 private fun PasskeyLoginMethod(enabled: Boolean, onClick: () -> Unit) {
-    val primaryColor = MaterialTheme.colorScheme.primary
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)))
@@ -1339,33 +1339,14 @@ private fun PasskeyLoginMethod(enabled: Boolean, onClick: () -> Unit) {
             )
             Box(Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)))
         }
-        Surface(
+        Spacer(Modifier.height(14.dp))
+        AppSecondaryButton(
+            text = "使用 Passkey 快捷登录",
+            icon = Icons.Outlined.Fingerprint,
             onClick = onClick,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth().padding(top = 15.dp).height(52.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    Icons.Outlined.Fingerprint,
-                    contentDescription = null,
-                    tint = if (enabled) primaryColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    "使用 Passkey 快捷登录",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
-                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
-        }
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -1418,98 +1399,17 @@ private fun PrimaryLoginButton(
     modifier: Modifier = Modifier,
     icon: ImageVector? = Icons.Outlined.Lock,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1.0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
-        label = "btn-scale"
+    AppButton(
+        text = text,
+        icon = icon,
+        onClick = onClick,
+        enabled = enabled,
+        loading = loading,
+        height = 50.dp,
+        modifier = modifier.fillMaxWidth(),
     )
-
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val buttonBrush = if (enabled || loading) {
-        Brush.horizontalGradient(
-            colors = listOf(
-                primaryColor,
-                lerp(primaryColor, Color.White, 0.16f),
-            )
-        )
-    } else {
-        SolidColor(primaryColor.copy(alpha = 0.08f))
-    }
-    val contentColor = if (enabled || loading) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-    val buttonShape = RoundedCornerShape(16.dp)
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(54.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .shadow(
-                elevation = if (enabled || loading) 4.dp else 0.dp,
-                shape = buttonShape,
-                clip = false,
-                ambientColor = primaryColor.copy(alpha = 0.35f),
-                spotColor = primaryColor.copy(alpha = 0.35f),
-            )
-            .clip(buttonShape)
-            .background(buttonBrush)
-            .clickable(enabled = enabled && !loading, onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            if (loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.5.dp,
-                    color = contentColor
-                )
-                Text(
-                    "安全验证中...",
-                    color = contentColor,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(start = 10.dp)
-                )
-            } else {
-                if (icon != null) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = contentColor,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                Text(
-                    text,
-                    color = contentColor,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
-        }
-    }
 }
 
-private fun decodeQrDataUrl(dataUrl: String): ImageBitmap? {
-    val base64 = dataUrl.substringAfter(',', "")
-    if (base64.isBlank()) return null
-    return runCatching {
-        val bytes = Base64.decode(base64, Base64.DEFAULT)
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-    }.getOrNull()
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -2571,15 +2471,8 @@ private fun SettingsStatusRow(
     }
 }
 
-private fun relativeSyncTime(timestamp: Long): String {
-    val minutes = ((System.currentTimeMillis() - timestamp).coerceAtLeast(0L) / 60_000L).toInt()
-    return when {
-        minutes < 1 -> "刚刚同步"
-        minutes < 60 -> "$minutes 分钟前同步"
-        minutes < 24 * 60 -> "${minutes / 60} 小时前同步"
-        else -> "${minutes / (24 * 60)} 天前同步"
-    }
-}
+private fun relativeSyncTime(timestamp: Long): String =
+    DateTimeUtils.formatRelativeSyncTime(timestamp)
 
 @Composable
 private fun AppHeader(tab: MainTab) {

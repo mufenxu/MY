@@ -1154,15 +1154,12 @@ private fun NotificationDetailPane(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Text("快捷操作", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 alert.actions.forEach { action ->
-                    Button(
+                    AppButton(
+                        text = action.label,
+                        icon = Icons.Outlined.OpenInNew,
                         onClick = { onAction(action) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
-                        Icon(Icons.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(action.label)
-                    }
+                    )
                 }
             }
         }
@@ -1218,15 +1215,12 @@ private fun NotificationDetailDialog(
             if (alert.actions.isNotEmpty()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 alert.actions.forEach { action ->
-                    Button(
+                    AppButton(
+                        text = action.label,
+                        icon = Icons.Outlined.OpenInNew,
                         onClick = { onAction(action) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(action.label)
-                    }
+                    )
                 }
             }
         }
@@ -3225,32 +3219,28 @@ private fun SceneCard(
                 IconButton(onClick = onEdit, enabled = enabled && !busy) { Icon(Icons.Outlined.Edit, "编辑") }
                 IconButton(onClick = { onDelete(scene.id) }, enabled = enabled && !busy) { Icon(Icons.Outlined.DeleteOutline, "删除") }
             }
-            Button(onClick = { onRun(scene.id) }, modifier = Modifier.fillMaxWidth().height(46.dp), enabled = enabled && !busy, shape = RoundedCornerShape(18.dp)) {
-                Icon(Icons.Outlined.PlayArrow, null)
-                Spacer(Modifier.width(6.dp))
-                Text("执行场景")
-            }
+            AppButton(
+                text = "执行场景",
+                icon = Icons.Outlined.PlayArrow,
+                onClick = { onRun(scene.id) },
+                enabled = enabled && !busy,
+                modifier = Modifier.fillMaxWidth(),
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                androidx.compose.material3.OutlinedButton(
+                AppSecondaryButton(
+                    text = "写入 NFC",
+                    icon = Icons.Outlined.Nfc,
                     onClick = onWriteNfc,
                     enabled = enabled && !busy,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    Icon(Icons.Outlined.Nfc, null)
-                    Spacer(Modifier.width(5.dp))
-                    Text("写入 NFC")
-                }
-                androidx.compose.material3.OutlinedButton(
+                )
+                AppSecondaryButton(
+                    text = if (quickScene) "当前磁贴" else "设为磁贴",
+                    icon = Icons.Outlined.DashboardCustomize,
                     onClick = onSetQuickScene,
                     enabled = enabled && !busy,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    Icon(Icons.Outlined.DashboardCustomize, null)
-                    Spacer(Modifier.width(5.dp))
-                    Text(if (quickScene) "当前磁贴" else "设为磁贴")
-                }
+                )
             }
         }
     }

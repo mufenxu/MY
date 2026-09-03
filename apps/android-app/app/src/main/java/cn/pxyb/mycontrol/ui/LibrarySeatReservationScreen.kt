@@ -150,78 +150,64 @@ fun LibrarySeatReservationScreen(
     val canQuery = selectedVenue != null && selectedDate.isNotBlank() && startMinute != null && endMinute != null && endMinute > startMinute
 
     val queryAreasButton: @Composable (Modifier) -> Unit = { buttonModifier ->
-        Button(
+        AppButton(
+            text = "查询阅览区",
+            icon = Icons.Outlined.Search,
             onClick = {
                 val venue = selectedVenue
-                val startMinute = timeTextToMinute(startTime) ?: run {
+                val sMinute = timeTextToMinute(startTime)
+                val eMinute = timeTextToMinute(endTime)
+                if (venue == null || selectedDate.isBlank() || sMinute == null || eMinute == null || eMinute <= sMinute) {
                     queryHint = "请先选择有效的场馆、日期和时间。"
-                    return@Button
+                } else {
+                    queryHint = null
+                    onClearFeedback()
+                    queryMode = "areas"
+                    seatListExpanded = false
+                    selectedAreaId = ""
+                    selectedSeatId = ""
+                    onQueryAreas(
+                        venue.id,
+                        selectedDate,
+                        sMinute,
+                        eMinute,
+                        selectedFloorId.takeIf(String::isNotBlank),
+                        50,
+                        wantPower,
+                        wantWindow,
+                    )
                 }
-                val endMinute = timeTextToMinute(endTime) ?: run {
-                    queryHint = "请先选择有效的场馆、日期和时间。"
-                    return@Button
-                }
-                if (venue == null || selectedDate.isBlank() || endMinute <= startMinute) {
-                    queryHint = "请先选择有效的场馆、日期和时间。"
-                    return@Button
-                }
-                queryHint = null
-                onClearFeedback()
-                queryMode = "areas"
-                seatListExpanded = false
-                selectedAreaId = ""
-                selectedSeatId = ""
-                onQueryAreas(
-                    venue.id,
-                    selectedDate,
-                    startMinute,
-                    endMinute,
-                    selectedFloorId.takeIf(String::isNotBlank),
-                    50,
-                    wantPower,
-                    wantWindow,
-                )
             },
             modifier = buttonModifier,
             enabled = canQuery && !state.areasLoading,
-        ) {
-            Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("查询阅览区", maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+            loading = state.areasLoading,
+        )
     }
     val queryFloorButton: @Composable (Modifier) -> Unit = { buttonModifier ->
-        FilledTonalButton(
+        AppSecondaryButton(
+            text = "二层 1-45",
+            icon = Icons.Outlined.Chair,
             onClick = {
                 val venue = selectedVenue
                 val floor = secondFloor
-                val startMinute = timeTextToMinute(startTime) ?: run {
+                val sMinute = timeTextToMinute(startTime)
+                val eMinute = timeTextToMinute(endTime)
+                if (venue == null || floor == null || selectedDate.isBlank() || sMinute == null || eMinute == null || eMinute <= sMinute) {
                     queryHint = "请先选择有效的场馆、日期和时间。"
-                    return@FilledTonalButton
+                } else {
+                    queryHint = null
+                    onClearFeedback()
+                    selectedFloorId = floor.id
+                    selectedAreaId = ""
+                    selectedSeatId = ""
+                    queryMode = "floor"
+                    onQueryFloorSeats(venue.id, floor.id, selectedDate, sMinute, eMinute)
                 }
-                val endMinute = timeTextToMinute(endTime) ?: run {
-                    queryHint = "请先选择有效的场馆、日期和时间。"
-                    return@FilledTonalButton
-                }
-                if (venue == null || floor == null || selectedDate.isBlank() || endMinute <= startMinute) {
-                    queryHint = "请先选择有效的场馆、日期和时间。"
-                    return@FilledTonalButton
-                }
-                queryHint = null
-                onClearFeedback()
-                selectedFloorId = floor.id
-                selectedAreaId = ""
-                selectedSeatId = ""
-                queryMode = "floor"
-                onQueryFloorSeats(venue.id, floor.id, selectedDate, startMinute, endMinute)
             },
             modifier = buttonModifier,
             enabled = canQuery && secondFloor != null && !state.floorSeatsLoading,
-        ) {
-            Icon(Icons.Outlined.Chair, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("二层 1-45", maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+            loading = state.floorSeatsLoading,
+        )
     }
 
     LaunchedEffect(Unit) {
@@ -842,17 +828,12 @@ private fun MySeatReservationsPanel(
                     }
                 }
             }
-            OutlinedButton(
+            AppSecondaryButton(
+                text = "返回查询座位",
+                icon = Icons.Outlined.Search,
                 onClick = onGoToBookSeat,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp),
-                shape = RoundedCornerShape(10.dp),
-            ) {
-                Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(5.dp))
-                Text("返回查询座位", maxLines = 1)
-            }
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -1408,7 +1389,9 @@ private fun LibrarySeatWaitlistPanel(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Button(
+            AppButton(
+                text = if (state.waitlistSaving) "正在开启..." else "开启候补监听",
+                icon = Icons.Outlined.NotificationsActive,
                 onClick = {
                     hint = null
                     val venue = selectedVenue
@@ -1442,15 +1425,9 @@ private fun LibrarySeatWaitlistPanel(
                     }
                 },
                 enabled = !state.waitlistSaving && state.venues.isNotEmpty(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Icon(Icons.Outlined.NotificationsActive, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(if (state.waitlistSaving) "正在开启..." else "开启候补监听", maxLines = 1)
-            }
+                loading = state.waitlistSaving,
+                modifier = Modifier.fillMaxWidth(),
+            )
             hint?.let { message ->
                 Text(
                     text = message,
@@ -1556,33 +1533,27 @@ private fun WaitlistTaskCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (listening) {
-                    OutlinedButton(
+                    AppSecondaryButton(
+                        text = "停止监听",
                         onClick = onStop,
                         enabled = !busy,
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    ) {
-                        Text("停止监听", maxLines = 1)
-                    }
+                        height = 36.dp,
+                    )
                 } else if (!deleting && (task.status == "stopped" || task.status == "failed")) {
-                    OutlinedButton(
+                    AppButton(
+                        text = "重新开启",
                         onClick = onResume,
                         enabled = !busy,
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    ) {
-                        Text("重新开启", maxLines = 1)
-                    }
+                        height = 36.dp,
+                    )
                 }
                 Spacer(Modifier.width(8.dp))
-                OutlinedButton(
+                AppDangerButton(
+                    text = if (deleting) "删除中..." else "删除",
                     onClick = onDelete,
                     enabled = !busy && !deleting,
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                ) {
-                    Text(if (deleting) "删除中..." else "删除", maxLines = 1)
-                }
+                    height = 36.dp,
+                )
             }
         }
     }

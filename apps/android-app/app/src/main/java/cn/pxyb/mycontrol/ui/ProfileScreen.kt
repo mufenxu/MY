@@ -1,7 +1,11 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.components.display.AppActionRow
+import cn.pxyb.mycontrol.ui.components.display.AppDivider
+
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -66,6 +70,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -1139,26 +1144,21 @@ fun ProfileScreen(
                     Spacer(Modifier.height(18.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(
+                        AppSecondaryButton(
+                            text = "关闭",
                             onClick = { showMagicLinkDialog = null },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(14.dp),
-                        ) {
-                            Text("关闭")
-                        }
-                        Button(
+                        )
+                        AppButton(
+                            text = "复制链接",
+                            icon = Icons.Outlined.ContentCopy,
                             onClick = {
                                 clipboardManager.setText(AnnotatedString(url))
                                 Toast.makeText(context, "已复制登录链接到剪贴板", Toast.LENGTH_SHORT).show()
                                 showMagicLinkDialog = null
                             },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(14.dp),
-                        ) {
-                            Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("复制链接")
-                        }
+                        )
                     }
                 }
             }
@@ -1278,57 +1278,43 @@ fun ProfileScreen(
                     Spacer(Modifier.height(16.dp))
 
                     when (state.appUpdate.phase) {
-                        AppUpdatePhase.Available -> Button(
+                        AppUpdatePhase.Available -> AppButton(
+                            text = "下载并安装",
+                            icon = Icons.Outlined.FileDownload,
                             onClick = onDownloadAndInstallUpdate,
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                        ) {
-                            Icon(Icons.Outlined.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("下载并安装")
-                        }
+                        )
 
                         AppUpdatePhase.ReadyToInstall,
                         AppUpdatePhase.InstallPermissionRequired,
-                        -> Button(
+                        -> AppButton(
+                            text = if (state.appUpdate.phase == AppUpdatePhase.InstallPermissionRequired) "继续安装" else "打开系统安装器",
+                            icon = Icons.Outlined.SystemUpdate,
                             onClick = onInstallDownloadedUpdate,
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                        ) {
-                            Icon(Icons.Outlined.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(if (state.appUpdate.phase == AppUpdatePhase.InstallPermissionRequired) "继续安装" else "打开系统安装器")
-                        }
+                        )
 
                         AppUpdatePhase.Error -> {
-                            Button(
+                            AppButton(
+                                text = "重新检查",
+                                icon = Icons.Outlined.SystemUpdate,
                                 onClick = onCheckUpdates,
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                            ) {
-                                Icon(Icons.Outlined.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("重新检查")
-                            }
+                            )
                             Spacer(Modifier.height(8.dp))
-                            OutlinedButton(
+                            AppSecondaryButton(
+                                text = "打开 GitHub Releases",
+                                icon = Icons.AutoMirrored.Outlined.OpenInNew,
                                 onClick = { onOpenReleases(state.appUpdate.info?.releaseUrl) },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                            ) {
-                                Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("打开 GitHub Releases")
-                            }
+                            )
                         }
 
-                        else -> OutlinedButton(
+                        else -> AppSecondaryButton(
+                            text = "关闭",
                             onClick = { showUpdateDialog = false },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                        ) {
-                            Text("关闭")
-                        }
+                        )
                     }
                 }
             }
@@ -1495,37 +1481,75 @@ private fun ModernProfileHeader(
         }
     }
 }
-/** 分组标题：与首页「工作台」一致的节奏 */
+/** 分组标题：灵动微岛毛玻璃浮标 (Dynamic Floating Island Pill) */
 @Composable
 private fun ProfileSectionTitle(
     title: String,
     subtitle: String,
+    dotColor: Color = MaterialTheme.colorScheme.primary,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    val isDark = isSystemInDarkTheme()
+    val pillBgColor = if (isDark) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    } else {
+        Color.White.copy(alpha = 0.82f)
+    }
+    val pillBorderColor = if (isDark) {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+    } else {
+        Color.White.copy(alpha = 0.90f)
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 2.dp),
+            .padding(horizontal = 2.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                ),
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 11.sp,
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Surface(
+            shape = CircleShape,
+            color = pillBgColor,
+            border = BorderStroke(0.6.dp, pillBorderColor),
+            shadowElevation = 0.dp,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(dotColor)
+                )
+
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        letterSpacing = 0.1.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 10.5.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
+
         trailing?.invoke()
     }
 }
@@ -1811,10 +1835,13 @@ private fun NotificationPreferencesDialog(
                 Spacer(Modifier.height(20.dp))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
-                        Text("取消")
-                    }
-                    Button(
+                    AppSecondaryButton(
+                        text = "取消",
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                    )
+                    AppButton(
+                        text = "保存配置",
                         onClick = {
                             onSave(
                                 current.copy(
@@ -1834,10 +1861,7 @@ private fun NotificationPreferencesDialog(
                             )
                         },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(14.dp),
-                    ) {
-                        Text("保存配置")
-                    }
+                    )
                 }
             }
         }
@@ -1932,67 +1956,33 @@ private fun ProfileActionRow(
     titleColor: Color = MaterialTheme.colorScheme.onSurface,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-            if (busy) {
-                CircularProgressIndicator(
+    AppActionRow(
+        title = title,
+        subtitle = subtitle,
+        onClick = onClick,
+        enabled = enabled && !busy,
+        modifier = modifier,
+        trailingContent = {
+            when {
+                busy -> CircularProgressIndicator(
                     modifier = Modifier.size(18.dp),
                     strokeWidth = 2.dp,
                     color = iconTint,
                 )
-            } else {
-                IconTile(icon, iconTint, iconBackground, modifier = Modifier.size(36.dp))
-            }
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.5.sp,
-                ),
-                color = titleColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!subtitle.isNullOrBlank()) {
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 1.dp),
+                trailing != null -> trailing()
+                showChevron -> Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp),
                 )
             }
-        }
-        if (trailing != null) {
-            trailing()
-        } else if (showChevron) {
-            Icon(
-                Icons.Outlined.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.size(16.dp),
-            )
-        }
-    }
+        },
+    )
 }
 
 @Composable
-private fun ProfileDivider() {
-    HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-    )
-}
+private fun ProfileDivider() = AppDivider(paddingStart = 16.dp, paddingEnd = 16.dp)
 
 @Composable
 private fun SessionRow(session: SecuritySession, busy: Boolean, onRevoke: () -> Unit) {
@@ -2041,7 +2031,7 @@ private fun SessionRow(session: SecuritySession, busy: Boolean, onRevoke: () -> 
             )
         }
         if (!session.current) {
-            OutlinedButton(onClick = onRevoke, enabled = !busy, shape = MaterialTheme.shapes.medium) { Text("撤销") }
+            AppDangerButton(text = "撤销", onClick = onRevoke, enabled = !busy, height = 36.dp)
         }
     }
 }
