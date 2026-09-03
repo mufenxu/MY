@@ -1498,48 +1498,16 @@ internal fun WorkspacePage(
     actions: (@Composable RowScope.() -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
-    val listState = rememberLazyListState()
-    val dark = isSystemInDarkTheme()
-    PullToRefresh(
-        isRefreshing = refreshing,
+    AppSubPage(
+        title = title,
+        subtitle = subtitle,
+        onBack = onBack,
+        contentPadding = contentPadding,
+        refreshing = refreshing,
         onRefresh = onRefresh,
-        enabled = onRefresh != null,
-        atTop = {
-            listState.firstVisibleItemIndex == 0 &&
-                listState.firstVisibleItemScrollOffset == 0
-        },
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .widthIn(max = AppTabletContentMaxWidth)
-                    .fillMaxWidth()
-                    .auroraBackdrop(dark)
-                    .padding(
-                        start = AppPageHorizontalPadding,
-                        end = AppPageHorizontalPadding,
-                        top = contentPadding.calculateTopPadding() + AppPageTopSpacing,
-                    ),
-                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item(key = "workspace-header", contentType = "header") {
-                    AppSecondaryHeader(
-                        title = title,
-                        subtitle = subtitle,
-                        onBack = onBack,
-                        actions = actions,
-                    )
-                }
-                content()
-            }
-        }
-    }
+        actions = actions,
+        content = content,
+    )
 }
 
 @Composable

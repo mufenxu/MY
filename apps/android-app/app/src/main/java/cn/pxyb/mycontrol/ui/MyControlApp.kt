@@ -138,6 +138,8 @@ import androidx.compose.ui.platform.LocalAutofill
 import androidx.compose.ui.platform.LocalAutofillTree
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
+import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -2661,6 +2663,7 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onCl
     val itemShape = RoundedCornerShape(22.dp)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val haptics = LocalHapticFeedback.current
 
     val foreground by animateColorAsState(
         targetValue = if (selected) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
@@ -2698,7 +2701,10 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onCl
                 indication = null,
                 role = Role.Tab,
                 onClickLabel = item.label,
-                onClick = onClick,
+                onClick = {
+                    AppHaptics.tick(haptics)
+                    onClick()
+                },
             )
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

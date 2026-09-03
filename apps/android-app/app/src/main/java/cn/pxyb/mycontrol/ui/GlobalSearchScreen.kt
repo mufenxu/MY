@@ -49,7 +49,6 @@ fun GlobalSearchScreen(
     onBack: () -> Unit,
     onSelect: (GlobalSearchItem) -> Unit,
 ) {
-    BackHandler(onBack = onBack)
     var query by rememberSaveable { mutableStateOf("") }
     val results = remember(query, state.items) {
         val normalized = query.trim()
@@ -66,30 +65,23 @@ fun GlobalSearchScreen(
 
     val adaptive = LocalAdaptiveWindow.current
     val isTablet = adaptive.isTabletOrExpanded
-    val dark = isSystemInDarkTheme()
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .auroraBackdrop(dark)
-            .imePadding(),
-        contentPadding = appPageContentPadding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    AppSubPage(
+        title = "全局搜索",
+        subtitle = "应用、服务、任务、课程、设备与资源",
+        onBack = onBack,
+        contentPadding = contentPadding,
+        pinHeader = true,
+        refreshing = state.refreshing,
+        modifier = Modifier.imePadding(),
     ) {
-        item(key = "search-header") {
-            AppSecondaryHeader(
-                title = "全局搜索",
-                subtitle = "应用、服务、任务、课程、设备与资源",
-                onBack = onBack,
-            )
-        }
         item(key = "search-input") {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("搜索名称、状态或内容") },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = "搜索") },
                 singleLine = true,
                 shape = AppSearchFieldShape,
                 colors = OutlinedTextFieldDefaults.colors(

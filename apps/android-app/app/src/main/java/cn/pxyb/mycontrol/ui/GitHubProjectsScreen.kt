@@ -107,25 +107,23 @@ fun GitHubProjectsScreen(
             onCreateRelease = { createOpen = true },
         )
     } else {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .auroraBackdrop(dark),
-            contentPadding = appPageContentPadding(contentPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "github-projects-header") {
-                AppSecondaryHeader(
-                    title = "GitHub 项目",
-                    subtitle = "账号与仓库管理",
-                    onBack = onBack,
-                    actions = {
-                        IconButton(onClick = onRefresh, enabled = !busy) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                        }
-                    },
+        AppSubPage(
+            title = "GitHub 项目",
+            subtitle = "账号与仓库管理",
+            onBack = onBack,
+            contentPadding = contentPadding,
+            refreshing = busy,
+            onRefresh = onRefresh,
+            actions = {
+                AppHeaderIconButton(
+                    icon = Icons.Outlined.Refresh,
+                    contentDescription = "刷新",
+                    onClick = onRefresh,
+                    enabled = !busy,
+                    loading = busy,
                 )
-            }
+            },
+        ) {
             when {
                 !profileLoaded && profile == null -> item(key = "github-account-loading") {
                     LoadingBlock("正在加载账号信息")
@@ -217,29 +215,29 @@ private fun GitHubReleasesPane(
     onRefresh: () -> Unit,
     onCreateRelease: () -> Unit,
 ) {
-    val dark = isSystemInDarkTheme()
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .auroraBackdrop(dark),
-        contentPadding = appPageContentPadding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item(key = "github-releases-header") {
-            AppSecondaryHeader(
-                title = repo.fullName,
-                subtitle = "Releases 管理",
-                onBack = onBack,
-                actions = {
-                    IconButton(onClick = onRefresh, enabled = !busy) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                    }
-                    IconButton(onClick = onCreateRelease, enabled = !busy) {
-                        Icon(Icons.Outlined.Add, contentDescription = "新建 Release")
-                    }
-                },
+    AppSubPage(
+        title = repo.fullName,
+        subtitle = "Releases 管理",
+        onBack = onBack,
+        contentPadding = contentPadding,
+        refreshing = busy,
+        onRefresh = onRefresh,
+        actions = {
+            AppHeaderIconButton(
+                icon = Icons.Outlined.Refresh,
+                contentDescription = "刷新",
+                onClick = onRefresh,
+                enabled = !busy,
+                loading = busy,
             )
-        }
+            AppHeaderIconButton(
+                icon = Icons.Outlined.Add,
+                contentDescription = "新建 Release",
+                onClick = onCreateRelease,
+                enabled = !busy,
+            )
+        },
+    ) {
         when {
             !loaded -> item(key = "github-releases-loading") {
                 LoadingBlock("正在加载 Releases")

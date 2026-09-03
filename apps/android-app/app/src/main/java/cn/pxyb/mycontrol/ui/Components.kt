@@ -118,6 +118,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.material3.minimumInteractiveComponentSize
+import cn.pxyb.mycontrol.ui.theme.AppHaptics
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
@@ -1527,6 +1531,7 @@ fun PullToRefresh(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
     val thresholdPx = with(density) { 76.dp.toPx() }
     val maxPullPx = with(density) { 150.dp.toPx() }
     val indicatorSizePx = with(density) { 42.dp.toPx() }
@@ -1566,6 +1571,7 @@ fun PullToRefresh(
             currentIsRefreshing || triggered -> animatePullTo(thresholdPx)
             pullOffset >= thresholdPx -> {
                 triggered = true
+                AppHaptics.refreshSnap(haptics)
                 animatePullTo(thresholdPx)
                 currentOnRefresh?.invoke()
             }
@@ -2234,6 +2240,7 @@ fun AppSwitch(
     tint: Color? = null,
 ) {
     val dark = isSystemInDarkTheme()
+    val haptics = LocalHapticFeedback.current
     val accent = tint ?: MaterialTheme.colorScheme.primary
     val interactive = enabled && onCheckedChange != null
     val interactionSource = remember { MutableInteractionSource() }
@@ -2266,7 +2273,7 @@ fun AppSwitch(
             checked -> accent
             else -> if (dark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.10f)
         },
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = tween(durationMillis = MotionTokens.DurationShort),
         label = "appSwitchTrack",
     )
     val thumbColor = when {
@@ -2282,6 +2289,7 @@ fun AppSwitch(
 
     Box(
         modifier = modifier
+            .minimumInteractiveComponentSize()
             .width(trackWidth)
             .height(trackHeight)
             .clip(RoundedCornerShape(50))
@@ -2293,7 +2301,10 @@ fun AppSwitch(
                         role = Role.Switch,
                         interactionSource = interactionSource,
                         indication = null,
-                    ) { onCheckedChange?.invoke(it) }
+                    ) { newValue ->
+                        AppHaptics.tick(haptics)
+                        onCheckedChange?.invoke(newValue)
+                    }
                 } else {
                     Modifier
                 }

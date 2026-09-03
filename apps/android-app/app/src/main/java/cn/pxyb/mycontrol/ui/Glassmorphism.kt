@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -61,8 +62,31 @@ fun Modifier.glassPanel(palette: GlassPalette): Modifier = this
     .background(palette.highlight, palette.shape)
     .border(1.dp, palette.border, palette.shape)
 
-/** 页面底层极光光斑背景（固定不随内容滚动），为玻璃面板提供可透出的色彩 */
-fun Modifier.auroraBackdrop(dark: Boolean): Modifier = this.drawBehind { drawAurora(dark) }
+/** 页面底层极光光斑背景（固定不随内容滚动），为玻璃面板提供可透出的色彩。已采用 drawWithCache 缓存渐变着色器避免滚动掉帧 */
+fun Modifier.auroraBackdrop(dark: Boolean): Modifier = this.drawWithCache {
+    val blobAlpha = if (dark) 0.30f else 0.26f
+    val c1 = if (dark) Color(0xFF3B82F6) else Color(0xFF60A5FA)
+    val c2 = if (dark) Color(0xFF8B5CF6) else Color(0xFFA78BFA)
+    val c3 = if (dark) Color(0xFF14B8A6) else Color(0xFF5EEAD4)
+
+    val r1 = 230.dp.toPx()
+    val r2 = 260.dp.toPx()
+    val r3 = 210.dp.toPx()
+
+    val center1 = Offset(size.width * 0.9f, size.height * 0.08f)
+    val center2 = Offset(size.width * 0.12f, size.height * 0.18f)
+    val center3 = Offset(size.width * 0.88f, size.height * 0.55f)
+
+    val brush1 = Brush.radialGradient(listOf(c1.copy(alpha = blobAlpha), Color.Transparent), center1, r1)
+    val brush2 = Brush.radialGradient(listOf(c2.copy(alpha = blobAlpha - 0.04f), Color.Transparent), center2, r2)
+    val brush3 = Brush.radialGradient(listOf(c3.copy(alpha = blobAlpha - 0.09f), Color.Transparent), center3, r3)
+
+    onDrawBehind {
+        drawCircle(brush = brush1, radius = r1, center = center1)
+        drawCircle(brush = brush2, radius = r2, center = center2)
+        drawCircle(brush = brush3, radius = r3, center = center3)
+    }
+}
 
 fun DrawScope.drawAurora(dark: Boolean) {
     val blobAlpha = if (dark) 0.30f else 0.26f
