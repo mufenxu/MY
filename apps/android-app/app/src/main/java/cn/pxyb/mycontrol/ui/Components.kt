@@ -31,8 +31,9 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -558,8 +559,13 @@ fun LoadingBlock(label: String, modifier: Modifier = Modifier) {
 // ---------------- 现代统一弹窗 ----------------
 
 /**
- * 全 App 统一的现代弹窗容器：柔和遮罩、圆角卡片、入场缩放动画，
- * 标题居中展示，底部为分隔线 + 全宽/双列胶囊按钮。
+ * 全 App 统一的原生极光弹窗体系 (AppDialog / Bottom Sheet Drawer)
+ * 
+ * 1. 手机端自适应为【底部半模态流光抽屉】(Bottom Sheet)，带有顶部 36×4dp 极简拖拽手柄、28dp 大圆角与弹性滑出动效，
+ *    彻底解决旧版居中大方块单手难以够到、压迫感强烈的痛点；
+ * 2. 平板/折叠大屏端自适应为【沉浸居中悬浮卡片】(最大宽 480dp，四周 24dp 磨砂圆角)，保持大屏视觉焦点；
+ * 3. 材质纯正：去除旧版粗暴的彩色彩晕与深色脏阴影，采用 App 原生磨砂底色 + 顶部微高光 + 1dp 发丝白描边；
+ * 4. 页眉标配轻巧关闭键与精致微标，底部标配 BrandBlue (#2563EB) 高度统一的胶囊按钮组。
  */
 @Composable
 fun AppDialog(
@@ -570,7 +576,7 @@ fun AppDialog(
     iconBackground: Color = MaterialTheme.colorScheme.primaryContainer,
     title: String? = null,
     subtitle: String? = null,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+    contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
     footer: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
@@ -588,7 +594,7 @@ fun AppDialog(
     ) {
         val view = LocalView.current
         val dark = isSystemInDarkTheme()
-        val dimAlpha = if (dark) 0.58f else 0.38f
+        val dimAlpha = if (dark) 0.42f else 0.28f
         SideEffect {
             val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
             WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -606,16 +612,32 @@ fun AppDialog(
             }
         }
 
-        val sheetColor = MaterialTheme.colorScheme.surface
-        val sheetBorder = MaterialTheme.colorScheme.outlineVariant
-        val headerWash = Brush.verticalGradient(
-            colors = listOf(
-                iconBackground.copy(alpha = if (dark) 0.34f else 0.55f),
-                sheetColor.copy(alpha = 0f),
+        val adaptive = LocalAdaptiveWindow.current
+        val isTablet = adaptive.isTabletOrExpanded
+
+        val sheetColor = if (dark) {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.97f)
+        }
+        val sheetBorder = if (dark) {
+            Color.White.copy(alpha = 0.14f)
+        } else {
+            Color.Black.copy(alpha = 0.08f)
+        }
+        val topHighlight = Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.0f to (if (dark) Color.White.copy(alpha = 0.09f) else Color.White.copy(alpha = 0.35f)),
+                0.15f to Color.Transparent,
+                1.0f to Color.Transparent,
             ),
         )
-        val adaptive = LocalAdaptiveWindow.current
-        val maxDialogWidth = if (adaptive.isTabletOrExpanded) 560.dp else 420.dp
+
+        val sheetShape = if (isTablet) {
+            RoundedCornerShape(24.dp)
+        } else {
+            RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
+        }
 
         Box(
             modifier = Modifier
@@ -625,76 +647,122 @@ fun AppDialog(
                     indication = null,
                     onClick = onDismissRequest,
                 ),
-            contentAlignment = Alignment.Center,
+            contentAlignment = if (isTablet) Alignment.Center else Alignment.BottomCenter,
         ) {
             AnimatedVisibility(
                 visible = visible,
-                enter = fadeIn(animationSpec = tween(150)) +
-                    scaleIn(initialScale = 0.94f, animationSpec = tween(220, easing = FastOutSlowInEasing)),
-                exit = fadeOut(animationSpec = tween(110)) +
-                    scaleOut(targetScale = 0.97f, animationSpec = tween(130)),
-                modifier = Modifier
-                    .imePadding()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 18.dp, vertical = 16.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                    ),
+                enter = if (isTablet) {
+                    fadeIn(animationSpec = tween(MotionTokens.DurationShort, easing = MotionTokens.FastEasing)) +
+                        scaleIn(initialScale = 0.94f, animationSpec = tween(MotionTokens.DurationMedium, easing = MotionTokens.EmphasizedDecelerate))
+                } else {
+                    slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = tween(durationMillis = 260, easing = CubicBezierEasing(0.1f, 0.9f, 0.2f, 1.0f)),
+                    ) + fadeIn(animationSpec = tween(MotionTokens.DurationShort, easing = MotionTokens.FastEasing))
+                },
+                exit = if (isTablet) {
+                    fadeOut(animationSpec = tween(MotionTokens.DurationShort, easing = MotionTokens.FastEasing)) +
+                        scaleOut(targetScale = 0.96f, animationSpec = tween(MotionTokens.DurationShort, easing = MotionTokens.FastEasing))
+                } else {
+                    slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                    ) + fadeOut(animationSpec = tween(MotionTokens.DurationShort, easing = MotionTokens.FastEasing))
+                },
+                modifier = if (isTablet) {
+                    Modifier
+                        .imePadding()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 24.dp, vertical = 20.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                        )
+                } else {
+                    Modifier
+                        .imePadding()
+                        .navigationBarsPadding()
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                        )
+                },
             ) {
                 Box(
                     modifier = modifier
-                        .widthIn(max = maxDialogWidth)
-                        .fillMaxWidth()
-                        .shadow(
-                            elevation = 28.dp,
-                            shape = AppDialogShape,
-                            ambientColor = Color.Black.copy(alpha = 0.18f),
-                            spotColor = Color.Black.copy(alpha = 0.22f),
+                        .then(
+                            if (isTablet) Modifier.widthIn(max = 480.dp).fillMaxWidth()
+                            else Modifier.fillMaxWidth()
                         )
-                        .clip(AppDialogShape)
+                        .clip(sheetShape)
                         .background(sheetColor)
-                        .background(headerWash)
-                        .border(1.dp, sheetBorder, AppDialogShape),
+                        .background(topHighlight)
+                        .border(1.dp, sheetBorder, sheetShape),
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = if (!isTablet) 8.dp else 0.dp),
+                    ) {
+                        // 顶部小手柄（仅手机底置模式展示）
+                        if (!isTablet) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 10.dp, bottom = 4.dp)
+                                    .size(width = 36.dp, height = 4.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(
+                                        if (dark) Color.White.copy(alpha = 0.24f)
+                                        else Color.Black.copy(alpha = 0.16f)
+                                    )
+                                    .align(Alignment.CenterHorizontally),
+                            )
+                        }
+
+                        // 页眉栏：左侧图标与标题，右侧圆形关闭键
                         if (icon != null || title != null || subtitle != null) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                verticalAlignment = Alignment.Top,
+                                    .padding(
+                                        start = 20.dp,
+                                        end = 16.dp,
+                                        top = if (isTablet) 20.dp else 10.dp,
+                                        bottom = 4.dp,
+                                    ),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 if (icon != null) {
                                     Box(
                                         modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(iconBackground.copy(alpha = if (dark) 0.9f else 1f)),
+                                            .size(38.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(iconBackground.copy(alpha = if (dark) 0.85f else 0.95f)),
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         Icon(
                                             imageVector = icon,
                                             contentDescription = null,
                                             tint = iconTint,
-                                            modifier = Modifier.size(24.dp),
+                                            modifier = Modifier.size(20.dp),
                                         )
                                     }
                                 }
                                 Column(
                                     modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp),
                                 ) {
                                     if (title != null) {
                                         Text(
                                             text = title,
-                                            style = MaterialTheme.typography.titleLarge.copy(
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontSize = 19.sp,
-                                                lineHeight = 25.sp,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 17.sp,
                                                 letterSpacing = (-0.2).sp,
                                             ),
                                             color = MaterialTheme.colorScheme.onSurface,
@@ -703,17 +771,24 @@ fun AppDialog(
                                     if (subtitle != null) {
                                         Text(
                                             text = subtitle,
-                                            style = MaterialTheme.typography.bodyMedium.copy(
-                                                fontSize = 13.5.sp,
-                                                lineHeight = 19.sp,
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontSize = 12.5.sp,
+                                                lineHeight = 17.sp,
                                             ),
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
                                 }
+                                AppHeaderIconButton(
+                                    icon = Icons.Outlined.Close,
+                                    contentDescription = "关闭",
+                                    onClick = onDismissRequest,
+                                    size = 32.dp,
+                                )
                             }
                         }
 
+                        // 弹窗内容区域
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -724,11 +799,12 @@ fun AppDialog(
                             content()
                         }
 
+                        // 底部操作区
                         if (footer != null) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    .padding(horizontal = 18.dp, vertical = 10.dp),
                             ) {
                                 Column(
                                     modifier = Modifier.fillMaxWidth(),
@@ -745,8 +821,7 @@ fun AppDialog(
     }
 }
 
-
-/** 弹窗主操作按钮：柔和圆角主色按钮。 */
+/** 弹窗主操作按钮：对齐 BrandBlue 官方科技蓝与 46dp 标准高度。 */
 @Composable
 fun AppDialogPrimaryButton(
     text: String,
@@ -755,13 +830,17 @@ fun AppDialogPrimaryButton(
     enabled: Boolean = true,
     busy: Boolean = false,
 ) {
+    val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     Button(
-        onClick = onClick,
-        modifier = modifier.height(48.dp).pressFeedback(interactionSource),
+        onClick = {
+            AppHaptics.tick(haptics)
+            onClick()
+        },
+        modifier = modifier.height(46.dp).pressFeedback(interactionSource),
         interactionSource = interactionSource,
         enabled = enabled && !busy,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         elevation = ButtonDefaults.buttonElevation(
             defaultElevation = 0.dp,
             pressedElevation = 0.dp,
@@ -784,12 +863,12 @@ fun AppDialogPrimaryButton(
                 color = MaterialTheme.colorScheme.onPrimary,
             )
         } else {
-            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp)
         }
     }
 }
 
-/** 弹窗次要操作按钮：浅底弱强调。 */
+/** 弹窗次要操作按钮：半透明磨砂弱强调。 */
 @Composable
 fun AppDialogSecondaryButton(
     text: String,
@@ -799,13 +878,17 @@ fun AppDialogSecondaryButton(
     busy: Boolean = false,
 ) {
     val dark = isSystemInDarkTheme()
+    val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     Button(
-        onClick = onClick,
-        modifier = modifier.height(48.dp).pressFeedback(interactionSource),
+        onClick = {
+            AppHaptics.tick(haptics)
+            onClick()
+        },
+        modifier = modifier.height(46.dp).pressFeedback(interactionSource),
         interactionSource = interactionSource,
         enabled = enabled && !busy,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (dark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant,
@@ -822,7 +905,7 @@ fun AppDialogSecondaryButton(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp)
         }
     }
 }
@@ -836,13 +919,17 @@ fun AppDialogDangerButton(
     enabled: Boolean = true,
     busy: Boolean = false,
 ) {
+    val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     Button(
-        onClick = onClick,
-        modifier = modifier.height(48.dp).pressFeedback(interactionSource),
+        onClick = {
+            AppHaptics.heavy(haptics)
+            onClick()
+        },
+        modifier = modifier.height(46.dp).pressFeedback(interactionSource),
         interactionSource = interactionSource,
         enabled = enabled && !busy,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -859,7 +946,7 @@ fun AppDialogDangerButton(
                 color = MaterialTheme.colorScheme.error,
             )
         } else {
-            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp)
         }
     }
 }
