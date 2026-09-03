@@ -1,4 +1,3 @@
-const DAY_MS = 24 * 60 * 60 * 1000;
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const SAFE_ID = /^[A-Za-z0-9_-]+$/;
