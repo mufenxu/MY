@@ -77,6 +77,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccessTime
@@ -842,7 +843,7 @@ fun AppButton(
     enabled: Boolean = true,
     loading: Boolean = false,
     height: Dp = 46.dp,
-    shape: Shape = RoundedCornerShape(50),
+    shape: RoundedCornerShape = RoundedCornerShape(50),
 ) {
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -917,7 +918,7 @@ fun AppSecondaryButton(
     enabled: Boolean = true,
     loading: Boolean = false,
     height: Dp = 46.dp,
-    shape: Shape = RoundedCornerShape(50),
+    shape: RoundedCornerShape = RoundedCornerShape(50),
 ) {
     val dark = isSystemInDarkTheme()
     val haptics = LocalHapticFeedback.current
@@ -991,7 +992,7 @@ fun AppDangerButton(
     enabled: Boolean = true,
     loading: Boolean = false,
     height: Dp = 46.dp,
-    shape: Shape = RoundedCornerShape(50),
+    shape: RoundedCornerShape = RoundedCornerShape(50),
 ) {
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
