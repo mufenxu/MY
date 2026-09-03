@@ -370,22 +370,14 @@ private fun FreeClassroomFilters(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Button(
+            AppButton(
+                text = if (refreshing) "查询中" else "查询空教室",
+                icon = if (!refreshing) Icons.Outlined.Search else null,
                 onClick = onQuery,
+                loading = refreshing,
                 enabled = !refreshing,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) {
-                if (refreshing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                } else {
-                    Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(19.dp))
-                }
-                Text(if (refreshing) "查询中" else "查询空教室", modifier = Modifier.padding(start = 8.dp))
-            }
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

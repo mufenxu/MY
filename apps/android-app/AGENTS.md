@@ -54,6 +54,7 @@
   - 卡片面板：`AppPanel`
   - 页头操作：`AppSecondaryHeader` / `AppHeaderIconButton`
   - 骨架屏加载：`GlassShimmerCard` / `GlassShimmerList` / `Modifier.glassShimmer(dark)`（首屏/卡片流加载优先使用骨架微光，杜绝突兀布局跳变）
+  - 按钮体系：`AppButton` / `AppSecondaryButton` / `AppDangerButton`（全 App 统一现代胶囊流光按钮族：全圆角 `RoundedCornerShape(50)`，内置 `pressFeedback` 物理弹性缩放 + `AppHaptics.tick` 细腻触觉，支持内置 `loading` 状态与图标。严禁业务页面随意裸写未经包装的默认 Material 3 `Button`）
   - 弹窗体系：`AppDialog`（全 App 统一弹窗底座：手机端自适应为底部半模态流光抽屉，顶部 28dp 圆角 + 拖拽把手；大屏端自适应为居中卡片。配套 `AppDialogPrimaryButton`/`AppDialogSecondaryButton`/`AppDialogDangerButton`，统一 46dp 标准高度与 `AppHaptics` 触觉回馈）
   - 开关：`AppSwitch`（内置 48dp 热区与微震动）
   - 反馈与重试：`FeedbackBanner`（支持可选 `onRetry` 就地一键重试回调）

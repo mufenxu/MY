@@ -796,53 +796,37 @@ private fun SingleReservationPanel(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    OutlinedButton(
+                    AppSecondaryButton(
+                        text = "查空间空闲时段",
+                        icon = Icons.Outlined.Search,
                         onClick = {
                             if (selectedSpaceId <= 0) {
                                 formValidationNotice = "请先选择空间"
-                                return@OutlinedButton
+                                return@AppSecondaryButton
                             }
                             formValidationNotice = null
                             onQuery(selectedSpaceId, selectedDate)
                         },
+                        loading = queryLoading,
                         enabled = !queryLoading && selectedSpaceId > 0,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                    ) {
-                        if (queryLoading) {
-                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(6.dp))
-                        } else {
-                            Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                        }
-                        Text("查空间空闲时段", style = MaterialTheme.typography.labelMedium, maxLines = 1)
-                    }
+                    )
 
-                    Button(
+                    AppButton(
+                        text = "查时段空闲房间",
+                        icon = Icons.Outlined.MeetingRoom,
                         onClick = {
                             if (!isDurationValid) {
                                 formValidationNotice = "请先设置有效的时间段（1至4小时）"
-                                return@Button
+                                return@AppButton
                             }
                             formValidationNotice = null
                             onQuerySpacesByTime(selectedDate, startTime, endTime)
                         },
+                        loading = availableSpacesLoading,
                         enabled = !availableSpacesLoading && isDurationValid,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                    ) {
-                        if (availableSpacesLoading) {
-                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = Color.White)
-                            Spacer(Modifier.width(6.dp))
-                        } else {
-                            Icon(Icons.Outlined.MeetingRoom, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                        }
-                        Text("查时段空闲房间", style = MaterialTheme.typography.labelMedium, maxLines = 1)
-                    }
+                    )
                 }
 
                 // 按时段查询空闲学习间结果展示
@@ -1001,50 +985,41 @@ private fun SingleReservationPanel(
                     FeedbackBanner(message = notice, error = true)
                 }
 
-                Button(
+                AppButton(
+                    text = "核对并提交预约",
+                    icon = Icons.Outlined.FactCheck,
                     onClick = {
                         if (selectedSpaceId <= 0) {
                             formValidationNotice = "请选择预约空间"
-                            return@Button
+                            return@AppButton
                         }
                         if (currentFreeWindows.isEmpty()) {
                             formValidationNotice = "请先点击上方“查询该空间开放规则与空闲时段”"
-                            return@Button
+                            return@AppButton
                         }
                         if (!isDurationValid) {
                             formValidationNotice = "预约时段需为 1 至 4 小时"
-                            return@Button
+                            return@AppButton
                         }
                         if (title.isBlank()) {
                             formValidationNotice = "请填写申请主题"
-                            return@Button
+                            return@AppButton
                         }
                         if (mobile.isBlank()) {
                             formValidationNotice = "请填写联系电话"
-                            return@Button
+                            return@AppButton
                         }
                         if (content.isBlank()) {
                             formValidationNotice = "请填写申请用途说明"
-                            return@Button
+                            return@AppButton
                         }
                         formValidationNotice = null
                         showConfirmDialog = true
                     },
+                    loading = submitLoading,
                     enabled = !submitLoading,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                ) {
-                    if (submitLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                        Spacer(Modifier.width(8.dp))
-                    } else {
-                        Icon(Icons.Outlined.FactCheck, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                    }
-                    Text("核对并提交预约", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }

@@ -822,25 +822,42 @@ fun AppDialog(
 }
 
 /** 弹窗主操作按钮：对齐 BrandBlue 官方科技蓝与 46dp 标准高度。 */
+// ---------------- 全 App 现代统一按钮体系 (方案 A：极光流光玻璃胶囊) ----------------
+
+/**
+ * 全 App 现代主行动按钮 (Aurora Glass Pill)
+ *
+ * 采用方案 A 极光流光全圆角胶囊：
+ * 1. 形状：全圆角胶囊 RoundedCornerShape(50)；
+ * 2. 材质：以 BrandBlue 为基准的主题主色，饱满圆润；
+ * 3. 触感：内置 pressFeedback 物理弹性微缩放 + AppHaptics.tick 细腻微触感；
+ * 4. 状态：支持可选图标 icon、loading 加载平滑 Spinner、enabled 禁用态。
+ */
 @Composable
-fun AppDialogPrimaryButton(
+fun AppButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
     enabled: Boolean = true,
-    busy: Boolean = false,
+    loading: Boolean = false,
+    height: Dp = 46.dp,
+    shape: Shape = RoundedCornerShape(50),
 ) {
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
+
     Button(
         onClick = {
             AppHaptics.tick(haptics)
             onClick()
         },
-        modifier = modifier.height(46.dp).pressFeedback(interactionSource),
+        modifier = modifier
+            .height(height)
+            .pressFeedback(interactionSource),
         interactionSource = interactionSource,
-        enabled = enabled && !busy,
-        shape = RoundedCornerShape(16.dp),
+        enabled = enabled && !loading,
+        shape = shape,
         elevation = ButtonDefaults.buttonElevation(
             defaultElevation = 0.dp,
             pressedElevation = 0.dp,
@@ -852,23 +869,209 @@ fun AppDialogPrimaryButton(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
-            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f),
         ),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
     ) {
-        if (busy) {
+        if (loading) {
             CircularProgressIndicator(
-                Modifier.size(18.dp),
+                modifier = Modifier.size(18.dp),
                 strokeWidth = 2.dp,
                 color = MaterialTheme.colorScheme.onPrimary,
             )
         } else {
-            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                    )
+                }
+                Text(
+                    text = text,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.5.sp,
+                    letterSpacing = (-0.1).sp,
+                )
+            }
         }
     }
 }
 
-/** 弹窗次要操作按钮：半透明磨砂弱强调。 */
+/**
+ * 全 App 现代次要行动按钮 (Frosted Glass Pill)
+ *
+ * 采用通透半透明磨砂质感 + 1dp 发丝描边 + 50% 胶囊圆角，悬浮在极光背景上，主次分明。
+ */
+@Composable
+fun AppSecondaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    height: Dp = 46.dp,
+    shape: Shape = RoundedCornerShape(50),
+) {
+    val dark = isSystemInDarkTheme()
+    val haptics = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
+
+    val bgColor = if (dark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+    val borderColor = if (dark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.08f)
+
+    Button(
+        onClick = {
+            AppHaptics.tick(haptics)
+            onClick()
+        },
+        modifier = modifier
+            .height(height)
+            .pressFeedback(interactionSource)
+            .border(1.dp, borderColor, shape),
+        interactionSource = interactionSource,
+        enabled = enabled && !loading,
+        shape = shape,
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = bgColor,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            disabledContainerColor = if (dark) Color.White.copy(alpha = 0.04f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+        ),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+    ) {
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    text = text,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.5.sp,
+                    letterSpacing = (-0.1).sp,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 全 App 现代危险警示按钮 (Rose Glass Pill)
+ *
+ * 柔和玫瑰浅底 + 珊瑚红文字与发丝描边，全圆角胶囊形态。
+ */
+@Composable
+fun AppDangerButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    height: Dp = 46.dp,
+    shape: Shape = RoundedCornerShape(50),
+) {
+    val haptics = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val dark = isSystemInDarkTheme()
+
+    val bgColor = if (dark) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
+    val borderColor = if (dark) MaterialTheme.colorScheme.error.copy(alpha = 0.35f) else MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
+
+    Button(
+        onClick = {
+            AppHaptics.heavy(haptics)
+            onClick()
+        },
+        modifier = modifier
+            .height(height)
+            .pressFeedback(interactionSource)
+            .border(1.dp, borderColor, shape),
+        interactionSource = interactionSource,
+        enabled = enabled && !loading,
+        shape = shape,
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = bgColor,
+            contentColor = MaterialTheme.colorScheme.error,
+            disabledContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+            disabledContentColor = MaterialTheme.colorScheme.error.copy(alpha = 0.45f),
+        ),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+    ) {
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.error,
+            )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Text(
+                    text = text,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.5.sp,
+                    letterSpacing = (-0.1).sp,
+                )
+            }
+        }
+    }
+}
+
+/** 弹窗主操作按钮：对齐全圆角胶囊与 46dp 标准高度。 */
+@Composable
+fun AppDialogPrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    busy: Boolean = false,
+) {
+    AppButton(
+        text = text,
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        loading = busy,
+        height = 46.dp,
+        shape = RoundedCornerShape(50),
+    )
+}
+
+/** 弹窗次要操作按钮：半透明磨砂全圆角胶囊。 */
 @Composable
 fun AppDialogSecondaryButton(
     text: String,
@@ -877,40 +1080,18 @@ fun AppDialogSecondaryButton(
     enabled: Boolean = true,
     busy: Boolean = false,
 ) {
-    val dark = isSystemInDarkTheme()
-    val haptics = LocalHapticFeedback.current
-    val interactionSource = remember { MutableInteractionSource() }
-    Button(
-        onClick = {
-            AppHaptics.tick(haptics)
-            onClick()
-        },
-        modifier = modifier.height(46.dp).pressFeedback(interactionSource),
-        interactionSource = interactionSource,
-        enabled = enabled && !busy,
-        shape = RoundedCornerShape(16.dp),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (dark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            disabledContainerColor = if (dark) Color.White.copy(alpha = 0.04f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-        ),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-    ) {
-        if (busy) {
-            CircularProgressIndicator(
-                Modifier.size(18.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp)
-        }
-    }
+    AppSecondaryButton(
+        text = text,
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        loading = busy,
+        height = 46.dp,
+        shape = RoundedCornerShape(50),
+    )
 }
 
-/** 弹窗危险操作按钮：柔和危险色。 */
+/** 弹窗危险操作按钮：柔和危险色全圆角胶囊。 */
 @Composable
 fun AppDialogDangerButton(
     text: String,
@@ -919,36 +1100,15 @@ fun AppDialogDangerButton(
     enabled: Boolean = true,
     busy: Boolean = false,
 ) {
-    val haptics = LocalHapticFeedback.current
-    val interactionSource = remember { MutableInteractionSource() }
-    Button(
-        onClick = {
-            AppHaptics.heavy(haptics)
-            onClick()
-        },
-        modifier = modifier.height(46.dp).pressFeedback(interactionSource),
-        interactionSource = interactionSource,
-        enabled = enabled && !busy,
-        shape = RoundedCornerShape(16.dp),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.error,
-            disabledContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
-            disabledContentColor = MaterialTheme.colorScheme.error.copy(alpha = 0.45f),
-        ),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-    ) {
-        if (busy) {
-            CircularProgressIndicator(
-                Modifier.size(18.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.error,
-            )
-        } else {
-            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp)
-        }
-    }
+    AppDangerButton(
+        text = text,
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        loading = busy,
+        height = 46.dp,
+        shape = RoundedCornerShape(50),
+    )
 }
 
 // ---------------- 滑动时间选择器（研讨间 / 座位预约共用） ----------------
