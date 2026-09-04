@@ -293,7 +293,10 @@ const libroomSessionQueue = new KeyedSerialQueue();
 const librarySeatSessionQueue = new KeyedSerialQueue();
 const schoolReloginQueue = new KeyedSerialQueue();
 const schoolReloginFailedAt = new Map();
+const schoolReloginSuccessAt = new Map();
 const SCHOOL_RELOGIN_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
+const SCHOOL_RELOGIN_SUCCESS_DEDUPE_MS = 10 * 1000;
+const SCHOOL_AUTH_RETRY_ATTEMPTS = 2;
 const logger = createLogger({ service: "hgu-campus-hub", environment: NODE_ENV });
 const CONFIGURED_DATA_ENCRYPTION_KEY = String(process.env.HGU_DATA_ENCRYPTION_KEY || "").trim();
 const DERIVED_DATA_ENCRYPTION_KEY = deriveDataEncryptionKey(APP_SESSION_SECRET);
@@ -1420,19 +1423,71 @@ function schoolReloginLog(value) {
 }
 
 async function reloginWithSavedCredentials(reason) {
+  return reloginWithSavedCredentialsInternal(reason, { force: false });
+}
+
+function schoolSessionReloginWanted(summary, jar) {
+  if (!summary?.hasStoredSession) return false;
+  if (summary.needsLogin) return true;
+  const cas = summary.sessions?.cas;
+  const casHealthy = Boolean(cas && (cas.status === "active" || cas.status === "refreshing"));
+  if (cas) {
+    if (cas.status === "expired" || cas.status === "error") return true;
+    if (cas.status === "missing" && savedSchoolReloginCredentials(jar)) return true;
+  }
+  const portal = summary.sessions?.portal;
+  return Boolean(portal && (portal.status === "expired" || portal.status === "error") && !casHealthy);
+}
+
+function schoolSessionHealthy(summary) {
+  const cas = summary?.sessions?.cas;
+  return Boolean(summary && !summary.needsLogin && cas && (cas.status === "active" || cas.status === "refreshing"));
+}
+
+async function reloginWithSavedCredentialsInternal(reason, { force }) {
   const userId = currentUserId();
   const failedAt = schoolReloginFailedAt.get(userId) || 0;
-  if (Date.now() - failedAt < SCHOOL_RELOGIN_FAILURE_COOLDOWN_MS) return false;
+  if (Date.now() - failedAt < SCHOOL_RELOGIN_FAILURE_COOLDOWN_MS) {
+    if (force) {
+      logger.info("school_session_auto_relogin_skip", {
+        userId,
+        reason: schoolReloginLog(reason),
+        cause: "failure_cooldown"
+      });
+    }
+    return false;
+  }
 
   return schoolReloginQueue.run(userId, async () => {
     const jar = await loadSessionJarForUser(userId);
     const current = storedSessionSummary(jar);
-    if (!current.needsLogin && current.sessions.cas.status !== "expired") return false;
     const credentials = savedSchoolReloginCredentials(jar);
-    if (!credentials) return false;
+    const reloggedAt = schoolReloginSuccessAt.get(userId) || 0;
+    if (!force && !schoolSessionReloginWanted(current, jar)) {
+      if (!schoolSessionHealthy(current)) {
+        logger.info("school_session_auto_relogin_skip", {
+          userId,
+          reason: schoolReloginLog(reason),
+          cause: "session_not_expired"
+        });
+      }
+      return false;
+    }
+    if (Date.now() - reloggedAt < SCHOOL_RELOGIN_SUCCESS_DEDUPE_MS) {
+      if (!force || schoolSessionHealthy(current)) return false;
+    }
+    if (!credentials) {
+      logger.info("school_session_auto_relogin_skip", {
+        userId,
+        reason: schoolReloginLog(reason),
+        cause: "no_saved_credentials"
+      });
+      return false;
+    }
     try {
       await loginWithCasFull({ ...credentials, saveCredentials: true });
       schoolReloginFailedAt.delete(userId);
+      schoolReloginSuccessAt.set(userId, Date.now());
       logger.info("school_session_auto_relogin", {
         userId,
         reason: schoolReloginLog(reason)
@@ -1448,6 +1503,75 @@ async function reloginWithSavedCredentials(reason) {
       return false;
     }
   });
+}
+
+function schoolAuthRecoveryAllowed(req, error) {
+  if (!isCasLoginRequiredError(error)) return false;
+  const path = String(req.url || "").split("?", 1)[0];
+  if (path.startsWith("/api/auth/") || path.startsWith("/api/app-auth/")) return false;
+  return Boolean(userContextStorage.getStore()?.user);
+}
+
+function schoolAuthRequestRetryAllowed(req, error) {
+  if (!schoolAuthRecoveryAllowed(req, error)) return false;
+  return req.method === "GET" || req.method === "HEAD";
+}
+
+async function recoverSchoolSessionAfterAuthError(error) {
+  const userId = currentUserId();
+  if (!userId) return false;
+  try {
+    const jar = await loadSessionJarForUser(userId);
+    markCasFailureIfNeeded(jar, error);
+    await saveSessionJarForUser(userId, jar);
+    const recovered = await reloginWithSavedCredentialsInternal(error, { force: true });
+    if (recovered) {
+      await refreshSchoolSessionMemo();
+    }
+    return recovered;
+  } catch (recoveryError) {
+    logger.warn("school_session_auto_relogin_error_path_failed", {
+      userId,
+      reason: schoolReloginLog(error),
+      error: recoveryError?.message || String(recoveryError)
+    });
+    return false;
+  }
+}
+
+async function refreshSchoolSessionMemo() {
+  const userId = currentUserId();
+  const store = userContextStorage.getStore();
+  if (!userId || !store) return;
+  setRequestMemo(store, `school-session:${userId}`, await loadSessionJarForUser(userId));
+}
+
+async function schoolSessionRecoveredOrHealthy() {
+  const userId = currentUserId();
+  if (!userId) return false;
+  try {
+    const jar = await loadSessionJarForUser(userId);
+    return schoolSessionHealthy(storedSessionSummary(jar));
+  } catch {
+    return false;
+  }
+}
+
+async function reloginSchoolSessionIfWanted(reason = { message: "background school task" }) {
+  const userId = currentUserId();
+  if (!userId) return false;
+  try {
+    const jar = await loadSessionJarForUser(userId);
+    if (!schoolSessionReloginWanted(storedSessionSummary(jar), jar)) return false;
+    return reloginWithSavedCredentials(reason);
+  } catch (error) {
+    logger.warn("school_session_auto_relogin_precheck_failed", {
+      userId,
+      reason: schoolReloginLog(reason),
+      error: error?.message || String(error)
+    });
+    return false;
+  }
 }
 
 function academicSessionSummary(jar) {
@@ -1601,7 +1725,7 @@ function storedSessionSummary(jar) {
 async function refreshStoredSessionsIfNeeded(jar) {
   const before = storedSessionSummary(jar);
   if (!before.hasStoredSession) return jar;
-  if (before.needsLogin || before.sessions.cas.status === "expired") {
+  if (schoolSessionReloginWanted(before, jar)) {
     const relogined = await reloginWithSavedCredentials(before);
     if (relogined) {
       Object.assign(jar, await loadSessionJarForUser(currentUserId()));
@@ -2787,7 +2911,6 @@ async function loginWithCasFull({ username, password, rememberMe = true, saveCre
   const jar = emptyJar();
   await loginCasService({ jar, username, password, rememberMe, serviceUrl: SERVICE_URL });
 
-  const view = await getViewData(jar);
   jar.meta.schoolAccount = normalizeSchoolLoginAccount(username);
   jar.meta.autoRelogin = saveCredentials
     ? {
@@ -2798,10 +2921,20 @@ async function loginWithCasFull({ username, password, rememberMe = true, saveCre
         savedAt: new Date().toISOString()
       }
     : null;
-  jar.meta.account = view.account || null;
-  jar.meta.ownerName = view.ownerName || null;
-  jar.meta.lastValidatedAt = new Date().toISOString();
   jar.meta.loginAt = new Date().toISOString();
+  await saveSessionJar(jar);
+  let view = null;
+  try {
+    view = await getViewData(jar);
+  } catch (error) {
+    jar.meta.energy ||= {};
+    jar.meta.energy.lastError = error.message || "能耗平台登录后刷新失败，请稍后重试。";
+  }
+  if (view) {
+    jar.meta.account = view.account || null;
+    jar.meta.ownerName = view.ownerName || null;
+    jar.meta.lastValidatedAt = new Date().toISOString();
+  }
   await activateCampusSessions(jar, { username, password, rememberMe }).catch((error) => {
     jar.meta.campus ||= {};
     jar.meta.campus.lastError = error.message || "校园一卡通登录失败";
@@ -7372,8 +7505,7 @@ async function handleAppLoginForm(req, res) {
   }
 }
 
-async function handleApi(req, res, url) {
-  try {
+async function handleApiRoutes(req, res, url) {
     if (url.pathname === "/api/app-auth/status") {
       json(res, 200, { ok: true, data: await appAuthStatus(req) });
       return;
@@ -8044,31 +8176,52 @@ async function handleApi(req, res, url) {
     }
 
     throw new HttpError(404, "接口不存在。");
-  } catch (error) {
-    const rawStatus = Number(error?.status);
-    const status = Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 500;
-    const context = userContextStorage.getStore() || {};
-    const logFields = {
-      requestId: context.requestId,
-      userId: context.user?.id,
-      method: req.method,
-      path: url.pathname,
-      status,
-      error
-    };
-    if (status >= 500) logger.error("http_request_failed", logFields);
-    else if (status !== 401 && status !== 404) logger.warn("http_request_rejected", logFields);
-    const safeDetails = error?.details && status < 500
-      ? Object.fromEntries(Object.entries(error.details).filter(([key]) => ["waitSeconds", "availableAt", "code"].includes(key)))
-      : undefined;
-    json(res, status, {
-      ok: false,
-      error: status >= 500 && NODE_ENV === "production" ? "服务器暂时无法完成请求，请稍后重试。" : (error.message || "服务器异常"),
-      code: error.code || (status >= 500 ? "INTERNAL_ERROR" : "REQUEST_FAILED"),
-      details: safeDetails,
-      requestId: context.requestId || null
-    });
+}
+
+async function handleApi(req, res, url) {
+  for (let attempt = 0; attempt < SCHOOL_AUTH_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      await handleApiRoutes(req, res, url);
+      return;
+    } catch (error) {
+      if (attempt === 0 && !res.headersSent && schoolAuthRecoveryAllowed(req, error)) {
+        const recovered = await recoverSchoolSessionAfterAuthError(error);
+        const healed = recovered || await schoolSessionRecoveredOrHealthy();
+        if (healed && schoolAuthRequestRetryAllowed(req, error)) {
+          await refreshSchoolSessionMemo();
+          continue;
+        }
+      }
+      respondApiError(req, res, url, error);
+      return;
+    }
   }
+}
+
+function respondApiError(req, res, url, error) {
+  const rawStatus = Number(error?.status);
+  const status = Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 500;
+  const context = userContextStorage.getStore() || {};
+  const logFields = {
+    requestId: context.requestId,
+    userId: context.user?.id,
+    method: req.method,
+    path: url.pathname,
+    status,
+    error
+  };
+  if (status >= 500) logger.error("http_request_failed", logFields);
+  else if (status !== 401 && status !== 404) logger.warn("http_request_rejected", logFields);
+  const safeDetails = error?.details && status < 500
+    ? Object.fromEntries(Object.entries(error.details).filter(([key]) => ["waitSeconds", "availableAt", "code"].includes(key)))
+    : undefined;
+  json(res, status, {
+    ok: false,
+    error: status >= 500 && NODE_ENV === "production" ? "服务器暂时无法完成请求，请稍后重试。" : (error.message || "服务器异常"),
+    code: error.code || (status >= 500 ? "INTERNAL_ERROR" : "REQUEST_FAILED"),
+    details: safeDetails,
+    requestId: context.requestId || null
+  });
 }
 
 const serveStatic = createStaticAssetHandler({
@@ -8205,6 +8358,7 @@ async function refreshAcademicTimetableInBackground(reason) {
       userContextStorage.run({ requestId: `job-${randomUUID()}`, user }, async () => {
         try {
           if (shuttingDown || Date.now() >= deadline) return "timed_out";
+          await reloginSchoolSessionIfWanted({ message: "academic auto refresh" });
           if (!(await hasAcademicRefreshSession())) return;
           const timetable = await withAcademicSessionLock(
             () => getAcademicTimetable(ACADEMIC_TIMETABLE_SOURCES.current)
@@ -8222,6 +8376,28 @@ async function refreshAcademicTimetableInBackground(reason) {
           return "completed";
         } catch (error) {
           logger.warn("academic_refresh_failed", { reason, userId: user.id, error });
+          if (isCasLoginRequiredError(error)) {
+            try {
+              const recovered = await recoverSchoolSessionAfterAuthError(error);
+              if (recovered) {
+                const retried = await withAcademicSessionLock(
+                  () => getAcademicTimetable(ACADEMIC_TIMETABLE_SOURCES.current)
+                );
+                if (retried.live === false) {
+                  logger.warn("academic_refresh_used_cache", {
+                    reason,
+                    userId: user.id,
+                    staleReason: retried.staleReason || "live sync failed after relogin"
+                  });
+                } else {
+                  logger.info("academic_refresh_completed_after_relogin", { reason, userId: user.id });
+                }
+                return "completed";
+              }
+            } catch (retryError) {
+              logger.warn("academic_refresh_failed_after_relogin", { reason, userId: user.id, error: retryError });
+            }
+          }
           return "failed";
         }
       })
@@ -8394,6 +8570,7 @@ async function runLibroomAutoReservationScheduler(reason) {
       return userContextStorage.run(
         { requestId: `auto-reservation-${randomUUID()}`, user },
         async () => {
+          await reloginSchoolSessionIfWanted({ message: "libroom auto reservation" });
           const result = await runAutoReservationTask(task, user, now);
           return result?.status || "claimed";
         }
@@ -8470,6 +8647,7 @@ async function runLibrarySeatWaitlistScheduler(reason) {
         { requestId: `library-seat-waitlist-${randomUUID()}`, user },
         async () => {
           try {
+            await reloginSchoolSessionIfWanted({ message: "library seat waitlist" });
             const result = await runLibrarySeatWaitlistTask(task, user, now);
             return result?.status || "claimed";
           } catch (error) {
