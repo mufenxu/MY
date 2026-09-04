@@ -949,6 +949,8 @@ fun AppButton(
                 spotColor = Color(0xFF3B82F6).copy(alpha = 0.35f),
                 ambientColor = Color.Black.copy(alpha = 0.08f),
             )
+            .clip(shape)
+            .background(gradientBrush)
             .border(1.dp, borderBrush, shape)
             .pressFeedback(interactionSource),
         interactionSource = interactionSource,
@@ -967,42 +969,34 @@ fun AppButton(
             disabledContainerColor = Color.Transparent,
             disabledContentColor = Color.White.copy(alpha = 0.70f),
         ),
-        contentPadding = PaddingValues(0.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(gradientBrush)
-                .padding(horizontal = 20.dp, vertical = 4.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = Color.White,
-                )
-            } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (icon != null) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = Color.White,
-                        )
-                    }
-                    Text(
-                        text = text,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.5.sp,
-                        letterSpacing = (-0.1).sp,
-                        color = Color.White,
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = Color.White,
+            )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = Color.White,
                     )
                 }
+                Text(
+                    text = text,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.5.sp,
+                    letterSpacing = (-0.1).sp,
+                    color = Color.White,
+                )
             }
         }
     }
@@ -1064,6 +1058,8 @@ fun AppSecondaryButton(
                 spotColor = Color.Black.copy(alpha = if (dark) 0.25f else 0.06f),
                 ambientColor = Color.Black.copy(alpha = 0.08f),
             )
+            .clip(shape)
+            .background(gradientBrush)
             .border(1.dp, borderBrush, shape)
             .pressFeedback(interactionSource),
         interactionSource = interactionSource,
@@ -1076,41 +1072,33 @@ fun AppSecondaryButton(
             disabledContainerColor = Color.Transparent,
             disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
         ),
-        contentPadding = PaddingValues(0.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(gradientBrush)
-                .padding(horizontal = 20.dp, vertical = 4.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (icon != null) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text(
-                        text = text,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.5.sp,
-                        letterSpacing = (-0.1).sp,
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Text(
+                    text = text,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.5.sp,
+                    letterSpacing = (-0.1).sp,
+                )
             }
         }
     }
@@ -1163,6 +1151,8 @@ fun AppDangerButton(
                 spotColor = Color(0xFFDC2626).copy(alpha = 0.35f),
                 ambientColor = Color.Black.copy(alpha = 0.15f),
             )
+            .clip(shape)
+            .background(gradientBrush)
             .border(1.dp, borderBrush, shape)
             .pressFeedback(interactionSource),
         interactionSource = interactionSource,
@@ -1175,42 +1165,116 @@ fun AppDangerButton(
             disabledContainerColor = Color.Transparent,
             disabledContentColor = Color.White.copy(alpha = 0.70f),
         ),
-        contentPadding = PaddingValues(0.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(gradientBrush)
-                .padding(horizontal = 20.dp, vertical = 4.dp),
-            contentAlignment = Alignment.Center,
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = Color.White,
+            )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = Color.White,
+                    )
+                }
+                Text(
+                    text = text,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.5.sp,
+                    letterSpacing = (-0.1).sp,
+                    color = Color.White,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 全 App 现代行内轻量危险微胶囊按钮 (Compact Soft Danger Pill)
+ *
+ * 专用于列表项、卡片行内右侧的次要危险操作（如“撤销”、“移除”、“解绑”），
+ * 采用柔和微透危险红底色 + 浅红微切边 + 全圆角胶囊，警示清晰、体量克制、不遮挡同行信息。
+ */
+@Composable
+fun AppInlineDangerButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+) {
+    val dark = isSystemInDarkTheme()
+    val haptics = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
+
+    val bgColor = if (dark) {
+        Color(0xFF7F1D1D).copy(alpha = 0.38f)
+    } else {
+        Color(0xFFFEE2E2).copy(alpha = 0.75f)
+    }
+    val contentColor = if (dark) {
+        Color(0xFFFCA5A5)
+    } else {
+        Color(0xFFDC2626)
+    }
+    val borderColor = if (dark) {
+        Color(0xFFEF4444).copy(alpha = 0.30f)
+    } else {
+        Color(0xFFF87171).copy(alpha = 0.35f)
+    }
+
+    Surface(
+        onClick = {
+            AppHaptics.tick(haptics)
+            onClick()
+        },
+        modifier = modifier.pressFeedback(interactionSource),
+        interactionSource = interactionSource,
+        enabled = enabled && !loading,
+        shape = RoundedCornerShape(50),
+        color = bgColor,
+        contentColor = contentColor,
+        border = BorderStroke(0.6.dp, borderColor),
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (loading) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = Color.White,
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 1.5.dp,
+                    color = contentColor,
                 )
             } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (icon != null) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = Color.White,
-                        )
-                    }
-                    Text(
-                        text = text,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.5.sp,
-                        letterSpacing = (-0.1).sp,
-                        color = Color.White,
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp),
+                        tint = contentColor,
                     )
                 }
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.5.sp,
+                    ),
+                    color = contentColor,
+                )
             }
         }
     }

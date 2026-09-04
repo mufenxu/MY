@@ -2031,7 +2031,11 @@ private fun SessionRow(session: SecuritySession, busy: Boolean, onRevoke: () -> 
             )
         }
         if (!session.current) {
-            AppDangerButton(text = "撤销", onClick = onRevoke, enabled = !busy, height = 36.dp)
+            AppInlineDangerButton(
+                text = "撤销",
+                onClick = onRevoke,
+                enabled = !busy,
+            )
         }
     }
 }
