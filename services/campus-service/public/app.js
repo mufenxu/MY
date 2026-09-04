@@ -835,6 +835,20 @@ async function loadAuthStatus() {
   }
 }
 
+const AUTO_RELOGIN_PREFERENCE_KEY = "hgu-auto-relogin";
+
+function rememberAutoReloginChoice(enabled) {
+  localStorage.setItem(AUTO_RELOGIN_PREFERENCE_KEY, enabled ? "1" : "0");
+}
+
+function applyAutoReloginChoice() {
+  const serverEnabled = Boolean(state.auth?.autoRelogin?.enabled);
+  const remembered = localStorage.getItem(AUTO_RELOGIN_PREFERENCE_KEY);
+  nodes.autoReloginInput.checked = serverEnabled || remembered === "1";
+}
+
+let autoReloginChoiceApplied = false;
+
 async function login() {
   const username = nodes.usernameInput.value.trim();
   const password = nodes.passwordInput.value;
@@ -856,6 +870,7 @@ async function login() {
         autoRelogin: nodes.autoReloginInput.checked
       }
     });
+    rememberAutoReloginChoice(nodes.autoReloginInput.checked);
     nodes.passwordInput.value = "";
     await loadAuthStatus();
     await refresh();
@@ -2608,8 +2623,14 @@ function renderAuth(error) {
     || casStatus === "expired"
     || casStatus === "error"
     || portalNeedsLogin;
+  const formWasHidden = nodes.loginForm.hidden;
   nodes.authPanel.dataset.connected = auth.hasCookie ? (shouldShowLogin ? "relogin" : "true") : "false";
   nodes.loginForm.hidden = !shouldShowLogin;
+  if (shouldShowLogin && (formWasHidden || !autoReloginChoiceApplied)) {
+    applyAutoReloginChoice();
+    autoReloginChoiceApplied = true;
+  }
+  if (!shouldShowLogin) autoReloginChoiceApplied = false;
   nodes.loginButton.textContent = auth.hasCookie && shouldShowLogin ? "重新登录并保存会话" : "登录并保存会话";
   nodes.logoutButton.hidden = !auth.hasCookie || auth.source === "env";
 
