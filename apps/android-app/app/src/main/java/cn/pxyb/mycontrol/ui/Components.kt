@@ -410,6 +410,7 @@ fun SectionHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Surface(
+            modifier = if (trailing != null) Modifier.weight(1f, fill = false) else Modifier,
             shape = CircleShape,
             color = pillBgColor,
             border = BorderStroke(0.6.dp, pillBorderColor),
@@ -451,7 +452,10 @@ fun SectionHeader(
             }
         }
 
-        trailing?.invoke()
+        if (trailing != null) {
+            Spacer(Modifier.width(8.dp))
+            trailing.invoke()
+        }
     }
 }
 
