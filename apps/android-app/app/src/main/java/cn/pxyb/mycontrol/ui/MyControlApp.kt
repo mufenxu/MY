@@ -184,6 +184,7 @@ internal object AppRoute {
     const val CampusCenter = "campus-center"
     const val SystemCenter = "system-center"
     const val DeviceCenter = "device-center"
+    const val ServiceCenter = "service-center"
     const val Events = "events"
     const val Tools = "tools"
     const val Profile = "profile"
@@ -235,6 +236,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.CampusCenter,
     AppRoute.SystemCenter,
     AppRoute.DeviceCenter,
+    AppRoute.ServiceCenter,
     AppRoute.Search,
     AppRoute.Assistant,
     AppRoute.Today,
@@ -260,6 +262,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.CampusCenter,
     AppRoute.SystemCenter,
     AppRoute.DeviceCenter,
+    AppRoute.ServiceCenter,
     AppRoute.Search,
     AppRoute.Today,
     AppRoute.FreeClassrooms,
@@ -1522,6 +1525,7 @@ private fun AuthenticatedShell(
             AppRoute.CampusCenter -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.SystemCenter -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.DeviceCenter -> viewModel.syncNavigationDestination(MainTab.Tools)
+            AppRoute.ServiceCenter -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.Notifications -> viewModel.syncNavigationDestination(
                 MainTab.Overview,
                 workspaceDestination = WorkspaceDestination.Notifications,
@@ -1681,6 +1685,9 @@ private fun AuthenticatedShell(
                         onOpenDeviceCenter = {
                             navController.navigate(AppRoute.DeviceCenter) { launchSingleTop = true }
                         },
+                        onOpenServiceCenter = {
+                            navController.navigate(AppRoute.ServiceCenter) { launchSingleTop = true }
+                        },
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
                         onOpenReservation = { navController.navigate(AppRoute.Reservation) },
                         onOpenFreeClassrooms = {
@@ -1736,6 +1743,16 @@ private fun AuthenticatedShell(
                         onOpenScenes = {
                             navController.navigate(AppRoute.Scenes) { launchSingleTop = true }
                         },
+                    )
+                }
+
+                composable(AppRoute.ServiceCenter) {
+                    ServiceCenterScreen(
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onOpenGoogleAccounts = { viewModel.openGoogleAccountDesk() },
+                        onOpenGitHubProjects = { viewModel.openGitHubProjects() },
+                        onOpenCt8Automation = { navigateToTab(MainTab.Tools) },
                     )
                 }
 

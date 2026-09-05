@@ -8,6 +8,7 @@ enum class HomeQuickAction {
     CampusCenter,
     SystemCenter,
     DeviceCenter,
+    ServiceCenter,
     Today,
     Notifications,
     Scenes,
@@ -59,6 +60,7 @@ class HomePreferences(context: Context) {
                 HomeQuickAction.CampusCenter,
                 HomeQuickAction.SystemCenter,
                 HomeQuickAction.DeviceCenter,
+                HomeQuickAction.ServiceCenter,
             ) + savedOrder
         } else {
             savedOrder
@@ -79,6 +81,7 @@ class HomePreferences(context: Context) {
                     add(HomeQuickAction.Backup)
                     add(HomeQuickAction.Operations)
                     add(HomeQuickAction.GoogleAccounts)
+                    remove(HomeQuickAction.ServiceCenter)
                     remove(HomeQuickAction.CampusCenter)
                     remove(HomeQuickAction.SystemCenter)
                     remove(HomeQuickAction.DeviceCenter)
