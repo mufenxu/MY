@@ -181,6 +181,7 @@ private enum class SecondFactorMode { Totp, RecoveryCode }
 
 internal object AppRoute {
     const val Overview = "overview"
+    const val CampusCenter = "campus-center"
     const val Events = "events"
     const val Tools = "tools"
     const val Profile = "profile"
@@ -229,6 +230,7 @@ private fun AppEntryUiState.requestedRoute(): String = when {
 
 private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Overview,
+    AppRoute.CampusCenter,
     AppRoute.Search,
     AppRoute.Assistant,
     AppRoute.Today,
@@ -251,6 +253,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Assistant -> MainTab.Overview
     AppRoute.GitHubProjects -> MainTab.Profile
     AppRoute.Notifications,
+    AppRoute.CampusCenter,
     AppRoute.Search,
     AppRoute.Today,
     AppRoute.FreeClassrooms,
@@ -1510,6 +1513,7 @@ private fun AuthenticatedShell(
     LaunchedEffect(currentRoute) {
         when (currentRoute) {
             AppRoute.Overview -> viewModel.syncNavigationDestination(MainTab.Overview)
+            AppRoute.CampusCenter -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.Notifications -> viewModel.syncNavigationDestination(
                 MainTab.Overview,
                 workspaceDestination = WorkspaceDestination.Notifications,
@@ -1660,6 +1664,9 @@ private fun AuthenticatedShell(
                         onOpenSearch = viewModel::openGlobalSearch,
                         onOpenQrLogin = viewModel::openQrScanner,
                         onOpenWorkspace = viewModel::openWorkspace,
+                        onOpenCampusCenter = {
+                            navController.navigate(AppRoute.CampusCenter) { launchSingleTop = true }
+                        },
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
                         onOpenReservation = { navController.navigate(AppRoute.Reservation) },
                         onOpenFreeClassrooms = {
@@ -1672,6 +1679,25 @@ private fun AuthenticatedShell(
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
                         requestWebLoginUrl = viewModel::createPlatformWebLoginUrl,
                         requestExternalApplicationLaunch = viewModel::createExternalApplicationLaunch,
+                    )
+                }
+
+                composable(AppRoute.CampusCenter) {
+                    CampusCenterScreen(
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onOpenToday = {
+                            navController.navigate(AppRoute.Today) { launchSingleTop = true }
+                        },
+                        onOpenFreeClassrooms = {
+                            navController.navigate(AppRoute.FreeClassrooms) { launchSingleTop = true }
+                        },
+                        onOpenReservation = {
+                            navController.navigate(AppRoute.Reservation) { launchSingleTop = true }
+                        },
+                        onOpenSeatReservation = {
+                            navController.navigate(AppRoute.LibrarySeatReservation) { launchSingleTop = true }
+                        },
                     )
                 }
 

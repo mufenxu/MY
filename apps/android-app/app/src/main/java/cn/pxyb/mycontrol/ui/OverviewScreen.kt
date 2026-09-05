@@ -135,6 +135,7 @@ fun OverviewScreen(
     onOpenSearch: () -> Unit,
     onOpenQrLogin: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
+    onOpenCampusCenter: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenReservation: () -> Unit = {},
     onOpenFreeClassrooms: () -> Unit = {},
@@ -636,6 +637,7 @@ fun OverviewScreen(
                                                     onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
                                                     onOpenOperations = onOpenOperations,
                                                     onOpenWorkspace = onOpenWorkspace,
+                                                    onOpenCampusCenter = onOpenCampusCenter,
                                                     onOpenReservation = onOpenReservation,
                                                     onOpenFreeClassrooms = onOpenFreeClassrooms,
                                                     onOpenSeatReservation = onOpenSeatReservation,
@@ -1025,6 +1027,7 @@ fun OverviewScreen(
                                             onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
                                             onOpenOperations = onOpenOperations,
                                             onOpenWorkspace = onOpenWorkspace,
+                                            onOpenCampusCenter = onOpenCampusCenter,
                                             onOpenReservation = onOpenReservation,
                                             onOpenFreeClassrooms = onOpenFreeClassrooms,
                                             onOpenSeatReservation = onOpenSeatReservation,
@@ -1434,6 +1437,7 @@ private data class QuickActionVisual(
 )
 
 private fun homeQuickActionVisual(action: HomeQuickAction): QuickActionVisual = when (action) {
+    HomeQuickAction.CampusCenter -> QuickActionVisual(Icons.Outlined.School, Color(0xFF2563EB))
     HomeQuickAction.Today -> QuickActionVisual(Icons.Outlined.CalendarMonth, Color(0xFF2563EB))
     HomeQuickAction.Notifications -> QuickActionVisual(Icons.Outlined.Notifications, Color(0xFFE11D48))
     HomeQuickAction.Scenes -> QuickActionVisual(Icons.Outlined.Tune, Color(0xFF7C3AED))
@@ -1457,6 +1461,7 @@ private fun homeQuickActionSpec(
     onOpenGoogleAccountDesk: () -> Unit,
     onOpenOperations: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
+    onOpenCampusCenter: () -> Unit,
     onOpenReservation: () -> Unit,
     onOpenFreeClassrooms: () -> Unit,
     onOpenSeatReservation: () -> Unit,
@@ -1464,6 +1469,13 @@ private fun homeQuickActionSpec(
     onOpenQrLogin: () -> Unit,
     onOpenAccountManagement: () -> Unit,
 ): HomeQuickActionSpec = when (action) {
+    HomeQuickAction.CampusCenter -> HomeQuickActionSpec(
+        icon = Icons.Outlined.School,
+        label = "校园中心",
+        accent = Color(0xFF2563EB),
+        accentPale = Color(0xFFEFF6FF),
+    ) { onOpenCampusCenter() }
+
     HomeQuickAction.Today -> HomeQuickActionSpec(
         icon = Icons.Outlined.CalendarMonth,
         label = "今日工作台",
@@ -1736,6 +1748,7 @@ private fun QuickActionArrowButton(
     }
 }
 private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action) {
+    HomeQuickAction.CampusCenter -> "校园中心"
     HomeQuickAction.Today -> "今日工作台"
     HomeQuickAction.Notifications -> "通知中心"
     HomeQuickAction.Scenes -> "智能场景"
