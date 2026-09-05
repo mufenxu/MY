@@ -136,6 +136,8 @@ fun OverviewScreen(
     onOpenQrLogin: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
     onOpenCampusCenter: () -> Unit,
+    onOpenSystemCenter: () -> Unit,
+    onOpenDeviceCenter: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenReservation: () -> Unit = {},
     onOpenFreeClassrooms: () -> Unit = {},
@@ -638,6 +640,8 @@ fun OverviewScreen(
                                                     onOpenOperations = onOpenOperations,
                                                     onOpenWorkspace = onOpenWorkspace,
                                                     onOpenCampusCenter = onOpenCampusCenter,
+                                                    onOpenSystemCenter = onOpenSystemCenter,
+                                                    onOpenDeviceCenter = onOpenDeviceCenter,
                                                     onOpenReservation = onOpenReservation,
                                                     onOpenFreeClassrooms = onOpenFreeClassrooms,
                                                     onOpenSeatReservation = onOpenSeatReservation,
@@ -1028,6 +1032,8 @@ fun OverviewScreen(
                                             onOpenOperations = onOpenOperations,
                                             onOpenWorkspace = onOpenWorkspace,
                                             onOpenCampusCenter = onOpenCampusCenter,
+                                            onOpenSystemCenter = onOpenSystemCenter,
+                                            onOpenDeviceCenter = onOpenDeviceCenter,
                                             onOpenReservation = onOpenReservation,
                                             onOpenFreeClassrooms = onOpenFreeClassrooms,
                                             onOpenSeatReservation = onOpenSeatReservation,
@@ -1438,6 +1444,8 @@ private data class QuickActionVisual(
 
 private fun homeQuickActionVisual(action: HomeQuickAction): QuickActionVisual = when (action) {
     HomeQuickAction.CampusCenter -> QuickActionVisual(Icons.Outlined.School, Color(0xFF2563EB))
+    HomeQuickAction.SystemCenter -> QuickActionVisual(Icons.Outlined.Settings, Color(0xFF2563EB))
+    HomeQuickAction.DeviceCenter -> QuickActionVisual(Icons.Outlined.Hub, Color(0xFF0284C7))
     HomeQuickAction.Today -> QuickActionVisual(Icons.Outlined.CalendarMonth, Color(0xFF2563EB))
     HomeQuickAction.Notifications -> QuickActionVisual(Icons.Outlined.Notifications, Color(0xFFE11D48))
     HomeQuickAction.Scenes -> QuickActionVisual(Icons.Outlined.Tune, Color(0xFF7C3AED))
@@ -1462,6 +1470,8 @@ private fun homeQuickActionSpec(
     onOpenOperations: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
     onOpenCampusCenter: () -> Unit,
+    onOpenSystemCenter: () -> Unit,
+    onOpenDeviceCenter: () -> Unit,
     onOpenReservation: () -> Unit,
     onOpenFreeClassrooms: () -> Unit,
     onOpenSeatReservation: () -> Unit,
@@ -1475,6 +1485,20 @@ private fun homeQuickActionSpec(
         accent = Color(0xFF2563EB),
         accentPale = Color(0xFFEFF6FF),
     ) { onOpenCampusCenter() }
+
+    HomeQuickAction.SystemCenter -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Settings,
+        label = "系统中心",
+        accent = Color(0xFF2563EB),
+        accentPale = Color(0xFFEFF6FF),
+    ) { onOpenSystemCenter() }
+
+    HomeQuickAction.DeviceCenter -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Hub,
+        label = "设备与自动化",
+        accent = Color(0xFF0284C7),
+        accentPale = Color(0xFFF0F9FF),
+    ) { onOpenDeviceCenter() }
 
     HomeQuickAction.Today -> HomeQuickActionSpec(
         icon = Icons.Outlined.CalendarMonth,
@@ -1749,6 +1773,8 @@ private fun QuickActionArrowButton(
 }
 private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action) {
     HomeQuickAction.CampusCenter -> "校园中心"
+    HomeQuickAction.SystemCenter -> "系统中心"
+    HomeQuickAction.DeviceCenter -> "设备与自动化"
     HomeQuickAction.Today -> "今日工作台"
     HomeQuickAction.Notifications -> "通知中心"
     HomeQuickAction.Scenes -> "智能场景"

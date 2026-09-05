@@ -182,6 +182,8 @@ private enum class SecondFactorMode { Totp, RecoveryCode }
 internal object AppRoute {
     const val Overview = "overview"
     const val CampusCenter = "campus-center"
+    const val SystemCenter = "system-center"
+    const val DeviceCenter = "device-center"
     const val Events = "events"
     const val Tools = "tools"
     const val Profile = "profile"
@@ -231,6 +233,8 @@ private fun AppEntryUiState.requestedRoute(): String = when {
 private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Overview,
     AppRoute.CampusCenter,
+    AppRoute.SystemCenter,
+    AppRoute.DeviceCenter,
     AppRoute.Search,
     AppRoute.Assistant,
     AppRoute.Today,
@@ -254,6 +258,8 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.GitHubProjects -> MainTab.Profile
     AppRoute.Notifications,
     AppRoute.CampusCenter,
+    AppRoute.SystemCenter,
+    AppRoute.DeviceCenter,
     AppRoute.Search,
     AppRoute.Today,
     AppRoute.FreeClassrooms,
@@ -1514,6 +1520,8 @@ private fun AuthenticatedShell(
         when (currentRoute) {
             AppRoute.Overview -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.CampusCenter -> viewModel.syncNavigationDestination(MainTab.Overview)
+            AppRoute.SystemCenter -> viewModel.syncNavigationDestination(MainTab.Overview)
+            AppRoute.DeviceCenter -> viewModel.syncNavigationDestination(MainTab.Tools)
             AppRoute.Notifications -> viewModel.syncNavigationDestination(
                 MainTab.Overview,
                 workspaceDestination = WorkspaceDestination.Notifications,
@@ -1667,6 +1675,12 @@ private fun AuthenticatedShell(
                         onOpenCampusCenter = {
                             navController.navigate(AppRoute.CampusCenter) { launchSingleTop = true }
                         },
+                        onOpenSystemCenter = {
+                            navController.navigate(AppRoute.SystemCenter) { launchSingleTop = true }
+                        },
+                        onOpenDeviceCenter = {
+                            navController.navigate(AppRoute.DeviceCenter) { launchSingleTop = true }
+                        },
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
                         onOpenReservation = { navController.navigate(AppRoute.Reservation) },
                         onOpenFreeClassrooms = {
@@ -1697,6 +1711,30 @@ private fun AuthenticatedShell(
                         },
                         onOpenSeatReservation = {
                             navController.navigate(AppRoute.LibrarySeatReservation) { launchSingleTop = true }
+                        },
+                    )
+                }
+
+                composable(AppRoute.SystemCenter) {
+                    SystemCenterScreen(
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onOpenNotifications = {
+                            navController.navigate(AppRoute.Notifications) { launchSingleTop = true }
+                        },
+                        onOpenOperations = { navigateToTab(MainTab.Operations) },
+                        onRunDiagnostics = viewModel::runDiagnostics,
+                        onTriggerBackup = { viewModel.triggerBackup(onSensitiveActionConfirmation) },
+                    )
+                }
+
+                composable(AppRoute.DeviceCenter) {
+                    DeviceCenterScreen(
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onOpenDevices = { navigateToTab(MainTab.Tools) },
+                        onOpenScenes = {
+                            navController.navigate(AppRoute.Scenes) { launchSingleTop = true }
                         },
                     )
                 }
