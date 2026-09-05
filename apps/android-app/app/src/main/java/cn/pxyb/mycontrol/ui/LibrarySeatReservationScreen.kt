@@ -681,6 +681,7 @@ fun LibrarySeatReservationScreen(
                     selectedDate = selectedDate,
                     startTime = startTime,
                     endTime = endTime,
+                    secondFloor = secondFloor,
                     floorSeats = state.floorSeats,
                     floorSeatsLoading = state.floorSeatsLoading,
                     onStartTimeChange = { startTime = it },
@@ -1027,6 +1028,7 @@ private fun SeatChip(
 private fun SecondFloorSeatMap(
     floorSeats: List<LibrarySeatFloorSeat>,
     selectedLabels: Set<Int> = emptySet(),
+    allowMissingSeats: Boolean = false,
     onSeatClick: (LibrarySeatFloorSeat) -> Unit,
 ) {
     val seatByLabel = remember(floorSeats) {
@@ -1052,7 +1054,23 @@ private fun SecondFloorSeatMap(
                         floorSeat = floorSeat,
                         faceDown = col % 2 == 0,
                         selected = label in selectedLabels,
-                        onClick = floorSeat?.let { seat -> { onSeatClick(seat) } },
+                        onClick = floorSeat?.let { seat -> { onSeatClick(seat) } }
+                            ?: if (allowMissingSeats) {
+                                {
+                                    onSeatClick(
+                                        LibrarySeatFloorSeat(
+                                            areaId = "",
+                                            areaName = "",
+                                            seat = LibrarySeatStatus(
+                                                id = label.toString(),
+                                                label = label.toString(),
+                                            ),
+                                        )
+                                    )
+                                }
+                            } else {
+                                null
+                            },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -1269,6 +1287,7 @@ private fun LibrarySeatWaitlistPanel(
     selectedDate: String,
     startTime: String,
     endTime: String,
+    secondFloor: LibrarySeatFloor?,
     floorSeats: List<LibrarySeatFloorSeat>,
     floorSeatsLoading: Boolean,
     onStartTimeChange: (String) -> Unit,
@@ -1308,15 +1327,16 @@ private fun LibrarySeatWaitlistPanel(
 
     fun openSeatDialog() {
         val venue = selectedVenue
-        val floor = selectedFloor
+        val floor = secondFloor
         val start = startMinute
         val end = endMinute
         when {
-            venue == null || floor == null -> hint = "请先选择场馆与楼层（默认二层）。"
+            venue == null || secondFloor == null -> hint = "未找到图书馆二层楼层，无法使用指定 1-45 号座位。"
             selectedDate.isBlank() -> hint = "请先选择预约日期。"
             start == null || end == null || end <= start -> hint = "请选择有效的候补时段。"
             else -> {
                 hint = null
+                if (selectedFloor?.id != floor.id) onFloorSelected(floor.id)
                 showSeatDialog = true
                 onQueryFloorSeats(venue.id, floor.id, selectedDate, start, end)
             }
@@ -1567,9 +1587,12 @@ private fun LibrarySeatWaitlistPanel(
             ) {
                 if (floorSeatsLoading) {
                     LoadingBlock("正在查询 1-45 号座位...")
-                } else if (floorSeats.isEmpty()) {
-                    EmptyBlock("暂无座位结果", "请稍后重试或检查候补条件。")
                 } else {
+                    Text(
+                        text = "共 45 个座位 · 当前空闲 ${floorSeats.count { it.seat.isFree && it.seat.label.toIntOrNull() in 1..45 }} 个",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Text(
                         text = if (selectedSeatLabels.isEmpty()) "未选择座位"
                         else "已选 ${selectedSeatLabels.size} 个：${selectedSeatLabels.sorted().joinToString("、")}",
@@ -1579,6 +1602,7 @@ private fun LibrarySeatWaitlistPanel(
                     SecondFloorSeatMap(
                         floorSeats = floorSeats,
                         selectedLabels = selectedSeatLabels,
+                        allowMissingSeats = true,
                         onSeatClick = { floorSeat ->
                             val label = floorSeat.seat.label.toIntOrNull()
                             if (label != null) {
