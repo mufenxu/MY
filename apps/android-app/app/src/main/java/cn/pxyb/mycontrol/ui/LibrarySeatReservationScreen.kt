@@ -19,7 +19,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Chair
 import androidx.compose.material.icons.outlined.EventAvailable
@@ -679,6 +681,8 @@ fun LibrarySeatReservationScreen(
                     selectedDate = selectedDate,
                     startTime = startTime,
                     endTime = endTime,
+                    floorSeats = state.floorSeats,
+                    floorSeatsLoading = state.floorSeatsLoading,
                     onStartTimeChange = { startTime = it },
                     onEndTimeChange = { endTime = it },
                     onVenueSelected = { venueId ->
@@ -697,6 +701,7 @@ fun LibrarySeatReservationScreen(
                         selectedAreaId = ""
                         selectedSeatId = ""
                     },
+                    onQueryFloorSeats = onQueryFloorSeats,
                     onClearFeedback = onClearFeedback,
                     onCreateWaitlist = { request -> onCreateWaitlist(request) {} },
                     onSetWaitlistEnabled = { taskId, enabled -> onSetWaitlistEnabled(taskId, enabled) {} },
@@ -775,7 +780,7 @@ private fun MySeatReservationsPanel(
                 "我的预约记录",
                 "官方系统同步 · 显示预约成功的座位",
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilterChip(
                     selected = !showHistory,
                     onClick = {
@@ -1021,6 +1026,7 @@ private fun SeatChip(
 @Composable
 private fun SecondFloorSeatMap(
     floorSeats: List<LibrarySeatFloorSeat>,
+    selectedLabels: Set<Int> = emptySet(),
     onSeatClick: (LibrarySeatFloorSeat) -> Unit,
 ) {
     val seatByLabel = remember(floorSeats) {
@@ -1045,6 +1051,7 @@ private fun SecondFloorSeatMap(
                         label = label,
                         floorSeat = floorSeat,
                         faceDown = col % 2 == 0,
+                        selected = label in selectedLabels,
                         onClick = floorSeat?.let { seat -> { onSeatClick(seat) } },
                         modifier = Modifier.weight(1f),
                     )
@@ -1061,23 +1068,27 @@ private fun SecondFloorSeatCell(
     label: Int,
     floorSeat: LibrarySeatFloorSeat?,
     faceDown: Boolean,
+    selected: Boolean = false,
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val seat = floorSeat?.seat
     val shape = RoundedCornerShape(7.dp)
     val background = when {
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
         seat == null -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f)
         seat.isFree -> FreeSeatGreen.copy(alpha = 0.16f)
         seat.status.equals("IN_USE", ignoreCase = true) -> MaterialTheme.colorScheme.surfaceVariant
         else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
     }
     val borderColor = when {
+        selected -> MaterialTheme.colorScheme.primary
         seat == null -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
         seat.isFree -> FreeSeatGreen.copy(alpha = 0.8f)
         else -> MaterialTheme.colorScheme.outlineVariant
     }
     val backColor = when {
+        selected -> MaterialTheme.colorScheme.primary
         seat == null -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         seat.isFree -> FreeSeatGreen
         else -> MaterialTheme.colorScheme.outlineVariant
@@ -1258,11 +1269,14 @@ private fun LibrarySeatWaitlistPanel(
     selectedDate: String,
     startTime: String,
     endTime: String,
+    floorSeats: List<LibrarySeatFloorSeat>,
+    floorSeatsLoading: Boolean,
     onStartTimeChange: (String) -> Unit,
     onEndTimeChange: (String) -> Unit,
     onVenueSelected: (String) -> Unit,
     onFloorSelected: (String) -> Unit,
     onDateSelected: (String) -> Unit,
+    onQueryFloorSeats: (String, String, String, Int, Int) -> Unit,
     onClearFeedback: () -> Unit,
     onCreateWaitlist: (LibrarySeatWaitlistRequest) -> Unit,
     onSetWaitlistEnabled: (String, Boolean) -> Unit,
@@ -1272,15 +1286,42 @@ private fun LibrarySeatWaitlistPanel(
     var floorMenuOpen by remember { mutableStateOf(false) }
     var minLabelText by rememberSaveable { mutableStateOf("1") }
     var maxLabelText by rememberSaveable { mutableStateOf("45") }
+    var selectionMode by rememberSaveable { mutableStateOf("range") }
+    var selectedSeatLabelsText by rememberSaveable { mutableStateOf("") }
+    var showSeatDialog by remember { mutableStateOf(false) }
     var hint by remember { mutableStateOf<String?>(null) }
 
     val startMinute = timeTextToMinute(startTime)
     val endMinute = timeTextToMinute(endTime)
     val minLabel = minLabelText.trim().toIntOrNull()
     val maxLabel = maxLabelText.trim().toIntOrNull()
+    val selectedSeatLabels = remember(selectedSeatLabelsText) {
+        selectedSeatLabelsText.split(",").mapNotNull(String::toIntOrNull).toSet()
+    }
     val formValid = selectedVenue != null && selectedFloor != null && selectedDate.isNotBlank()
         && startMinute != null && endMinute != null && endMinute > startMinute
-        && minLabel != null && maxLabel != null && minLabel in 1..999 && maxLabel in 1..999 && minLabel <= maxLabel
+        && if (selectionMode == "specified") {
+        selectedSeatLabels.isNotEmpty() && selectedSeatLabels.all { it in 1..45 }
+    } else {
+        minLabel != null && maxLabel != null && minLabel in 1..999 && maxLabel in 1..999 && minLabel <= maxLabel
+    }
+
+    fun openSeatDialog() {
+        val venue = selectedVenue
+        val floor = selectedFloor
+        val start = startMinute
+        val end = endMinute
+        when {
+            venue == null || floor == null -> hint = "请先选择场馆与楼层（默认二层）。"
+            selectedDate.isBlank() -> hint = "请先选择预约日期。"
+            start == null || end == null || end <= start -> hint = "请选择有效的候补时段。"
+            else -> {
+                hint = null
+                showSeatDialog = true
+                onQueryFloorSeats(venue.id, floor.id, selectedDate, start, end)
+            }
+        }
+    }
 
     AppPanel {
         Column(
@@ -1323,12 +1364,34 @@ private fun LibrarySeatWaitlistPanel(
                     },
                 )
             }
+            val seatTargetText = if (selectionMode == "specified") {
+                val floorName = selectedFloor?.name?.takeIf(String::isNotBlank) ?: "未选楼层"
+                val selectedText = if (selectedSeatLabels.isEmpty()) "未选择" else selectedSeatLabels.sorted().joinToString("、")
+                "指定座位：$floorName $selectedText"
+            } else {
+                val floorName = selectedFloor?.name?.takeIf(String::isNotBlank) ?: "未选楼层"
+                "候补座位范围：$floorName $minLabelText-$maxLabelText 号座位"
+            }
             Text(
-                text = "候补座位范围：${selectedFloor?.name?.takeIf(String::isNotBlank) ?: "未选楼层"} "
-                    + "$minLabelText-$maxLabelText 号座位",
+                text = seatTargetText,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                FilterChip(
+                    selected = selectionMode == "range",
+                    onClick = { selectionMode = "range" },
+                    label = { Text("座位范围") },
+                )
+                FilterChip(
+                    selected = selectionMode == "specified",
+                    onClick = {
+                        selectionMode = "specified"
+                        openSeatDialog()
+                    },
+                    label = { Text("指定 1-45 号座位") },
+                )
+            }
             ReservationTimeRangePicker(
                 startTime = startTime,
                 endTime = endTime,
@@ -1357,32 +1420,41 @@ private fun LibrarySeatWaitlistPanel(
                     )
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                OutlinedTextField(
-                    value = minLabelText,
-                    onValueChange = { value ->
-                        minLabelText = value.filter(Char::isDigit).take(3)
-                        hint = null
-                    },
-                    label = { Text("最小座位号") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f),
+            if (selectionMode == "specified") {
+                AppSecondaryButton(
+                    text = if (selectedSeatLabels.isEmpty()) "打开 1-45 号座位图选择"
+                    else "修改指定座位（已选 ${selectedSeatLabels.size} 个）",
+                    onClick = { openSeatDialog() },
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
-                    value = maxLabelText,
-                    onValueChange = { value ->
-                        maxLabelText = value.filter(Char::isDigit).take(3)
-                        hint = null
-                    },
-                    label = { Text("最大座位号") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f),
-                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    OutlinedTextField(
+                        value = minLabelText,
+                        onValueChange = { value ->
+                            minLabelText = value.filter(Char::isDigit).take(3)
+                            hint = null
+                        },
+                        label = { Text("最小座位号") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = maxLabelText,
+                        onValueChange = { value ->
+                            maxLabelText = value.filter(Char::isDigit).take(3)
+                            hint = null
+                        },
+                        label = { Text("最大座位号") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
             Text(
                 text = "检测到范围内释放座位后会自动预约并发送 App 消息与企业微信提醒。",
@@ -1400,11 +1472,14 @@ private fun LibrarySeatWaitlistPanel(
                     val end = endMinute
                     val min = minLabel
                     val max = maxLabel
+                    val labels = selectedSeatLabels.sorted()
                     when {
                         venue == null || floor == null -> hint = "请先选择场馆与楼层（默认二层）。"
                         selectedDate.isBlank() -> hint = "请先选择预约日期。"
                         start == null || end == null || end <= start -> hint = "请选择有效的候补时段。"
-                        min == null || max == null || min !in 1..999 || max !in 1..999 || min > max ->
+                        selectionMode == "specified" && (labels.isEmpty() || labels.any { it !in 1..45 }) ->
+                            hint = "请在 1-45 号座位图中至少选择一个座位。"
+                        selectionMode == "range" && (min == null || max == null || min !in 1..999 || max !in 1..999 || min > max) ->
                             hint = "座位号需为 1 至 999 的整数，且最小号不能大于最大号。"
                         else -> {
                             onClearFeedback()
@@ -1417,8 +1492,9 @@ private fun LibrarySeatWaitlistPanel(
                                     date = selectedDate,
                                     startMinute = start,
                                     endMinute = end,
-                                    minLabel = min,
-                                    maxLabel = max,
+                                    minLabel = if (selectionMode == "specified") labels.first() else min ?: 1,
+                                    maxLabel = if (selectionMode == "specified") labels.last() else max ?: 45,
+                                    seatLabels = if (selectionMode == "specified") labels else emptyList(),
                                 ),
                             )
                         }
@@ -1459,6 +1535,66 @@ private fun LibrarySeatWaitlistPanel(
             }
         }
     }
+
+    if (showSeatDialog) {
+        AppDialog(
+            onDismissRequest = { showSeatDialog = false },
+            title = "选择指定座位",
+            subtitle = "点击 1-45 号座位可多选，绿色表示当前空闲",
+            footer = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    AppDialogSecondaryButton(
+                        text = "清空",
+                        onClick = { selectedSeatLabelsText = "" },
+                        modifier = Modifier.weight(1f),
+                    )
+                    AppDialogPrimaryButton(
+                        text = "完成",
+                        onClick = { showSeatDialog = false },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            },
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (floorSeatsLoading) {
+                    LoadingBlock("正在查询 1-45 号座位...")
+                } else if (floorSeats.isEmpty()) {
+                    EmptyBlock("暂无座位结果", "请稍后重试或检查候补条件。")
+                } else {
+                    Text(
+                        text = if (selectedSeatLabels.isEmpty()) "未选择座位"
+                        else "已选 ${selectedSeatLabels.size} 个：${selectedSeatLabels.sorted().joinToString("、")}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    SecondFloorSeatMap(
+                        floorSeats = floorSeats,
+                        selectedLabels = selectedSeatLabels,
+                        onSeatClick = { floorSeat ->
+                            val label = floorSeat.seat.label.toIntOrNull()
+                            if (label != null) {
+                                val labels = if (label in selectedSeatLabels) {
+                                    selectedSeatLabels - label
+                                } else {
+                                    selectedSeatLabels + label
+                                }
+                                selectedSeatLabelsText = labels.sorted().joinToString(",")
+                            }
+                        },
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -1490,7 +1626,8 @@ private fun WaitlistTaskCard(
                 Text(
                     text = listOfNotNull(
                         task.floorName.takeIf(String::isNotBlank),
-                        "${task.minLabel}-${task.maxLabel} 号座位",
+                        if (task.seatLabels.isEmpty()) "${task.minLabel}-${task.maxLabel} 号座位"
+                        else "指定 ${task.seatLabels.joinToString("、")} 号座位",
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                     maxLines = 1,

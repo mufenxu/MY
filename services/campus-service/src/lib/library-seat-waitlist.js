@@ -58,6 +58,20 @@ function labelValue(value, fallback, label) {
   return parsed;
 }
 
+function seatLabelsValue(value) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) {
+    fail("指定座位号需为座位号数组。", "INVALID_LIBRARY_SEAT_WAITLIST_SEAT_LABELS");
+  }
+  const labels = value
+    .map((item) => Number(item))
+    .filter((label) => Number.isInteger(label));
+  if (!labels.length || labels.some((label) => label < 1 || label > 999) || new Set(labels).size !== labels.length) {
+    fail("指定座位号需为 1 至 999 的不重复整数。", "INVALID_LIBRARY_SEAT_WAITLIST_SEAT_LABELS");
+  }
+  return labels.sort((a, b) => a - b);
+}
+
 export function normalizeLibrarySeatWaitlistInput(input = {}) {
   const venueId = safeId(input.venueId ?? input.venue_id, "场馆", "INVALID_LIBRARY_SEAT_WAITLIST_VENUE");
   const floorId = safeId(input.floorId ?? input.floor_id, "楼层", "INVALID_LIBRARY_SEAT_WAITLIST_FLOOR");
@@ -82,6 +96,7 @@ export function normalizeLibrarySeatWaitlistInput(input = {}) {
   }
   const minLabel = labelValue(input.minLabel ?? input.min_label ?? input.minSeatNo, DEFAULT_MIN_LABEL, "最小座位号");
   const maxLabel = labelValue(input.maxLabel ?? input.max_label ?? input.maxSeatNo, DEFAULT_MAX_LABEL, "最大座位号");
+  const seatLabels = seatLabelsValue(input.seatLabels ?? input.seat_labels);
   if (minLabel > maxLabel) {
     fail("最小座位号不能大于最大座位号。", "INVALID_LIBRARY_SEAT_WAITLIST_LABEL_RANGE");
   }
@@ -95,6 +110,7 @@ export function normalizeLibrarySeatWaitlistInput(input = {}) {
     endMinute,
     minLabel,
     maxLabel,
+    seatLabels,
     enabled: input.enabled !== false
   };
 }
@@ -159,12 +175,18 @@ export function librarySeatWaitlistNextScanDelay(tasks = [], now = new Date(), c
   return delay;
 }
 
-export function pickLibrarySeatWaitlistFreeSeat(seats = [], minLabel = DEFAULT_MIN_LABEL, maxLabel = DEFAULT_MAX_LABEL) {
+export function pickLibrarySeatWaitlistFreeSeat(
+  seats = [],
+  minLabel = DEFAULT_MIN_LABEL,
+  maxLabel = DEFAULT_MAX_LABEL,
+  selectedLabels = []
+) {
   const rows = Array.isArray(seats) ? seats : [];
+  const labels = new Set(Array.isArray(selectedLabels) ? selectedLabels : []);
   const candidates = rows.filter((seat) => {
     if (!seat || seat.isFree !== true) return false;
     const label = Number(seat.label);
-    return Number.isInteger(label) && label >= minLabel && label <= maxLabel;
+    return Number.isInteger(label) && label >= minLabel && label <= maxLabel && (!labels.size || labels.has(label));
   });
   candidates.sort((a, b) => Number(a.label) - Number(b.label));
   return candidates[0] || null;
@@ -214,7 +236,12 @@ export async function scanLibrarySeatWaitlist({
       endMinute: task.endMinute,
       amPm: 0
     });
-    const freeSeat = pickLibrarySeatWaitlistFreeSeat(seats, task.minLabel, task.maxLabel);
+    const freeSeat = pickLibrarySeatWaitlistFreeSeat(
+      seats,
+      task.minLabel,
+      task.maxLabel,
+      task.seatLabels ?? task.seat_labels
+    );
     if (!freeSeat) continue;
     try {
       await client.submitReservation({

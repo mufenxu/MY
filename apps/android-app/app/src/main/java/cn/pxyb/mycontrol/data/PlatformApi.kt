@@ -727,6 +727,7 @@ class PlatformApi(
             .put("endMinute", request.endMinute)
             .put("minLabel", request.minLabel)
             .put("maxLabel", request.maxLabel)
+            .put("seatLabels", JSONArray(request.seatLabels))
         execute(CAMPUS_LIBRARY_SEAT_WAITLISTS_PATH, method = "POST", body = body)
     }
 
@@ -2036,6 +2037,7 @@ internal fun JSONObject.toLibrarySeatWaitlistTask(): LibrarySeatWaitlistTask? {
         endMinute = optInt("endMinute", 0),
         minLabel = optInt("minLabel", 1),
         maxLabel = optInt("maxLabel", 45),
+        seatLabels = optJSONArray("seatLabels").toInts(),
         status = status,
         statusText = when (status) {
             "success" -> "已预约成功"

@@ -2648,6 +2648,7 @@ function librarySeatWaitlistPublic(row) {
     endMinute: Number.isInteger(row.end_minute) ? row.end_minute : null,
     minLabel: Number.isInteger(row.min_label) ? row.min_label : 1,
     maxLabel: Number.isInteger(row.max_label) ? row.max_label : 45,
+    seatLabels: Array.isArray(row.seat_labels) ? row.seat_labels : [],
     status,
     statusText: librarySeatWaitlistStatusText(status),
     lastMessage: row.last_message || null,
@@ -2674,6 +2675,7 @@ function librarySeatWaitlistRecord(userId, normalized, timestamp, targets, id = 
     end_minute: normalized.endMinute,
     min_label: normalized.minLabel,
     max_label: normalized.maxLabel,
+    seat_labels: normalized.seatLabels,
     enabled: Boolean(normalized.enabled),
     status: "listening",
     last_message: null,
@@ -2744,6 +2746,7 @@ async function saveLibrarySeatWaitlist(userId, body, existing = null, targets = 
     end_minute: merged.endMinute,
     min_label: merged.minLabel,
     max_label: merged.maxLabel,
+    seat_labels: merged.seatLabels,
     enabled: Boolean(merged.enabled)
   };
   if (!changes.enabled && existing.status === "listening") {

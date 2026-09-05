@@ -272,6 +272,7 @@ data class LibrarySeatWaitlistRequest(
     val endMinute: Int,
     val minLabel: Int,
     val maxLabel: Int,
+    val seatLabels: List<Int> = emptyList(),
 )
 
 @Immutable
@@ -287,6 +288,7 @@ data class LibrarySeatWaitlistTask(
     val endMinute: Int = 0,
     val minLabel: Int = 1,
     val maxLabel: Int = 45,
+    val seatLabels: List<Int> = emptyList(),
     val status: String = "listening",
     val statusText: String = "监听中",
     val lastMessage: String = "",
