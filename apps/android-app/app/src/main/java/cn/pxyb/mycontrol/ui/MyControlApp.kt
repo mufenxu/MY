@@ -1476,17 +1476,28 @@ private fun AuthenticatedShell(
     val currentRoute = currentBackStackEntry?.destination?.route ?: initialRoute
     val isSubScreen = parentTabForSubScreen(currentRoute, null) != null
     val navigateBackFromSubScreen: () -> Unit = {
-        val parentTab = parentTabForSubScreen(
-            route = currentRoute,
-            previousRoute = navController.previousBackStackEntry?.destination?.route,
-        )
-        if (parentTab != null) {
-            val parentRoute = parentTab.route()
-            viewModel.syncNavigationDestination(parentTab)
-            if (!navController.popBackStack(parentRoute, inclusive = false)) {
-                navController.navigate(parentRoute) {
-                    popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
-                    launchSingleTop = true
+        val previousRoute = navController.previousBackStackEntry?.destination?.route
+        if (previousRoute != null && previousRoute != currentRoute) {
+            val previousTab = primaryTabForRoute(previousRoute)
+                ?: parentTabForSubScreen(previousRoute, null)
+            previousTab?.let(viewModel::syncNavigationDestination)
+        }
+        val returnedToPrevious = previousRoute != null &&
+            previousRoute != currentRoute &&
+            navController.popBackStack()
+        if (!returnedToPrevious) {
+            val parentTab = parentTabForSubScreen(
+                route = currentRoute,
+                previousRoute = navController.previousBackStackEntry?.destination?.route,
+            )
+            if (parentTab != null) {
+                val parentRoute = parentTab.route()
+                viewModel.syncNavigationDestination(parentTab)
+                if (!navController.popBackStack(parentRoute, inclusive = false)) {
+                    navController.navigate(parentRoute) {
+                        popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+                        launchSingleTop = true
+                    }
                 }
             }
         }
@@ -1672,7 +1683,9 @@ private fun AuthenticatedShell(
                         onRunDiagnostics = viewModel::runDiagnostics,
                         onTriggerBackup = { viewModel.triggerBackup(onSensitiveActionConfirmation) },
                         onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
-                        onOpenOperations = { navigateToTab(MainTab.Operations) },
+                        onOpenOperations = {
+                            navController.navigate(AppRoute.Operations) { launchSingleTop = true }
+                        },
                         onOpenSearch = viewModel::openGlobalSearch,
                         onOpenQrLogin = viewModel::openQrScanner,
                         onOpenWorkspace = viewModel::openWorkspace,
@@ -1729,7 +1742,9 @@ private fun AuthenticatedShell(
                         onOpenNotifications = {
                             navController.navigate(AppRoute.Notifications) { launchSingleTop = true }
                         },
-                        onOpenOperations = { navigateToTab(MainTab.Operations) },
+                        onOpenOperations = {
+                            navController.navigate(AppRoute.Operations) { launchSingleTop = true }
+                        },
                         onRunDiagnostics = viewModel::runDiagnostics,
                         onTriggerBackup = { viewModel.triggerBackup(onSensitiveActionConfirmation) },
                     )
@@ -1739,7 +1754,9 @@ private fun AuthenticatedShell(
                     DeviceCenterScreen(
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
-                        onOpenDevices = { navigateToTab(MainTab.Tools) },
+                        onOpenDevices = {
+                            navController.navigate(AppRoute.Tools) { launchSingleTop = true }
+                        },
                         onOpenScenes = {
                             navController.navigate(AppRoute.Scenes) { launchSingleTop = true }
                         },
@@ -1752,7 +1769,9 @@ private fun AuthenticatedShell(
                         onBack = navigateBackFromSubScreen,
                         onOpenGoogleAccounts = { viewModel.openGoogleAccountDesk() },
                         onOpenGitHubProjects = { viewModel.openGitHubProjects() },
-                        onOpenCt8Automation = { navigateToTab(MainTab.Tools) },
+                        onOpenCt8Automation = {
+                            navController.navigate(AppRoute.Tools) { launchSingleTop = true }
+                        },
                     )
                 }
 
