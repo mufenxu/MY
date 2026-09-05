@@ -507,6 +507,48 @@ fun IconTile(icon: ImageVector, tint: Color, background: Color, modifier: Modifi
 }
 
 @Composable
+fun QuickActionGlassTile(
+    icon: ImageVector,
+    accent: Color,
+    accentPale: Color,
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 22.dp,
+    contentDescription: String? = null,
+) {
+    val darkTheme = isSystemInDarkTheme()
+    val shape = RoundedCornerShape(19.dp)
+    val glassColors = if (darkTheme) {
+        listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.06f))
+    } else {
+        listOf(Color.White.copy(alpha = 0.64f), accentPale.copy(alpha = 0.34f))
+    }
+    Box(
+        modifier = modifier
+            .shadow(
+                elevation = 3.dp,
+                shape = shape,
+                ambientColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.16f),
+                spotColor = accent.copy(alpha = 0.20f),
+            )
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.78f), shape)
+            .background(Brush.linearGradient(colors = glassColors), shape)
+            .border(
+                border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                shape = shape,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            tint = if (darkTheme) lerp(accent, Color.White, 0.30f) else accent,
+            modifier = Modifier.size(iconSize),
+        )
+    }
+}
+
+@Composable
 fun FeedbackBanner(
     message: String,
     error: Boolean,

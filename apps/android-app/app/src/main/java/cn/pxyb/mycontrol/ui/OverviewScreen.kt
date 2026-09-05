@@ -2004,7 +2004,6 @@ private fun QuickAction(
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isDark = isSystemInDarkTheme()
 
     Column(
         modifier = modifier
@@ -2018,23 +2017,14 @@ private fun QuickAction(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(
-                    if (isDark) accent.copy(alpha = 0.20f)
-                    else accentPale.copy(alpha = 0.65f)
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = accent,
-                modifier = Modifier.size(20.dp),
-            )
-        }
+        QuickActionGlassTile(
+            icon = icon,
+            accent = accent,
+            accentPale = accentPale,
+            modifier = Modifier.size(38.dp),
+            iconSize = 20.dp,
+            contentDescription = label,
+        )
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(

@@ -35,7 +35,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -106,7 +105,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalUriHandler
@@ -2611,7 +2609,7 @@ private fun QuickToolItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        QuickToolIconTile(icon, accent, accentPale, modifier = Modifier.size(42.dp))
+        QuickActionGlassTile(icon, accent, accentPale, modifier = Modifier.size(42.dp))
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
@@ -2619,46 +2617,6 @@ private fun QuickToolItem(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
-private fun QuickToolIconTile(
-    icon: ImageVector,
-    accent: Color,
-    accentPale: Color,
-    modifier: Modifier = Modifier,
-) {
-    val darkTheme = isSystemInDarkTheme()
-    val shape = RoundedCornerShape(19.dp)
-    val glassColors = if (darkTheme) {
-        listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.06f))
-    } else {
-        listOf(Color.White.copy(alpha = 0.64f), accentPale.copy(alpha = 0.34f))
-    }
-    Box(
-        modifier = modifier
-            .shadow(
-                elevation = 3.dp,
-                shape = shape,
-                ambientColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.16f),
-                spotColor = accent.copy(alpha = 0.20f),
-            )
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.78f), shape)
-            .background(Brush.linearGradient(colors = glassColors), shape)
-            .border(
-                border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                shape = shape,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = if (darkTheme) lerp(accent, Color.White, 0.30f) else accent,
-            modifier = Modifier.size(22.dp),
         )
     }
 }
