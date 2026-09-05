@@ -181,10 +181,6 @@ private enum class SecondFactorMode { Totp, RecoveryCode }
 
 internal object AppRoute {
     const val Overview = "overview"
-    const val CampusCenter = "campus-center"
-    const val SystemCenter = "system-center"
-    const val DeviceCenter = "device-center"
-    const val ServiceCenter = "service-center"
     const val Events = "events"
     const val Tools = "tools"
     const val Profile = "profile"
@@ -233,10 +229,6 @@ private fun AppEntryUiState.requestedRoute(): String = when {
 
 private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Overview,
-    AppRoute.CampusCenter,
-    AppRoute.SystemCenter,
-    AppRoute.DeviceCenter,
-    AppRoute.ServiceCenter,
     AppRoute.Search,
     AppRoute.Assistant,
     AppRoute.Today,
@@ -259,10 +251,6 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Assistant -> MainTab.Overview
     AppRoute.GitHubProjects -> MainTab.Profile
     AppRoute.Notifications,
-    AppRoute.CampusCenter,
-    AppRoute.SystemCenter,
-    AppRoute.DeviceCenter,
-    AppRoute.ServiceCenter,
     AppRoute.Search,
     AppRoute.Today,
     AppRoute.FreeClassrooms,
@@ -1476,28 +1464,17 @@ private fun AuthenticatedShell(
     val currentRoute = currentBackStackEntry?.destination?.route ?: initialRoute
     val isSubScreen = parentTabForSubScreen(currentRoute, null) != null
     val navigateBackFromSubScreen: () -> Unit = {
-        val previousRoute = navController.previousBackStackEntry?.destination?.route
-        if (previousRoute != null && previousRoute != currentRoute) {
-            val previousTab = primaryTabForRoute(previousRoute)
-                ?: parentTabForSubScreen(previousRoute, null)
-            previousTab?.let(viewModel::syncNavigationDestination)
-        }
-        val returnedToPrevious = previousRoute != null &&
-            previousRoute != currentRoute &&
-            navController.popBackStack()
-        if (!returnedToPrevious) {
-            val parentTab = parentTabForSubScreen(
-                route = currentRoute,
-                previousRoute = navController.previousBackStackEntry?.destination?.route,
-            )
-            if (parentTab != null) {
-                val parentRoute = parentTab.route()
-                viewModel.syncNavigationDestination(parentTab)
-                if (!navController.popBackStack(parentRoute, inclusive = false)) {
-                    navController.navigate(parentRoute) {
-                        popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
-                        launchSingleTop = true
-                    }
+        val parentTab = parentTabForSubScreen(
+            route = currentRoute,
+            previousRoute = navController.previousBackStackEntry?.destination?.route,
+        )
+        if (parentTab != null) {
+            val parentRoute = parentTab.route()
+            viewModel.syncNavigationDestination(parentTab)
+            if (!navController.popBackStack(parentRoute, inclusive = false)) {
+                navController.navigate(parentRoute) {
+                    popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+                    launchSingleTop = true
                 }
             }
         }
@@ -1533,10 +1510,6 @@ private fun AuthenticatedShell(
     LaunchedEffect(currentRoute) {
         when (currentRoute) {
             AppRoute.Overview -> viewModel.syncNavigationDestination(MainTab.Overview)
-            AppRoute.CampusCenter -> viewModel.syncNavigationDestination(MainTab.Overview)
-            AppRoute.SystemCenter -> viewModel.syncNavigationDestination(MainTab.Overview)
-            AppRoute.DeviceCenter -> viewModel.syncNavigationDestination(MainTab.Tools)
-            AppRoute.ServiceCenter -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.Notifications -> viewModel.syncNavigationDestination(
                 MainTab.Overview,
                 workspaceDestination = WorkspaceDestination.Notifications,
@@ -1683,24 +1656,10 @@ private fun AuthenticatedShell(
                         onRunDiagnostics = viewModel::runDiagnostics,
                         onTriggerBackup = { viewModel.triggerBackup(onSensitiveActionConfirmation) },
                         onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
-                        onOpenOperations = {
-                            navController.navigate(AppRoute.Operations) { launchSingleTop = true }
-                        },
+                        onOpenOperations = { navigateToTab(MainTab.Operations) },
                         onOpenSearch = viewModel::openGlobalSearch,
                         onOpenQrLogin = viewModel::openQrScanner,
                         onOpenWorkspace = viewModel::openWorkspace,
-                        onOpenCampusCenter = {
-                            navController.navigate(AppRoute.CampusCenter) { launchSingleTop = true }
-                        },
-                        onOpenSystemCenter = {
-                            navController.navigate(AppRoute.SystemCenter) { launchSingleTop = true }
-                        },
-                        onOpenDeviceCenter = {
-                            navController.navigate(AppRoute.DeviceCenter) { launchSingleTop = true }
-                        },
-                        onOpenServiceCenter = {
-                            navController.navigate(AppRoute.ServiceCenter) { launchSingleTop = true }
-                        },
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
                         onOpenReservation = { navController.navigate(AppRoute.Reservation) },
                         onOpenFreeClassrooms = {
@@ -1713,65 +1672,6 @@ private fun AuthenticatedShell(
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
                         requestWebLoginUrl = viewModel::createPlatformWebLoginUrl,
                         requestExternalApplicationLaunch = viewModel::createExternalApplicationLaunch,
-                    )
-                }
-
-                composable(AppRoute.CampusCenter) {
-                    CampusCenterScreen(
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onOpenToday = {
-                            navController.navigate(AppRoute.Today) { launchSingleTop = true }
-                        },
-                        onOpenFreeClassrooms = {
-                            navController.navigate(AppRoute.FreeClassrooms) { launchSingleTop = true }
-                        },
-                        onOpenReservation = {
-                            navController.navigate(AppRoute.Reservation) { launchSingleTop = true }
-                        },
-                        onOpenSeatReservation = {
-                            navController.navigate(AppRoute.LibrarySeatReservation) { launchSingleTop = true }
-                        },
-                    )
-                }
-
-                composable(AppRoute.SystemCenter) {
-                    SystemCenterScreen(
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onOpenNotifications = {
-                            navController.navigate(AppRoute.Notifications) { launchSingleTop = true }
-                        },
-                        onOpenOperations = {
-                            navController.navigate(AppRoute.Operations) { launchSingleTop = true }
-                        },
-                        onRunDiagnostics = viewModel::runDiagnostics,
-                        onTriggerBackup = { viewModel.triggerBackup(onSensitiveActionConfirmation) },
-                    )
-                }
-
-                composable(AppRoute.DeviceCenter) {
-                    DeviceCenterScreen(
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onOpenDevices = {
-                            navController.navigate(AppRoute.Tools) { launchSingleTop = true }
-                        },
-                        onOpenScenes = {
-                            navController.navigate(AppRoute.Scenes) { launchSingleTop = true }
-                        },
-                    )
-                }
-
-                composable(AppRoute.ServiceCenter) {
-                    ServiceCenterScreen(
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onOpenGoogleAccounts = { viewModel.openGoogleAccountDesk() },
-                        onOpenGitHubProjects = { viewModel.openGitHubProjects() },
-                        onOpenCt8Automation = {
-                            navController.navigate(AppRoute.Tools) { launchSingleTop = true }
-                        },
                     )
                 }
 
