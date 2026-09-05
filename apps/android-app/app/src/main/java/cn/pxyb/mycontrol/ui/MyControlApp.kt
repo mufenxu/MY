@@ -160,6 +160,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -183,6 +184,7 @@ internal object AppRoute {
     const val Overview = "overview"
     const val Events = "events"
     const val Tools = "tools"
+    const val Authenticator = "authenticator"
     const val Profile = "profile"
     const val Operations = "operations"
     const val Account = "account"
@@ -238,7 +240,8 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Scenes -> MainTab.Overview
     AppRoute.Notifications -> MainTab.Overview
     AppRoute.Operations -> MainTab.Operations
-    AppRoute.Tools -> MainTab.Tools
+    AppRoute.Tools,
+    AppRoute.Authenticator -> MainTab.Tools
     AppRoute.Profile,
     AppRoute.Account -> MainTab.Profile
     AppRoute.GitHubProjects -> MainTab.Profile
@@ -248,6 +251,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
 internal fun parentTabForSubScreen(route: String?, previousRoute: String?): MainTab? = when (route) {
     AppRoute.GoogleAccounts -> primaryTabForRoute(previousRoute) ?: MainTab.Profile
     AppRoute.Account -> MainTab.Profile
+    AppRoute.Authenticator -> MainTab.Tools
     AppRoute.Assistant -> MainTab.Overview
     AppRoute.GitHubProjects -> MainTab.Profile
     AppRoute.Notifications,
@@ -1723,6 +1727,21 @@ private fun AuthenticatedShell(
                         },
                         onRefresh,
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
+                        onOpenAuthenticator = {
+                            navController.navigate(AppRoute.Authenticator) { launchSingleTop = true }
+                        },
+                    )
+                }
+                composable(AppRoute.Authenticator) {
+                    val authenticatorViewModel: AuthenticatorViewModel = viewModel()
+                    val authenticatorState by authenticatorViewModel.state.collectAsStateWithLifecycle()
+                    AuthenticatorScreen(
+                        state = authenticatorState,
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onAddFromUri = authenticatorViewModel::addFromUri,
+                        onAddManual = authenticatorViewModel::addManual,
+                        onDelete = authenticatorViewModel::delete,
                     )
                 }
                 composable(AppRoute.Profile) {

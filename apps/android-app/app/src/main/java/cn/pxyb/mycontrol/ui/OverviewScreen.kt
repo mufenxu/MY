@@ -11,6 +11,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -721,7 +722,7 @@ fun OverviewScreen(
                                 if (state.externalApplications.isEmpty()) {
                                     ExternalApplicationsLoadingPlaceholder()
                                 } else {
-                                    state.externalApplications.forEach { application ->
+                                    OverviewTwoColumnGrid(items = state.externalApplications) { application ->
                                         ExternalApplicationRow(
                                             application = application,
                                             opening = openingExternalApplicationId == application.id,
@@ -738,7 +739,7 @@ fun OverviewScreen(
                             if (sortedServices.isEmpty()) {
                                 EmptyBlock("暂无服务监测", "等待平台状态同步")
                             } else {
-                                sortedServices.forEach { service ->
+                                OverviewTwoColumnGrid(items = sortedServices) { service ->
                                     ServiceRow(
                                         service = service,
                                         opening = openingServiceId == service.id,
@@ -1117,16 +1118,14 @@ fun OverviewScreen(
                             ExternalApplicationsLoadingPlaceholder()
                         }
                     } else {
-                        items(
-                            items = state.externalApplications,
-                            key = { "external-application-${it.id}" },
-                            contentType = { "external-application" },
-                        ) { application ->
-                            ExternalApplicationRow(
-                                application = application,
-                                opening = openingExternalApplicationId == application.id,
-                                onOpen = stableOpenExternalApplication,
-                            )
+                        item(key = "external-apps-grid", contentType = "grid") {
+                            OverviewTwoColumnGrid(items = state.externalApplications) { application ->
+                                ExternalApplicationRow(
+                                    application = application,
+                                    opening = openingExternalApplicationId == application.id,
+                                    onOpen = stableOpenExternalApplication,
+                                )
+                            }
                         }
                     }
                 }
@@ -1144,16 +1143,14 @@ fun OverviewScreen(
                         EmptyBlock("暂无服务监测", "等待平台状态同步")
                     }
                 } else {
-                    items(
-                        items = sortedServices,
-                        key = { "service-${it.id}" },
-                        contentType = { "service" },
-                    ) { service ->
-                        ServiceRow(
-                            service = service,
-                            opening = openingServiceId == service.id,
-                            onOpen = stableOpenServiceAdmin,
-                        )
+                    item(key = "services-grid", contentType = "grid") {
+                        OverviewTwoColumnGrid(items = sortedServices) { service ->
+                            ServiceRow(
+                                service = service,
+                                opening = openingServiceId == service.id,
+                                onOpen = stableOpenServiceAdmin,
+                            )
+                        }
                     }
                 }
 
@@ -1321,6 +1318,120 @@ private fun OverviewSectionTitle(
         }
 
         trailing?.invoke()
+    }
+}
+
+@Composable
+private fun <T> OverviewTwoColumnGrid(
+    items: List<T>,
+    itemContent: @Composable (T) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        items.chunked(2).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                rowItems.forEach { item ->
+                    Box(modifier = Modifier.weight(1f)) {
+                        itemContent(item)
+                    }
+                }
+                if (rowItems.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OverviewServiceCardShell(
+    title: String,
+    icon: ImageVector,
+    accent: Color,
+    accentPale: Color,
+    enabled: Boolean,
+    opening: Boolean,
+    onClick: (() -> Unit)?,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val isDark = isSystemInDarkTheme()
+    val iconBackground = if (isDark) {
+        accent.copy(alpha = 0.18f)
+    } else {
+        accentPale.copy(alpha = 0.78f)
+    }
+
+    AppPanel(
+        onClick = if (enabled) onClick else null,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .alpha(if (enabled) 1f else 0.62f),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(iconBackground),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.5.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    content()
+                }
+
+                if (opening) {
+                    ServiceJumpIndicator()
+                } else if (enabled) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(15.dp),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -2126,143 +2237,65 @@ private fun ServiceRow(
 ) {
     val theme = remember(service.id, service.name) { serviceVisualTheme(service) }
     val hasAdminUrl = !service.adminUrl.isNullOrBlank()
-    val shape = RoundedCornerShape(16.dp)
-    val interactionSource = remember(service.id) { MutableInteractionSource() }
     val isDark = isSystemInDarkTheme()
 
-    val containerBg = if (isDark) {
-        theme.accent.copy(alpha = 0.07f).compositeOver(MaterialTheme.colorScheme.surface)
-    } else {
-        theme.accentPale.copy(alpha = 0.40f)
-    }
-
-    val borderColor = if (isDark) {
-        theme.accent.copy(alpha = 0.16f)
-    } else {
-        theme.accent.copy(alpha = 0.10f)
-    }
-
-    Surface(
-        onClick = { if (hasAdminUrl && !opening) onOpen(service) },
+    OverviewServiceCardShell(
+        title = service.name,
+        icon = theme.icon,
+        accent = theme.accent,
+        accentPale = theme.accentPale,
         enabled = hasAdminUrl && !opening,
-        interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .pressFeedback(interactionSource, pressedScale = 0.985f),
-        shape = shape,
-        color = containerBg,
-        border = BorderStroke(0.8.dp, borderColor),
-        shadowElevation = 0.dp,
+        opening = opening,
+        onClick = { onOpen(service) },
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(
-                        if (isDark) theme.accent.copy(alpha = 0.20f)
-                        else theme.accent.copy(alpha = 0.14f)
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = theme.icon,
-                    contentDescription = service.name,
-                    tint = theme.accent,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(
-                    text = service.name,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.5.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+            service.httpStatus?.let { status ->
+                val statusColor = if (status in 200..299) Color(0xFF059669) else Color(0xFFDC2626)
+                Surface(
+                    shape = RoundedCornerShape(5.dp),
+                    color = statusColor.copy(alpha = if (isDark) 0.2f else 0.10f),
                 ) {
-                    service.httpStatus?.let { status ->
-                        val statusBg = if (status in 200..299) Color(0xFF059669) else Color(0xFFDC2626)
-                        Surface(
-                            shape = RoundedCornerShape(5.dp),
-                            color = statusBg.copy(alpha = if (isDark) 0.2f else 0.10f),
-                        ) {
-                            Text(
-                                text = "HTTP $status",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp,
-                                    color = statusBg,
-                                ),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                            )
-                        }
-                    }
-                    service.latencyMs?.let { latency ->
-                        val latencyColor = when {
-                            latency < 50 -> Color(0xFF059669)
-                            latency < 150 -> Color(0xFF2563EB)
-                            else -> Color(0xFFD97706)
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(5.dp),
-                            color = latencyColor.copy(alpha = if (isDark) 0.2f else 0.10f),
-                        ) {
-                            Text(
-                                text = "$latency ms",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp,
-                                    color = latencyColor,
-                                ),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                            )
-                        }
-                    }
-                    if (service.httpStatus == null && service.latencyMs == null) {
-                        Text(
-                            text = "等待监测数据",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text(
+                        text = "HTTP $status",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            color = statusColor,
+                        ),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                    )
                 }
             }
-
-            if (opening) {
-                ServiceJumpIndicator()
-            } else {
-                // 未配置健康检查（unmonitored）时不再显示“正常/异常/未确认”，避免误导。
-                if (service.state != "unmonitored") {
-                    StatusBadge(service.state)
+            service.latencyMs?.let { latency ->
+                val latencyColor = when {
+                    latency < 50 -> Color(0xFF059669)
+                    latency < 150 -> Color(0xFF2563EB)
+                    else -> Color(0xFFD97706)
                 }
-                if (hasAdminUrl) {
-                    Box(
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Outlined.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(15.dp),
-                        )
-                    }
+                Surface(
+                    shape = RoundedCornerShape(5.dp),
+                    color = latencyColor.copy(alpha = if (isDark) 0.2f else 0.10f),
+                ) {
+                    Text(
+                        text = "$latency ms",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            color = latencyColor,
+                        ),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                    )
                 }
+            }
+            if (service.httpStatus == null && service.latencyMs == null) {
+                Text(
+                    text = "等待监测数据",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -2270,64 +2303,8 @@ private fun ServiceRow(
 
 @Composable
 private fun ExternalApplicationsLoadingPlaceholder() {
-    val transition = rememberInfiniteTransition(label = "external-apps-loading")
-    val pulse by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 720, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "external-apps-loading-pulse",
-    )
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        repeat(2) { index ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(11.dp))
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f * pulse)),
-                )
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(7.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(if (index == 0) 0.52f else 0.4f)
-                            .height(13.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f * pulse)),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.68f)
-                            .height(9.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f * pulse)),
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .width(46.dp)
-                        .height(20.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.16f * pulse)),
-                )
-            }
-        }
+    OverviewTwoColumnGrid(items = List(4) { it }) {
+        GlassShimmerCard(height = 74.dp)
     }
 }
 
@@ -2338,131 +2315,53 @@ private fun ExternalApplicationRow(
     onOpen: (ExternalApplication) -> Unit,
 ) {
     val theme = remember(application.id, application.name) { applicationVisualTheme(application) }
-    val shape = RoundedCornerShape(16.dp)
-    val interactionSource = remember(application.id) { MutableInteractionSource() }
     val isDark = isSystemInDarkTheme()
 
-    val containerBg = if (isDark) {
-        theme.accent.copy(alpha = 0.08f).compositeOver(MaterialTheme.colorScheme.surface)
-    } else {
-        theme.accentPale.copy(alpha = 0.45f)
-    }
-
-    val borderColor = if (isDark) {
-        theme.accent.copy(alpha = 0.18f)
-    } else {
-        theme.accent.copy(alpha = 0.10f)
-    }
-
-    Surface(
-        onClick = { if (application.canAccess && !opening) onOpen(application) },
+    OverviewServiceCardShell(
+        title = application.name,
+        icon = theme.icon,
+        accent = theme.accent,
+        accentPale = theme.accentPale,
         enabled = application.canAccess && !opening,
-        interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .pressFeedback(interactionSource, pressedScale = 0.985f),
-        shape = shape,
-        color = containerBg,
-        border = BorderStroke(0.8.dp, borderColor),
-        shadowElevation = 0.dp,
+        opening = opening,
+        onClick = { onOpen(application) },
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(
-                        if (isDark) theme.accent.copy(alpha = 0.20f)
-                        else theme.accent.copy(alpha = 0.14f)
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = theme.icon,
-                    contentDescription = application.name,
-                    tint = theme.accent,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(
-                    text = application.name,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.5.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+            application.health.latencyMs?.let { latency ->
+                val latencyColor = when {
+                    latency < 50 -> Color(0xFF059669)
+                    latency < 150 -> Color(0xFF2563EB)
+                    else -> Color(0xFFD97706)
+                }
+                Surface(
+                    shape = RoundedCornerShape(5.dp),
+                    color = latencyColor.copy(alpha = if (isDark) 0.2f else 0.10f),
                 ) {
-                    application.health.latencyMs?.let { latency ->
-                        val latencyColor = when {
-                            latency < 50 -> Color(0xFF059669)
-                            latency < 150 -> Color(0xFF2563EB)
-                            else -> Color(0xFFD97706)
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(5.dp),
-                            color = latencyColor.copy(alpha = if (isDark) 0.2f else 0.10f),
-                        ) {
-                            Text(
-                                text = "$latency ms",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp,
-                                    color = latencyColor,
-                                ),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                            )
-                        }
-                    }
                     Text(
-                        text = when {
-                            !application.canAccess -> "当前账号无权访问"
-                            application.kind == "direct" -> "无需平台登录 · 直接打开"
-                            else -> "最低权限 ${externalRoleLabel(application.requiredRole)}"
-                        },
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        text = "$latency ms",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            color = latencyColor,
+                        ),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                     )
                 }
             }
-
-            if (opening) {
-                ServiceJumpIndicator()
-            } else {
-                // 外部应用未设置健康检查地址时不显示在线状态角标。
-                if (!application.healthUrl.isNullOrBlank() && application.health.state != "unmonitored") {
-                    StatusBadge(application.health.state)
-                }
-                if (application.canAccess) {
-                    Box(
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Outlined.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(15.dp),
-                        )
-                    }
-                }
-            }
+            Text(
+                text = when {
+                    !application.canAccess -> "当前账号无权访问"
+                    application.kind == "direct" -> "无需平台登录 · 直接打开"
+                    else -> "最低权限 ${externalRoleLabel(application.requiredRole)}"
+                },
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

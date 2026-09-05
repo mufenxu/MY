@@ -115,6 +115,10 @@ export function normalizeLibrarySeatWaitlistInput(input = {}) {
   };
 }
 
+export function librarySeatWaitlistRunInput(task = {}) {
+  return normalizeLibrarySeatWaitlistInput(task);
+}
+
 function beijingInstantMs(date, minute) {
   const [year, month, day] = date.split("-").map(Number);
   const hour = Math.floor(minute / 60);

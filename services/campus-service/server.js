@@ -62,6 +62,7 @@ import {
   normalizeAutoReservationTaskInput
 } from "./src/lib/libroom-auto-reservation.js";
 import {
+  librarySeatWaitlistRunInput,
   librarySeatWaitlistNextScanDelay,
   librarySeatWaitlistRunPlan,
   librarySeatWaitlistTimes,
@@ -2836,18 +2837,7 @@ async function notifyLibrarySeatWaitlist(user, task, result) {
 }
 
 async function runLibrarySeatWaitlistTask(task, user, now = new Date()) {
-  const runInput = {
-    venueId: task.venue_id || task.venueId || "",
-    floorId: task.floor_id || task.floorId || "",
-    venueName: task.venue_name || task.venueName || "",
-    floorName: task.floor_name || task.floorName || "",
-    date: task.date || task.reservationDate || "",
-    startMinute: Number(task.start_minute ?? task.startMinute ?? task.beginMinute),
-    endMinute: Number(task.end_minute ?? task.endMinute),
-    minLabel: Number(task.min_label ?? task.minLabel ?? 1),
-    maxLabel: Number(task.max_label ?? task.maxLabel ?? 45),
-    enabled: Boolean(task.enabled)
-  };
+  const runInput = librarySeatWaitlistRunInput(task);
   const plan = librarySeatWaitlistRunPlan(runInput, now);
   const nowValue = now.toISOString();
   if (!plan.due) {

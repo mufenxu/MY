@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.LockClock
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.PowerSettingsNew
@@ -88,6 +89,7 @@ import cn.pxyb.mycontrol.ui.theme.Forest
 import cn.pxyb.mycontrol.ui.theme.MintPale
 import cn.pxyb.mycontrol.ui.theme.Ocean
 import cn.pxyb.mycontrol.ui.theme.OceanPale
+import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 
 private sealed interface ToolConfirmation {
     data object Ct8 : ToolConfirmation
@@ -135,6 +137,7 @@ fun ToolsScreen(
     onControlRelay: (String, String, Boolean) -> Unit,
     onRefresh: () -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenAuthenticator: () -> Unit,
 ) {
     var confirmation by remember { mutableStateOf<ToolConfirmation?>(null) }
 
@@ -200,6 +203,17 @@ fun ToolsScreen(
             state.sectionError?.let { message ->
                 item(key = "tools-error", contentType = "banner") {
                     FeedbackBanner("设备数据暂不可用：$message", error = true)
+                }
+            }
+
+            item(key = "authenticator", contentType = "action") {
+                AppPanel {
+                    AppActionRow(
+                        title = "本地验证器",
+                        subtitle = "离线生成第三方网站 TOTP 动态码",
+                        icon = Icons.Outlined.LockClock,
+                        onClick = onOpenAuthenticator,
+                    )
                 }
             }
 

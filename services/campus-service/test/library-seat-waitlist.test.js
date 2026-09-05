@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  librarySeatWaitlistRunInput,
   librarySeatWaitlistNextScanDelay,
   librarySeatWaitlistRunPlan,
   normalizeLibrarySeatWaitlistInput,
@@ -63,6 +64,24 @@ test("rejects invalid waitlist input", () => {
 test("keeps disabled flag when disabling a task", () => {
   const result = normalizeLibrarySeatWaitlistInput({ ...baseTask, enabled: false });
   assert.equal(result.enabled, false);
+});
+
+test("scheduler input preserves specified seat labels from persisted task rows", () => {
+  const row = {
+    venue_id: "1744276833606668288",
+    venue_name: "图书馆",
+    floor_id: "1935932081147318272",
+    floor_name: "二层",
+    date: "2026-09-03",
+    start_minute: 600,
+    end_minute: 720,
+    min_label: 1,
+    max_label: 45,
+    seat_labels: [42],
+    enabled: true
+  };
+  const input = librarySeatWaitlistRunInput(row);
+  assert.deepEqual(input.seatLabels, [42]);
 });
 
 test("run plan marks a task expired after its time window ends", () => {

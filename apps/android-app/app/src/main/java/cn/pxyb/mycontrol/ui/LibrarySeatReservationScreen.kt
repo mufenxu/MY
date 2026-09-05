@@ -1306,7 +1306,9 @@ private fun LibrarySeatWaitlistPanel(
     var minLabelText by rememberSaveable { mutableStateOf("1") }
     var maxLabelText by rememberSaveable { mutableStateOf("45") }
     var selectionMode by rememberSaveable { mutableStateOf("range") }
-    var selectedSeatLabelsText by rememberSaveable { mutableStateOf("") }
+    var selectedSeatLabelsText by rememberSaveable(selectedVenue?.id, selectedFloor?.id) {
+        mutableStateOf("")
+    }
     var showSeatDialog by remember { mutableStateOf(false) }
     var hint by remember { mutableStateOf<String?>(null) }
 
