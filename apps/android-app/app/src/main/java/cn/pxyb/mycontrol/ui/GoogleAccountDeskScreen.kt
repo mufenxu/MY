@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
+import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
+
 import androidx.activity.compose.BackHandler
 import android.content.Context
 import android.content.Intent
@@ -875,71 +878,43 @@ private fun avatarGradientForEmail(email: String): Brush {
 
 @Composable
 private fun ModernOpenAiStatusBadge(status: String) {
-    val bg: Color
-    val fg: Color
-    val border: Color
     val icon: ImageVector
     val label: String
+    val semantic: AppStatusSemantic
 
     when (status) {
         OPENAI_REGISTERED -> {
-            bg = Color(0xFFECFDF5)
-            fg = Color(0xFF047857)
-            border = Color(0xFFA7F3D0)
             icon = Icons.Outlined.CheckCircle
             label = "已注册"
+            semantic = AppStatusSemantic.Success
         }
         OPENAI_VERIFICATION -> {
-            bg = Color(0xFFFFFBEB)
-            fg = Color(0xFFB45309)
-            border = Color(0xFFFDE68A)
             icon = Icons.Outlined.Warning
             label = "需验证"
+            semantic = AppStatusSemantic.Warning
         }
         OPENAI_ABNORMAL -> {
-            bg = Color(0xFFFEF2F2)
-            fg = Color(0xFFB91C1C)
-            border = Color(0xFFFECACA)
             icon = Icons.Outlined.Warning
             label = "异常"
+            semantic = AppStatusSemantic.Error
         }
         OPENAI_DISABLED -> {
-            bg = Color(0xFFF1F5F9)
-            fg = Color(0xFF64748B)
-            border = Color(0xFFCBD5E1)
             icon = Icons.Outlined.Close
             label = "已停用"
+            semantic = AppStatusSemantic.Neutral
         }
         else -> {
-            bg = Color(0xFFF0F9FF)
-            fg = Color(0xFF0284C7)
-            border = Color(0xFFBAE6FD)
             icon = Icons.Outlined.Schedule
             label = "未注册"
+            semantic = AppStatusSemantic.Info
         }
     }
 
-    Surface(
-        color = bg.copy(alpha = 0.6f),
-        contentColor = fg,
-        shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(0.6.dp, border),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.5.dp),
-        ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(12.dp), tint = fg)
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                ),
-            )
-        }
-    }
+    AppStatusBadge(
+        label = label,
+        semantic = semantic,
+        icon = icon,
+    )
 }
 
 @Composable

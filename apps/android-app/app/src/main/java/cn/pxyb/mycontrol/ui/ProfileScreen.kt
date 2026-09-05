@@ -1,6 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
+import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
 
 import android.widget.Toast
@@ -1489,69 +1490,12 @@ private fun ProfileSectionTitle(
     dotColor: Color = MaterialTheme.colorScheme.primary,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    val isDark = isSystemInDarkTheme()
-    val pillBgColor = if (isDark) {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-    } else {
-        Color.White.copy(alpha = 0.82f)
-    }
-    val pillBorderColor = if (isDark) {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-    } else {
-        Color.White.copy(alpha = 0.90f)
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Surface(
-            shape = CircleShape,
-            color = pillBgColor,
-            border = BorderStroke(0.6.dp, pillBorderColor),
-            shadowElevation = 0.dp,
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(dotColor)
-                )
-
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        letterSpacing = 0.1.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-
-                if (subtitle.isNotBlank()) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 10.5.sp,
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-
-        trailing?.invoke()
-    }
+    AppSectionHeader(
+        title = title,
+        subtitle = subtitle,
+        accent = dotColor,
+        trailing = trailing,
+    )
 }
 
 /** 个人资料 Card */

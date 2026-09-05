@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -104,11 +104,11 @@ fun AssistantScreen(
                     AssistantWelcomeCard()
                 }
             } else {
-                itemsIndexed(
+                items(
                     state.messages,
-                    key = { index, _ -> "assistant-message-$index" },
-                    contentType = { _, message -> message.role },
-                ) { _, message ->
+                    key = { message -> message.id },
+                    contentType = { message -> message.role },
+                ) { message ->
                     AssistantMessageBubble(
                         message = message,
                         onSuggestionClick = { destination ->

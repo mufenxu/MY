@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
+import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.util.QrUtils
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -1248,54 +1249,10 @@ private fun DialogError(text: String?) {
 
 @Composable
 private fun AccountSectionHeader(title: String) {
-    val isDark = isSystemInDarkTheme()
-    val pillBgColor = if (isDark) {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-    } else {
-        androidx.compose.ui.graphics.Color.White.copy(alpha = 0.82f)
-    }
-    val pillBorderColor = if (isDark) {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-    } else {
-        androidx.compose.ui.graphics.Color.White.copy(alpha = 0.90f)
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Surface(
-            shape = CircleShape,
-            color = pillBgColor,
-            border = BorderStroke(0.6.dp, pillBorderColor),
-            shadowElevation = 0.dp,
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                )
-
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.5.sp,
-                        letterSpacing = 0.1.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-            }
-        }
-    }
+    AppSectionHeader(
+        title = title,
+        modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 6.dp),
+    )
 }
 
 @Composable

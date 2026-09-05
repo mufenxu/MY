@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
+
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -265,24 +267,13 @@ private fun QrConfirmationScreen(
 
 @Composable
 private fun QrDetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.padding(10.dp).size(20.dp),
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-    }
+    AppDetailRow(
+        label = label,
+        value = value,
+        icon = icon,
+        modifier = Modifier.padding(vertical = 6.dp),
+        maxLines = 2,
+    )
 }
 
 @Composable
@@ -392,32 +383,13 @@ private fun QrApprovedScreen(target: QrLoginTarget, onClose: () -> Unit) {
 
 @Composable
 private fun QrApprovedDetailRow(icon: ImageVector, label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(9.dp).size(19.dp),
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                value,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    AppDetailRow(
+        label = label,
+        value = value,
+        icon = icon,
+        modifier = Modifier.padding(vertical = 8.dp),
+        maxLines = 1,
+    )
 }
 
 @Composable

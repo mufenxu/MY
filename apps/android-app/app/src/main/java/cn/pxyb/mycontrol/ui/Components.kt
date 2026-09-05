@@ -16,6 +16,7 @@ import cn.pxyb.mycontrol.ui.components.display.AppDivider
 import cn.pxyb.mycontrol.ui.components.display.AppGroupedCard
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppErrorState
+import cn.pxyb.mycontrol.ui.components.feedback.AppLoadingState
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterBar
 import cn.pxyb.mycontrol.util.QrUtils
@@ -651,14 +652,7 @@ fun GlassShimmerList(
 
 @Composable
 fun LoadingBlock(label: String, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(vertical = 28.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-        Text(label, modifier = Modifier.padding(start = 10.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+    AppLoadingState(label = label, modifier = modifier)
 }
 
 // ---------------- 现代统一弹窗 ----------------

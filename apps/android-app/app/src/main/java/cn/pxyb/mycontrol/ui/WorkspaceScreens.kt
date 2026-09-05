@@ -1,5 +1,10 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
+import cn.pxyb.mycontrol.ui.components.display.AppListCard
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
+import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -85,7 +90,6 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -259,20 +263,20 @@ fun TodayScreen(
         }
         item(key = "campus-filter", contentType = "filter") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
+                AppFilterChip(
+                    label = "今日课程",
                     selected = campusSection == CampusWorkspaceSection.Today,
                     onClick = { campusSection = CampusWorkspaceSection.Today },
-                    label = { Text("今日课程") },
                 )
-                FilterChip(
+                AppFilterChip(
+                    label = "本学期课表",
                     selected = campusSection == CampusWorkspaceSection.Timetable,
                     onClick = { campusSection = CampusWorkspaceSection.Timetable },
-                    label = { Text("本学期课表") },
                 )
-                FilterChip(
+                AppFilterChip(
+                    label = "校园信息",
                     selected = campusSection == CampusWorkspaceSection.Campus,
                     onClick = { campusSection = CampusWorkspaceSection.Campus },
-                    label = { Text("校园信息") },
                 )
             }
         }
@@ -1885,16 +1889,10 @@ private fun TermTimetable(
                     (1..maxTeachingWeeks).forEach { week ->
                         val isCurrent = officialCurrentWeek == week
                         val isSelected = week == selectedWeek
-                        FilterChip(
+                        AppFilterChip(
+                            label = if (isCurrent) "第 $week 周 (本周)" else "第 $week 周",
                             selected = isSelected,
                             onClick = { selectedWeek = week },
-                            label = {
-                                Text(
-                                    if (isCurrent) "第 $week 周 (本周)" else "第 $week 周",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (isSelected || isCurrent) FontWeight.Bold else FontWeight.Normal,
-                                )
-                            },
                         )
                     }
                 }
@@ -2788,15 +2786,7 @@ private fun DetailRow(
     value: String,
     icon: ImageVector,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(72.dp))
-        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-    }
+    AppDetailRow(label = label, value = value, icon = icon)
 }
 
 private fun weekdayLabel(day: Int): String = listOf("", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
@@ -2808,19 +2798,25 @@ private fun formatCampusAmount(value: String): String = value
 
 @Composable
 private fun TodoCard(task: TodoTask, onToggle: (String) -> Unit, onEdit: () -> Unit, onDelete: (String) -> Unit) {
-    AppPanel {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    AppListCard(
+        title = task.title,
+        subtitle = todoMeta(task),
+        leading = {
             IconButton(onClick = { onToggle(task.id) }) {
-                Icon(if (task.completed) Icons.Outlined.CheckCircle else Icons.Outlined.Schedule, if (task.completed) "标记未完成" else "标记完成", tint = if (task.completed) Color(0xFF059669) else MaterialTheme.colorScheme.primary)
+                Icon(
+                    if (task.completed) Icons.Outlined.CheckCircle else Icons.Outlined.Schedule,
+                    if (task.completed) "标记未完成" else "标记完成",
+                    tint = if (task.completed) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
+                )
             }
-            Column(Modifier.weight(1f)) {
-                Text(task.title, style = MaterialTheme.typography.titleMedium, textDecoration = if (task.completed) TextDecoration.LineThrough else null, color = if (task.completed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
-                Text(todoMeta(task), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+        },
+        trailing = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "编辑") }
             IconButton(onClick = { onDelete(task.id) }) { Icon(Icons.Outlined.DeleteOutline, "删除") }
+            }
         }
-    }
+    )
 }
 
 @Composable
@@ -3259,34 +3255,30 @@ private fun TodoEditorDialog(
     var recurrence by remember(task?.id) { mutableStateOf(task?.recurrence ?: "none") }
     var duePreset by remember(task?.id) { mutableStateOf(duePreset(task?.dueAt)) }
     var courseId by remember(task?.id) { mutableStateOf(task?.courseRef?.id) }
-    AppDialog(
+    AppDialogForm(
+        onConfirm = {
+            val now = System.currentTimeMillis()
+            val selectedCourse = courses.firstOrNull { it.id == courseId }
+            val dueAt = dueFromPreset(duePreset)
+            onSave(
+                (task ?: TodoTask(id = UUID.randomUUID().toString(), title = title.trim())).copy(
+                    title = title.trim(),
+                    priority = priority,
+                    recurrence = recurrence,
+                    dueAt = dueAt,
+                    reminderAt = dueAt?.minus(60 * 60_000L),
+                    reminderStatus = "pending",
+                    courseRef = selectedCourse?.let { TodoCourseRef(it.id, it.courseName) },
+                    updatedAt = now,
+                ),
+            )
+        },
+        enabled = title.isNotBlank(),
         onDismissRequest = onDismiss,
         icon = Icons.Outlined.Event,
         title = if (task == null) "添加待办" else "编辑待办",
         subtitle = "离线时也会安全保存在本机",
         modifier = Modifier.heightIn(max = 720.dp),
-        footer = {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                AppDialogSecondaryButton("取消", onDismiss, Modifier.weight(1f))
-                AppDialogPrimaryButton("保存", { 
-                    val now = System.currentTimeMillis()
-                    val selectedCourse = courses.firstOrNull { it.id == courseId }
-                    val dueAt = dueFromPreset(duePreset)
-                    onSave(
-                        (task ?: TodoTask(id = UUID.randomUUID().toString(), title = title.trim())).copy(
-                            title = title.trim(),
-                            priority = priority,
-                            recurrence = recurrence,
-                            dueAt = dueAt,
-                            reminderAt = dueAt?.minus(60 * 60_000L),
-                            reminderStatus = "pending",
-                            courseRef = selectedCourse?.let { TodoCourseRef(it.id, it.courseName) },
-                            updatedAt = now,
-                        ),
-                    )
-                }, Modifier.weight(1f), enabled = title.isNotBlank())
-            }
-        },
     ) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             DialogTextField(title, { title = it }, "待办内容")
@@ -3296,9 +3288,9 @@ private fun TodoEditorDialog(
             if (courses.isNotEmpty()) {
                 Text("关联课程", style = MaterialTheme.typography.labelLarge)
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = courseId == null, onClick = { courseId = null }, label = { Text("无") })
+                    AppFilterChip(label = "无", selected = courseId == null, onClick = { courseId = null })
                     courses.take(8).forEach { course ->
-                        FilterChip(selected = courseId == course.id, onClick = { courseId = course.id }, label = { Text(course.courseName, maxLines = 1) })
+                        AppFilterChip(label = course.courseName, selected = courseId == course.id, onClick = { courseId = course.id })
                     }
                 }
             }
@@ -3312,7 +3304,7 @@ private fun ChoiceRow(title: String, choices: List<Pair<String, String>>, select
         Text(title, style = MaterialTheme.typography.labelLarge)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             choices.forEach { (value, label) ->
-                FilterChip(selected = selected == value, onClick = { onSelect(value) }, label = { Text(label) })
+                AppFilterChip(label = label, selected = selected == value, onClick = { onSelect(value) })
             }
         }
     }
@@ -3410,8 +3402,8 @@ private fun SceneEditorDialog(
                             }
                             if (current != null) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    FilterChip(selected = current.status == "ON", onClick = { actions = actions.map { if (it.deviceId == deviceId && it.relayId == relayId) it.copy(status = "ON") else it } }, label = { Text("打开") })
-                                    FilterChip(selected = current.status == "OFF", onClick = { actions = actions.map { if (it.deviceId == deviceId && it.relayId == relayId) it.copy(status = "OFF") else it } }, label = { Text("关闭") })
+                                    AppFilterChip(label = "打开", selected = current.status == "ON", onClick = { actions = actions.map { if (it.deviceId == deviceId && it.relayId == relayId) it.copy(status = "ON") else it } })
+                                    AppFilterChip(label = "关闭", selected = current.status == "OFF", onClick = { actions = actions.map { if (it.deviceId == deviceId && it.relayId == relayId) it.copy(status = "OFF") else it } })
                                 }
                             }
                         }
@@ -3591,13 +3583,13 @@ private fun AutomationRuleEditorDialog(
             Text("监控设备", style = MaterialTheme.typography.labelLarge)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 devices.forEach { device ->
-                    FilterChip(
+                    AppFilterChip(
+                        label = device.name,
                         selected = device.id == deviceId,
                         onClick = {
                             deviceId = device.id
                             relayId = device.relays.keys.firstOrNull()
                         },
-                        label = { Text(device.name, maxLines = 1) },
                     )
                 }
             }
@@ -3627,7 +3619,7 @@ private fun AutomationRuleEditorDialog(
                     Text("监控继电器", style = MaterialTheme.typography.labelLarge)
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         selectedDevice?.relays?.keys.orEmpty().sorted().forEach { id ->
-                            FilterChip(selected = relayId == id, onClick = { relayId = id }, label = { Text(id) })
+                            AppFilterChip(label = id, selected = relayId == id, onClick = { relayId = id })
                         }
                     }
                     ChoiceRow("目标状态", listOf("ON" to "开启", "OFF" to "关闭"), value.uppercase()) { value = it }
@@ -3636,7 +3628,7 @@ private fun AutomationRuleEditorDialog(
             Text("命中后执行", style = MaterialTheme.typography.labelLarge)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 scenes.forEach { scene ->
-                    FilterChip(selected = scene.id == sceneId, onClick = { sceneId = scene.id }, label = { Text(scene.name, maxLines = 1) })
+                    AppFilterChip(label = scene.name, selected = scene.id == sceneId, onClick = { sceneId = scene.id })
                 }
             }
             if (sceneId == null && rule?.actions.orEmpty().isNotEmpty()) {

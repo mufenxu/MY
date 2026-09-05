@@ -1,6 +1,8 @@
 package cn.pxyb.mycontrol.ui
 
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
+import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
+import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
 import androidx.compose.material.icons.outlined.RocketLaunch
 
 import androidx.activity.compose.BackHandler
@@ -249,7 +251,12 @@ private fun GitHubReleasesPane(
                 GitHubReleasesEmptyState(onCreate = onCreateRelease)
             }
             else -> {
-                items(releases, key = { it.tagName }) { release ->
+                items(
+                    releases,
+                    key = { release ->
+                        "${release.tagName}:${release.publishedAt}:${release.assetsCount}"
+                    },
+                ) { release ->
                     GitHubReleaseCard(release)
                 }
             }
@@ -371,7 +378,10 @@ private fun GitHubRepositoryCard(
             ) {
                 VisibilityBadge(repository.visibility)
                 if (repository.archived) {
-                    StatusBadge(label = "已归档", foreground = Amber, background = AmberPale)
+                    AppStatusBadge(
+                        label = "已归档",
+                        semantic = AppStatusSemantic.Warning,
+                    )
                 }
                 repository.language?.let { language ->
                     Text(
@@ -625,42 +635,22 @@ private fun GitHubInitialAvatar(name: String, size: Dp) {
 }
 
 @Composable
-private fun StatusBadge(label: String, foreground: Color, background: Color) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(background)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall.copy(
-                color = foreground,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 11.sp,
-            ),
-        )
-    }
-}
-
-@Composable
 private fun VisibilityBadge(visibility: String) {
-    val (label, foreground, background) = when (visibility) {
-        "private" -> Triple("私有", Amber, AmberPale)
-        "internal" -> Triple("内部", Coral, CoralPale)
-        else -> Triple("公开", Ocean, OceanPale)
+    val (label, semantic) = when (visibility) {
+        "private" -> "私有" to AppStatusSemantic.Warning
+        "internal" -> "内部" to AppStatusSemantic.Error
+        else -> "公开" to AppStatusSemantic.Info
     }
-    StatusBadge(label, foreground, background)
+    AppStatusBadge(label = label, semantic = semantic)
 }
 
 @Composable
 private fun ReleaseBadge(release: GitHubReleaseRecord) {
-    val (label, foreground, background) = when {
-        release.draft -> Triple("草稿", Amber, AmberPale)
-        else -> Triple("预发布", Coral, CoralPale)
+    val (label, semantic) = when {
+        release.draft -> "草稿" to AppStatusSemantic.Warning
+        else -> "预发布" to AppStatusSemantic.Error
     }
-    StatusBadge(label, foreground, background)
+    AppStatusBadge(label = label, semantic = semantic)
 }
 
 @Composable

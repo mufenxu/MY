@@ -45,6 +45,7 @@ import cn.pxyb.mycontrol.data.TotpEnrollment
 import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.WebLoginLink
 import cn.pxyb.mycontrol.update.AppUpdateUiState
+import java.util.UUID
 
 @Immutable
 data class AppEntryUiState(
@@ -83,6 +84,7 @@ data class AppEntryUiState(
 
 @Immutable
 data class AssistantChatMessageUi(
+    val id: String = UUID.randomUUID().toString(),
     val role: String,
     val content: String,
     val suggestions: List<AssistantSuggestion> = emptyList(),

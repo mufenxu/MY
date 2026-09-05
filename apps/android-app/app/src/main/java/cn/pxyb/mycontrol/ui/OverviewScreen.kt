@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
@@ -1256,69 +1258,13 @@ private fun OverviewSectionTitle(
     tag: String? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    val isDark = isSystemInDarkTheme()
-    val pillBgColor = if (isDark) {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-    } else {
-        Color.White.copy(alpha = 0.82f)
-    }
-    val pillBorderColor = if (isDark) {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-    } else {
-        Color.White.copy(alpha = 0.90f)
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Surface(
-            shape = CircleShape,
-            color = pillBgColor,
-            border = BorderStroke(0.6.dp, pillBorderColor),
-            shadowElevation = 0.dp,
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(dotColor)
-                )
-
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        letterSpacing = 0.1.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-
-                if (subtitle.isNotBlank()) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 10.5.sp,
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-
-        trailing?.invoke()
-    }
+    AppSectionHeader(
+        title = title,
+        subtitle = subtitle,
+        accent = dotColor,
+        tag = tag,
+        trailing = trailing,
+    )
 }
 
 @Composable
@@ -2237,7 +2183,6 @@ private fun ServiceRow(
 ) {
     val theme = remember(service.id, service.name) { serviceVisualTheme(service) }
     val hasAdminUrl = !service.adminUrl.isNullOrBlank()
-    val isDark = isSystemInDarkTheme()
 
     OverviewServiceCardShell(
         title = service.name,
@@ -2248,53 +2193,39 @@ private fun ServiceRow(
         opening = opening,
         onClick = { onOpen(service) },
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            service.httpStatus?.let { status ->
-                val statusColor = if (status in 200..299) Color(0xFF059669) else Color(0xFFDC2626)
-                Surface(
-                    shape = RoundedCornerShape(5.dp),
-                    color = statusColor.copy(alpha = if (isDark) 0.2f else 0.10f),
-                ) {
-                    Text(
-                        text = "HTTP $status",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp,
-                            color = statusColor,
-                        ),
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                    )
-                }
-            }
-            service.latencyMs?.let { latency ->
-                val latencyColor = when {
-                    latency < 50 -> Color(0xFF059669)
-                    latency < 150 -> Color(0xFF2563EB)
-                    else -> Color(0xFFD97706)
-                }
-                Surface(
-                    shape = RoundedCornerShape(5.dp),
-                    color = latencyColor.copy(alpha = if (isDark) 0.2f else 0.10f),
-                ) {
-                    Text(
-                        text = "$latency ms",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp,
-                            color = latencyColor,
-                        ),
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                    )
-                }
-            }
-            if (service.httpStatus == null && service.latencyMs == null) {
+        val statusText = listOfNotNull(
+            service.httpStatus?.let { "HTTP $it" },
+            service.latencyMs?.let { "$it ms" },
+        ).joinToString(" · ").ifBlank { "等待监测数据" }
+        val statusColor = when {
+            service.httpStatus == null -> MaterialTheme.colorScheme.onSurfaceVariant
+            service.httpStatus in 200..299 -> Color(0xFF059669)
+            else -> Color(0xFFDC2626)
+        }
+
+        if (service.httpStatus == null) {
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                color = statusColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            Surface(
+                shape = RoundedCornerShape(5.dp),
+                color = statusColor.copy(alpha = 0.12f),
+            ) {
                 Text(
-                    text = "等待监测数据",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = statusText,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        color = statusColor,
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                 )
             }
         }
@@ -2303,8 +2234,79 @@ private fun ServiceRow(
 
 @Composable
 private fun ExternalApplicationsLoadingPlaceholder() {
-    OverviewTwoColumnGrid(items = List(4) { it }) {
-        GlassShimmerCard(height = 74.dp)
+    OverviewTwoColumnGrid(items = List(4) { it }) { index ->
+        ExternalApplicationLoadingCard(index = index)
+    }
+}
+
+@Composable
+private fun ExternalApplicationLoadingCard(index: Int) {
+    val isDark = isSystemInDarkTheme()
+    val transition = rememberInfiniteTransition(label = "external-application-loading")
+    val pulse by transition.animateFloat(
+        initialValue = 0.38f,
+        targetValue = 0.88f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900 + index * 110, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "external-application-loading-pulse",
+    )
+    val skeletonColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f * pulse)
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(74.dp)
+            .glassShimmer(isDark),
+        shape = RoundedCornerShape(18.dp),
+        color = glassCardColor(),
+        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(skeletonColor),
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(if (index % 2 == 0) 0.72f else 0.58f)
+                        .height(11.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(skeletonColor),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 30.dp, height = 10.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(skeletonColor),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(width = 46.dp, height = 10.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(skeletonColor),
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(skeletonColor),
+            )
+        }
     }
 }
 
@@ -2315,7 +2317,6 @@ private fun ExternalApplicationRow(
     onOpen: (ExternalApplication) -> Unit,
 ) {
     val theme = remember(application.id, application.name) { applicationVisualTheme(application) }
-    val isDark = isSystemInDarkTheme()
 
     OverviewServiceCardShell(
         title = application.name,
@@ -2326,43 +2327,20 @@ private fun ExternalApplicationRow(
         opening = opening,
         onClick = { onOpen(application) },
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            application.health.latencyMs?.let { latency ->
-                val latencyColor = when {
-                    latency < 50 -> Color(0xFF059669)
-                    latency < 150 -> Color(0xFF2563EB)
-                    else -> Color(0xFFD97706)
-                }
-                Surface(
-                    shape = RoundedCornerShape(5.dp),
-                    color = latencyColor.copy(alpha = if (isDark) 0.2f else 0.10f),
-                ) {
-                    Text(
-                        text = "$latency ms",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp,
-                            color = latencyColor,
-                        ),
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                    )
-                }
-            }
-            Text(
-                text = when {
+        Text(
+            text = listOfNotNull(
+                application.health.latencyMs?.let { "$it ms" },
+                when {
                     !application.canAccess -> "当前账号无权访问"
-                    application.kind == "direct" -> "无需平台登录 · 直接打开"
+                    application.kind == "direct" -> "直接打开"
                     else -> "最低权限 ${externalRoleLabel(application.requiredRole)}"
                 },
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+            ).joinToString(" · "),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
