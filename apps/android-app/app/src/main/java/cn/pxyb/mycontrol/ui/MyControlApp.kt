@@ -2553,16 +2553,17 @@ private fun AppBottomNavigation(
     onSelect: (MainTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val glass = rememberGlassPalette(radius = 31.dp)
     Surface(
         modifier = modifier
             .padding(horizontal = 16.dp, vertical = 10.dp)
             .widthIn(max = 420.dp)
             .fillMaxWidth()
-            .height(62.dp),
-        color = glassCardColor(),
-        shape = RoundedCornerShape(31.dp),
+            .height(62.dp)
+            .glassPanel(glass),
+        color = Color.Transparent,
+        shape = glass.shape,
         shadowElevation = 0.dp,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(
             modifier = Modifier
