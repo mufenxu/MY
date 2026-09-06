@@ -15,7 +15,7 @@
     "@ant-design/icons": "^6.1.0",
     "@marsidev/react-turnstile": "^1.4.2",
     "@my-platform/platform-browser-runtime": "file:../../packages/platform-browser-runtime",
-    "antd": "^6.0.0",
+    "antd": "^6.5.2",
     "axios": "^1.18.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
