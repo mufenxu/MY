@@ -7,8 +7,9 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
-import android.util.Log
 import android.view.ViewGroup
+import android.view.View
+import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.MimeTypeMap
 import android.webkit.WebChromeClient
@@ -27,6 +28,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -36,6 +40,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -50,10 +55,19 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import cn.pxyb.mycontrol.BuildConfig
+import cn.pxyb.mycontrol.MainActivity
+import cn.pxyb.mycontrol.data.SessionStore
+import cn.pxyb.mycontrol.data.WebSessionStore
+import cn.pxyb.mycontrol.data.AppPreferences
+import cn.pxyb.mycontrol.data.AppThemePreference
+import cn.pxyb.mycontrol.util.authenticateDevice
+import androidx.lifecycle.Lifecycle
+import kotlinx.coroutines.Job
 import cn.pxyb.mycontrol.data.ExternalApplicationAutoLogin
 import cn.pxyb.mycontrol.data.PlatformWebCookie
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 import java.io.File
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,28 +75,29 @@ import kotlinx.coroutines.withContext
 class PlatformWebActivity : ComponentActivity() {
 
     private var webViewInstance: WebView? = null
+    private val sessionStore by lazy { SessionStore(this) }
+    private var webOwner: String? = null
+    private var webPrepared by mutableStateOf(false)
+    private var webUnlocked by mutableStateOf(false)
+    private var unlocking by mutableStateOf(false)
+    private var unlockJob: Job? = null
     private lateinit var webDownloadSupport: PlatformWebDownloadSupport
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private val uploadCacheDirectory by lazy { File(cacheDir, "$WEBVIEW_UPLOAD_CACHE_DIR/${UUID.randomUUID()}") }
 
     private val fileChooserLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         val callback = filePathCallback.also { filePathCallback = null } ?: return@registerForActivityResult
         val pickedUris = parsePickedUris(result.resultCode, result.data)
-        // 临时诊断：确认选择器返回内容，验证完成后移除
-        val resultDesc = result.data?.let { it.data?.toString() ?: "URI为空" } ?: "无数据"
-        Toast.makeText(this@PlatformWebActivity, "选择器返回: code=${result.resultCode} $resultDesc", Toast.LENGTH_LONG).show()
         if (pickedUris.isNullOrEmpty()) {
-            logUpload("选择器未返回文件（resultCode=${result.resultCode}）")
             callback.onReceiveValue(null)
             return@registerForActivityResult
         }
-        logUpload("选择器返回 ${pickedUris.size} 个文件: ${pickedUris.joinToString { "${it.scheme.orEmpty()}:${it.lastPathSegment}" }}")
         lifecycleScope.launch {
             val cachedUris = withContext(Dispatchers.IO) { copyPickedUrisToCache(pickedUris) }
             if (isFinishing || isDestroyed) return@launch
             if (cachedUris == null) {
-                logUpload("所选文件复制到缓存失败，按取消处理")
                 Toast.makeText(this@PlatformWebActivity, "照片读取失败，请重试或更换图片来源", Toast.LENGTH_SHORT).show()
             }
             callback.onReceiveValue(cachedUris)
@@ -92,6 +107,8 @@ class PlatformWebActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        webOwner = sessionStore.readActiveUsername()
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         webDownloadSupport = PlatformWebDownloadSupport(this) { webViewInstance }
 
         val initialUrl = intent.getStringExtra(EXTRA_URL).orEmpty()
@@ -112,18 +129,81 @@ class PlatformWebActivity : ComponentActivity() {
             }
 
         setContent {
-            MYControlTheme {
-                PlatformWebScreen(
-                    initialUrl = initialUrl,
-                    initialTitle = initialTitle,
-                    trustedDownloadUrl = trustedDownloadUrl,
-                    initialCookies = initialCookies,
-                    autoLogin = autoLogin,
-                    webDownloadSupport = webDownloadSupport,
-                    onFinish = { finish() },
-                    onWebViewCreated = { webViewInstance = it },
-                    onShowFileChooser = ::showFileChooser,
-                )
+            val preference = remember { AppPreferences(this).themePreference() }
+            val dark = when (preference) {
+                AppThemePreference.System -> androidx.compose.foundation.isSystemInDarkTheme()
+                AppThemePreference.Light -> false
+                AppThemePreference.Dark -> true
+            }
+            MYControlTheme(darkTheme = dark) {
+                Box(Modifier.fillMaxSize()) {
+                    if (webPrepared) {
+                        PlatformWebScreen(
+                            initialUrl = initialUrl,
+                            initialTitle = initialTitle,
+                            trustedDownloadUrl = trustedDownloadUrl,
+                            initialCookies = initialCookies,
+                            autoLogin = autoLogin,
+                            webDownloadSupport = webDownloadSupport,
+                            onFinish = { finish() },
+                            onWebViewCreated = {
+                                webViewInstance = it
+                                it.visibility = if (webUnlocked) View.VISIBLE else View.INVISIBLE
+                            },
+                            onShowFileChooser = ::showFileChooser,
+                        )
+                    }
+                    if (!webUnlocked) {
+                        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                            Column(
+                                Modifier.padding(32.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text("验证身份后继续访问网页", style = MaterialTheme.typography.titleMedium)
+                                AppButton("解锁网页", onClick = ::resumeProtectedPage, loading = unlocking)
+                                AppSecondaryButton("返回应用", onClick = ::returnToApp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun returnToApp() {
+        startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        finish()
+    }
+
+    private fun resumeProtectedPage() {
+        if (unlockJob?.isActive == true) return
+        unlockJob = lifecycleScope.launch {
+            unlocking = true
+            try {
+                val valid = withContext(Dispatchers.IO) {
+                    sessionStore.hasSession() && webOwner != null && sessionStore.readActiveUsername() == webOwner
+                }
+                if (!valid) {
+                    returnToApp()
+                    return@launch
+                }
+                if (sessionStore.isLocked()) {
+                    webUnlocked = false
+                    webViewInstance?.visibility = View.INVISIBLE
+                    if (!authenticateDevice("解锁 MY Control", "验证身份后继续访问网页")) return@launch
+                    val unlocked = withContext(Dispatchers.IO) { runCatching { sessionStore.unlock() }.getOrDefault(false) }
+                    if (!unlocked) return@launch
+                }
+                WebSessionStore.awaitCleared()
+                if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@launch
+                if (!sessionStore.hasSession() || sessionStore.isLocked() || sessionStore.readActiveUsername() != webOwner) return@launch
+                webPrepared = true
+                webUnlocked = true
+                webViewInstance?.visibility = View.VISIBLE
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            } finally {
+                unlocking = false
             }
         }
     }
@@ -133,11 +213,9 @@ class PlatformWebActivity : ComponentActivity() {
         params: WebChromeClient.FileChooserParams,
     ): Boolean {
         if (filePathCallback != null) {
-            logUpload("重复的文件选择请求被忽略")
             // 已有文件选择器在等待结果，忽略重复触发，避免取消当前选择
             return true
         }
-        logUpload("打开文件选择: accept=${params.acceptTypes.joinToString(",")}, capture=${params.isCaptureEnabled}, mode=${params.mode}")
         filePathCallback = callback
 
         return runCatching {
@@ -145,7 +223,6 @@ class PlatformWebActivity : ComponentActivity() {
             true
         }.getOrElse {
             filePathCallback = null
-            logUpload("文件选择器启动失败")
             false
         }
     }
@@ -178,9 +255,6 @@ class PlatformWebActivity : ComponentActivity() {
         return intent.takeIf { it.resolveActivity(packageManager) != null } ?: params.createIntent()
     }
 
-    private fun logUpload(message: String) {
-        Log.i(TAG_UPLOAD, message)
-    }
 
     /**
      * 部分系统（MIUI/HyperOS）选择器只通过 clipData 返回所选文件，
@@ -203,8 +277,7 @@ class PlatformWebActivity : ComponentActivity() {
      * 保证网页端能真正读到所选文件。
      */
     private fun copyPickedUrisToCache(uris: Array<Uri>): Array<Uri>? {
-        val uploadsDir = File(cacheDir, WEBVIEW_UPLOAD_CACHE_DIR).apply { mkdirs() }
-        uploadsDir.listFiles()?.forEach { it.delete() }
+        val uploadsDir = uploadCacheDirectory.apply { mkdirs() }
         val cachedUris = uris.mapIndexedNotNull { index, uri ->
             runCatching {
                 val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
@@ -224,14 +297,21 @@ class PlatformWebActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         webViewInstance?.onResume()
+        resumeProtectedPage()
     }
 
     override fun onPause() {
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (sessionStore.isLockEnabled()) {
+            webUnlocked = false
+            webViewInstance?.visibility = View.INVISIBLE
+        }
         webViewInstance?.onPause()
         super.onPause()
     }
 
     override fun onDestroy() {
+        unlockJob?.cancel()
         filePathCallback?.onReceiveValue(null)
         filePathCallback = null
         webViewInstance?.let { wv ->
@@ -241,6 +321,11 @@ class PlatformWebActivity : ComponentActivity() {
             wv.destroy()
         }
         webViewInstance = null
+        uploadCacheDirectory.deleteRecursively()
+        if (isFinishing) {
+            listOf(EXTRA_AUTO_LOGIN_USERNAME, EXTRA_AUTO_LOGIN_PASSWORD, EXTRA_INITIAL_COOKIE_URLS, EXTRA_INITIAL_COOKIE_VALUES)
+                .forEach(intent::removeExtra)
+        }
         super.onDestroy()
     }
 
@@ -255,7 +340,6 @@ class PlatformWebActivity : ComponentActivity() {
         private const val EXTRA_AUTO_LOGIN_PASSWORD = "extra_auto_login_password"
         private const val EXTRA_AUTO_LOGIN_HOME_URL = "extra_auto_login_home_url"
         private const val WEBVIEW_UPLOAD_CACHE_DIR = "webview-uploads"
-        private const val TAG_UPLOAD = "PlatformWebUpload"
 
         fun createIntent(
             context: Context,

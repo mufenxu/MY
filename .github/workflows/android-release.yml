@@ -72,6 +72,15 @@ jobs:
           echo "version_code=${version_code}" >> "${GITHUB_OUTPUT}"
           echo "tag=android-v${version}" >> "${GITHUB_OUTPUT}"
 
+      - name: Verify Android quality for the release commit
+        working-directory: apps/android-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          chmod +x ./gradlew
+          ./gradlew :app:testDebugUnitTest :app:lintRelease --console=plain --no-daemon
+
       - name: Restore dedicated release keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}

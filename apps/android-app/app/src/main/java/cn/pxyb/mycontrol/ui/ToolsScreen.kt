@@ -12,7 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,12 +32,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoMode
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.CloudQueue
-import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.LockClock
-import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Router
@@ -45,16 +41,12 @@ import androidx.compose.material.icons.outlined.Sensors
 import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material.icons.outlined.WifiOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -64,16 +56,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.DeviceInfo
@@ -84,7 +73,6 @@ import cn.pxyb.mycontrol.data.TelemetryMetricSummary
 import cn.pxyb.mycontrol.data.TelemetrySeriesPoint
 import cn.pxyb.mycontrol.ui.theme.Amber
 import cn.pxyb.mycontrol.ui.theme.AmberPale
-import cn.pxyb.mycontrol.ui.theme.Coral
 import cn.pxyb.mycontrol.ui.theme.Forest
 import cn.pxyb.mycontrol.ui.theme.MintPale
 import cn.pxyb.mycontrol.ui.theme.Ocean
@@ -170,7 +158,7 @@ fun ToolsScreen(
     val isTablet = adaptive.isTabletOrExpanded
 
     val listState = rememberLazyListState()
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     PullToRefresh(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,

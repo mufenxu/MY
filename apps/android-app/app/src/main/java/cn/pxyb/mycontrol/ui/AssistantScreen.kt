@@ -4,7 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -66,11 +65,11 @@ fun AssistantScreen(
     onSend: (String) -> Unit,
     onExecuteAction: (AssistantActionItem) -> Unit,
 ) {
-    BackHandler(onBack = onBack)
+    BackHandler(enabled = !LocalAppNavigationHandlesBack.current, onBack = onBack)
     var input by rememberSaveable { mutableStateOf("") }
     var pendingAction by remember { mutableStateOf<AssistantActionItem?>(null) }
     val listState = rememberLazyListState()
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
 
     LaunchedEffect(state.messages.size, state.sending) {
         if (state.messages.isNotEmpty()) {

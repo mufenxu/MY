@@ -3,11 +3,8 @@ package cn.pxyb.mycontrol.ui
 import cn.pxyb.mycontrol.util.QrUtils
 import cn.pxyb.mycontrol.util.DateTimeUtils
 
-import android.graphics.BitmapFactory
 import android.Manifest
 import android.content.pm.PackageManager
-import android.util.Base64
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -26,7 +23,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -97,12 +93,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -130,11 +126,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -154,10 +147,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -346,7 +343,8 @@ fun MyControlApp(
                         onCancelDeviceLogin = viewModel::cancelDeviceQrLogin,
                         onBackFromSecondFactor = viewModel::resetSecondFactor,
                     )
-                    else -> AuthenticatedShell(
+                    else -> CompositionLocalProvider(LocalAppNavigationHandlesBack provides true) {
+                        AuthenticatedShell(
                         state,
                         viewModel,
                         onPasskeyRequest,
@@ -361,7 +359,8 @@ fun MyControlApp(
                         onThemePreferenceChange,
                         showInitialSetup,
                         onInitialSetupComplete,
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -1463,7 +1462,10 @@ private fun AuthenticatedShell(
         label = "toast-swipe-offset",
     )
     val navController = rememberNavController()
-    val initialRoute = remember { state.requestedRoute() }
+    val initialRoute = remember {
+        val requested = state.requestedRoute()
+        parentTabForSubScreen(requested, null)?.route() ?: requested
+    }
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route ?: initialRoute
     val isSubScreen = parentTabForSubScreen(currentRoute, null) != null
@@ -1483,14 +1485,31 @@ private fun AuthenticatedShell(
             }
         }
     }
-    BackHandler(enabled = isSubScreen, onBack = navigateBackFromSubScreen)
+    val navigateToSubScreen: (String) -> Unit = remember(navController) {
+        navigate@{ route ->
+            val current = navController.currentBackStackEntry?.destination?.route
+            if (current == route) return@navigate
+            val parentRoute = parentTabForSubScreen(route, current)?.route() ?: return@navigate
+            // 保证预测性手势预览的上一页与页头返回目标一致。
+            if (current != parentRoute && !navController.popBackStack(parentRoute, inclusive = false)) {
+                navController.navigate(parentRoute) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+                navController.popBackStack(parentRoute, inclusive = false)
+            }
+            navController.navigate(route) { launchSingleTop = true }
+        }
+    }
 
-    // 0ms 纯瞬发导航分发：直接由 NavController 控制跳转，0 协程调度、0 阻塞 IO、0 竞态等待
-    val navigateToTab: (MainTab) -> Unit = remember(navController) {
+    val navigateToTab: (MainTab) -> Unit = remember(navController, navigateToSubScreen) {
         { tab ->
             val targetRoute = tab.route()
             val current = navController.currentBackStackEntry?.destination?.route
-            if (current != targetRoute) {
+            if (parentTabForSubScreen(targetRoute, current) != null) {
+                navigateToSubScreen(targetRoute)
+            } else if (current != targetRoute) {
                 navController.navigate(targetRoute) {
                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                     launchSingleTop = true
@@ -1506,7 +1525,7 @@ private fun AuthenticatedShell(
     LaunchedEffect(state.accountManagementOpen, state.googleAccountDeskOpen, state.githubProjectsOpen, state.globalSearchOpen, state.assistantOpen, state.workspaceDestination) {
         val targetRoute = state.requestedRoute()
         if (targetRoute != currentRoute && targetRoute !in setOf(AppRoute.Overview, AppRoute.Operations, AppRoute.Tools, AppRoute.Profile)) {
-            navController.navigate(targetRoute) { launchSingleTop = true }
+            navigateToSubScreen(targetRoute)
         }
     }
 
@@ -1566,11 +1585,11 @@ private fun AuthenticatedShell(
                     unreadAlerts = settingsProfileState.unreadAlerts,
                     onOpenNotifications = {
                         viewModel.openWorkspace(WorkspaceDestination.Notifications)
-                        navController.navigate(AppRoute.Notifications) { launchSingleTop = true }
+                        navigateToSubScreen(AppRoute.Notifications)
                     },
                     onOpenSearch = {
                         viewModel.openGlobalSearch()
-                        navController.navigate(AppRoute.Search) { launchSingleTop = true }
+                        navigateToSubScreen(AppRoute.Search)
                     },
                     onOpenQrLogin = viewModel::openQrScanner,
                     onOpenSettings = { settingsOpen = true },
@@ -1665,12 +1684,12 @@ private fun AuthenticatedShell(
                         onOpenQrLogin = viewModel::openQrScanner,
                         onOpenWorkspace = viewModel::openWorkspace,
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
-                        onOpenReservation = { navController.navigate(AppRoute.Reservation) },
+                        onOpenReservation = { navigateToSubScreen(AppRoute.Reservation) },
                         onOpenFreeClassrooms = {
-                            navController.navigate(AppRoute.FreeClassrooms) { launchSingleTop = true }
+                            navigateToSubScreen(AppRoute.FreeClassrooms)
                         },
                         onOpenSeatReservation = {
-                            navController.navigate(AppRoute.LibrarySeatReservation) { launchSingleTop = true }
+                            navigateToSubScreen(AppRoute.LibrarySeatReservation)
                         },
                         onOpenAccountManagement = viewModel::openAccountManagement,
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
@@ -1728,7 +1747,7 @@ private fun AuthenticatedShell(
                         onRefresh,
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
                         onOpenAuthenticator = {
-                            navController.navigate(AppRoute.Authenticator) { launchSingleTop = true }
+                            navigateToSubScreen(AppRoute.Authenticator)
                         },
                     )
                 }
@@ -1902,13 +1921,13 @@ private fun AuthenticatedShell(
                         },
                         onOpenNotifications = { navigateToTab(MainTab.Notifications) },
                         onOpenFreeClassrooms = {
-                            navController.navigate(AppRoute.FreeClassrooms) { launchSingleTop = true }
+                            navigateToSubScreen(AppRoute.FreeClassrooms)
                         },
                         onOpenReservation = {
-                            navController.navigate(AppRoute.Reservation) { launchSingleTop = true }
+                            navigateToSubScreen(AppRoute.Reservation)
                         },
                         onOpenLibrarySeatReservation = {
-                            navController.navigate(AppRoute.LibrarySeatReservation) { launchSingleTop = true }
+                            navigateToSubScreen(AppRoute.LibrarySeatReservation)
                         },
                         onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
                     )
@@ -2290,6 +2309,18 @@ private fun FloatingAssistantButton(
                 )
             }
             .size(54.dp)
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                stateDescription = if (collapsedSide == 0) "已展开，可拖动" else "已收纳在屏幕边缘"
+                onClick(label = if (collapsedSide == 0) "打开 AI 小助手" else "展开 AI 小助手") {
+                    if (collapsedSide != 0) expandFromEdge() else onOpen()
+                    true
+                }
+                customActions = listOf(
+                    CustomAccessibilityAction("收纳到左侧") { collapsedSide = 1; persistPosition(); true },
+                    CustomAccessibilityAction("收纳到右侧") { collapsedSide = 2; persistPosition(); true },
+                )
+            }
             .then(gestureModifier),
     ) {
         if (collapsedSide != 0) {

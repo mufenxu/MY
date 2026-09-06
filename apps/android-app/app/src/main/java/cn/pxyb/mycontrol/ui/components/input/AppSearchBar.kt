@@ -1,6 +1,6 @@
 package cn.pxyb.mycontrol.ui.components.input
 
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,7 +36,7 @@ fun AppSearchBar(
     onSearch: ((String) -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null,
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     val focusManager = LocalFocusManager.current
     val haptics = LocalHapticFeedback.current
 

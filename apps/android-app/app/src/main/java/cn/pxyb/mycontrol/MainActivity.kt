@@ -1,7 +1,5 @@
 package cn.pxyb.mycontrol
 
-import android.hardware.biometrics.BiometricManager
-import android.hardware.biometrics.BiometricPrompt
 import android.content.Intent
 import android.Manifest
 import android.content.pm.PackageManager
@@ -15,7 +13,6 @@ import android.nfc.tech.Ndef
 import android.nfc.tech.NdefFormatable
 import android.os.Build
 import android.os.Bundle
-import android.os.CancellationSignal
 import android.provider.Settings
 import android.view.WindowManager
 import android.widget.Toast
@@ -49,13 +46,13 @@ import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 import cn.pxyb.mycontrol.data.AppPreferences
 import cn.pxyb.mycontrol.data.AppThemePreference
 import cn.pxyb.mycontrol.data.SessionStore
-import java.util.concurrent.Executor
-import kotlin.coroutines.resume
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import cn.pxyb.mycontrol.util.authenticateDevice
+import cn.pxyb.mycontrol.util.promptDeviceAuthentication
 
 class MainActivity : ComponentActivity() {
     private val appViewModel: AppViewModel by viewModels()
@@ -64,8 +61,6 @@ class MainActivity : ComponentActivity() {
     private val sessionStore by lazy { SessionStore(this) }
     private val nfcAdapter by lazy { NfcAdapter.getDefaultAdapter(this) }
     private var pendingNfcScene: Pair<String, String>? = null
-    private var authenticationRequests = 0
-    private var activityStopped = false
     private var notificationsEnabled = mutableStateOf(false)
 
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -132,17 +127,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        activityStopped = false
-        OperationalSyncScheduler.setAppForeground(this, true)
+        if (sessionStore.isLocked()) appViewModel.lockSession()
         appViewModel.setAppInForeground(true)
         notificationsEnabled.value = hasNotificationPermission()
     }
 
     override fun onStop() {
-        activityStopped = true
-        OperationalSyncScheduler.setAppForeground(this, false)
         appViewModel.setAppInForeground(false)
-        if (authenticationRequests == 0) appViewModel.lockSession()
         super.onStop()
     }
 
@@ -153,6 +144,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private suspend fun requestPasskey(requestJson: String): String {
+        AppSessionLifecycle.beginAuthentication()
         return try {
             withTimeout(60_000) {
                 val request = GetCredentialRequest(
@@ -176,10 +168,13 @@ class MainActivity : ComponentActivity() {
             throw IllegalStateException("系统 Passkey 验证被中断，请重试。", error)
         } catch (error: GetCredentialException) {
             throw IllegalStateException("Passkey 验证失败，请检查设备中的 Passkey 和域名关联后重试。", error)
+        } finally {
+            AppSessionLifecycle.endAuthentication()
         }
     }
 
     private suspend fun requestPasskeyRegistration(requestJson: String): String {
+        AppSessionLifecycle.beginAuthentication()
         return try {
             withTimeout(60_000) {
                 val response = credentialManager.createCredential(
@@ -193,11 +188,13 @@ class MainActivity : ComponentActivity() {
             throw IllegalStateException("系统 Passkey 窗口未响应，请确认域名已关联当前 App 签名后重试。", error)
         } catch (error: CreateCredentialException) {
             throw IllegalStateException("Passkey 注册未完成，请确认设备支持并重试。", error)
+        } finally {
+            AppSessionLifecycle.endAuthentication()
         }
     }
 
     private fun promptForUnlock(onSuccess: () -> Unit) {
-        promptForAuthentication(
+        promptDeviceAuthentication(
             title = "解锁 MY Control",
             subtitle = "验证身份后继续访问统一平台",
         ) { authenticated -> if (authenticated) onSuccess() }
@@ -219,71 +216,7 @@ class MainActivity : ComponentActivity() {
     )
 
     private suspend fun requestDeviceAuthentication(title: String, subtitle: String): Boolean =
-        try {
-            authenticationRequests += 1
-            suspendCancellableCoroutine { continuation ->
-                val cancellationSignal = promptForAuthentication(title, subtitle) { authenticated ->
-                    if (continuation.isActive) continuation.resume(authenticated)
-                }
-                continuation.invokeOnCancellation { cancellationSignal?.cancel() }
-            }
-        } finally {
-            authenticationRequests = (authenticationRequests - 1).coerceAtLeast(0)
-            if (activityStopped && authenticationRequests == 0) appViewModel.lockSession()
-        }
-
-    private fun promptForAuthentication(
-        title: String,
-        subtitle: String,
-        onResult: (Boolean) -> Unit,
-    ): CancellationSignal? {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val manager = getSystemService(BiometricManager::class.java)
-            @Suppress("DEPRECATION")
-            val biometricReady = manager?.canAuthenticate() == BiometricManager.BIOMETRIC_SUCCESS
-            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q && !biometricReady) {
-                Toast.makeText(this, "设备未配置生物识别，请改用平台账号登录。", Toast.LENGTH_LONG).show()
-                onResult(false)
-                return null
-            }
-        }
-        val executor = Executor { command -> runOnUiThread(command) }
-        val promptBuilder = BiometricPrompt.Builder(this)
-            .setTitle(title)
-            .setSubtitle(subtitle)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            promptBuilder.setAllowedAuthenticators(
-                BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                    BiometricManager.Authenticators.DEVICE_CREDENTIAL,
-            )
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            @Suppress("DEPRECATION")
-            promptBuilder.setDeviceCredentialAllowed(true)
-        } else {
-            promptBuilder.setNegativeButton("取消", executor) { _, _ -> }
-        }
-        val prompt = promptBuilder.build()
-        val cancellationSignal = CancellationSignal()
-        prompt.authenticate(
-            cancellationSignal,
-            executor,
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    onResult(true)
-                }
-
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
-                    if (errorCode != BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED &&
-                        errorCode != BiometricPrompt.BIOMETRIC_ERROR_CANCELED
-                    ) {
-                        Toast.makeText(this@MainActivity, errString ?: "身份验证失败", Toast.LENGTH_SHORT).show()
-                    }
-                    onResult(false)
-                }
-            },
-        )
-        return cancellationSignal
-    }
+        authenticateDevice(title, subtitle)
 
     private fun requestNotificationPermissionIfNeeded() {
         if (hasNotificationPermission()) return
@@ -389,33 +322,37 @@ class MainActivity : ComponentActivity() {
         } ?: return
         val uri = DeepLinks.openIntent(this, destination = "scenes", sceneId = sceneId).data ?: return
         val message = NdefMessage(arrayOf(NdefRecord.createUri(uri)))
-        val result = runCatching {
-            val ndef = Ndef.get(tag)
-            if (ndef != null) {
-                ndef.connect()
-                try {
-                    require(ndef.isWritable) { "这个 NFC 标签是只读的。" }
-                    require(ndef.maxSize >= message.toByteArray().size) { "NFC 标签容量不足。" }
-                    ndef.writeNdefMessage(message)
-                } finally {
-                    ndef.close()
-                }
-            } else {
-                val formatable = NdefFormatable.get(tag) ?: error("这个 NFC 标签不支持 NDEF 写入。")
-                formatable.connect()
-                try {
-                    formatable.format(message)
-                } finally {
-                    formatable.close()
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val ndef = Ndef.get(tag)
+                    if (ndef != null) {
+                        ndef.connect()
+                        try {
+                            require(ndef.isWritable) { "这个 NFC 标签是只读的。" }
+                            require(ndef.maxSize >= message.toByteArray().size) { "NFC 标签容量不足。" }
+                            ndef.writeNdefMessage(message)
+                        } finally {
+                            ndef.close()
+                        }
+                    } else {
+                        val formatable = NdefFormatable.get(tag) ?: error("这个 NFC 标签不支持 NDEF 写入。")
+                        formatable.connect()
+                        try {
+                            formatable.format(message)
+                        } finally {
+                            formatable.close()
+                        }
+                    }
                 }
             }
-        }
-        if (result.isSuccess) {
-            pendingNfcScene = null
-            runCatching { nfcAdapter?.disableForegroundDispatch(this) }
-            Toast.makeText(this, "“$sceneName”已写入 NFC 标签。", Toast.LENGTH_LONG).show()
-        } else {
-            Toast.makeText(this, result.exceptionOrNull()?.message ?: "NFC 写入失败，请重试。", Toast.LENGTH_LONG).show()
+            if (result.isSuccess) {
+                pendingNfcScene = null
+                runCatching { nfcAdapter?.disableForegroundDispatch(this@MainActivity) }
+                Toast.makeText(this@MainActivity, "“$sceneName”已写入 NFC 标签。", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(this@MainActivity, result.exceptionOrNull()?.message ?: "NFC 写入失败，请重试。", Toast.LENGTH_LONG).show()
+            }
         }
     }
 }

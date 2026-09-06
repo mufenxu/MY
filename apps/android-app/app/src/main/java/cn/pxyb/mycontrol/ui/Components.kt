@@ -1,25 +1,10 @@
 package cn.pxyb.mycontrol.ui
 
-import cn.pxyb.mycontrol.ui.components.input.AppTextField
-import cn.pxyb.mycontrol.ui.components.input.AppSearchBar
 import cn.pxyb.mycontrol.ui.components.picker.AppWheelPicker
-import cn.pxyb.mycontrol.ui.components.picker.AppDatePickerModal
 import cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal
 import cn.pxyb.mycontrol.ui.components.picker.AppTimeRangePicker
-import cn.pxyb.mycontrol.ui.components.display.AppActionRow
-import cn.pxyb.mycontrol.ui.components.display.AppSwitchRow
-import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
-import cn.pxyb.mycontrol.ui.components.display.AppMetricCard
-import cn.pxyb.mycontrol.ui.components.display.AppMetricDashboard
-import cn.pxyb.mycontrol.ui.components.display.AppAvatar
-import cn.pxyb.mycontrol.ui.components.display.AppDivider
-import cn.pxyb.mycontrol.ui.components.display.AppGroupedCard
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
-import cn.pxyb.mycontrol.ui.components.feedback.AppErrorState
 import cn.pxyb.mycontrol.ui.components.feedback.AppLoadingState
-import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
-import cn.pxyb.mycontrol.ui.components.filter.AppFilterBar
-import cn.pxyb.mycontrol.util.QrUtils
 import cn.pxyb.mycontrol.util.DateTimeUtils
 
 import androidx.compose.runtime.Immutable
@@ -48,19 +33,14 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.ui.semantics.Role
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Hub
-import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.background
@@ -68,7 +48,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -91,20 +71,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Notifications
@@ -115,19 +88,15 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -135,7 +104,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -154,7 +122,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -165,26 +132,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
-import cn.pxyb.mycontrol.data.ServiceInfo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import java.time.Instant
-import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -391,7 +352,7 @@ fun SectionHeader(
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     val pillBgColor = if (isDark) {
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
     } else {
@@ -467,7 +428,7 @@ fun MetricCell(
     modifier: Modifier = Modifier,
     valueColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
-    val displayValueColor = if (isSystemInDarkTheme()) lerp(valueColor, Color.White, 0.28f) else valueColor
+    val displayValueColor = if (isAppInDarkTheme()) lerp(valueColor, Color.White, 0.28f) else valueColor
     Column(modifier = modifier.padding(vertical = 2.dp)) {
         Text(
             text = label,
@@ -490,7 +451,7 @@ fun MetricCell(
 
 @Composable
 fun IconTile(icon: ImageVector, tint: Color, background: Color, modifier: Modifier = Modifier) {
-    val darkTheme = isSystemInDarkTheme()
+    val darkTheme = isAppInDarkTheme()
     val contentTint = if (darkTheme) lerp(tint, Color.White, 0.3f) else tint
     val container = if (darkTheme) {
         contentTint.copy(alpha = 0.16f).compositeOver(MaterialTheme.colorScheme.surface)
@@ -516,7 +477,7 @@ fun QuickActionGlassTile(
     iconSize: Dp = 22.dp,
     contentDescription: String? = null,
 ) {
-    val darkTheme = isSystemInDarkTheme()
+    val darkTheme = isAppInDarkTheme()
     val shape = RoundedCornerShape(19.dp)
     val glassColors = if (darkTheme) {
         listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.06f))
@@ -618,7 +579,7 @@ fun GlassShimmerCard(
     height: Dp = 72.dp,
     shape: RoundedCornerShape = RoundedCornerShape(20.dp),
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     val glass = rememberGlassPalette(radius = 20.dp)
     Box(
         modifier = modifier
@@ -692,7 +653,7 @@ fun AppDialog(
         ),
     ) {
         val view = LocalView.current
-        val dark = isSystemInDarkTheme()
+        val dark = isAppInDarkTheme()
         val dimAlpha = if (dark) 0.42f else 0.28f
         SideEffect {
             val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
@@ -978,7 +939,8 @@ fun AppButton(
             onClick()
         },
         modifier = modifier
-            .height(height)
+            .minimumInteractiveComponentSize()
+            .heightIn(min = height)
             .shadow(
                 elevation = if (enabled && !loading) 2.5.dp else 0.dp,
                 shape = shape,
@@ -1054,7 +1016,7 @@ fun AppSecondaryButton(
     height: Dp = 46.dp,
     shape: RoundedCornerShape = RoundedCornerShape(50),
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -1087,7 +1049,8 @@ fun AppSecondaryButton(
             onClick()
         },
         modifier = modifier
-            .height(height)
+            .minimumInteractiveComponentSize()
+            .heightIn(min = height)
             .shadow(
                 elevation = if (enabled && !loading) 1.5.dp else 0.dp,
                 shape = shape,
@@ -1180,7 +1143,8 @@ fun AppDangerButton(
             onClick()
         },
         modifier = modifier
-            .height(height)
+            .minimumInteractiveComponentSize()
+            .heightIn(min = height)
             .shadow(
                 elevation = if (enabled && !loading) 3.dp else 0.dp,
                 shape = shape,
@@ -1249,7 +1213,7 @@ fun AppInlineDangerButton(
     enabled: Boolean = true,
     loading: Boolean = false,
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -1484,7 +1448,7 @@ fun DialogTextField(
     isPassword: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -1591,7 +1555,7 @@ fun AppToast(
     error: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     val accentColor = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
     val container = accentColor
         .copy(alpha = if (dark) 0.1f else 0.035f)
@@ -1947,7 +1911,7 @@ fun ModernAnimatedSplashScreen(
     isExiting: Boolean = false,
     onSplashExitFinished: (() -> Unit)? = null,
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
 
@@ -2374,7 +2338,7 @@ fun AppSwitch(
     enabled: Boolean = true,
     tint: Color? = null,
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     val haptics = LocalHapticFeedback.current
     val accent = tint ?: MaterialTheme.colorScheme.primary
     val interactive = enabled && onCheckedChange != null

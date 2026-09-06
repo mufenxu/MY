@@ -5,16 +5,14 @@ import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -24,7 +22,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -45,11 +42,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Backup
-import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FactCheck
 import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.material.icons.outlined.Chair
@@ -73,14 +68,10 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -99,7 +90,6 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -112,15 +102,11 @@ import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.ServiceInfo
 import cn.pxyb.mycontrol.ui.theme.Amber
-import cn.pxyb.mycontrol.ui.theme.AmberPale
 import cn.pxyb.mycontrol.ui.theme.Coral
 import cn.pxyb.mycontrol.ui.theme.CoralPale
-import cn.pxyb.mycontrol.ui.theme.Forest
 import cn.pxyb.mycontrol.ui.theme.Mint
-import cn.pxyb.mycontrol.ui.theme.MintPale
 import cn.pxyb.mycontrol.ui.theme.Ocean
 import cn.pxyb.mycontrol.ui.theme.OceanPale
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Date
 import java.time.LocalDate
@@ -285,7 +271,7 @@ fun OverviewScreen(
     val openTodayWorkspace = remember { { onOpenWorkspace(WorkspaceDestination.Today) } }
     val openNotificationsWorkspace = remember { { onOpenWorkspace(WorkspaceDestination.Notifications) } }
     val startCustomizingQuickActions = remember { { customizingQuickActions = true } }
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     PullToRefresh(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,
@@ -365,7 +351,7 @@ fun OverviewScreen(
                     item(key = "tablet-overview-bento", contentType = "tablet-bento") {
                     val incidentCount = activeIncidents.size
                     val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
-                    val isDark = isSystemInDarkTheme()
+                    val isDark = isAppInDarkTheme()
                     val campus = state.campusOverview
                     val campusInteractionSource = remember { MutableInteractionSource() }
 
@@ -757,7 +743,7 @@ fun OverviewScreen(
                 item(key = "health-hero", contentType = "hero") {
                     val incidentCount = activeIncidents.size
                     val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
-                    val isDark = isSystemInDarkTheme()
+                    val isDark = isAppInDarkTheme()
                     val topGradientStart = if (stable) {
                         if (isDark) Color(0xFF064E3B).copy(alpha = 0.30f) else Color(0xFFECFDF5).copy(alpha = 0.85f)
                     } else {
@@ -867,7 +853,7 @@ fun OverviewScreen(
                 }
                 item(key = "campus-card", contentType = "card") {
                     val campus = state.campusOverview
-                    val isDark = isSystemInDarkTheme()
+                    val isDark = isAppInDarkTheme()
                     val campusInteractionSource = remember { MutableInteractionSource() }
                     Surface(
                         onClick = openTodayWorkspace,
@@ -1062,7 +1048,7 @@ fun OverviewScreen(
                     ) { incident ->
                         val incidentCardShape = RoundedCornerShape(16.dp)
                         val incidentInteractionSource = remember(incident.id) { MutableInteractionSource() }
-                        val isDark = isSystemInDarkTheme()
+                        val isDark = isAppInDarkTheme()
                         Surface(
                             onClick = openNotificationsWorkspace,
                             interactionSource = incidentInteractionSource,
@@ -1305,7 +1291,7 @@ private fun OverviewServiceCardShell(
     onClick: (() -> Unit)?,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     val iconBackground = if (isDark) {
         accent.copy(alpha = 0.18f)
     } else {
@@ -1640,7 +1626,7 @@ private fun QuickActionsDialog(
     var localOrder by remember(order) { mutableStateOf(order) }
     var localHidden by remember(hidden) { mutableStateOf(hidden) }
     val visibleCount = localOrder.count { it !in localHidden }
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     AppDialog(
         onDismissRequest = onDismiss,
         icon = Icons.Outlined.Edit,
@@ -1843,7 +1829,7 @@ private fun OfflineSnapshotNotice(cachedAtMillis: Long?) {
         ) {
             Icon(Icons.Outlined.CloudOff, contentDescription = null, modifier = Modifier.size(20.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("当前离线，仅显示上次同步数据", style = MaterialTheme.typography.labelLarge)
+                Text("部分内容使用缓存，请留意更新时间", style = MaterialTheme.typography.labelLarge)
                 Text(
                     updatedAt?.let { "缓存更新时间 $it" } ?: "联网后将自动恢复同步",
                     style = MaterialTheme.typography.bodySmall,
@@ -2241,7 +2227,7 @@ private fun ExternalApplicationsLoadingPlaceholder() {
 
 @Composable
 private fun ExternalApplicationLoadingCard(index: Int) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     val transition = rememberInfiniteTransition(label = "external-application-loading")
     val pulse by transition.animateFloat(
         initialValue = 0.38f,

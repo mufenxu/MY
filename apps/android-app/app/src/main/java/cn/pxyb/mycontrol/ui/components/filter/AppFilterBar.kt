@@ -2,7 +2,7 @@ package cn.pxyb.mycontrol.ui.components.filter
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -39,7 +39,7 @@ fun AppFilterChip(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 

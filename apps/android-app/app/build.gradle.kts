@@ -99,6 +99,32 @@ kotlin {
     }
 }
 
+androidComponents {
+    finalizeDsl { extension ->
+        // 性能采集包使用独立数据目录和本机空端口，避免接触真实账号与线上业务。
+        listOf("nonMinifiedRelease", "benchmarkRelease").forEach { name ->
+            extension.buildTypes.getByName(name).apply {
+                applicationIdSuffix = ".benchmark"
+                signingConfig = extension.signingConfigs.getByName("debug")
+                buildConfigField("String", "PLATFORM_BASE_URL", "\"https://127.0.0.1:9\"")
+                buildConfigField("String", "APP_UPDATE_MANIFEST_URL", "\"https://127.0.0.1:9/latest.json\"")
+                buildConfigField("String", "APP_UPDATE_MANIFEST_FALLBACK_URL", "\"https://127.0.0.1:9/latest.json\"")
+            }
+            extension.sourceSets.getByName(name).apply {
+                java.srcDir("src/benchmark/java")
+                manifest.srcFile("src/benchmark/AndroidManifest.xml")
+            }
+        }
+    }
+}
+
+baselineProfile {
+    mergeIntoMain = true
+    saveInSrc = true
+    automaticGenerationDuringBuild = false
+    filter { exclude("cn.pxyb.mycontrol.benchmark.**") }
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core.ktx)

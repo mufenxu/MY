@@ -5,7 +5,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,13 +38,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
+import androidx.compose.runtime.staticCompositionLocalOf
+
+internal val LocalAppNavigationHandlesBack = staticCompositionLocalOf { false }
 
 internal val AppPageHorizontalPadding = 16.dp
 internal val AppPageTopSpacing = 6.dp
@@ -162,7 +164,7 @@ fun AppHeaderIconButton(
     containerColor: Color? = null,
     borderColor: Color? = null,
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     val haptics = LocalHapticFeedback.current
     val resolvedBg = containerColor ?: if (isDark) {
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)
@@ -220,7 +222,7 @@ fun AppHeaderIconButton(
  * 标准二级页面脚手架 (AppSubPage)
  *
  * 统一承载所有二级页面的通用布局规范：
- * 1. 自动处理系统返回键与 BackHandler；
+ * 1. 导航容器负责系统返回，独立呈现时由脚手架处理；
  * 2. 自动根据平板/折叠屏/手机注入最大内容宽度 AppTabletContentMaxWidth (1120dp) 并居中；
  * 3. 统一绘制带 drawWithCache 缓存的极光背景 (auroraBackdrop)；
  * 4. 统一处理页面安全区与 appPageContentPadding；
@@ -244,8 +246,8 @@ fun AppSubPage(
     listState: LazyListState = rememberLazyListState(),
     content: LazyListScope.() -> Unit,
 ) {
-    BackHandler(onBack = onBack)
-    val dark = isSystemInDarkTheme()
+    BackHandler(enabled = !LocalAppNavigationHandlesBack.current, onBack = onBack)
+    val dark = isAppInDarkTheme()
 
     PullToRefresh(
         isRefreshing = refreshing,

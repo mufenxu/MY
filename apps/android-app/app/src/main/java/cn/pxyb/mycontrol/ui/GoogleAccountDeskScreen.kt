@@ -9,7 +9,7 @@ import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,8 +59,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -139,7 +137,7 @@ fun GoogleAccountDeskScreen(
     onUploadLocalAccounts: () -> Unit,
     onDiscardLocalAccounts: () -> Unit,
 ) {
-    BackHandler(enabled = true, onBack = onDismiss)
+    BackHandler(enabled = !LocalAppNavigationHandlesBack.current, onBack = onDismiss)
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(FILTER_ALL) }
     var sort by rememberSaveable { mutableStateOf(SORT_ATTENTION) }
@@ -209,7 +207,7 @@ fun GoogleAccountDeskScreen(
         )
     }
 
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
 
     LazyColumn(
         modifier = Modifier

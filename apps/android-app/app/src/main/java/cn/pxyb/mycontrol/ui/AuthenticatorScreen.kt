@@ -1,9 +1,17 @@
 package cn.pxyb.mycontrol.ui
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.PersistableBundle
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,7 +30,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,9 +59,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,6 +73,7 @@ import cn.pxyb.mycontrol.data.AuthenticatorEntry
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import kotlinx.coroutines.delay
+import java.util.UUID
 
 @Composable
 fun AuthenticatorScreen(
@@ -78,10 +87,14 @@ fun AuthenticatorScreen(
     var scannerOpen by remember { mutableStateOf(false) }
     var manualOpen by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<AuthenticatorEntry?>(null) }
-    val currentMillis by produceState(initialValue = System.currentTimeMillis()) {
-        while (true) {
-            value = System.currentTimeMillis()
-            delay(250)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val currentMillis by produceState(initialValue = System.currentTimeMillis(), lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                val now = System.currentTimeMillis()
+                value = now
+                delay(1000L - now % 1000L)
+            }
         }
     }
 
@@ -224,13 +237,14 @@ private fun AuthenticatorEntryCard(
     currentMillis: Long,
     onDelete: () -> Unit,
 ) {
-    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     var copied by remember(entry.id) { mutableStateOf(false) }
-    val code = Authenticator.generate(entry, currentMillis)
+    val timeStep = currentMillis / (entry.periodSeconds * 1000L)
+    val code = remember(entry, timeStep) { Authenticator.generate(entry, currentMillis) }
     val remainingSeconds = Authenticator.remainingSeconds(entry, currentMillis)
     val progress by animateFloatAsState(
         targetValue = remainingSeconds.toFloat() / entry.periodSeconds,
-        animationSpec = tween(durationMillis = 250, easing = LinearEasing),
+        animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
         label = "totp-progress",
     )
 
@@ -243,7 +257,8 @@ private fun AuthenticatorEntryCard(
 
     AppPanel(
         onClick = {
-            clipboard.setText(AnnotatedString(code))
+            val now = System.currentTimeMillis()
+            copyAuthenticatorCode(context, Authenticator.generate(entry, now), Authenticator.remainingSeconds(entry, now) * 1000L)
             copied = true
         },
     ) {
@@ -311,6 +326,26 @@ private fun AuthenticatorEntryCard(
             )
         }
     }
+}
+
+private fun copyAuthenticatorCode(context: Context, code: String, lifetimeMillis: Long) {
+    val clipboard = context.getSystemService(ClipboardManager::class.java)
+    val clipId = UUID.randomUUID().toString()
+    val idKey = "cn.pxyb.mycontrol.clip_id"
+    val sensitiveKey = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        ClipDescription.EXTRA_IS_SENSITIVE
+    } else "android.content.extra.IS_SENSITIVE"
+    val clip = ClipData.newPlainText("动态验证码", code).apply {
+        description.extras = PersistableBundle().apply {
+            putBoolean(sensitiveKey, true)
+            putString(idKey, clipId)
+        }
+    }
+    clipboard.setPrimaryClip(clip)
+    Handler(Looper.getMainLooper()).postDelayed({
+        // 仅清理这次复制的验证码，保留用户随后复制的内容。
+        if (clipboard.primaryClipDescription?.extras?.getString(idKey) == clipId) clipboard.clearPrimaryClip()
+    }, lifetimeMillis.coerceIn(1000L, 60_000L))
 }
 
 private fun formatTotpCode(code: String): String = when (code.length) {

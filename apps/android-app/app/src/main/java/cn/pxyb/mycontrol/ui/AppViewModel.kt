@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui
 
-import androidx.compose.runtime.Immutable
 
 import android.app.Application
 import android.content.Intent
@@ -17,7 +16,6 @@ import cn.pxyb.mycontrol.DailyBriefScheduler
 import cn.pxyb.mycontrol.DeepLinks
 import cn.pxyb.mycontrol.DeviceControlTileService
 import cn.pxyb.mycontrol.SnoozedAlertScheduler
-import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot
 import cn.pxyb.mycontrol.assistant.buildGuardianAlerts
 import cn.pxyb.mycontrol.assistant.buildPersonalAssistantSnapshot
 import cn.pxyb.mycontrol.assistant.sharedTodoTitle
@@ -31,63 +29,35 @@ import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationPreference
 import cn.pxyb.mycontrol.data.AppNotificationAction
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
-import cn.pxyb.mycontrol.data.CampusFreeClassrooms
-import cn.pxyb.mycontrol.data.CampusMyReservation
-import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusReservationAvailability
 import cn.pxyb.mycontrol.data.CampusReservationRequest
-import cn.pxyb.mycontrol.data.CampusReservationSpace
-import cn.pxyb.mycontrol.data.CampusReservationTimeWindow
 import cn.pxyb.mycontrol.data.CampusTimetable
-import cn.pxyb.mycontrol.data.Ct8Data
-import cn.pxyb.mycontrol.data.DiagnosticData
-import cn.pxyb.mycontrol.data.ExternalApplication
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
-import cn.pxyb.mycontrol.data.GitHubRepositoryRecord
-import cn.pxyb.mycontrol.data.GitHubProfileRecord
-import cn.pxyb.mycontrol.data.GitHubReleaseRecord
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAccountStore
 import cn.pxyb.mycontrol.data.GoogleAliasRecord
 import cn.pxyb.mycontrol.data.HomePreferences
 import cn.pxyb.mycontrol.data.HomeQuickAction
-import cn.pxyb.mycontrol.data.DEFAULT_HIDDEN_HOME_QUICK_ACTIONS
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.AssistantActionItem
 import cn.pxyb.mycontrol.data.AssistantChatTurn
-import cn.pxyb.mycontrol.data.IotData
 import cn.pxyb.mycontrol.data.IotSceneAction
 import cn.pxyb.mycontrol.data.newTodoTask
-import org.json.JSONArray
 import org.json.JSONObject
-import cn.pxyb.mycontrol.data.OverviewData
-import cn.pxyb.mycontrol.data.PlatformPasskey
 import cn.pxyb.mycontrol.data.PlatformApi
-import cn.pxyb.mycontrol.data.PlatformTask
-import cn.pxyb.mycontrol.data.PlatformUser
 import cn.pxyb.mycontrol.data.PlatformWebSession
-import cn.pxyb.mycontrol.data.LibrarySeatArea
 import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
-import cn.pxyb.mycontrol.data.LibrarySeatOverview
-import cn.pxyb.mycontrol.data.LibrarySeatReservationHistory
-import cn.pxyb.mycontrol.data.LibrarySeatReservationRecord
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
-import cn.pxyb.mycontrol.data.LibrarySeatStatus
 import cn.pxyb.mycontrol.data.LibrarySeatWaitlistRequest
-import cn.pxyb.mycontrol.data.LibrarySeatWaitlistTask
 import cn.pxyb.mycontrol.data.QuickScenePreference
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
-import cn.pxyb.mycontrol.data.ReleaseData
 import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.ResponseSnapshotStore
-import cn.pxyb.mycontrol.data.QrLoginTarget
 import cn.pxyb.mycontrol.data.SecurityData
 import cn.pxyb.mycontrol.data.SessionStore
-import cn.pxyb.mycontrol.data.TotpEnrollment
 import cn.pxyb.mycontrol.data.TodoMutation
 import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.TodoTask
-import cn.pxyb.mycontrol.data.WebLoginLink
 import cn.pxyb.mycontrol.data.mergeRemoteAlerts
 import cn.pxyb.mycontrol.data.mergeHydratedAlerts
 import cn.pxyb.mycontrol.flushNotificationMutations
@@ -102,6 +72,8 @@ import cn.pxyb.mycontrol.update.isAppUpdateSigningMismatch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -129,147 +101,6 @@ import java.net.URL
 import java.time.temporal.ChronoUnit
 import javax.net.ssl.HttpsURLConnection
 import java.security.cert.X509Certificate
-
-enum class MainTab { Overview, Notifications, Operations, Tools, Profile }
-
-enum class WorkspaceDestination { Today, Notifications, Scenes }
-
-enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, Ct8, Security, Todos, Campus, FreeClassrooms, Resources, Notifications, Reservation }
-
-@Immutable
-data class SectionLoadState(
-    val refreshing: Boolean = false,
-    val error: String? = null,
-    val updatedAtMillis: Long? = null,
-    val fromCache: Boolean = false,
-)
-
-@Immutable
-data class AppUiState(
-    val booting: Boolean = true,
-    val locked: Boolean = false,
-    val appLockEnabled: Boolean = false,
-    val user: PlatformUser? = null,
-    val selectedTab: MainTab = MainTab.Overview,
-    val loginBusy: Boolean = false,
-    val secondFactorRequired: Boolean = false,
-    val recoveryCodeAllowed: Boolean = false,
-    val androidPasskeySupported: Boolean = false,
-    val suggestedUsername: String = "",
-    val deviceLoginBusy: Boolean = false,
-    val deviceLoginQrDataUrl: String? = null,
-    val deviceLoginError: String? = null,
-    val refreshing: Boolean = false,
-    val busyAction: String? = null,
-    val overview: OverviewData? = null,
-    val externalApplications: List<ExternalApplication> = emptyList(),
-    val incidents: List<IncidentInfo> = emptyList(),
-    val tasks: List<PlatformTask> = emptyList(),
-    val releases: ReleaseData? = null,
-    val appUpdate: AppUpdateUiState = AppUpdateUiState(),
-    val backup: BackupQuality? = null,
-    val iot: IotData? = null,
-    val ct8: Ct8Data? = null,
-    val githubRepositories: List<GitHubRepositoryRecord> = emptyList(),
-    val githubRepositoriesLoaded: Boolean = false,
-    val githubProfile: GitHubProfileRecord? = null,
-    val githubProfileLoaded: Boolean = false,
-    val githubReleases: List<GitHubReleaseRecord> = emptyList(),
-    val githubReleasesLoaded: Boolean = false,
-    val githubReleasesRepoFullName: String? = null,
-    val diagnostics: DiagnosticData? = null,
-    val security: SecurityData? = null,
-    val qrLoginOpen: Boolean = false,
-    val qrLoginBusy: Boolean = false,
-    val qrLoginTarget: QrLoginTarget? = null,
-    val qrLoginError: String? = null,
-    val accountManagementOpen: Boolean = false,
-    val googleAccountDeskOpen: Boolean = false,
-    val githubProjectsOpen: Boolean = false,
-    val globalSearchOpen: Boolean = false,
-    val assistantOpen: Boolean = false,
-    val assistantButtonVisible: Boolean = true,
-    val workspaceDestination: WorkspaceDestination? = null,
-    val googleAccounts: List<GoogleAccountRecord> = emptyList(),
-    val googleAccountsLoaded: Boolean = false,
-    val googleAccountsRevision: Int = 0,
-    val googleAccountMigrationPending: Boolean = false,
-    val googleAccountsRemoteReady: Boolean = false,
-    val totpEnrollment: TotpEnrollment? = null,
-    val recoveryCodes: List<String> = emptyList(),
-    val passkeys: List<PlatformPasskey> = emptyList(),
-    val error: String? = null,
-    val message: String? = null,
-    val offlineMode: Boolean = false,
-    val cachedAtMillis: Long? = null,
-    val sectionLoadStates: Map<DataSection, SectionLoadState> = emptyMap(),
-    val homeQuickActionOrder: List<HomeQuickAction> = HomeQuickAction.entries,
-    val hiddenHomeQuickActions: Set<HomeQuickAction> = DEFAULT_HIDDEN_HOME_QUICK_ACTIONS,
-    val todoSnapshot: TodoSnapshot = TodoSnapshot(),
-    val pendingTodoMutations: Int = 0,
-    val campusTimetable: CampusTimetable? = null,
-    val campusOverview: CampusOverview? = null,
-    val freeClassroomResult: CampusFreeClassrooms? = null,
-    val resourceExpiries: List<ResourceExpiry> = emptyList(),
-    val alerts: List<AppAlertRecord> = emptyList(),
-    val alertPreferences: AlertPreferences = AlertPreferences(),
-    val networkHealth: NetworkHealth = NetworkHealth(),
-    val cacheStorageInfo: CacheStorageInfo = CacheStorageInfo(),
-    val webLoginLink: WebLoginLink? = null,
-    val assistantSnapshot: PersonalAssistantSnapshot? = null,
-    val sharedTodoDraft: String? = null,
-    val pendingSceneId: String? = null,
-    val quickScene: QuickScenePreference? = null,
-    val reservationSpaces: List<CampusReservationSpace> = emptyList(),
-    val reservationSpacesLoading: Boolean = false,
-    val reservationRules: String? = null,
-    val reservationAvailability: String? = null,
-    val reservationFreeWindows: List<CampusReservationTimeWindow> = emptyList(),
-    val reservationBusyWindows: List<CampusReservationTimeWindow> = emptyList(),
-    val reservationAvailabilitySpaceId: Int? = null,
-    val reservationAvailabilityDate: String? = null,
-    val reservationAvailableSpaces: List<CampusReservationSpace> = emptyList(),
-    val reservationAvailableSpacesQueryText: String? = null,
-    val reservationAvailableSpacesLoading: Boolean = false,
-    val reservationQueryLoading: Boolean = false,
-    val reservationSubmitLoading: Boolean = false,
-    val reservationAutoTasks: List<CampusAutoReservationTask> = emptyList(),
-    val reservationAutoTasksLoading: Boolean = false,
-    val reservationSavingTask: Boolean = false,
-    val reservationDeletingTaskId: String? = null,
-    val reservationMyReservations: List<CampusMyReservation> = emptyList(),
-    val reservationMyReservationsLoading: Boolean = false,
-    val reservationCancellingReservationId: String? = null,
-    val reservationError: String? = null,
-    val reservationMessage: String? = null,
-    val librarySeatOverview: LibrarySeatOverview = LibrarySeatOverview(),
-    val librarySeatOverviewLoading: Boolean = false,
-    val librarySeatAreas: List<LibrarySeatArea> = emptyList(),
-    val librarySeatAreasLoading: Boolean = false,
-    val librarySeatSeats: List<LibrarySeatStatus> = emptyList(),
-    val librarySeatSeatsLoading: Boolean = false,
-    val librarySeatFloorSeats: List<LibrarySeatFloorSeat> = emptyList(),
-    val librarySeatFloorSeatsLoading: Boolean = false,
-    val librarySeatSubmitLoading: Boolean = false,
-    val librarySeatReservations: List<LibrarySeatReservationRecord> = emptyList(),
-    val librarySeatReservationsLoading: Boolean = false,
-    val librarySeatHistoryReservations: LibrarySeatReservationHistory = LibrarySeatReservationHistory(),
-    val librarySeatHistoryReservationsLoading: Boolean = false,
-    val librarySeatWaitlists: List<LibrarySeatWaitlistTask> = emptyList(),
-    val librarySeatWaitlistsLoading: Boolean = false,
-    val librarySeatWaitlistSaving: Boolean = false,
-    val librarySeatWaitlistDeletingId: String? = null,
-    val librarySeatSelectedVenueId: String? = null,
-    val librarySeatSelectedDate: String? = null,
-    val librarySeatSelectedFloorId: String? = null,
-    val librarySeatSelectedAreaId: String? = null,
-    val librarySeatSelectedSeatId: String? = null,
-    val librarySeatError: String? = null,
-    val librarySeatMessage: String? = null,
-) {
-    val activeIncidents: List<IncidentInfo>
-        get() = incidents.filter { it.status != "resolved" }
-}
 
 @OptIn(kotlinx.coroutines.FlowPreview::class)
 class AppViewModel(
@@ -350,7 +181,7 @@ class AppViewModel(
 
     init {
         viewModelScope.launch {
-            runCatching { api.loginCapabilities() }.onSuccess { capabilities ->
+            runCatching { api.auth.loginCapabilities() }.onSuccess { capabilities ->
                 mutableState.update { it.copy(androidPasskeySupported = capabilities.androidPasskeySupported) }
             }
         }
@@ -422,8 +253,9 @@ class AppViewModel(
                 CourseWidgetProvider.clear(getApplication())
                 return@launch
             }
-            runCatching { api.authStatus() }
-                .onSuccess { user ->
+            runCatching { api.withRequestMetadata { api.auth.authStatus() } }
+                .onSuccess { response ->
+                    val user = response.value
                     if (user == null) {
                         clearAccountScopedState()
                         mutableState.update {
@@ -448,8 +280,8 @@ class AppViewModel(
                                 booting = false,
                                 locked = false,
                                 user = user,
-                                offlineMode = api.isOffline(),
-                                cachedAtMillis = api.cachedAtMillis(),
+                                offlineMode = response.fromCache,
+                                cachedAtMillis = response.cachedAtMillis,
                             )
                         }
                         hydrateLocalState()
@@ -461,6 +293,7 @@ class AppViewModel(
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     sessionStore.lock()
                     mutableState.update {
                         it.copy(
@@ -507,7 +340,7 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(loginBusy = true, error = null, message = null) }
             runCatching {
-                val result = api.login(
+                val result = api.auth.login(
                     username,
                     password,
                     totp = factor.takeUnless { useRecoveryCode }.orEmpty(),
@@ -527,8 +360,8 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(loginBusy = true, error = null, message = null) }
             runCatching {
-                val challenge = api.beginPasskeyLogin(username)
-                val result = api.completePasskeyLogin(
+                val challenge = api.auth.beginPasskeyLogin(username)
+                val result = api.auth.completePasskeyLogin(
                     challenge,
                     requestCredential(challenge.optionsJson),
                     deviceName = currentDeviceName(),
@@ -572,7 +405,7 @@ class AppViewModel(
                         message = null,
                     )
                 }
-                val request = api.createQrLoginRequest()
+                val request = api.auth.createQrLoginRequest()
                 mutableState.update {
                     it.copy(
                         deviceLoginQrDataUrl = request.qrDataUrl,
@@ -580,10 +413,10 @@ class AppViewModel(
                 }
                 while (true) {
                     delay(2_000)
-                    val status = api.qrLoginRequestStatus(request.requestId, request.requesterVerifier)
+                    val status = api.auth.qrLoginRequestStatus(request.requestId, request.requesterVerifier)
                     when (status.status) {
                         "approved" -> {
-                            val result = api.consumeQrLoginRequest(request.requestId, request.requesterVerifier, currentDeviceName())
+                            val result = api.auth.consumeQrLoginRequest(request.requestId, request.requesterVerifier, currentDeviceName())
                             completeLogin(protectLogin(result, authorizeSession))
                             return@launch
                         }
@@ -631,10 +464,10 @@ class AppViewModel(
                 sessionStore.prepareProtection()
                 if (!authorizeSession()) throw IllegalStateException("未完成设备身份验证，登录会话未保存。")
             }
-            api.persistLogin(result)
+            api.auth.persistLogin(result)
             result
         } catch (error: Throwable) {
-            api.discardLogin(result)
+            api.auth.discardLogin(result)
             throw error
         }
     }
@@ -662,6 +495,8 @@ class AppViewModel(
             if (hasSession) {
                 mutableState.update {
                     it.copy(
+                        booting = false,
+                        busyAction = null,
                         locked = true,
                         accountManagementOpen = false,
                         googleAccountDeskOpen = false,
@@ -681,6 +516,8 @@ class AppViewModel(
                 clearRefreshCache()
                 mutableState.update {
                     it.copy(
+                        booting = false,
+                        busyAction = null,
                         locked = false,
                         user = null,
                         googleAccounts = emptyList(),
@@ -814,23 +651,24 @@ class AppViewModel(
             stopOperationalPolling()
             cancelRefreshes()
             mutableState.update { it.copy(busyAction = "logout", error = null) }
-            api.logout()
-            alertsSeeded = false
-            initialIncidentsLoaded = false
-            initialTasksLoaded = false
-            clearAccountScopedState()
-            mutableState.update {
-                AppUiState(
-                    booting = false,
-                    androidPasskeySupported = it.androidPasskeySupported,
-                    suggestedUsername = sessionStore.readLastUsername(),
-                    appLockEnabled = it.appLockEnabled,
-                    homeQuickActionOrder = it.homeQuickActionOrder,
-                    hiddenHomeQuickActions = it.hiddenHomeQuickActions,
-                )
+            api.auth.logout {
+                alertsSeeded = false
+                initialIncidentsLoaded = false
+                initialTasksLoaded = false
+                clearAccountScopedState()
+                mutableState.update {
+                    AppUiState(
+                        booting = false,
+                        androidPasskeySupported = it.androidPasskeySupported,
+                        suggestedUsername = sessionStore.readLastUsername(),
+                        appLockEnabled = it.appLockEnabled,
+                        homeQuickActionOrder = it.homeQuickActionOrder,
+                        hiddenHomeQuickActions = it.hiddenHomeQuickActions,
+                    )
+                }
+                MyControlWidgetProvider.clear(getApplication())
+                CourseWidgetProvider.clear(getApplication())
             }
-            MyControlWidgetProvider.clear(getApplication())
-            CourseWidgetProvider.clear(getApplication())
         }
     }
 
@@ -1061,6 +899,7 @@ class AppViewModel(
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     assistantChatMutable.update { it.copy(sending = false, error = mapAssistantError(error)) }
                 }
         }
@@ -1235,6 +1074,7 @@ class AppViewModel(
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update {
                         it.copy(githubRepositoriesLoaded = true, error = error.message ?: "GitHub 仓库加载失败。")
                     }
@@ -1286,6 +1126,7 @@ class AppViewModel(
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update {
                         it.copy(githubReleasesLoaded = true, error = error.message ?: "GitHub Releases 加载失败。")
                     }
@@ -1554,6 +1395,7 @@ class AppViewModel(
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update {
                         it.copy(
                             googleAccounts = localAccounts,
@@ -1598,6 +1440,7 @@ class AppViewModel(
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update {
                         it.copy(busyAction = null, error = error.message ?: "本机缓存清除失败。")
                     }
@@ -1635,6 +1478,7 @@ class AppViewModel(
                     )
                 }
             }.onFailure { error ->
+                if (error is CancellationException) throw error
                 if (error is ApiException && error.code == "GOOGLE_ACCOUNT_REVISION_CONFLICT") {
                     mutableState.update {
                         it.copy(
@@ -1724,20 +1568,21 @@ class AppViewModel(
         if (mutableState.value.qrLoginBusy) return
         viewModelScope.launch {
             mutableState.update { it.copy(qrLoginBusy = true, qrLoginError = null) }
-            runCatching { api.rejectQrLogin(target.requestId) }
+            runCatching { api.auth.rejectQrLogin(target.requestId) }
                 .onSuccess {
                     mutableState.update {
                         it.copy(qrLoginOpen = false, qrLoginBusy = false, qrLoginTarget = null, message = "已拒绝本次网页登录。")
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update { it.copy(qrLoginBusy = false, qrLoginError = qrErrorMessage(error)) }
             }
         }
     }
 
     suspend fun createPlatformWebLoginUrl(redirectUrl: String): String {
-        val link = api.createWebLoginLink(redirectUrl)
+        val link = api.auth.createWebLoginLink(redirectUrl)
         return link.loginUrl.takeIf { it.isNotBlank() }
             ?: throw IllegalStateException("服务端未返回自动登录链接。")
     }
@@ -1770,7 +1615,7 @@ class AppViewModel(
                 )
             }
             try {
-                val session = api.campusReservationOfficialWebSession()
+                val session = api.campus.campusReservationOfficialWebSession()
                 mutableState.update { it.copy(busyAction = null) }
                 onOpen(session)
             } catch (error: Throwable) {
@@ -1808,21 +1653,22 @@ class AppViewModel(
             mutableState.update { it.copy(qrLoginBusy = true, qrLoginError = null) }
             runCatching {
                 if (target.confirmationMethod == "passkey") {
-                    val challenge = api.beginQrPasskey(target.requestId)
-                    api.approveQrWithPasskey(
+                    val challenge = api.auth.beginQrPasskey(target.requestId)
+                    api.auth.approveQrWithPasskey(
                         target.requestId,
                         challenge,
                         requestCredential(challenge.optionsJson),
                     )
                 } else {
                     if (!requestBiometric()) throw IllegalStateException("身份验证已取消，未批准网页登录。")
-                    api.approveQrWithBiometric(target.requestId)
+                    api.auth.approveQrWithBiometric(target.requestId)
                 }
             }.onSuccess { approved ->
                 mutableState.update {
                     it.copy(qrLoginBusy = false, qrLoginTarget = approved, message = "网页登录已安全批准。")
                 }
             }.onFailure { error ->
+                if (error is CancellationException) throw error
                 mutableState.update { it.copy(qrLoginBusy = false, qrLoginError = qrErrorMessage(error)) }
             }
         }
@@ -1835,12 +1681,13 @@ class AppViewModel(
             mutableState.update {
                 it.copy(qrLoginOpen = true, qrLoginBusy = true, qrLoginTarget = null, qrLoginError = null)
             }
-            runCatching { api.scanQrLogin(pending.first, pending.second) }
+            runCatching { api.auth.scanQrLogin(pending.first, pending.second) }
                 .onSuccess { target ->
                     pendingQrLogin = null
                     mutableState.update { it.copy(qrLoginBusy = false, qrLoginTarget = target) }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     pendingQrLogin = null
                     mutableState.update { it.copy(qrLoginBusy = false, qrLoginError = qrErrorMessage(error)) }
                 }
@@ -2019,9 +1866,23 @@ class AppViewModel(
     }
 
     private fun refreshIot(force: Boolean = false) = launchRefresh(DataSection.Iot, force) {
-        val iot = api.iot()
-        mutableState.update { it.copy(iot = iot) }
+        val iot = api.iot.dashboard { devices ->
+            mutableState.update { current ->
+                current.copy(iot = devices.copy(
+                    scenes = current.iot?.scenes.orEmpty(), rules = current.iot?.rules.orEmpty(),
+                    runs = current.iot?.runs.orEmpty(), insights = current.iot?.insights.orEmpty(),
+                ))
+            }
+        }
+        mutableState.update { it.copy(iot = iot.copy(insights = it.iot?.insights.orEmpty())) }
         publishWidget()
+        val current = mutableState.value
+        if (current.workspaceDestination != WorkspaceDestination.Scenes && current.selectedTab in setOf(MainTab.Tools, MainTab.Operations)) {
+            launchRefresh(DataSection.IotInsights, force, publishError = false) {
+                val insights = api.iot.deviceInsights(iot.devices)
+                mutableState.update { it.copy(iot = it.iot?.copy(insights = insights)) }
+            }
+        }
     }
 
     private fun refreshToday(force: Boolean = false) {
@@ -2050,7 +1911,7 @@ class AppViewModel(
     }
 
     private fun refreshCampus(force: Boolean = false) = launchRefresh(DataSection.Campus, force) {
-        val campus = api.campusDashboard()
+        val campus = api.campus.campusDashboard()
         mutableState.update {
             it.copy(
                 campusTimetable = campus.timetable,
@@ -2064,7 +1925,7 @@ class AppViewModel(
 
     fun queryFreeClassrooms(dayplus: Int, sections: List<Int>, building: String) =
         launchRefresh(DataSection.FreeClassrooms, force = true, publishError = false) {
-            val result = api.campusFreeClassrooms(dayplus, sections, building)
+            val result = api.campus.campusFreeClassrooms(dayplus, sections, building)
             mutableState.update { it.copy(freeClassroomResult = result) }
         }
 
@@ -2079,7 +1940,7 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(reservationSpacesLoading = true, reservationError = null) }
             try {
-                val spaces = api.campusReservationSpaces()
+                val spaces = api.campus.campusReservationSpaces()
                 mutableState.update {
                     it.copy(
                         reservationSpaces = spaces,
@@ -2117,7 +1978,7 @@ class AppViewModel(
                 supervisorScope {
                     val rulesDeferred = async {
                         try {
-                            api.campusReservationRules(spaceId)
+                            api.campus.campusReservationRules(spaceId)
                         } catch (error: Throwable) {
                             if (error is CancellationException) throw error
                             null
@@ -2125,7 +1986,7 @@ class AppViewModel(
                     }
                     val availabilityDeferred = async {
                         try {
-                            api.campusReservationAvailability(spaceId, date)
+                            api.campus.campusReservationAvailability(spaceId, date)
                         } catch (error: Throwable) {
                             if (error is CancellationException) throw error
                             null
@@ -2176,7 +2037,7 @@ class AppViewModel(
                 )
             }
             try {
-                val availableSpaces = api.campusReservationSpaces(date = date, startTime = startTime, endTime = endTime)
+                val availableSpaces = api.campus.campusReservationSpaces(date = date, startTime = startTime, endTime = endTime)
                 mutableState.update {
                     it.copy(
                         reservationAvailableSpaces = availableSpaces,
@@ -2200,7 +2061,7 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(reservationSubmitLoading = true, reservationError = null, reservationMessage = null) }
             try {
-                api.submitCampusReservation(request)
+                api.campus.submitCampusReservation(request)
                 mutableState.update {
                     it.copy(
                         reservationSubmitLoading = false,
@@ -2226,7 +2087,7 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(reservationMyReservationsLoading = true) }
             try {
-                val records = api.campusMyReservations()
+                val records = api.campus.campusMyReservations()
                 mutableState.update {
                     it.copy(
                         reservationMyReservations = records,
@@ -2249,7 +2110,7 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(reservationCancellingReservationId = reservationId, reservationError = null, reservationMessage = null) }
             try {
-                api.cancelCampusReservation(reservationId)
+                api.campus.cancelCampusReservation(reservationId)
                 mutableState.update {
                     it.copy(
                         reservationCancellingReservationId = null,
@@ -2282,7 +2143,7 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(librarySeatOverviewLoading = true, librarySeatError = null, librarySeatMessage = null) }
             try {
-                val overview = api.librarySeatOverview()
+                val overview = api.campus.librarySeatOverview()
                 mutableState.update { current ->
                     val venueId = current.librarySeatSelectedVenueId.takeIf { selected ->
                         overview.venues.any { it.id == selected }
@@ -2343,7 +2204,7 @@ class AppViewModel(
                 )
             }
             try {
-                val areas = api.librarySeatAreas(
+                val areas = api.campus.librarySeatAreas(
                     venueId = venueId,
                     date = date,
                     startMinute = startMinute,
@@ -2393,7 +2254,7 @@ class AppViewModel(
                 )
             }
             try {
-                val seats = api.librarySeatSeats(roomId, date, startMinute, endMinute, amPm)
+                val seats = api.campus.librarySeatSeats(roomId, date, startMinute, endMinute, amPm)
                 mutableState.update {
                     it.copy(
                         librarySeatSeats = seats,
@@ -2439,7 +2300,7 @@ class AppViewModel(
                 )
             }
             try {
-                val areas = api.librarySeatAreas(
+                val areas = api.campus.librarySeatAreas(
                     venueId = venueId,
                     date = date,
                     startMinute = startMinute,
@@ -2453,7 +2314,7 @@ class AppViewModel(
                 val floorSeats = supervisorScope {
                     areas.map { area ->
                         async {
-                            api.librarySeatSeats(area.id, date, startMinute, endMinute, 0)
+                            api.campus.librarySeatSeats(area.id, date, startMinute, endMinute, 0)
                                 .map { seat -> LibrarySeatFloorSeat(area.id, area.name, seat) }
                         }
                     }.flatMap { it.await() }
@@ -2487,7 +2348,7 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(librarySeatSubmitLoading = true, librarySeatError = null, librarySeatMessage = null) }
             try {
-                api.submitLibrarySeatReservation(request)
+                api.campus.submitLibrarySeatReservation(request)
                 mutableState.update {
                     it.copy(
                         librarySeatSubmitLoading = false,
@@ -2513,7 +2374,7 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(librarySeatReservationsLoading = true) }
             try {
-                val records = api.librarySeatReservations()
+                val records = api.campus.librarySeatReservations()
                 mutableState.update {
                     it.copy(
                         librarySeatReservations = records,
@@ -2537,7 +2398,7 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(librarySeatHistoryReservationsLoading = true) }
             try {
-                val history = api.librarySeatReservationHistory(page = 0, size = 20)
+                val history = api.campus.librarySeatReservationHistory(page = 0, size = 20)
                 mutableState.update {
                     it.copy(
                         librarySeatHistoryReservations = history,
@@ -2561,7 +2422,7 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(librarySeatWaitlistsLoading = true) }
             try {
-                val tasks = api.librarySeatWaitlists()
+                val tasks = api.campus.librarySeatWaitlists()
                 mutableState.update {
                     it.copy(
                         librarySeatWaitlists = tasks,
@@ -2587,7 +2448,7 @@ class AppViewModel(
                 it.copy(librarySeatWaitlistSaving = true, librarySeatError = null, librarySeatMessage = null)
             }
             try {
-                api.createLibrarySeatWaitlist(request)
+                api.campus.createLibrarySeatWaitlist(request)
                 mutableState.update {
                     it.copy(
                         librarySeatWaitlistSaving = false,
@@ -2615,7 +2476,7 @@ class AppViewModel(
                 it.copy(librarySeatWaitlistSaving = true, librarySeatError = null, librarySeatMessage = null)
             }
             try {
-                api.setLibrarySeatWaitlistEnabled(taskId, enabled)
+                api.campus.setLibrarySeatWaitlistEnabled(taskId, enabled)
                 mutableState.update {
                     it.copy(
                         librarySeatWaitlistSaving = false,
@@ -2648,7 +2509,7 @@ class AppViewModel(
                 )
             }
             try {
-                api.deleteLibrarySeatWaitlist(taskId)
+                api.campus.deleteLibrarySeatWaitlist(taskId)
                 mutableState.update {
                     it.copy(
                         librarySeatWaitlistSaving = false,
@@ -2680,7 +2541,7 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(reservationAutoTasksLoading = true, reservationError = null) }
             try {
-                val tasks = api.campusAutoReservations()
+                val tasks = api.campus.campusAutoReservations()
                 mutableState.update {
                     it.copy(
                         reservationAutoTasks = tasks,
@@ -2705,9 +2566,9 @@ class AppViewModel(
             mutableState.update { it.copy(reservationSavingTask = true, reservationError = null, reservationMessage = null) }
             try {
                 if (task.id.isNotBlank()) {
-                    api.updateCampusAutoReservation(task)
+                    api.campus.updateCampusAutoReservation(task)
                 } else {
-                    api.createCampusAutoReservation(task)
+                    api.campus.createCampusAutoReservation(task)
                 }
                 mutableState.update {
                     it.copy(
@@ -2732,7 +2593,7 @@ class AppViewModel(
     fun toggleAutoReservationTask(task: CampusAutoReservationTask) {
         viewModelScope.launch {
             try {
-                api.updateCampusAutoReservation(task.copy(enabled = !task.enabled))
+                api.campus.updateCampusAutoReservation(task.copy(enabled = !task.enabled))
                 loadAutoReservationTasks(force = true)
             } catch (error: Throwable) {
                 if (error is CancellationException) throw error
@@ -2748,7 +2609,7 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(reservationDeletingTaskId = taskId, reservationError = null, reservationMessage = null) }
             try {
-                api.deleteCampusAutoReservation(taskId)
+                api.campus.deleteCampusAutoReservation(taskId)
                 mutableState.update {
                     it.copy(
                         reservationDeletingTaskId = null,
@@ -2785,7 +2646,7 @@ class AppViewModel(
     }
 
     private fun refreshSecurity(force: Boolean = false) = launchRefresh(DataSection.Security, force) {
-        val security = api.security()
+        val security = api.auth.security()
         mutableState.update { it.copy(security = security) }
         refreshPasskeysInternal()
     }
@@ -2801,44 +2662,55 @@ class AppViewModel(
         val lastRefresh = lastRefreshElapsedMs[section]
         if (!force && lastRefresh != null && now - lastRefresh < REFRESH_CACHE_WINDOW_MS) return
         updateSectionLoadState(section) { it.copy(refreshing = true, error = null) }
-        val job = viewModelScope.launch {
-            try {
-                block()
-                lastRefreshElapsedMs[section] = SystemClock.elapsedRealtime()
-                updateConnectivityState()
-                updateSectionLoadState(section) {
-                    it.copy(
-                        error = null,
-                        updatedAtMillis = System.currentTimeMillis(),
-                        fromCache = api.isOffline(),
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                updateConnectivityState()
-                updateSectionLoadState(section) {
-                    it.copy(error = error.message ?: "请稍后重试。")
-                }
-                if (error is ApiException && shouldInvalidatePlatformSession(error.status, error.code)) {
-                    forceReauthentication(error.message ?: "登录会话已失效，请重新登录。")
-                } else if (publishError) {
-                    mutableState.update {
-                        it.copy(error = "部分数据暂不可用：${error.message ?: "请稍后重试。"}")
+        val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
+            val refreshJob = currentCoroutineContext()[Job]
+            api.withRequestMetadata {
+                try {
+                    block()
+                    lastRefreshElapsedMs[section] = SystemClock.elapsedRealtime()
+                    val fromCache = api.isOffline()
+                    val cachedAt = api.cachedAtMillis()
+                    updateSectionLoadState(section) {
+                        it.copy(error = null, updatedAtMillis = System.currentTimeMillis(), fromCache = fromCache, cachedAtMillis = cachedAt)
+                    }
+                } catch (error: Throwable) {
+                    if (error is CancellationException) throw error
+                    val cachedAt = api.cachedAtMillis()
+                    updateSectionLoadState(section) {
+                        it.copy(
+                            error = error.message ?: "请稍后重试。",
+                            fromCache = it.fromCache || cachedAt != null,
+                            cachedAtMillis = cachedAt ?: it.cachedAtMillis,
+                        )
+                    }
+                    if (error is ApiException && shouldInvalidatePlatformSession(error.status, error.code)) {
+                        forceReauthentication(error.message ?: "登录会话已失效，请重新登录。")
+                    } else if (publishError) {
+                        mutableState.update { it.copy(error = "部分数据暂不可用：${error.message ?: "请稍后重试。"}") }
+                    }
+                } finally {
+                    if (refreshJobs[section] === refreshJob) {
+                        refreshJobs.remove(section)
+                        updateSectionLoadState(section) { it.copy(refreshing = false) }
+                        updateRefreshingState()
                     }
                 }
-            } finally {
-                refreshJobs.remove(section)
-                updateSectionLoadState(section) { it.copy(refreshing = false) }
-                updateRefreshingState()
             }
         }
         refreshJobs[section] = job
+        job.start()
         updateRefreshingState()
     }
 
     private fun cancelRefreshes() {
         refreshJobs.values.toList().forEach { it.cancel() }
         refreshJobs.clear()
+        mutableState.update { current ->
+            current.copy(
+                refreshing = false,
+                sectionLoadStates = current.sectionLoadStates.mapValues { (_, state) -> state.copy(refreshing = false) },
+            )
+        }
     }
 
     private fun clearRefreshCache() {
@@ -2852,23 +2724,16 @@ class AppViewModel(
         }
     }
 
-    private fun updateConnectivityState() {
-        mutableState.update { current ->
-            current.copy(
-                offlineMode = api.isOffline(),
-                cachedAtMillis = api.cachedAtMillis(),
-            )
-        }
-    }
-
     private fun updateSectionLoadState(
         section: DataSection,
         transform: (SectionLoadState) -> SectionLoadState,
     ) {
         mutableState.update { current ->
+            val sections = current.sectionLoadStates + (section to transform(current.sectionLoadStates[section] ?: SectionLoadState()))
             current.copy(
-                sectionLoadStates = current.sectionLoadStates +
-                    (section to transform(current.sectionLoadStates[section] ?: SectionLoadState())),
+                sectionLoadStates = sections,
+                offlineMode = sections.values.any { it.fromCache },
+                cachedAtMillis = sections.values.filter { it.fromCache }.mapNotNull { it.cachedAtMillis }.minOrNull(),
             )
         }
     }
@@ -2909,6 +2774,7 @@ class AppViewModel(
             }.onSuccess { result ->
                 mutableState.update { it.copy(busyAction = null, message = result.message()) }
             }.onFailure { error ->
+                if (error is CancellationException) throw error
                 mutableState.update {
                     it.copy(busyAction = null, error = error.message ?: "日历同步失败，请稍后重试。")
                 }
@@ -3010,15 +2876,15 @@ class AppViewModel(
             return
         }
         runAction("scene-edit", if (id == null) "智能场景已创建。" else "智能场景已更新。") {
-            if (id == null) api.createIotScene(name, actions) else api.updateIotScene(id, name, actions)
-            mutableState.update { it.copy(iot = api.iot()) }
+            if (id == null) api.iot.createIotScene(name, actions) else api.iot.updateIotScene(id, name, actions)
+            mutableState.update { it.copy(iot = api.iot.dashboard()) }
         }
     }
 
     fun deleteIotScene(id: String, confirmation: suspend () -> Boolean) =
         runAction("scene-delete", "智能场景已删除。", confirmation) {
-            api.deleteIotScene(id)
-            mutableState.update { it.copy(iot = api.iot()) }
+            api.iot.deleteIotScene(id)
+            mutableState.update { it.copy(iot = api.iot.dashboard()) }
         }
 
     fun saveIotRule(
@@ -3036,24 +2902,24 @@ class AppViewModel(
         }
         runAction("rule-edit", if (id == null) "自动化规则已创建。" else "自动化规则已更新。", confirmation) {
             if (id == null) {
-                api.createIotRule(name, condition, actions, cooldownSeconds)
+                api.iot.createIotRule(name, condition, actions, cooldownSeconds)
             } else {
-                api.updateIotRule(id, name, enabled, condition, actions, cooldownSeconds)
+                api.iot.updateIotRule(id, name, enabled, condition, actions, cooldownSeconds)
             }
-            mutableState.update { it.copy(iot = api.iot()) }
+            mutableState.update { it.copy(iot = api.iot.dashboard()) }
         }
     }
 
     fun setIotRuleEnabled(id: String, enabled: Boolean, confirmation: suspend () -> Boolean) =
         runAction("rule-toggle", if (enabled) "自动化规则已启用。" else "自动化规则已停用。", confirmation) {
-            api.setIotRuleEnabled(id, enabled)
-            mutableState.update { it.copy(iot = api.iot()) }
+            api.iot.setIotRuleEnabled(id, enabled)
+            mutableState.update { it.copy(iot = api.iot.dashboard()) }
         }
 
     fun deleteIotRule(id: String, confirmation: suspend () -> Boolean) =
         runAction("rule-delete", "自动化规则已删除。", confirmation) {
-            api.deleteIotRule(id)
-            mutableState.update { it.copy(iot = api.iot()) }
+            api.iot.deleteIotRule(id)
+            mutableState.update { it.copy(iot = api.iot.dashboard()) }
         }
 
     fun runDiagnostics() = runAction("diagnostics", "所有者一键巡检已完成。") {
@@ -3062,7 +2928,7 @@ class AppViewModel(
         val overview = runCatching { api.overview(force = true) }.getOrDefault(current.overview)
         val incidents = runCatching { api.incidents() }.getOrDefault(current.incidents)
         val backup = runCatching { api.backupQuality() }.getOrDefault(current.backup)
-        val iot = runCatching { api.iot() }.getOrDefault(current.iot)
+        val iot = runCatching { api.iot.dashboard() }.getOrDefault(current.iot)
         val resources = runCatching { api.resourceExpiries() }.getOrDefault(current.resourceExpiries)
         mutableState.update {
             it.copy(
@@ -3091,8 +2957,8 @@ class AppViewModel(
 
     fun runIotScene(id: String, confirmation: suspend () -> Boolean) =
         runAction("scene", "IoT 场景指令已进入执行队列。", confirmation) {
-            api.runIotScene(id)
-            mutableState.update { it.copy(iot = api.iot()) }
+            api.iot.runIotScene(id)
+            mutableState.update { it.copy(iot = api.iot.dashboard()) }
             publishWidget()
         }
 
@@ -3119,22 +2985,22 @@ class AppViewModel(
         relayId: String,
         enabled: Boolean,
     ) = runAction("relay:$deviceId:$relayId", "继电器指令已发送。") {
-        api.controlIotRelay(deviceId, relayId, enabled)
-        mutableState.update { it.copy(iot = api.iot()) }
+        api.iot.controlIotRelay(deviceId, relayId, enabled)
+        mutableState.update { it.copy(iot = api.iot.dashboard()) }
         publishWidget()
     }
 
     fun revokeSession(nonce: String, confirmation: suspend () -> Boolean) =
         runAction("session", "远程会话已撤销。", confirmation) {
-            api.revokeSession(nonce)
-            mutableState.update { it.copy(security = api.security()) }
+            api.auth.revokeSession(nonce)
+            mutableState.update { it.copy(security = api.auth.security()) }
         }
 
     fun changePassword(oldPassword: String, newPassword: String, totp: String) {
         if (mutableState.value.busyAction != null) return
         viewModelScope.launch {
             mutableState.update { it.copy(busyAction = "password", error = null, message = null) }
-            runCatching { api.changePassword(oldPassword, newPassword, totp) }
+            runCatching { api.auth.changePassword(oldPassword, newPassword, totp) }
                 .onSuccess { revoked ->
                     if (revoked) {
                         forceReauthentication("密码已修改，所有会话已退出，请使用新密码重新登录。")
@@ -3143,6 +3009,7 @@ class AppViewModel(
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update {
                         it.copy(busyAction = null, error = error.message ?: "密码修改失败，请稍后重试。")
                     }
@@ -3154,11 +3021,12 @@ class AppViewModel(
         if (mutableState.value.busyAction != null) return
         viewModelScope.launch {
             mutableState.update { it.copy(busyAction = "totp-enroll", error = null, message = null) }
-            runCatching { api.beginTotpEnrollment(password, totp) }
+            runCatching { api.auth.beginTotpEnrollment(password, totp) }
                 .onSuccess { enrollment ->
                     mutableState.update { it.copy(busyAction = null, totpEnrollment = enrollment) }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update {
                         it.copy(busyAction = null, error = error.message ?: "动态验证注册启动失败，请稍后重试。")
                     }
@@ -3170,7 +3038,7 @@ class AppViewModel(
         if (mutableState.value.busyAction != null) return
         viewModelScope.launch {
             mutableState.update { it.copy(busyAction = "totp-confirm", error = null, message = null) }
-            runCatching { api.confirmTotpEnrollment(code) }
+            runCatching { api.auth.confirmTotpEnrollment(code) }
                 .onSuccess { codes ->
                     mutableState.update {
                         it.copy(busyAction = null, recoveryCodes = codes, message = "动态验证已启用。")
@@ -3178,6 +3046,7 @@ class AppViewModel(
                     refreshSecurityData()
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update {
                         it.copy(busyAction = null, error = error.message ?: "动态验证码无效，请重试。")
                     }
@@ -3189,7 +3058,7 @@ class AppViewModel(
         if (mutableState.value.busyAction != null) return
         viewModelScope.launch {
             mutableState.update { it.copy(busyAction = "recovery-codes", error = null, message = null) }
-            runCatching { api.regenerateRecoveryCodes(password, totp) }
+            runCatching { api.auth.regenerateRecoveryCodes(password, totp) }
                 .onSuccess { codes ->
                     mutableState.update {
                         it.copy(busyAction = null, recoveryCodes = codes, message = "恢复码已重置，旧恢复码全部失效。")
@@ -3197,6 +3066,7 @@ class AppViewModel(
                     refreshSecurityData()
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update {
                         it.copy(busyAction = null, error = error.message ?: "恢复码生成失败，请稍后重试。")
                     }
@@ -3208,7 +3078,7 @@ class AppViewModel(
         if (mutableState.value.busyAction != null) return
         viewModelScope.launch {
             mutableState.update { it.copy(busyAction = "totp-disable", error = null, message = null) }
-            runCatching { api.disableTotp(password, totp) }
+            runCatching { api.auth.disableTotp(password, totp) }
                 .onSuccess { revoked ->
                     if (revoked) {
                         forceReauthentication("动态验证已关闭，所有会话已退出，请重新登录。")
@@ -3218,6 +3088,7 @@ class AppViewModel(
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update {
                         it.copy(busyAction = null, error = error.message ?: "动态验证关闭失败，请稍后重试。")
                     }
@@ -3233,11 +3104,12 @@ class AppViewModel(
         if (mutableState.value.busyAction != null) return
         viewModelScope.launch {
             mutableState.update { it.copy(busyAction = "passkey-list", error = null) }
-            runCatching { api.passkeys() }
+            runCatching { api.auth.passkeys() }
                 .onSuccess { passkeys ->
                     mutableState.update { it.copy(busyAction = null, passkeys = passkeys) }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update {
                         it.copy(busyAction = null, error = error.message ?: "Passkey 列表读取失败，请稍后重试。")
                     }
@@ -3255,9 +3127,9 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(busyAction = "passkey-register", error = null, message = null) }
             runCatching {
-                val challenge = api.beginPasskeyRegistration(password, totp)
+                val challenge = api.auth.beginPasskeyRegistration(password, totp)
                 val responseJson = requestCredential(challenge.optionsJson)
-                api.completePasskeyRegistration(challenge.challengeId, responseJson, name)
+                api.auth.completePasskeyRegistration(challenge.challengeId, responseJson, name)
             }
                 .onSuccess {
                     mutableState.update { it.copy(busyAction = null, message = "Passkey 已成功绑定。") }
@@ -3265,6 +3137,7 @@ class AppViewModel(
                     refreshSecurityData()
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update {
                         it.copy(busyAction = null, error = error.message ?: "Passkey 注册失败，请稍后重试。")
                     }
@@ -3276,13 +3149,14 @@ class AppViewModel(
         if (mutableState.value.busyAction != null) return
         viewModelScope.launch {
             mutableState.update { it.copy(busyAction = "passkey-delete", error = null, message = null) }
-            runCatching { api.deletePasskey(id, password, totp) }
+            runCatching { api.auth.deletePasskey(id, password, totp) }
                 .onSuccess {
                     mutableState.update { it.copy(busyAction = null, message = "Passkey 已删除。") }
                     refreshPasskeysInternal()
                     refreshSecurityData()
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     mutableState.update {
                         it.copy(busyAction = null, error = error.message ?: "Passkey 删除失败，请稍后重试。")
                     }
@@ -3382,18 +3256,9 @@ class AppViewModel(
                     syncRemoteNotifications()
                     continue
                 }
-                runCatching {
-                    val incidents = api.incidents()
-                    val tasks = api.tasks().tasks
-                    val refreshedAt = SystemClock.elapsedRealtime()
-                    lastRefreshElapsedMs[DataSection.Incidents] = refreshedAt
-                    lastRefreshElapsedMs[DataSection.Tasks] = refreshedAt
-                    mutableState.update { it.copy(incidents = incidents, tasks = tasks) }
-                    updateConnectivityState()
-                    publishWidget()
-                    evaluateAlerts()
-                    syncRemoteNotifications()
-                }
+                refreshIncidents()
+                refreshTasks()
+                syncRemoteNotifications()
             }
         }
     }
@@ -3426,9 +3291,10 @@ class AppViewModel(
                 mutableState.update { it.copy(busyAction = null) }
                 return@launch
             }
-            runCatching { block() }
+            runCatching { api.withRequestMetadata { block() } }
                 .onSuccess { mutableState.update { it.copy(busyAction = null, message = successMessage) } }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     if (error is ApiException && shouldInvalidatePlatformSession(error.status, error.code)) {
                         val current = mutableState.value
                         mutableState.value = AppUiState(
@@ -3452,13 +3318,13 @@ class AppViewModel(
     }
 
     private suspend fun refreshSecurityData() {
-        runCatching { api.security() }.onSuccess { security ->
+        runCatching { api.auth.security() }.onSuccess { security ->
             mutableState.update { it.copy(security = security) }
         }
     }
 
     private suspend fun refreshPasskeysInternal() {
-        runCatching { api.passkeys() }.onSuccess { passkeys ->
+        runCatching { api.auth.passkeys() }.onSuccess { passkeys ->
             mutableState.update { it.copy(passkeys = passkeys) }
         }
     }
@@ -3680,7 +3546,7 @@ class AppViewModel(
         )
 
         val apiStart = System.nanoTime()
-        val apiResult = runCatching { api.authStatus() }
+        val apiResult = runCatching { api.withRequestMetadata(allowCache = false) { api.auth.authStatus() } }
         val apiMs = (System.nanoTime() - apiStart) / 1_000_000L
         checks += NetworkCheckResult(
             label = "平台 API",
@@ -3787,7 +3653,7 @@ class AppViewModel(
                 )
             }
             try {
-                val session = api.librarySeatOfficialWebSession()
+                val session = api.campus.librarySeatOfficialWebSession()
                 mutableState.update { it.copy(busyAction = null) }
                 onOpen(session)
             } catch (error: Throwable) {
@@ -3835,11 +3701,12 @@ class AppViewModel(
         viewModelScope.launch {
             mutableState.update { it.copy(busyAction = "desktop-magic-link", error = null) }
             runCatching {
-                api.createWebLoginLink("/console")
+                api.auth.createWebLoginLink("/console")
             }.onSuccess { link ->
                 mutableState.update { it.copy(busyAction = null, webLoginLink = link) }
                 onResult(link.loginUrl, null)
             }.onFailure { error ->
+                if (error is CancellationException) throw error
                 mutableState.update { it.copy(busyAction = null, error = error.message ?: "生成网页登录链接失败") }
                 onResult(null, error.message ?: "生成网页登录链接失败")
             }
@@ -3881,6 +3748,7 @@ class AppViewModel(
                     )
                 }
             }.onFailure { error ->
+                if (error is CancellationException) throw error
                 mutableState.update {
                     it.copy(
                         busyAction = null,
@@ -3938,6 +3806,7 @@ class AppViewModel(
                 }
                 installDownloadedAppUpdate()
             }.onFailure { error ->
+                if (error is CancellationException) throw error
                 val message = if (isAppUpdateSigningMismatch(error)) {
                     "当前安装版本与正式更新包的签名不一致，Android 不允许直接覆盖安装。请卸载当前版本后安装正式版。"
                 } else {
@@ -3969,6 +3838,7 @@ class AppViewModel(
                 )
             }
         }.onFailure { error ->
+            if (error is CancellationException) throw error
             mutableState.update {
                 it.copy(
                     appUpdate = it.appUpdate.copy(

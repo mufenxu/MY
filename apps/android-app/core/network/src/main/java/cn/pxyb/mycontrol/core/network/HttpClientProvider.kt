@@ -28,14 +28,18 @@ object HttpClientProvider {
         .build()
 
     /** 共享客户端：默认 12s 连接 / 30s 读写超时，供常规接口调用复用。 */
-    val client: OkHttpClient by lazy { newBuilder().build() }
+    val client: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(12, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(60, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
+            .certificatePinner(certificatePinner)
+            .build()
+    }
 
     /** 基于统一配置创建可微调超时的客户端，与其他调用方共享同一连接池。 */
-    fun newBuilder(): OkHttpClient.Builder = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
-        .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
-        .certificatePinner(certificatePinner)
+    fun newBuilder(): OkHttpClient.Builder = client.newBuilder()
 }

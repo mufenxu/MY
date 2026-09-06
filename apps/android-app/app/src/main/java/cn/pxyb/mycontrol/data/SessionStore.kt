@@ -6,6 +6,8 @@ import android.security.keystore.KeyProperties
 import android.security.keystore.UserNotAuthenticatedException
 import android.util.Base64
 import android.os.Build
+import cn.pxyb.mycontrol.core.network.HttpClientProvider
+import kotlinx.coroutines.CancellationException
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import java.util.UUID
@@ -14,11 +16,14 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+internal class SessionRequest(val generation: Long, val username: String?, internal val cookie: String?) {
+    val accountScope = accountStorageScope(username)
+}
+
 class SessionStore(context: Context) {
     private val preferences = context.getSharedPreferences("secure_platform_session", Context.MODE_PRIVATE)
     private val keyAlias = "my_control_session_key_v2"
     private val unlockedKeyAlias = "my_control_session_unlocked_key_v1"
-    @Volatile private var activeCookie: String? = null
 
     init {
         val storedVersion = preferences.getInt(KEY_STORAGE_VERSION, 0)
@@ -30,25 +35,49 @@ class SessionStore(context: Context) {
         preserveExistingLockDefault()
     }
 
-    fun readCookie(): String? {
-        if (!hasSession()) return null
-        activeCookie?.let { return it }
-        if (!isLockEnabled()) {
-            return decryptStoredCookie(KEY_UNLOCKED_COOKIE, unlockedKeyAlias)?.also { activeCookie = it }
-        }
-        return null
+    internal fun captureRequestSession(): SessionRequest = synchronized(sessionLock) {
+        val cookie = readCookie()
+        SessionRequest(generation, readActiveUsername(), cookie)
     }
 
-    fun unlock(): Boolean {
-        if (!hasSession()) return false
+    internal fun <T> withRequestSession(
+        session: SessionRequest?,
+        endedGeneration: Long? = null,
+        block: () -> T,
+    ): T = synchronized(sessionLock) {
+        val endedHere = endedGeneration == generation && readActiveUsername() == null
+        if (session != null && !endedHere && (session.generation != generation || session.username != readActiveUsername())) {
+            throw CancellationException("账号会话已切换")
+        }
+        block()
+    }
+
+    internal fun clearRequestSession(session: SessionRequest): Long = withRequestSession(session) {
+        clear()
+        generation
+    }
+
+    fun isLocked(): Boolean = synchronized(sessionLock) { isLockEnabled() && activeCookie == null && hasSession() }
+
+    fun readCookie(): String? = synchronized(sessionLock) {
+        if (!hasSession()) return@synchronized null
+        activeCookie?.let { return@synchronized it }
+        if (!isLockEnabled()) {
+            return@synchronized decryptStoredCookie(KEY_UNLOCKED_COOKIE, unlockedKeyAlias)?.also { activeCookie = it }
+        }
+        return@synchronized null
+    }
+
+    fun unlock(): Boolean = synchronized(sessionLock) {
+        if (!hasSession()) return@synchronized false
         if (!isLockEnabled()) {
             val cookie = decryptStoredCookie(KEY_UNLOCKED_COOKIE, unlockedKeyAlias)
             if (!cookie.isNullOrBlank()) {
                 activeCookie = cookie
-                return true
+                return@synchronized true
             }
         }
-        return runCatching {
+        return@synchronized runCatching {
             activeCookie = requireNotNull(decryptStoredCookie(KEY_COOKIE, keyAlias))
             true
         }.getOrElse { error ->
@@ -71,26 +100,33 @@ class SessionStore(context: Context) {
         }
     }
 
-    fun writeCookie(cookie: String, expiresAtMillis: Long, idleTimeoutMinutes: Int) {
-        require(cookie.isNotBlank())
-        require(expiresAtMillis > System.currentTimeMillis())
-        val now = System.currentTimeMillis()
-        val edit = preferences.edit()
-            .putInt(KEY_STORAGE_VERSION, STORAGE_VERSION)
-            .putLong(KEY_EXPIRES_AT, expiresAtMillis)
-            .putLong(KEY_LAST_USED_AT, now)
-            .putLong(KEY_IDLE_TIMEOUT, idleTimeoutMinutes.coerceAtLeast(1) * 60_000L)
-        if (isLockEnabled()) {
-            edit.putString(KEY_COOKIE, encryptCookie(cookie, keyAlias, userAuthenticationRequired = true))
-        } else {
-            edit.putString(
-                KEY_UNLOCKED_COOKIE,
-                encryptCookie(cookie, unlockedKeyAlias, userAuthenticationRequired = false),
-            )
+    fun writeCookie(cookie: String, expiresAtMillis: Long, idleTimeoutMinutes: Int, username: String) {
+        synchronized(sessionLock) {
+            require(cookie.isNotBlank())
+            require(expiresAtMillis > System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            val edit = preferences.edit()
+                .putInt(KEY_STORAGE_VERSION, STORAGE_VERSION)
+                .putString(KEY_ACTIVE_USERNAME, username.trim())
+                .putString("last_username", username.trim())
+                .putLong(KEY_EXPIRES_AT, expiresAtMillis)
+                .putLong(KEY_LAST_USED_AT, now)
+                .putLong(KEY_IDLE_TIMEOUT, idleTimeoutMinutes.coerceAtLeast(1) * 60_000L)
+            if (isLockEnabled()) {
+                edit.putString(KEY_COOKIE, encryptCookie(cookie, keyAlias, userAuthenticationRequired = true))
+            } else {
+                edit.putString(
+                    KEY_UNLOCKED_COOKIE,
+                    encryptCookie(cookie, unlockedKeyAlias, userAuthenticationRequired = false),
+                )
+            }
+            edit.remove(KEY_PLAIN_COOKIE)
+            edit.remove(if (isLockEnabled()) KEY_UNLOCKED_COOKIE else KEY_COOKIE)
+            edit.apply()
+            advanceGeneration()
+            activeCookie = cookie
+            WebSessionStore.clear()
         }
-        edit.remove(KEY_PLAIN_COOKIE)
-        edit.apply()
-        activeCookie = cookie
     }
 
     fun readLastUsername(): String = preferences.getString("last_username", "").orEmpty()
@@ -103,20 +139,20 @@ class SessionStore(context: Context) {
         ?.trim()
         ?.takeIf(String::isNotBlank)
 
-    fun writeActiveUsername(username: String) {
-        preferences.edit().putString(KEY_ACTIVE_USERNAME, username.trim()).apply()
-    }
-
-    fun readOrCreateDeviceId(): String {
-        preferences.getString(KEY_DEVICE_ID, null)?.trim()?.takeIf(String::isNotBlank)?.let { return it }
+    fun readOrCreateDeviceId(): String = synchronized(sessionLock) {
+        preferences.getString(KEY_DEVICE_ID, null)?.trim()?.takeIf(String::isNotBlank)?.let { return@synchronized it }
         val deviceId = UUID.randomUUID().toString()
         preferences.edit().putString(KEY_DEVICE_ID, deviceId).apply()
-        return deviceId
+        return@synchronized deviceId
     }
 
     fun clear() {
-        activeCookie = null
-        clearSessionData()
+        synchronized(sessionLock) {
+            activeCookie = null
+            advanceGeneration()
+            clearSessionData()
+            WebSessionStore.clear()
+        }
     }
 
     private fun clearSessionData() {
@@ -133,16 +169,19 @@ class SessionStore(context: Context) {
     }
 
     fun lock() {
-        activeCookie = null
+        synchronized(sessionLock) {
+            activeCookie = null
+            advanceGeneration()
+        }
     }
 
-    fun markUsed(now: Long = System.currentTimeMillis()) {
+    fun markUsed(now: Long = System.currentTimeMillis()) = synchronized(sessionLock) {
         if (now - preferences.getLong(KEY_LAST_USED_AT, 0L) >= LAST_USED_WRITE_INTERVAL_MS) {
             preferences.edit().putLong(KEY_LAST_USED_AT, now).apply()
         }
     }
 
-    fun hasSession(now: Long = System.currentTimeMillis()): Boolean {
+    fun hasSession(now: Long = System.currentTimeMillis()): Boolean = synchronized(sessionLock) {
         val validStorage = preferences.getInt(KEY_STORAGE_VERSION, 0) == STORAGE_VERSION
         val payloadPresent = !preferences.getString(KEY_COOKIE, null).isNullOrBlank()
         val unlockedPayloadPresent = !preferences.getString(KEY_UNLOCKED_COOKIE, null).isNullOrBlank()
@@ -153,32 +192,35 @@ class SessionStore(context: Context) {
             && lastUsedAt + idleTimeout > now
         val sessionPresent = metadataValid && if (isLockEnabled()) payloadPresent else unlockedPayloadPresent
         if (!sessionPresent && (payloadPresent || unlockedPayloadPresent)) clear()
-        return sessionPresent
+        return@synchronized sessionPresent
     }
 
     fun isLockEnabled(): Boolean = preferences.getBoolean(KEY_LOCK_ENABLED, false)
 
     fun setLockEnabled(enabled: Boolean) {
-        val cookie = activeCookie ?: readCookie()
-        if (cookie.isNullOrBlank()) {
-            preferences.edit().putBoolean(KEY_LOCK_ENABLED, enabled).apply()
-            return
+        synchronized(sessionLock) {
+            val cookie = activeCookie ?: readCookie()
+            if (cookie.isNullOrBlank()) {
+                preferences.edit().putBoolean(KEY_LOCK_ENABLED, enabled).apply()
+                return
+            }
+            val edit = preferences.edit().putBoolean(KEY_LOCK_ENABLED, enabled)
+            if (enabled) {
+                // 开启“打开应用时验证身份”时，把会话改存到认证绑定密钥下；
+                // 调用方需先完成指纹/PIN 验证，否则加密会抛出 UserNotAuthenticatedException。
+                edit.putString(KEY_COOKIE, encryptCookie(cookie, keyAlias, userAuthenticationRequired = true))
+                    .remove(KEY_UNLOCKED_COOKIE)
+                    .remove(KEY_PLAIN_COOKIE)
+            } else {
+                edit.putString(
+                    KEY_UNLOCKED_COOKIE,
+                    encryptCookie(cookie, unlockedKeyAlias, userAuthenticationRequired = false),
+                )
+                    .remove(KEY_COOKIE)
+                    .remove(KEY_PLAIN_COOKIE)
+            }
+            edit.apply()
         }
-        val edit = preferences.edit().putBoolean(KEY_LOCK_ENABLED, enabled)
-        if (enabled) {
-            // 开启“打开应用时验证身份”时，把会话改存到认证绑定密钥下；
-            // 调用方需先完成指纹/PIN 验证，否则加密会抛出 UserNotAuthenticatedException。
-            edit.putString(KEY_COOKIE, encryptCookie(cookie, keyAlias, userAuthenticationRequired = true))
-                .remove(KEY_UNLOCKED_COOKIE)
-                .remove(KEY_PLAIN_COOKIE)
-        } else {
-            edit.putString(
-                KEY_UNLOCKED_COOKIE,
-                encryptCookie(cookie, unlockedKeyAlias, userAuthenticationRequired = false),
-            )
-                .remove(KEY_PLAIN_COOKIE)
-        }
-        edit.apply()
     }
 
     private fun encryptCookie(cookie: String, alias: String, userAuthenticationRequired: Boolean): String {
@@ -267,7 +309,18 @@ class SessionStore(context: Context) {
         }
     }
 
+    private fun advanceGeneration() {
+        generation += 1
+        val dispatcher = HttpClientProvider.client.dispatcher
+        (dispatcher.queuedCalls() + dispatcher.runningCalls()).forEach { call ->
+            if (call.request().tag(SessionRequest::class.java) != null) call.cancel()
+        }
+    }
+
     private companion object {
+        val sessionLock = Any()
+        @Volatile var generation = 0L
+        @Volatile var activeCookie: String? = null
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val IV_SIZE = 12
         const val LEGACY_STORAGE_VERSION = 2

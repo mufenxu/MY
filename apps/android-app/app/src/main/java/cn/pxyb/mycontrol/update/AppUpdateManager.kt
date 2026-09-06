@@ -47,6 +47,7 @@ class AppUpdateManager(private val context: Context) {
     private val client = HttpClientProvider.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
+        .callTimeout(10, TimeUnit.MINUTES)
         .build()
 
     suspend fun fetchLatest(): AppUpdateInfo = withContext(Dispatchers.IO) {

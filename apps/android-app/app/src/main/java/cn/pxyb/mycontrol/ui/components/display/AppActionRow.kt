@@ -2,15 +2,12 @@ package cn.pxyb.mycontrol.ui.components.display
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -170,7 +167,7 @@ fun AppDivider(
     paddingStart: androidx.compose.ui.unit.Dp = 14.dp,
     paddingEnd: androidx.compose.ui.unit.Dp = 14.dp,
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     HorizontalDivider(
         modifier = modifier.padding(start = paddingStart, end = paddingEnd),
         thickness = 0.6.dp,

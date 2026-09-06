@@ -8,20 +8,22 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.composed
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -41,26 +43,29 @@ data class GlassPalette(
 
 @Composable
 fun rememberGlassPalette(radius: Dp = 20.dp): GlassPalette {
-    val dark = isSystemInDarkTheme()
-    val highlightColor = if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.2f)
-    return GlassPalette(
-        base = MaterialTheme.colorScheme.surface.copy(alpha = if (dark) 0.5f else 0.35f),
-        highlight = Brush.verticalGradient(
-            colorStops = arrayOf(
-                0.0f to highlightColor,
-                0.5f to highlightColor.copy(alpha = 0f),
-                1.0f to Color.Transparent,
+    val dark = isAppInDarkTheme()
+    val surface = MaterialTheme.colorScheme.surface
+    return remember(dark, surface, radius) {
+        val highlightColor = if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.2f)
+        GlassPalette(
+            base = surface.copy(alpha = if (dark) 0.5f else 0.35f),
+            highlight = Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0.0f to highlightColor,
+                    0.5f to highlightColor.copy(alpha = 0f),
+                    1.0f to Color.Transparent,
+                ),
             ),
-        ),
-        border = if (dark) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(radius),
-    )
+            border = if (dark) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.5f),
+            shape = RoundedCornerShape(radius),
+        )
+    }
 }
 
 /** 卡片底色：半透明磨砂白，让极光背景透出一层淡彩（与白色纯卡形成统一质感） */
 @Composable
 fun glassCardColor(): Color {
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     return MaterialTheme.colorScheme.surface.copy(alpha = if (dark) 0.5f else 0.55f)
 }
 
@@ -154,20 +159,23 @@ fun Modifier.glassShimmer(dark: Boolean): Modifier = this.composed {
     drawWithCache {
         val width = size.width
         val height = size.height
-        val xOffset = progress * width
-
         val shimmerBrush = Brush.linearGradient(
             colorStops = arrayOf(
                 0.0f to highlightColor.copy(alpha = baseAlpha),
                 0.5f to highlightColor.copy(alpha = highlightAlpha),
                 1.0f to highlightColor.copy(alpha = baseAlpha),
             ),
-            start = Offset(xOffset, 0f),
-            end = Offset(xOffset + width * 0.7f, height),
+            start = Offset.Zero,
+            end = Offset(width * 0.7f, height),
         )
 
         onDrawBehind {
-            drawRect(brush = shimmerBrush)
+            val xOffset = progress * width
+            clipRect {
+                translate(left = xOffset) {
+                    drawRect(brush = shimmerBrush, topLeft = Offset(-xOffset, 0f), size = size)
+                }
+            }
         }
     }
 }

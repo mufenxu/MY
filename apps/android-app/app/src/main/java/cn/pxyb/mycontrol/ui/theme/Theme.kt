@@ -7,7 +7,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -77,6 +80,12 @@ object ColorTokens {
     val CoralContainerDark = androidx.compose.ui.graphics.Color(0xFF7F1D1D)
 }
 
+private val LocalAppDarkTheme = staticCompositionLocalOf { false }
+
+@Composable
+@ReadOnlyComposable
+fun isAppInDarkTheme(): Boolean = LocalAppDarkTheme.current
+
 @Composable
 fun MYControlTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -99,10 +108,12 @@ fun MYControlTheme(
             }
         }
     }
-    MaterialTheme(
-        colorScheme = colors,
-        typography = AppTypography,
-        shapes = AppShapes,
-        content = content,
-    )
+    CompositionLocalProvider(LocalAppDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = colors,
+            typography = AppTypography,
+            shapes = AppShapes,
+            content = content,
+        )
+    }
 }

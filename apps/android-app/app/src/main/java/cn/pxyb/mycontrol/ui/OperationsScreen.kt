@@ -1,6 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -83,7 +83,7 @@ fun OperationsScreen(
         }.sortedBy { it.second }
     }
     val listState = rememberLazyListState()
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
 
     val adaptive = LocalAdaptiveWindow.current
     val isTablet = adaptive.isTabletOrExpanded

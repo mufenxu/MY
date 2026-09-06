@@ -2,10 +2,9 @@ package cn.pxyb.mycontrol.ui.components.display
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -32,7 +31,7 @@ fun AppSectionHeader(
     tag: String? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
     val backgroundColor = MaterialTheme.colorScheme.surface.copy(
         alpha = if (dark) 0.55f else 0.82f,
     )
@@ -64,7 +63,10 @@ fun AppSectionHeader(
                         .size(7.dp)
                         .background(accent, CircleShape),
                 )
-                Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),

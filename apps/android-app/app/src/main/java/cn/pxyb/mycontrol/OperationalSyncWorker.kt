@@ -31,104 +31,116 @@ class OperationalSyncWorker(
     override suspend fun doWork(): Result {
         MyControlWidgetProvider.refresh(applicationContext)
         CourseWidgetProvider.refresh(applicationContext)
-        if (OperationalSyncScheduler.isAppForeground(applicationContext)) return Result.success()
+        if (AppSessionLifecycle.isForeground) return Result.success()
 
         val sessionStore = SessionStore(applicationContext)
         if (!sessionStore.hasSession() || sessionStore.isLockEnabled()) return Result.success()
-
+        val session = sessionStore.captureRequestSession()
+        val accountUsername = session.username ?: return Result.success()
         val api = PlatformApi(sessionStore, ResponseSnapshotStore(applicationContext))
-        val accountUsername = sessionStore.readActiveUsername()
         val personalStore = PersonalWorkspaceStore(applicationContext).apply { setAccount(accountUsername) }
         val alertNotifier = AlertNotifier(applicationContext).apply { setAccount(accountUsername) }
-        if (accountUsername.isNullOrBlank()) return Result.success()
-        return try {
-            val overview = api.overview()
-            if (api.isOffline()) return Result.retry()
-            val incidents = api.incidents()
-            if (api.isOffline()) return Result.retry()
-            val tasks = api.tasks().tasks
-            if (api.isOffline()) return Result.retry()
-            val iot = api.iot()
-            if (api.isOffline()) return Result.retry()
-            val todo = api.todos()
-            if (api.isOffline()) return Result.retry()
-            val pending = personalStore.readPendingTodoMutations()
-            val syncedTodo = if (pending.isEmpty()) {
-                todo
-            } else {
-                try {
-                    api.mutateTodos(todo.revision, pending)
-                } catch (error: ApiException) {
-                    if (error.code != "TODO_REVISION_CONFLICT") throw error
-                    val latest = api.todos()
-                    api.mutateTodos(latest.revision, pending)
-                }
-            }
-            personalStore.writeTodoSnapshot(syncedTodo)
-            if (pending.isNotEmpty()) personalStore.writePendingTodoMutations(emptyList())
-            val timetable = api.campusTimetable()
-            CourseWidgetProvider.publish(applicationContext, timetable)
-            if (api.isOffline()) return Result.retry()
-            val resources = api.resourceExpiries()
-            if (api.isOffline()) return Result.retry()
-            val backup = runCatching { api.backupQuality() }.getOrNull()
-            val security = runCatching { api.security() }.getOrNull()
-            flushNotificationMutations(api, personalStore)
-            val remoteNotifications = api.allAppNotifications()
-            val currentAlerts = personalStore.readAlerts()
-            val currentById = currentAlerts.associateBy { it.id }
-            remoteNotifications.forEach { remote ->
-                val local = currentById[remote.id] ?: return@forEach
-                if (local.read && !remote.read) runCatching { api.markAppNotificationRead(remote.id) }
-                val localSnooze = local.snoozedUntil
-                if (localSnooze != null && localSnooze != remote.snoozedUntil) {
-                    runCatching { api.snoozeAppNotification(remote.id, localSnooze) }
-                }
-            }
-            val mergedAlerts = mergeRemoteAlerts(currentAlerts, remoteNotifications)
-            personalStore.writeAlerts(mergedAlerts)
-            alertNotifier.evaluateRemote(mergedAlerts)
+        val syncPreferences = applicationContext.getSharedPreferences("operational_sync", Context.MODE_PRIVATE)
+        val fullSyncKey = "full_sync_${session.accountScope}"
+        val lastFullSync = syncPreferences.getLong(fullSyncKey, 0L)
+        val now = System.currentTimeMillis()
+        val fullSyncDue = inputData.getBoolean("force_full", false) || lastFullSync <= 0L ||
+            lastFullSync > now || now - lastFullSync >= TimeUnit.HOURS.toMillis(1)
 
-            val activeIncidents = incidents.filter { it.status != "resolved" }
-            val assistant = buildPersonalAssistantSnapshot(
-                timetable = timetable,
-                todos = syncedTodo,
-                incidents = incidents,
-                alerts = mergedAlerts,
-                resources = resources,
-                backup = backup,
-                security = security,
-            )
-            personalStore.writeAssistantSnapshot(assistant)
-            val guardianAlerts = buildGuardianAlerts(backup = backup, security = security)
-            personalStore.appendAlerts(guardianAlerts)
-            guardianAlerts.forEach { alertNotifier.notifyRecord(it) }
-            MyControlWidgetProvider.publish(
-                applicationContext,
-                overview,
-                activeIncidents,
-                iot,
-                assistant,
-                personalStore.readQuickScene(),
-            )
-            alertNotifier.evaluate(incidents = incidents, tasks = tasks)
-            alertNotifier.evaluatePersonal(syncedTodo, timetable)
-            alertNotifier.evaluateResourceExpiries(resources)
-            Result.success()
+        return try {
+            api.withRequestMetadata(allowCache = false) {
+                sessionStore.withRequestSession(session) { }
+                // 提醒、待办和课程保持 15 分钟同步；概要、设备和安全巡检每小时更新。
+                val incidents = api.incidents()
+                val tasks = api.tasks().tasks
+                val todo = api.todos()
+                val pending = personalStore.readPendingTodoMutations()
+                val syncedTodo = if (pending.isEmpty()) todo else {
+                    try {
+                        api.mutateTodos(todo.revision, pending)
+                    } catch (error: ApiException) {
+                        if (error.code != "TODO_REVISION_CONFLICT") throw error
+                        val latest = api.todos()
+                        api.mutateTodos(latest.revision, pending)
+                    }
+                }
+                sessionStore.withRequestSession(session) {
+                    personalStore.writeTodoSnapshot(syncedTodo)
+                    if (pending.isNotEmpty()) personalStore.writePendingTodoMutations(emptyList())
+                }
+                val timetable = api.campus.campusTimetable()
+                val resources = api.resourceExpiries()
+                flushNotificationMutations(api, personalStore)
+                val remoteNotifications = api.allAppNotifications()
+                val currentAlerts = personalStore.readAlerts()
+                val currentById = currentAlerts.associateBy { it.id }
+                remoteNotifications.forEach { remote ->
+                    val local = currentById[remote.id] ?: return@forEach
+                    if (local.read && !remote.read) optionalSync { api.markAppNotificationRead(remote.id) }
+                    val localSnooze = local.snoozedUntil
+                    if (localSnooze != null && localSnooze != remote.snoozedUntil) {
+                        optionalSync { api.snoozeAppNotification(remote.id, localSnooze) }
+                    }
+                }
+                val mergedAlerts = mergeRemoteAlerts(currentAlerts, remoteNotifications)
+                sessionStore.withRequestSession(session) {
+                    personalStore.writeAlerts(mergedAlerts)
+                    alertNotifier.evaluateRemote(mergedAlerts)
+                    alertNotifier.evaluate(incidents = incidents, tasks = tasks)
+                    alertNotifier.evaluatePersonal(syncedTodo, timetable)
+                    alertNotifier.evaluateResourceExpiries(resources)
+                    CourseWidgetProvider.publish(applicationContext, timetable)
+                }
+                if (!fullSyncDue) return@withRequestMetadata Result.success()
+
+                val overview = api.overview()
+                val iot = api.iot.dashboard(includeAutomations = false)
+                val backup = optionalSync { api.backupQuality() }
+                val security = optionalSync { api.auth.security() }
+                val assistant = buildPersonalAssistantSnapshot(
+                    timetable = timetable,
+                    todos = syncedTodo,
+                    incidents = incidents,
+                    alerts = mergedAlerts,
+                    resources = resources,
+                    backup = backup,
+                    security = security,
+                )
+                sessionStore.withRequestSession(session) {
+                    personalStore.writeAssistantSnapshot(assistant)
+                    val guardianAlerts = buildGuardianAlerts(backup = backup, security = security)
+                    personalStore.appendAlerts(guardianAlerts)
+                    guardianAlerts.forEach { alertNotifier.notifyRecord(it) }
+                    MyControlWidgetProvider.publish(
+                        applicationContext,
+                        overview,
+                        incidents.filter { it.status != "resolved" },
+                        iot,
+                        assistant,
+                        personalStore.readQuickScene(),
+                    )
+                    syncPreferences.edit().putLong(fullSyncKey, System.currentTimeMillis()).apply()
+                }
+                Result.success()
+            }.value
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
             if (error is IOException || error is ApiException && error.status >= 500) Result.retry() else Result.failure()
         }
     }
+
+    private suspend fun <T> optionalSync(block: suspend () -> T): T? = try {
+        block()
+    } catch (error: Exception) {
+        if (error is CancellationException || error is ApiException &&
+            cn.pxyb.mycontrol.data.shouldInvalidatePlatformSession(error.status, error.code)) throw error
+        null
+    }
+
 }
 
 object OperationalSyncScheduler {
     private const val WORK_NAME = "my-control-operational-sync"
-    private const val PREFERENCES = "operational_sync_state"
-    private const val KEY_FOREGROUND = "app_foreground"
-    private const val KEY_FOREGROUND_AT = "app_foreground_at"
-    private const val FOREGROUND_STALE_MS = 10 * 60_000L
-
     fun schedule(context: Context) {
         val request = PeriodicWorkRequestBuilder<OperationalSyncWorker>(15, TimeUnit.MINUTES)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
@@ -142,6 +154,7 @@ object OperationalSyncScheduler {
 
     fun runNow(context: Context) {
         val request = OneTimeWorkRequestBuilder<OperationalSyncWorker>()
+            .setInputData(androidx.work.workDataOf("force_full" to true))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -151,17 +164,4 @@ object OperationalSyncScheduler {
         )
     }
 
-    fun setAppForeground(context: Context, foreground: Boolean) {
-        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).edit()
-            .putBoolean(KEY_FOREGROUND, foreground)
-            .putLong(KEY_FOREGROUND_AT, System.currentTimeMillis())
-            .apply()
-    }
-
-    fun isAppForeground(context: Context): Boolean {
-        val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-        if (!preferences.getBoolean(KEY_FOREGROUND, false)) return false
-        val recordedAt = preferences.getLong(KEY_FOREGROUND_AT, 0L)
-        return recordedAt > 0L && System.currentTimeMillis() - recordedAt < FOREGROUND_STALE_MS
-    }
 }

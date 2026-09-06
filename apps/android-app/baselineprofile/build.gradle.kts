@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import com.android.build.api.dsl.ManagedVirtualDevice
 
 plugins {
     alias(libs.plugins.android.test)
@@ -23,6 +24,18 @@ android {
 
     targetProjectPath = ":app"
     experimentalProperties["android.experimental.self-instrumenting"] = true
+
+    testOptions.managedDevices.allDevices.create<ManagedVirtualDevice>("pixel2Api35") {
+        device = "Pixel 2"
+        apiLevel = 35
+        systemImageSource = "aosp"
+    }
+}
+
+baselineProfile {
+    val managed = providers.gradleProperty("useManagedProfileDevice").map(String::toBoolean).getOrElse(false)
+    useConnectedDevices = !managed
+    if (managed) managedDevices += "pixel2Api35"
 }
 
 kotlin {

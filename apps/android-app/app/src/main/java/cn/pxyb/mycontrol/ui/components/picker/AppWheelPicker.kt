@@ -4,7 +4,7 @@ import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -71,7 +71,7 @@ fun <T> AppWheelPicker(
     val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
     val coroutineScope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
-    val dark = isSystemInDarkTheme()
+    val dark = isAppInDarkTheme()
 
     val centerIndex by remember(items) {
         derivedStateOf {
