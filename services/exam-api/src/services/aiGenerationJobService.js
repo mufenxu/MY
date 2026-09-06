@@ -111,10 +111,10 @@ async function selectJobQuestions(job, claim) {
         ...(job.requestedQuestionIds.length ? { _id: { $in: job.requestedQuestionIds } } : {}),
     });
     const query = after ? { $and: [baseQuery, { $or: [
-        { sortOrder: after.sortOrder == null ? { $ne: null } : { $gt: after.sortOrder } },
+        { sortOrder: after.sortOrder === null || after.sortOrder === undefined ? { $ne: null } : { $gt: after.sortOrder } },
         {
             sortOrder: after.sortOrder ?? null,
-            createTime: after.createTime == null ? { $ne: null } : { $gt: after.createTime },
+            createTime: after.createTime === null || after.createTime === undefined ? { $ne: null } : { $gt: after.createTime },
         },
         { sortOrder: after.sortOrder ?? null, createTime: after.createTime ?? null, _id: { $gt: after.questionId } },
     ] }] } : baseQuery;
