@@ -60,14 +60,17 @@ export function useAiAnalysis({
     const aiBatchGeneratingText = computed(() => {
         const progress = aiBatchDialog.progress;
         if (aiBatchDialog.loading && progress) {
+            if (progress.status === 'selecting') {
+                return `正在筛选题目，已检查 ${progress.summary.total} 道，已有有效解析 ${progress.summary.skipped} 道。`;
+            }
             return progress.status === 'queued'
-                ? `任务已提交，正在等待处理，共 ${progress.scheduled} 道题。`
+                ? '任务已提交，正在等待处理。'
                 : `已处理 ${progress.processed}/${progress.scheduled} 道题，成功 ${progress.summary.generated} 道，失败 ${progress.summary.failed} 道。`;
         }
         const count = aiBatchForm.mode === 'selected'
             ? aiBatchForm.questionIds.length
             : aiBatchForm.limit;
-        const actionText = aiBatchForm.forceRefresh ? '重新生成并覆盖' : '生成缺失解析';
+        const actionText = aiBatchForm.forceRefresh ? '重新生成并覆盖' : '生成缺失或过期解析';
         return `本次最多${actionText} ${count} 道题，完成后会自动显示统计结果。`;
     });
     const aiAnalysisDialog = reactive({
@@ -193,7 +196,6 @@ export function useAiAnalysis({
         }
 
         aiBatchDialog.visible = true;
-        aiBatchDialog.summary = null;
         aiBatchForm.questionIds = aiBatchForm.questionIds.filter((id) => (
             aiBatchQuestionOptions.value.some((item) => item.id === id)
         ));
@@ -224,18 +226,22 @@ export function useAiAnalysis({
         }
     };
 
-    const generateAiBatch = async () => {
+    const runAiBatch = async (retryJobId = '') => {
+        if (aiBatchDialog.loading) return;
         if (!refValue(canBatchGenerateAi)) {
             ElMessage.warning('当前账号无权限批量生成 AI 解析');
             return;
         }
 
-        if (aiBatchForm.mode === 'selected' && aiBatchForm.questionIds.length === 0) {
+        if (!retryJobId && aiBatchForm.mode === 'selected' && aiBatchForm.questionIds.length === 0) {
             ElMessage.warning('请先选择要生成 AI 解析的题目');
             return;
         }
 
+        const previousSummary = aiBatchDialog.summary;
+        const previousProgress = aiBatchDialog.progress;
         aiBatchDialog.loading = true;
+        aiBatchDialog.summary = null;
         aiBatchDialog.progress = null;
         batchController = new AbortController();
         try {
@@ -249,6 +255,7 @@ export function useAiAnalysis({
             }
 
             const res = await examApi.generateAiAnalyses(payload, {
+                retryJobId,
                 signal: batchController.signal,
                 onProgress: (job) => { aiBatchDialog.progress = job; },
             });
@@ -263,8 +270,19 @@ export function useAiAnalysis({
             ElMessage.error(err.response?.data?.message || (aiBatchDialog.progress?.jobId
                 ? '进度查询中断，已提交任务会继续执行，再次生成可恢复查询'
                 : '批量生成任务提交失败'));
+            if (retryJobId && !aiBatchDialog.progress?.jobId) {
+                aiBatchDialog.summary = previousSummary;
+                aiBatchDialog.progress = previousProgress;
+            }
         } finally {
             aiBatchDialog.loading = false;
+        }
+    };
+
+    const generateAiBatch = () => runAiBatch();
+    const retryFailedAiBatch = () => {
+        if (aiBatchDialog.summary?.failed && aiBatchDialog.progress?.jobId) {
+            return runAiBatch(aiBatchDialog.progress.jobId);
         }
     };
 
@@ -277,6 +295,7 @@ export function useAiAnalysis({
         adoptAiAnalysis,
         deleteAiAnalysis,
         generateAiBatch,
+        retryFailedAiBatch,
         handleAiBatchDialogClose,
         openAiAnalysisDialog,
         openAiBatchDialog,

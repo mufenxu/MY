@@ -8,7 +8,7 @@ const AiGenerationJob = require('../models/AiGenerationJob');
 const { AppError, NotFoundError } = require('../utils/errors');
 const { ADMIN_SCOPE, PERSONAL_SCOPE, buildAdminScopeQuery } = require('../utils/libraryScope');
 const { toQuestionListSort } = require('../utils/questionOrder');
-const { buildQuestionSignature, generateQuestionAnalysis } = require('./aiAnalysisService');
+const { buildQuestionSignature, isStoredAnalysisFresh, generateQuestionAnalysis } = require('./aiAnalysisService');
 const { beforeBatchGeneration, beforeSingleGeneration, afterSingleGeneration } = require('./aiGenerationGuard');
 
 const JOB_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -33,7 +33,7 @@ function toJobPayload(job) {
             skipped: job.skipped,
             pending: job.pending,
             failed: job.failed,
-            failures: job.failures,
+            failures: job.failures.slice(0, 5),
             selected: job.selected,
         },
     };
@@ -51,21 +51,11 @@ async function enqueueCategoryAiAnalyses(input) {
 
     const selectedIds = [...new Set(questionIds.map(String))];
     const selected = selectedIds.length > 0;
-    const questions = await Question.find(scopedQuery(input, {
-        categoryId,
-        ...(selected ? { _id: { $in: selectedIds } } : {}),
-    })).select('_id').sort(toQuestionListSort(true)).limit(1000).lean();
-    if (selected && questions.length !== selectedIds.length) {
-        throw new NotFoundError('包含无效或无权访问的题目');
+    if (selected) {
+        const count = await Question.countDocuments(scopedQuery(input, { categoryId, _id: { $in: selectedIds } }));
+        if (count !== selectedIds.length) throw new NotFoundError('包含无效或无权访问的题目');
     }
-
-    const ids = questions.map((question) => String(question._id));
-    const records = forceRefresh || ids.length === 0 ? []
-        : await AiQuestionAnalysis.find({ questionId: { $in: ids } }).select('questionId').lean();
-    const storedIds = new Set(records.map((record) => record.questionId));
-    const available = ids.filter((id) => !storedIds.has(id));
-    const targets = available.slice(0, Math.min(limit, config.ai.batchMaxPerRun));
-    if (targets.length) await beforeBatchGeneration(actorKey);
+    await beforeBatchGeneration(actorKey);
 
     let job;
     try {
@@ -75,15 +65,11 @@ async function enqueueCategoryAiAnalyses(input) {
             scopeType: input.scopeType,
             ownerOpenid: input.ownerOpenid || '',
             requesterOpenid: input.requesterOpenid || '',
-            questionIds: targets,
+            requestedQuestionIds: selectedIds,
+            batchLimit: Math.min(limit, config.ai.batchMaxPerRun),
+            selectionPending: true,
             forceRefresh,
-            total: ids.length,
-            skipped: ids.length - available.length,
-            pending: available.length - targets.length,
             selected,
-            active: targets.length > 0,
-            status: targets.length ? 'queued' : 'completed',
-            expiresAt: targets.length ? null : new Date(Date.now() + JOB_RETENTION_MS),
         });
     } catch (error) {
         if (error?.code === 11000) throw new AppError('已有 AI 批量任务正在处理，请稍后查询进度', 409);
@@ -98,8 +84,75 @@ async function getAiGenerationJob({ id, actorKey, scopeType }) {
     return toJobPayload(job);
 }
 
+async function retryAiGenerationJob({ id, actorKey, scopeType }) {
+    const job = await AiGenerationJob.findOne({ _id: id, actorKey, scopeType }).lean();
+    if (!job) throw new NotFoundError('AI 生成任务不存在');
+    if (job.active) throw new AppError('任务仍在处理中，请完成后再重试', 409);
+    if (!job.failures.length) throw new AppError('此任务没有失败题目', 400);
+    if (!await Category.exists(scopedQuery(job, { _id: job.categoryId }))) throw new NotFoundError('题库不存在');
+    const questions = await Question.find(scopedQuery(job, {
+        categoryId: job.categoryId, _id: { $in: job.failures.map((failure) => failure.questionId) },
+    })).select('_id').lean();
+    if (!questions.length) throw new NotFoundError('失败题目已删除或不可访问');
+    return enqueueCategoryAiAnalyses({
+        ...job,
+        questionIds: questions.map((question) => String(question._id)),
+        limit: questions.length,
+    });
+}
+
+async function selectJobQuestions(job, claim) {
+    const targets = [];
+    let total = 0;
+    let skipped = 0;
+    const cursor = Question.find(scopedQuery(job, {
+        categoryId: job.categoryId,
+        ...(job.requestedQuestionIds.length ? { _id: { $in: job.requestedQuestionIds } } : {}),
+    })).select('_id type content options answer analysis').sort(toQuestionListSort(true)).lean().cursor({ batchSize: 200 });
+    const inspectBatch = async (questions) => {
+        const records = job.forceRefresh ? [] : await AiQuestionAnalysis.find({
+            questionId: { $in: questions.map((question) => String(question._id)) },
+        }).select('questionId questionSignature promptVersion analysis').lean();
+        const byId = new Map(records.map((record) => [record.questionId, record]));
+        for (const question of questions) {
+            total += 1;
+            if (!job.forceRefresh && isStoredAnalysisFresh(byId.get(String(question._id)), question)) skipped += 1;
+            else if (targets.length < job.batchLimit) targets.push(String(question._id));
+        }
+        const result = await AiGenerationJob.updateOne(claim, {
+            $set: { status: 'selecting', total, skipped, leaseUntil: new Date(Date.now() + LEASE_MS) },
+        });
+        return result.matchedCount > 0;
+    };
+    try {
+        let batch = [];
+        for await (const question of cursor) {
+            if (!workerTimer) return null;
+            batch.push(question);
+            if (batch.length === 200) {
+                if (!await inspectBatch(batch)) return null;
+                batch = [];
+            }
+        }
+        if (batch.length && !await inspectBatch(batch)) return null;
+        return await AiGenerationJob.findOneAndUpdate(claim, { $set: {
+            questionIds: targets, total, skipped, pending: total - skipped - targets.length,
+            selectionPending: false, status: 'running', leaseUntil: new Date(Date.now() + LEASE_MS),
+        } }, { new: true }).lean();
+    } finally {
+        await cursor.close();
+    }
+}
+
 async function processJob(job) {
     const claim = { _id: job._id, active: true, leaseToken: job.leaseToken };
+    if (job.selectionPending) {
+        job = await selectJobQuestions(job, claim);
+        if (!job) {
+            await AiGenerationJob.updateOne(claim, { $set: { status: 'queued', leaseToken: '', leaseUntil: new Date(0) } });
+            return;
+        }
+    }
     while (workerTimer && job.processed < job.questionIds.length) {
         const questionId = job.questionIds[job.processed];
         const questionStartedAt = job.questionStartedAt || new Date();
@@ -143,7 +196,7 @@ async function processJob(job) {
             $inc: { processed: 1, [failure ? 'failed' : 'generated']: 1 },
             $set: { questionStartedAt: null, leaseUntil: new Date(Date.now() + LEASE_MS) },
         };
-        if (failure) update.$push = { failures: { $each: [failure], $slice: 5 } };
+        if (failure) update.$push = { failures: failure };
         job = await AiGenerationJob.findOneAndUpdate(claim, update, { new: true }).lean();
         if (!job) return;
     }
@@ -181,4 +234,4 @@ async function stopAiGenerationWorker() {
     await activeRun;
 }
 
-module.exports = { enqueueCategoryAiAnalyses, getAiGenerationJob, startAiGenerationWorker, stopAiGenerationWorker };
+module.exports = { enqueueCategoryAiAnalyses, getAiGenerationJob, retryAiGenerationJob, startAiGenerationWorker, stopAiGenerationWorker };

@@ -28,6 +28,8 @@ let server;
 let initialized = false;
 let initializationPromise = null;
 let shutdownPromise = null;
+let searchBackfillController = null;
+let searchBackfill = null;
 
 function isStrongAdminPassword(password) {
     return typeof password === 'string'
@@ -165,6 +167,9 @@ async function initializeExamRuntime() {
         await initAdmin();
         await initData();
         startAiGenerationWorker();
+        searchBackfillController = new AbortController();
+        searchBackfill = Question.backfillSearchInitials({ signal: searchBackfillController.signal })
+            .catch((error) => logger.warn({ err: error }, 'Question search backfill paused; legacy search remains available'));
         initialized = true;
         setRuntimeReady(true);
         return app;
@@ -184,6 +189,8 @@ async function initializeCriticalIndexes(models = [Admin, ExamProgress, ExamResu
 async function closeExamRuntime() {
     setRuntimeReady(false);
     if (initialized) {
+        searchBackfillController?.abort();
+        await searchBackfill;
         await stopAiGenerationWorker();
         await disconnectDatabase();
         initialized = false;

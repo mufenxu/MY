@@ -81,6 +81,19 @@ export class CampusRepository {
     return this.db.collection("users").countDocuments();
   }
 
+  async getBackgroundCheckpoint(name) {
+    const row = await this.db.collection("background_checkpoints").findOne({ _id: name });
+    return row?.cursor || null;
+  }
+
+  async saveBackgroundCheckpoint(name, cursor) {
+    await this.db.collection("background_checkpoints").updateOne(
+      { _id: name },
+      { $set: { cursor: clone(cursor), updated_at: new Date().toISOString() } },
+      { upsert: true }
+    );
+  }
+
   async insertUser(user, { session } = {}) {
     await this.db.collection("users").insertOne({ _id: user.id, ...clone(user) }, { session });
     return clone(user);
@@ -103,8 +116,11 @@ export class CampusRepository {
   async listActiveUsers(options = {}) {
     const { offset, limit } = boundedWindow(options);
     const rows = await this.db.collection("users")
-      .find({ disabled: { $ne: 1 } }, { projection: { _id: 0 } })
-      .sort({ created_at: 1 })
+      .find({
+        disabled: { $ne: 1 },
+        ...(options.afterId ? { id: { $gt: String(options.afterId) } } : {})
+      }, { projection: { _id: 0 } })
+      .sort(Object.hasOwn(options, "afterId") ? { id: 1 } : { created_at: 1 })
       .skip(offset)
       .limit(limit)
       .toArray();
@@ -373,6 +389,7 @@ export class CampusRepository {
     return this.db.collection("reminder_preferences")
       .find({
         enabled: true,
+        ...(options.afterId ? { user_id: { $gt: String(options.afterId) } } : {}),
         $or: [
           { recipient_id: { $type: "string", $ne: "" } },
           { app_recipient_id: { $type: "string", $ne: "" } }
@@ -550,12 +567,15 @@ export class MemoryCampusRepository {
     this.reminderPreferences = new Map();
     this.autoReservationTasks = new Map();
     this.librarySeatWaitlists = new Map();
+    this.backgroundCheckpoints = new Map();
   }
 
   async initialize() {}
   async ping() { return true; }
   async close() {}
   async countUsers() { return this.users.size; }
+  async getBackgroundCheckpoint(name) { return clone(this.backgroundCheckpoints.get(name) || null); }
+  async saveBackgroundCheckpoint(name, cursor) { this.backgroundCheckpoints.set(name, clone(cursor)); }
 
   async insertUser(user) {
     if (Array.from(this.users.values()).some((row) => row.username === user.username)) {
@@ -573,8 +593,10 @@ export class MemoryCampusRepository {
   async listActiveUsers(options = {}) {
     const { offset, limit } = boundedWindow(options);
     return clone(Array.from(this.users.values())
-      .filter((row) => !row.disabled)
-      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .filter((row) => !row.disabled && (!options.afterId || String(row.id) > String(options.afterId)))
+      .sort((a, b) => Object.hasOwn(options, "afterId")
+        ? (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0)
+        : a.created_at.localeCompare(b.created_at))
       .slice(offset, offset + limit));
   }
 
@@ -678,8 +700,9 @@ export class MemoryCampusRepository {
   async listEnabledReminderPreferences(options = {}) {
     const { offset, limit } = boundedWindow(options);
     return clone(Array.from(this.reminderPreferences.values())
-      .filter((row) => row.enabled && (row.recipient_id || row.app_recipient_id))
-      .sort((a, b) => a.user_id.localeCompare(b.user_id))
+      .filter((row) => row.enabled && (row.recipient_id || row.app_recipient_id)
+        && (!options.afterId || String(row.user_id) > String(options.afterId)))
+      .sort((a, b) => String(a.user_id) < String(b.user_id) ? -1 : String(a.user_id) > String(b.user_id) ? 1 : 0)
       .slice(offset, offset + limit));
   }
   async upsertReminderPreference(userId, preference, timestamp) {

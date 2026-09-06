@@ -30,6 +30,7 @@ router.delete('/major-categories/:id', validate(cv.idParam), consoleController.d
 
 router.get('/categories', consoleController.getCategories);
 router.get('/ai-analyses/jobs/:id', validate(cv.idParam), consoleController.getAiGenerationJob);
+router.post('/ai-analyses/jobs/:id/retry', aiLimiter, validate(cv.idParam), consoleController.retryAiGenerationJob);
 router.get('/categories/:id/analysis', validate(cv.idParam), consoleController.getCategoryAnalysis);
 router.post(
     '/categories/:id/ai-analyses/generate',

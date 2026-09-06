@@ -63,6 +63,23 @@ function getTextInitials(text = '') {
     return initials;
 }
 
+const SEARCH_INITIALS_VERSION = 1;
+
+function buildQuestionSearchInitials(question) {
+    return {
+        version: SEARCH_INITIALS_VERSION,
+        content: getTextInitials(question.content),
+        analysis: getTextInitials(question.analysis),
+        options: (question.options || []).map((option) => getTextInitials(option.value)),
+    };
+}
+
+function buildPinyinSearchConditions(keyword, searchScope) {
+    const fields = searchScope === 'all' ? ['content', 'analysis', 'options']
+        : [searchScope === 'option' ? 'options' : searchScope];
+    return fields.map((field) => ({ [`searchInitials.${field}`]: { $regex: normalizePinyinKeyword(keyword) } }));
+}
+
 function containsPinyinInitials(text, keyword, cache) {
     const normalizedKeyword = normalizePinyinKeyword(keyword);
     if (!normalizedKeyword) return false;
@@ -158,6 +175,9 @@ async function collectMatchingPage(items, { startIndex = 0, limit = 20, getMatch
 }
 
 module.exports = {
+    SEARCH_INITIALS_VERSION,
+    buildQuestionSearchInitials,
+    buildPinyinSearchConditions,
     collectMatchingPage,
     normalizePinyinKeyword,
     isPinyinInitialKeyword,

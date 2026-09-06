@@ -697,6 +697,7 @@ module.exports = {
     AI_ANALYSIS_SYSTEM_PROMPT,
     buildChatCompletionsUrl,
     buildQuestionSignature,
+    isStoredAnalysisFresh,
     getStoredQuestionAnalysis,
     getStoredQuestionAnalysisMap,
     generateQuestionAnalysis,

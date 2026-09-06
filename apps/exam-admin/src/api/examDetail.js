@@ -66,13 +66,15 @@ export function createExamDetailApi({ getExamId, getScopeType, getIsConsoleMode,
             ),
         getAiAnalysis: (questionId) =>
             http.get(`${questionUrl(questionId)}/ai-analysis`, { params: scopeParams() }),
-        generateAiAnalyses: async (payload, { onProgress, signal } = {}) => {
+        generateAiAnalyses: async (payload, { onProgress, signal, retryJobId } = {}) => {
             const jobBase = `${apiBase}${isConsoleMode() ? '/api/console' : '/api/manage'}/ai-analyses/jobs`;
             const params = scopeParams();
-            let response = await http.post(`${categoryUrl()}/ai-analyses/generate`, scopePayload(payload), { signal });
+            let response = retryJobId
+                ? await http.post(`${jobBase}/${encodeURIComponent(retryJobId)}/retry`, {}, { params, signal })
+                : await http.post(`${categoryUrl()}/ai-analyses/generate`, scopePayload(payload), { signal });
             let job = response.data.data;
             onProgress?.(job);
-            while (['queued', 'running'].includes(job.status)) {
+            while (['queued', 'selecting', 'running'].includes(job.status)) {
                 await new Promise((resolve) => setTimeout(resolve, 1500));
                 signal?.throwIfAborted();
                 response = await http.get(`${jobBase}/${encodeURIComponent(job.jobId)}`, { params, signal });

@@ -35,8 +35,8 @@ async function loadDashboardStats(nowMs) {
             count: { $sum: 1 },
         } },
     ];
-    const [userRows, notificationRows, auditRows, orderRows] = await Promise.all([
-        User.aggregate([{ $facet: {
+    const [userRows, notificationRows, auditRows, orderRows, recentUsers, recentLogs] = await Promise.all([
+        User.aggregate([{ $project: { _id: 0, status: 1, createdAt: 1 } }, { $facet: {
             summary: [{ $group: {
                 _id: null,
                 total: { $sum: 1 },
@@ -45,37 +45,29 @@ async function loadDashboardStats(nowMs) {
                 newThisWeek: { $sum: { $cond: [{ $gte: ['$createdAt', week.getTime()] }, 1, 0] } },
             } }],
             trend: dailyCounts('createdAt'),
-            recent: [
-                { $sort: { createdAt: -1 } }, { $limit: 5 },
-                { $project: { nickName: 1, avatarUrl: 1, role: 1, status: 1, createdAt: 1 } },
-            ],
         } }]),
-        Notification.aggregate([{ $group: {
+        Notification.aggregate([{ $project: { _id: 0, is_published: 1 } }, { $group: {
             _id: null,
             total: { $sum: 1 },
             published: { $sum: { $cond: [{ $eq: ['$is_published', true] }, 1, 0] } },
         } }]),
-        AuditLog.aggregate([{ $facet: {
-            summary: [{ $group: {
-                _id: null, total: { $sum: 1 },
-                today: { $sum: { $cond: [{ $gte: ['$ts', today] }, 1, 0] } },
-            } }],
-            recent: [
-                { $sort: { ts: -1 } }, { $limit: 10 },
-                { $project: { action: 1, actorOpenid: 1, ts: 1 } },
-            ],
+        AuditLog.aggregate([{ $project: { _id: 0, ts: 1 } }, { $group: {
+            _id: null, total: { $sum: 1 },
+            today: { $sum: { $cond: [{ $gte: ['$ts', today] }, 1, 0] } },
         } }]),
-        CourseOrder.aggregate([{ $facet: {
+        CourseOrder.aggregate([{ $project: { _id: 0, status: 1, createTime: 1 } }, { $facet: {
             summary: [{ $group: {
                 _id: null, total: { $sum: 1 },
                 active: { $sum: { $cond: [{ $in: ['$status', ['Pending', 'Processing']] }, 1, 0] } },
             } }],
             trend: dailyCounts('createTime'),
         } }]),
+        User.find({}).select('nickName avatarUrl role status createdAt').sort({ createdAt: -1 }).limit(5).lean(),
+        AuditLog.find({}).select('action actorOpenid ts').sort({ ts: -1 }).limit(10).lean(),
     ]);
     const users = userRows[0]?.summary[0] || {};
     const notifications = notificationRows[0] || {};
-    const audit = auditRows[0]?.summary[0] || {};
+    const audit = auditRows[0] || {};
     const orders = orderRows[0]?.summary[0] || {};
     const usersByDay = new Map((userRows[0]?.trend || []).map((row) => [row._id, row.count]));
     const ordersByDay = new Map((orderRows[0]?.trend || []).map((row) => [row._id, row.count]));
@@ -91,8 +83,8 @@ async function loadDashboardStats(nowMs) {
                 users: usersByDay.get(index) || 0,
                 orders: ordersByDay.get(index) || 0,
             })),
-            recentUsers: userRows[0]?.recent || [],
-            recentLogs: auditRows[0]?.recent || [],
+            recentUsers,
+            recentLogs,
         },
     };
 }

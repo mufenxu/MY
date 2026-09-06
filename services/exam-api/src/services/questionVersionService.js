@@ -3,6 +3,7 @@ const Question = require('../models/Question');
 const QuestionVersion = require('../models/QuestionVersion');
 const { AppError } = require('../utils/errors');
 const { ADMIN_SCOPE, PERSONAL_SCOPE } = require('../utils/libraryScope');
+const { buildQuestionSearchInitials } = require('../utils/pinyinSearch');
 
 const SNAPSHOT_FIELDS = [
     'type',
@@ -206,7 +207,7 @@ async function performVersionedUpdate({
     const updated = await QuestionModel.findOneAndUpdate(
         buildRevisionGuard(query, currentRevision),
         {
-            $set: update,
+            $set: { ...update, searchInitials: buildQuestionSearchInitials({ ...toPlainObject(current), ...update }) },
             $inc: { revision: 1 },
         },
         { new: true, runValidators: true, ...(session ? { session } : {}) },

@@ -40,7 +40,7 @@ const {
     generateUniqueShareCode,
     getAdminShareOwner,
 } = require('../services/paperShareService');
-const { enqueueCategoryAiAnalyses, getAiGenerationJob } = require('../services/aiGenerationJobService');
+const { enqueueCategoryAiAnalyses, getAiGenerationJob, retryAiGenerationJob } = require('../services/aiGenerationJobService');
 const { removeUsersFromLearningOperations } = require('../services/learningPlanService');
 const {
     recordQuestionVersion,
@@ -424,6 +424,16 @@ exports.getAiGenerationJob = asyncHandler(async (req, res) => {
         scopeType: getManagedScopeType(req),
     });
     success(res, job);
+});
+
+exports.retryAiGenerationJob = asyncHandler(async (req, res) => {
+    const job = await retryAiGenerationJob({
+        id: req.params.id,
+        actorKey: buildActorKey('admin', req.user.id || req.user.username),
+        scopeType: getManagedScopeType(req),
+    });
+    res.status(202);
+    success(res, job, '失败题目重试任务已提交');
 });
 
 exports.createQuestion = asyncHandler(async (req, res) => {

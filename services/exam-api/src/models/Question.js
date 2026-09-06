@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { ADMIN_SCOPE, DEMO_SCOPE, PERSONAL_SCOPE } = require('../utils/libraryScope');
+const { SEARCH_INITIALS_VERSION, buildQuestionSearchInitials } = require('../utils/pinyinSearch');
 
 const QuestionSchema = new mongoose.Schema(
     {
@@ -40,6 +41,15 @@ const QuestionSchema = new mongoose.Schema(
             enum: ['manual', 'ai'],
             default: 'manual',
         },
+        searchInitials: {
+            type: new mongoose.Schema({
+                version: Number,
+                content: String,
+                analysis: String,
+                options: [String],
+            }, { _id: false }),
+            select: false,
+        },
         categoryId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Category',
@@ -73,14 +83,45 @@ const QuestionSchema = new mongoose.Schema(
     },
 );
 
+QuestionSchema.pre('validate', function () {
+    if (this.isNew || !this.searchInitials || ['content', 'analysis', 'options'].some((field) => this.isModified(field))) {
+        this.searchInitials = buildQuestionSearchInitials(this);
+    }
+});
+
+QuestionSchema.statics.backfillSearchInitials = async function ({ signal } = {}) {
+    let afterId = null;
+    while (!signal?.aborted) {
+        const batch = await this.find({
+            'searchInitials.version': { $ne: SEARCH_INITIALS_VERSION },
+            ...(afterId ? { _id: { $gt: afterId } } : {}),
+        }).select('_id revision updateTime content analysis options').sort({ _id: 1 }).limit(200).lean();
+        if (!batch.length || signal?.aborted) return;
+        // Native writes preserve timestamps and revisions; guards avoid overwriting a concurrent edit.
+        await this.collection.bulkWrite(batch.map((question) => ({ updateOne: {
+            filter: {
+                _id: question._id,
+                revision: question.revision ?? { $exists: false },
+                updateTime: question.updateTime ?? { $exists: false },
+                'searchInitials.version': { $ne: SEARCH_INITIALS_VERSION },
+            },
+            update: { $set: { searchInitials: buildQuestionSearchInitials(question) } },
+        } })), { ordered: false });
+        afterId = batch[batch.length - 1]._id;
+        await new Promise((resolve) => setImmediate(resolve));
+    }
+};
+
 QuestionSchema.set('toJSON', {
     transform: (doc, ret) => {
         delete ret.__v;
+        delete ret.searchInitials;
         return ret;
     },
 });
 
 QuestionSchema.index({ categoryId: 1, sortOrder: 1, createTime: 1 });
+QuestionSchema.index({ 'searchInitials.version': 1, _id: 1 });
 QuestionSchema.index({ categoryId: 1, updateTime: -1 });
 QuestionSchema.index({ scopeType: 1, ownerOpenid: 1, categoryId: 1, sortOrder: 1, createTime: 1 });
 QuestionSchema.index({ scopeType: 1, ownerOpenid: 1, categoryId: 1, updateTime: -1 });

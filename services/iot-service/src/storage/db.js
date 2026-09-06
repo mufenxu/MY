@@ -107,6 +107,7 @@ class Database {
     this.client = options.client || null;
     this.ownsClient = !options.client;
     this.db = options.db || null;
+    this.telemetryCache = new BoundedTtlCache({ maxEntries: 128, ttlMs: 5000 });
     this.apiKeyCache = new BoundedTtlCache({
       maxEntries: API_KEY_CACHE_MAX_ENTRIES,
       ttlMs: API_KEY_CACHE_TTL_MS
@@ -207,7 +208,9 @@ class Database {
   async saveSensorData(deviceId, temp, hum) {
     const now = Date.now();
     await Promise.all([
-      this.db.collection('sensor_data').insertOne({ device_id: deviceId, temp, hum, created_at: now }),
+      this.db.collection('sensor_data').insertOne({ device_id: deviceId, temp, hum, created_at: now }).then(() => {
+        for (const range of Object.keys(RANGE_DURATIONS)) this.telemetryCache.delete(JSON.stringify([deviceId, range]));
+      }),
       this.db.collection('devices').updateOne(
         { id: deviceId },
         { $set: { online_status: 'online', last_active: now } }
@@ -218,11 +221,7 @@ class Database {
   async getSensorHistory(deviceId, limit = 100, range = null) {
     const query = { device_id: deviceId };
     if (Object.hasOwn(RANGE_DURATIONS, range)) {
-      const now = Date.now();
-      query.created_at = { $gte: now - RANGE_DURATIONS[range], $lte: now };
-      return this.db.collection('sensor_data').aggregate([
-        { $match: query }, ...telemetrySeriesStages(range)
-      ]).toArray();
+      return (await this.getSensorStatistics(deviceId, range)).series;
     }
     const max = Math.min(500, Math.max(1, Number.parseInt(limit, 10) || 100));
     const rows = await this.db.collection('sensor_data')
@@ -235,8 +234,11 @@ class Database {
 
   async getSensorStatistics(deviceId, range = '24h') {
     const normalized = normalizeRange(range);
+    const key = JSON.stringify([deviceId, normalized]);
+    const cached = this.telemetryCache.get(key);
+    if (cached) return clone(await cached);
     const now = Date.now();
-    const [result] = await this.db.collection('sensor_data').aggregate([
+    const pending = this.db.collection('sensor_data').aggregate([
       { $match: { device_id: deviceId, created_at: { $gte: now - RANGE_DURATIONS[normalized], $lte: now } } },
       { $sort: { created_at: -1 } },
       { $facet: {
@@ -244,17 +246,25 @@ class Database {
         series: telemetrySeriesStages(normalized),
         samples: [{ $limit: 500 }, { $project: { _id: 0, temp: 1, hum: 1, created_at: 1 } }]
       } }
-    ]).toArray();
-    const summary = result.summary[0];
-    return {
-      summary: {
-        samples: summary?.sampleCount || 0,
-        temperature: telemetryMetricSummary(summary, 'temp'),
-        humidity: telemetryMetricSummary(summary, 'hum')
-      },
-      series: result.series,
-      samples: result.samples.reverse()
-    };
+    ]).toArray().then(([result]) => {
+      const summary = result.summary[0];
+      return {
+        summary: {
+          samples: summary?.sampleCount || 0,
+          temperature: telemetryMetricSummary(summary, 'temp'),
+          humidity: telemetryMetricSummary(summary, 'hum')
+        },
+        series: result.series,
+        samples: result.samples.reverse()
+      };
+    });
+    this.telemetryCache.set(key, pending);
+    try {
+      return clone(await pending);
+    } catch (error) {
+      if (this.telemetryCache.get(key) === pending) this.telemetryCache.delete(key);
+      throw error;
+    }
   }
 
   async cleanOldData(retentionDays) {
@@ -264,6 +274,7 @@ class Database {
       this.db.collection('sensor_data').deleteMany({ created_at: { $lt: cutoff } }),
       this.db.collection('relay_logs').deleteMany({ created_at: { $lt: cutoff } })
     ]);
+    this.telemetryCache.clear();
     return sensor.deletedCount + relays.deletedCount;
   }
 

@@ -1128,6 +1128,11 @@
             <template #footer>
                 <span class="dialog-footer">
                     <el-button :disabled="aiBatchDialog.loading" @click="aiBatchDialog.visible = false">关闭</el-button>
+                    <el-button
+                        v-if="aiBatchDialog.summary?.failed && aiBatchDialog.progress?.jobId"
+                        :disabled="aiBatchDialog.loading"
+                        @click="retryFailedAiBatch"
+                    >重试失败题目</el-button>
                     <el-button type="primary" :loading="aiBatchDialog.loading" @click="generateAiBatch">
                         {{ aiBatchDialog.loading ? '生成中...' : '开始生成' }}
                     </el-button>
@@ -1359,6 +1364,7 @@ const {
     adoptAiAnalysis,
     deleteAiAnalysis,
     generateAiBatch,
+    retryFailedAiBatch,
     handleAiBatchDialogClose,
     openAiAnalysisDialog,
     openAiBatchDialog,

@@ -239,7 +239,7 @@ const {
     generateUniqueShareCode,
     copySharedPaperToRecipient,
 } = require('../services/paperShareService');
-const { enqueueCategoryAiAnalyses, getAiGenerationJob } = require('../services/aiGenerationJobService');
+const { enqueueCategoryAiAnalyses, getAiGenerationJob, retryAiGenerationJob } = require('../services/aiGenerationJobService');
 const { buildActorKey } = require('../services/aiGenerationGuard');
 
 exports.wechatLogin = asyncHandler(async (req, res) => {
@@ -850,6 +850,19 @@ exports.getAiGenerationJob = asyncHandler(async (req, res) => {
         scopeType: PERSONAL_SCOPE,
     });
     success(res, job);
+});
+
+exports.retryAiGenerationJob = asyncHandler(async (req, res) => {
+    if (!['ops_admin', 'super_admin'].includes(req.user.consoleRole)) {
+        throw new ForbiddenError('无权限批量生成 AI 解析');
+    }
+    const job = await retryAiGenerationJob({
+        id: req.params.id,
+        actorKey: buildActorKey('console', req.user.openid),
+        scopeType: PERSONAL_SCOPE,
+    });
+    res.status(202);
+    success(res, job, '失败题目重试任务已提交');
 });
 
 exports.createQuestion = asyncHandler(async (req, res) => {

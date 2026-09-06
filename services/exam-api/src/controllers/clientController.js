@@ -17,6 +17,8 @@ const Feedback = require('../models/Feedback');
 const config = require('../config');
 const { isCorrect, asyncHandler } = require('../utils/exam');
 const {
+    SEARCH_INITIALS_VERSION,
+    buildPinyinSearchConditions,
     collectMatchingPage,
     normalizePinyinKeyword,
     isPinyinInitialKeyword,
@@ -473,6 +475,9 @@ async function searchQuestionList({
         const usePinyinInitial = isPinyinInitialKeyword(trimmedKeyword);
         const normalizedPinyinKeyword = normalizePinyinKeyword(trimmedKeyword);
         const searchConditions = buildSearchConditions(safeKeyword, actualSearchScope);
+        if (usePinyinInitial) {
+            searchConditions.push(...buildPinyinSearchConditions(normalizedPinyinKeyword, actualSearchScope));
+        }
         const dbTextQuery = {
             $and: [
                 questionBaseQuery,
@@ -480,9 +485,11 @@ async function searchQuestionList({
             ],
         };
 
-        if (usePinyinInitial) {
+        const missingInitials = { 'searchInitials.version': { $ne: SEARCH_INITIALS_VERSION } };
+        if (usePinyinInitial && await Question.exists({ $and: [questionBaseQuery, missingInitials] })) {
             const startIndex = (actualPage - 1) * actualLimit;
-            const cursor = Question.find(questionBaseQuery)
+            // During backfill, keep old questions searchable while only fetching possible matches.
+            const cursor = Question.find({ $and: [questionBaseQuery, { $or: [missingInitials, ...searchConditions] }] })
                 .select('_id content analysis options')
                 .sort({ updateTime: -1, _id: -1 })
                 .lean()
