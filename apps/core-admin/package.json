@@ -12,7 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ant-design/icons": "^6.1.0",
+    "@ant-design/icons": "^6.3.2",
     "@marsidev/react-turnstile": "^1.4.2",
     "@my-platform/platform-browser-runtime": "file:../../packages/platform-browser-runtime",
     "antd": "^6.0.0",
