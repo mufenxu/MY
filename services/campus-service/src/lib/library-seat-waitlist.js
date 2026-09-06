@@ -63,10 +63,8 @@ function seatLabelsValue(value) {
   if (!Array.isArray(value)) {
     fail("指定座位号需为座位号数组。", "INVALID_LIBRARY_SEAT_WAITLIST_SEAT_LABELS");
   }
-  const labels = value
-    .map((item) => Number(item))
-    .filter((label) => Number.isInteger(label));
-  if (!labels.length || labels.some((label) => label < 1 || label > 999) || new Set(labels).size !== labels.length) {
+  const labels = value.map((item) => Number(item));
+  if (labels.some((label) => !Number.isInteger(label) || label < 1 || label > 999) || new Set(labels).size !== labels.length) {
     fail("指定座位号需为 1 至 999 的不重复整数。", "INVALID_LIBRARY_SEAT_WAITLIST_SEAT_LABELS");
   }
   return labels.sort((a, b) => a - b);
