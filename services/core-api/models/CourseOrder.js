@@ -51,6 +51,7 @@ courseOrderSchema.index(
 );
 courseOrderSchema.index({ remoteOrderId: 1 });
 courseOrderSchema.index({ userId: 1, createTime: -1 });
+courseOrderSchema.index({ createTime: -1 });
 courseOrderSchema.index({ status: 1, createTime: -1 });
 courseOrderSchema.index({ status: 1, lastSubmitAttemptAt: 1 });
 courseOrderSchema.index({ account: 1, createTime: -1 });

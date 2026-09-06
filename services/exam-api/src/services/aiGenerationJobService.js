@@ -102,13 +102,24 @@ async function retryAiGenerationJob({ id, actorKey, scopeType }) {
 }
 
 async function selectJobQuestions(job, claim) {
-    const targets = [];
-    let total = 0;
-    let skipped = 0;
-    const cursor = Question.find(scopedQuery(job, {
+    const after = job.selectionCursor?.questionId ? job.selectionCursor : null;
+    const targets = after ? [...job.questionIds] : [];
+    let total = after ? job.total : 0;
+    let skipped = after ? job.skipped : 0;
+    const baseQuery = scopedQuery(job, {
         categoryId: job.categoryId,
         ...(job.requestedQuestionIds.length ? { _id: { $in: job.requestedQuestionIds } } : {}),
-    })).select('_id type content options answer analysis').sort(toQuestionListSort(true)).lean().cursor({ batchSize: 200 });
+    });
+    const query = after ? { $and: [baseQuery, { $or: [
+        { sortOrder: after.sortOrder == null ? { $ne: null } : { $gt: after.sortOrder } },
+        {
+            sortOrder: after.sortOrder ?? null,
+            createTime: after.createTime == null ? { $ne: null } : { $gt: after.createTime },
+        },
+        { sortOrder: after.sortOrder ?? null, createTime: after.createTime ?? null, _id: { $gt: after.questionId } },
+    ] }] } : baseQuery;
+    const cursor = Question.find(query).select('_id sortOrder createTime type content options answer analysis')
+        .sort(toQuestionListSort(true)).lean().cursor({ batchSize: 200 });
     const inspectBatch = async (questions) => {
         const records = job.forceRefresh ? [] : await AiQuestionAnalysis.find({
             questionId: { $in: questions.map((question) => String(question._id)) },
@@ -119,8 +130,15 @@ async function selectJobQuestions(job, claim) {
             if (!job.forceRefresh && isStoredAnalysisFresh(byId.get(String(question._id)), question)) skipped += 1;
             else if (targets.length < job.batchLimit) targets.push(String(question._id));
         }
+        const last = questions[questions.length - 1];
         const result = await AiGenerationJob.updateOne(claim, {
-            $set: { status: 'selecting', total, skipped, leaseUntil: new Date(Date.now() + LEASE_MS) },
+            $set: {
+                status: 'selecting', total, skipped, questionIds: targets,
+                selectionCursor: {
+                    questionId: String(last._id), sortOrder: last.sortOrder ?? null, createTime: last.createTime ?? null,
+                },
+                leaseUntil: new Date(Date.now() + LEASE_MS),
+            },
         });
         return result.matchedCount > 0;
     };

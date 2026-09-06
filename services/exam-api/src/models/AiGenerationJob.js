@@ -10,6 +10,11 @@ const AiGenerationJobSchema = new mongoose.Schema({
     requestedQuestionIds: [String],
     batchLimit: { type: Number, default: 10 },
     selectionPending: { type: Boolean, default: false },
+    selectionCursor: {
+        questionId: String,
+        sortOrder: Number,
+        createTime: Date,
+    },
     forceRefresh: { type: Boolean, default: false },
     active: { type: Boolean, default: true },
     status: { type: String, enum: ['queued', 'selecting', 'running', 'completed'], default: 'queued' },

@@ -216,6 +216,8 @@ const ACADEMIC_REFRESH_MAX_RUNTIME_MS = 10 * 60 * 1000;
 const ACADEMIC_REMINDER_CACHE_CONCURRENCY = 5;
 const ACADEMIC_REMINDER_ENQUEUE_CONCURRENCY = 5;
 const ACADEMIC_REMINDER_MAX_RUNTIME_MS = 3 * 60 * 1000;
+const ACADEMIC_REMINDER_MAX_ENQUEUE_ATTEMPTS = 3;
+const ACADEMIC_REMINDER_RETRY_DELAY_MS = 60 * 1000;
 const UIAS_PORTAL_APPS_TTL_MS = 2 * 60 * 1000;
 const UIAS_PORTAL_APPS_MAX_ITEMS = 100;
 const NODE_ENV = process.env.NODE_ENV || "development";
@@ -8260,6 +8262,8 @@ const academicReminderOperation = {
   truncated: 0,
   queued: 0,
   deduplicated: 0,
+  retryPending: 0,
+  retryExhausted: 0,
   timedOut: false,
   lastError: null
 };
@@ -8443,100 +8447,146 @@ async function enqueueUpcomingAcademicReminders(reason) {
   try {
     const now = new Date();
     const horizon = new Date(now.getTime() + CAMPUS_REMINDER_HORIZON_HOURS * 60 * 60 * 1000);
-    const checkpoint = await repository.getBackgroundCheckpoint("academic-reminders") || {};
-    const occurrenceKey = (occurrence) => `${occurrence.startAt.toISOString()}|${occurrence.id}`;
-    const rows = await repository.listEnabledReminderPreferences({
-      afterId: checkpoint.afterId || "", limit: BACKGROUND_USER_SCAN_LIMIT + 1
-    });
-    const preferences = rows.slice(0, BACKGROUND_USER_SCAN_LIMIT);
     const deadline = Date.now() + ACADEMIC_REMINDER_MAX_RUNTIME_MS;
-    academicReminderOperation.scanned = preferences.length;
-    academicReminderOperation.truncated = Math.max(0, rows.length - preferences.length);
-    const prepared = await mapWithConcurrency(preferences, ACADEMIC_REMINDER_CACHE_CONCURRENCY, async (preference) => {
-      if (shuttingDown || Date.now() >= deadline) return { preference, occurrences: [], timedOut: true };
+    const stored = await repository.getBackgroundCheckpoint("academic-reminders") || {};
+    let { retries: storedRetries = [], ...checkpoint } = stored;
+    const occurrenceKey = (occurrence) => `${occurrence.startAt.toISOString()}|${occurrence.id}`;
+    const retryKey = (userId, occurrence) => `${userId}|${occurrenceKey(occurrence)}`;
+    const retries = new Map(storedRetries
+      .filter((entry) => new Date(entry.occurrence.startAt) > now)
+      .map((entry) => [entry.key, entry]));
+    const shouldStop = () => shuttingDown || Date.now() >= deadline;
+    const attemptedKeys = new Set();
+    let attemptsUsed = 0;
+    const saveProgress = async () => {
+      academicReminderOperation.queued = queued;
+      academicReminderOperation.deduplicated = deduplicated;
+      academicReminderOperation.completed = queued + deduplicated;
+      academicReminderOperation.retryPending = [...retries.values()].filter((entry) => entry.attempts < ACADEMIC_REMINDER_MAX_ENQUEUE_ATTEMPTS).length;
+      academicReminderOperation.retryExhausted = retries.size - academicReminderOperation.retryPending;
+      await repository.saveBackgroundCheckpoint("academic-reminders", { ...checkpoint, retries: [...retries.values()] });
+    };
+    const enqueue = async (preference, occurrence, previous = null) => {
+      if (shouldStop()) return "timed_out";
+      const key = retryKey(preference.user_id, occurrence);
+      if (occurrence.startAt.getTime() <= Date.now()) {
+        retries.delete(key);
+        academicReminderOperation.skipped += 1;
+        return "skipped";
+      }
+      attemptedKeys.add(key);
+      attemptsUsed += 1;
       try {
-        const timetable = await cachedAcademicTimetableForUser(preference.user_id);
-        if (!timetable) return { preference, occurrences: [] };
-        const occurrences = buildCourseOccurrences(timetable, { now, from: now, to: horizon })
-          .filter((occurrence) => occurrence.startAt > now && occurrence.startAt <= horizon
-            && (preference.user_id !== checkpoint.pendingUserId || occurrenceKey(occurrence) > checkpoint.occurrenceAfter))
-          .sort((a, b) => a.startAt - b.startAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-        return { preference, occurrences };
+        const delivery = buildCourseReminderDelivery(preference, occurrence, new Date());
+        const requestId = `campus-reminder-${randomUUID()}`;
+        const result = delivery.kind === "canonical"
+          ? await sendCampusNotification(delivery.payload, { requestId })
+          : await enqueueCampusNotification(delivery.payload, { requestId });
+        retries.delete(key);
+        if (result.deduplicated) deduplicated += 1;
+        else queued += 1;
+        return "completed";
       } catch (error) {
-        logger.warn("academic_reminder_cache_read_failed", { reason, userId: preference.user_id, error });
-        return { preference, occurrences: [], error };
+        const attempts = (previous?.attempts || 0) + 1;
+        retries.set(key, {
+          key, userId: preference.user_id, occurrence, attempts,
+          retryAt: Date.now() + ACADEMIC_REMINDER_RETRY_DELAY_MS * 2 ** (attempts - 1)
+        });
+        academicReminderOperation.failed += 1;
+        logger.warn("academic_reminder_enqueue_failed", { reason, userId: preference.user_id, courseId: occurrence.id, attempts, error });
+        return "failed";
+      }
+    };
+
+    // Reserve part of each run for new users while retrying failed enqueue requests.
+    const dueRetries = [...retries.values()]
+      .filter((entry) => entry.attempts < ACADEMIC_REMINDER_MAX_ENQUEUE_ATTEMPTS && entry.retryAt <= Date.now())
+      .sort((a, b) => a.retryAt - b.retryAt)
+      .slice(0, Math.max(1, Math.floor(CAMPUS_REMINDER_BATCH_SIZE / 2)));
+    await mapWithConcurrency(dueRetries, ACADEMIC_REMINDER_ENQUEUE_CONCURRENCY, async (entry) => {
+      if (shouldStop()) return;
+      try {
+        const preference = await repository.getReminderPreference(entry.userId);
+        if (!preference?.enabled || (!preference.recipient_id && !preference.app_recipient_id)) {
+          retries.delete(entry.key);
+          return;
+        }
+        const occurrence = { ...entry.occurrence, startAt: new Date(entry.occurrence.startAt), endAt: new Date(entry.occurrence.endAt) };
+        await enqueue(preference, occurrence, entry);
+      } catch (error) {
+        entry.retryAt = Date.now() + ACADEMIC_REMINDER_RETRY_DELAY_MS;
+        academicReminderOperation.failed += 1;
+        logger.warn("academic_reminder_retry_read_failed", { reason, userId: entry.userId, error });
       }
     });
-    const candidates = [];
-    for (const { preference, occurrences, timedOut } of prepared) {
-      if (timedOut) break;
-      for (const occurrence of occurrences) {
-        if (candidates.length >= CAMPUS_REMINDER_BATCH_SIZE) break;
-        candidates.push({ preference, occurrence });
+    if (storedRetries.length) await saveProgress();
+
+    while (!shouldStop() && attemptsUsed < CAMPUS_REMINDER_BATCH_SIZE && academicReminderOperation.scanned < BACKGROUND_USER_SCAN_LIMIT) {
+      // Keep enough retry slots to persist every failure before advancing the scan cursor.
+      const capacity = Math.min(CAMPUS_REMINDER_BATCH_SIZE - attemptsUsed, BACKGROUND_USER_SCAN_LIMIT - retries.size);
+      if (capacity <= 0) {
+        academicReminderOperation.truncated = 1;
+        break;
       }
-      if (candidates.length >= CAMPUS_REMINDER_BATCH_SIZE) break;
-    }
-    const outcomes = await mapWithConcurrency(
-      candidates,
-      ACADEMIC_REMINDER_ENQUEUE_CONCURRENCY,
-      async ({ preference, occurrence }) => {
-        if (shuttingDown || Date.now() >= deadline) return "timed_out";
+      const pageSize = Math.min(ACADEMIC_REMINDER_CACHE_CONCURRENCY, capacity, BACKGROUND_USER_SCAN_LIMIT - academicReminderOperation.scanned);
+      const rows = await repository.listEnabledReminderPreferences({ afterId: checkpoint.afterId || "", limit: pageSize + 1 });
+      const preferences = rows.slice(0, pageSize);
+      academicReminderOperation.scanned += preferences.length;
+      const prepared = await mapWithConcurrency(preferences, ACADEMIC_REMINDER_CACHE_CONCURRENCY, async (preference) => {
+        if (shouldStop()) return { preference, occurrences: [], timedOut: true };
         try {
-          const delivery = buildCourseReminderDelivery(preference, occurrence, now);
-          const requestId = `campus-reminder-${randomUUID()}`;
-          const result = delivery.kind === "canonical"
-            ? await sendCampusNotification(delivery.payload, { requestId })
-            : await enqueueCampusNotification(delivery.payload, { requestId });
-          return result.deduplicated ? "deduplicated" : "queued";
+          const timetable = await cachedAcademicTimetableForUser(preference.user_id);
+          const occurrences = timetable ? buildCourseOccurrences(timetable, { now, from: now, to: horizon })
+            .filter((occurrence) => occurrence.startAt > now && occurrence.startAt <= horizon
+              && (preference.user_id !== checkpoint.pendingUserId || occurrenceKey(occurrence) > checkpoint.occurrenceAfter)
+              && !retries.has(retryKey(preference.user_id, occurrence))
+              && !attemptedKeys.has(retryKey(preference.user_id, occurrence)))
+            .sort((a, b) => a.startAt - b.startAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) : [];
+          return { preference, occurrences };
         } catch (error) {
-          logger.warn("academic_reminder_enqueue_failed", {
-            reason,
-            userId: preference.user_id,
-            courseId: occurrence.id,
-            error
-          });
-          return "failed";
+          academicReminderOperation.failed += 1;
+          logger.warn("academic_reminder_cache_read_failed", { reason, userId: preference.user_id, error });
+          return { preference, occurrences: [], error };
         }
+      });
+      const candidates = [];
+      for (const { preference, occurrences, timedOut, error } of prepared) {
+        if (timedOut || error) break;
+        for (const occurrence of occurrences) {
+          if (candidates.length >= capacity) break;
+          candidates.push({ preference, occurrence });
+        }
+        if (candidates.length >= capacity) break;
       }
-    );
-    queued = outcomes.filter((outcome) => outcome === "queued").length;
-    deduplicated = outcomes.filter((outcome) => outcome === "deduplicated").length;
-    academicReminderOperation.queued = queued;
-    academicReminderOperation.deduplicated = deduplicated;
-    academicReminderOperation.completed = queued + deduplicated;
-    academicReminderOperation.failed = outcomes.filter((outcome) => outcome === "failed").length
-      + prepared.filter((entry) => entry.error).length;
-    academicReminderOperation.skipped = prepared.filter((entry) => !entry.occurrences.length).length
-      + outcomes.filter((outcome) => outcome === "timed_out").length;
-    academicReminderOperation.timedOut = prepared.some((entry) => entry.timedOut) || outcomes.includes("timed_out");
-    let nextCheckpoint = { ...checkpoint };
-    let outcomeIndex = 0;
-    let handledUsers = 0;
-    for (const { preference, occurrences, timedOut } of prepared) {
-      if (timedOut) break;
-      let handledOccurrences = 0;
-      for (const occurrence of occurrences) {
-        if (!outcomes[outcomeIndex] || outcomes[outcomeIndex] === "timed_out") break;
-        outcomeIndex += 1;
-        handledOccurrences += 1;
-        nextCheckpoint = {
-          afterId: nextCheckpoint.afterId || "",
-          pendingUserId: preference.user_id,
-          occurrenceAfter: occurrenceKey(occurrence)
-        };
+      const outcomes = await mapWithConcurrency(candidates, ACADEMIC_REMINDER_ENQUEUE_CONCURRENCY,
+        ({ preference, occurrence }) => enqueue(preference, occurrence));
+      let outcomeIndex = 0;
+      let handledUsers = 0;
+      for (const { preference, occurrences, timedOut, error } of prepared) {
+        if (timedOut || error) break;
+        let handledOccurrences = 0;
+        for (const occurrence of occurrences) {
+          if (!outcomes[outcomeIndex] || outcomes[outcomeIndex] === "timed_out") break;
+          outcomeIndex += 1;
+          handledOccurrences += 1;
+          checkpoint = {
+            afterId: checkpoint.afterId || "", pendingUserId: preference.user_id, occurrenceAfter: occurrenceKey(occurrence)
+          };
+        }
+        if (handledOccurrences < occurrences.length) break;
+        checkpoint = { afterId: preference.user_id };
+        handledUsers += 1;
+        if (!occurrences.length) academicReminderOperation.skipped += 1;
       }
-      // Retain progress within this user when the enqueue budget or deadline is reached.
-      if (handledOccurrences < occurrences.length) break;
-      nextCheckpoint = { afterId: preference.user_id };
-      handledUsers += 1;
+      const finishedCycle = handledUsers === preferences.length && rows.length <= pageSize;
+      if (finishedCycle) checkpoint = { afterId: "" };
+      academicReminderOperation.truncated = rows.length - handledUsers;
+      await saveProgress();
+      if (finishedCycle || handledUsers < preferences.length) break;
     }
-    if (handledUsers === preferences.length && rows.length <= BACKGROUND_USER_SCAN_LIMIT) {
-      nextCheckpoint = { afterId: "" };
-    }
-    academicReminderOperation.truncated += preferences.length - handledUsers;
-    await repository.saveBackgroundCheckpoint("academic-reminders", nextCheckpoint);
+    academicReminderOperation.timedOut = shouldStop();
     if (reason !== "interval" || queued > 0) {
-      logger.info("academic_reminder_scan_completed", { reason, queued, deduplicated, users: preferences.length });
+      logger.info("academic_reminder_scan_completed", { reason, queued, deduplicated, users: academicReminderOperation.scanned });
     }
   } catch (error) {
     operationError = error;
