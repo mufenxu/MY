@@ -3878,6 +3878,149 @@ async function refreshCampusWaterCode() {
   };
 }
 
+function parseWaterValveCode(rawCode) {
+  const value = String(rawCode || "").trim();
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      return new URL(value).searchParams.get("sn") || "";
+    } catch {
+      return "";
+    }
+  }
+  if (/^\d{12}$/.test(value)) return value;
+  const parts = value.split("_");
+  return parts.length >= 3 ? parts[2] : "";
+}
+
+function waterValveState(jar) {
+  return jar.meta?.campus?.waterValve || null;
+}
+
+function waterValvePublic(state) {
+  if (!state?.seqNo) return { bound: false };
+  return {
+    bound: true,
+    seqNo: state.seqNo,
+    deviceName: state.deviceName || `设备 ${state.seqNo}`,
+    running: state.running === true,
+    defaultValue: state.defaultValue || null,
+    balance: state.balance || null,
+    updatedAt: state.updatedAt || null
+  };
+}
+
+function normalizeWaterValveDevice(response, seqNo) {
+  const rows = Array.isArray(response?.data) ? response.data : [];
+  const device = rows[0] || {};
+  return {
+    seqNo,
+    deviceName: device.deviceName || device.name || `设备 ${seqNo}`,
+    defaultValue: device.mondeal != null ? String(device.mondeal) : null,
+    balance: device.ewalletBalance != null ? String(device.ewalletBalance) : null,
+    running: false,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+async function getCampusWaterValve() {
+  await ensureCampusSessions();
+  const jar = await readSessionJar();
+  const state = waterValveState(jar);
+  if (!state?.seqNo) return waterValvePublic(null);
+
+  try {
+    const response = await uwcAuthedRequest(jar, "/bluetoothApp/getListBySeqNo", (session) => ({
+      seqNo: state.seqNo,
+      accNum: session.accNum
+    }));
+    const normalized = normalizeWaterValveDevice(response, state.seqNo);
+    const merged = {
+      ...state,
+      deviceName: normalized.deviceName,
+      defaultValue: normalized.defaultValue,
+      balance: normalized.balance,
+      running: state.running === true,
+      updatedAt: new Date().toISOString()
+    };
+    jar.meta.campus.waterValve = merged;
+    await saveSessionJar(jar);
+    return waterValvePublic(merged);
+  } catch (error) {
+    return { ...waterValvePublic(state), error: error.message || "生活用水设备状态查询失败" };
+  }
+}
+
+async function bindCampusWaterValve(rawCode) {
+  const seqNo = parseWaterValveCode(rawCode);
+  if (!seqNo || seqNo.length !== 12) {
+    throw new HttpError(400, "无法解析设备二维码，请重新扫描。", null, "INVALID_WATER_VALVE_CODE");
+  }
+
+  await ensureCampusSessions();
+  const jar = await readSessionJar();
+  const response = await uwcAuthedRequest(jar, "/bluetoothApp/getListBySeqNo", (session) => ({
+    seqNo,
+    accNum: session.accNum
+  }));
+  if (!Array.isArray(response?.data) || response.data.length === 0) {
+    throw new HttpError(404, "未找到对应的生活用水设备。", null, "WATER_VALVE_NOT_FOUND");
+  }
+
+  const state = normalizeWaterValveDevice(response, seqNo);
+  jar.meta.campus ||= {};
+  jar.meta.campus.waterValve = state;
+  await saveSessionJar(jar);
+  return waterValvePublic(state);
+}
+
+async function openCampusWaterValve() {
+  await ensureCampusSessions();
+  const jar = await readSessionJar();
+  const state = waterValveState(jar);
+  if (!state?.seqNo) {
+    throw new HttpError(400, "请先扫描并绑定饮水机。", null, "WATER_VALVE_NOT_BOUND");
+  }
+
+  const response = await uwcAuthedRequest(jar, "/bluetoothApp/openValueOnline", (session) => ({
+    seqNo: state.seqNo,
+    accNum: session.accNum
+  }));
+  const timestamp = response?.data?.timestamp;
+  const next = {
+    ...state,
+    running: true,
+    timestamp: timestamp != null ? String(timestamp) : state.timestamp || null,
+    updatedAt: new Date().toISOString()
+  };
+  jar.meta.campus.waterValve = next;
+  await saveSessionJar(jar);
+  return waterValvePublic(next);
+}
+
+async function closeCampusWaterValve() {
+  await ensureCampusSessions();
+  const jar = await readSessionJar();
+  const state = waterValveState(jar);
+  if (!state?.seqNo) {
+    throw new HttpError(400, "请先扫描并绑定饮水机。", null, "WATER_VALVE_NOT_BOUND");
+  }
+
+  await uwcAuthedRequest(jar, "/bluetoothApp/closeValueOnline", () => ({
+    seqNo: state.seqNo,
+    timestamp: state.timestamp != null ? Number(state.timestamp) : null
+  }));
+  const next = {
+    ...state,
+    running: false,
+    timestamp: null,
+    updatedAt: new Date().toISOString()
+  };
+  jar.meta.campus.waterValve = next;
+  await saveSessionJar(jar);
+  return waterValvePublic(next);
+}
+
 async function ensureCampusSessions() {
   const jar = await readSessionJar();
   const campus = campusSessionSummary(jar);
@@ -7791,6 +7934,23 @@ async function handleApiRoutes(req, res, url) {
     }
     if (url.pathname === "/api/campus/water-code/refresh" && req.method === "POST") {
       json(res, 200, { ok: true, data: await withCampusSessionLock(() => refreshCampusWaterCode()) });
+      return;
+    }
+    if (url.pathname === "/api/campus/water-valve") {
+      json(res, 200, { ok: true, data: await withCampusSessionLock(() => getCampusWaterValve()) });
+      return;
+    }
+    if (url.pathname === "/api/campus/water-valve/bind" && req.method === "POST") {
+      const body = await readBodyJson(req);
+      json(res, 200, { ok: true, data: await withCampusSessionLock(() => bindCampusWaterValve(body.rawCode || body.code || body.seqNo)) });
+      return;
+    }
+    if (url.pathname === "/api/campus/water-valve/open" && req.method === "POST") {
+      json(res, 200, { ok: true, data: await withCampusSessionLock(() => openCampusWaterValve()) });
+      return;
+    }
+    if (url.pathname === "/api/campus/water-valve/close" && req.method === "POST") {
+      json(res, 200, { ok: true, data: await withCampusSessionLock(() => closeCampusWaterValve()) });
       return;
     }
     if (url.pathname === "/api/campus/recharge-link") {

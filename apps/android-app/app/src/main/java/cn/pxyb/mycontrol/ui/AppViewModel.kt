@@ -158,6 +158,7 @@ class AppViewModel(
     private val assistantChatMutable = MutableStateFlow(AssistantChatUiState())
     val assistantChatState: StateFlow<AssistantChatUiState> = assistantChatMutable.asStateFlow()
     val todayState = deriveState(AppUiState::toTodayUiState)
+    val waterValveState = deriveState(AppUiState::toWaterValveUiState)
     val freeClassroomState = deriveState(AppUiState::toFreeClassroomUiState)
     val reservationState = deriveState(AppUiState::toReservationUiState)
     val librarySeatState = deriveState(AppUiState::toLibrarySeatUiState)
@@ -1921,6 +1922,116 @@ class AppViewModel(
         }
         publishWidget()
         evaluatePersonalReminders()
+    }
+
+    fun refreshWaterValve(force: Boolean = false) {
+        if (!force && mutableState.value.campusWaterValve.bound) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(campusWaterValveLoading = true, campusWaterValveError = null) }
+            try {
+                val valve = api.campus.campusWaterValve()
+                mutableState.update {
+                    it.copy(
+                        campusWaterValve = valve,
+                        campusWaterValveLoading = false,
+                        campusWaterValveError = valve.error,
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        campusWaterValveLoading = false,
+                        campusWaterValveError = error.message ?: "饮水机状态加载失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun bindWaterValve(rawCode: String) {
+        if (mutableState.value.campusWaterValveBusy) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(campusWaterValveBusy = true, campusWaterValveError = null, campusWaterValveMessage = null)
+            }
+            try {
+                val valve = api.campus.bindCampusWaterValve(rawCode)
+                mutableState.update {
+                    it.copy(
+                        campusWaterValve = valve,
+                        campusWaterValveBusy = false,
+                        campusWaterValveMessage = "饮水机绑定成功",
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        campusWaterValveBusy = false,
+                        campusWaterValveError = error.message ?: "饮水机绑定失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun openWaterValve() {
+        if (mutableState.value.campusWaterValveBusy) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(campusWaterValveBusy = true, campusWaterValveError = null, campusWaterValveMessage = null)
+            }
+            try {
+                val valve = api.campus.openCampusWaterValve()
+                mutableState.update {
+                    it.copy(
+                        campusWaterValve = valve,
+                        campusWaterValveBusy = false,
+                        campusWaterValveMessage = "饮水机已开启",
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        campusWaterValveBusy = false,
+                        campusWaterValveError = error.message ?: "饮水机开启失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun closeWaterValve() {
+        if (mutableState.value.campusWaterValveBusy) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(campusWaterValveBusy = true, campusWaterValveError = null, campusWaterValveMessage = null)
+            }
+            try {
+                val valve = api.campus.closeCampusWaterValve()
+                mutableState.update {
+                    it.copy(
+                        campusWaterValve = valve,
+                        campusWaterValveBusy = false,
+                        campusWaterValveMessage = "饮水机已关闭",
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        campusWaterValveBusy = false,
+                        campusWaterValveError = error.message ?: "饮水机关闭失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearWaterValveFeedback() {
+        mutableState.update { it.copy(campusWaterValveError = null, campusWaterValveMessage = null) }
     }
 
     fun queryFreeClassrooms(dayplus: Int, sections: List<Int>, building: String) =

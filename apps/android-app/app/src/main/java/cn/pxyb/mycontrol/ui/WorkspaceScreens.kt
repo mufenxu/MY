@@ -75,6 +75,7 @@ import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -147,6 +148,7 @@ fun TodayScreen(
     onOpenFreeClassrooms: () -> Unit,
     onOpenReservation: () -> Unit,
     onOpenLibrarySeatReservation: () -> Unit,
+    onOpenWaterValve: () -> Unit,
     onConsumeSharedDraft: () -> Unit,
 ) {
     var editingTodo by remember { mutableStateOf<TodoTask?>(null) }
@@ -523,7 +525,13 @@ fun TodayScreen(
                 )
             }
             CampusWorkspaceSection.Campus -> item(key = "campus-overview", contentType = "workspace") {
-                CampusOverviewSection(state.campusOverview, onOpenFreeClassrooms, onOpenReservation, onOpenLibrarySeatReservation)
+                CampusOverviewSection(
+                    overview = state.campusOverview,
+                    onOpenFreeClassrooms = onOpenFreeClassrooms,
+                    onOpenReservation = onOpenReservation,
+                    onOpenLibrarySeatReservation = onOpenLibrarySeatReservation,
+                    onOpenWaterValve = onOpenWaterValve,
+                )
             }
         }
     }
@@ -2189,6 +2197,7 @@ private fun CampusOverviewSection(
     onOpenFreeClassrooms: () -> Unit,
     onOpenReservation: () -> Unit,
     onOpenLibrarySeatReservation: () -> Unit,
+    onOpenWaterValve: () -> Unit,
 ) {
     if (overview == null) {
         Column(
@@ -2199,6 +2208,7 @@ private fun CampusOverviewSection(
                 onOpenFreeClassrooms = onOpenFreeClassrooms,
                 onOpenReservation = onOpenReservation,
                 onOpenLibrarySeatReservation = onOpenLibrarySeatReservation,
+                onOpenWaterValve = onOpenWaterValve,
             )
             EmptyBlock("校园信息正在同步", "连接学校账号后，会显示成绩、空教室、一卡通和宿舍能耗。")
         }
@@ -2233,6 +2243,7 @@ private fun CampusOverviewSection(
             onOpenFreeClassrooms = onOpenFreeClassrooms,
             onOpenReservation = onOpenReservation,
             onOpenLibrarySeatReservation = onOpenLibrarySeatReservation,
+            onOpenWaterValve = onOpenWaterValve,
         )
     }
 }
@@ -2512,54 +2523,67 @@ private fun CampusQuickToolsGrid(
     onOpenFreeClassrooms: () -> Unit,
     onOpenReservation: () -> Unit,
     onOpenLibrarySeatReservation: () -> Unit,
+    onOpenWaterValve: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SectionHeader("校园快捷服务", "常用教务与生活服务指南")
         AppPanel {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(14.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                QuickToolItem(
-                    icon = Icons.Outlined.MeetingRoom,
-                    label = "自习空教室",
-                    accent = Color(0xFF059669),
-                    accentPale = Color(0xFFD1FAE5),
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenFreeClassrooms,
-                )
-                QuickToolItem(
-                    icon = Icons.Outlined.CalendarMonth,
-                    label = "研讨间预约",
-                    accent = Color(0xFF2563EB),
-                    accentPale = Color(0xFFEFF6FF),
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenReservation,
-                )
-                QuickToolItem(
-                    icon = Icons.Outlined.Chair,
-                    label = "座位预约",
-                    accent = Color(0xFF0F766E),
-                    accentPale = Color(0xFFCCFBF1),
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenLibrarySeatReservation,
-                )
-                QuickToolItem(
-                    icon = Icons.Outlined.School,
-                    label = "成绩明细",
-                    accent = Color(0xFF7C3AED),
-                    accentPale = Color(0xFFF3E8FF),
-                    modifier = Modifier.weight(1f),
-                )
-                QuickToolItem(
-                    icon = Icons.Outlined.Bolt,
-                    label = "水电充值",
-                    accent = Color(0xFF0284C7),
-                    accentPale = Color(0xFFE0F2FE),
-                    modifier = Modifier.weight(1f),
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    QuickToolItem(
+                        icon = Icons.Outlined.MeetingRoom,
+                        label = "自习空教室",
+                        accent = Color(0xFF059669),
+                        accentPale = Color(0xFFD1FAE5),
+                        modifier = Modifier.weight(1f),
+                        onClick = onOpenFreeClassrooms,
+                    )
+                    QuickToolItem(
+                        icon = Icons.Outlined.CalendarMonth,
+                        label = "研讨间预约",
+                        accent = Color(0xFF2563EB),
+                        accentPale = Color(0xFFEFF6FF),
+                        modifier = Modifier.weight(1f),
+                        onClick = onOpenReservation,
+                    )
+                    QuickToolItem(
+                        icon = Icons.Outlined.Chair,
+                        label = "座位预约",
+                        accent = Color(0xFF0F766E),
+                        accentPale = Color(0xFFCCFBF1),
+                        modifier = Modifier.weight(1f),
+                        onClick = onOpenLibrarySeatReservation,
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    QuickToolItem(
+                        icon = Icons.Outlined.WaterDrop,
+                        label = "饮水机",
+                        accent = MaterialTheme.colorScheme.tertiary,
+                        accentPale = MaterialTheme.colorScheme.tertiaryContainer,
+                        modifier = Modifier.weight(1f),
+                        onClick = onOpenWaterValve,
+                    )
+                    QuickToolItem(
+                        icon = Icons.Outlined.School,
+                        label = "成绩明细",
+                        accent = Color(0xFF7C3AED),
+                        accentPale = Color(0xFFF3E8FF),
+                        modifier = Modifier.weight(1f),
+                    )
+                    QuickToolItem(
+                        icon = Icons.Outlined.Bolt,
+                        label = "水电充值",
+                        accent = Color(0xFF0284C7),
+                        accentPale = Color(0xFFE0F2FE),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
     }

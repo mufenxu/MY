@@ -386,6 +386,45 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         )
     }
 
+    suspend fun campusWaterValve(): CampusWaterValve = withContext(Dispatchers.IO) {
+        campusWaterValveData(CAMPUS_WATER_VALVE_PATH)
+    }
+
+    suspend fun bindCampusWaterValve(rawCode: String): CampusWaterValve = withContext(Dispatchers.IO) {
+        campusWaterValveData(
+            CAMPUS_WATER_VALVE_BIND_PATH,
+            method = "POST",
+            body = JSONObject().put("rawCode", rawCode),
+        )
+    }
+
+    suspend fun openCampusWaterValve(): CampusWaterValve = withContext(Dispatchers.IO) {
+        campusWaterValveData(CAMPUS_WATER_VALVE_OPEN_PATH, method = "POST")
+    }
+
+    suspend fun closeCampusWaterValve(): CampusWaterValve = withContext(Dispatchers.IO) {
+        campusWaterValveData(CAMPUS_WATER_VALVE_CLOSE_PATH, method = "POST")
+    }
+
+    private suspend fun campusWaterValveData(
+        path: String,
+        method: String = "GET",
+        body: JSONObject? = null,
+    ): CampusWaterValve {
+        val envelope = http.execute(path, method = method, body = body).json
+        val data = envelope.optJSONObject("data") ?: JSONObject()
+        return CampusWaterValve(
+            bound = data.optBoolean("bound"),
+            seqNo = data.nullableString("seqNo"),
+            deviceName = data.nullableString("deviceName"),
+            running = data.optBoolean("running"),
+            defaultValue = data.nullableString("defaultValue"),
+            balance = data.nullableString("balance"),
+            updatedAt = data.nullableString("updatedAt"),
+            error = data.nullableString("error"),
+        )
+    }
+
     private suspend fun campusEnergy(): CampusEnergy {
         val data = campusData("$CAMPUS_ENERGY_SUMMARY_PATH?time=${YearMonth.now()}")
         val wallet = data.optJSONObject("wallet")

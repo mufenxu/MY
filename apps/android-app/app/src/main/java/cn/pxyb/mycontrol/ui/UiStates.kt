@@ -12,6 +12,7 @@ import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusFreeClassrooms
 import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.data.CampusOverview
+import cn.pxyb.mycontrol.data.CampusWaterValve
 import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.data.CampusReservationTimeWindow
 import cn.pxyb.mycontrol.data.CampusTimetable
@@ -130,6 +131,11 @@ data class AppUiState(
     val pendingTodoMutations: Int = 0,
     val campusTimetable: CampusTimetable? = null,
     val campusOverview: CampusOverview? = null,
+    val campusWaterValve: CampusWaterValve = CampusWaterValve(),
+    val campusWaterValveLoading: Boolean = false,
+    val campusWaterValveBusy: Boolean = false,
+    val campusWaterValveError: String? = null,
+    val campusWaterValveMessage: String? = null,
     val freeClassroomResult: CampusFreeClassrooms? = null,
     val resourceExpiries: List<ResourceExpiry> = emptyList(),
     val alerts: List<AppAlertRecord> = emptyList(),
@@ -400,6 +406,15 @@ data class TodayUiState(
     val unreadAlerts: Int,
     val resourceExpiries: List<ResourceExpiry>,
     val sharedTodoDraft: String?,
+)
+
+@Immutable
+data class WaterValveUiState(
+    val refreshing: Boolean = false,
+    val busy: Boolean = false,
+    val valve: CampusWaterValve = CampusWaterValve(),
+    val error: String? = null,
+    val message: String? = null,
 )
 
 @Immutable
@@ -776,6 +791,14 @@ internal fun AppUiState.toTodayUiState() = TodayUiState(
     unreadAlerts = alerts.count { !it.read },
     resourceExpiries = resourceExpiries,
     sharedTodoDraft = sharedTodoDraft,
+)
+
+internal fun AppUiState.toWaterValveUiState() = WaterValveUiState(
+    refreshing = campusWaterValveLoading,
+    busy = campusWaterValveBusy,
+    valve = campusWaterValve,
+    error = campusWaterValveError,
+    message = campusWaterValveMessage,
 )
 
 internal fun AppUiState.toFreeClassroomUiState() = FreeClassroomUiState(

@@ -193,6 +193,7 @@ internal object AppRoute {
     const val FreeClassrooms = "free-classrooms"
     const val Reservation = "reservation"
     const val LibrarySeatReservation = "library-seat-reservation"
+    const val CampusWaterValve = "campus-water-valve"
     const val Notifications = "notifications"
     const val Scenes = "scenes"
 }
@@ -234,6 +235,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.FreeClassrooms,
     AppRoute.Reservation,
     AppRoute.LibrarySeatReservation,
+    AppRoute.CampusWaterValve,
     AppRoute.Scenes -> MainTab.Overview
     AppRoute.Notifications -> MainTab.Overview
     AppRoute.Operations -> MainTab.Operations
@@ -257,6 +259,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.FreeClassrooms,
     AppRoute.Reservation,
     AppRoute.LibrarySeatReservation,
+    AppRoute.CampusWaterValve,
     AppRoute.Scenes -> MainTab.Overview
     else -> null
 }
@@ -1929,6 +1932,9 @@ private fun AuthenticatedShell(
                         onOpenLibrarySeatReservation = {
                             navigateToSubScreen(AppRoute.LibrarySeatReservation)
                         },
+                        onOpenWaterValve = {
+                            navigateToSubScreen(AppRoute.CampusWaterValve)
+                        },
                         onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
                     )
                 }
@@ -1939,6 +1945,19 @@ private fun AuthenticatedShell(
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
                         onQuery = viewModel::queryFreeClassrooms,
+                    )
+                }
+                composable(AppRoute.CampusWaterValve) {
+                    val waterValveState by viewModel.waterValveState.collectAsStateWithLifecycle()
+                    WaterValveScreen(
+                        state = waterValveState,
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onRefresh = { force -> viewModel.refreshWaterValve(force) },
+                        onBind = viewModel::bindWaterValve,
+                        onOpen = viewModel::openWaterValve,
+                        onClose = viewModel::closeWaterValve,
+                        onClearFeedback = viewModel::clearWaterValveFeedback,
                     )
                 }
                 composable(AppRoute.Reservation) {

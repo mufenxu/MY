@@ -162,6 +162,18 @@ data class CampusOverview(
 )
 
 @Immutable
+data class CampusWaterValve(
+    val bound: Boolean = false,
+    val seqNo: String? = null,
+    val deviceName: String? = null,
+    val running: Boolean = false,
+    val defaultValue: String? = null,
+    val balance: String? = null,
+    val updatedAt: String? = null,
+    val error: String? = null,
+)
+
+@Immutable
 data class CampusDashboard(
     val timetable: CampusTimetable,
     val overview: CampusOverview,
