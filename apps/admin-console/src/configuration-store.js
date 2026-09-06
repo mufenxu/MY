@@ -61,11 +61,12 @@ export function createMemoryConfigurationStore({
 
 export async function createMongoConfigurationStore({
   uri,
+  client: sharedClient = null,
   databaseName = process.env.PLATFORM_MONGODB_DATABASE || 'platform_app',
 } = {}) {
-  if (!uri) throw new Error('PLATFORM_MONGODB_URI is required.');
-  const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
-  await client.connect();
+  if (!uri && !sharedClient) throw new Error('PLATFORM_MONGODB_URI is required.');
+  const client = sharedClient || new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
+  if (!sharedClient) await client.connect();
   const db = client.db(databaseName);
   const state = db.collection('configuration_state');
   const versions = db.collection('configuration_versions');
@@ -110,6 +111,6 @@ export async function createMongoConfigurationStore({
       return row ? serialize(row) : null;
     },
     async ping() { return (await db.command({ ping: 1 })).ok === 1; },
-    async close() { await client.close(); },
+    async close() { if (!sharedClient) await client.close(); },
   };
 }

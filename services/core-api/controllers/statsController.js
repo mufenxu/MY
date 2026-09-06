@@ -10,6 +10,8 @@ const DASHBOARD_CACHE_TTL_MS = Math.max(
 );
 
 let dashboardCache = null;
+let dashboardRefresh = null;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function getDayStartTimestamp(date) {
     const d = new Date(date);
@@ -21,116 +23,91 @@ function formatTrendDate(ts) {
     return new Date(ts).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 }
 
-/**
- * 获取仪表盘统计数据
- */
+async function loadDashboardStats(nowMs) {
+    const today = getDayStartTimestamp(nowMs);
+    const week = new Date(today);
+    week.setDate(week.getDate() - week.getDay());
+    const trendStart = today - 6 * DAY_MS;
+    const dailyCounts = (field) => [
+        { $match: { [field]: { $gte: trendStart, $lt: today + DAY_MS } } },
+        { $group: {
+            _id: { $floor: { $divide: [{ $subtract: [`$${field}`, trendStart] }, DAY_MS] } },
+            count: { $sum: 1 },
+        } },
+    ];
+    const [userRows, notificationRows, auditRows, orderRows] = await Promise.all([
+        User.aggregate([{ $facet: {
+            summary: [{ $group: {
+                _id: null,
+                total: { $sum: 1 },
+                active: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
+                newToday: { $sum: { $cond: [{ $gte: ['$createdAt', today] }, 1, 0] } },
+                newThisWeek: { $sum: { $cond: [{ $gte: ['$createdAt', week.getTime()] }, 1, 0] } },
+            } }],
+            trend: dailyCounts('createdAt'),
+            recent: [
+                { $sort: { createdAt: -1 } }, { $limit: 5 },
+                { $project: { nickName: 1, avatarUrl: 1, role: 1, status: 1, createdAt: 1 } },
+            ],
+        } }]),
+        Notification.aggregate([{ $group: {
+            _id: null,
+            total: { $sum: 1 },
+            published: { $sum: { $cond: [{ $eq: ['$is_published', true] }, 1, 0] } },
+        } }]),
+        AuditLog.aggregate([{ $facet: {
+            summary: [{ $group: {
+                _id: null, total: { $sum: 1 },
+                today: { $sum: { $cond: [{ $gte: ['$ts', today] }, 1, 0] } },
+            } }],
+            recent: [
+                { $sort: { ts: -1 } }, { $limit: 10 },
+                { $project: { action: 1, actorOpenid: 1, ts: 1 } },
+            ],
+        } }]),
+        CourseOrder.aggregate([{ $facet: {
+            summary: [{ $group: {
+                _id: null, total: { $sum: 1 },
+                active: { $sum: { $cond: [{ $in: ['$status', ['Pending', 'Processing']] }, 1, 0] } },
+            } }],
+            trend: dailyCounts('createTime'),
+        } }]),
+    ]);
+    const users = userRows[0]?.summary[0] || {};
+    const notifications = notificationRows[0] || {};
+    const audit = auditRows[0]?.summary[0] || {};
+    const orders = orderRows[0]?.summary[0] || {};
+    const usersByDay = new Map((userRows[0]?.trend || []).map((row) => [row._id, row.count]));
+    const ordersByDay = new Map((orderRows[0]?.trend || []).map((row) => [row._id, row.count]));
+    return {
+        success: true,
+        data: {
+            users: { total: users.total || 0, active: users.active || 0, newToday: users.newToday || 0, newThisWeek: users.newThisWeek || 0 },
+            notifications: { total: notifications.total || 0, published: notifications.published || 0 },
+            auditLogs: { total: audit.total || 0, today: audit.today || 0 },
+            orders: { total: orders.total || 0, active: orders.active || 0 },
+            trend: Array.from({ length: 7 }, (_, index) => ({
+                date: formatTrendDate(trendStart + index * DAY_MS),
+                users: usersByDay.get(index) || 0,
+                orders: ordersByDay.get(index) || 0,
+            })),
+            recentUsers: userRows[0]?.recent || [],
+            recentLogs: auditRows[0]?.recent || [],
+        },
+    };
+}
+
 exports.getDashboardStats = async (req, res) => {
     const nowMs = Date.now();
-    if (dashboardCache && nowMs < dashboardCache.expiresAt) {
-        return res.json(dashboardCache.payload);
-    }
-
+    if (dashboardCache && nowMs < dashboardCache.expiresAt) return res.json(dashboardCache.payload);
     try {
-        const now = new Date(nowMs);
-        const todayStartTs = getDayStartTimestamp(now);
-        const weekStart = new Date(todayStartTs);
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        const weekStartTs = weekStart.getTime();
-
-        const [
-            totalUsers,
-            activeUsers,
-            newUsersToday,
-            newUsersThisWeek,
-            totalNotifications,
-            publishedNotifications,
-            totalAuditLogs,
-            todayAuditLogs,
-            recentUsers,
-            recentLogs,
-            totalOrders,
-            activeOrders
-        ] = await Promise.all([
-            User.countDocuments(),
-            User.countDocuments({ status: 'active' }),
-            User.countDocuments({ createdAt: { $gte: todayStartTs } }),
-            User.countDocuments({ createdAt: { $gte: weekStartTs } }),
-
-            Notification.countDocuments(),
-            Notification.countDocuments({ is_published: true }),
-
-            AuditLog.countDocuments(),
-            AuditLog.countDocuments({ ts: { $gte: todayStartTs } }),
-
-            User.find()
-                .sort({ createdAt: -1 })
-                .limit(5)
-                .select('nickName avatarUrl role status createdAt')
-                .lean(),
-            AuditLog.find()
-                .sort({ ts: -1 })
-                .limit(10)
-                .select('action actorOpenid ts')
-                .lean(),
-
-            CourseOrder.countDocuments(),
-            CourseOrder.countDocuments({ status: { $in: ['Pending', 'Processing'] } })
-        ]);
-
-        const oneDayMs = 24 * 60 * 60 * 1000;
-        const trendStart = todayStartTs - 6 * oneDayMs;
-
-        const trend = await Promise.all(
-            Array.from({ length: 7 }, async (_, index) => {
-                const start = trendStart + index * oneDayMs;
-                const end = start + oneDayMs;
-
-                const [userCount, orderCount] = await Promise.all([
-                    User.countDocuments({ createdAt: { $gte: start, $lt: end } }),
-                    CourseOrder.countDocuments({ createTime: { $gte: start, $lt: end } })
-                ]);
-
-                return {
-                    date: formatTrendDate(start),
-                    users: userCount,
-                    orders: orderCount
-                };
-            })
-        );
-
-        const payload = {
-            success: true,
-            data: {
-                users: {
-                    total: totalUsers,
-                    active: activeUsers,
-                    newToday: newUsersToday,
-                    newThisWeek: newUsersThisWeek
-                },
-                notifications: {
-                    total: totalNotifications,
-                    published: publishedNotifications
-                },
-                auditLogs: {
-                    total: totalAuditLogs,
-                    today: todayAuditLogs
-                },
-                orders: {
-                    total: totalOrders,
-                    active: activeOrders
-                },
-                trend,
-                recentUsers,
-                recentLogs
-            }
-        };
-
-        dashboardCache = {
-            expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
-            payload
-        };
-
-        res.json(payload);
+        if (!dashboardRefresh) {
+            dashboardRefresh = loadDashboardStats(nowMs).then((payload) => {
+                dashboardCache = { expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS, payload };
+                return payload;
+            }).finally(() => { dashboardRefresh = null; });
+        }
+        res.json(await dashboardRefresh);
     } catch (error) {
         logger.error('Stats Error:', error);
         res.status(500).json({

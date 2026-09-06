@@ -142,8 +142,11 @@ test('todo reminder sends to the platform App when WeCom is disabled', async () 
     assert.deepEqual(capturedPayload.audience, { users: ['platform-user'] });
     assert.deepEqual(capturedPayload.channels, ['app']);
     assert.equal(updates.length, 1);
-    assert.equal(updates[0][1].$set.tasks[0].reminderStatus, 'sent');
-    assert.equal(updates[0][1].$set.tasks[0].remindedAt, 1_000);
+    assert.equal(updates[0][1].$set['tasks.$[reminded].reminderStatus'], 'sent');
+    assert.equal(updates[0][1].$set['tasks.$[reminded].remindedAt'], 1_000);
+    assert.equal(Object.hasOwn(updates[0][1].$set, 'tasks'), false);
+    assert.equal(updates[0][1].$inc.revision, 1);
+    assert.equal(updates[0][2].arrayFilters[0].$or[0]['reminded.id'], 'task-1');
 });
 
 test('todo reminder falls back to WeCom when canonical delivery fails', async () => {

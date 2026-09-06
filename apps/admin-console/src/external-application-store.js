@@ -318,13 +318,14 @@ export function createMemoryExternalApplicationStore({
 
 export async function createMongoExternalApplicationStore({
   uri,
+  client: sharedClient = null,
   databaseName = process.env.PLATFORM_MONGODB_DATABASE || 'platform_app',
   codeTtlMs = EXTERNAL_AUTHORIZATION_CODE_TTL_MS,
   encryptionKey = null,
 } = {}) {
-  if (!uri) throw new Error('PLATFORM_MONGODB_URI is required.');
-  const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
-  await client.connect();
+  if (!uri && !sharedClient) throw new Error('PLATFORM_MONGODB_URI is required.');
+  const client = sharedClient || new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
+  if (!sharedClient) await client.connect();
   const db = client.db(databaseName);
   const applications = db.collection('external_applications');
   const authorizationCodes = db.collection('external_authorization_codes');
@@ -463,7 +464,7 @@ export async function createMongoExternalApplicationStore({
     },
 
     async ping() { return (await db.command({ ping: 1 })).ok === 1; },
-    async close() { await client.close(); },
+    async close() { if (!sharedClient) await client.close(); },
   };
 }
 

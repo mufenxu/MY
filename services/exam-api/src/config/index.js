@@ -177,7 +177,7 @@ const config = {
         apiBaseUrl: aiApiBaseUrl,
         apiKey: aiApiKey,
         model: process.env.SUB2API_MODEL || process.env.AI_MODEL || 'gpt-4o-mini',
-        timeoutMs: parsePositiveInt(process.env.AI_API_TIMEOUT_MS, 30000),
+        timeoutMs: Math.min(parsePositiveInt(process.env.AI_API_TIMEOUT_MS, 30000), 120000),
         maxTokens: parsePositiveInt(process.env.AI_MAX_TOKENS, 500),
         batchMaxPerRun: parsePositiveInt(process.env.AI_BATCH_MAX_PER_RUN, 10),
         batchCooldownMs: parsePositiveInt(process.env.AI_BATCH_COOLDOWN_MS, 60000),

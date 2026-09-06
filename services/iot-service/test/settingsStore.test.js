@@ -124,8 +124,8 @@ test('SettingsStore persists administrator passwords only as scrypt hashes', asy
   assert.equal(store.getPublicConfig().config.auth.password, '');
 
   const authManager = new AuthManager(store, storage);
-  assert.equal(authManager.authenticate('admin', password).ok, true);
-  assert.equal(authManager.authenticate('admin', 'wrong-password').ok, false);
+  assert.equal((await authManager.authenticate('admin', password)).ok, true);
+  assert.equal((await authManager.authenticate('admin', 'wrong-password')).ok, false);
 });
 
 test('SettingsStore recovers invalid persisted production auth from environment defaults', async () => {
@@ -161,7 +161,7 @@ test('SettingsStore recovers invalid persisted production auth from environment 
     await store.initialize();
 
     assert.equal(isPasswordHash(storage.settings.auth.password), true);
-    assert.equal(verifyPassword(envPassword, storage.settings.auth.password), true);
+    assert.equal(await verifyPassword(envPassword, storage.settings.auth.password), true);
     assert.equal(storage.settings.auth.sessionSecret, envSessionSecret);
   } finally {
     if (previousNodeEnv === undefined) {
@@ -187,7 +187,7 @@ test('production auth rejects weak and template credentials', () => {
   );
 });
 
-test('scrypt verifier rejects malformed or attacker-controlled parameters', () => {
+test('scrypt verifier rejects malformed or attacker-controlled parameters', async () => {
   assert.equal(isPasswordHash('scrypt$999999999$8$1$c2FsdA$aGFzaA'), false);
-  assert.equal(verifyPassword('password', 'scrypt$999999999$8$1$c2FsdA$aGFzaA'), false);
+  assert.equal(await verifyPassword('password', 'scrypt$999999999$8$1$c2FsdA$aGFzaA'), false);
 });

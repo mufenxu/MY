@@ -156,11 +156,12 @@ export function createMemoryGoogleAccountStore() {
 
 export async function createMongoGoogleAccountStore({
   uri,
+  client: sharedClient = null,
   databaseName = process.env.PLATFORM_MONGODB_DATABASE || 'platform_app',
 } = {}) {
-  if (!uri) throw new Error('PLATFORM_MONGODB_URI is required.');
-  const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
-  await client.connect();
+  if (!uri && !sharedClient) throw new Error('PLATFORM_MONGODB_URI is required.');
+  const client = sharedClient || new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
+  if (!sharedClient) await client.connect();
   const db = client.db(databaseName);
   const collection = db.collection('google_account_ledgers');
   await collection.createIndex({ updatedAt: -1 });
@@ -193,7 +194,7 @@ export async function createMongoGoogleAccountStore({
       return true;
     },
     async close() {
-      await client.close();
+      if (!sharedClient) await client.close();
     },
   };
 }

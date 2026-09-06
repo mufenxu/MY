@@ -55,9 +55,11 @@ export class CampusRepository {
       this.db.collection("auto_reservation_tasks").createIndex({ id: 1 }, { unique: true }),
       this.db.collection("auto_reservation_tasks").createIndex({ user_id: 1, created_at: 1 }),
       this.db.collection("auto_reservation_tasks").createIndex({ enabled: 1, run_lock_until: 1 }),
+      this.db.collection("auto_reservation_tasks").createIndex({ enabled: 1, id: 1 }),
       this.db.collection("library_seat_waitlists").createIndex({ id: 1 }, { unique: true }),
       this.db.collection("library_seat_waitlists").createIndex({ user_id: 1, created_at: 1 }),
       this.db.collection("library_seat_waitlists").createIndex({ enabled: 1, updated_at: 1 }),
+      this.db.collection("library_seat_waitlists").createIndex({ enabled: 1, id: 1 }),
       this.db.collection("invites").createIndex({ id: 1 }, { unique: true }),
       this.db.collection("invites").createIndex({ code_hash: 1 }, { unique: true }),
       this.db.collection("invites").createIndex({ created_at: -1 })
@@ -415,8 +417,8 @@ export class CampusRepository {
   async listEnabledAutoReservationTasks(options = {}) {
     const { offset, limit } = boundedWindow(options);
     return this.db.collection("auto_reservation_tasks")
-      .find({ enabled: true }, { projection: { _id: 0 } })
-      .sort({ updated_at: 1 })
+      .find({ enabled: true, ...(options.afterId ? { id: { $gt: String(options.afterId) } } : {}) }, { projection: { _id: 0 } })
+      .sort({ id: 1 })
       .skip(offset)
       .limit(limit)
       .toArray();
@@ -494,8 +496,8 @@ export class CampusRepository {
   async listEnabledLibrarySeatWaitlists(options = {}) {
     const { offset, limit } = boundedWindow(options);
     return this.db.collection("library_seat_waitlists")
-      .find({ enabled: true }, { projection: { _id: 0 } })
-      .sort({ updated_at: 1 })
+      .find({ enabled: true, ...(options.afterId ? { id: { $gt: String(options.afterId) } } : {}) }, { projection: { _id: 0 } })
+      .sort({ id: 1 })
       .skip(offset)
       .limit(limit)
       .toArray();
@@ -701,8 +703,8 @@ export class MemoryCampusRepository {
   async listEnabledAutoReservationTasks(options = {}) {
     const { offset, limit } = boundedWindow(options);
     return clone(Array.from(this.autoReservationTasks.values())
-      .filter((row) => row.enabled)
-      .sort((a, b) => String(a.updated_at || "").localeCompare(String(b.updated_at || "")))
+      .filter((row) => row.enabled && (!options.afterId || String(row.id) > String(options.afterId)))
+      .sort((a, b) => String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0)
       .slice(offset, offset + limit));
   }
 
@@ -765,8 +767,8 @@ export class MemoryCampusRepository {
   async listEnabledLibrarySeatWaitlists(options = {}) {
     const { offset, limit } = boundedWindow(options);
     return clone(Array.from(this.librarySeatWaitlists.values())
-      .filter((row) => row.enabled)
-      .sort((a, b) => String(a.updated_at || "").localeCompare(String(b.updated_at || "")))
+      .filter((row) => row.enabled && (!options.afterId || String(row.id) > String(options.afterId)))
+      .sort((a, b) => String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0)
       .slice(offset, offset + limit));
   }
 

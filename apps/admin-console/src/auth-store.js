@@ -323,17 +323,18 @@ export function createMemoryAuthStore({ bootstrap, encryptionKey, issuer = 'MY P
 
 export async function createMongoAuthStore({
   uri,
+  client: sharedClient = null,
   encryptionKey,
   bootstrap,
   issuer = 'MY Platform',
   databaseName = process.env.PLATFORM_MONGODB_DATABASE || 'platform_app',
   now = () => Date.now(),
 } = {}) {
-  if (!uri) throw new Error('PLATFORM_MONGODB_URI is required.');
+  if (!uri && !sharedClient) throw new Error('PLATFORM_MONGODB_URI is required.');
   const key = decodeKey(encryptionKey);
   const initial = validateBootstrap(bootstrap);
-  const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
-  await client.connect();
+  const client = sharedClient || new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
+  if (!sharedClient) await client.connect();
   const db = client.db(databaseName);
   const accounts = db.collection('admin_accounts');
   const challenges = db.collection('auth_challenges');
@@ -562,7 +563,7 @@ export async function createMongoAuthStore({
       return { newIp };
     },
     async ping() { return (await db.command({ ping: 1 })).ok === 1; },
-    async close() { await client.close(); },
+    async close() { if (!sharedClient) await client.close(); },
   };
 }
 

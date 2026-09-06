@@ -29,6 +29,7 @@ router.put('/major-categories/:id', validate(cv.updateMajorCategory), consoleCon
 router.delete('/major-categories/:id', validate(cv.idParam), consoleController.deleteMajorCategory);
 
 router.get('/categories', consoleController.getCategories);
+router.get('/ai-analyses/jobs/:id', validate(cv.idParam), consoleController.getAiGenerationJob);
 router.get('/categories/:id/analysis', validate(cv.idParam), consoleController.getCategoryAnalysis);
 router.post(
     '/categories/:id/ai-analyses/generate',

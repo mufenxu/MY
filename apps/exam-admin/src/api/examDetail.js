@@ -66,10 +66,21 @@ export function createExamDetailApi({ getExamId, getScopeType, getIsConsoleMode,
             ),
         getAiAnalysis: (questionId) =>
             http.get(`${questionUrl(questionId)}/ai-analysis`, { params: scopeParams() }),
-        generateAiAnalyses: (payload) =>
-            http.post(`${categoryUrl()}/ai-analyses/generate`, scopePayload(payload), {
-                timeout: 180000,
-            }),
+        generateAiAnalyses: async (payload, { onProgress, signal } = {}) => {
+            const jobBase = `${apiBase}${isConsoleMode() ? '/api/console' : '/api/manage'}/ai-analyses/jobs`;
+            const params = scopeParams();
+            let response = await http.post(`${categoryUrl()}/ai-analyses/generate`, scopePayload(payload), { signal });
+            let job = response.data.data;
+            onProgress?.(job);
+            while (['queued', 'running'].includes(job.status)) {
+                await new Promise((resolve) => setTimeout(resolve, 1500));
+                signal?.throwIfAborted();
+                response = await http.get(`${jobBase}/${encodeURIComponent(job.jobId)}`, { params, signal });
+                job = response.data.data;
+                onProgress?.(job);
+            }
+            return { ...response, data: { ...response.data, data: job.summary } };
+        },
         adoptAiAnalysis: (questionId) =>
             http.patch(`${questionUrl(questionId)}/ai-analysis/adopt`, {}, {
                 params: scopeParams(),

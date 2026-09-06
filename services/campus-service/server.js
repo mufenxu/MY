@@ -10,7 +10,7 @@ import * as cheerio from "cheerio";
 import QRCode from "qrcode";
 import bwipjs from "bwip-js";
 import { runWithAuthRecovery } from "./src/lib/auth-recovery.js";
-import { mapWithConcurrency } from "./src/lib/bounded-concurrency.js";
+import { iterateTaskPages, mapWithConcurrency } from "./src/lib/bounded-concurrency.js";
 import { createLogger } from "./src/lib/logger.js";
 import { KeyedSerialQueue } from "./src/lib/keyed-serial-queue.js";
 import { FixedWindowAttemptLimiter } from "./src/lib/rate-limiter.js";
@@ -8553,24 +8553,34 @@ async function runLibroomAutoReservationScheduler(reason) {
   libroomAutoReservationRunning = true;
   let nextDelayMs = LIBROOM_AUTO_RESERVATION_INTERVAL_MS;
   try {
-    const rows = await repository.listEnabledAutoReservationTasks({ limit: BACKGROUND_USER_SCAN_LIMIT + 1 });
-    const tasks = rows.slice(0, BACKGROUND_USER_SCAN_LIMIT);
-    const now = new Date();
-    await mapWithConcurrency(tasks, 2, async (task) => {
-      if (!isAutoReservationDue(task, now)) return "skipped";
-      const user = await repository.findUserById(task.user_id);
-      if (!user || user.disabled) return "skipped";
-      return userContextStorage.run(
-        { requestId: `auto-reservation-${randomUUID()}`, user },
-        async () => {
-          await reloginSchoolSessionIfWanted({ message: "libroom auto reservation" });
-          const result = await runAutoReservationTask(task, user, now);
-          return result?.status || "claimed";
-        }
-      );
-    });
-    nextDelayMs = autoReservationNextScanDelay(tasks, new Date(), { fallbackMs: LIBROOM_AUTO_RESERVATION_INTERVAL_MS });
-    if (reason !== "interval" && tasks.length) logger.info("libroom_auto_reservation_scan_completed", { reason, tasks: tasks.length });
+    let scanned = 0;
+    for await (const tasks of iterateTaskPages(repository.listEnabledAutoReservationTasks.bind(repository), {
+      batchSize: BACKGROUND_USER_SCAN_LIMIT,
+      shouldStop: () => shuttingDown
+    })) {
+      const now = new Date();
+      await mapWithConcurrency(tasks, 2, async (task) => {
+        if (!isAutoReservationDue(task, now)) return "skipped";
+        const user = await repository.findUserById(task.user_id);
+        if (!user || user.disabled) return "skipped";
+        return userContextStorage.run(
+          { requestId: `auto-reservation-${randomUUID()}`, user },
+          async () => {
+            await reloginSchoolSessionIfWanted({ message: "libroom auto reservation" });
+            const result = await runAutoReservationTask(task, user, now);
+            return result?.status || "claimed";
+          }
+        ).catch((error) => {
+          logger.warn("libroom_auto_reservation_task_failed", { taskId: task.id, error });
+          return "failed";
+        });
+      });
+      scanned += tasks.length;
+      nextDelayMs = Math.min(nextDelayMs, autoReservationNextScanDelay(tasks, new Date(), { fallbackMs: LIBROOM_AUTO_RESERVATION_INTERVAL_MS }));
+    }
+    if (reason !== "interval" && scanned) {
+      logger.info("libroom_auto_reservation_scan_completed", { reason, tasks: scanned });
+    }
   } catch (error) {
     logger.warn("libroom_auto_reservation_scan_failed", { reason, error });
   } finally {
@@ -8618,70 +8628,75 @@ async function runLibrarySeatWaitlistScheduler(reason) {
   librarySeatWaitlistRunning = true;
   let nextDelayMs = LIBRARY_SEAT_WAITLIST_SLOW_INTERVAL_MS;
   try {
-    const rows = await repository.listEnabledLibrarySeatWaitlists({ limit: BACKGROUND_USER_SCAN_LIMIT + 1 });
-    const tasks = rows.slice(0, BACKGROUND_USER_SCAN_LIMIT);
-    const now = new Date();
-    await mapWithConcurrency(tasks, 2, async (task) => {
-      const plan = librarySeatWaitlistRunPlan(task, now);
-      const user = await repository.findUserById(task.user_id);
-      if (!user || user.disabled) {
-        if (plan.expired) {
-          await repository.finishLibrarySeatWaitlist(task.user_id, task.id, {
-            status: "expired",
-            message: "候补时段已结束，未能预约成功。",
-            areaName: null,
-            seatId: null,
-            seatLabel: null
-          }, now.toISOString());
-        }
-        return "skipped";
-      }
-      return userContextStorage.run(
-        { requestId: `library-seat-waitlist-${randomUUID()}`, user },
-        async () => {
-          try {
-            await reloginSchoolSessionIfWanted({ message: "library seat waitlist" });
-            const result = await runLibrarySeatWaitlistTask(task, user, now);
-            return result?.status || "claimed";
-          } catch (error) {
-            const failures = Number(task.consecutive_failures || 0) + 1;
-            const message = librarySeatWaitlistFailureText(error);
-            const timestamp = now.toISOString();
-            if (failures >= LIBRARY_SEAT_WAITLIST_MAX_FAILURES) {
-              const result = {
-                status: "failed",
-                message: `候补已停止：${message}`,
-                areaName: null,
-                seatId: null,
-                seatLabel: null
-              };
-              await repository.finishLibrarySeatWaitlist(user.id, task.id, result, timestamp);
-              await notifyLibrarySeatWaitlist(user, task, result).catch((notifyError) => {
-                logger.warn("library_seat_waitlist_notify_failed", { taskId: task.id, error: notifyError?.message });
-              });
-            } else {
-              await repository.updateLibrarySeatWaitlist(user.id, task.id, {
-                status: "listening",
-                last_message: `第 ${failures} 次检测失败：${message}`,
-                consecutive_failures: failures,
-                last_run_at: timestamp
-              }, timestamp);
-            }
-            logger.warn("library_seat_waitlist_scan_task_failed", { userId: user.id, taskId: task.id, failures });
-            return "failed";
+    let scanned = 0;
+    for await (const tasks of iterateTaskPages(repository.listEnabledLibrarySeatWaitlists.bind(repository), {
+      batchSize: BACKGROUND_USER_SCAN_LIMIT,
+      shouldStop: () => shuttingDown
+    })) {
+      const now = new Date();
+      await mapWithConcurrency(tasks, 2, async (task) => {
+        const plan = librarySeatWaitlistRunPlan(task, now);
+        const user = await repository.findUserById(task.user_id);
+        if (!user || user.disabled) {
+          if (plan.expired) {
+            await repository.finishLibrarySeatWaitlist(task.user_id, task.id, {
+              status: "expired",
+              message: "候补时段已结束，未能预约成功。",
+              areaName: null,
+              seatId: null,
+              seatLabel: null
+            }, now.toISOString());
           }
+          return "skipped";
         }
-      );
-    });
-    nextDelayMs = librarySeatWaitlistNextScanDelay(rows, new Date(), {
-      fastMs: LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS,
-      mediumMs: LIBRARY_SEAT_WAITLIST_MEDIUM_INTERVAL_MS,
-      slowMs: LIBRARY_SEAT_WAITLIST_SLOW_INTERVAL_MS,
-      hotWindowMs: LIBRARY_SEAT_WAITLIST_HOT_WINDOW_MS,
-      mediumWindowMs: LIBRARY_SEAT_WAITLIST_MEDIUM_WINDOW_MS
-    });
-    if (reason !== "interval" && tasks.length) {
-      logger.info("library_seat_waitlist_scan_completed", { reason, tasks: tasks.length });
+        return userContextStorage.run(
+          { requestId: `library-seat-waitlist-${randomUUID()}`, user },
+          async () => {
+            try {
+              await reloginSchoolSessionIfWanted({ message: "library seat waitlist" });
+              const result = await runLibrarySeatWaitlistTask(task, user, now);
+              return result?.status || "claimed";
+            } catch (error) {
+              const failures = Number(task.consecutive_failures || 0) + 1;
+              const message = librarySeatWaitlistFailureText(error);
+              const timestamp = now.toISOString();
+              if (failures >= LIBRARY_SEAT_WAITLIST_MAX_FAILURES) {
+                const result = {
+                  status: "failed",
+                  message: `候补已停止：${message}`,
+                  areaName: null,
+                  seatId: null,
+                  seatLabel: null
+                };
+                await repository.finishLibrarySeatWaitlist(user.id, task.id, result, timestamp);
+                await notifyLibrarySeatWaitlist(user, task, result).catch((notifyError) => {
+                  logger.warn("library_seat_waitlist_notify_failed", { taskId: task.id, error: notifyError?.message });
+                });
+              } else {
+                await repository.updateLibrarySeatWaitlist(user.id, task.id, {
+                  status: "listening",
+                  last_message: `第 ${failures} 次检测失败：${message}`,
+                  consecutive_failures: failures,
+                  last_run_at: timestamp
+                }, timestamp);
+              }
+              logger.warn("library_seat_waitlist_scan_task_failed", { userId: user.id, taskId: task.id, failures });
+              return "failed";
+            }
+          }
+        );
+      });
+      scanned += tasks.length;
+      nextDelayMs = Math.min(nextDelayMs, librarySeatWaitlistNextScanDelay(tasks, new Date(), {
+        fastMs: LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS,
+        mediumMs: LIBRARY_SEAT_WAITLIST_MEDIUM_INTERVAL_MS,
+        slowMs: LIBRARY_SEAT_WAITLIST_SLOW_INTERVAL_MS,
+        hotWindowMs: LIBRARY_SEAT_WAITLIST_HOT_WINDOW_MS,
+        mediumWindowMs: LIBRARY_SEAT_WAITLIST_MEDIUM_WINDOW_MS
+      }));
+    }
+    if (reason !== "interval" && scanned) {
+      logger.info("library_seat_waitlist_scan_completed", { reason, tasks: scanned });
     }
   } catch (error) {
     logger.warn("library_seat_waitlist_scan_failed", { reason, error: error?.message });

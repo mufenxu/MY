@@ -157,6 +157,7 @@ export function createOperationsCenter({
   let current = [];
   let refreshedAt = null;
   let refreshPromise = null;
+  let overviewHistory = null;
   let monitorTimer = null;
   let backupTimer = null;
   let stopped = true;
@@ -326,6 +327,7 @@ export function createOperationsCenter({
       await store.recordStatusSamples(results, new Date(timestamp));
       current = results;
       refreshedAt = new Date(timestamp).toISOString();
+      overviewHistory = null;
       metrics?.recordServiceStatuses?.(results);
       metrics?.recordIncidentCount?.((await store.listIncidents({ status: 'open,acknowledged', limit: 2000 })).length);
       return results;
@@ -360,20 +362,29 @@ export function createOperationsCenter({
 
   async function getOverview() {
     if (!current.length) await refresh(true);
-    const since = new Date(now().getTime() - 24 * 3600000).toISOString();
-    const histories = await Promise.all(services.map(async (service) => {
-      const samples = await store.getStatusHistory({ serviceId: service.id, since, limit: 3000 });
-      const monitored = samples.filter((sample) => !sample.maintenance && sample.state !== 'unmonitored');
-      const healthy = monitored.filter((sample) => sample.state === 'healthy').length;
-      const latencies = monitored.map((sample) => sample.latencyMs).filter(Number.isFinite);
-      return [service.id, {
-        samples: downsample(samples),
-        availability: monitored.length ? Math.round((healthy / monitored.length) * 10000) / 100 : null,
-        p95LatencyMs: percentile(latencies, 0.95),
-      }];
-    }));
-    const incidents = await store.listIncidents({ status: 'open,acknowledged', limit: 8 });
-    const audit = await store.listAudit({ limit: 8 });
+    if (!overviewHistory) {
+      const since = new Date(now().getTime() - 24 * 3600000).toISOString();
+      const pending = Promise.all(services.map(async (service) => {
+        const samples = await store.getStatusHistory({ serviceId: service.id, since, limit: 3000 });
+        const monitored = samples.filter((sample) => !sample.maintenance && sample.state !== 'unmonitored');
+        const healthy = monitored.filter((sample) => sample.state === 'healthy').length;
+        const latencies = monitored.map((sample) => sample.latencyMs).filter(Number.isFinite);
+        return [service.id, {
+          samples: downsample(samples),
+          availability: monitored.length ? Math.round((healthy / monitored.length) * 10000) / 100 : null,
+          p95LatencyMs: percentile(latencies, 0.95),
+        }];
+      })).catch((error) => {
+        if (overviewHistory === pending) overviewHistory = null;
+        throw error;
+      });
+      overviewHistory = pending;
+    }
+    const [histories, incidents, audit] = await Promise.all([
+      overviewHistory,
+      store.listIncidents({ status: 'open,acknowledged', limit: 8 }),
+      store.listAudit({ limit: 8 }),
+    ]);
     return {
       ...statusPayload(),
       history: Object.fromEntries(histories),

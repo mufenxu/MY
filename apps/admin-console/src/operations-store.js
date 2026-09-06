@@ -329,13 +329,14 @@ export function createMemoryOperationsStore({
 
 export async function createMongoOperationsStore({
   uri,
+  client: sharedClient = null,
   databaseName = process.env.PLATFORM_MONGODB_DATABASE || 'platform_app',
   statusRetentionDays = 30,
   auditRetentionDays = 180,
 } = {}) {
-  if (!uri) throw new Error('PLATFORM_MONGODB_URI is required.');
-  const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
-  await client.connect();
+  if (!uri && !sharedClient) throw new Error('PLATFORM_MONGODB_URI is required.');
+  const client = sharedClient || new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
+  if (!sharedClient) await client.connect();
   const db = client.db(databaseName);
   const statusHistory = db.collection('service_status_history');
   const statusRollups = db.collection('service_status_rollups');
@@ -683,7 +684,7 @@ export async function createMongoOperationsStore({
     },
 
     async close() {
-      await client.close();
+      if (!sharedClient) await client.close();
     },
   };
   return store;

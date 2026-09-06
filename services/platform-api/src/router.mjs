@@ -264,9 +264,9 @@ export function createPlatformRouter({
     mqtt: parseHosts(mqttHosts),
   };
   const upstreamTimeout = boundedProxyTimeout(proxyTimeoutMs);
-  const assistantLimiter = createAssistantRateLimiter({
-    limit: readAiAssistantConfig().rateLimitPerMinute,
-  });
+  const assistantConfig = readAiAssistantConfig();
+  const examAiTimeout = Math.max(upstreamTimeout, assistantConfig.timeoutMs + 10_000);
+  const assistantLimiter = createAssistantRateLimiter({ limit: assistantConfig.rateLimitPerMinute });
   const proxy = httpProxy.createProxyServer({
     xfwd: true,
     ws: true,
@@ -302,7 +302,7 @@ export function createPlatformRouter({
       writeProxyError(res, error);
       if (!context.proxyRes?.destroyed) context.proxyRes?.destroy(error);
       if (!proxyReq.destroyed) proxyReq.destroy(error);
-    }, upstreamTimeout);
+    }, context.timeoutMs);
     timeout.unref?.();
     context.timeout = timeout;
 
@@ -344,9 +344,13 @@ export function createPlatformRouter({
       res.end(JSON.stringify({ error: '内部服务未配置。', code: 'UPSTREAM_NOT_CONFIGURED' }));
       return;
     }
+    const pathname = new URL(req.url || '/', 'http://platform.internal').pathname;
+    const timeoutMs = service === 'exam' && req.method === 'POST' && pathname === '/api/user/ai/question-analysis'
+      ? examAiTimeout : upstreamTimeout;
     req[PROXY_CONTEXT] = {
       finished: false,
       service,
+      timeoutMs,
       startedAt: performance.now(),
     };
     res.once('finish', () => finishProxyMetric(req, res));
@@ -359,7 +363,7 @@ export function createPlatformRouter({
     });
     proxy.web(req, res, {
       target,
-      proxyTimeout: upstreamTimeout + 250,
+      proxyTimeout: timeoutMs + 250,
     });
   }
 

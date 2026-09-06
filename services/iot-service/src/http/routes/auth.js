@@ -10,10 +10,10 @@ function registerAuthRoutes(app, { authManager, loginLimiter }) {
     });
   });
 
-  app.post('/api/auth/login', loginLimiter, (req, res) => {
+  app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const username = String(req.body.username || '');
     const password = String(req.body.password || '');
-    const result = authManager.authenticate(username, password);
+    const result = await authManager.authenticate(username, password);
 
     if (result.disabled) {
       return res.json({

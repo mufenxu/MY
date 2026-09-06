@@ -102,11 +102,12 @@ function mongoPatch(patch) {
 
 export async function createMongoReleaseStore({
   uri,
+  client: sharedClient = null,
   databaseName = process.env.PLATFORM_MONGODB_DATABASE || 'platform_app',
 } = {}) {
-  if (!uri) throw new Error('PLATFORM_MONGODB_URI is required.');
-  const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
-  await client.connect();
+  if (!uri && !sharedClient) throw new Error('PLATFORM_MONGODB_URI is required.');
+  const client = sharedClient || new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
+  if (!sharedClient) await client.connect();
   const db = client.db(databaseName);
   const builds = db.collection('release_builds');
 
@@ -150,7 +151,7 @@ export async function createMongoReleaseStore({
     },
 
     async close() {
-      await client.close();
+      if (!sharedClient) await client.close();
     },
   };
 }

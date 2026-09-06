@@ -1,6 +1,42 @@
 const crypto = require('crypto');
 const { MongoClient } = require('mongodb');
 const { BoundedTtlCache } = require('../utils/boundedTtlCache');
+const { RANGE_BUCKETS, normalizeRange, downsampleTelemetry, summarizeMetric } = require('../services/telemetryInsights');
+
+const RANGE_DURATIONS = { '1h': 3600000, '24h': 86400000, '7d': 604800000 };
+
+function telemetryGroup(id) {
+  const group = { _id: id, sampleCount: { $sum: 1 } };
+  for (const field of ['temp', 'hum']) {
+    group[field] = { $avg: `$${field}` };
+    group[`${field}Count`] = { $sum: { $cond: [{ $isNumber: `$${field}` }, 1, 0] } };
+    group[`${field}Min`] = { $min: `$${field}` };
+    group[`${field}Max`] = { $max: `$${field}` };
+  }
+  return group;
+}
+
+function telemetrySeriesStages(range) {
+  const bucketMs = RANGE_BUCKETS[range];
+  return [
+    { $group: telemetryGroup({ $subtract: ['$created_at', { $mod: ['$created_at', bucketMs] }] }) },
+    { $sort: { _id: 1 } },
+    { $project: {
+      _id: 0, created_at: '$_id', sampleCount: 1,
+      temp: { $round: ['$temp', 2] }, tempMin: 1, tempMax: 1,
+      hum: { $round: ['$hum', 2] }, humMin: 1, humMax: 1
+    } }
+  ];
+}
+
+function telemetryMetricSummary(row, field) {
+  return {
+    count: row?.[`${field}Count`] || 0,
+    min: row?.[`${field}Min`] ?? null,
+    max: row?.[`${field}Max`] ?? null,
+    average: row?.[field] == null ? null : Number(row[field].toFixed(2))
+  };
+}
 
 const API_KEY_CACHE_TTL_MS = 60000;
 const API_KEY_NEGATIVE_CACHE_TTL_MS = 5000;
@@ -95,7 +131,9 @@ class Database {
     await Promise.all([
       this.db.collection('devices').createIndex({ id: 1 }, { unique: true }),
       this.db.collection('sensor_data').createIndex({ device_id: 1, created_at: -1 }),
+      this.db.collection('sensor_data').createIndex({ created_at: 1 }),
       this.db.collection('relay_logs').createIndex({ device_id: 1, created_at: -1 }),
+      this.db.collection('relay_logs').createIndex({ created_at: 1 }),
       this.db.collection('api_keys').createIndex({ key_id: 1 }, { unique: true }),
       this.db.collection('api_keys').createIndex({ token_hash: 1 }, { unique: true, sparse: true }),
       this.db.collection('settings').createIndex({ key: 1 }, { unique: true }),
@@ -179,21 +217,44 @@ class Database {
 
   async getSensorHistory(deviceId, limit = 100, range = null) {
     const query = { device_id: deviceId };
-    const durations = {
-      '1h': 60 * 60 * 1000,
-      '24h': 24 * 60 * 60 * 1000,
-      '7d': 7 * 24 * 60 * 60 * 1000
-    };
-    if (durations[range]) query.created_at = { $gte: Date.now() - durations[range] };
-    const max = durations[range]
-      ? 500
-      : Math.min(500, Math.max(1, Number.parseInt(limit, 10) || 100));
+    if (Object.hasOwn(RANGE_DURATIONS, range)) {
+      const now = Date.now();
+      query.created_at = { $gte: now - RANGE_DURATIONS[range], $lte: now };
+      return this.db.collection('sensor_data').aggregate([
+        { $match: query }, ...telemetrySeriesStages(range)
+      ]).toArray();
+    }
+    const max = Math.min(500, Math.max(1, Number.parseInt(limit, 10) || 100));
     const rows = await this.db.collection('sensor_data')
       .find(query, { projection: { _id: 0, temp: 1, hum: 1, created_at: 1 } })
       .sort({ created_at: -1 })
       .limit(max)
       .toArray();
     return rows.reverse();
+  }
+
+  async getSensorStatistics(deviceId, range = '24h') {
+    const normalized = normalizeRange(range);
+    const now = Date.now();
+    const [result] = await this.db.collection('sensor_data').aggregate([
+      { $match: { device_id: deviceId, created_at: { $gte: now - RANGE_DURATIONS[normalized], $lte: now } } },
+      { $sort: { created_at: -1 } },
+      { $facet: {
+        summary: [{ $group: telemetryGroup(null) }],
+        series: telemetrySeriesStages(normalized),
+        samples: [{ $limit: 500 }, { $project: { _id: 0, temp: 1, hum: 1, created_at: 1 } }]
+      } }
+    ]).toArray();
+    const summary = result.summary[0];
+    return {
+      summary: {
+        samples: summary?.sampleCount || 0,
+        temperature: telemetryMetricSummary(summary, 'temp'),
+        humidity: telemetryMetricSummary(summary, 'hum')
+      },
+      series: result.series,
+      samples: result.samples.reverse()
+    };
   }
 
   async cleanOldData(retentionDays) {
@@ -532,10 +593,26 @@ class MemoryDatabase {
   }
 
   async getSensorHistory(deviceId, limit = 100, range = null) {
-    const duration = { '1h': 3600000, '24h': 86400000, '7d': 604800000 }[range];
-    const cutoff = duration ? Date.now() - duration : 0;
-    const max = duration ? 500 : Math.min(500, Math.max(1, Number(limit) || 100));
-    return this.sensorData.filter((row) => row.device_id === deviceId && row.created_at >= cutoff).slice(-max).map(clone);
+    if (Object.hasOwn(RANGE_DURATIONS, range)) return (await this.getSensorStatistics(deviceId, range)).series;
+    const max = Math.min(500, Math.max(1, Number.parseInt(limit, 10) || 100));
+    return this.sensorData.filter((row) => row.device_id === deviceId)
+      .sort((left, right) => left.created_at - right.created_at).slice(-max).map(clone);
+  }
+
+  async getSensorStatistics(deviceId, range = '24h') {
+    const normalized = normalizeRange(range);
+    const now = Date.now();
+    const rows = this.sensorData.filter((row) => row.device_id === deviceId
+      && row.created_at >= now - RANGE_DURATIONS[normalized] && row.created_at <= now);
+    return {
+      summary: {
+        samples: rows.length,
+        temperature: summarizeMetric(rows, 'temp'),
+        humidity: summarizeMetric(rows, 'hum')
+      },
+      series: downsampleTelemetry(rows, RANGE_BUCKETS[normalized]),
+      samples: rows.sort((left, right) => left.created_at - right.created_at).slice(-500).map(clone)
+    };
   }
 
   async cleanOldData(retentionDays) {

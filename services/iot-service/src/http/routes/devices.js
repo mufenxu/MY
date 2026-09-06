@@ -54,9 +54,10 @@ function registerDeviceRoutes(app, {
         error.expose = true;
         throw error;
       }
-      const rows = await mqttService.db.getSensorHistory(deviceId, MAX_HISTORY_LIMIT, range);
+      const statistics = await mqttService.db.getSensorStatistics(deviceId, range);
       const config = settingsStore.getConfig();
-      res.json(createTelemetryInsight(device, rows, {
+      res.json(createTelemetryInsight(device, statistics.samples, {
+        statistics,
         range,
         onlineThresholdMs: config.api.deviceOnlineThreshold
       }));

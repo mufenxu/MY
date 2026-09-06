@@ -14,7 +14,6 @@ const PaperShare = require('../models/PaperShare');
 const PaperShareReceipt = require('../models/PaperShareReceipt');
 const Feedback = require('../models/Feedback');
 const AiQuestionAnalysis = require('../models/AiQuestionAnalysis');
-const config = require('../config');
 const { asyncHandler } = require('../utils/exam');
 const { success } = require('../utils/response');
 const { NotFoundError, AppError } = require('../utils/errors');
@@ -41,18 +40,13 @@ const {
     generateUniqueShareCode,
     getAdminShareOwner,
 } = require('../services/paperShareService');
-const { generateQuestionAnalysis } = require('../services/aiAnalysisService');
+const { enqueueCategoryAiAnalyses, getAiGenerationJob } = require('../services/aiGenerationJobService');
 const { removeUsersFromLearningOperations } = require('../services/learningPlanService');
 const {
     recordQuestionVersion,
     updateQuestionWithVersion,
 } = require('../services/questionVersionService');
-const {
-    buildActorKey,
-    beforeSingleGeneration,
-    afterSingleGeneration,
-    beforeBatchGeneration,
-} = require('../services/aiGenerationGuard');
+const { buildActorKey } = require('../services/aiGenerationGuard');
 const { buildCategoryAnalysis } = require('../utils/categoryAnalysis');
 const {
     toQuestionListSort,
@@ -408,81 +402,28 @@ exports.adoptQuestionAiAnalysis = asyncHandler(async (req, res) => {
 });
 
 exports.generateCategoryAiAnalyses = asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const { limit = 10, forceRefresh = false, questionIds = [] } = req.body;
     const scopeType = getManagedScopeType(req);
     const actorKey = buildActorKey('admin', req.user.id || req.user.username);
-    const selectedQuestionIds = [...new Set(questionIds.map((item) => String(item)))];
-    const hasSelectedQuestions = selectedQuestionIds.length > 0;
-    const actualLimit = Math.min(limit, config.ai.batchMaxPerRun);
-
-    const category = await Category.findOne(buildManagedQuery(scopeType, { _id: id })).select('_id').lean();
-    if (!category) {
-        throw new NotFoundError('题库不存在');
-    }
-
-    const questionQuery = buildManagedQuery(scopeType, {
-        categoryId: id,
-        ...(hasSelectedQuestions ? { _id: { $in: selectedQuestionIds } } : {}),
+    const category = await Category.findOne(buildManagedQuery(scopeType, { _id: req.params.id })).select('_id').lean();
+    if (!category) throw new NotFoundError('题库不存在');
+    const job = await enqueueCategoryAiAnalyses({
+        ...req.body,
+        categoryId: req.params.id,
+        scopeType,
+        actorKey,
+        requesterOpenid: req.user.id,
     });
-    const questions = await Question.find(questionQuery)
-        .select('_id categoryId scopeType ownerOpenid type content options answer analysis sortOrder')
-        .sort(toQuestionListSort(true))
-        .limit(1000)
-        .lean();
+    res.status(job.status === 'completed' ? 200 : 202);
+    success(res, job, job.status === 'completed' ? 'AI解析批量生成完成' : 'AI解析任务已提交');
+});
 
-    if (hasSelectedQuestions && questions.length !== selectedQuestionIds.length) {
-        throw new NotFoundError('包含无效或无权访问的题目');
-    }
-
-    const targetQuestionIds = questions.map((question) => String(question._id));
-    const existingRecords = forceRefresh || targetQuestionIds.length === 0
-        ? []
-        : await AiQuestionAnalysis.find({ questionId: { $in: targetQuestionIds } }).select('questionId').lean();
-    const existingQuestionIdSet = new Set(existingRecords.map((item) => item.questionId));
-    const availableTargets = forceRefresh
-        ? questions
-        : questions.filter((question) => !existingQuestionIdSet.has(String(question._id)));
-    const targets = availableTargets.slice(0, actualLimit);
-
-    const summary = {
-        total: questions.length,
-        generated: 0,
-        skipped: questions.length - availableTargets.length,
-        pending: Math.max(availableTargets.length - targets.length, 0),
-        failed: 0,
-        failures: [],
-        selected: hasSelectedQuestions,
-    };
-
-    if (targets.length > 0) {
-        await beforeBatchGeneration(actorKey);
-    }
-
-    for (const question of targets) {
-        try {
-            await generateQuestionAnalysis({
-                question,
-                forceRefresh,
-                requesterOpenid: req.user.id,
-                generationKey: actorKey,
-                allowUpstream: true,
-                beforeUpstream: () => beforeSingleGeneration(actorKey),
-                afterUpstream: (result, reservation) => afterSingleGeneration(actorKey, result, reservation),
-            });
-            summary.generated += 1;
-        } catch (error) {
-            summary.failed += 1;
-            if (summary.failures.length < 5) {
-                summary.failures.push({
-                    questionId: String(question._id),
-                    message: error.message || '生成失败',
-                });
-            }
-        }
-    }
-
-    success(res, summary, 'AI解析批量生成完成');
+exports.getAiGenerationJob = asyncHandler(async (req, res) => {
+    const job = await getAiGenerationJob({
+        id: req.params.id,
+        actorKey: buildActorKey('admin', req.user.id || req.user.username),
+        scopeType: getManagedScopeType(req),
+    });
+    success(res, job);
 });
 
 exports.createQuestion = asyncHandler(async (req, res) => {

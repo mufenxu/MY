@@ -13,6 +13,20 @@ export async function mapWithConcurrency(items, concurrency, mapper) {
     }
   }
 
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  const workers = await Promise.allSettled(Array.from({ length: workerCount }, () => worker()));
+  const failed = workers.find((result) => result.status === "rejected");
+  if (failed) throw failed.reason;
   return results;
+}
+
+export async function* iterateTaskPages(loadPage, { batchSize = 1000, shouldStop = () => false } = {}) {
+  let afterId = "";
+  while (!shouldStop()) {
+    const tasks = await loadPage({ afterId, limit: batchSize });
+    if (!tasks.length) return;
+    // IDs stay stable when a task is updated or disabled during the scan.
+    afterId = tasks[tasks.length - 1].id;
+    yield tasks;
+    if (tasks.length < batchSize) return;
+  }
 }

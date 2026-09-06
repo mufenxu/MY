@@ -251,14 +251,29 @@ async function checkAndNotifyTodos(options = {}) {
                 try {
                     const reminderIds = new Set(group.tasks.map((task) => task.id));
                     const doc = docs.find((item) => String(item._id) === String(group.userId));
-                    const tasks = (Array.isArray(doc?.tasks) ? doc.tasks : []).map((task) => {
-                        const plain = typeof task.toObject === 'function' ? task.toObject() : { ...task };
-                        if (!reminderIds.has(String(plain.id))) return plain;
-                        return { ...plain, reminderStatus: 'sent', remindedAt: nowTs };
-                    });
+                    const matchingTasks = (doc?.tasks || [])
+                        .filter((task) => reminderIds.has(String(task.id)))
+                        .map((task) => ({
+                            'reminded.id': String(task.id),
+                            'reminded.updatedAt': task.updatedAt ?? null,
+                            'reminded.title': task.title,
+                            'reminded.reminderAt': task.reminderAt ?? null,
+                            'reminded.dueAt': task.dueAt ?? null,
+                            'reminded.completed': { $ne: true },
+                            'reminded.reminderStatus': { $ne: 'dismissed' },
+                        }));
+                    // A delivery may finish after the user edits or reschedules a task.
                     await TodoListModel.updateOne(
                         { _id: group.userId },
-                        { $set: { tasks, lastNotifiedAt: nowTs } }
+                        {
+                            $set: {
+                                'tasks.$[reminded].reminderStatus': 'sent',
+                                'tasks.$[reminded].remindedAt': nowTs,
+                            },
+                            $max: { lastNotifiedAt: nowTs, updatedAt: nowTs },
+                            $inc: { revision: 1 },
+                        },
+                        { arrayFilters: [{ $or: matchingTasks }] }
                     );
                 } catch (err) {
                     console.warn('更新 lastNotifiedAt 失败:', group.userId, err.message);

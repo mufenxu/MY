@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const { promisify } = require('util');
+const scrypt = promisify(crypto.scrypt);
 
 const SCRYPT_PREFIX = 'scrypt';
 const SCRYPT_COST = 16384;
@@ -52,12 +54,12 @@ function hashPassword(password) {
   ].join('$');
 }
 
-function verifyPassword(password, encodedHash) {
+async function verifyPassword(password, encodedHash) {
   const parsed = parsePasswordHash(encodedHash);
   if (!parsed) return false;
 
   try {
-    const actual = crypto.scryptSync(String(password || ''), parsed.salt, parsed.hash.length, {
+    const actual = await scrypt(String(password || ''), parsed.salt, parsed.hash.length, {
       N: SCRYPT_COST,
       r: SCRYPT_BLOCK_SIZE,
       p: SCRYPT_PARALLELIZATION,

@@ -74,7 +74,8 @@ const {
 } = require('../services/examAttemptService');
 const { canUseQuestionAiAnalysis } = require('../middleware/aiAccess');
 const { QUESTION_ORDER_SORT } = require('../utils/questionOrder');
-const { buildInitialReviewState, scheduleReview } = require('../services/reviewScheduler');
+const { scheduleReview } = require('../services/reviewScheduler');
+const { applyAnswerResultToQuestionState, persistExamSubmission } = require('../services/examSubmissionService');
 
 function sanitizeExamQuestions(questions) {
     return questions.map((question) => ({
@@ -711,97 +712,6 @@ async function attachWrongQuestionStates(groups, userId, includeMastered = false
         .filter((group) => (group.questions || []).length > 0);
 }
 
-async function applyAnswerResultToQuestionState({
-    userId,
-    categoryId,
-    questionId,
-    isAnswerCorrect,
-    at = new Date(),
-}) {
-    const existing = await UserQuestionState.findOne({ userId, questionId });
-
-    if (!isAnswerCorrect) {
-        const reviewState = existing
-            ? scheduleReview(existing, 'unknown', at)
-            : buildInitialReviewState(at);
-        return UserQuestionState.findOneAndUpdate(
-            { userId, questionId },
-            {
-                $set: {
-                    categoryId,
-                    status: 'needsReview',
-                    correctStreak: 0,
-                    lastWrongAt: at,
-                    masteredAt: null,
-                    ...reviewState,
-                },
-                $inc: { wrongCount: 1 },
-                $setOnInsert: {
-                    favorite: false,
-                    note: '',
-                },
-            },
-            { upsert: true, new: true, runValidators: true },
-        );
-    }
-
-    if (!existing) {
-        return null;
-    }
-
-    const nextStreak = (existing.correctStreak || 0) + 1;
-    const nextStatus = nextStreak >= 2 ? 'mastered' : existing.status;
-    existing.categoryId = categoryId;
-    existing.correctStreak = nextStreak;
-    existing.lastCorrectAt = at;
-    existing.status = nextStatus;
-    Object.assign(existing, scheduleReview(existing, 'known', at));
-    if (nextStatus === 'mastered' && !existing.masteredAt) {
-        existing.masteredAt = at;
-    }
-
-    return existing.save();
-}
-
-async function syncQuestionStatesFromExam(userId, category, details = []) {
-    const categoryId = category?._id || category;
-    if (!userId || !categoryId || !Array.isArray(details) || details.length === 0) {
-        return;
-    }
-
-    const answeredDetails = details
-        .filter((detail) => detail?.questionId && Array.isArray(detail.userAnswer) && detail.userAnswer.length > 0);
-    const wrongDetails = answeredDetails.filter((detail) => !detail.isCorrect);
-    await Promise.all(wrongDetails.map((detail) => applyAnswerResultToQuestionState({
-        userId,
-        categoryId,
-        questionId: String(detail.questionId),
-        isAnswerCorrect: false,
-    })));
-
-    const correctQuestionIds = answeredDetails
-        .filter((detail) => detail.isCorrect)
-        .map((detail) => String(detail.questionId));
-    if (correctQuestionIds.length === 0) {
-        return;
-    }
-
-    const existingStates = await UserQuestionState.find({
-        userId,
-        questionId: { $in: correctQuestionIds },
-    }).select('questionId').lean();
-    const existingQuestionIds = new Set(existingStates.map((state) => String(state.questionId)));
-
-    await Promise.all(correctQuestionIds
-        .filter((questionId) => existingQuestionIds.has(questionId))
-        .map((questionId) => applyAnswerResultToQuestionState({
-            userId,
-            categoryId,
-            questionId,
-            isAnswerCorrect: true,
-        })));
-}
-
 function buildStudyTrend(results, dayCount = 14) {
     const labels = buildRecentDayLabels(dayCount);
     const map = new Map(labels.map((label) => [label, { count: 0, scoreSum: 0 }]));
@@ -1110,7 +1020,7 @@ exports.previewDemoExam = asyncHandler(async (req, res) => {
     let persistedResult = null;
 
     if (userId) {
-        persistedResult = await ExamResult.create({
+        persistedResult = await persistExamSubmission({
             userId,
             categoryId,
             score,
@@ -1122,7 +1032,6 @@ exports.previewDemoExam = asyncHandler(async (req, res) => {
             scopeType: DEMO_SCOPE,
             ownerOpenid: null,
         });
-        await syncQuestionStatesFromExam(userId, category, details);
     }
 
     const reviewDetails = userId
@@ -1306,48 +1215,19 @@ exports.submitExam = asyncHandler(async (req, res) => {
     const score = Math.round((correctCount / totalCount) * 100);
     const resultScopeType = getCategoryRecordScope(category);
 
-    let result;
-    let created = false;
-    try {
-        result = await ExamResult.create({
-            userId,
-            categoryId,
-            attemptId: effectiveAttemptId || null,
-            score,
-            correctCount,
-            totalCount,
-            answers,
-            categorySnapshot: buildCategorySnapshot(category),
-            details,
-            scopeType: resultScopeType,
-            ownerOpenid: resultScopeType === PERSONAL_SCOPE ? (category.ownerOpenid || userId) : null,
-        });
-        created = true;
-    } catch (error) {
-        if (error.code !== 11000 || !effectiveAttemptId) {
-            throw error;
-        }
-        result = await ExamResult.findOne({ userId, categoryId, attemptId: effectiveAttemptId });
-        if (!result) {
-            throw error;
-        }
-    }
-
-    if (created) {
-        await syncQuestionStatesFromExam(userId, category, details);
-        if (effectiveAttemptId) {
-            await ExamProgress.updateOne(
-                { userId, categoryId, mode: 'exam', attemptId: effectiveAttemptId },
-                {
-                    $set: {
-                        attemptSubmittedAt: new Date(),
-                        isCleared: true,
-                        timeLeft: 0,
-                    },
-                },
-            );
-        }
-    }
+    const result = await persistExamSubmission({
+        userId,
+        categoryId,
+        attemptId: effectiveAttemptId || null,
+        score,
+        correctCount,
+        totalCount,
+        answers,
+        categorySnapshot: buildCategorySnapshot(category),
+        details,
+        scopeType: resultScopeType,
+        ownerOpenid: resultScopeType === PERSONAL_SCOPE ? (category.ownerOpenid || userId) : null,
+    });
 
     return sendExamSubmission(res, result, category);
 });

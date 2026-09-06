@@ -3,15 +3,16 @@ import { issueSession, verifySession } from './auth.js';
 
 export async function createMongoSessionRegistry({
   uri,
+  client: sharedClient = null,
   secret,
   databaseName = process.env.PLATFORM_MONGODB_DATABASE || 'platform_app',
   maxSessions = 1024,
   idleTimeoutMinutes = 30,
   touchIntervalMs = 60_000,
 } = {}) {
-  if (!uri) throw new Error('PLATFORM_MONGODB_URI is required.');
-  const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
-  await client.connect();
+  if (!uri && !sharedClient) throw new Error('PLATFORM_MONGODB_URI is required.');
+  const client = sharedClient || new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
+  if (!sharedClient) await client.connect();
   const db = client.db(databaseName);
   const sessions = db.collection('sessions');
   const defaultIdleTimeoutMinutes = Math.max(Number(idleTimeoutMinutes) || 30, 1);
@@ -193,7 +194,7 @@ export async function createMongoSessionRegistry({
     },
 
     async close() {
-      await client.close();
+      if (!sharedClient) await client.close();
     },
   };
 }

@@ -239,13 +239,8 @@ const {
     generateUniqueShareCode,
     copySharedPaperToRecipient,
 } = require('../services/paperShareService');
-const { generateQuestionAnalysis } = require('../services/aiAnalysisService');
-const {
-    buildActorKey,
-    beforeSingleGeneration,
-    afterSingleGeneration,
-    beforeBatchGeneration,
-} = require('../services/aiGenerationGuard');
+const { enqueueCategoryAiAnalyses, getAiGenerationJob } = require('../services/aiGenerationJobService');
+const { buildActorKey } = require('../services/aiGenerationGuard');
 
 exports.wechatLogin = asyncHandler(async (req, res) => {
     const { tempAuthCode } = req.body;
@@ -830,79 +825,31 @@ exports.generateCategoryAiAnalyses = asyncHandler(async (req, res) => {
     if (!['ops_admin', 'super_admin'].includes(req.user.consoleRole)) {
         throw new ForbiddenError('无权限批量生成 AI 解析');
     }
+    const scopeType = PERSONAL_SCOPE;
+    const actorKey = buildActorKey('console', req.user.openid);
+    await ensureOwnedCategory(req.params.id, req.user.openid);
+    const job = await enqueueCategoryAiAnalyses({
+        ...req.body,
+        categoryId: req.params.id,
+        scopeType,
+        actorKey,
+        ownerOpenid: req.user.openid,
+        requesterOpenid: req.user.openid,
+    });
+    res.status(job.status === 'completed' ? 200 : 202);
+    success(res, job, job.status === 'completed' ? 'AI解析批量生成完成' : 'AI解析任务已提交');
+});
 
-    const { id } = req.params;
-    const { limit = 10, forceRefresh = false, questionIds = [] } = req.body;
-    const ownerOpenid = req.user.openid;
-    const actorKey = buildActorKey('console', ownerOpenid);
-    const selectedQuestionIds = [...new Set(questionIds.map((item) => String(item)))];
-    const hasSelectedQuestions = selectedQuestionIds.length > 0;
-    const actualLimit = Math.min(limit, config.ai.batchMaxPerRun);
-    await ensureOwnedCategory(id, ownerOpenid);
-
-    const questions = await Question.find({
-        categoryId: id,
+exports.getAiGenerationJob = asyncHandler(async (req, res) => {
+    if (!['ops_admin', 'super_admin'].includes(req.user.consoleRole)) {
+        throw new ForbiddenError('无权限批量生成 AI 解析');
+    }
+    const job = await getAiGenerationJob({
+        id: req.params.id,
+        actorKey: buildActorKey('console', req.user.openid),
         scopeType: PERSONAL_SCOPE,
-        ownerOpenid,
-        ...(hasSelectedQuestions ? { _id: { $in: selectedQuestionIds } } : {}),
-    })
-        .select('_id categoryId scopeType ownerOpenid type content options answer analysis sortOrder')
-        .sort(toQuestionListSort(true))
-        .limit(1000)
-        .lean();
-
-    if (hasSelectedQuestions && questions.length !== selectedQuestionIds.length) {
-        throw new NotFoundError('包含无效或无权访问的题目');
-    }
-
-    const targetQuestionIds = questions.map((question) => String(question._id));
-    const existingRecords = forceRefresh || targetQuestionIds.length === 0
-        ? []
-        : await AiQuestionAnalysis.find({ questionId: { $in: targetQuestionIds } }).select('questionId').lean();
-    const existingQuestionIdSet = new Set(existingRecords.map((item) => item.questionId));
-    const availableTargets = forceRefresh
-        ? questions
-        : questions.filter((question) => !existingQuestionIdSet.has(String(question._id)));
-    const targets = availableTargets.slice(0, actualLimit);
-
-    const summary = {
-        total: questions.length,
-        generated: 0,
-        skipped: questions.length - availableTargets.length,
-        pending: Math.max(availableTargets.length - targets.length, 0),
-        failed: 0,
-        failures: [],
-        selected: hasSelectedQuestions,
-    };
-
-    if (targets.length > 0) {
-        await beforeBatchGeneration(actorKey);
-    }
-
-    for (const question of targets) {
-        try {
-            await generateQuestionAnalysis({
-                question,
-                forceRefresh,
-                requesterOpenid: ownerOpenid,
-                generationKey: actorKey,
-                allowUpstream: true,
-                beforeUpstream: () => beforeSingleGeneration(actorKey),
-                afterUpstream: (result, reservation) => afterSingleGeneration(actorKey, result, reservation),
-            });
-            summary.generated += 1;
-        } catch (error) {
-            summary.failed += 1;
-            if (summary.failures.length < 5) {
-                summary.failures.push({
-                    questionId: String(question._id),
-                    message: error.message || '生成失败',
-                });
-            }
-        }
-    }
-
-    success(res, summary, 'AI解析批量生成完成');
+    });
+    success(res, job);
 });
 
 exports.createQuestion = asyncHandler(async (req, res) => {

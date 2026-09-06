@@ -110,17 +110,18 @@ export function createMemoryAuthRiskStore({ encryptionKey, challengeConfigured =
 
 export async function createMongoAuthRiskStore({
   uri,
+  client: sharedClient = null,
   encryptionKey,
   challengeConfigured = false,
   databaseName = process.env.PLATFORM_MONGODB_DATABASE || 'platform_app',
   now = () => Date.now(),
   ...options
 } = {}) {
-  if (!uri) throw new Error('PLATFORM_MONGODB_URI is required.');
+  if (!uri && !sharedClient) throw new Error('PLATFORM_MONGODB_URI is required.');
   const key = decodeKey(encryptionKey);
   const policy = createPolicy(options);
-  const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
-  await client.connect();
+  const client = sharedClient || new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
+  if (!sharedClient) await client.connect();
   const db = client.db(databaseName);
   const attempts = db.collection('auth_attempts');
   await attempts.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
@@ -195,6 +196,6 @@ export async function createMongoAuthRiskStore({
       await attempts.deleteMany({ _id: { $in: list.map(({ id }) => id) } });
     },
     async ping() { return (await db.command({ ping: 1 })).ok === 1; },
-    async close() { await client.close(); },
+    async close() { if (!sharedClient) await client.close(); },
   };
 }

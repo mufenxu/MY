@@ -1,4 +1,4 @@
-import { computed, nextTick, reactive } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { isPersistedQuestion } from './questionUtils.js';
 
@@ -47,7 +47,10 @@ export function useAiAnalysis({
         visible: false,
         loading: false,
         summary: null,
+        progress: null,
     });
+    let batchController = null;
+    onBeforeUnmount(() => batchController?.abort());
     const aiBatchForm = reactive({
         mode: 'all',
         limit: 10,
@@ -55,6 +58,12 @@ export function useAiAnalysis({
         questionIds: [],
     });
     const aiBatchGeneratingText = computed(() => {
+        const progress = aiBatchDialog.progress;
+        if (aiBatchDialog.loading && progress) {
+            return progress.status === 'queued'
+                ? `任务已提交，正在等待处理，共 ${progress.scheduled} 道题。`
+                : `已处理 ${progress.processed}/${progress.scheduled} 道题，成功 ${progress.summary.generated} 道，失败 ${progress.summary.failed} 道。`;
+        }
         const count = aiBatchForm.mode === 'selected'
             ? aiBatchForm.questionIds.length
             : aiBatchForm.limit;
@@ -227,6 +236,8 @@ export function useAiAnalysis({
         }
 
         aiBatchDialog.loading = true;
+        aiBatchDialog.progress = null;
+        batchController = new AbortController();
         try {
             const payload = {
                 limit: aiBatchForm.limit,
@@ -237,15 +248,21 @@ export function useAiAnalysis({
                 payload.limit = payload.questionIds.length;
             }
 
-            const res = await examApi.generateAiAnalyses(payload);
+            const res = await examApi.generateAiAnalyses(payload, {
+                signal: batchController.signal,
+                onProgress: (job) => { aiBatchDialog.progress = job; },
+            });
             if (res.data.code === 0) {
                 aiBatchDialog.summary = res.data.data || null;
                 const summary = res.data.data || {};
                 ElMessage.success(`AI解析生成完成：生成/覆盖 ${summary.generated || 0} 条，失败 ${summary.failed || 0} 条`);
             }
         } catch (err) {
+            if (batchController.signal.aborted) return;
             console.error('Generate AI analyses failed:', err);
-            ElMessage.error(err.response?.data?.message || '批量生成失败');
+            ElMessage.error(err.response?.data?.message || (aiBatchDialog.progress?.jobId
+                ? '进度查询中断，已提交任务会继续执行，再次生成可恢复查询'
+                : '批量生成任务提交失败'));
         } finally {
             aiBatchDialog.loading = false;
         }

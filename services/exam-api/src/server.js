@@ -15,6 +15,8 @@ const Question = require('./models/Question');
 const QuestionVersion = require('./models/QuestionVersion');
 const ExamProgress = require('./models/ExamProgress');
 const ExamResult = require('./models/ExamResult');
+const AiGenerationJob = require('./models/AiGenerationJob');
+const { startAiGenerationWorker, stopAiGenerationWorker } = require('./services/aiGenerationJobService');
 const { DEMO_SCOPE, buildScopeAssignment } = require('./utils/libraryScope');
 const { isRuntimeReady, setRuntimeReady } = require('./runtimeState');
 const { closeHttpServer } = require('./services/httpShutdown');
@@ -162,6 +164,7 @@ async function initializeExamRuntime() {
         await initializeCriticalIndexes();
         await initAdmin();
         await initData();
+        startAiGenerationWorker();
         initialized = true;
         setRuntimeReady(true);
         return app;
@@ -174,13 +177,14 @@ async function initializeExamRuntime() {
     }
 }
 
-async function initializeCriticalIndexes(models = [Admin, ExamProgress, ExamResult, QuestionVersion]) {
+async function initializeCriticalIndexes(models = [Admin, ExamProgress, ExamResult, QuestionVersion, AiGenerationJob]) {
     await Promise.all(models.map((Model) => Model.init()));
 }
 
 async function closeExamRuntime() {
     setRuntimeReady(false);
     if (initialized) {
+        await stopAiGenerationWorker();
         await disconnectDatabase();
         initialized = false;
     }

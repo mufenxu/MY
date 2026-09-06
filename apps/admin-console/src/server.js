@@ -1,95 +1,13 @@
 import { createApp } from './app.js';
-import { createMongoAuthRiskStore } from './auth-risk-store.js';
-import { createMongoAuthStore } from './auth-store.js';
 import { loadConfig } from './config.js';
-import { createMongoSessionRegistry } from './mongo-session-registry.js';
-import { createMongoOperationsStore } from './operations-store.js';
-import { createMongoReleaseStore } from './release-store.js';
-import { createMongoConfigurationStore } from './configuration-store.js';
-import { createMongoQrLoginStore } from './qr-login-store.js';
-import { createMongoWebLoginTicketStore } from './web-login-ticket-store.js';
-import { createMemoryGoogleAccountStore, createMongoGoogleAccountStore } from './google-account-store.js';
+import { closePortalStores, createPersistentPortalStores, pingPortalStores } from './portal-stores.js';
 
 const config = loadConfig();
-const authStore = config.mongoUri
-  ? await createMongoAuthStore({
-    uri: config.mongoUri,
-    encryptionKey: config.authEncryptionKey,
-    issuer: config.webauthnRpName,
-    bootstrap: {
-      username: config.adminUsername,
-      passwordHash: config.adminPasswordHash,
-      role: config.adminRole,
-      totpSecret: config.adminTotpSecret,
-    },
-  })
-  : null;
-const authRiskStore = config.mongoUri
-  ? await createMongoAuthRiskStore({
-    uri: config.mongoUri,
-    encryptionKey: config.authEncryptionKey,
-    challengeConfigured: Boolean(config.turnstileSiteKey && config.turnstileSecretKey),
-    windowMinutes: config.loginWindowMinutes,
-    maxAttempts: config.loginMaxAttempts,
-    challengeThreshold: config.loginChallengeThreshold,
-    backoffBaseMs: config.loginBackoffBaseMs,
-    backoffMaxMs: config.loginBackoffMaxMs,
-  })
-  : null;
-const sessionRegistry = config.mongoUri
-  ? await createMongoSessionRegistry({
-    uri: config.mongoUri,
-    secret: config.sessionSecret,
-    idleTimeoutMinutes: config.sessionIdleMinutes,
-  })
-  : null;
-const operationsStore = config.mongoUri
-  ? await createMongoOperationsStore({
-    uri: config.mongoUri,
-    statusRetentionDays: config.statusRetentionDays,
-    auditRetentionDays: config.auditRetentionDays,
-  })
-  : null;
-const releaseStore = config.mongoUri
-  ? await createMongoReleaseStore({ uri: config.mongoUri })
-  : null;
-const configurationStore = config.mongoUri
-  ? await createMongoConfigurationStore({ uri: config.mongoUri })
-  : null;
-const qrLoginStore = config.mongoUri
-  ? await createMongoQrLoginStore({ uri: config.mongoUri })
-  : null;
-const webLoginTicketStore = config.mongoUri
-  ? await createMongoWebLoginTicketStore({ uri: config.mongoUri })
-  : null;
-const googleAccountStore = config.mongoUri
-  ? await createMongoGoogleAccountStore({ uri: config.mongoUri })
-  : createMemoryGoogleAccountStore();
+const stores = await createPersistentPortalStores({ config });
 const app = createApp({
   config,
-  authStore,
-  authRiskStore,
-  sessionRegistry,
-  operationsStore,
-  releaseStore,
-  configurationStore,
-  qrLoginStore,
-  webLoginTicketStore,
-  googleAccountStore,
-  readinessCheck: async () => {
-    const [authReady, riskReady, sessionsReady, operationsReady, releasesReady, configurationReady, qrLoginReady, webLoginReady, googleAccountsReady] = await Promise.all([
-      authStore ? authStore.ping() : true,
-      authRiskStore ? authRiskStore.ping() : true,
-      sessionRegistry ? sessionRegistry.ping() : true,
-      operationsStore ? operationsStore.ping() : true,
-      releaseStore ? releaseStore.ping() : true,
-      configurationStore ? configurationStore.ping() : true,
-      qrLoginStore ? qrLoginStore.ping() : true,
-      webLoginTicketStore ? webLoginTicketStore.ping() : true,
-      googleAccountStore.ping(),
-    ]);
-    return authReady && riskReady && sessionsReady && operationsReady && releasesReady && configurationReady && qrLoginReady && webLoginReady && googleAccountsReady;
-  },
+  ...stores,
+  readinessCheck: () => pingPortalStores(stores),
 });
 app.locals.operationsCenter.start();
 const server = app.listen(config.port, config.host, () => {
@@ -110,11 +28,12 @@ function shutdown(signal) {
       console.error(error);
       process.exitCode = 1;
     }
-    await Promise.allSettled([authStore?.close(), authRiskStore?.close(), sessionRegistry?.close(), qrLoginStore?.close(), webLoginTicketStore?.close(), googleAccountStore?.close()]);
     app.locals.operationsCenter.stop();
-    await operationsStore?.close();
-    await releaseStore?.close();
-    await configurationStore?.close();
+    const errors = await closePortalStores(stores);
+    if (errors.length) {
+      console.error(new AggregateError(errors, 'Failed to close portal stores.'));
+      process.exitCode = 1;
+    }
   });
 }
 

@@ -10,6 +10,7 @@ function normalizeRange(value) {
 }
 
 function finite(value) {
+  if (value == null || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -28,13 +29,24 @@ function median(values) {
 }
 
 function summarizeMetric(rows, field) {
-  const values = rows.map((row) => finite(row[field])).filter((value) => value !== null);
-  if (!values.length) return { count: 0, min: null, max: null, average: null };
+  let count = 0;
+  let min = Infinity;
+  let max = -Infinity;
+  let sum = 0;
+  for (const row of rows) {
+    const value = finite(row[field]);
+    if (value === null) continue;
+    count += 1;
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+    sum += value;
+  }
+  if (!count) return { count: 0, min: null, max: null, average: null };
   return {
-    count: values.length,
-    min: Math.min(...values),
-    max: Math.max(...values),
-    average: round(values.reduce((sum, value) => sum + value, 0) / values.length)
+    count,
+    min,
+    max,
+    average: round(sum / count)
   };
 }
 
@@ -104,7 +116,8 @@ function detectTelemetryAnomalies(rows) {
 function createTelemetryInsight(device, rows, {
   range = '24h',
   onlineThresholdMs = 60_000,
-  now = Date.now()
+  now = Date.now(),
+  statistics = null
 } = {}) {
   const normalizedRange = normalizeRange(range);
   const anomalies = detectTelemetryAnomalies(rows);
@@ -129,17 +142,21 @@ function createTelemetryInsight(device, rows, {
       relays: device.relays || {}
     },
     summary: {
-      samples: rows.length,
-      temperature: summarizeMetric(rows, 'temp'),
-      humidity: summarizeMetric(rows, 'hum'),
-      anomalyCount: anomalies.length
+      ...(statistics?.summary || {
+        samples: rows.length,
+        temperature: summarizeMetric(rows, 'temp'),
+        humidity: summarizeMetric(rows, 'hum')
+      }),
+      anomalyCount: anomalies.length,
+      anomalySampleCount: rows.length
     },
-    series: downsampleTelemetry(rows, RANGE_BUCKETS[normalizedRange]),
+    series: statistics?.series || downsampleTelemetry(rows, RANGE_BUCKETS[normalizedRange]),
     anomalies
   };
 }
 
 module.exports = {
+  RANGE_BUCKETS,
   createTelemetryInsight,
   detectTelemetryAnomalies,
   downsampleTelemetry,

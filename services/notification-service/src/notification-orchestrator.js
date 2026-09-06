@@ -216,14 +216,17 @@ function createNotificationOrchestrator({
   async function executeDue(limit) {
     const maximum = Math.min(Math.max(Number(limit) || 20, 1), 100);
     const results = [];
-    while (results.length < maximum) {
-      const jobs = await store.claimDueNotificationJobs(
-        Math.min(workerConcurrency, maximum - results.length),
-        { workerId, leaseMs: normalizedLeaseMs },
-      );
-      if (!jobs.length) break;
-      results.push(...await Promise.all(jobs.map(processJob)));
-    }
+    let reserved = 0;
+    const workers = await Promise.allSettled(Array.from({ length: Math.min(workerConcurrency, maximum) }, async () => {
+      while (reserved < maximum) {
+        reserved += 1;
+        const [job] = await store.claimDueNotificationJobs(1, { workerId, leaseMs: normalizedLeaseMs });
+        if (!job) break;
+        results.push(await processJob(job));
+      }
+    }));
+    const failedWorker = workers.find((result) => result.status === 'rejected');
+    if (failedWorker) throw failedWorker.reason;
     return results;
   }
 

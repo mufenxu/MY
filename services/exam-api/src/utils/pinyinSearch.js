@@ -4,6 +4,8 @@ const PINYIN_BOUNDARIES = ['阿', '芭', '擦', '搭', '蛾', '发', '噶', '哈
 const CHINESE_RE = /[\u4e00-\u9fff]/;
 const ALNUM_RE = /[a-z0-9]/i;
 const LETTER_RE = /[a-z]/i;
+// The Chinese character range bounds this cache to 20,992 entries.
+const charInitialCache = new Map();
 
 let pinyinCollator = null;
 try {
@@ -31,17 +33,24 @@ function getCharInitial(char) {
     if (!CHINESE_RE.test(char) || !pinyinCollator) {
         return '';
     }
+    if (charInitialCache.has(char)) return charInitialCache.get(char);
 
     let boundaryIndex = 0;
-    for (let i = 0; i < PINYIN_BOUNDARIES.length; i++) {
-        if (pinyinCollator.compare(char, PINYIN_BOUNDARIES[i]) >= 0) {
-            boundaryIndex = i;
+    let low = 0;
+    let high = PINYIN_BOUNDARIES.length - 1;
+    while (low <= high) {
+        const middle = Math.floor((low + high) / 2);
+        if (pinyinCollator.compare(char, PINYIN_BOUNDARIES[middle]) >= 0) {
+            boundaryIndex = middle;
+            low = middle + 1;
         } else {
-            break;
+            high = middle - 1;
         }
     }
 
-    return PINYIN_INITIALS[boundaryIndex] || '';
+    const initial = PINYIN_INITIALS[boundaryIndex] || '';
+    charInitialCache.set(char, initial);
+    return initial;
 }
 
 function getTextInitials(text = '') {

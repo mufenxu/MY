@@ -86,6 +86,7 @@ router.post('/feedbacks/:id/reply', validate(mv.replyFeedback), manageController
 router.patch('/feedbacks/:id/status', validate(mv.updateFeedbackStatus), manageController.updateFeedbackStatus);
 
 router.get('/categories', manageController.getCategories);
+router.get('/ai-analyses/jobs/:id', validate(mv.idParam), manageController.getAiGenerationJob);
 router.get('/categories/:id/analysis', validate(mv.idParam), manageController.getCategoryAnalysis);
 router.post(
     '/categories/:id/ai-analyses/generate',

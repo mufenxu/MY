@@ -117,6 +117,7 @@ async function startTestServer(options = {}) {
       apiKeyUsages.push(keyId);
     },
     getSensorHistory: async () => [],
+    getSensorStatistics: async () => ({ samples: [] }),
     getApiKeys: async () => [],
     addApiKey: async () => ({}),
     deleteApiKey: async () => {},
@@ -272,12 +273,12 @@ test('device insights require history scope and return bounded aggregate diagnos
   const now = Date.now();
   const { baseUrl, server } = await startTestServer({
     dbOverrides: {
-      getSensorHistory: async (...args) => {
+      getSensorStatistics: async (...args) => {
         historyCalls.push(args);
-        return [
+        return { samples: [
           { created_at: now - 120000, temp: 21, hum: 42 },
           { created_at: now - 60000, temp: 23, hum: 46 }
-        ];
+        ] };
       }
     }
   });
@@ -299,7 +300,7 @@ test('device insights require history scope and return bounded aggregate diagnos
   assert.equal(body.summary.samples, 2);
   assert.equal(body.summary.temperature.average, 22);
   assert.ok(body.series.length <= 2);
-  assert.deepEqual(historyCalls, [['device_1', 500, '1h']]);
+  assert.deepEqual(historyCalls, [['device_1', '1h']]);
 });
 
 test('valid platform SSO takes precedence over a stale restricted bearer key', async (t) => {

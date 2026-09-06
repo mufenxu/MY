@@ -206,7 +206,7 @@ class AuthManager {
     };
   }
 
-  authenticate(username, password) {
+  async authenticate(username, password) {
     const auth = this.getConfig();
 
     if (!this.isEnabled()) {
@@ -216,7 +216,7 @@ class AuthManager {
       };
     }
 
-    if (!safeEqual(username, auth.username) || !verifyPassword(password, auth.password)) {
+    if (!safeEqual(username, auth.username) || !await verifyPassword(password, auth.password)) {
       return {
         ok: false,
         message: '用户名或密码不正确。'
