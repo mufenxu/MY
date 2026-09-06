@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
-    "@marsidev/react-turnstile": "^1.4.2",
+    "@marsidev/react-turnstile": "^1.5.4",
     "@my-platform/platform-browser-runtime": "file:../../packages/platform-browser-runtime",
     "antd": "^6.0.0",
     "axios": "^1.18.1",
