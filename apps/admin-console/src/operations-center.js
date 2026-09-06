@@ -2,7 +2,6 @@ import crypto from 'node:crypto';
 import { statfs } from 'node:fs/promises';
 
 const UNHEALTHY_STATES = new Set(['degraded', 'offline']);
-const ACTIVE_INCIDENT_STATES = new Set(['open', 'acknowledged']);
 const BLACKBOX_STATES = new Set(['healthy', 'degraded', 'offline']);
 
 function clampInteger(value, fallback, minimum, maximum) {

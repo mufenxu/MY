@@ -75,7 +75,7 @@
           try {
             await navigator.clipboard.writeText(textToCopy);
             showCopiedState(button);
-          } catch (error) {
+          } catch {
             showToast('复制失败', '请手动选择代码并复制。', 'error');
           }
         });

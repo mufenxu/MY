@@ -4,7 +4,8 @@
   "description": "MQTT dashboard with secure web console, realtime updates, and scoped API keys",
   "main": "src/index.js",
   "scripts": {
-    "check": "node scripts/check-js.js",
+    "check": "npm run lint && node scripts/check-js.js",
+    "lint": "eslint .",
     "audit:prod": "npm audit --omit=dev",
     "start": "node src/index.js",
     "test": "node --test",
@@ -21,6 +22,8 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
+    "eslint": "^9.39.5",
+    "globals": "^16.5.0",
     "sqlite3": "^6.0.1"
   }
 }

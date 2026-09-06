@@ -535,7 +535,7 @@ test('server errors return a safe request-scoped payload and log diagnostics', a
     .map((line) => {
       try {
         return JSON.parse(line);
-      } catch (error) {
+      } catch {
         return null;
       }
     })

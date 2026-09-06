@@ -1045,7 +1045,7 @@ function connectRealtime() {
       if (payload?.type === 'automation' && state.currentTab === 'automation') {
         automationView.refresh().catch((error) => showToast('执行记录刷新失败', error.message, 'error'));
       }
-    } catch (error) {
+    } catch {
       addEvent('实时消息解析失败');
     }
   });
@@ -1318,7 +1318,7 @@ async function copyText(text, successMessage) {
   try {
     await navigator.clipboard.writeText(text);
     showToast('剪贴板操作', successMessage, 'success');
-  } catch (error) {
+  } catch {
     showToast('复制失败', '浏览器未开放剪贴板写入权限。', 'error');
   }
 }

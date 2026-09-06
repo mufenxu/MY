@@ -28,7 +28,7 @@ function registerSystemRoutes(app, { settingsStore, mqttService, requireSession 
 
   app.post('/api/config/reset', requireSession, async (req, res, next) => {
     try {
-      const result = await settingsStore.resetConfig();
+      await settingsStore.resetConfig();
       mqttService.restart('config-reset');
       const publicConfig = settingsStore.getPublicConfig();
 

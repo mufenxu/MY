@@ -66,7 +66,7 @@ async function verifyPassword(password, encodedHash) {
       maxmem: 64 * 1024 * 1024
     });
     return crypto.timingSafeEqual(parsed.hash, actual);
-  } catch (error) {
+  } catch {
     return false;
   }
 }

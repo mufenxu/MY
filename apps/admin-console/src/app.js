@@ -2622,13 +2622,13 @@ export function createApp({
     }
   });
 
-  app.post('/api/security/passkeys/verify', requireConsoleRequest, async (req, res, next) => {
+  app.post('/api/security/passkeys/verify', requireConsoleRequest, async (req, res, _next) => {
     try {
       const result = await passkeys.verifyRegistration(req.consoleUser.username, req.body);
       if (!result.verified) return res.status(400).json({ error: 'Passkey 注册验证失败。', code: 'PASSKEY_REGISTRATION_FAILED' });
       await recordAudit(req, { action: 'security.passkey_registered', targetType: 'account', targetId: req.consoleUser.username });
       return res.status(201).json(result);
-    } catch (error) {
+    } catch {
       return res.status(400).json({ error: 'Passkey 注册验证失败。', code: 'PASSKEY_REGISTRATION_FAILED' });
     }
   });
@@ -2946,8 +2946,6 @@ export function createApp({
     try {
       const backupName = String(req.body?.backupName || '');
       const confirmText = String(req.body?.confirmText || '');
-      const password = String(req.body?.password || '');
-
       if (!backupName) {
         return res.status(400).json({ error: '请选择要恢复的备份。', code: 'BACKUP_REQUIRED' });
       }

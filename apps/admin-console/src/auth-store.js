@@ -261,7 +261,7 @@ export function createMemoryAuthStore({ bootstrap, encryptionKey, issuer = 'MY P
     },
     async listPasskeys(username) {
       const account = accountFor(username);
-      return (account?.passkeys || []).map(({ publicKey, ...passkey }) => ({ ...passkey }));
+      return (account?.passkeys || []).map(({ publicKey: _publicKey, ...passkey }) => ({ ...passkey }));
     },
     async getPasskeys(username) {
       return structuredClone(accountFor(username)?.passkeys || []);
@@ -498,7 +498,7 @@ export async function createMongoAuthStore({
     },
     async listPasskeys(username) {
       const account = await rawAccount(username);
-      return (account?.passkeys || []).map(({ publicKey, ...passkey }) => passkey);
+      return (account?.passkeys || []).map(({ publicKey: _publicKey, ...passkey }) => passkey);
     },
     async getPasskeys(username) {
       return (await rawAccount(username))?.passkeys || [];

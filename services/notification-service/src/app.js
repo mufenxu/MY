@@ -706,7 +706,7 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
     }
   });
 
-  app.get('/management/overview', checkManagementAccess, async (_req, res, next) => {
+  app.get('/management/overview', checkManagementAccess, async (_req, res, _next) => {
     try {
       const [history, queue] = await Promise.all([
         store.getOverview(),

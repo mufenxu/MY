@@ -55,7 +55,7 @@ function getRequestOrigin(req) {
   if (req.headers.origin) {
     try {
       return new URL(req.headers.origin).origin;
-    } catch (error) {
+    } catch {
       return 'invalid-origin';
     }
   }
@@ -63,7 +63,7 @@ function getRequestOrigin(req) {
   if (req.headers.referer) {
     try {
       return new URL(req.headers.referer).origin;
-    } catch (error) {
+    } catch {
       return 'invalid-origin';
     }
   }

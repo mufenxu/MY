@@ -5,6 +5,7 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 const secretService = require('../services/secretService');
+const { parseBodyObject } = require('../utils/parseBodyObject');
 
 const getWebhookSecret = () => {
     const value = secretService.getSecretSync('GH_WEBHOOK_SECRET') || process.env.GH_WEBHOOK_SECRET || '';
@@ -13,29 +14,6 @@ const getWebhookSecret = () => {
 
 const isWebhookDisabled = () => ['0', 'false', 'off', 'disabled']
     .includes(String(process.env.GH_WEBHOOK_ENABLED || '').trim().toLowerCase());
-
-const parseBodyObject = (value) => {
-    if (!value) return {};
-    if (typeof value === 'object') return value;
-    if (typeof value !== 'string') return {};
-
-    const text = value.trim();
-    if (!text) return {};
-
-    try {
-        const parsed = JSON.parse(text);
-        if (parsed && typeof parsed === 'object') return parsed;
-    } catch (_) { }
-
-    try {
-        const params = new URLSearchParams(text);
-        const obj = {};
-        for (const [k, v] of params.entries()) obj[k] = v;
-        return obj;
-    } catch (_) {
-        return {};
-    }
-};
 
 const extractSecret = (req, { allowPayload = false } = {}) => {
     const lowerHeader = (name) => {

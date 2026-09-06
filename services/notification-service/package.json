@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "test": "node --test",
-    "check": "node --check src/server.js && node --check src/app.js && npm test"
+    "lint": "eslint .",
+    "check": "npm run lint && node --check src/server.js && node --check src/app.js && npm test"
   },
   "keywords": [
     "wecom",
@@ -30,6 +31,8 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "eslint": "^9.39.5",
+    "globals": "^16.5.0",
     "nodemon": "^3.1.0"
   }
 }

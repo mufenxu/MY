@@ -182,7 +182,8 @@ export function createOperationalSearch({
       || Date.parse(right.occurredAt || 0) - Date.parse(left.occurredAt || 0)
       || left.sourceOrder - right.sourceOrder
       || left.title.localeCompare(right.title));
-    const results = matches.slice(0, resultLimit).map(({ searchText, score, sourceOrder, ...item }) => item);
+    const results = matches.slice(0, resultLimit)
+      .map(({ searchText: _searchText, score: _score, sourceOrder: _sourceOrder, ...item }) => item);
     return {
       query: normalizedQuery,
       types,

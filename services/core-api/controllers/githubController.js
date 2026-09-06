@@ -4,48 +4,35 @@ const {
     normalizeWorkflowResults,
     pickFirst
 } = require('../utils/githubResultParser');
+const { parseBodyObject } = require('../utils/parseBodyObject');
 
-const rateLimit = { ip: {}, global: 0 };
+const RATE_LIMIT_IP_WINDOW_MS = 60_000;
+const RATE_LIMIT_GLOBAL_WINDOW_MS = 30_000;
+const rateLimit = { ip: new Map(), global: 0 };
 
-const parseBodyObject = (value) => {
-    if (!value) return {};
-    if (typeof value === 'object') return value;
-    if (typeof value !== 'string') return {};
-
-    const text = value.trim();
-    if (!text) return {};
-
-    try {
-        const parsed = JSON.parse(text);
-        if (parsed && typeof parsed === 'object') return parsed;
-    } catch (_) { }
-
-    try {
-        const params = new URLSearchParams(text);
-        const obj = {};
-        for (const [k, v] of params.entries()) obj[k] = v;
-        return obj;
-    } catch (_) {
-        return {};
+function pruneRateLimitIps(now) {
+    for (const [ip, timestamp] of rateLimit.ip) {
+        if (now - timestamp >= RATE_LIMIT_IP_WINDOW_MS) rateLimit.ip.delete(ip);
     }
-};
+}
 
 exports.triggerAction = async (req, res, next) => {
     try {
         const ip = req.ip;
         const now = Date.now();
 
-        if (rateLimit.ip[ip] && (now - rateLimit.ip[ip] < 60000)) {
-            const remaining = Math.ceil((60000 - (now - rateLimit.ip[ip])) / 1000);
+        if (rateLimit.ip.has(ip) && (now - rateLimit.ip.get(ip) < RATE_LIMIT_IP_WINDOW_MS)) {
+            const remaining = Math.ceil((RATE_LIMIT_IP_WINDOW_MS - (now - rateLimit.ip.get(ip))) / 1000);
             return res.status(429).json({ error: 'Too Many Requests', message: `请等待 ${remaining} 秒后再试` });
         }
 
-        if (now - rateLimit.global < 30000) {
-            const remaining = Math.ceil((30000 - (now - rateLimit.global)) / 1000);
+        if (now - rateLimit.global < RATE_LIMIT_GLOBAL_WINDOW_MS) {
+            const remaining = Math.ceil((RATE_LIMIT_GLOBAL_WINDOW_MS - (now - rateLimit.global)) / 1000);
             return res.status(429).json({ error: 'Too Many Requests', message: `系统繁忙，请等待 ${remaining} 秒` });
         }
 
-        rateLimit.ip[ip] = now;
+        pruneRateLimitIps(now);
+        rateLimit.ip.set(ip, now);
         rateLimit.global = now;
 
         const inputs = req.body.inputs || {};

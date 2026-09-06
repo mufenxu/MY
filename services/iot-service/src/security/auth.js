@@ -164,7 +164,7 @@ class AuthManager {
       }
 
       return data;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -283,7 +283,7 @@ class AuthManager {
         keyId: result.keyId,
         scopes: result.scopes || []
       };
-    } catch (error) {
+    } catch {
       return { invalid: true };
     }
   }
