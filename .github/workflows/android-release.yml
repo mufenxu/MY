@@ -275,4 +275,19 @@ jobs:
             echo "::error::Qiniu latest.json did not reference the uploaded APK after CDN propagation wait"
             exit 1
           fi
+
+          retention_listing="${RUNNER_TEMP}/qiniu-android-list.tsv"
+          retention_delete="${RUNNER_TEMP}/qiniu-android-delete.txt"
+          "${qshell_bin}" -L listbucket "${QINIU_BUCKET}" \
+            --prefix "android/my-control-" \
+            -o "${retention_listing}"
+          node "${GITHUB_WORKSPACE}/scripts/qiniu-android-retention.mjs" \
+            --input "${retention_listing}" \
+            --keep 20 \
+            --output "${retention_delete}"
+          if [[ -s "${retention_delete}" ]]; then
+            "${qshell_bin}" -L batchdelete --force \
+              "${QINIU_BUCKET}" \
+              -i "${retention_delete}"
+          fi
           popd >/dev/null
