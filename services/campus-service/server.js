@@ -95,6 +95,8 @@ import {
   mergeSessionJars,
   updateJarFromResponse
 } from "./src/lib/session-jar.js";
+import { createCampusBillService } from "./src/lib/campus-bills.js";
+import { createWaterValveService } from "./src/lib/water-valve.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 process.umask(0o077);
@@ -1141,10 +1143,6 @@ function formEncode(input = {}) {
     if (value !== undefined && value !== null) form.set(key, String(value));
   });
   return form.toString();
-}
-
-function monthCompact(month) {
-  return String(month || defaultMonth()).replace("-", "");
 }
 
 function normalizeCampusBillQuery(input = {}) {
@@ -3708,83 +3706,11 @@ function campusAuth(jar, key) {
   return session;
 }
 
-function campusDealCount(payload) {
-  const list = Array.isArray(payload?.list) ? payload.list : [];
-  return list.reduce((sum, group) => {
-    if (Array.isArray(group?.dealDetail)) return sum + group.dealDetail.length;
-    if (Array.isArray(group?.list)) return sum + group.list.length;
-    return sum + (group && typeof group === "object" ? 1 : 0);
-  }, 0);
-}
-
-async function requestCampusCardBill(jar, billPayload, options = {}) {
-  try {
-    return await easytongAuthedRequest(jar, "/easytong_app/GetDealRec", (session) => ({
-      ...billPayload,
-      AccNum: session.accNum || billPayload.AccNum
-    }), options);
-  } catch (firstError) {
-    try {
-      return await easytongAuthedRequest(jar, "/easytong_app/GetDealRec", (session) => ({
-        ...billPayload,
-        AccNum: session.accNum || billPayload.AccNum,
-        EPID: session.epId || 0
-      }), options);
-    } catch (secondError) {
-      throw new HttpError(secondError.status || firstError.status || 502, secondError.message || firstError.message || "暂无一卡通账单");
-    }
-  }
-}
-
-async function getCampusCardBill(jar, billQuery, options = {}) {
-  const session = campusAuth(jar, "easytong");
-  const pageSize = 100;
-  const basePayload = {
-    AccNum: session.accNum,
-    CardAccNum: "-1",
-    Count: pageSize,
-    EPID: 0,
-    TypeNum: -1,
-    WalletNum: "0"
-  };
-  if (billQuery.mode === "month") basePayload.YearMonth = monthCompact(billQuery.time);
-
-  let begin = 1;
-  let combined = null;
-  for (let page = 0; page < 10; page += 1) {
-    const payload = await requestCampusCardBill(jar, {
-      ...basePayload,
-      BeginRecNum: begin
-    }, options);
-    const list = Array.isArray(payload.list) ? payload.list : [];
-    const dealCount = campusDealCount(payload);
-    combined ||= { ...payload, list: [] };
-    combined.list.push(...list);
-    if (dealCount < pageSize || list.length === 0) break;
-    begin += dealCount;
-  }
-  return combined || { code: 1, list: [], msg: "暂无一卡通账单" };
-}
-
-async function getCampusWaterBill(jar, waterMonth) {
-  const pageSize = 100;
-  let combined = null;
-  for (let page = 1; page <= 10; page += 1) {
-    const payload = await uwcAuthedRequest(jar, "/public/getTransactionBill", (currentSession) => ({
-      accNum: currentSession.accNum,
-      epId: currentSession.epId,
-      date: waterMonth,
-      current: page,
-      pageSize
-    }));
-    const rows = Array.isArray(payload.data) ? payload.data : [];
-    combined ||= { ...payload, data: [] };
-    combined.data.push(...rows);
-    const totalCount = Number(payload.totalCount ?? payload.total ?? payload.count ?? rows.length);
-    if (!rows.length || !Number.isFinite(totalCount) || combined.data.length >= totalCount || rows.length < pageSize) break;
-  }
-  return combined || { msg: "暂无生活用水账单", code: "1", data: [], totalCount: 0 };
-}
+const campusBills = createCampusBillService({
+  campusAuth,
+  easytongAuthedRequest,
+  uwcAuthedRequest
+});
 
 async function getCampusCard(queryInput = {}) {
   const billQuery = normalizeCampusBillQuery(queryInput);
@@ -3801,7 +3727,7 @@ async function getCampusCard(queryInput = {}) {
       AccNum: session.accNum,
       CardStatus: 2
     }), { retryOnAuth: false }),
-    getCampusCardBill(jar, billQuery, { retryOnAuth: false })
+    campusBills.getCardBill(jar, billQuery, { retryOnAuth: false })
   ]);
   const cards = cardsResult.status === "fulfilled" ? cardsResult.value : null;
   const bill = billResult.status === "fulfilled" ? billResult.value : {
@@ -3838,7 +3764,7 @@ async function getCampusWater(queryInput = {}) {
     accNum: currentSession.accNum,
     epId: currentSession.epId
   })).catch((error) => ({ error: error.message }));
-  const waterBill = await getCampusWaterBill(jar, waterMonth).catch((error) => ({ error: error.message }));
+  const waterBill = await campusBills.getWaterBill(jar, waterMonth).catch((error) => ({ error: error.message }));
 
   const session = campusAuth(jar, "uwc");
   await saveSessionJar(jar);
@@ -3876,151 +3802,6 @@ async function refreshCampusWaterCode() {
     waterCode,
     generatedAt: new Date().toISOString()
   };
-}
-
-function parseWaterValveCode(rawCode) {
-  const value = String(rawCode || "").trim();
-  if (!value) return "";
-  if (/^https?:\/\//i.test(value)) {
-    try {
-      const url = new URL(value);
-      const hashQuery = url.hash.includes("?") ? url.hash.slice(url.hash.indexOf("?") + 1) : "";
-      return url.searchParams.get("sn") || new URLSearchParams(hashQuery).get("sn") || "";
-    } catch {
-      return "";
-    }
-  }
-  if (/^[A-Za-z0-9]{12}$/.test(value)) return value;
-  const parts = value.split("_");
-  return parts.length >= 3 ? parts[2] : "";
-}
-
-function waterValveState(jar) {
-  return jar.meta?.campus?.waterValve || null;
-}
-
-function waterValvePublic(state) {
-  if (!state?.seqNo) return { bound: false };
-  return {
-    bound: true,
-    seqNo: state.seqNo,
-    deviceName: state.deviceName || `设备 ${state.seqNo}`,
-    running: state.running === true,
-    defaultValue: state.defaultValue || null,
-    balance: state.balance || null,
-    updatedAt: state.updatedAt || null
-  };
-}
-
-function normalizeWaterValveDevice(response, seqNo) {
-  const rows = Array.isArray(response?.data) ? response.data : [];
-  const device = rows[0] || {};
-  return {
-    seqNo,
-    deviceName: device.deviceName || device.name || `设备 ${seqNo}`,
-    defaultValue: device.mondeal != null ? String(device.mondeal) : null,
-    balance: device.ewalletBalance != null ? String(device.ewalletBalance) : null,
-    running: false,
-    updatedAt: new Date().toISOString()
-  };
-}
-
-async function getCampusWaterValve() {
-  await ensureCampusSessions();
-  const jar = await readSessionJar();
-  const state = waterValveState(jar);
-  if (!state?.seqNo) return waterValvePublic(null);
-
-  try {
-    const response = await uwcAuthedRequest(jar, "/bluetoothApp/getListBySeqNo", (session) => ({
-      seqNo: state.seqNo,
-      accNum: session.accNum
-    }));
-    const normalized = normalizeWaterValveDevice(response, state.seqNo);
-    const merged = {
-      ...state,
-      deviceName: normalized.deviceName,
-      defaultValue: normalized.defaultValue,
-      balance: normalized.balance,
-      running: state.running === true,
-      updatedAt: new Date().toISOString()
-    };
-    jar.meta.campus.waterValve = merged;
-    await saveSessionJar(jar);
-    return waterValvePublic(merged);
-  } catch (error) {
-    return { ...waterValvePublic(state), error: error.message || "生活用水设备状态查询失败" };
-  }
-}
-
-async function bindCampusWaterValve(rawCode) {
-  const seqNo = parseWaterValveCode(rawCode);
-  if (!seqNo || seqNo.length !== 12) {
-    throw new HttpError(400, "无法解析设备二维码，请重新扫描。", null, "INVALID_WATER_VALVE_CODE");
-  }
-
-  await ensureCampusSessions();
-  const jar = await readSessionJar();
-  const response = await uwcAuthedRequest(jar, "/bluetoothApp/getListBySeqNo", (session) => ({
-    seqNo,
-    accNum: session.accNum
-  }));
-  if (!Array.isArray(response?.data) || response.data.length === 0) {
-    throw new HttpError(404, "未找到对应的生活用水设备。", null, "WATER_VALVE_NOT_FOUND");
-  }
-
-  const state = normalizeWaterValveDevice(response, seqNo);
-  jar.meta.campus ||= {};
-  jar.meta.campus.waterValve = state;
-  await saveSessionJar(jar);
-  return waterValvePublic(state);
-}
-
-async function openCampusWaterValve() {
-  await ensureCampusSessions();
-  const jar = await readSessionJar();
-  const state = waterValveState(jar);
-  if (!state?.seqNo) {
-    throw new HttpError(400, "请先扫描并绑定饮水机。", null, "WATER_VALVE_NOT_BOUND");
-  }
-
-  const response = await uwcAuthedRequest(jar, "/bluetoothApp/openValueOnline", (session) => ({
-    seqNo: state.seqNo,
-    accNum: session.accNum
-  }));
-  const timestamp = response?.data?.timestamp;
-  const next = {
-    ...state,
-    running: true,
-    timestamp: timestamp != null ? String(timestamp) : state.timestamp || null,
-    updatedAt: new Date().toISOString()
-  };
-  jar.meta.campus.waterValve = next;
-  await saveSessionJar(jar);
-  return waterValvePublic(next);
-}
-
-async function closeCampusWaterValve() {
-  await ensureCampusSessions();
-  const jar = await readSessionJar();
-  const state = waterValveState(jar);
-  if (!state?.seqNo) {
-    throw new HttpError(400, "请先扫描并绑定饮水机。", null, "WATER_VALVE_NOT_BOUND");
-  }
-
-  await uwcAuthedRequest(jar, "/bluetoothApp/closeValueOnline", () => ({
-    seqNo: state.seqNo,
-    timestamp: state.timestamp != null ? Number(state.timestamp) : null
-  }));
-  const next = {
-    ...state,
-    running: false,
-    timestamp: null,
-    updatedAt: new Date().toISOString()
-  };
-  jar.meta.campus.waterValve = next;
-  await saveSessionJar(jar);
-  return waterValvePublic(next);
 }
 
 async function ensureCampusSessions() {
@@ -7939,20 +7720,20 @@ async function handleApiRoutes(req, res, url) {
       return;
     }
     if (url.pathname === "/api/campus/water-valve") {
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => getCampusWaterValve()) });
+      json(res, 200, { ok: true, data: await withCampusSessionLock(() => waterValve.get()) });
       return;
     }
     if (url.pathname === "/api/campus/water-valve/bind" && req.method === "POST") {
       const body = await readBodyJson(req);
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => bindCampusWaterValve(body.rawCode || body.code || body.seqNo)) });
+      json(res, 200, { ok: true, data: await withCampusSessionLock(() => waterValve.bind(body.rawCode || body.code || body.seqNo)) });
       return;
     }
     if (url.pathname === "/api/campus/water-valve/open" && req.method === "POST") {
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => openCampusWaterValve()) });
+      json(res, 200, { ok: true, data: await withCampusSessionLock(() => waterValve.open()) });
       return;
     }
     if (url.pathname === "/api/campus/water-valve/close" && req.method === "POST") {
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => closeCampusWaterValve()) });
+      json(res, 200, { ok: true, data: await withCampusSessionLock(() => waterValve.close()) });
       return;
     }
     if (url.pathname === "/api/campus/recharge-link") {
@@ -8966,6 +8747,13 @@ function startLibrarySeatWaitlistScheduler() {
   if (!librarySeatWaitlistSchedulerEnabled()) return;
   scheduleLibrarySeatWaitlistScan("startup", Math.max(0, LIBRARY_SEAT_WAITLIST_START_DELAY_MS));
 }
+
+const waterValve = createWaterValveService({
+  ensureSessions: ensureCampusSessions,
+  readSessionJar,
+  saveSessionJar,
+  request: uwcAuthedRequest
+});
 
 const server = createServer((req, res) => {
   const incomingRequestId = String(req.headers["x-request-id"] || "");

@@ -32,6 +32,7 @@ import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusReservationAvailability
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusTimetable
+import cn.pxyb.mycontrol.data.CampusWaterValve
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAccountStore
@@ -1949,73 +1950,41 @@ class AppViewModel(
         }
     }
 
-    fun bindWaterValve(rawCode: String) {
-        if (mutableState.value.campusWaterValveBusy) return
-        viewModelScope.launch {
-            mutableState.update {
-                it.copy(campusWaterValveBusy = true, campusWaterValveError = null, campusWaterValveMessage = null)
-            }
-            try {
-                val valve = api.campus.bindCampusWaterValve(rawCode)
-                mutableState.update {
-                    it.copy(
-                        campusWaterValve = valve,
-                        campusWaterValveBusy = false,
-                        campusWaterValveMessage = "饮水机绑定成功",
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        campusWaterValveBusy = false,
-                        campusWaterValveError = error.message ?: "饮水机绑定失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
+    fun bindWaterValve(rawCode: String) = runWaterValveAction(
+        successMessage = "饮水机绑定成功",
+        failureMessage = "饮水机绑定失败，请重试。",
+        action = { api.campus.bindCampusWaterValve(rawCode) },
+    )
 
-    fun openWaterValve() {
-        if (mutableState.value.campusWaterValveBusy) return
-        viewModelScope.launch {
-            mutableState.update {
-                it.copy(campusWaterValveBusy = true, campusWaterValveError = null, campusWaterValveMessage = null)
-            }
-            try {
-                val valve = api.campus.openCampusWaterValve()
-                mutableState.update {
-                    it.copy(
-                        campusWaterValve = valve,
-                        campusWaterValveBusy = false,
-                        campusWaterValveMessage = "饮水机已开启",
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        campusWaterValveBusy = false,
-                        campusWaterValveError = error.message ?: "饮水机开启失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
+    fun openWaterValve() = runWaterValveAction(
+        successMessage = "饮水机已开启",
+        failureMessage = "饮水机开启失败，请重试。",
+        action = api.campus::openCampusWaterValve,
+    )
 
-    fun closeWaterValve() {
+    fun closeWaterValve() = runWaterValveAction(
+        successMessage = "饮水机已关闭",
+        failureMessage = "饮水机关闭失败，请重试。",
+        action = api.campus::closeCampusWaterValve,
+    )
+
+    private fun runWaterValveAction(
+        successMessage: String,
+        failureMessage: String,
+        action: suspend () -> CampusWaterValve,
+    ) {
         if (mutableState.value.campusWaterValveBusy) return
         viewModelScope.launch {
             mutableState.update {
                 it.copy(campusWaterValveBusy = true, campusWaterValveError = null, campusWaterValveMessage = null)
             }
             try {
-                val valve = api.campus.closeCampusWaterValve()
+                val valve = action()
                 mutableState.update {
                     it.copy(
                         campusWaterValve = valve,
                         campusWaterValveBusy = false,
-                        campusWaterValveMessage = "饮水机已关闭",
+                        campusWaterValveMessage = successMessage,
                     )
                 }
             } catch (error: Throwable) {
@@ -2023,7 +1992,7 @@ class AppViewModel(
                 mutableState.update {
                     it.copy(
                         campusWaterValveBusy = false,
-                        campusWaterValveError = error.message ?: "饮水机关闭失败，请重试。",
+                        campusWaterValveError = error.message ?: failureMessage,
                     )
                 }
             }
@@ -2046,29 +2015,13 @@ class AppViewModel(
         loadAutoReservationTasks(force = true)
     }
 
-    fun loadReservationSpaces(force: Boolean = false) {
-        if (mutableState.value.reservationSpacesLoading) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(reservationSpacesLoading = true, reservationError = null) }
-            try {
-                val spaces = api.campus.campusReservationSpaces()
-                mutableState.update {
-                    it.copy(
-                        reservationSpaces = spaces,
-                        reservationSpacesLoading = false,
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        reservationSpacesLoading = false,
-                        reservationError = error.message ?: "空间加载失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
+    fun loadReservationSpaces(force: Boolean = false) = launchUiStateAction(
+        isBusy = { reservationSpacesLoading },
+        start = { copy(reservationSpacesLoading = true, reservationError = null) },
+        action = { api.campus.campusReservationSpaces() },
+        success = { spaces -> copy(reservationSpaces = spaces, reservationSpacesLoading = false) },
+        failure = { error -> copy(reservationSpacesLoading = false, reservationError = error.message ?: "空间加载失败，请重试。") },
+    )
 
     fun queryReservationRulesAndAvailability(spaceId: Int, date: String) {
         if (spaceId <= 0 || date.isBlank() || mutableState.value.reservationQueryLoading) return
@@ -2136,109 +2089,94 @@ class AppViewModel(
         }
     }
 
-    fun queryAvailableSpacesByTime(date: String, startTime: String, endTime: String) {
-        if (date.isBlank() || startTime.isBlank() || endTime.isBlank() || mutableState.value.reservationAvailableSpacesLoading) return
-        viewModelScope.launch {
-            mutableState.update {
-                it.copy(
-                    reservationAvailableSpacesLoading = true,
-                    reservationAvailableSpaces = emptyList(),
-                    reservationAvailableSpacesQueryText = "$date $startTime - $endTime",
-                    reservationError = null,
-                )
-            }
-            try {
-                val availableSpaces = api.campus.campusReservationSpaces(date = date, startTime = startTime, endTime = endTime)
-                mutableState.update {
-                    it.copy(
-                        reservationAvailableSpaces = availableSpaces,
-                        reservationAvailableSpacesLoading = false,
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        reservationAvailableSpacesLoading = false,
-                        reservationError = error.message ?: "按时段查询空闲学习间失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
+    fun queryAvailableSpacesByTime(date: String, startTime: String, endTime: String) = launchUiStateAction(
+        isBusy = {
+            date.isBlank() || startTime.isBlank() || endTime.isBlank() || reservationAvailableSpacesLoading
+        },
+        start = {
+            copy(
+                reservationAvailableSpacesLoading = true,
+                reservationAvailableSpaces = emptyList(),
+                reservationAvailableSpacesQueryText = "$date $startTime - $endTime",
+                reservationError = null,
+            )
+        },
+        action = { api.campus.campusReservationSpaces(date = date, startTime = startTime, endTime = endTime) },
+        success = { spaces -> copy(reservationAvailableSpaces = spaces, reservationAvailableSpacesLoading = false) },
+        failure = { error ->
+            copy(
+                reservationAvailableSpacesLoading = false,
+                reservationError = error.message ?: "按时段查询空闲学习间失败，请重试。",
+            )
+        },
+    )
 
-    fun submitReservation(request: CampusReservationRequest, onSuccess: () -> Unit = {}) {
-        if (mutableState.value.reservationSubmitLoading) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(reservationSubmitLoading = true, reservationError = null, reservationMessage = null) }
-            try {
-                api.campus.submitCampusReservation(request)
-                mutableState.update {
-                    it.copy(
-                        reservationSubmitLoading = false,
-                        reservationMessage = "预约已提交成功，请以学校预约系统记录为准。",
-                    )
-                }
-                loadMyReservations(force = true)
-                onSuccess()
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        reservationSubmitLoading = false,
-                        reservationError = error.message ?: "预约提交失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
+    fun submitReservation(request: CampusReservationRequest, onSuccess: () -> Unit = {}) = launchUiStateAction(
+        isBusy = { reservationSubmitLoading },
+        start = { copy(reservationSubmitLoading = true, reservationError = null, reservationMessage = null) },
+        action = { api.campus.submitCampusReservation(request) },
+        success = {
+            copy(
+                reservationSubmitLoading = false,
+                reservationMessage = "预约已提交成功，请以学校预约系统记录为准。",
+            )
+        },
+        failure = { error -> copy(reservationSubmitLoading = false, reservationError = error.message ?: "预约提交失败，请重试。") },
+        afterSuccess = {
+            loadMyReservations(force = true)
+            onSuccess()
+        },
+    )
 
-    fun loadMyReservations(force: Boolean = false) {
-        if (mutableState.value.reservationMyReservationsLoading) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(reservationMyReservationsLoading = true) }
-            try {
-                val records = api.campus.campusMyReservations()
-                mutableState.update {
-                    it.copy(
-                        reservationMyReservations = records,
-                        reservationMyReservationsLoading = false,
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        reservationMyReservationsLoading = false,
-                    )
-                }
-            }
-        }
-    }
+    fun loadMyReservations(force: Boolean = false) = launchUiStateAction(
+        isBusy = { reservationMyReservationsLoading },
+        start = { copy(reservationMyReservationsLoading = true) },
+        action = { api.campus.campusMyReservations() },
+        success = { records -> copy(reservationMyReservations = records, reservationMyReservationsLoading = false) },
+        failure = { copy(reservationMyReservationsLoading = false) },
+    )
 
-    fun cancelMyReservation(reservationId: String, onSuccess: () -> Unit = {}) {
-        if (reservationId.isBlank() || mutableState.value.reservationCancellingReservationId != null) return
+    fun cancelMyReservation(reservationId: String, onSuccess: () -> Unit = {}) = launchUiStateAction(
+        isBusy = { reservationId.isBlank() || reservationCancellingReservationId != null },
+        start = { copy(reservationCancellingReservationId = reservationId, reservationError = null, reservationMessage = null) },
+        action = { api.campus.cancelCampusReservation(reservationId) },
+        success = {
+            copy(
+                reservationCancellingReservationId = null,
+                reservationMessage = "已成功取消该研讨间预约。",
+                reservationMyReservations = reservationMyReservations.filter { it.id != reservationId },
+            )
+        },
+        failure = { error ->
+            copy(
+                reservationCancellingReservationId = null,
+                reservationError = error.message ?: "取消预约失败，请重试。",
+            )
+        },
+        afterSuccess = {
+            loadMyReservations(force = true)
+            onSuccess()
+        },
+    )
+
+    private fun <T> launchUiStateAction(
+        isBusy: AppUiState.() -> Boolean,
+        start: AppUiState.() -> AppUiState,
+        action: suspend () -> T,
+        success: AppUiState.(T) -> AppUiState,
+        failure: AppUiState.(Throwable) -> AppUiState,
+        afterSuccess: () -> Unit = {},
+    ) {
+        if (mutableState.value.isBusy()) return
         viewModelScope.launch {
-            mutableState.update { it.copy(reservationCancellingReservationId = reservationId, reservationError = null, reservationMessage = null) }
+            mutableState.update { it.start() }
             try {
-                api.campus.cancelCampusReservation(reservationId)
-                mutableState.update {
-                    it.copy(
-                        reservationCancellingReservationId = null,
-                        reservationMessage = "已成功取消该研讨间预约。",
-                        reservationMyReservations = it.reservationMyReservations.filter { r -> r.id != reservationId }
-                    )
-                }
-                loadMyReservations(force = true)
-                onSuccess()
+                val result = action()
+                mutableState.update { it.success(result) }
+                afterSuccess()
             } catch (error: Throwable) {
                 if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        reservationCancellingReservationId = null,
-                        reservationError = error.message ?: "取消预约失败，请重试。",
-                    )
-                }
+                mutableState.update { it.failure(error) }
             }
         }
     }
@@ -2454,252 +2392,171 @@ class AppViewModel(
         }
     }
 
-    fun submitLibrarySeatReservation(request: LibrarySeatReservationRequest, onSuccess: () -> Unit = {}) {
-        if (mutableState.value.librarySeatSubmitLoading) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(librarySeatSubmitLoading = true, librarySeatError = null, librarySeatMessage = null) }
-            try {
-                api.campus.submitLibrarySeatReservation(request)
-                mutableState.update {
-                    it.copy(
-                        librarySeatSubmitLoading = false,
-                        librarySeatMessage = "座位预约已提交成功，请以学校预约系统记录为准。",
-                    )
-                }
-                loadLibrarySeatReservations()
-                onSuccess()
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        librarySeatSubmitLoading = false,
-                        librarySeatError = error.message ?: "座位预约提交失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
+    fun submitLibrarySeatReservation(request: LibrarySeatReservationRequest, onSuccess: () -> Unit = {}) = launchUiStateAction(
+        isBusy = { librarySeatSubmitLoading },
+        start = { copy(librarySeatSubmitLoading = true, librarySeatError = null, librarySeatMessage = null) },
+        action = { api.campus.submitLibrarySeatReservation(request) },
+        success = {
+            copy(
+                librarySeatSubmitLoading = false,
+                librarySeatMessage = "座位预约已提交成功，请以学校预约系统记录为准。",
+            )
+        },
+        failure = { error -> copy(librarySeatSubmitLoading = false, librarySeatError = error.message ?: "座位预约提交失败，请重试。") },
+        afterSuccess = {
+            loadLibrarySeatReservations()
+            onSuccess()
+        },
+    )
 
-    fun loadLibrarySeatReservations(force: Boolean = false) {
-        if (mutableState.value.librarySeatReservationsLoading && !force) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(librarySeatReservationsLoading = true) }
-            try {
-                val records = api.campus.librarySeatReservations()
-                mutableState.update {
-                    it.copy(
-                        librarySeatReservations = records,
-                        librarySeatReservationsLoading = false,
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        librarySeatReservationsLoading = false,
-                        librarySeatError = error.message ?: "座位预约记录加载失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
+    fun loadLibrarySeatReservations(force: Boolean = false) = launchUiStateAction(
+        isBusy = { librarySeatReservationsLoading && !force },
+        start = { copy(librarySeatReservationsLoading = true) },
+        action = { api.campus.librarySeatReservations() },
+        success = { records -> copy(librarySeatReservations = records, librarySeatReservationsLoading = false) },
+        failure = { error ->
+            copy(
+                librarySeatReservationsLoading = false,
+                librarySeatError = error.message ?: "座位预约记录加载失败，请重试。",
+            )
+        },
+    )
 
-    fun loadLibrarySeatReservationHistory(force: Boolean = false) {
-        if (mutableState.value.librarySeatHistoryReservationsLoading && !force) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(librarySeatHistoryReservationsLoading = true) }
-            try {
-                val history = api.campus.librarySeatReservationHistory(page = 0, size = 20)
-                mutableState.update {
-                    it.copy(
-                        librarySeatHistoryReservations = history,
-                        librarySeatHistoryReservationsLoading = false,
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        librarySeatHistoryReservationsLoading = false,
-                        librarySeatError = error.message ?: "历史预约记录加载失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
+    fun loadLibrarySeatReservationHistory(force: Boolean = false) = launchUiStateAction(
+        isBusy = { librarySeatHistoryReservationsLoading && !force },
+        start = { copy(librarySeatHistoryReservationsLoading = true) },
+        action = { api.campus.librarySeatReservationHistory(page = 0, size = 20) },
+        success = { history ->
+            copy(
+                librarySeatHistoryReservations = history,
+                librarySeatHistoryReservationsLoading = false,
+            )
+        },
+        failure = { error ->
+            copy(
+                librarySeatHistoryReservationsLoading = false,
+                librarySeatError = error.message ?: "历史预约记录加载失败，请重试。",
+            )
+        },
+    )
 
-    fun loadLibrarySeatWaitlists(force: Boolean = false) {
-        if (mutableState.value.librarySeatWaitlistsLoading && !force) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(librarySeatWaitlistsLoading = true) }
-            try {
-                val tasks = api.campus.librarySeatWaitlists()
-                mutableState.update {
-                    it.copy(
-                        librarySeatWaitlists = tasks,
-                        librarySeatWaitlistsLoading = false,
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        librarySeatWaitlistsLoading = false,
-                        librarySeatError = error.message ?: "候补任务加载失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
+    fun loadLibrarySeatWaitlists(force: Boolean = false) = launchUiStateAction(
+        isBusy = { librarySeatWaitlistsLoading && !force },
+        start = { copy(librarySeatWaitlistsLoading = true) },
+        action = { api.campus.librarySeatWaitlists() },
+        success = { tasks -> copy(librarySeatWaitlists = tasks, librarySeatWaitlistsLoading = false) },
+        failure = { error ->
+            copy(
+                librarySeatWaitlistsLoading = false,
+                librarySeatError = error.message ?: "候补任务加载失败，请重试。",
+            )
+        },
+    )
 
-    fun createLibrarySeatWaitlist(request: LibrarySeatWaitlistRequest, onSuccess: () -> Unit = {}) {
-        if (mutableState.value.librarySeatWaitlistSaving) return
-        viewModelScope.launch {
-            mutableState.update {
-                it.copy(librarySeatWaitlistSaving = true, librarySeatError = null, librarySeatMessage = null)
-            }
-            try {
-                api.campus.createLibrarySeatWaitlist(request)
-                mutableState.update {
-                    it.copy(
-                        librarySeatWaitlistSaving = false,
-                        librarySeatMessage = "候补监听已开启，检测到释放座位将自动预约。",
-                    )
-                }
-                loadLibrarySeatWaitlists(force = true)
-                onSuccess()
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        librarySeatWaitlistSaving = false,
-                        librarySeatError = error.message ?: "候补任务创建失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
+    fun createLibrarySeatWaitlist(request: LibrarySeatWaitlistRequest, onSuccess: () -> Unit = {}) = launchUiStateAction(
+        isBusy = { librarySeatWaitlistSaving },
+        start = { copy(librarySeatWaitlistSaving = true, librarySeatError = null, librarySeatMessage = null) },
+        action = { api.campus.createLibrarySeatWaitlist(request) },
+        success = {
+            copy(
+                librarySeatWaitlistSaving = false,
+                librarySeatMessage = "候补监听已开启，检测到释放座位将自动预约。",
+            )
+        },
+        failure = { error -> copy(librarySeatWaitlistSaving = false, librarySeatError = error.message ?: "候补任务创建失败，请重试。") },
+        afterSuccess = {
+            loadLibrarySeatWaitlists(force = true)
+            onSuccess()
+        },
+    )
 
-    fun setLibrarySeatWaitlistEnabled(taskId: String, enabled: Boolean, onSuccess: () -> Unit = {}) {
-        if (mutableState.value.librarySeatWaitlistSaving) return
-        viewModelScope.launch {
-            mutableState.update {
-                it.copy(librarySeatWaitlistSaving = true, librarySeatError = null, librarySeatMessage = null)
-            }
-            try {
-                api.campus.setLibrarySeatWaitlistEnabled(taskId, enabled)
-                mutableState.update {
-                    it.copy(
-                        librarySeatWaitlistSaving = false,
-                        librarySeatMessage = if (enabled) "候补监听已重新开启。" else "已停止候补监听。",
-                    )
-                }
-                loadLibrarySeatWaitlists(force = true)
-                onSuccess()
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        librarySeatWaitlistSaving = false,
-                        librarySeatError = error.message ?: "候补任务状态更新失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
+    fun setLibrarySeatWaitlistEnabled(taskId: String, enabled: Boolean, onSuccess: () -> Unit = {}) = launchUiStateAction(
+        isBusy = { librarySeatWaitlistSaving },
+        start = { copy(librarySeatWaitlistSaving = true, librarySeatError = null, librarySeatMessage = null) },
+        action = { api.campus.setLibrarySeatWaitlistEnabled(taskId, enabled) },
+        success = {
+            copy(
+                librarySeatWaitlistSaving = false,
+                librarySeatMessage = if (enabled) "候补监听已重新开启。" else "已停止候补监听。",
+            )
+        },
+        failure = { error -> copy(librarySeatWaitlistSaving = false, librarySeatError = error.message ?: "候补任务状态更新失败，请重试。") },
+        afterSuccess = {
+            loadLibrarySeatWaitlists(force = true)
+            onSuccess()
+        },
+    )
 
-    fun deleteLibrarySeatWaitlist(taskId: String, onSuccess: () -> Unit = {}) {
-        if (taskId.isBlank() || mutableState.value.librarySeatWaitlistSaving) return
-        viewModelScope.launch {
-            mutableState.update {
-                it.copy(
-                    librarySeatWaitlistSaving = true,
-                    librarySeatWaitlistDeletingId = taskId,
-                    librarySeatError = null,
-                    librarySeatMessage = null,
-                )
-            }
-            try {
-                api.campus.deleteLibrarySeatWaitlist(taskId)
-                mutableState.update {
-                    it.copy(
-                        librarySeatWaitlistSaving = false,
-                        librarySeatWaitlistDeletingId = null,
-                        librarySeatMessage = "候补任务已删除。",
-                    )
-                }
-                loadLibrarySeatWaitlists(force = true)
-                onSuccess()
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        librarySeatWaitlistSaving = false,
-                        librarySeatWaitlistDeletingId = null,
-                        librarySeatError = error.message ?: "候补任务删除失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
+    fun deleteLibrarySeatWaitlist(taskId: String, onSuccess: () -> Unit = {}) = launchUiStateAction(
+        isBusy = { taskId.isBlank() || librarySeatWaitlistSaving },
+        start = {
+            copy(
+                librarySeatWaitlistSaving = true,
+                librarySeatWaitlistDeletingId = taskId,
+                librarySeatError = null,
+                librarySeatMessage = null,
+            )
+        },
+        action = { api.campus.deleteLibrarySeatWaitlist(taskId) },
+        success = {
+            copy(
+                librarySeatWaitlistSaving = false,
+                librarySeatWaitlistDeletingId = null,
+                librarySeatMessage = "候补任务已删除。",
+            )
+        },
+        failure = { error ->
+            copy(
+                librarySeatWaitlistSaving = false,
+                librarySeatWaitlistDeletingId = null,
+                librarySeatError = error.message ?: "候补任务删除失败，请重试。",
+            )
+        },
+        afterSuccess = {
+            loadLibrarySeatWaitlists(force = true)
+            onSuccess()
+        },
+    )
 
     fun clearLibrarySeatFeedback() {
         mutableState.update { it.copy(librarySeatError = null, librarySeatMessage = null) }
     }
 
-    fun loadAutoReservationTasks(force: Boolean = false) {
-        if (mutableState.value.reservationAutoTasksLoading) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(reservationAutoTasksLoading = true, reservationError = null) }
-            try {
-                val tasks = api.campus.campusAutoReservations()
-                mutableState.update {
-                    it.copy(
-                        reservationAutoTasks = tasks,
-                        reservationAutoTasksLoading = false,
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        reservationAutoTasksLoading = false,
-                        reservationError = error.message ?: "自动预约任务加载失败。",
-                    )
-                }
-            }
-        }
-    }
+    fun loadAutoReservationTasks(force: Boolean = false) = launchUiStateAction(
+        isBusy = { reservationAutoTasksLoading },
+        start = { copy(reservationAutoTasksLoading = true, reservationError = null) },
+        action = { api.campus.campusAutoReservations() },
+        success = { tasks -> copy(reservationAutoTasks = tasks, reservationAutoTasksLoading = false) },
+        failure = { error ->
+            copy(
+                reservationAutoTasksLoading = false,
+                reservationError = error.message ?: "自动预约任务加载失败。",
+            )
+        },
+    )
 
-    fun saveAutoReservationTask(task: CampusAutoReservationTask, onSuccess: () -> Unit = {}) {
-        if (mutableState.value.reservationSavingTask) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(reservationSavingTask = true, reservationError = null, reservationMessage = null) }
-            try {
-                if (task.id.isNotBlank()) {
-                    api.campus.updateCampusAutoReservation(task)
-                } else {
-                    api.campus.createCampusAutoReservation(task)
-                }
-                mutableState.update {
-                    it.copy(
-                        reservationSavingTask = false,
-                        reservationMessage = "自动预约任务已保存。",
-                    )
-                }
-                loadAutoReservationTasks(force = true)
-                onSuccess()
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        reservationSavingTask = false,
-                        reservationError = error.message ?: "自动预约任务保存失败。",
-                    )
-                }
+    fun saveAutoReservationTask(task: CampusAutoReservationTask, onSuccess: () -> Unit = {}) = launchUiStateAction(
+        isBusy = { reservationSavingTask },
+        start = { copy(reservationSavingTask = true, reservationError = null, reservationMessage = null) },
+        action = {
+            if (task.id.isNotBlank()) {
+                api.campus.updateCampusAutoReservation(task)
+            } else {
+                api.campus.createCampusAutoReservation(task)
             }
-        }
-    }
+        },
+        success = {
+            copy(
+                reservationSavingTask = false,
+                reservationMessage = "自动预约任务已保存。",
+            )
+        },
+        failure = { error -> copy(reservationSavingTask = false, reservationError = error.message ?: "自动预约任务保存失败。") },
+        afterSuccess = {
+            loadAutoReservationTasks(force = true)
+            onSuccess()
+        },
+    )
 
     fun toggleAutoReservationTask(task: CampusAutoReservationTask) {
         viewModelScope.launch {
