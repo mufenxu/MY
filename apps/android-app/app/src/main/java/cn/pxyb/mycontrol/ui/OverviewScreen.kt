@@ -1831,27 +1831,13 @@ private fun OfflineSnapshotNotice(cachedAtMillis: Long?) {
     val updatedAt = remember(context, cachedAtMillis) {
         cachedAtMillis?.let { android.text.format.DateFormat.getTimeFormat(context).format(Date(it)) }
     }
-    Surface(
+    FeedbackBanner(
+        title = "部分内容使用缓存，请留意更新时间",
+        message = updatedAt?.let { "缓存更新时间 $it" } ?: "联网后将自动恢复同步",
+        error = false,
+        icon = Icons.Outlined.CloudOff,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Icon(Icons.Outlined.CloudOff, contentDescription = null, modifier = Modifier.size(20.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("部分内容使用缓存，请留意更新时间", style = MaterialTheme.typography.labelLarge)
-                Text(
-                    updatedAt?.let { "缓存更新时间 $it" } ?: "联网后将自动恢复同步",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-    }
+    )
 }
 
 // 首页预加载骨架：overview 数据到达前，按真实区块同构渲染呼吸脉冲占位

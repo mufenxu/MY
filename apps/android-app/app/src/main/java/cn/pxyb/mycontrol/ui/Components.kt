@@ -4,6 +4,8 @@ import cn.pxyb.mycontrol.ui.components.picker.AppWheelPicker
 import cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal
 import cn.pxyb.mycontrol.ui.components.picker.AppTimeRangePicker
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import cn.pxyb.mycontrol.ui.components.feedback.AppLoadingState
 import cn.pxyb.mycontrol.util.DateTimeUtils
 
@@ -513,63 +515,32 @@ fun QuickActionGlassTile(
     }
 }
 
+/**
+ * 页面内嵌操作反馈横幅 (FeedbackBanner)
+ *
+ * 全面升级为 2026 视觉规范【极光微光毛玻璃胶囊 (Aurora Glass Capsule)】，
+ * 底层委托至公共组件 [AppFeedbackBanner]，具备 20dp 圆角半透毛玻璃、1dp 翡翠绿/珊瑚红发丝微光描边、
+ * 3D 同心光环徽标底座、微型极光胶囊重试键与物理触觉震动反馈。
+ */
 @Composable
 fun FeedbackBanner(
     message: String,
     error: Boolean,
     modifier: Modifier = Modifier,
     onRetry: (() -> Unit)? = null,
+    title: String? = null,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onDismiss: (() -> Unit)? = null,
 ) {
-    val foreground = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer
-    val background = if (error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer
-    val haptics = LocalHapticFeedback.current
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(background, RoundedCornerShape(16.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(9.dp),
-    ) {
-        Icon(
-            if (error) Icons.Outlined.ErrorOutline else Icons.Outlined.CheckCircle,
-            contentDescription = null,
-            tint = foreground,
-            modifier = Modifier.size(18.dp),
-        )
-        Text(message, style = MaterialTheme.typography.bodyMedium, color = foreground, modifier = Modifier.weight(1f))
-        if (onRetry != null) {
-            Surface(
-                onClick = {
-                    AppHaptics.tick(haptics)
-                    onRetry()
-                },
-                modifier = Modifier
-                    .minimumInteractiveComponentSize()
-                    .pressFeedback(remember { MutableInteractionSource() }, pressedScale = 0.94f),
-                shape = RoundedCornerShape(8.dp),
-                color = foreground.copy(alpha = 0.14f),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Icon(
-                        Icons.Outlined.Refresh,
-                        contentDescription = "重试",
-                        tint = foreground,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Text(
-                        "重试",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = foreground,
-                    )
-                }
-            }
-        }
-    }
+    AppFeedbackBanner(
+        message = message,
+        error = error,
+        modifier = modifier,
+        title = title,
+        icon = icon,
+        onRetry = onRetry,
+        onDismiss = onDismiss,
+    )
 }
 
 /**
