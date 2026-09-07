@@ -69,7 +69,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -517,11 +520,11 @@ private fun WaterValveDeviceCard(
                 }
             }
 
-            // 主体区域：左右分栏（左侧数据微卡，右侧环形中控仪表罗盘）
+            // 主体区域：左右分栏（左侧数据矩阵，右侧超大仪表按钮，完全对齐方案二）
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 // 左侧数据指标列
                 Column(
@@ -530,24 +533,40 @@ private fun WaterValveDeviceCard(
                 ) {
                     WaterValveMetricTile(
                         label = "钱包余额",
+                        tag = "即时可用",
                         value = device.balance.orEmpty().ifBlank { "--" },
-                        unit = "元",
+                        prefix = "¥ ",
                         icon = Icons.Outlined.AccountBalanceWallet,
                         running = device.running,
                     )
                     WaterValveMetricTile(
-                        label = "单次规格",
+                        label = "设定流量",
+                        tag = "定额出水",
                         value = device.defaultValue.orEmpty().ifBlank { "--" },
                         unit = "mL",
                         icon = Icons.Outlined.Opacity,
                         running = device.running,
                     )
+                    Text(
+                        text = if (device.running) "设备状态：高速供水中" else "设备状态：阀门已就绪",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            fontWeight = if (device.running) FontWeight.Bold else FontWeight.Medium,
+                        ),
+                        color = if (device.running) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                        },
+                        modifier = Modifier.padding(start = 2.dp),
+                    )
                 }
 
-                // 右侧环形中控仪表控制大罗盘
+                // 右侧大环形控制罗盘（方案二核心样式）
                 WaterValveRingDialButton(
                     running = device.running,
                     busy = busy,
+                    defaultValue = device.defaultValue,
                     onToggle = onToggle,
                 )
             }
@@ -568,75 +587,79 @@ private fun WaterValveDeviceCard(
 @Composable
 private fun WaterValveMetricTile(
     label: String,
+    tag: String,
     value: String,
-    unit: String,
     icon: ImageVector,
     running: Boolean,
     modifier: Modifier = Modifier,
+    prefix: String? = null,
+    unit: String? = null,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(13.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (running) 0.38f else 0.26f),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (running) 0.42f else 0.28f),
         border = androidx.compose.foundation.BorderStroke(
-            width = 0.6.dp,
+            width = 0.8.dp,
             color = if (running) {
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
             } else {
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             },
         ),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            Surface(
-                shape = CircleShape,
-                color = if (running) {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
-                } else {
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-                },
-                modifier = Modifier.size(26.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = if (running) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp),
-                    )
-                }
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(1.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Row(
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
+                Text(
+                    text = tag,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                    color = if (running) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                if (!prefix.isNullOrBlank() && value != "--") {
                     Text(
-                        text = value,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 15.5.sp),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        text = prefix,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 1.dp),
                     )
-                    if (value != "--") {
-                        Text(
-                            text = unit,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                            modifier = Modifier.padding(bottom = 1.dp),
-                        )
-                    }
+                }
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Black,
+                        fontSize = 17.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!unit.isNullOrBlank() && value != "--") {
+                    Text(
+                        text = unit,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        modifier = Modifier.padding(bottom = 1.dp),
+                    )
                 }
             }
         }
@@ -647,6 +670,7 @@ private fun WaterValveMetricTile(
 private fun WaterValveRingDialButton(
     running: Boolean,
     busy: Boolean,
+    defaultValue: String?,
     onToggle: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -656,30 +680,30 @@ private fun WaterValveRingDialButton(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3200, easing = LinearEasing),
+            animation = tween(durationMillis = 4000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
         label = "ringSweepAngle",
     )
     val pulseAlpha by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.85f,
+        initialValue = 0.5f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1600, easing = LinearEasing),
+            animation = tween(durationMillis = 1400, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "ringPulseAlpha",
     )
 
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val secondaryColor = MaterialTheme.colorScheme.tertiary
-    val outlineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
-
     val dialInteractionSource = remember { MutableInteractionSource() }
+
+    val runningGradient = Brush.linearGradient(
+        colors = listOf(Color(0xFF2563EB), Color(0xFF4F46E5)),
+    )
 
     Box(
         modifier = modifier
-            .size(86.dp)
+            .size(108.dp)
             .pressFeedback(dialInteractionSource, pressedScale = 0.94f)
             .clickable(
                 enabled = !busy,
@@ -691,81 +715,93 @@ private fun WaterValveRingDialButton(
             },
         contentAlignment = Alignment.Center,
     ) {
-        // 外圈环形轨道（出水时为旋转跑马灯流光圆环，待机时为细腻发丝轨道）
-        Canvas(modifier = Modifier.size(84.dp)) {
-            val strokeWidth = 2.4.dp.toPx()
-            if (running) {
+        // 出水状态下的外圈动态旋转跑马灯光环（方案二原型 ringGlow）
+        if (running) {
+            Canvas(modifier = Modifier.size(108.dp)) {
+                val strokeWidth = 2.dp.toPx()
                 val sweepBrush = Brush.sweepGradient(
                     colors = listOf(
-                        primaryColor,
-                        secondaryColor,
-                        primaryColor.copy(alpha = 0.1f),
-                        primaryColor,
+                        Color(0xFF38BDF8),
+                        Color(0xFF818CF8),
+                        Color(0xFF38BDF8).copy(alpha = 0.15f),
+                        Color(0xFF38BDF8),
                     ),
                 )
                 rotate(sweepAngle) {
                     drawCircle(
                         brush = sweepBrush,
-                        style = Stroke(width = strokeWidth),
+                        style = Stroke(
+                            width = strokeWidth,
+                            pathEffect = PathEffect.dashPathEffect(
+                                floatArrayOf(16f, 12f),
+                                0f,
+                            ),
+                        ),
                     )
                 }
-            } else {
-                drawCircle(
-                    color = outlineColor,
-                    style = Stroke(width = 1.2.dp.toPx()),
-                )
             }
         }
 
-        // 核心圆盘实体
-        Surface(
-            shape = CircleShape,
-            color = if (running) {
-                primaryColor
-            } else {
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
-            },
-            border = androidx.compose.foundation.BorderStroke(
-                width = 1.dp,
-                color = if (running) {
-                    primaryColor.copy(alpha = pulseAlpha)
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
-                },
-            ),
-            modifier = Modifier.size(70.dp),
-        ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                if (busy) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        strokeWidth = 2.5.dp,
-                        color = if (running) MaterialTheme.colorScheme.onPrimary else primaryColor,
-                    )
-                } else {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(
-                            imageVector = if (running) Icons.Outlined.Stop else Icons.Outlined.PlayArrow,
-                            contentDescription = if (running) "停止供水" else "开启供水",
-                            tint = if (running) MaterialTheme.colorScheme.onPrimary else primaryColor,
-                            modifier = Modifier.size(21.dp),
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = if (running) "停水" else "出水",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp,
-                            ),
-                            color = if (running) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                        )
+        // 大圆盘按钮实体主体（方案二原型 circleBtn 结构）
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .shadow(
+                    elevation = if (running) 8.dp else 2.dp,
+                    shape = CircleShape,
+                    spotColor = if (running) Color(0xFF2563EB).copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.08f),
+                )
+                .then(
+                    if (running) {
+                        Modifier
+                            .background(runningGradient, CircleShape)
+                            .border(2.dp, Color(0xFF67E8F9).copy(alpha = pulseAlpha), CircleShape)
+                    } else {
+                        Modifier
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f), CircleShape)
+                            .border(2.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f), CircleShape)
                     }
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (busy) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(26.dp),
+                    strokeWidth = 2.5.dp,
+                    color = if (running) Color.White else MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    // 1. 顶部图标
+                    Icon(
+                        imageVector = if (running) Icons.Outlined.Stop else Icons.Outlined.WaterDrop,
+                        contentDescription = if (running) "点击停水" else "轻触出水",
+                        tint = if (running) Color.White else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp),
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    // 2. 中间主标题（方案二同款：轻触出水 / 点击停水）
+                    Text(
+                        text = if (running) "点击停水" else "轻触出水",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                        ),
+                        color = if (running) Color.White else MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    // 3. 底部副标题（方案二同款：500 mL / 出水中...）
+                    Text(
+                        text = if (running) "出水中..." else (defaultValue?.ifBlank { "500 mL" } ?: "500 mL"),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 10.sp,
+                        ),
+                        color = if (running) Color(0xFFA5F3FC) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    )
                 }
             }
         }
