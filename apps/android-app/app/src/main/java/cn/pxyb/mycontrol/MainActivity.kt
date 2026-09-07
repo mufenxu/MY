@@ -15,7 +15,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.WindowManager
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -285,17 +284,17 @@ class MainActivity : ComponentActivity() {
     private fun beginNfcSceneWrite(sceneId: String, sceneName: String) {
         val adapter = nfcAdapter
         if (adapter == null) {
-            Toast.makeText(this, "当前设备不支持 NFC。", Toast.LENGTH_LONG).show()
+            appViewModel.postError("当前设备不支持 NFC。")
             return
         }
         if (!adapter.isEnabled) {
-            Toast.makeText(this, "请先开启 NFC，再把标签贴近手机。", Toast.LENGTH_LONG).show()
+            appViewModel.postError("请先开启 NFC，再把标签贴近手机。")
             startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
             return
         }
         pendingNfcScene = sceneId to sceneName
         enableNfcForegroundDispatch()
-        Toast.makeText(this, "请将 NFC 标签贴近手机，写入“$sceneName”。", Toast.LENGTH_LONG).show()
+        appViewModel.postSuccess("请将 NFC 标签贴近手机，写入“$sceneName”。")
     }
 
     private fun enableNfcForegroundDispatch() {
@@ -349,9 +348,9 @@ class MainActivity : ComponentActivity() {
             if (result.isSuccess) {
                 pendingNfcScene = null
                 runCatching { nfcAdapter?.disableForegroundDispatch(this@MainActivity) }
-                Toast.makeText(this@MainActivity, "“$sceneName”已写入 NFC 标签。", Toast.LENGTH_LONG).show()
+                appViewModel.postSuccess("“$sceneName”已写入 NFC 标签。")
             } else {
-                Toast.makeText(this@MainActivity, result.exceptionOrNull()?.message ?: "NFC 写入失败，请重试。", Toast.LENGTH_LONG).show()
+                appViewModel.postError(result.exceptionOrNull()?.message ?: "NFC 写入失败，请重试。")
             }
         }
     }

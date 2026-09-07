@@ -12,7 +12,6 @@ import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.URLUtil
 import android.webkit.WebView
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.lifecycleScope
@@ -151,7 +150,10 @@ internal class PlatformWebDownloadSupport(
     }
 
     private fun showToast(message: String) {
-        Toast.makeText(activity, message, Toast.LENGTH_SHORT).show()
+        val isError = "失败" in message || "无法" in message || "不支持" in message
+        if (onFeedback != null) {
+            activity.runOnUiThread { onFeedback.invoke(isError, message) }
+        }
     }
 
     private class ImageDownloadBridge(

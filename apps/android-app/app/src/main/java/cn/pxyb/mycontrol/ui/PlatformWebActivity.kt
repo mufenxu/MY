@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.components.dialog.AppSuccessModalCard
+import cn.pxyb.mycontrol.ui.components.dialog.AppErrorModalCard
+
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
@@ -18,7 +21,6 @@ import android.webkit.WebSettings
 import android.webkit.ValueCallback
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -98,7 +100,7 @@ class PlatformWebActivity : ComponentActivity() {
             val cachedUris = withContext(Dispatchers.IO) { copyPickedUrisToCache(pickedUris) }
             if (isFinishing || isDestroyed) return@launch
             if (cachedUris == null) {
-                Toast.makeText(this@PlatformWebActivity, "照片读取失败，请重试或更换图片来源", Toast.LENGTH_SHORT).show()
+                statusFeedback = true to "照片读取失败，请重试或更换图片来源"
             }
             callback.onReceiveValue(cachedUris)
         }
@@ -109,7 +111,7 @@ class PlatformWebActivity : ComponentActivity() {
         enableEdgeToEdge()
         webOwner = sessionStore.readActiveUsername()
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        webDownloadSupport = PlatformWebDownloadSupport(this) { webViewInstance }
+        webDownloadSupport = PlatformWebDownloadSupport(this, onFeedback = { isError, msg -> statusFeedback = isError to msg }) { webViewInstance }
 
         val initialUrl = intent.getStringExtra(EXTRA_URL).orEmpty()
         val initialTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "管理后台" }
@@ -164,6 +166,23 @@ class PlatformWebActivity : ComponentActivity() {
                                 AppButton("解锁网页", onClick = ::resumeProtectedPage, loading = unlocking)
                                 AppSecondaryButton("返回应用", onClick = ::returnToApp)
                             }
+                        }
+                    }
+
+                    statusFeedback?.let { (isError, msg) ->
+                        if (isError) {
+                            AppErrorModalCard(
+                                title = "操作未完成",
+                                error = msg,
+                                onDismiss = { statusFeedback = null },
+                            )
+                        } else {
+                            AppSuccessModalCard(
+                                title = "操作成功",
+                                message = msg,
+                                onDismiss = { statusFeedback = null },
+                                autoDismissMillis = 2800L,
+                            )
                         }
                     }
                 }

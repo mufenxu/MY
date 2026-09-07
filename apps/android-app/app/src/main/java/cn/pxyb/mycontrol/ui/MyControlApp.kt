@@ -2134,6 +2134,22 @@ private fun AuthenticatedShell(
                 )
             }
 
+            // 方案二：全局毛玻璃流光状态模态卡片反馈 (Glassmorphic Modal Card)
+            if (!state.message.isNullOrBlank()) {
+                AppSuccessModalCard(
+                    title = "操作成功",
+                    message = state.message.orEmpty(),
+                    onDismiss = viewModel::clearFeedback,
+                    autoDismissMillis = 2800L,
+                )
+            } else if (!state.error.isNullOrBlank()) {
+                AppErrorModalCard(
+                    title = "操作未完成",
+                    error = state.error.orEmpty(),
+                    onDismiss = viewModel::clearFeedback,
+                )
+            }
+
             androidx.compose.animation.AnimatedVisibility(
                 visible = toastVisible,
                 enter = slideInVertically(animationSpec = tween(260, easing = FastOutSlowInEasing)) { -it } + fadeIn(animationSpec = tween(180)),

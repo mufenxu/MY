@@ -4,7 +4,6 @@ import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
 
-import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -117,6 +116,7 @@ fun ProfileScreen(
     var showUpdateDialog by remember { mutableStateOf(false) }
     var confirmClearCache by remember { mutableStateOf(false) }
     var showPrivacyPolicy by remember { mutableStateOf(false) }
+    var statusFeedback by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
 
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -318,7 +318,7 @@ fun ProfileScreen(
                                                 if (url != null) {
                                                     showMagicLinkDialog = url
                                                 } else if (error != null) {
-                                                    Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                                                    statusFeedback = true to (error ?: "生成登录链接失败")
                                                 }
                                             }
                                         },
@@ -530,7 +530,7 @@ fun ProfileScreen(
                                         subtitle = "重新拉取全部模块的最新数据",
                                         onClick = {
                                             onForceFullSync()
-                                            Toast.makeText(context, "正在全量重新同步数据...", Toast.LENGTH_SHORT).show()
+                                            statusFeedback = false to "正在全量重新同步数据..."
                                         },
                                     )
                                     ProfileDivider()
@@ -875,7 +875,7 @@ fun ProfileScreen(
                                         if (url != null) {
                                             showMagicLinkDialog = url
                                         } else if (error != null) {
-                                            Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                                            statusFeedback = true to (error ?: "生成登录链接失败")
                                         }
                                     }
                                 },
@@ -974,7 +974,7 @@ fun ProfileScreen(
                                 subtitle = "重新拉取全部模块的最新数据",
                                 onClick = {
                                     onForceFullSync()
-                                    Toast.makeText(context, "正在全量重新同步数据...", Toast.LENGTH_SHORT).show()
+                                    statusFeedback = false to "正在全量重新同步数据..."
                                 },
                             )
                             ProfileDivider()
@@ -1149,7 +1149,7 @@ fun ProfileScreen(
                             icon = Icons.Outlined.ContentCopy,
                             onClick = {
                                 clipboardManager.setText(AnnotatedString(url))
-                                Toast.makeText(context, "已复制登录链接到剪贴板", Toast.LENGTH_SHORT).show()
+                                statusFeedback = false to "已复制登录链接到剪贴板"
                                 showMagicLinkDialog = null
                             },
                             modifier = Modifier.weight(1f),
@@ -1168,7 +1168,7 @@ fun ProfileScreen(
             onSave = { updated ->
                 onUpdateNotificationPreferences(updated)
                 showNotificationDialog = false
-                Toast.makeText(context, "推送与免打扰偏好已保存", Toast.LENGTH_SHORT).show()
+                statusFeedback = false to "推送与免打扰偏好已保存"
             },
         )
     }
@@ -1349,7 +1349,7 @@ fun ProfileScreen(
             onConfirm = {
                 confirmClearCache = false
                 onClearCache()
-                Toast.makeText(context, "本地缓存已清理", Toast.LENGTH_SHORT).show()
+                statusFeedback = false to "本地缓存已清理"
             },
             icon = Icons.Outlined.CleaningServices,
         )
@@ -1357,6 +1357,23 @@ fun ProfileScreen(
 
     if (showPrivacyPolicy) {
         PrivacyPolicyDialog(onDismiss = { showPrivacyPolicy = false })
+    }
+
+    statusFeedback?.let { (isError, msg) ->
+        if (isError) {
+            AppErrorModalCard(
+                title = "操作未完成",
+                error = msg,
+                onDismiss = { statusFeedback = null },
+            )
+        } else {
+            AppSuccessModalCard(
+                title = "操作成功",
+                message = msg,
+                onDismiss = { statusFeedback = null },
+                autoDismissMillis = 2800L,
+            )
+        }
     }
 }
 

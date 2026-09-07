@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -148,25 +147,16 @@ fun AssistantScreen(
         )
     }
     pendingAction?.let { action ->
-        AlertDialog(
-            onDismissRequest = { pendingAction = null },
-            title = { Text("确认操作") },
-            text = { Text("确认要执行：${assistantActionLabel(action)}？") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onExecuteAction(action)
-                        pendingAction = null
-                    },
-                ) {
-                    Text("确认")
-                }
+        AppConfirmDialog(
+            title = "确认操作",
+            detail = "确认要执行：${assistantActionLabel(action)}？",
+            confirmLabel = "确认执行",
+            onDismiss = { pendingAction = null },
+            onConfirm = {
+                onExecuteAction(action)
+                pendingAction = null
             },
-            dismissButton = {
-                TextButton(onClick = { pendingAction = null }) {
-                    Text("取消")
-                }
-            },
+            icon = Icons.Outlined.CheckCircle,
         )
     }
 }

@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
+
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,7 +22,6 @@ import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.VolumeOff
 import androidx.compose.material.icons.outlined.Wifi
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -590,31 +591,28 @@ fun OperationsScreen(
         )
     }
     noteTarget?.let { incident ->
-        AlertDialog(
+        AppDialogForm(
+            title = "记录处理进展",
+            subtitle = "记录当前事件的处理进展与排查记录",
+            confirmText = "保存记录",
+            cancelText = "取消",
+            enabled = noteText.isNotBlank(),
             onDismissRequest = { noteTarget = null },
-            title = { Text("记录处理进展") },
-            text = {
-                OutlinedTextField(
-                    value = noteText,
-                    onValueChange = { noteText = it.take(500) },
-                    label = { Text("备注") },
-                    placeholder = { Text("例如：已重启服务，等待指标恢复") },
-                    minLines = 3,
-                    maxLines = 5,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+            onConfirm = {
+                onIncidentNote(incident.id, noteText)
+                noteTarget = null
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onIncidentNote(incident.id, noteText)
-                        noteTarget = null
-                    },
-                    enabled = noteText.isNotBlank(),
-                ) { Text("保存记录") }
-            },
-            dismissButton = { TextButton(onClick = { noteTarget = null }) { Text("取消") } },
-        )
+        ) {
+            OutlinedTextField(
+                value = noteText,
+                onValueChange = { noteText = it.take(500) },
+                label = { Text("备注") },
+                placeholder = { Text("例如：已重启服务，等待指标恢复") },
+                minLines = 3,
+                maxLines = 5,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 

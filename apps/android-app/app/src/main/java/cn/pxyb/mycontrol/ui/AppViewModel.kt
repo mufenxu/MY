@@ -3229,6 +3229,18 @@ class AppViewModel(
         mutableState.update { it.copy(error = null, message = null) }
     }
 
+    fun postSuccess(message: String) {
+        mutableState.update { it.copy(message = message, error = null) }
+    }
+
+    fun postError(message: String) {
+        mutableState.update { it.copy(error = message, message = null) }
+    }
+
+    fun postFeedback(message: String, error: Boolean = false) {
+        if (error) postError(message) else postSuccess(message)
+    }
+
     private fun assistantInputs(state: AppUiState) = AssistantInputs(
         username = state.user?.username,
         locked = state.locked,
