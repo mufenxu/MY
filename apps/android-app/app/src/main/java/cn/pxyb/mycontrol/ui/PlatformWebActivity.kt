@@ -83,6 +83,7 @@ class PlatformWebActivity : ComponentActivity() {
     private var webUnlocked by mutableStateOf(false)
     private var unlocking by mutableStateOf(false)
     private var unlockJob: Job? = null
+    private var statusFeedback by mutableStateOf<Pair<Boolean, String>?>(null)
     private lateinit var webDownloadSupport: PlatformWebDownloadSupport
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val uploadCacheDirectory by lazy { File(cacheDir, "$WEBVIEW_UPLOAD_CACHE_DIR/${UUID.randomUUID()}") }

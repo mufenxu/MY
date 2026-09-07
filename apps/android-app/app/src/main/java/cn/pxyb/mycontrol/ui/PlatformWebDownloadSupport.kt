@@ -22,6 +22,7 @@ import java.io.File
 
 internal class PlatformWebDownloadSupport(
     private val activity: PlatformWebActivity,
+    private val onFeedback: ((Boolean, String) -> Unit)? = null,
     private val currentWebView: () -> WebView?,
 ) {
     private var pendingLegacyImage: PendingImage? = null
