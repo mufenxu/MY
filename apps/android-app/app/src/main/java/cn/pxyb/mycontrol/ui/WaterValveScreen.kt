@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -354,8 +355,8 @@ private fun WaterValveDeviceCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(13.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -366,7 +367,7 @@ private fun WaterValveDeviceCard(
                     imageVector = Icons.Outlined.DragHandle,
                     contentDescription = "长按拖动排序",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(18.dp),
                 )
                 Column(
                     modifier = Modifier.weight(1f),
@@ -389,12 +390,11 @@ private fun WaterValveDeviceCard(
                 Surface(
                     shape = CircleShape,
                     color = if (device.running) {
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f)
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.68f)
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f)
                     },
-                    modifier = Modifier
-                        .heightIn(min = 30.dp),
+                    modifier = Modifier.heightIn(min = 27.dp),
                 ) {
                     Text(
                         text = if (device.running) "运行中" else "已关闭",
@@ -404,14 +404,15 @@ private fun WaterValveDeviceCard(
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                     )
                 }
                 Surface(
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.72f),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.48f),
                     modifier = Modifier
-                        .size(48.dp)
+                        .minimumInteractiveComponentSize()
+                        .size(33.dp)
                         .clickable(enabled = !busy, onClick = onDelete),
                 ) {
                     Icon(
@@ -419,8 +420,7 @@ private fun WaterValveDeviceCard(
                         contentDescription = "删除绑定",
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier
-                            .size(20.dp)
-                            .padding(0.dp),
+                            .size(16.dp),
                     )
                 }
             }
@@ -468,12 +468,12 @@ private fun WaterValveMetric(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+        shape = RoundedCornerShape(15.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 text = label,
@@ -499,13 +499,13 @@ private fun WaterValvePowerButton(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 58.dp)
+            .heightIn(min = 53.dp)
             .clickable(enabled = !busy) { onToggle(!running) },
-        shape = RoundedCornerShape(29.dp),
+        shape = RoundedCornerShape(27.dp),
         color = if (running) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.90f)
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.88f)
         } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f)
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.44f)
         },
         border = androidx.compose.foundation.BorderStroke(
             width = 1.dp,
@@ -517,13 +517,13 @@ private fun WaterValvePowerButton(
         ),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(1.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
                     text = if (running) "正在出水" else "阀门已关闭",
@@ -543,7 +543,7 @@ private fun WaterValvePowerButton(
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(41.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                 if (busy) {
@@ -560,7 +560,7 @@ private fun WaterValvePowerButton(
                         } else {
                             MaterialTheme.colorScheme.onPrimary
                         },
-                        modifier = Modifier.size(22.dp),
+                        modifier = Modifier.size(19.dp),
                     )
                 }
             }
