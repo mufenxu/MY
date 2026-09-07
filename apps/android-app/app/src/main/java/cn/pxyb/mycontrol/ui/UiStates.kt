@@ -152,52 +152,6 @@ data class AppUiState(
     val sharedTodoDraft: String? = null,
     val pendingSceneId: String? = null,
     val quickScene: QuickScenePreference? = null,
-    val reservationSpaces: List<CampusReservationSpace> = emptyList(),
-    val reservationSpacesLoading: Boolean = false,
-    val reservationRules: String? = null,
-    val reservationAvailability: String? = null,
-    val reservationFreeWindows: List<CampusReservationTimeWindow> = emptyList(),
-    val reservationBusyWindows: List<CampusReservationTimeWindow> = emptyList(),
-    val reservationAvailabilitySpaceId: Int? = null,
-    val reservationAvailabilityDate: String? = null,
-    val reservationAvailableSpaces: List<CampusReservationSpace> = emptyList(),
-    val reservationAvailableSpacesQueryText: String? = null,
-    val reservationAvailableSpacesLoading: Boolean = false,
-    val reservationQueryLoading: Boolean = false,
-    val reservationSubmitLoading: Boolean = false,
-    val reservationAutoTasks: List<CampusAutoReservationTask> = emptyList(),
-    val reservationAutoTasksLoading: Boolean = false,
-    val reservationSavingTask: Boolean = false,
-    val reservationDeletingTaskId: String? = null,
-    val reservationMyReservations: List<CampusMyReservation> = emptyList(),
-    val reservationMyReservationsLoading: Boolean = false,
-    val reservationCancellingReservationId: String? = null,
-    val reservationError: String? = null,
-    val reservationMessage: String? = null,
-    val librarySeatOverview: LibrarySeatOverview = LibrarySeatOverview(),
-    val librarySeatOverviewLoading: Boolean = false,
-    val librarySeatAreas: List<LibrarySeatArea> = emptyList(),
-    val librarySeatAreasLoading: Boolean = false,
-    val librarySeatSeats: List<LibrarySeatStatus> = emptyList(),
-    val librarySeatSeatsLoading: Boolean = false,
-    val librarySeatFloorSeats: List<LibrarySeatFloorSeat> = emptyList(),
-    val librarySeatFloorSeatsLoading: Boolean = false,
-    val librarySeatSubmitLoading: Boolean = false,
-    val librarySeatReservations: List<LibrarySeatReservationRecord> = emptyList(),
-    val librarySeatReservationsLoading: Boolean = false,
-    val librarySeatHistoryReservations: LibrarySeatReservationHistory = LibrarySeatReservationHistory(),
-    val librarySeatHistoryReservationsLoading: Boolean = false,
-    val librarySeatWaitlists: List<LibrarySeatWaitlistTask> = emptyList(),
-    val librarySeatWaitlistsLoading: Boolean = false,
-    val librarySeatWaitlistSaving: Boolean = false,
-    val librarySeatWaitlistDeletingId: String? = null,
-    val librarySeatSelectedVenueId: String? = null,
-    val librarySeatSelectedDate: String? = null,
-    val librarySeatSelectedFloorId: String? = null,
-    val librarySeatSelectedAreaId: String? = null,
-    val librarySeatSelectedSeatId: String? = null,
-    val librarySeatError: String? = null,
-    val librarySeatMessage: String? = null,
 ) {
     val activeIncidents: List<IncidentInfo>
         get() = incidents.filter { it.status != "resolved" }
@@ -462,11 +416,8 @@ data class ReservationUiState(
 
 @Immutable
 data class LibrarySeatUiState(
-    val refreshing: Boolean = false,
     val overview: LibrarySeatOverview = LibrarySeatOverview(),
     val overviewLoading: Boolean = false,
-    val venues: List<LibrarySeatVenue> = emptyList(),
-    val dates: List<String> = emptyList(),
     val areas: List<LibrarySeatArea> = emptyList(),
     val areasLoading: Boolean = false,
     val seats: List<LibrarySeatStatus> = emptyList(),
@@ -489,7 +440,12 @@ data class LibrarySeatUiState(
     val selectedSeatId: String? = null,
     val error: String? = null,
     val message: String? = null,
-)
+) {
+    val venues: List<LibrarySeatVenue> get() = overview.venues
+    val dates: List<String> get() = overview.dates
+    val refreshing: Boolean get() = overviewLoading || areasLoading || seatsLoading || submitLoading ||
+        reservationsLoading || historyReservationsLoading
+}
 
 @Immutable
 data class NotificationCenterUiState(
@@ -818,63 +774,6 @@ internal fun AppUiState.toFreeClassroomUiState() = FreeClassroomUiState(
     refreshing = isRefreshing(DataSection.FreeClassrooms),
     error = sectionError(DataSection.FreeClassrooms),
     result = freeClassroomResult ?: campusOverview?.freeClassrooms,
-)
-
-internal fun AppUiState.toReservationUiState() = ReservationUiState(
-    refreshing = isRefreshing(DataSection.Reservation),
-    spaces = reservationSpaces,
-    spacesLoading = reservationSpacesLoading,
-    rules = reservationRules,
-    availability = reservationAvailability,
-    freeWindows = reservationFreeWindows,
-    busyWindows = reservationBusyWindows,
-    availabilitySpaceId = reservationAvailabilitySpaceId,
-    availabilityDate = reservationAvailabilityDate,
-    availableSpaces = reservationAvailableSpaces,
-    availableSpacesQueryText = reservationAvailableSpacesQueryText,
-    availableSpacesLoading = reservationAvailableSpacesLoading,
-    queryLoading = reservationQueryLoading,
-    submitLoading = reservationSubmitLoading,
-    autoTasks = reservationAutoTasks,
-    autoTasksLoading = reservationAutoTasksLoading,
-    savingTask = reservationSavingTask,
-    deletingTaskId = reservationDeletingTaskId,
-    myReservations = reservationMyReservations,
-    myReservationsLoading = reservationMyReservationsLoading,
-    cancellingReservationId = reservationCancellingReservationId,
-    error = sectionError(DataSection.Reservation) ?: reservationError,
-    message = reservationMessage,
-)
-
-internal fun AppUiState.toLibrarySeatUiState() = LibrarySeatUiState(
-    refreshing = librarySeatOverviewLoading || librarySeatAreasLoading || librarySeatSeatsLoading || librarySeatSubmitLoading ||
-        librarySeatReservationsLoading || librarySeatHistoryReservationsLoading,
-    overview = librarySeatOverview,
-    overviewLoading = librarySeatOverviewLoading,
-    venues = librarySeatOverview.venues,
-    dates = librarySeatOverview.dates,
-    areas = librarySeatAreas,
-    areasLoading = librarySeatAreasLoading,
-    seats = librarySeatSeats,
-    seatsLoading = librarySeatSeatsLoading,
-    floorSeats = librarySeatFloorSeats,
-    floorSeatsLoading = librarySeatFloorSeatsLoading,
-    submitLoading = librarySeatSubmitLoading,
-    reservations = librarySeatReservations,
-    reservationsLoading = librarySeatReservationsLoading,
-    historyReservations = librarySeatHistoryReservations,
-    historyReservationsLoading = librarySeatHistoryReservationsLoading,
-    waitlists = librarySeatWaitlists,
-    waitlistsLoading = librarySeatWaitlistsLoading,
-    waitlistSaving = librarySeatWaitlistSaving,
-    waitlistDeletingId = librarySeatWaitlistDeletingId,
-    selectedVenueId = librarySeatSelectedVenueId,
-    selectedDate = librarySeatSelectedDate,
-    selectedFloorId = librarySeatSelectedFloorId,
-    selectedAreaId = librarySeatSelectedAreaId,
-    selectedSeatId = librarySeatSelectedSeatId,
-    error = librarySeatError,
-    message = librarySeatMessage,
 )
 
 internal fun AppUiState.toNotificationCenterUiState() = NotificationCenterUiState(

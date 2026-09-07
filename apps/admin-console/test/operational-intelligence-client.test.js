@@ -67,16 +67,19 @@ test('operational intelligence tables preserve essential actions and budget data
 
 test('all operational intelligence reads cancel stale requests before applying results', () => {
   const source = readSource('src', 'client', 'OperationsViews.jsx');
-  const controllerCreations = source.match(/const controller = new AbortController\(\)/g) || [];
-  const guardedWrites = source.match(/requestRef\.current === controller/g) || [];
-  const requestSignals = source.match(/signal: controller\.signal/g) || [];
-  const clearedBeforeAbort = source.match(/requestRef\.current = null;\s+controller\?\.abort\(\)/g) || [];
+  const hook = readSource('src', 'client', 'useLatestRequest.js');
+  const combined = source + hook;
+  const controllerCreations = combined.match(/const controller = new AbortController\(\)/g) || [];
+  const guardedWrites = combined.match(/requestRef\.current === controller/g) || [];
+  const requestSignals = source.match(/\{ signal(?:: controller\.signal)? \}/g) || [];
+  const clearedBeforeAbort = combined.match(/requestRef\.current = null;\s+controller\?\.abort\(\)/g) || [];
 
-  assert.ok(controllerCreations.length >= 4);
-  assert.ok(guardedWrites.length >= 12);
+  assert.equal((source.match(/useLatestRequest\(\)/g) || []).length, 4);
+  assert.ok(controllerCreations.length >= 2);
+  assert.ok(guardedWrites.length >= 6);
   assert.ok(requestSignals.length >= 4);
-  assert.ok(clearedBeforeAbort.length >= 4);
-  assert.match(source, /requestError\.code !== 'REQUEST_ABORTED'/);
+  assert.ok(clearedBeforeAbort.length >= 2);
+  assert.match(hook, /requestError\.code !== 'REQUEST_ABORTED'/);
 });
 
 test('operational search results route through existing console navigation', () => {

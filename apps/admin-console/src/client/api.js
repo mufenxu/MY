@@ -27,16 +27,38 @@ export async function requestJson(url, options = {}) {
   let response;
   try {
     response = await fetchImpl(url, {
-    credentials: 'same-origin',
-    ...fetchOptions,
-    signal: controller.signal,
-    headers: {
-      Accept: 'application/json',
-      ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(fetchOptions.method && fetchOptions.method !== 'GET' ? { 'X-Platform-Request': 'console' } : {}),
-      ...fetchOptions.headers,
-    },
+      credentials: 'same-origin',
+      ...fetchOptions,
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(fetchOptions.method && fetchOptions.method !== 'GET' ? { 'X-Platform-Request': 'console' } : {}),
+        ...fetchOptions.headers,
+      },
     });
+    let data = {};
+    if (response.status !== 204 && response.status !== 205) {
+      try {
+        data = await response.json();
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        if (response.ok) {
+          throw createRequestError('服务器返回的数据格式异常，请稍后重试。', {
+            code: 'INVALID_RESPONSE', status: response.status, cause: error,
+          });
+        }
+      }
+    }
+    if (!response.ok) {
+      const error = createRequestError(data?.message || data?.error || `请求失败（HTTP ${response.status}）`, {
+        status: response.status,
+        code: data?.code || 'HTTP_ERROR',
+      });
+      error.details = data?.details;
+      throw error;
+    }
+    return data;
   } catch (error) {
     if (controller.signal.aborted) {
       const timedOut = !callerSignal?.aborted;
@@ -45,6 +67,7 @@ export async function requestJson(url, options = {}) {
         cause: error,
       });
     }
+    if (response && error.status === response.status) throw error;
     throw createRequestError('无法连接服务，请检查网络后重试。', {
       code: 'NETWORK_ERROR',
       cause: error,
@@ -54,14 +77,4 @@ export async function requestJson(url, options = {}) {
     callerSignal?.removeEventListener?.('abort', abortFromCaller);
   }
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = createRequestError(data.message || data.error || `请求失败（HTTP ${response.status}）`, {
-      status: response.status,
-      code: data.code || 'HTTP_ERROR',
-    });
-    error.details = data.details;
-    throw error;
-  }
-  return data;
 }

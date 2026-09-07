@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLatestRequest } from './useLatestRequest.js';
 import { startRegistration } from '@simplewebauthn/browser';
 import {
   Activity,
@@ -251,38 +252,18 @@ function TrendMonitoringPanel({ services }) {
   const [hours, setHours] = useState(24);
   const [selected, setSelected] = useState('all');
   const [samples, setSamples] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const requestRef = useRef(null);
+  const { loading, error, runRequest } = useLatestRequest();
 
   const load = useCallback(async () => {
-    requestRef.current?.abort();
-    const controller = new AbortController();
-    requestRef.current = controller;
-    setLoading(true);
-    setError('');
-    try {
+    await runRequest(async (signal) => {
       const query = new URLSearchParams({ hours: String(hours), limit: '3000' });
       if (selected !== 'all') query.set('serviceId', selected);
-      const result = await requestJson(`/api/operations/history?${query}`, { signal: controller.signal });
-      if (requestRef.current === controller) setSamples(result.samples || []);
-    } catch (requestError) {
-      if (requestRef.current === controller && requestError.code !== 'REQUEST_ABORTED') setError(requestError.message);
-    } finally {
-      if (requestRef.current === controller) {
-        requestRef.current = null;
-        setLoading(false);
-      }
-    }
-  }, [hours, selected]);
+      return requestJson(`/api/operations/history?${query}`, { signal });
+    }, (result) => setSamples(result.samples || []));
+  }, [hours, selected, runRequest]);
 
   useEffect(() => {
     load();
-    return () => {
-      const controller = requestRef.current;
-      requestRef.current = null;
-      controller?.abort();
-    };
   }, [load]);
 
   const groups = useMemo(() => samples.reduce((result, sample) => {
@@ -360,38 +341,18 @@ function SloPanel({ services }) {
   const [windowValue, setWindowValue] = useState('7d');
   const [selected, setSelected] = useState('all');
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const requestRef = useRef(null);
+  const { loading, error, runRequest } = useLatestRequest();
 
   const load = useCallback(async () => {
-    requestRef.current?.abort();
-    const controller = new AbortController();
-    requestRef.current = controller;
-    setLoading(true);
-    setError('');
-    try {
+    await runRequest(async (signal) => {
       const query = new URLSearchParams({ window: windowValue });
       if (selected !== 'all') query.set('serviceId', selected);
-      const result = await requestJson(`/api/operations/slo?${query}`, { signal: controller.signal });
-      if (requestRef.current === controller) setData(result);
-    } catch (requestError) {
-      if (requestRef.current === controller && requestError.code !== 'REQUEST_ABORTED') setError(requestError.message);
-    } finally {
-      if (requestRef.current === controller) {
-        requestRef.current = null;
-        setLoading(false);
-      }
-    }
-  }, [selected, windowValue]);
+      return requestJson(`/api/operations/slo?${query}`, { signal });
+    }, setData);
+  }, [selected, windowValue, runRequest]);
 
   useEffect(() => {
     load();
-    return () => {
-      const controller = requestRef.current;
-      requestRef.current = null;
-      controller?.abort();
-    };
   }, [load]);
 
   const reports = data?.services || [];
@@ -450,17 +411,10 @@ function ChangeCalendarPanel({ services }) {
   const [selected, setSelected] = useState('all');
   const [page, setPage] = useState(1);
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const requestRef = useRef(null);
+  const { loading, error, runRequest } = useLatestRequest();
 
   const load = useCallback(async () => {
-    requestRef.current?.abort();
-    const controller = new AbortController();
-    requestRef.current = controller;
-    setLoading(true);
-    setError('');
-    try {
+    await runRequest(async (signal) => {
       const current = new Date();
       const futureDays = period === 90 ? 30 : 15;
       const query = new URLSearchParams({
@@ -471,25 +425,12 @@ function ChangeCalendarPanel({ services }) {
       });
       if (type !== 'all') query.set('type', type);
       if (selected !== 'all') query.set('serviceId', selected);
-      const result = await requestJson(`/api/operations/change-calendar?${query}`, { signal: controller.signal });
-      if (requestRef.current === controller) setData(result);
-    } catch (requestError) {
-      if (requestRef.current === controller && requestError.code !== 'REQUEST_ABORTED') setError(requestError.message);
-    } finally {
-      if (requestRef.current === controller) {
-        requestRef.current = null;
-        setLoading(false);
-      }
-    }
-  }, [page, period, selected, type]);
+      return requestJson(`/api/operations/change-calendar?${query}`, { signal });
+    }, setData);
+  }, [page, period, selected, type, runRequest]);
 
   useEffect(() => {
     load();
-    return () => {
-      const controller = requestRef.current;
-      requestRef.current = null;
-      controller?.abort();
-    };
   }, [load]);
 
   useEffect(() => {
@@ -761,9 +702,8 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
 
 export function ReleasesView({ session, targetEntityId = '' }) {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { loading, error, setError, runRequest } = useLatestRequest();
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [clockNow, setClockNow] = useState(Date.now());
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -771,10 +711,8 @@ export function ReleasesView({ session, targetEntityId = '' }) {
   const [credentials, setCredentials] = useState({ password: '', totp: '' });
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try { setData(await requestJson('/api/releases')); } catch (requestError) { setError(requestError.message); } finally { setLoading(false); }
-  }, []);
+    await runRequest((signal) => requestJson('/api/releases', { signal }), setData);
+  }, [runRequest]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     if (!targetEntityId || !data) return undefined;

@@ -28,16 +28,10 @@ import cn.pxyb.mycontrol.data.AutomationCondition
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationPreference
 import cn.pxyb.mycontrol.data.AppNotificationAction
-import cn.pxyb.mycontrol.data.CampusAutoReservationTask
-import cn.pxyb.mycontrol.data.CampusReservationAvailability
-import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusTimetable
-import cn.pxyb.mycontrol.data.CampusWaterBill
 import cn.pxyb.mycontrol.data.CampusWaterValve
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
-import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAccountStore
-import cn.pxyb.mycontrol.data.GoogleAliasRecord
 import cn.pxyb.mycontrol.data.HomePreferences
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
@@ -48,9 +42,6 @@ import cn.pxyb.mycontrol.data.newTodoTask
 import org.json.JSONObject
 import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.PlatformWebSession
-import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
-import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
-import cn.pxyb.mycontrol.data.LibrarySeatWaitlistRequest
 import cn.pxyb.mycontrol.data.QuickScenePreference
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.ResourceExpiry
@@ -158,6 +149,7 @@ class AppViewModel(
     val toolsState = deriveState(AppUiState::toToolsUiState)
     val profileState = deriveState(AppUiState::toProfileUiState)
     val accountManagementState = deriveState(AppUiState::toAccountManagementUiState)
+    val googleAccounts = GoogleAccountsController(viewModelScope, api, googleAccountStore, mutableState, ::forceReauthentication)
     val googleAccountDeskState = deriveState(AppUiState::toGoogleAccountDeskUiState)
     val qrLoginState = deriveState(AppUiState::toQrLoginUiState)
     val globalSearchState = deriveState(AppUiState::toGlobalSearchUiState)
@@ -166,8 +158,8 @@ class AppViewModel(
     val todayState = deriveState(AppUiState::toTodayUiState)
     val waterValveState = deriveState(AppUiState::toWaterValveUiState)
     val freeClassroomState = deriveState(AppUiState::toFreeClassroomUiState)
-    val reservationState = deriveState(AppUiState::toReservationUiState)
-    val librarySeatState = deriveState(AppUiState::toLibrarySeatUiState)
+    val reservations = ReservationStateHolder(viewModelScope, api.campus, ::forceReauthentication)
+    val librarySeats = LibrarySeatStateHolder(viewModelScope, api.campus, ::forceReauthentication)
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
     val scenesState = deriveState(AppUiState::toScenesUiState)
     private var pendingQrLogin: Pair<String, String>? = null
@@ -181,6 +173,7 @@ class AppViewModel(
     private var initialTasksLoaded = false
     private var operationalEffectsJob: Job? = null
     private val waterValveMutex = Mutex()
+    private var featureAccountUsername: String? = null
 
     private fun <T> deriveState(transform: (AppUiState) -> T): StateFlow<T> = mutableState
         .map(transform)
@@ -294,7 +287,7 @@ class AppViewModel(
                         }
                         hydrateLocalState()
                         syncRemoteNotifications()
-                        loadGoogleAccounts()
+                        googleAccounts.loadGoogleAccounts()
                         startOperationalPolling()
                         refreshInitialData()
                         scanPendingQrLogin()
@@ -497,6 +490,9 @@ class AppViewModel(
         if (mutableState.value.user != null && !mutableState.value.qrLoginBusy) {
             stopOperationalPolling()
             cancelRefreshes()
+            googleAccounts.cancelPending()
+            reservations.cancelPending()
+            librarySeats.cancelPending()
             clearRefreshCache()
             val hasSession = sessionStore.hasSession()
             sessionStore.lock()
@@ -591,7 +587,7 @@ class AppViewModel(
                 cachedAtMillis = null,
             )
         }
-        loadGoogleAccounts()
+        googleAccounts.loadGoogleAccounts()
         alertsSeeded = false
         initialIncidentsLoaded = false
         initialTasksLoaded = false
@@ -605,6 +601,12 @@ class AppViewModel(
     }
 
     private fun setAccountScope(username: String?) {
+        if (featureAccountUsername != username) {
+            googleAccounts.cancelPending()
+            reservations.reset()
+            librarySeats.reset()
+            featureAccountUsername = username
+        }
         appDeviceRegistered = false
         googleAccountStore.setAccount(username)
         personalStore.setAccount(username)
@@ -614,6 +616,7 @@ class AppViewModel(
     }
 
     private fun clearAccountScopedState() {
+        googleAccounts.cancelPending()
         alertNotifier.clear()
         personalStore.clearAccountData()
         snapshotStore.clear()
@@ -1041,7 +1044,7 @@ class AppViewModel(
             )
         }
         if (changedTab) refreshForTab(MainTab.Profile)
-        loadGoogleAccounts()
+        googleAccounts.loadGoogleAccounts()
     }
 
     fun closeGoogleAccountDesk() {
@@ -1155,388 +1158,6 @@ class AppViewModel(
         api.createGitHubRelease(owner, repo, tag, name, body, draft, prerelease)
         loadGitHubReleases(owner, repo)
     }
-    fun addGoogleAccount(
-        primaryEmail: String,
-        displayName: String,
-        emailStatus: String,
-        openAiStatus: String,
-        tagsText: String,
-        nextReviewAtText: String,
-        note: String,
-    ) {
-        val email = normalizeGoogleAddress(primaryEmail)
-        val tags = normalizeGoogleTags(tagsText) ?: return
-        val nextReviewAt = parseGoogleReviewDate(nextReviewAtText)
-        if (nextReviewAtText.isNotBlank() && nextReviewAt == null) {
-            setGoogleAccountError("检查日期请使用 yyyy-MM-dd 格式。")
-            return
-        }
-        when {
-            !isValidGoogleAddress(email) -> setGoogleAccountError("请输入有效的 Google 邮箱地址。")
-            mutableState.value.googleAccounts.any { it.primaryEmail == email } ->
-                setGoogleAccountError("这个主邮箱已经添加过了。")
-            else -> persistGoogleAccounts(
-                transform = { accounts ->
-                    accounts + GoogleAccountRecord(
-                        id = UUID.randomUUID().toString(),
-                        primaryEmail = email,
-                        displayName = displayName.trim(),
-                        emailStatus = emailStatus,
-                        openAiStatus = openAiStatus,
-                        note = note.trim(),
-                        nextReviewAt = nextReviewAt,
-                        tags = tags,
-                    )
-                },
-                successMessage = "Google 邮箱已添加。",
-            )
-        }
-    }
-
-    fun importGoogleAccounts(rawText: String) {
-        val candidates = rawText
-            .split(Regex("[\\s,;]+"))
-            .map(::normalizeGoogleAddress)
-            .filter(::isValidGoogleAddress)
-            .distinct()
-        val existing = mutableState.value.googleAccounts.map { it.primaryEmail }.toSet()
-        val newEmails = candidates.filterNot(existing::contains)
-        if (newEmails.isEmpty()) {
-            setGoogleAccountError("没有找到可导入的新邮箱。")
-            return
-        }
-        val skippedCount = rawText
-            .split(Regex("[\\s,;]+"))
-            .count { it.isNotBlank() } - newEmails.size
-        persistGoogleAccounts(
-            transform = { accounts ->
-                accounts + newEmails.map { email ->
-                    GoogleAccountRecord(
-                        id = UUID.randomUUID().toString(),
-                        primaryEmail = email,
-                    )
-                }
-            },
-            successMessage = if (skippedCount > 0) {
-                "已导入 ${newEmails.size} 个邮箱，跳过 $skippedCount 个无效或重复地址。"
-            } else {
-                "已导入 ${newEmails.size} 个邮箱。"
-            },
-        )
-    }
-
-    fun updateGoogleAccount(
-        id: String,
-        primaryEmail: String,
-        displayName: String,
-        emailStatus: String,
-        openAiStatus: String,
-        tagsText: String,
-        nextReviewAtText: String,
-        note: String,
-    ) {
-        val email = normalizeGoogleAddress(primaryEmail)
-        val tags = normalizeGoogleTags(tagsText) ?: return
-        val nextReviewAt = parseGoogleReviewDate(nextReviewAtText)
-        if (nextReviewAtText.isNotBlank() && nextReviewAt == null) {
-            setGoogleAccountError("检查日期请使用 yyyy-MM-dd 格式。")
-            return
-        }
-        when {
-            !isValidGoogleAddress(email) -> setGoogleAccountError("请输入有效的 Google 邮箱地址。")
-            mutableState.value.googleAccounts.any { it.id != id && it.primaryEmail == email } ->
-                setGoogleAccountError("这个主邮箱已经被其他记录使用。")
-            else -> persistGoogleAccounts(
-                transform = { accounts ->
-                    accounts.map { account ->
-                        if (account.id != id) account else account.copy(
-                            primaryEmail = email,
-                            displayName = displayName.trim(),
-                            emailStatus = emailStatus,
-                            openAiStatus = openAiStatus,
-                            note = note.trim(),
-                            lastCheckedAt = System.currentTimeMillis(),
-                            nextReviewAt = nextReviewAt,
-                            tags = tags,
-                        )
-                    }
-                },
-                successMessage = "邮箱记录已更新。",
-            )
-        }
-    }
-
-    fun deleteGoogleAccount(id: String) = persistGoogleAccounts(
-        transform = { accounts -> accounts.filterNot { it.id == id } },
-        successMessage = "邮箱记录已删除。",
-    )
-
-    fun bulkUpdateGoogleAccounts(ids: Set<String>, openAiStatus: String) {
-        if (ids.isEmpty()) return
-        persistGoogleAccounts(
-            transform = { accounts ->
-                accounts.map { account ->
-                    if (account.id in ids) account.copy(
-                        openAiStatus = openAiStatus,
-                        lastCheckedAt = System.currentTimeMillis(),
-                    ) else account
-                }
-            },
-            successMessage = "已批量更新 ${ids.size} 个邮箱状态。",
-        )
-    }
-
-    fun bulkSetGoogleAccountsArchived(ids: Set<String>, archived: Boolean) {
-        if (ids.isEmpty()) return
-        persistGoogleAccounts(
-            transform = { accounts ->
-                accounts.map { account ->
-                    if (account.id in ids) account.copy(archived = archived) else account
-                }
-            },
-            successMessage = if (archived) "已归档 ${ids.size} 个邮箱。" else "已恢复 ${ids.size} 个邮箱。",
-        )
-    }
-
-    fun bulkDeleteGoogleAccounts(ids: Set<String>) {
-        if (ids.isEmpty()) return
-        persistGoogleAccounts(
-            transform = { accounts -> accounts.filterNot { it.id in ids } },
-            successMessage = "已删除 ${ids.size} 个邮箱记录。",
-        )
-    }
-
-    fun addGoogleAlias(accountId: String, address: String, aliasType: String = "plus") {
-        val normalizedAddress = normalizeGoogleAddress(address)
-        when {
-            !isValidGoogleAddress(normalizedAddress) -> setGoogleAccountError("请输入有效的别名地址。")
-            mutableState.value.googleAccounts
-                .firstOrNull { it.id == accountId }
-                ?.aliases
-                ?.any { it.address == normalizedAddress } == true ->
-                setGoogleAccountError("这个别名已经添加过了。")
-            else -> persistGoogleAccounts(
-                transform = { accounts ->
-                    accounts.map { account ->
-                        if (account.id != accountId) account else account.copy(
-                            aliases = account.aliases + GoogleAliasRecord(
-                                id = UUID.randomUUID().toString(),
-                                address = normalizedAddress,
-                                aliasType = aliasType,
-                            ),
-                        )
-                    }
-                },
-                successMessage = "邮箱别名已添加。",
-            )
-        }
-    }
-
-    fun updateGoogleAlias(
-        accountId: String,
-        aliasId: String,
-        aliasStatus: String,
-        openAiStatus: String,
-        note: String,
-    ) = persistGoogleAccounts(
-        transform = { accounts ->
-            val now = System.currentTimeMillis()
-            accounts.map { account ->
-                if (account.id != accountId) account else account.copy(
-                    aliases = account.aliases.map { alias ->
-                        if (alias.id != aliasId) alias else alias.copy(
-                            aliasStatus = aliasStatus,
-                            openAiStatus = openAiStatus,
-                            registeredAt = if (openAiStatus == "registered") alias.registeredAt ?: now else null,
-                            lastVerifiedAt = now,
-                            note = note.trim(),
-                        )
-                    },
-                )
-            }
-        },
-        successMessage = "别名状态已更新。",
-    )
-
-    fun deleteGoogleAlias(accountId: String, aliasId: String) = persistGoogleAccounts(
-        transform = { accounts ->
-            accounts.map { account ->
-                if (account.id != accountId) account else account.copy(
-                    aliases = account.aliases.filterNot { it.id == aliasId },
-                )
-            }
-        },
-        successMessage = "邮箱别名已删除。",
-    )
-
-    private fun loadGoogleAccounts() {
-        if (mutableState.value.googleAccountsLoaded || mutableState.value.user == null) return
-        viewModelScope.launch {
-            val localResult = runCatching { withContext(Dispatchers.IO) { googleAccountStore.read() } }
-            val localAccounts = localResult.getOrDefault(emptyList())
-            runCatching { api.googleAccounts() }
-                .onSuccess { snapshot ->
-                    if (snapshot.accounts.isEmpty() && localAccounts.isNotEmpty()) {
-                        mutableState.update {
-                            it.copy(
-                                googleAccounts = localAccounts,
-                                googleAccountsLoaded = true,
-                                googleAccountsRevision = snapshot.revision,
-                                googleAccountMigrationPending = true,
-                                googleAccountsRemoteReady = false,
-                                error = null,
-                                message = "发现本机邮箱记录，请选择是否上传到服务器。",
-                            )
-                        }
-                    } else {
-                        runCatching { withContext(Dispatchers.IO) { googleAccountStore.write(snapshot.accounts) } }
-                        mutableState.update {
-                            it.copy(
-                                googleAccounts = snapshot.accounts,
-                                googleAccountsLoaded = true,
-                                googleAccountsRevision = snapshot.revision,
-                                googleAccountMigrationPending = false,
-                                googleAccountsRemoteReady = true,
-                                error = null,
-                            )
-                        }
-                    }
-                }
-                .onFailure { error ->
-                    if (error is CancellationException) throw error
-                    mutableState.update {
-                        it.copy(
-                            googleAccounts = localAccounts,
-                            googleAccountsLoaded = true,
-                            googleAccountsRevision = 0,
-                            googleAccountMigrationPending = false,
-                            googleAccountsRemoteReady = false,
-                            error = if (localResult.isFailure && localAccounts.isEmpty()) {
-                                localResult.exceptionOrNull()?.message ?: "Google 邮箱台账读取失败。"
-                            } else {
-                                error.message ?: "服务器暂时不可用，当前显示本机缓存。"
-                            },
-                        )
-                    }
-                }
-        }
-    }
-
-    fun uploadLocalGoogleAccounts() {
-        if (!mutableState.value.googleAccountMigrationPending) return
-        persistGoogleAccounts(
-            transform = { it },
-            successMessage = "本机邮箱记录已上传到服务器。",
-        )
-    }
-
-    fun discardLocalGoogleAccounts() {
-        if (mutableState.value.busyAction != null || !mutableState.value.googleAccountMigrationPending) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(busyAction = "google-accounts", error = null, message = null) }
-            runCatching { withContext(Dispatchers.IO) { googleAccountStore.clear() } }
-                .onSuccess {
-                    mutableState.update {
-                        it.copy(
-                            googleAccounts = emptyList(),
-                            googleAccountsLoaded = true,
-                            googleAccountMigrationPending = false,
-                            googleAccountsRemoteReady = true,
-                            busyAction = null,
-                            message = "已清除本机缓存，服务器台账仍为空。",
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    if (error is CancellationException) throw error
-                    mutableState.update {
-                        it.copy(busyAction = null, error = error.message ?: "本机缓存清除失败。")
-                    }
-                }
-        }
-    }
-
-    private fun persistGoogleAccounts(
-        transform: (List<GoogleAccountRecord>) -> List<GoogleAccountRecord>,
-        successMessage: String,
-    ) {
-        val current = mutableState.value
-        if (current.busyAction != null) return
-        if (!current.googleAccountsRemoteReady && !current.googleAccountMigrationPending) {
-            setGoogleAccountError("服务器暂时不可用，邮箱台账当前为只读缓存。")
-            return
-        }
-        viewModelScope.launch {
-            mutableState.update { it.copy(busyAction = "google-accounts", error = null, message = null) }
-            runCatching {
-                val accounts = transform(mutableState.value.googleAccounts)
-                val snapshot = api.replaceGoogleAccounts(accounts, mutableState.value.googleAccountsRevision)
-                withContext(Dispatchers.IO) { googleAccountStore.write(snapshot.accounts) }
-                snapshot
-            }.onSuccess { snapshot ->
-                mutableState.update {
-                    it.copy(
-                        googleAccounts = snapshot.accounts,
-                        googleAccountsLoaded = true,
-                        googleAccountsRevision = snapshot.revision,
-                        googleAccountMigrationPending = false,
-                        googleAccountsRemoteReady = true,
-                        busyAction = null,
-                        message = successMessage,
-                    )
-                }
-            }.onFailure { error ->
-                if (error is CancellationException) throw error
-                if (error is ApiException && error.code == "GOOGLE_ACCOUNT_REVISION_CONFLICT") {
-                    mutableState.update {
-                        it.copy(
-                            busyAction = null,
-                            googleAccountsLoaded = false,
-                            googleAccountsRemoteReady = false,
-                            error = "服务器上的邮箱台账已更新，正在重新加载。",
-                        )
-                    }
-                    loadGoogleAccounts()
-                } else {
-                    mutableState.update {
-                        it.copy(busyAction = null, error = error.message ?: "Google 邮箱台账保存失败。")
-                    }
-                }
-            }
-        }
-    }
-
-    private fun setGoogleAccountError(message: String) {
-        mutableState.update { it.copy(error = message, message = null) }
-    }
-
-    private fun normalizeGoogleTags(raw: String): List<String>? {
-        val tags = raw.split(',', '，', ';', '；', '\n')
-            .map(String::trim)
-            .filter(String::isNotBlank)
-            .distinct()
-        if (tags.size > 20 || tags.any { it.length > 40 }) {
-            setGoogleAccountError("标签最多 20 个，每个标签不超过 40 个字符。")
-            return null
-        }
-        return tags
-    }
-
-    private fun parseGoogleReviewDate(raw: String): Long? = runCatching {
-        LocalDate.parse(raw.trim())
-            .atStartOfDay(ZoneId.systemDefault())
-            .toInstant()
-            .toEpochMilli()
-    }.getOrNull()
-
-    private fun normalizeGoogleAddress(address: String): String = address.trim().lowercase()
-
-    private fun isValidGoogleAddress(address: String): Boolean =
-        address.length <= 254 && address.count { it == '@' } == 1 &&
-            address.substringBefore('@').isNotBlank() &&
-            address.substringAfter('@').contains('.') &&
-            address.none(Char::isWhitespace)
-
     fun handleQrLoginUrl(rawUrl: String?) {
         if (rawUrl.isNullOrBlank()) return
         val parsed = parseQrLoginUrl(rawUrl)
@@ -1651,12 +1272,11 @@ class AppViewModel(
 
     fun openOfficialCampusReservation(onOpen: (PlatformWebSession) -> Unit) {
         if (mutableState.value.busyAction != null) return
+        reservations.clearReservationFeedback()
         viewModelScope.launch {
             mutableState.update {
                 it.copy(
                     busyAction = "official-campus-reservation",
-                    reservationError = null,
-                    reservationMessage = null,
                 )
             }
             try {
@@ -1665,10 +1285,10 @@ class AppViewModel(
                 onOpen(session)
             } catch (error: Throwable) {
                 if (error is CancellationException) throw error
+                reservations.showError(error.message ?: "学校官方预约入口打开失败，请稍后重试。")
                 mutableState.update {
                     it.copy(
                         busyAction = null,
-                        reservationError = error.message ?: "学校官方预约入口打开失败，请稍后重试。",
                     )
                 }
             }
@@ -1824,7 +1444,7 @@ class AppViewModel(
                 reloadPersonalState()
             }
             googleAccountDeskOpen -> {
-                loadGoogleAccounts()
+                googleAccounts.loadGoogleAccounts()
             }
             githubProjectsOpen -> {
                 refreshGitHubProjects()
@@ -1861,7 +1481,7 @@ class AppViewModel(
         refreshResourceExpiries(force)
         refreshIot(force)
         syncRemoteNotifications(force)
-        loadGoogleAccounts()
+        googleAccounts.loadGoogleAccounts()
     }
 
     private fun refreshForTab(tab: MainTab, force: Boolean = false) {
@@ -2108,598 +1728,6 @@ class AppViewModel(
             val result = api.campus.campusFreeClassrooms(dayplus, sections, building)
             mutableState.update { it.copy(freeClassroomResult = result) }
         }
-
-    fun refreshReservation() {
-        loadReservationSpaces(force = true)
-        loadMyReservations(force = true)
-        loadAutoReservationTasks(force = true)
-    }
-
-    fun loadReservationSpaces(force: Boolean = false) = launchUiStateAction(
-        isBusy = { reservationSpacesLoading },
-        start = { copy(reservationSpacesLoading = true, reservationError = null) },
-        action = { api.campus.campusReservationSpaces() },
-        success = { spaces -> copy(reservationSpaces = spaces, reservationSpacesLoading = false) },
-        failure = { error -> copy(reservationSpacesLoading = false, reservationError = error.message ?: "空间加载失败，请重试。") },
-    )
-
-    fun queryReservationRulesAndAvailability(spaceId: Int, date: String) {
-        if (spaceId <= 0 || date.isBlank() || mutableState.value.reservationQueryLoading) return
-        viewModelScope.launch {
-            mutableState.update {
-                it.copy(
-                    reservationQueryLoading = true,
-                    reservationRules = "查询中...",
-                    reservationAvailability = "查询中...",
-                    reservationFreeWindows = emptyList(),
-                    reservationBusyWindows = emptyList(),
-                    reservationAvailabilitySpaceId = null,
-                    reservationAvailabilityDate = null,
-                    reservationError = null,
-                )
-            }
-            try {
-                supervisorScope {
-                    val rulesDeferred = async {
-                        try {
-                            api.campus.campusReservationRules(spaceId)
-                        } catch (error: Throwable) {
-                            if (error is CancellationException) throw error
-                            null
-                        }
-                    }
-                    val availabilityDeferred = async {
-                        try {
-                            api.campus.campusReservationAvailability(spaceId, date)
-                        } catch (error: Throwable) {
-                            if (error is CancellationException) throw error
-                            null
-                        }
-                    }
-                    val rules = rulesDeferred.await() ?: "暂无规则信息"
-                    val availability = availabilityDeferred.await()
-                        ?: CampusReservationAvailability(detail = "暂无时段占用信息")
-                    mutableState.update {
-                        it.copy(
-                            reservationRules = rules,
-                            reservationAvailability = availability.detail,
-                            reservationFreeWindows = availability.freeWindows,
-                            reservationBusyWindows = availability.busyWindows,
-                            reservationAvailabilitySpaceId = spaceId,
-                            reservationAvailabilityDate = date,
-                            reservationQueryLoading = false,
-                        )
-                    }
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        reservationRules = "查询失败",
-                        reservationAvailability = "查询失败",
-                        reservationFreeWindows = emptyList(),
-                        reservationBusyWindows = emptyList(),
-                        reservationAvailabilitySpaceId = null,
-                        reservationAvailabilityDate = null,
-                        reservationQueryLoading = false,
-                        reservationError = error.message ?: "查询失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
-
-    fun queryAvailableSpacesByTime(date: String, startTime: String, endTime: String) = launchUiStateAction(
-        isBusy = {
-            date.isBlank() || startTime.isBlank() || endTime.isBlank() || reservationAvailableSpacesLoading
-        },
-        start = {
-            copy(
-                reservationAvailableSpacesLoading = true,
-                reservationAvailableSpaces = emptyList(),
-                reservationAvailableSpacesQueryText = "$date $startTime - $endTime",
-                reservationError = null,
-            )
-        },
-        action = { api.campus.campusReservationSpaces(date = date, startTime = startTime, endTime = endTime) },
-        success = { spaces -> copy(reservationAvailableSpaces = spaces, reservationAvailableSpacesLoading = false) },
-        failure = { error ->
-            copy(
-                reservationAvailableSpacesLoading = false,
-                reservationError = error.message ?: "按时段查询空闲学习间失败，请重试。",
-            )
-        },
-    )
-
-    fun submitReservation(request: CampusReservationRequest, onSuccess: () -> Unit = {}) = launchUiStateAction(
-        isBusy = { reservationSubmitLoading },
-        start = { copy(reservationSubmitLoading = true, reservationError = null, reservationMessage = null) },
-        action = { api.campus.submitCampusReservation(request) },
-        success = {
-            copy(
-                reservationSubmitLoading = false,
-                reservationMessage = "预约已提交成功，请以学校预约系统记录为准。",
-            )
-        },
-        failure = { error -> copy(reservationSubmitLoading = false, reservationError = error.message ?: "预约提交失败，请重试。") },
-        afterSuccess = {
-            loadMyReservations(force = true)
-            onSuccess()
-        },
-    )
-
-    fun loadMyReservations(force: Boolean = false) = launchUiStateAction(
-        isBusy = { reservationMyReservationsLoading },
-        start = { copy(reservationMyReservationsLoading = true) },
-        action = { api.campus.campusMyReservations() },
-        success = { records -> copy(reservationMyReservations = records, reservationMyReservationsLoading = false) },
-        failure = { copy(reservationMyReservationsLoading = false) },
-    )
-
-    fun cancelMyReservation(reservationId: String, onSuccess: () -> Unit = {}) = launchUiStateAction(
-        isBusy = { reservationId.isBlank() || reservationCancellingReservationId != null },
-        start = { copy(reservationCancellingReservationId = reservationId, reservationError = null, reservationMessage = null) },
-        action = { api.campus.cancelCampusReservation(reservationId) },
-        success = {
-            copy(
-                reservationCancellingReservationId = null,
-                reservationMessage = "已成功取消该研讨间预约。",
-                reservationMyReservations = reservationMyReservations.filter { it.id != reservationId },
-            )
-        },
-        failure = { error ->
-            copy(
-                reservationCancellingReservationId = null,
-                reservationError = error.message ?: "取消预约失败，请重试。",
-            )
-        },
-        afterSuccess = {
-            loadMyReservations(force = true)
-            onSuccess()
-        },
-    )
-
-    private fun <T> launchUiStateAction(
-        isBusy: AppUiState.() -> Boolean,
-        start: AppUiState.() -> AppUiState,
-        action: suspend () -> T,
-        success: AppUiState.(T) -> AppUiState,
-        failure: AppUiState.(Throwable) -> AppUiState,
-        afterSuccess: () -> Unit = {},
-    ) {
-        if (mutableState.value.isBusy()) return
-        viewModelScope.launch {
-            mutableState.update { it.start() }
-            try {
-                val result = action()
-                mutableState.update { it.success(result) }
-                afterSuccess()
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update { it.failure(error) }
-            }
-        }
-    }
-
-    fun refreshLibrarySeat() {
-        loadLibrarySeatOverview(force = true)
-        loadLibrarySeatReservations(force = true)
-        loadLibrarySeatWaitlists(force = true)
-    }
-
-    fun loadLibrarySeatOverview(force: Boolean = false) {
-        if (mutableState.value.librarySeatOverviewLoading && !force) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(librarySeatOverviewLoading = true, librarySeatError = null, librarySeatMessage = null) }
-            try {
-                val overview = api.campus.librarySeatOverview()
-                mutableState.update { current ->
-                    val venueId = current.librarySeatSelectedVenueId.takeIf { selected ->
-                        overview.venues.any { it.id == selected }
-                    } ?: overview.venues.firstOrNull()?.id
-                    val date = current.librarySeatSelectedDate.takeIf { selected ->
-                        overview.dates.contains(selected)
-                    } ?: overview.dates.firstOrNull()
-                    current.copy(
-                        librarySeatOverview = overview,
-                        librarySeatOverviewLoading = false,
-                        librarySeatSelectedVenueId = venueId,
-                        librarySeatSelectedDate = date,
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        librarySeatOverviewLoading = false,
-                        librarySeatError = error.message ?: "座位场馆加载失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
-
-    fun queryLibrarySeatAreas(
-        venueId: String,
-        date: String,
-        startMinute: Int,
-        endMinute: Int,
-        floorId: String? = null,
-        pageSize: Int = 50,
-        currentPage: Int = 1,
-        power: Boolean = false,
-        window: Boolean = false,
-    ) {
-        if (
-            venueId.isBlank() ||
-            date.isBlank() ||
-            startMinute < 0 ||
-            endMinute <= startMinute ||
-            mutableState.value.librarySeatAreasLoading
-        ) return
-        viewModelScope.launch {
-            mutableState.update {
-                it.copy(
-                    librarySeatAreasLoading = true,
-                    librarySeatAreas = emptyList(),
-                    librarySeatError = null,
-                    librarySeatMessage = null,
-                    librarySeatSelectedVenueId = venueId,
-                    librarySeatSelectedDate = date,
-                    librarySeatSelectedFloorId = floorId,
-                    librarySeatSelectedAreaId = null,
-                    librarySeatSelectedSeatId = null,
-                    librarySeatSeats = emptyList(),
-                )
-            }
-            try {
-                val areas = api.campus.librarySeatAreas(
-                    venueId = venueId,
-                    date = date,
-                    startMinute = startMinute,
-                    endMinute = endMinute,
-                    floorId = floorId,
-                    pageSize = pageSize,
-                    currentPage = currentPage,
-                    power = power,
-                    window = window,
-                )
-                mutableState.update {
-                    it.copy(
-                        librarySeatAreas = areas,
-                        librarySeatAreasLoading = false,
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        librarySeatAreasLoading = false,
-                        librarySeatError = error.message ?: "阅览区查询失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
-
-    fun loadLibrarySeatSeats(
-        roomId: String,
-        date: String,
-        startMinute: Int,
-        endMinute: Int,
-        amPm: Int = 0,
-    ) {
-        if (roomId.isBlank() || date.isBlank() || endMinute <= startMinute || mutableState.value.librarySeatSeatsLoading) return
-        viewModelScope.launch {
-            mutableState.update {
-                it.copy(
-                    librarySeatSeatsLoading = true,
-                    librarySeatSeats = emptyList(),
-                    librarySeatError = null,
-                    librarySeatMessage = null,
-                    librarySeatSelectedAreaId = roomId,
-                    librarySeatSelectedDate = date,
-                    librarySeatSelectedSeatId = null,
-                )
-            }
-            try {
-                val seats = api.campus.librarySeatSeats(roomId, date, startMinute, endMinute, amPm)
-                mutableState.update {
-                    it.copy(
-                        librarySeatSeats = seats,
-                        librarySeatSeatsLoading = false,
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        librarySeatSeatsLoading = false,
-                        librarySeatError = error.message ?: "座位列表加载失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
-
-    fun queryLibrarySeatFloorSeats(
-        venueId: String,
-        floorId: String,
-        date: String,
-        startMinute: Int,
-        endMinute: Int,
-        minLabel: Int = 1,
-        maxLabel: Int = 45,
-    ) {
-        if (
-            venueId.isBlank() ||
-            floorId.isBlank() ||
-            date.isBlank() ||
-            startMinute < 0 ||
-            endMinute <= startMinute ||
-            mutableState.value.librarySeatFloorSeatsLoading
-        ) return
-        viewModelScope.launch {
-            mutableState.update {
-                it.copy(
-                    librarySeatFloorSeatsLoading = true,
-                    librarySeatFloorSeats = emptyList(),
-                    librarySeatError = null,
-                    librarySeatMessage = null,
-                )
-            }
-            try {
-                val areas = api.campus.librarySeatAreas(
-                    venueId = venueId,
-                    date = date,
-                    startMinute = startMinute,
-                    endMinute = endMinute,
-                    floorId = floorId,
-                    pageSize = 50,
-                    currentPage = 1,
-                    power = false,
-                    window = false,
-                )
-                val floorSeats = supervisorScope {
-                    areas.map { area ->
-                        async {
-                            api.campus.librarySeatSeats(area.id, date, startMinute, endMinute, 0)
-                                .map { seat -> LibrarySeatFloorSeat(area.id, area.name, seat) }
-                        }
-                    }.flatMap { it.await() }
-                }.filter { floorSeat ->
-                    (floorSeat.seat.label.toIntOrNull() ?: -1) in minLabel..maxLabel
-                }.sortedWith(
-                    compareBy<LibrarySeatFloorSeat> { it.seat.label.toIntOrNull() ?: Int.MAX_VALUE }
-                        .thenBy { it.seat.label }
-                        .thenBy { it.areaName },
-                )
-                mutableState.update {
-                    it.copy(
-                        librarySeatFloorSeats = floorSeats,
-                        librarySeatFloorSeatsLoading = false,
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        librarySeatFloorSeatsLoading = false,
-                        librarySeatError = error.message ?: "二层座位查询失败，请重试。",
-                    )
-                }
-            }
-        }
-    }
-
-    fun submitLibrarySeatReservation(request: LibrarySeatReservationRequest, onSuccess: () -> Unit = {}) = launchUiStateAction(
-        isBusy = { librarySeatSubmitLoading },
-        start = { copy(librarySeatSubmitLoading = true, librarySeatError = null, librarySeatMessage = null) },
-        action = { api.campus.submitLibrarySeatReservation(request) },
-        success = {
-            copy(
-                librarySeatSubmitLoading = false,
-                librarySeatMessage = "座位预约已提交成功，请以学校预约系统记录为准。",
-            )
-        },
-        failure = { error -> copy(librarySeatSubmitLoading = false, librarySeatError = error.message ?: "座位预约提交失败，请重试。") },
-        afterSuccess = {
-            loadLibrarySeatReservations()
-            onSuccess()
-        },
-    )
-
-    fun loadLibrarySeatReservations(force: Boolean = false) = launchUiStateAction(
-        isBusy = { librarySeatReservationsLoading && !force },
-        start = { copy(librarySeatReservationsLoading = true) },
-        action = { api.campus.librarySeatReservations() },
-        success = { records -> copy(librarySeatReservations = records, librarySeatReservationsLoading = false) },
-        failure = { error ->
-            copy(
-                librarySeatReservationsLoading = false,
-                librarySeatError = error.message ?: "座位预约记录加载失败，请重试。",
-            )
-        },
-    )
-
-    fun loadLibrarySeatReservationHistory(force: Boolean = false) = launchUiStateAction(
-        isBusy = { librarySeatHistoryReservationsLoading && !force },
-        start = { copy(librarySeatHistoryReservationsLoading = true) },
-        action = { api.campus.librarySeatReservationHistory(page = 0, size = 20) },
-        success = { history ->
-            copy(
-                librarySeatHistoryReservations = history,
-                librarySeatHistoryReservationsLoading = false,
-            )
-        },
-        failure = { error ->
-            copy(
-                librarySeatHistoryReservationsLoading = false,
-                librarySeatError = error.message ?: "历史预约记录加载失败，请重试。",
-            )
-        },
-    )
-
-    fun loadLibrarySeatWaitlists(force: Boolean = false) = launchUiStateAction(
-        isBusy = { librarySeatWaitlistsLoading && !force },
-        start = { copy(librarySeatWaitlistsLoading = true) },
-        action = { api.campus.librarySeatWaitlists() },
-        success = { tasks -> copy(librarySeatWaitlists = tasks, librarySeatWaitlistsLoading = false) },
-        failure = { error ->
-            copy(
-                librarySeatWaitlistsLoading = false,
-                librarySeatError = error.message ?: "候补任务加载失败，请重试。",
-            )
-        },
-    )
-
-    fun createLibrarySeatWaitlist(request: LibrarySeatWaitlistRequest, onSuccess: () -> Unit = {}) = launchUiStateAction(
-        isBusy = { librarySeatWaitlistSaving },
-        start = { copy(librarySeatWaitlistSaving = true, librarySeatError = null, librarySeatMessage = null) },
-        action = { api.campus.createLibrarySeatWaitlist(request) },
-        success = {
-            copy(
-                librarySeatWaitlistSaving = false,
-                librarySeatMessage = "候补监听已开启，检测到释放座位将自动预约。",
-            )
-        },
-        failure = { error -> copy(librarySeatWaitlistSaving = false, librarySeatError = error.message ?: "候补任务创建失败，请重试。") },
-        afterSuccess = {
-            loadLibrarySeatWaitlists(force = true)
-            onSuccess()
-        },
-    )
-
-    fun setLibrarySeatWaitlistEnabled(taskId: String, enabled: Boolean, onSuccess: () -> Unit = {}) = launchUiStateAction(
-        isBusy = { librarySeatWaitlistSaving },
-        start = { copy(librarySeatWaitlistSaving = true, librarySeatError = null, librarySeatMessage = null) },
-        action = { api.campus.setLibrarySeatWaitlistEnabled(taskId, enabled) },
-        success = {
-            copy(
-                librarySeatWaitlistSaving = false,
-                librarySeatMessage = if (enabled) "候补监听已重新开启。" else "已停止候补监听。",
-            )
-        },
-        failure = { error -> copy(librarySeatWaitlistSaving = false, librarySeatError = error.message ?: "候补任务状态更新失败，请重试。") },
-        afterSuccess = {
-            loadLibrarySeatWaitlists(force = true)
-            onSuccess()
-        },
-    )
-
-    fun deleteLibrarySeatWaitlist(taskId: String, onSuccess: () -> Unit = {}) = launchUiStateAction(
-        isBusy = { taskId.isBlank() || librarySeatWaitlistSaving },
-        start = {
-            copy(
-                librarySeatWaitlistSaving = true,
-                librarySeatWaitlistDeletingId = taskId,
-                librarySeatError = null,
-                librarySeatMessage = null,
-            )
-        },
-        action = { api.campus.deleteLibrarySeatWaitlist(taskId) },
-        success = {
-            copy(
-                librarySeatWaitlistSaving = false,
-                librarySeatWaitlistDeletingId = null,
-                librarySeatMessage = "候补任务已删除。",
-            )
-        },
-        failure = { error ->
-            copy(
-                librarySeatWaitlistSaving = false,
-                librarySeatWaitlistDeletingId = null,
-                librarySeatError = error.message ?: "候补任务删除失败，请重试。",
-            )
-        },
-        afterSuccess = {
-            loadLibrarySeatWaitlists(force = true)
-            onSuccess()
-        },
-    )
-
-    fun clearLibrarySeatFeedback() {
-        mutableState.update { it.copy(librarySeatError = null, librarySeatMessage = null) }
-    }
-
-    fun loadAutoReservationTasks(force: Boolean = false) = launchUiStateAction(
-        isBusy = { reservationAutoTasksLoading },
-        start = { copy(reservationAutoTasksLoading = true, reservationError = null) },
-        action = { api.campus.campusAutoReservations() },
-        success = { tasks -> copy(reservationAutoTasks = tasks, reservationAutoTasksLoading = false) },
-        failure = { error ->
-            copy(
-                reservationAutoTasksLoading = false,
-                reservationError = error.message ?: "自动预约任务加载失败。",
-            )
-        },
-    )
-
-    fun saveAutoReservationTask(task: CampusAutoReservationTask, onSuccess: () -> Unit = {}) = launchUiStateAction(
-        isBusy = { reservationSavingTask },
-        start = { copy(reservationSavingTask = true, reservationError = null, reservationMessage = null) },
-        action = {
-            if (task.id.isNotBlank()) {
-                api.campus.updateCampusAutoReservation(task)
-            } else {
-                api.campus.createCampusAutoReservation(task)
-            }
-        },
-        success = {
-            copy(
-                reservationSavingTask = false,
-                reservationMessage = "自动预约任务已保存。",
-            )
-        },
-        failure = { error -> copy(reservationSavingTask = false, reservationError = error.message ?: "自动预约任务保存失败。") },
-        afterSuccess = {
-            loadAutoReservationTasks(force = true)
-            onSuccess()
-        },
-    )
-
-    fun toggleAutoReservationTask(task: CampusAutoReservationTask) {
-        viewModelScope.launch {
-            try {
-                api.campus.updateCampusAutoReservation(task.copy(enabled = !task.enabled))
-                loadAutoReservationTasks(force = true)
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(reservationError = error.message ?: "任务状态更新失败。")
-                }
-            }
-        }
-    }
-
-    fun deleteAutoReservationTask(taskId: String) {
-        if (taskId.isBlank()) return
-        viewModelScope.launch {
-            mutableState.update { it.copy(reservationDeletingTaskId = taskId, reservationError = null, reservationMessage = null) }
-            try {
-                api.campus.deleteCampusAutoReservation(taskId)
-                mutableState.update {
-                    it.copy(
-                        reservationDeletingTaskId = null,
-                        reservationMessage = "自动预约任务已删除。",
-                    )
-                }
-                loadAutoReservationTasks(force = true)
-            } catch (error: Throwable) {
-                if (error is CancellationException) throw error
-                mutableState.update {
-                    it.copy(
-                        reservationDeletingTaskId = null,
-                        reservationError = error.message ?: "任务删除失败。",
-                    )
-                }
-            }
-        }
-    }
-
-    fun clearReservationFeedback() {
-        mutableState.update { it.copy(reservationError = null, reservationMessage = null) }
-    }
 
     private fun refreshResourceExpiries(force: Boolean = false) = launchRefresh(DataSection.Resources, force) {
         val resources = api.resourceExpiries()
@@ -3364,18 +2392,7 @@ class AppViewModel(
                 .onFailure { error ->
                     if (error is CancellationException) throw error
                     if (error is ApiException && shouldInvalidatePlatformSession(error.status, error.code)) {
-                        val current = mutableState.value
-                        mutableState.value = AppUiState(
-                            booting = false,
-                            error = error.message,
-                            appLockEnabled = current.appLockEnabled,
-                            androidPasskeySupported = current.androidPasskeySupported,
-                            suggestedUsername = sessionStore.readLastUsername(),
-                            homeQuickActionOrder = current.homeQuickActionOrder,
-                            hiddenHomeQuickActions = current.hiddenHomeQuickActions,
-                        )
-                        MyControlWidgetProvider.clear(getApplication())
-                        CourseWidgetProvider.clear(getApplication())
+                        forceReauthentication(error.message ?: "登录会话已失效，请重新登录。")
                     } else {
                         mutableState.update {
                             it.copy(busyAction = null, error = error.message ?: "操作失败，请稍后重试。")
@@ -3712,12 +2729,11 @@ class AppViewModel(
 
     fun openOfficialLibrarySeatReservation(onOpen: (PlatformWebSession) -> Unit) {
         if (mutableState.value.busyAction != null) return
+        librarySeats.clearLibrarySeatFeedback()
         viewModelScope.launch {
             mutableState.update {
                 it.copy(
                     busyAction = "official-library-seat-reservation",
-                    librarySeatError = null,
-                    librarySeatMessage = null,
                 )
             }
             try {
@@ -3726,10 +2742,10 @@ class AppViewModel(
                 onOpen(session)
             } catch (error: Throwable) {
                 if (error is CancellationException) throw error
+                librarySeats.showError(error.message ?: "学校官方座位预约入口打开失败，请稍后重试。")
                 mutableState.update {
                     it.copy(
                         busyAction = null,
-                        librarySeatError = error.message ?: "学校官方座位预约入口打开失败，请稍后重试。",
                     )
                 }
             }

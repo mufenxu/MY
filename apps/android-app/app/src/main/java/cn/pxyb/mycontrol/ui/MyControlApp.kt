@@ -1844,18 +1844,18 @@ private fun AuthenticatedShell(
                         state = googleAccountState,
                         contentPadding = contentPadding,
                         onDismiss = navigateBackFromSubScreen,
-                        onAddAccount = viewModel::addGoogleAccount,
-                        onImportAccounts = viewModel::importGoogleAccounts,
-                        onUpdateAccount = viewModel::updateGoogleAccount,
-                        onDeleteAccount = viewModel::deleteGoogleAccount,
-                        onBulkUpdateAccounts = viewModel::bulkUpdateGoogleAccounts,
-                        onBulkArchiveAccounts = viewModel::bulkSetGoogleAccountsArchived,
-                        onBulkDeleteAccounts = viewModel::bulkDeleteGoogleAccounts,
-                        onAddAlias = viewModel::addGoogleAlias,
-                        onUpdateAlias = viewModel::updateGoogleAlias,
-                        onDeleteAlias = viewModel::deleteGoogleAlias,
-                        onUploadLocalAccounts = viewModel::uploadLocalGoogleAccounts,
-                        onDiscardLocalAccounts = viewModel::discardLocalGoogleAccounts,
+                        onAddAccount = viewModel.googleAccounts::addGoogleAccount,
+                        onImportAccounts = viewModel.googleAccounts::importGoogleAccounts,
+                        onUpdateAccount = viewModel.googleAccounts::updateGoogleAccount,
+                        onDeleteAccount = viewModel.googleAccounts::deleteGoogleAccount,
+                        onBulkUpdateAccounts = viewModel.googleAccounts::bulkUpdateGoogleAccounts,
+                        onBulkArchiveAccounts = viewModel.googleAccounts::bulkSetGoogleAccountsArchived,
+                        onBulkDeleteAccounts = viewModel.googleAccounts::bulkDeleteGoogleAccounts,
+                        onAddAlias = viewModel.googleAccounts::addGoogleAlias,
+                        onUpdateAlias = viewModel.googleAccounts::updateGoogleAlias,
+                        onDeleteAlias = viewModel.googleAccounts::deleteGoogleAlias,
+                        onUploadLocalAccounts = viewModel.googleAccounts::uploadLocalGoogleAccounts,
+                        onDiscardLocalAccounts = viewModel.googleAccounts::discardLocalGoogleAccounts,
                     )
                 }
                 composable(AppRoute.GitHubProjects) {
@@ -1981,15 +1981,15 @@ private fun AuthenticatedShell(
                     )
                 }
                 composable(AppRoute.Reservation) {
-                    val reservationState by viewModel.reservationState.collectAsStateWithLifecycle()
+                    val reservationState by viewModel.reservations.state.collectAsStateWithLifecycle()
                     val context = LocalContext.current
                     ReservationScreen(
                         state = reservationState,
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
-                        onRefresh = viewModel::refreshReservation,
-                        onLoadSpaces = viewModel::loadReservationSpaces,
-                        onLoadMyReservations = viewModel::loadMyReservations,
+                        onRefresh = viewModel.reservations::refreshReservation,
+                        onLoadSpaces = viewModel.reservations::loadReservationSpaces,
+                        onLoadMyReservations = viewModel.reservations::loadMyReservations,
                         onOpenOfficialReservation = {
                             viewModel.openOfficialCampusReservation { session ->
                                 openPlatformWebLink(
@@ -2000,27 +2000,27 @@ private fun AuthenticatedShell(
                                 )
                             }
                         },
-                        onQueryRulesAndAvailability = viewModel::queryReservationRulesAndAvailability,
-                        onQuerySpacesByTime = viewModel::queryAvailableSpacesByTime,
-                        onSubmitReservation = viewModel::submitReservation,
-                        onLoadAutoTasks = viewModel::loadAutoReservationTasks,
-                        onSaveAutoTask = viewModel::saveAutoReservationTask,
-                        onToggleAutoTask = viewModel::toggleAutoReservationTask,
-                        onDeleteAutoTask = viewModel::deleteAutoReservationTask,
-                        onClearFeedback = viewModel::clearReservationFeedback,
+                        onQueryRulesAndAvailability = viewModel.reservations::queryReservationRulesAndAvailability,
+                        onQuerySpacesByTime = viewModel.reservations::queryAvailableSpacesByTime,
+                        onSubmitReservation = viewModel.reservations::submitReservation,
+                        onLoadAutoTasks = viewModel.reservations::loadAutoReservationTasks,
+                        onSaveAutoTask = viewModel.reservations::saveAutoReservationTask,
+                        onToggleAutoTask = viewModel.reservations::toggleAutoReservationTask,
+                        onDeleteAutoTask = viewModel.reservations::deleteAutoReservationTask,
+                        onClearFeedback = viewModel.reservations::clearReservationFeedback,
                     )
                 }
                 composable(AppRoute.LibrarySeatReservation) {
-                    val librarySeatState by viewModel.librarySeatState.collectAsStateWithLifecycle()
+                    val librarySeatState by viewModel.librarySeats.state.collectAsStateWithLifecycle()
                     val context = LocalContext.current
                     LibrarySeatReservationScreen(
                         state = librarySeatState,
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
-                        onRefresh = viewModel::refreshLibrarySeat,
-                        onLoadOverview = { force -> viewModel.loadLibrarySeatOverview(force) },
+                        onRefresh = viewModel.librarySeats::refreshLibrarySeat,
+                        onLoadOverview = { force -> viewModel.librarySeats.loadLibrarySeatOverview(force) },
                         onQueryAreas = { venueId, date, startMinute, endMinute, floorId, pageSize, power, window ->
-                            viewModel.queryLibrarySeatAreas(
+                            viewModel.librarySeats.queryLibrarySeatAreas(
                                 venueId = venueId,
                                 date = date,
                                 startMinute = startMinute,
@@ -2032,11 +2032,11 @@ private fun AuthenticatedShell(
                                 window = window,
                             )
                         },
-                        onLoadSeats = viewModel::loadLibrarySeatSeats,
-                        onQueryFloorSeats = viewModel::queryLibrarySeatFloorSeats,
-                        onSubmitReservation = viewModel::submitLibrarySeatReservation,
-                        onLoadReservations = viewModel::loadLibrarySeatReservations,
-                        onLoadReservationHistory = viewModel::loadLibrarySeatReservationHistory,
+                        onLoadSeats = viewModel.librarySeats::loadLibrarySeatSeats,
+                        onQueryFloorSeats = viewModel.librarySeats::queryLibrarySeatFloorSeats,
+                        onSubmitReservation = viewModel.librarySeats::submitLibrarySeatReservation,
+                        onLoadReservations = viewModel.librarySeats::loadLibrarySeatReservations,
+                        onLoadReservationHistory = viewModel.librarySeats::loadLibrarySeatReservationHistory,
                         onOpenOfficialReservation = {
                             viewModel.openOfficialLibrarySeatReservation { session ->
                                 openPlatformWebLink(
@@ -2047,17 +2047,17 @@ private fun AuthenticatedShell(
                                 )
                             }
                         },
-                        onLoadWaitlists = viewModel::loadLibrarySeatWaitlists,
+                        onLoadWaitlists = viewModel.librarySeats::loadLibrarySeatWaitlists,
                         onCreateWaitlist = { request, onSuccess ->
-                            viewModel.createLibrarySeatWaitlist(request, onSuccess)
+                            viewModel.librarySeats.createLibrarySeatWaitlist(request, onSuccess)
                         },
                         onSetWaitlistEnabled = { taskId, enabled, onSuccess ->
-                            viewModel.setLibrarySeatWaitlistEnabled(taskId, enabled, onSuccess)
+                            viewModel.librarySeats.setLibrarySeatWaitlistEnabled(taskId, enabled, onSuccess)
                         },
                         onDeleteWaitlist = { taskId, onSuccess ->
-                            viewModel.deleteLibrarySeatWaitlist(taskId, onSuccess)
+                            viewModel.librarySeats.deleteLibrarySeatWaitlist(taskId, onSuccess)
                         },
-                        onClearFeedback = viewModel::clearLibrarySeatFeedback,
+                        onClearFeedback = viewModel.librarySeats::clearLibrarySeatFeedback,
                     )
                 }
                 composable(AppRoute.Scenes) {
