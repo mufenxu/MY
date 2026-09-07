@@ -67,6 +67,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -128,6 +129,7 @@ fun OverviewScreen(
     onOpenReservation: () -> Unit = {},
     onOpenFreeClassrooms: () -> Unit = {},
     onOpenSeatReservation: () -> Unit = {},
+    onOpenWaterValve: () -> Unit = {},
     onOpenAccountManagement: () -> Unit = {},
     onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
     requestWebLoginUrl: suspend (String) -> String,
@@ -628,6 +630,7 @@ fun OverviewScreen(
                                                     onOpenReservation = onOpenReservation,
                                                     onOpenFreeClassrooms = onOpenFreeClassrooms,
                                                     onOpenSeatReservation = onOpenSeatReservation,
+                                                    onOpenWaterValve = onOpenWaterValve,
                                                     onOpenSearch = onOpenSearch,
                                                     onOpenQrLogin = onOpenQrLogin,
                                                     onOpenAccountManagement = onOpenAccountManagement,
@@ -1017,6 +1020,7 @@ fun OverviewScreen(
                                             onOpenReservation = onOpenReservation,
                                             onOpenFreeClassrooms = onOpenFreeClassrooms,
                                             onOpenSeatReservation = onOpenSeatReservation,
+                                            onOpenWaterValve = onOpenWaterValve,
                                             onOpenSearch = onOpenSearch,
                                             onOpenQrLogin = onOpenQrLogin,
                                             onOpenAccountManagement = onOpenAccountManagement,
@@ -1483,6 +1487,7 @@ private fun homeQuickActionVisual(action: HomeQuickAction): QuickActionVisual = 
     HomeQuickAction.Reservation -> QuickActionVisual(Icons.Outlined.MeetingRoom, Color(0xFF2563EB))
     HomeQuickAction.FreeClassrooms -> QuickActionVisual(Icons.Outlined.School, Color(0xFF0284C7))
     HomeQuickAction.SeatReservation -> QuickActionVisual(Icons.Outlined.Chair, Color(0xFF16A34A))
+    HomeQuickAction.WaterValve -> QuickActionVisual(Icons.Outlined.WaterDrop, Color(0xFF0284C7))
     HomeQuickAction.Devices -> QuickActionVisual(Icons.Outlined.Hub, Color(0xFF0284C7))
     HomeQuickAction.Diagnostics -> QuickActionVisual(Icons.Outlined.Speed, Color(0xFFD97706))
     HomeQuickAction.Backup -> QuickActionVisual(Icons.Outlined.Backup, Color(0xFF0D9488))
@@ -1503,6 +1508,7 @@ private fun homeQuickActionSpec(
     onOpenReservation: () -> Unit,
     onOpenFreeClassrooms: () -> Unit,
     onOpenSeatReservation: () -> Unit,
+    onOpenWaterValve: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenQrLogin: () -> Unit,
     onOpenAccountManagement: () -> Unit,
@@ -1550,6 +1556,14 @@ private fun homeQuickActionSpec(
         accent = Color(0xFF16A34A),
         accentPale = Color(0xFFF0FDF4),
         onClick = onOpenSeatReservation,
+    )
+
+    HomeQuickAction.WaterValve -> HomeQuickActionSpec(
+        icon = Icons.Outlined.WaterDrop,
+        label = "饮水机",
+        accent = Color(0xFF0284C7),
+        accentPale = Color(0xFFF0F9FF),
+        onClick = onOpenWaterValve,
     )
 
     HomeQuickAction.Devices -> HomeQuickActionSpec(
@@ -1785,6 +1799,7 @@ private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action
     HomeQuickAction.Reservation -> "研讨间预约"
     HomeQuickAction.FreeClassrooms -> "空闲教室"
     HomeQuickAction.SeatReservation -> "座位预约"
+    HomeQuickAction.WaterValve -> "饮水机"
     HomeQuickAction.Devices -> "设备控制"
     HomeQuickAction.Diagnostics -> "系统自检"
     HomeQuickAction.Backup -> "数据备份"

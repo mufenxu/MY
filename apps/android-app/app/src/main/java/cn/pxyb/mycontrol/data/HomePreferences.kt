@@ -11,6 +11,7 @@ enum class HomeQuickAction {
     Reservation,
     FreeClassrooms,
     SeatReservation,
+    WaterValve,
     Devices,
     Diagnostics,
     Backup,

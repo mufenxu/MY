@@ -60,7 +60,7 @@ export function createWaterValveService({
     if (!state?.seqNo) return waterValvePublic(null);
 
     try {
-      const response = await request(jar, "/bluetoothApp/getListBySeqNo", (session) => ({
+      const response = await request(jar, "/bluetoothApp/openValueBefore", (session) => ({
         seqNo: state.seqNo,
         accNum: session.accNum
       }));
@@ -89,7 +89,7 @@ export function createWaterValveService({
 
     await ensureSessions();
     const jar = await readSessionJar();
-    const response = await request(jar, "/bluetoothApp/getListBySeqNo", (session) => ({
+    const response = await request(jar, "/bluetoothApp/openValueBefore", (session) => ({
       seqNo,
       accNum: session.accNum
     }));

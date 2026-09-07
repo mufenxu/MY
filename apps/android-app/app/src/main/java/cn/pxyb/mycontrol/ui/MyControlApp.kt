@@ -1694,6 +1694,9 @@ private fun AuthenticatedShell(
                         onOpenSeatReservation = {
                             navigateToSubScreen(AppRoute.LibrarySeatReservation)
                         },
+                        onOpenWaterValve = {
+                            navigateToSubScreen(AppRoute.CampusWaterValve)
+                        },
                         onOpenAccountManagement = viewModel::openAccountManagement,
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
                         requestWebLoginUrl = viewModel::createPlatformWebLoginUrl,
