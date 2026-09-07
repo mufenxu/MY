@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 data class AuthenticatorUiState(
@@ -27,6 +29,7 @@ class AuthenticatorViewModel(application: Application) : AndroidViewModel(applic
     private val store = AuthenticatorStore(application)
     private val mutableState = MutableStateFlow(AuthenticatorUiState())
     val state: StateFlow<AuthenticatorUiState> = mutableState.asStateFlow()
+    private val stateMutex = Mutex()
 
     init {
         load()
@@ -34,20 +37,22 @@ class AuthenticatorViewModel(application: Application) : AndroidViewModel(applic
 
     fun load() {
         viewModelScope.launch {
-            mutableState.update { it.copy(loading = true, error = null) }
-            val result = withContext(Dispatchers.IO) {
-                runCatching { store.read() }
-            }
-            result.fold(
-                onSuccess = { entries ->
-                    mutableState.update { it.copy(loading = false, entries = entries) }
-                },
-                onFailure = { error ->
-                    mutableState.update {
-                        it.copy(loading = false, entries = emptyList(), error = userMessage(error))
+            stateMutex.withLock {
+                mutableState.update { it.copy(loading = true, error = null) }
+                val result = withContext(Dispatchers.IO) {
+                    runCatching { store.read() }
+                }
+                result.fold(
+                    onSuccess = { entries ->
+                        mutableState.update { it.copy(loading = false, entries = entries) }
+                    },
+                    onFailure = { error ->
+                        mutableState.update {
+                            it.copy(loading = false, entries = emptyList(), error = userMessage(error))
+                        }
                     }
-                },
-            )
+                )
+            }
         }
     }
 
@@ -95,24 +100,26 @@ class AuthenticatorViewModel(application: Application) : AndroidViewModel(applic
     ) {
         if (mutableState.value.busy) return
         viewModelScope.launch {
-            mutableState.update { it.copy(busy = true, error = null, message = null) }
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    val entries = entries(mutableState.value.entries)
-                    store.write(entries)
-                    entries
-                }
-            }
-            result.fold(
-                onSuccess = { entries ->
-                    mutableState.update {
-                        it.copy(busy = false, entries = entries, message = successMessage(entries))
+            stateMutex.withLock {
+                mutableState.update { it.copy(busy = true, error = null, message = null) }
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val entries = entries(mutableState.value.entries)
+                        store.write(entries)
+                        entries
                     }
-                },
-                onFailure = { error ->
-                    mutableState.update { it.copy(busy = false, error = userMessage(error)) }
-                },
-            )
+                }
+                result.fold(
+                    onSuccess = { entries ->
+                        mutableState.update {
+                            it.copy(busy = false, entries = entries, message = successMessage(entries))
+                        }
+                    },
+                    onFailure = { error ->
+                        mutableState.update { it.copy(busy = false, error = userMessage(error)) }
+                    },
+                )
+            }
         }
     }
 

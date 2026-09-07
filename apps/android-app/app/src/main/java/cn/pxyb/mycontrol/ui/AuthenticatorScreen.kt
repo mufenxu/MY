@@ -100,8 +100,8 @@ fun AuthenticatorScreen(
         }
     }
 
-    LaunchedEffect(pendingQrUri) {
-        if (pendingQrUri != null) {
+    LaunchedEffect(pendingQrUri, state.busy) {
+        if (pendingQrUri != null && !state.busy) {
             onAddFromUri(pendingQrUri)
             onPendingQrUriConsumed()
         }
