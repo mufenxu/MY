@@ -66,7 +66,6 @@ import androidx.core.content.ContextCompat
 import cn.pxyb.mycontrol.data.CampusWaterBill
 import cn.pxyb.mycontrol.data.CampusWaterValveDevice
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
-import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import java.time.YearMonth
 import kotlin.math.abs
@@ -180,80 +179,90 @@ fun WaterValveScreen(
                     key = { device -> "water-valve-device-${device.seqNo}" },
                     contentType = { "water-valve-device" },
                 ) { device ->
-                    val itemKey = "water-valve-device-${device.seqNo}"
-                    val dragging = draggingKey == itemKey
-                    val dragModifier = if (dragging) {
-                        Modifier.graphicsLayer {
-                            translationY = draggingOffset
-                            scaleX = 1.02f
-                            scaleY = 1.02f
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val itemKey = "water-valve-device-${device.seqNo}"
+                        val dragging = draggingKey == itemKey
+                        val dragModifier = if (dragging) {
+                            Modifier.graphicsLayer {
+                                translationY = draggingOffset
+                                scaleX = 1.02f
+                                scaleY = 1.02f
+                            }
+                        } else {
+                            Modifier
                         }
-                    } else {
-                        Modifier
-                    }
-                    WaterValveDeviceCard(
-                        device = device,
-                        busy = state.busy,
-                        dragging = dragging,
-                        modifier = dragModifier.pointerInput(device.seqNo) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = { offset ->
-                                    val visibleItems = listState.layoutInfo.visibleItemsInfo
-                                    val current = visibleItems.firstOrNull { info ->
-                                        offset.y >= 0f && offset.y <= info.size.toFloat() && info.key == itemKey
-                                    } ?: return@detectDragGesturesAfterLongPress
-                                    draggingKey = current.key
-                                    draggingOffset = 0f
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    draggingOffset += dragAmount.y
-                                    val visibleItems = listState.layoutInfo.visibleItemsInfo
-                                    val currentInfo = visibleItems.firstOrNull { it.key == draggingKey } ?: return@detectDragGesturesAfterLongPress
-                                    val draggedCenter = currentInfo.offset + currentInfo.size / 2f + draggingOffset
-                                    val targetInfo = visibleItems
-                                        .filter { it.key != draggingKey }
-                                        .minByOrNull { info -> abs(draggedCenter - (info.offset + info.size / 2f)) }
-                                        ?: return@detectDragGesturesAfterLongPress
-                                    if (abs(draggedCenter - (targetInfo.offset + targetInfo.size / 2f)) < targetInfo.size * 0.62f) {
-                                        moveDevice(draggingKey ?: return@detectDragGesturesAfterLongPress, targetInfo.key)
+                        WaterValveDeviceCard(
+                            device = device,
+                            busy = state.busy,
+                            dragging = dragging,
+                            modifier = dragModifier.pointerInput(device.seqNo) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = { offset ->
+                                        val visibleItems = listState.layoutInfo.visibleItemsInfo
+                                        val current = visibleItems.firstOrNull { info ->
+                                            offset.y >= 0f && offset.y <= info.size.toFloat() && info.key == itemKey
+                                        } ?: return@detectDragGesturesAfterLongPress
+                                        draggingKey = current.key
                                         draggingOffset = 0f
-                                    }
-                                },
-                                onDragEnd = {
-                                    val seqNos = devices.mapNotNull { it.seqNo }
-                                    val originalSeqNos = state.valve.devices.mapNotNull { it.seqNo }
-                                    if (seqNos != originalSeqNos) currentOnReorder(seqNos)
-                                    draggingKey = null
-                                    draggingOffset = 0f
-                                },
-                                onDragCancel = {
-                                    draggingKey = null
-                                    draggingOffset = 0f
-                                },
-                            )
-                        },
-                        onToggle = { wanted ->
-                            pendingAction = if (wanted) WaterValveAction.Open to device else WaterValveAction.Close to device
-                            onClearFeedback()
-                        },
-                        onDelete = {
-                            pendingDelete = device
-                            onClearFeedback()
-                        },
-                    )
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        draggingOffset += dragAmount.y
+                                        val visibleItems = listState.layoutInfo.visibleItemsInfo
+                                        val currentInfo = visibleItems.firstOrNull { it.key == draggingKey } ?: return@detectDragGesturesAfterLongPress
+                                        val draggedCenter = currentInfo.offset + currentInfo.size / 2f + draggingOffset
+                                        val targetInfo = visibleItems
+                                            .filter { it.key != draggingKey }
+                                            .minByOrNull { info -> abs(draggedCenter - (info.offset + info.size / 2f)) }
+                                            ?: return@detectDragGesturesAfterLongPress
+                                        if (abs(draggedCenter - (targetInfo.offset + targetInfo.size / 2f)) < targetInfo.size * 0.62f) {
+                                            moveDevice(draggingKey ?: return@detectDragGesturesAfterLongPress, targetInfo.key)
+                                            draggingOffset = 0f
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        val seqNos = devices.mapNotNull { it.seqNo }
+                                        val originalSeqNos = state.valve.devices.mapNotNull { it.seqNo }
+                                        if (seqNos != originalSeqNos) currentOnReorder(seqNos)
+                                        draggingKey = null
+                                        draggingOffset = 0f
+                                    },
+                                    onDragCancel = {
+                                        draggingKey = null
+                                        draggingOffset = 0f
+                                    },
+                                )
+                            },
+                            onToggle = { wanted ->
+                                pendingAction = if (wanted) WaterValveAction.Open to device else WaterValveAction.Close to device
+                                onClearFeedback()
+                            },
+                            onDelete = {
+                                pendingDelete = device
+                                onClearFeedback()
+                            },
+                        )
+                    }
                 }
             }
 
             item(key = "water-valve-bill", contentType = "bill") {
-                WaterValveBillCard(
-                    bill = state.bill,
-                    loading = state.billLoading,
-                    month = billMonth,
-                    onPreviousMonth = { billMonth = billMonth.minusMonths(1) },
-                    onNextMonth = { billMonth = billMonth.plusMonths(1) },
-                    onRetry = { onQueryBill(billMonth.toString(), true) },
-                )
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    WaterValveBillCard(
+                        bill = state.bill,
+                        loading = state.billLoading,
+                        month = billMonth,
+                        onPreviousMonth = { billMonth = billMonth.minusMonths(1) },
+                        onNextMonth = { billMonth = billMonth.plusMonths(1) },
+                        onRetry = { onQueryBill(billMonth.toString(), true) },
+                    )
+                }
             }
         }
 
@@ -337,49 +346,72 @@ private fun WaterValveDeviceCard(
     onToggle: (Boolean) -> Unit,
     onDelete: () -> Unit,
 ) {
-    AppPanel(modifier = modifier) {
+    AppPanel(
+        modifier = modifier
+            .fillMaxWidth()
+            .widthIn(max = 620.dp),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.DragHandle,
                     contentDescription = "长按拖动排序",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(20.dp),
                 )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                ) {
+                    Text(
+                        text = device.deviceName.orEmpty().ifBlank { device.seqNo.orEmpty() },
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "编号 ${device.seqNo.orEmpty()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Surface(
                     shape = CircleShape,
                     color = if (device.running) {
-                        MaterialTheme.colorScheme.primaryContainer
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.68f)
                     },
+                    modifier = Modifier
+                        .heightIn(min = 30.dp),
                 ) {
                     Text(
                         text = if (device.running) "运行中" else "已关闭",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = if (device.running) {
                             MaterialTheme.colorScheme.onPrimaryContainer
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
                     )
                 }
-                Spacer(modifier = Modifier.weight(1f))
                 Surface(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.72f),
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(48.dp)
                         .clickable(enabled = !busy, onClick = onDelete),
                 ) {
                     Icon(
@@ -393,23 +425,9 @@ private fun WaterValveDeviceCard(
                 }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(
-                    text = device.deviceName.orEmpty().ifBlank { device.seqNo.orEmpty() },
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = "编号 ${device.seqNo.orEmpty()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 WaterValveMetric(
                     label = "钱包余额",
@@ -432,7 +450,12 @@ private fun WaterValveDeviceCard(
             if (device.error != null) {
                 FeedbackBanner(message = device.error, error = true)
             }
-            AppDetailRow(label = "同步时间", value = formatPlatformTime(device.updatedAt))
+            Text(
+                text = "同步于 ${formatPlatformTime(device.updatedAt)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.End),
+            )
         }
     }
 }
@@ -445,21 +468,21 @@ private fun WaterValveMetric(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = value,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -473,35 +496,60 @@ private fun WaterValvePowerButton(
     busy: Boolean,
     onToggle: (Boolean) -> Unit,
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Surface(
-            modifier = Modifier
-                .size(96.dp)
-                .clickable(enabled = !busy) { onToggle(!running) },
-            shape = CircleShape,
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 58.dp)
+            .clickable(enabled = !busy) { onToggle(!running) },
+        shape = RoundedCornerShape(29.dp),
+        color = if (running) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.90f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f)
+        },
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
             color = if (running) {
-                MaterialTheme.colorScheme.primary
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.26f)
             } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f)
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.70f)
             },
-            border = androidx.compose.foundation.BorderStroke(
-                width = 2.dp,
-                color = if (running) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
-                },
-            ),
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(contentAlignment = Alignment.Center) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(1.dp),
+            ) {
+                Text(
+                    text = if (running) "正在出水" else "阀门已关闭",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = if (running) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+                Text(
+                    text = if (running) "点击结束本次用水" else "点击开启饮水机",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(44.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
                 if (busy) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(30.dp),
-                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
                     )
                 } else {
                     Icon(
@@ -510,20 +558,16 @@ private fun WaterValvePowerButton(
                         tint = if (running) {
                             MaterialTheme.colorScheme.onPrimary
                         } else {
-                            MaterialTheme.colorScheme.primary
+                            MaterialTheme.colorScheme.onPrimary
                         },
-                        modifier = Modifier.size(38.dp),
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
+                }
+            }
         }
-        Text(
-            text = if (running) "点击关阀" else "点击开阀",
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
-}
 
 @Composable
 private fun WaterValveBillCard(
@@ -534,7 +578,11 @@ private fun WaterValveBillCard(
     onNextMonth: () -> Unit,
     onRetry: () -> Unit,
 ) {
-    AppPanel {
+    AppPanel(
+        modifier = Modifier
+            .fillMaxWidth()
+            .widthIn(max = 620.dp),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
