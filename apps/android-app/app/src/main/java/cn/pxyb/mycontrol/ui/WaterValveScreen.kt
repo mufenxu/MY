@@ -8,12 +8,17 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -87,6 +92,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import cn.pxyb.mycontrol.data.CampusWaterBill
 import cn.pxyb.mycontrol.data.CampusWaterValveDevice
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
@@ -119,6 +125,7 @@ fun WaterValveScreen(
     var draggingKey by remember { mutableStateOf<Any?>(null) }
     var draggingOffset by remember { mutableStateOf(0f) }
     val currentOnReorder by rememberUpdatedState(onReorder)
+    var hasInitialLoaded by remember { mutableStateOf(state.valve.devices.isNotEmpty()) }
 
     LaunchedEffect(Unit) {
         onRefresh(true)
@@ -128,6 +135,14 @@ fun WaterValveScreen(
     }
     LaunchedEffect(state.valve.devices) {
         if (draggingKey == null) devices = state.valve.devices
+        if (state.valve.devices.isNotEmpty()) {
+            hasInitialLoaded = true
+        }
+    }
+    LaunchedEffect(state.refreshing) {
+        if (!state.refreshing) {
+            hasInitialLoaded = true
+        }
     }
 
     fun moveDevice(fromKey: Any, toKey: Any) {
@@ -180,9 +195,11 @@ fun WaterValveScreen(
                 }
             }
 
-            if (state.refreshing && devices.isEmpty()) {
+            val isInitialLoading = !hasInitialLoaded || (state.refreshing && devices.isEmpty())
+
+            if (isInitialLoading) {
                 item(key = "water-valve-loading", contentType = "loading") {
-                    GlassShimmerList(itemCount = 2, itemHeight = 168.dp)
+                    WaterValveSkeletonList(count = 2)
                 }
             } else if (devices.isEmpty()) {
                 item(key = "water-valve-empty", contentType = "empty") {
@@ -203,72 +220,80 @@ fun WaterValveScreen(
                     key = { device -> "water-valve-device-${device.seqNo}" },
                     contentType = { "water-valve-device" },
                 ) { device ->
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center,
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(animationSpec = tween(380)) + slideInVertically(
+                            animationSpec = tween(380),
+                            initialOffsetY = { 35 },
+                        ),
                     ) {
-                        val itemKey = "water-valve-device-${device.seqNo}"
-                        val dragging = draggingKey == itemKey
-                        val dragModifier = if (dragging) {
-                            Modifier.graphicsLayer {
-                                translationY = draggingOffset
-                                scaleX = 1.02f
-                                scaleY = 1.02f
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            val itemKey = "water-valve-device-${device.seqNo}"
+                            val dragging = draggingKey == itemKey
+                            val dragModifier = if (dragging) {
+                                Modifier.graphicsLayer {
+                                    translationY = draggingOffset
+                                    scaleX = 1.02f
+                                    scaleY = 1.02f
+                                }
+                            } else {
+                                Modifier
                             }
-                        } else {
-                            Modifier
-                        }
-                        WaterValveDeviceCard(
-                            device = device,
-                            busy = state.busy,
-                            dragging = dragging,
-                            modifier = dragModifier.pointerInput(device.seqNo) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = { offset ->
-                                        val visibleItems = listState.layoutInfo.visibleItemsInfo
-                                        val current = visibleItems.firstOrNull { info ->
-                                            offset.y >= 0f && offset.y <= info.size.toFloat() && info.key == itemKey
-                                        } ?: return@detectDragGesturesAfterLongPress
-                                        draggingKey = current.key
-                                        draggingOffset = 0f
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        draggingOffset += dragAmount.y
-                                        val visibleItems = listState.layoutInfo.visibleItemsInfo
-                                        val currentInfo = visibleItems.firstOrNull { it.key == draggingKey } ?: return@detectDragGesturesAfterLongPress
-                                        val draggedCenter = currentInfo.offset + currentInfo.size / 2f + draggingOffset
-                                        val targetInfo = visibleItems
-                                            .filter { it.key != draggingKey }
-                                            .minByOrNull { info -> abs(draggedCenter - (info.offset + info.size / 2f)) }
-                                            ?: return@detectDragGesturesAfterLongPress
-                                        if (abs(draggedCenter - (targetInfo.offset + targetInfo.size / 2f)) < targetInfo.size * 0.62f) {
-                                            moveDevice(draggingKey ?: return@detectDragGesturesAfterLongPress, targetInfo.key)
+                            WaterValveDeviceCard(
+                                device = device,
+                                busy = state.busy,
+                                dragging = dragging,
+                                modifier = dragModifier.pointerInput(device.seqNo) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = { offset ->
+                                            val visibleItems = listState.layoutInfo.visibleItemsInfo
+                                            val current = visibleItems.firstOrNull { info ->
+                                                offset.y >= 0f && offset.y <= info.size.toFloat() && info.key == itemKey
+                                            } ?: return@detectDragGesturesAfterLongPress
+                                            draggingKey = current.key
                                             draggingOffset = 0f
-                                        }
-                                    },
-                                    onDragEnd = {
-                                        val seqNos = devices.mapNotNull { it.seqNo }
-                                        val originalSeqNos = state.valve.devices.mapNotNull { it.seqNo }
-                                        if (seqNos != originalSeqNos) currentOnReorder(seqNos)
-                                        draggingKey = null
-                                        draggingOffset = 0f
-                                    },
-                                    onDragCancel = {
-                                        draggingKey = null
-                                        draggingOffset = 0f
-                                    },
-                                )
-                            },
-                            onToggle = { wanted ->
-                                pendingAction = if (wanted) WaterValveAction.Open to device else WaterValveAction.Close to device
-                                onClearFeedback()
-                            },
-                            onDelete = {
-                                pendingDelete = device
-                                onClearFeedback()
-                            },
-                        )
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            draggingOffset += dragAmount.y
+                                            val visibleItems = listState.layoutInfo.visibleItemsInfo
+                                            val currentInfo = visibleItems.firstOrNull { it.key == draggingKey } ?: return@detectDragGesturesAfterLongPress
+                                            val draggedCenter = currentInfo.offset + currentInfo.size / 2f + draggingOffset
+                                            val targetInfo = visibleItems
+                                                .filter { it.key != draggingKey }
+                                                .minByOrNull { info -> abs(draggedCenter - (info.offset + info.size / 2f)) }
+                                                ?: return@detectDragGesturesAfterLongPress
+                                            if (abs(draggedCenter - (targetInfo.offset + targetInfo.size / 2f)) < targetInfo.size * 0.62f) {
+                                                moveDevice(draggingKey ?: return@detectDragGesturesAfterLongPress, targetInfo.key)
+                                                draggingOffset = 0f
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            val seqNos = devices.mapNotNull { it.seqNo }
+                                            val originalSeqNos = state.valve.devices.mapNotNull { it.seqNo }
+                                            if (seqNos != originalSeqNos) currentOnReorder(seqNos)
+                                            draggingKey = null
+                                            draggingOffset = 0f
+                                        },
+                                        onDragCancel = {
+                                            draggingKey = null
+                                            draggingOffset = 0f
+                                        },
+                                    )
+                                },
+                                onToggle = { wanted ->
+                                    pendingAction = if (wanted) WaterValveAction.Open to device else WaterValveAction.Close to device
+                                    onClearFeedback()
+                                },
+                                onDelete = {
+                                    pendingDelete = device
+                                    onClearFeedback()
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -357,6 +382,263 @@ fun WaterValveScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun WaterValveSkeletonList(
+    count: Int = 2,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        repeat(count) {
+            WaterValveSkeletonCard()
+        }
+    }
+}
+
+@Composable
+private fun WaterValveSkeletonCard(
+    modifier: Modifier = Modifier,
+) {
+    val dark = isAppInDarkTheme()
+    val pulseTransition = rememberInfiniteTransition(label = "valveSkeletonPulse")
+    val pulseAlpha by pulseTransition.animateFloat(
+        initialValue = 0.32f,
+        targetValue = 0.72f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 950, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "skeletonPulseAlpha",
+    )
+
+    AppPanel(
+        modifier = modifier
+            .fillMaxWidth()
+            .widthIn(max = 620.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 13.dp)
+                .glassShimmer(dark),
+            verticalArrangement = Arrangement.spacedBy(11.dp),
+        ) {
+            // 1. 顶部 Header 骨架（与方案二头部完全一致）
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                // 拖拽手柄微光
+                Box(
+                    modifier = Modifier
+                        .size(width = 19.dp, height = 12.dp)
+                        .background(
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.25f),
+                            RoundedCornerShape(3.dp),
+                        ),
+                )
+                // 32dp 设备圆角水滴底座微光
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = pulseAlpha * 0.9f),
+                            RoundedCornerShape(10.dp),
+                        ),
+                )
+                // 标题与编号微光条
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.52f)
+                            .height(15.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = pulseAlpha),
+                                RoundedCornerShape(4.dp),
+                            ),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.3f)
+                            .height(10.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = pulseAlpha * 0.65f),
+                                RoundedCornerShape(3.dp),
+                            ),
+                    )
+                }
+                // 状态指示小胶囊微光
+                Box(
+                    modifier = Modifier
+                        .size(width = 56.dp, height = 26.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = pulseAlpha * 0.75f),
+                            CircleShape,
+                        )
+                        .border(
+                            0.8.dp,
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                            CircleShape,
+                        ),
+                )
+                // 删除按钮微光
+                Box(
+                    modifier = Modifier
+                        .size(31.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = pulseAlpha * 0.6f),
+                            CircleShape,
+                        )
+                        .border(
+                            0.8.dp,
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                            CircleShape,
+                        ),
+                )
+            }
+
+            // 2. 主体左右分栏骨架（左侧两块微卡，右侧 108dp 大圆盘中控罗盘骨架，完全对称方案二）
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                // 左侧两张微卡骨架
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    repeat(2) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = pulseAlpha * 0.45f),
+                            border = BorderStroke(
+                                0.8.dp,
+                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                            ),
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = 44.dp, height = 11.dp)
+                                            .background(
+                                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.28f),
+                                                RoundedCornerShape(3.dp),
+                                            ),
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = 36.dp, height = 9.dp)
+                                            .background(
+                                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.2f),
+                                                RoundedCornerShape(3.dp),
+                                            ),
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 68.dp, height = 18.dp)
+                                        .background(
+                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.38f),
+                                            RoundedCornerShape(4.dp),
+                                        ),
+                                )
+                            }
+                        }
+                    }
+                    // 设备状态小字骨架
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 2.dp)
+                            .size(width = 115.dp, height = 11.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.22f),
+                                RoundedCornerShape(3.dp),
+                            ),
+                    )
+                }
+
+                // 右侧大中控罗盘骨架（108dp 饱满圆形，方案二同款尺寸）
+                Box(
+                    modifier = Modifier.size(108.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = pulseAlpha * 0.65f),
+                                CircleShape,
+                            )
+                            .border(
+                                2.dp,
+                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                CircleShape,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.25f),
+                                        CircleShape,
+                                    ),
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 46.dp, height = 11.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.3f),
+                                        RoundedCornerShape(3.dp),
+                                    ),
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 32.dp, height = 9.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.2f),
+                                        RoundedCornerShape(3.dp),
+                                    ),
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3. 底部同步时间微光骨架
+            Box(
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .size(width = 90.dp, height = 10.dp)
+                    .background(
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha * 0.2f),
+                        RoundedCornerShape(3.dp),
+                    ),
+            )
         }
     }
 }
