@@ -122,7 +122,7 @@
 | | `AppMetricCard` | 现代指标展示小卡片与自适应网格看板 (`AppMetricDashboard`) |
 | | `AppAvatar` | 支持网络加载、首字母自动散列双色极光渐变兜底与在线状态圆点 |
 | | `AppDivider` | 统一规范的发丝分割线，支持自定义起止内边距 |
-| **`ui.components.feedback`** | `AppFeedbackBanner` | 方案一极光微光毛玻璃胶囊操作反馈横幅，支持成功/失败/信息状态、3D 同心微徽标与胶囊重试 |
+| **`ui.components.feedback`** | `AppFeedbackBanner` | 极光微光毛玻璃胶囊操作反馈横幅，支持方案 D 倒计时微光进度环、4秒平滑淡出、3D 同心微徽标与胶囊重试 |
 | | `AppEmptyState` | 标准居中空状态，带毛玻璃圆形底衬图标、主副说明文案与主次操作胶囊按键 |
 | | `AppErrorState` | 标准错误面板，集成就地一键重试机制 |
 | **`ui.components.filter`** | `AppFilterChip` / `AppFilterBar` | 胶囊形微凸毛玻璃多维筛选栏，支持横向平滑滚动 |

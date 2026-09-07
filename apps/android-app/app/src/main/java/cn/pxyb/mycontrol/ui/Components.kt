@@ -518,9 +518,9 @@ fun QuickActionGlassTile(
 /**
  * 页面内嵌操作反馈横幅 (FeedbackBanner)
  *
- * 全面升级为 2026 视觉规范【极光微光毛玻璃胶囊 (Aurora Glass Capsule)】，
+ * 全面升级为 2026 视觉规范【极光微光毛玻璃胶囊 (Aurora Glass Capsule)】+【方案 D 倒计时微光圆环】：
  * 底层委托至公共组件 [AppFeedbackBanner]，具备 20dp 圆角半透毛玻璃、1dp 翡翠绿/珊瑚红发丝微光描边、
- * 3D 同心光环徽标底座、微型极光胶囊重试键与物理触觉震动反馈。
+ * 3D 同心光环徽标底座、微型极光胶囊重试键、4秒平滑倒计时进度圆环与自动淡出折叠机制。
  */
 @Composable
 fun FeedbackBanner(
@@ -530,6 +530,8 @@ fun FeedbackBanner(
     onRetry: (() -> Unit)? = null,
     title: String? = null,
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    showCloseButton: Boolean = true,
+    autoDismissDurationMillis: Long? = 4000L,
     onDismiss: (() -> Unit)? = null,
 ) {
     AppFeedbackBanner(
@@ -539,6 +541,8 @@ fun FeedbackBanner(
         title = title,
         icon = icon,
         onRetry = onRetry,
+        showCloseButton = showCloseButton,
+        autoDismissDurationMillis = autoDismissDurationMillis,
         onDismiss = onDismiss,
     )
 }
