@@ -3883,12 +3883,14 @@ function parseWaterValveCode(rawCode) {
   if (!value) return "";
   if (/^https?:\/\//i.test(value)) {
     try {
-      return new URL(value).searchParams.get("sn") || "";
+      const url = new URL(value);
+      const hashQuery = url.hash.includes("?") ? url.hash.slice(url.hash.indexOf("?") + 1) : "";
+      return url.searchParams.get("sn") || new URLSearchParams(hashQuery).get("sn") || "";
     } catch {
       return "";
     }
   }
-  if (/^\d{12}$/.test(value)) return value;
+  if (/^[A-Za-z0-9]{12}$/.test(value)) return value;
   const parts = value.split("_");
   return parts.length >= 3 ? parts[2] : "";
 }
