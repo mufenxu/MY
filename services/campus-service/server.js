@@ -3439,7 +3439,8 @@ async function uwcRequest(jar, path, data = {}, token = "") {
   if (!raw.resultMap) throw new HttpError(502, "生活用水接口未返回加密结果。", { endpoint: path, raw });
   const decrypted = parseJsonLike(uwcDecrypt(raw.resultMap));
   if (decrypted.code !== "1") {
-    throw new HttpError(decrypted.code === "-2" ? 401 : 502, decrypted.msg || "生活用水接口返回失败", { endpoint: path, code: decrypted.code });
+    const status = decrypted.code === "-2" ? 401 : 400;
+    throw new HttpError(status, decrypted.msg || "生活用水接口返回失败", { endpoint: path, code: decrypted.code });
   }
 
   const responseSign = decrypted.sign;
