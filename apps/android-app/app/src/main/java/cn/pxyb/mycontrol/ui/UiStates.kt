@@ -12,6 +12,7 @@ import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusFreeClassrooms
 import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.data.CampusOverview
+import cn.pxyb.mycontrol.data.CampusWaterBill
 import cn.pxyb.mycontrol.data.CampusWaterValve
 import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.data.CampusReservationTimeWindow
@@ -136,6 +137,9 @@ data class AppUiState(
     val campusWaterValveBusy: Boolean = false,
     val campusWaterValveError: String? = null,
     val campusWaterValveMessage: String? = null,
+    val campusWaterBill: CampusWaterBill? = null,
+    val campusWaterBillLoading: Boolean = false,
+    val campusWaterBillError: String? = null,
     val freeClassroomResult: CampusFreeClassrooms? = null,
     val resourceExpiries: List<ResourceExpiry> = emptyList(),
     val alerts: List<AppAlertRecord> = emptyList(),
@@ -413,6 +417,9 @@ data class WaterValveUiState(
     val refreshing: Boolean = false,
     val busy: Boolean = false,
     val valve: CampusWaterValve = CampusWaterValve(),
+    val bill: CampusWaterBill? = null,
+    val billLoading: Boolean = false,
+    val billError: String? = null,
     val error: String? = null,
     val message: String? = null,
 )
@@ -797,6 +804,9 @@ internal fun AppUiState.toWaterValveUiState() = WaterValveUiState(
     refreshing = campusWaterValveLoading,
     busy = campusWaterValveBusy,
     valve = campusWaterValve,
+    bill = campusWaterBill,
+    billLoading = campusWaterBillLoading,
+    billError = campusWaterBillError,
     error = campusWaterValveError,
     message = campusWaterValveMessage,
 )

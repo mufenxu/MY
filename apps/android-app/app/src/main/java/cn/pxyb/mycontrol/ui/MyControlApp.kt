@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
+import java.time.YearMonth
+
 import cn.pxyb.mycontrol.util.QrUtils
 import cn.pxyb.mycontrol.util.DateTimeUtils
 
@@ -1956,10 +1958,16 @@ private fun AuthenticatedShell(
                         state = waterValveState,
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
-                        onRefresh = { force -> viewModel.refreshWaterValve(force) },
+                        onRefresh = { force ->
+                            viewModel.refreshWaterValve(force)
+                            if (force) viewModel.refreshWaterBill(YearMonth.now().toString(), true)
+                        },
                         onBind = viewModel::bindWaterValve,
                         onOpen = viewModel::openWaterValve,
                         onClose = viewModel::closeWaterValve,
+                        onUnbind = viewModel::unbindWaterValve,
+                        onReorder = viewModel::reorderWaterValves,
+                        onQueryBill = viewModel::refreshWaterBill,
                         onClearFeedback = viewModel::clearWaterValveFeedback,
                     )
                 }

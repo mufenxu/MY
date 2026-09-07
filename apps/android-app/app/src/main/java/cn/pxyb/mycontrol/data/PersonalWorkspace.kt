@@ -162,6 +162,18 @@ data class CampusOverview(
 )
 
 @Immutable
+data class CampusWaterValveDevice(
+    val bound: Boolean = false,
+    val seqNo: String? = null,
+    val deviceName: String? = null,
+    val running: Boolean = false,
+    val defaultValue: String? = null,
+    val balance: String? = null,
+    val updatedAt: String? = null,
+    val error: String? = null,
+)
+
+@Immutable
 data class CampusWaterValve(
     val bound: Boolean = false,
     val seqNo: String? = null,
@@ -170,6 +182,23 @@ data class CampusWaterValve(
     val defaultValue: String? = null,
     val balance: String? = null,
     val updatedAt: String? = null,
+    val error: String? = null,
+    val devices: List<CampusWaterValveDevice> = emptyList(),
+)
+
+@Immutable
+data class CampusWaterBillRecord(
+    val title: String,
+    val amount: String,
+    val time: String,
+    val detail: String,
+)
+
+@Immutable
+data class CampusWaterBill(
+    val month: String,
+    val totalAmount: String,
+    val records: List<CampusWaterBillRecord> = emptyList(),
     val error: String? = null,
 )
 

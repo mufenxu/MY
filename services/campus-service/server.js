@@ -75,6 +75,11 @@ import {
   trackUpstreamResponse
 } from "./src/lib/upstream-response.js";
 import { createCampusRepository } from "./src/storage/campus-repository.js";
+import { handleCampusCoreRoutes } from "./src/routes/campus-core-routes.js";
+import { handleLibroomRoutes } from "./src/routes/libroom-routes.js";
+import { handleLibrarySeatRoutes } from "./src/routes/library-seat-routes.js";
+import { handleAcademicRoutes } from "./src/routes/academic-routes.js";
+import { handleSystemAdminRoutes } from "./src/routes/system-admin-routes.js";
 import { buildCourseOccurrences, renderAcademicCalendar } from "./src/lib/academic-calendar.js";
 import {
   buildCourseReminderDelivery,
@@ -7521,501 +7526,104 @@ async function handleApiRoutes(req, res, url) {
       return;
     }
 
-    if (url.pathname === "/api/operations/status" && req.method === "GET") {
-      requireAdminUser();
-      json(res, 200, { ok: true, data: backgroundOperationsSnapshot() });
+    if (await handleSystemAdminRoutes(req, res, url, {
+      HttpError,
+      backgroundOperationsSnapshot,
+      createInvite,
+      createSystemUser,
+      currentUserId,
+      decodeBoundedPathSegment,
+      deleteInvite,
+      deleteSystemUser,
+      json,
+      listInvites,
+      listSystemUsers,
+      logger,
+      normalizePagination,
+      readBodyJson,
+      requireAdminUser,
+      resetSystemUserPassword,
+      revokeInvite,
+      setSystemUserDisabled
+    })) {
       return;
     }
 
-    if (url.pathname === "/api/users" && req.method === "GET") {
-      requireAdminUser();
-      const pagination = normalizePagination({
-        page: url.searchParams.get("page"),
-        pageSize: url.searchParams.get("pageSize")
-      });
-      const users = await listSystemUsers(pagination);
-      json(res, 200, { ok: true, data: users.items, pagination: users.pagination });
+    if (await handleCampusCoreRoutes(req, res, url, {
+      HttpError,
+      campusQueryFromSearch,
+      clearSessionJar,
+      currentUserId,
+      defaultMonth,
+      getCampusAccommodation,
+      getCampusCard,
+      getCampusRechargeLink,
+      getCampusSummary,
+      getCampusWater,
+      getEnergyRechargeLink,
+      getMonthBill,
+      getMeters,
+      getSummary,
+      getViewData,
+      getWallet,
+      getYesterdayBill,
+      json,
+      logger,
+      loginWithCas,
+      readBodyJson,
+      readSessionJar,
+      refreshCampusWaterCode,
+      saveSessionJar,
+      schoolLoginLimiter,
+      sensitiveJson,
+      sessionStatus,
+      waterValve,
+      withCampusSessionLock
+    })) {
       return;
     }
-    if (url.pathname === "/api/users" && req.method === "POST") {
-      requireAdminUser();
-      const body = await readBodyJson(req);
-      const user = await createSystemUser({
-        username: body.username,
-        password: body.password,
-        role: body.role === "admin" ? "admin" : "user"
-      });
-      logger.info("audit_user_created", { actorUserId: currentUserId(), targetUserId: user.id, role: user.role });
-      json(res, 201, { ok: true, data: user });
-      return;
-    }
-    if (url.pathname === "/api/invites" && req.method === "GET") {
-      requireAdminUser();
-      json(res, 200, { ok: true, data: await listInvites() });
-      return;
-    }
-    if (url.pathname === "/api/invites" && req.method === "POST") {
-      requireAdminUser();
-      const body = await readBodyJson(req);
-      const invite = await createInvite({
-        role: body.role,
-        note: body.note,
-        expiresInDays: body.expiresInDays,
-        actorId: currentUserId()
-      });
-      logger.info("audit_invite_created", { actorUserId: currentUserId(), inviteId: invite.id, role: invite.role });
-      json(res, 201, { ok: true, data: invite });
-      return;
-    }
-    const inviteActionMatch = url.pathname.match(/^\/api\/invites\/([^/]+)$/);
-    if (inviteActionMatch && req.method === "PATCH") {
-      requireAdminUser();
-      const body = await readBodyJson(req);
-      if (body.revoked !== true) throw new HttpError(400, "无效的邀请码操作。");
-      const invite = await revokeInvite({ id: decodeBoundedPathSegment(inviteActionMatch[1], "邀请码编号") });
-      logger.info("audit_invite_revoked", { actorUserId: currentUserId(), inviteId: invite.id });
-      json(res, 200, { ok: true, data: invite });
-      return;
-    }
-    if (inviteActionMatch && req.method === "DELETE") {
-      requireAdminUser();
-      const invite = await deleteInvite({ id: decodeBoundedPathSegment(inviteActionMatch[1], "邀请码编号") });
-      logger.info("audit_invite_deleted", { actorUserId: currentUserId(), inviteId: invite.id });
-      json(res, 200, { ok: true, data: invite });
-      return;
-    }
-    const userActionMatch = url.pathname.match(/^\/api\/users\/([^/]+)(?:\/(password))?$/);
-    if (userActionMatch) {
-      requireAdminUser();
-      const targetUserId = decodeBoundedPathSegment(userActionMatch[1], "用户编号");
-      const subAction = userActionMatch[2] || "";
-      if (subAction === "password" && req.method === "POST") {
-        const body = await readBodyJson(req);
-        const user = await resetSystemUserPassword({ id: targetUserId, password: body.password });
-        logger.info("audit_user_password_reset", { actorUserId: currentUserId(), targetUserId: user.id });
-        json(res, 200, { ok: true, data: user });
-        return;
-      }
-      if (!subAction && req.method === "PATCH") {
-        const body = await readBodyJson(req);
-        const user = await setSystemUserDisabled({
-          id: targetUserId,
-          disabled: Boolean(body.disabled),
-          actorId: currentUserId()
-        });
-        logger.info("audit_user_status_changed", {
-          actorUserId: currentUserId(),
-          targetUserId: user.id,
-          disabled: user.disabled
-        });
-        json(res, 200, { ok: true, data: user });
-        return;
-      }
-      if (!subAction && req.method === "DELETE") {
-        const user = await deleteSystemUser({ id: targetUserId, actorId: currentUserId() });
-        logger.info("audit_user_deleted", { actorUserId: currentUserId(), targetUserId: user.id });
-        json(res, 200, { ok: true, data: user });
-        return;
-      }
-    }
-
-    if (url.pathname === "/api/auth/status") {
-      json(res, 200, { ok: true, data: await sessionStatus() });
-      return;
-    }
-    if (url.pathname === "/api/auth/login" && req.method === "POST") {
-      const body = await readBodyJson(req);
-      if (body.autoRelogin === true && !sensitiveJson.encrypted) {
-        throw new HttpError(503, "请先配置 HGU_DATA_ENCRYPTION_KEY，再开启学校会话自动重登。");
-      }
-      const schoolLoginLimit = schoolLoginLimiter.check(currentUserId());
-      if (!schoolLoginLimit.allowed) {
-        throw new HttpError(
-          429,
-          `学校账号登录尝试较多，请 ${Math.ceil(schoolLoginLimit.retryAfterMs / 1000)} 秒后重试。`,
-          null,
-          "SCHOOL_LOGIN_RATE_LIMITED"
-        );
-      }
-      let data;
-      try {
-        data = await loginWithCas({ ...body, saveCredentials: body.autoRelogin === true });
-        schoolLoginLimiter.reset(currentUserId());
-        logger.info("audit_school_account_connected", { actorUserId: currentUserId() });
-      } catch (error) {
-        schoolLoginLimiter.recordFailure(currentUserId());
-        throw error;
-      }
-      json(res, 200, { ok: true, data });
-      return;
-    }
-    if (url.pathname === "/api/auth/logout" && req.method === "POST") {
-      await clearSessionJar();
-      logger.info("audit_school_account_disconnected", { actorUserId: currentUserId() });
-      json(res, 200, { ok: true, data: await sessionStatus() });
-      return;
-    }
-    if (url.pathname === "/api/auth/validate" && req.method === "POST") {
-      const view = await getViewData();
-      const jar = await readSessionJar();
-      jar.meta.account = view.account || jar.meta.account || null;
-      jar.meta.ownerName = view.ownerName || jar.meta.ownerName || null;
-      jar.meta.lastValidatedAt = new Date().toISOString();
-      await saveSessionJar(jar);
-      json(res, 200, { ok: true, data: { view, status: await sessionStatus() } });
+    if (await handleLibroomRoutes(req, res, url, {
+      HttpError,
+      autoReservationTaskPublic,
+      currentUserId,
+      getLibroomOfficialLoginUrl,
+      getLibroomOfficialWebViewLogin,
+      json,
+      libroomClient,
+      libroomDate,
+      libroomSpaceId,
+      logger,
+      normalizeLibroomMyReservationRecord,
+      normalizeReservationInput,
+      readBodyJson,
+      readSessionJar,
+      redirect,
+      repository,
+      saveAutoReservationTask,
+      saveSessionJar,
+      summarizeLibroomAvailability,
+      wakeLibroomAutoReservationScheduler
+    })) {
       return;
     }
 
-    if (url.pathname === "/api/energy/view") {
-      json(res, 200, { ok: true, data: await getViewData() });
+    if (await handleLibrarySeatRoutes(req, res, url, {
+      HttpError,
+      currentUserId,
+      getLibrarySeatOfficialWebViewLogin,
+      json,
+      librarySeatClient,
+      librarySeatWaitlistPublic,
+      librarySeatWaitlistRequestTargets,
+      logger,
+      normalizeLibrarySeatReservationInput,
+      platformUserId: appSession.platformUserId,
+      readBodyJson,
+      repository,
+      saveLibrarySeatWaitlist,
+      wakeLibrarySeatWaitlistScheduler
+    })) {
       return;
-    }
-    if (url.pathname === "/api/energy/wallet") {
-      json(res, 200, { ok: true, data: await getWallet() });
-      return;
-    }
-    if (url.pathname === "/api/energy/bill/month") {
-      const time = url.searchParams.get("time") || defaultMonth();
-      json(res, 200, { ok: true, data: await getMonthBill(time), time });
-      return;
-    }
-    if (url.pathname === "/api/energy/bill/yesterday") {
-      json(res, 200, { ok: true, data: await getYesterdayBill() });
-      return;
-    }
-    if (url.pathname === "/api/energy/meters") {
-      json(res, 200, { ok: true, data: await getMeters() });
-      return;
-    }
-    if (url.pathname === "/api/energy/summary") {
-      const time = url.searchParams.get("time") || defaultMonth();
-      json(res, 200, { ok: true, data: await getSummary(time) });
-      return;
-    }
-    if (url.pathname === "/api/energy/recharge-link") {
-      json(res, 200, { ok: true, data: await getEnergyRechargeLink() });
-      return;
-    }
-
-    if (url.pathname === "/api/campus/summary") {
-      const query = campusQueryFromSearch(url.searchParams);
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => getCampusSummary(query)) });
-      return;
-    }
-    if (url.pathname === "/api/campus/card") {
-      const query = campusQueryFromSearch(url.searchParams);
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => getCampusCard(query)) });
-      return;
-    }
-    if (url.pathname === "/api/campus/water") {
-      const query = campusQueryFromSearch(url.searchParams);
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => getCampusWater(query)) });
-      return;
-    }
-    if (url.pathname === "/api/campus/accommodation") {
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => getCampusAccommodation()) });
-      return;
-    }
-    if (url.pathname === "/api/campus/water-code/refresh" && req.method === "POST") {
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => refreshCampusWaterCode()) });
-      return;
-    }
-    if (url.pathname === "/api/campus/water-valve") {
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => waterValve.get()) });
-      return;
-    }
-    if (url.pathname === "/api/campus/water-valve/bind" && req.method === "POST") {
-      const body = await readBodyJson(req);
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => waterValve.bind(body.rawCode || body.code || body.seqNo)) });
-      return;
-    }
-    if (url.pathname === "/api/campus/water-valve/open" && req.method === "POST") {
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => waterValve.open()) });
-      return;
-    }
-    if (url.pathname === "/api/campus/water-valve/close" && req.method === "POST") {
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => waterValve.close()) });
-      return;
-    }
-    if (url.pathname === "/api/campus/recharge-link") {
-      json(res, 200, { ok: true, data: await withCampusSessionLock(() => getCampusRechargeLink()) });
-      return;
-    }
-    const autoReservationPath = url.pathname.match(/^\/api\/campus\/libroom\/auto-reservations(?:\/([^/]+))?$/);
-    if (autoReservationPath) {
-      const userId = currentUserId();
-      const taskId = autoReservationPath[1] ? decodeURIComponent(autoReservationPath[1]) : "";
-      if (req.method === "GET" && !taskId) {
-        json(res, 200, { ok: true, data: (await repository.listAutoReservationTasks(userId)).map(autoReservationTaskPublic) });
-        return;
-      }
-      if (req.method === "POST" && !taskId) {
-        const body = await readBodyJson(req);
-        const data = await saveAutoReservationTask(userId, body);
-        wakeLibroomAutoReservationScheduler("task_changed");
-        json(res, 201, { ok: true, data });
-        return;
-      }
-      if (!taskId) throw new HttpError(400, "自动预约任务标识不正确。", null, "INVALID_AUTO_RESERVATION_ID");
-      const existing = await repository.getAutoReservationTask(userId, taskId);
-      if (!existing) throw new HttpError(404, "自动预约任务不存在。", null, "AUTO_RESERVATION_NOT_FOUND");
-      if (req.method === "PUT") {
-        const body = await readBodyJson(req);
-        const data = await saveAutoReservationTask(userId, { ...existing, ...body }, existing);
-        wakeLibroomAutoReservationScheduler("task_changed");
-        json(res, 200, { ok: true, data });
-        return;
-      }
-      if (req.method === "DELETE") {
-        await repository.deleteAutoReservationTask(userId, taskId);
-        wakeLibroomAutoReservationScheduler("task_changed");
-        json(res, 200, { ok: true, data: null });
-        return;
-      }
-    }
-    if (url.pathname === "/api/campus/libroom/official-login" && req.method === "GET") {
-      redirect(res, await getLibroomOfficialLoginUrl());
-      return;
-    }
-    if (url.pathname === "/api/campus/libroom/official-webview-login" && req.method === "GET") {
-      json(res, 200, { ok: true, data: await getLibroomOfficialWebViewLogin() });
-      return;
-    }
-    if (url.pathname === "/api/campus/libroom/spaces" && req.method === "GET") {
-      const date = url.searchParams.get("date") || "";
-      const startTime = url.searchParams.get("startTime") || url.searchParams.get("start_time") || "";
-      const endTime = url.searchParams.get("endTime") || url.searchParams.get("end_time") || "";
-      const client = await libroomClient();
-
-      let spaces = [];
-      if (date && startTime && endTime) {
-        try {
-          spaces = await client.listSpaces({ date, start_time: startTime, end_time: endTime });
-        } catch (err) {
-          logger.warn("libroom_list_spaces_time_query_failed", { error: err?.message });
-        }
-        if (!Array.isArray(spaces) || spaces.length === 0) {
-          spaces = await client.listSpaces({ date });
-        }
-      } else {
-        spaces = await client.listSpaces({});
-      }
-
-      if (date && startTime && endTime && Array.isArray(spaces) && spaces.length > 0) {
-        const checkAvailability = async (space) => {
-          const spaceId = space?.id ?? space?.area_id ?? space?.areaId;
-          if (!spaceId) return null;
-          try {
-            let avail = summarizeLibroomAvailability(space, { date });
-            if (avail?.source === "unrecognized") {
-              avail = await client.getAvailability({ spaceId, date });
-            }
-            const freeWindows = avail?.freeWindows || [];
-            const busyWindows = avail?.busyWindows || [];
-
-            const isFree = freeWindows.some((w) => String(w.start || "") <= startTime && String(w.end || "") >= endTime) &&
-              !busyWindows.some((b) => !(String(b.end || "") <= startTime || String(b.start || "") >= endTime));
-
-            if (isFree) {
-              return { ...space, availability: avail };
-            }
-            return null;
-          } catch {
-            return null;
-          }
-        };
-
-        const results = await Promise.all(spaces.map(checkAvailability));
-        const availableSpaces = results.filter(Boolean);
-        json(res, 200, { ok: true, data: availableSpaces });
-        return;
-      }
-
-      json(res, 200, { ok: true, data: spaces });
-      return;
-    }
-    if (url.pathname === "/api/campus/libroom/rules" && req.method === "GET") {
-      const client = await libroomClient();
-      json(res, 200, { ok: true, data: await client.getRules() });
-      return;
-    }
-    if (url.pathname === "/api/campus/libroom/availability" && req.method === "GET") {
-      const spaceId = libroomSpaceId(url.searchParams.get("spaceId"));
-      const date = libroomDate(url.searchParams.get("date"));
-      const client = await libroomClient();
-      const availability = await client.getAvailability({ spaceId, date });
-      json(res, 200, { ok: true, data: { date, availability } });
-      return;
-    }
-    if (url.pathname === "/api/campus/libroom/reservations" && req.method === "GET") {
-      const client = await libroomClient();
-      const records = await client.getMyReservations({});
-      const normalized = records
-        .map((record) => normalizeLibroomMyReservationRecord(record))
-        .filter(Boolean)
-        .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.startTime || "").localeCompare(a.startTime || ""));
-      json(res, 200, { ok: true, data: normalized });
-      return;
-    }
-    const cancelMatch = url.pathname.match(/^\/api\/campus\/libroom\/reservations\/([^/]+)\/cancel$/);
-    if ((cancelMatch || url.pathname === "/api/campus/libroom/reservations/cancel") && req.method === "POST") {
-      const reservationId = cancelMatch ? cancelMatch[1] : (url.searchParams.get("id") || (await readBodyJson(req)).id);
-      const client = await libroomClient();
-      try {
-        await client.cancelReservation(reservationId);
-      } catch (err) {
-        logger.warn("libroom_cancel_upstream_failed", { error: err?.message, id: reservationId });
-      }
-
-      // 从本地会话记录中同步标记为已取消或移除
-      const jar = await readSessionJar();
-      if (Array.isArray(jar.meta?.libroom_my_reservations)) {
-        jar.meta.libroom_my_reservations = jar.meta.libroom_my_reservations.filter((item) => String(item.id) !== String(reservationId));
-        await saveSessionJar(jar).catch(() => {});
-      }
-
-      logger.info("audit_libroom_reservation_cancelled", {
-        actorUserId: currentUserId(),
-        reservationId
-      });
-      json(res, 200, { ok: true, data: { success: true } });
-      return;
-    }
-    if (url.pathname === "/api/campus/libroom/reservations" && req.method === "POST") {
-      const body = await readBodyJson(req);
-      const normalized = normalizeReservationInput(body);
-      const client = await libroomClient();
-      const result = await client.submitReservation(body);
-
-      logger.info("audit_libroom_reservation_submitted", {
-        actorUserId: currentUserId(),
-        areaId: normalized.payload.area_id,
-        date: normalized.date,
-        startTime: normalized.startTime,
-        endTime: normalized.endTime
-      });
-      json(res, 201, { ok: true, data: result });
-      return;
-    }
-
-    if (url.pathname === "/api/campus/library-seat/official-webview-login" && req.method === "GET") {
-      json(res, 200, { ok: true, data: await getLibrarySeatOfficialWebViewLogin() });
-      return;
-    }
-    if (url.pathname === "/api/campus/library-seat/overview" && req.method === "GET") {
-      const client = await librarySeatClient();
-      json(res, 200, { ok: true, data: await client.getOverview() });
-      return;
-    }
-    if (url.pathname === "/api/campus/library-seat/areas" && req.method === "GET") {
-      const venueId = url.searchParams.get("venueId") || url.searchParams.get("buildingId") || "";
-      const date = url.searchParams.get("date") || "";
-      const startMinute = url.searchParams.get("startMinute") || url.searchParams.get("beginMinute") || "";
-      const endMinute = url.searchParams.get("endMinute") || "";
-      const floorId = url.searchParams.get("floorId") || "";
-      const pageSize = url.searchParams.get("pageSize") || "";
-      const currentPage = url.searchParams.get("currentPage") || "";
-      const client = await librarySeatClient();
-      const data = await client.listAreas({
-        venueId,
-        date,
-        startMinute: Number(startMinute),
-        endMinute: endMinute === "" ? "" : Number(endMinute),
-        floorId,
-        pageSize: pageSize === "" ? undefined : Number(pageSize),
-        currentPage: currentPage === "" ? undefined : Number(currentPage),
-        power: url.searchParams.get("power") === "true",
-        window: url.searchParams.get("window") === "true" || url.searchParams.get("windows") === "true"
-      });
-      json(res, 200, { ok: true, data });
-      return;
-    }
-    if (url.pathname === "/api/campus/library-seat/seats" && req.method === "GET") {
-      const roomId = url.searchParams.get("roomId") || url.searchParams.get("areaId") || "";
-      const date = url.searchParams.get("date") || "";
-      const client = await librarySeatClient();
-      const data = await client.getSeats({
-        roomId,
-        date,
-        startMinute: Number(url.searchParams.get("startMinute") || 0),
-        endMinute: Number(url.searchParams.get("endMinute") || 0),
-        amPm: Number(url.searchParams.get("amPm") || 0)
-      });
-      json(res, 200, { ok: true, data });
-      return;
-    }
-    if (url.pathname === "/api/campus/library-seat/reservations" && req.method === "GET") {
-      const client = await librarySeatClient();
-      json(res, 200, { ok: true, data: await client.getMyReservations() });
-      return;
-    }
-    if (url.pathname === "/api/campus/library-seat/reservations/history" && req.method === "GET") {
-      const client = await librarySeatClient();
-      const data = await client.getMyReservationHistory({
-        page: url.searchParams.get("page"),
-        size: url.searchParams.get("size")
-      });
-      json(res, 200, { ok: true, data });
-      return;
-    }
-    if (url.pathname === "/api/campus/library-seat/reservations" && req.method === "POST") {
-      const body = await readBodyJson(req);
-      const normalized = normalizeLibrarySeatReservationInput(body);
-      const client = await librarySeatClient();
-      const result = await client.submitReservation(body);
-      logger.info("audit_library_seat_reservation_submitted", {
-        actorUserId: currentUserId(),
-        seatId: normalized.seatId,
-        date: normalized.date,
-        startMinute: normalized.startMinute,
-        endMinute: normalized.endMinute
-      });
-      json(res, 201, { ok: true, data: result });
-      return;
-    }
-
-    const librarySeatWaitlistPath = url.pathname.match(/^\/api\/campus\/library-seat\/waitlists(?:\/([^/]+))?$/);
-    if (librarySeatWaitlistPath) {
-      const userId = currentUserId();
-      const taskId = librarySeatWaitlistPath[1] ? decodeURIComponent(librarySeatWaitlistPath[1]) : "";
-      if (req.method === "GET" && !taskId) {
-        json(res, 200, {
-          ok: true,
-          data: (await repository.listLibrarySeatWaitlists(userId)).map(librarySeatWaitlistPublic)
-        });
-        return;
-      }
-      if (req.method === "POST" && !taskId) {
-        const body = await readBodyJson(req);
-        const targets = await librarySeatWaitlistRequestTargets(userId, appSession.platformUserId);
-        const data = await saveLibrarySeatWaitlist(userId, body, null, targets);
-        wakeLibrarySeatWaitlistScheduler("task_changed");
-        logger.info("audit_library_seat_waitlist_created", { actorUserId: userId, taskId: data.id });
-        json(res, 201, { ok: true, data });
-        return;
-      }
-      if (!taskId) {
-        throw new HttpError(400, "座位候补任务标识不正确。", null, "INVALID_LIBRARY_SEAT_WAITLIST_ID");
-      }
-      const existing = await repository.getLibrarySeatWaitlist(userId, taskId);
-      if (!existing) {
-        throw new HttpError(404, "座位候补任务不存在。", null, "LIBRARY_SEAT_WAITLIST_NOT_FOUND");
-      }
-      if (req.method === "PUT") {
-        const body = await readBodyJson(req);
-        const data = await saveLibrarySeatWaitlist(userId, { ...existing, ...body }, existing);
-        wakeLibrarySeatWaitlistScheduler("task_changed");
-        logger.info("audit_library_seat_waitlist_updated", { actorUserId: userId, taskId: data.id, enabled: data.enabled });
-        json(res, 200, { ok: true, data });
-        return;
-      }
-      if (req.method === "DELETE") {
-        await repository.deleteLibrarySeatWaitlist(userId, taskId);
-        wakeLibrarySeatWaitlistScheduler("task_changed");
-        logger.info("audit_library_seat_waitlist_deleted", { actorUserId: userId, taskId });
-        json(res, 200, { ok: true, data: null });
-        return;
-      }
     }
 
     if (url.pathname === "/api/identity-card") {
@@ -8035,82 +7643,31 @@ async function handleApiRoutes(req, res, url) {
       return;
     }
 
-    if (url.pathname === "/api/academic/timetable") {
-      const source = academicTimetableSourceFromSearch(url.searchParams);
-      json(res, 200, { ok: true, data: await withAcademicSessionLock(() => getAcademicTimetable(source)) });
-      return;
-    }
-    if (url.pathname === "/api/academic/integrations" && req.method === "GET") {
-      json(res, 200, { ok: true, data: await academicIntegrationSettings(currentUserId()) });
-      return;
-    }
-    if (url.pathname === "/api/academic/calendar/rotate" && req.method === "POST") {
-      const data = await rotateAcademicCalendarSubscription(currentUserId());
-      logger.info("audit_academic_calendar_rotated", { actorUserId: currentUserId() });
-      json(res, 201, { ok: true, data });
-      return;
-    }
-    if (url.pathname === "/api/academic/calendar" && req.method === "DELETE") {
-      await repository.disableCalendarSubscription(currentUserId(), nowIso());
-      logger.info("audit_academic_calendar_disabled", { actorUserId: currentUserId() });
-      json(res, 200, { ok: true, data: await academicIntegrationSettings(currentUserId()) });
-      return;
-    }
-    if (url.pathname === "/api/academic/reminder" && req.method === "PUT") {
-      const body = await readBodyJson(req);
-      const data = await saveAcademicReminderPreference(currentUserId(), body, appSession.platformUserId);
-      logger.info("audit_academic_reminder_updated", {
-        actorUserId: currentUserId(),
-        enabled: data.enabled,
-        leadMinutes: data.leadMinutes
-      });
-      json(res, 200, { ok: true, data });
-      return;
-    }
-    if (url.pathname === "/api/academic/gpa") {
-      json(res, 200, { ok: true, data: await withAcademicSessionLock(() => getAcademicGpa()) });
-      return;
-    }
-    if (url.pathname === "/api/academic/free-classrooms") {
-      const query = freeClassroomQueryFromSearch(url.searchParams);
-      json(res, 200, { ok: true, data: await withAcademicSessionLock(() => getFreeClassrooms(query)) });
-      return;
-    }
-    if (url.pathname === "/api/academic/evaluations" && req.method === "GET") {
-      json(res, 200, { ok: true, data: await withAcademicSessionLock(() => getAcademicEvaluations()) });
-      return;
-    }
-    if (url.pathname === "/api/academic/evaluations/auto" && req.method === "GET") {
-      json(res, 200, { ok: true, data: academicEvaluationAutoStatus() });
-      return;
-    }
-    if (url.pathname === "/api/academic/evaluations/auto/start" && req.method === "POST") {
-      const body = await readBodyJson(req);
-      const result = startAcademicEvaluationAutoJob(body);
-      logger.info(result.reused ? "audit_academic_evaluation_auto_reused" : "audit_academic_evaluation_auto_started", {
-        actorUserId: currentUserId(),
-        jobId: result.id
-      });
-      json(res, 202, { ok: true, data: result });
-      return;
-    }
-    if (url.pathname === "/api/academic/evaluations/auto/stop" && req.method === "POST") {
-      const result = stopAcademicEvaluationAutoJob();
-      logger.info("audit_academic_evaluation_auto_stop_requested", { actorUserId: currentUserId(), jobId: result.id || null });
-      json(res, 200, { ok: true, data: result });
-      return;
-    }
-    const evaluationMatch = url.pathname.match(/^\/api\/academic\/evaluations\/([^/]+)(?:\/(submit))?$/);
-    if (evaluationMatch && req.method === "GET" && !evaluationMatch[2]) {
-      const lessonId = decodeBoundedPathSegment(evaluationMatch[1], "教学评估课程编号", 100);
-      json(res, 200, { ok: true, data: await withAcademicSessionLock(() => getAcademicEvaluationDraft(lessonId)) });
-      return;
-    }
-    if (evaluationMatch && req.method === "POST" && evaluationMatch[2] === "submit") {
-      const body = await readBodyJson(req);
-      const result = await withAcademicSessionLock(() => submitAcademicEvaluation(body));
-      logger.info("audit_academic_evaluation_submitted", { actorUserId: currentUserId() });
-      json(res, 200, { ok: true, data: result });
+    if (await handleAcademicRoutes(req, res, url, {
+      academicEvaluationAutoStatus,
+      academicIntegrationSettings,
+      academicTimetableSourceFromSearch,
+      currentUserId,
+      decodeBoundedPathSegment,
+      freeClassroomQueryFromSearch,
+      getAcademicEvaluationDraft,
+      getAcademicEvaluations,
+      getAcademicGpa,
+      getAcademicTimetable,
+      getFreeClassrooms,
+      json,
+      logger,
+      nowIso,
+      platformUserId: appSession.platformUserId,
+      readBodyJson,
+      repository,
+      rotateAcademicCalendarSubscription,
+      saveAcademicReminderPreference,
+      startAcademicEvaluationAutoJob,
+      stopAcademicEvaluationAutoJob,
+      submitAcademicEvaluation,
+      withAcademicSessionLock
+    })) {
       return;
     }
 

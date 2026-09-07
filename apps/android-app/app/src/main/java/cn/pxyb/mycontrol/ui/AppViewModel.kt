@@ -32,6 +32,7 @@ import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusReservationAvailability
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusTimetable
+import cn.pxyb.mycontrol.data.CampusWaterBill
 import cn.pxyb.mycontrol.data.CampusWaterValve
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
@@ -1950,22 +1951,59 @@ class AppViewModel(
         }
     }
 
+    fun refreshWaterBill(month: String, force: Boolean = false) {
+        if (!force && mutableState.value.campusWaterBill?.month == month) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(campusWaterBillLoading = true, campusWaterBillError = null) }
+            try {
+                val bill = api.campus.campusWaterBill(month)
+                mutableState.update {
+                    it.copy(
+                        campusWaterBill = bill,
+                        campusWaterBillLoading = false,
+                        campusWaterBillError = bill.error,
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(
+                        campusWaterBillLoading = false,
+                        campusWaterBillError = error.message ?: "生活用水账单加载失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
+
     fun bindWaterValve(rawCode: String) = runWaterValveAction(
         successMessage = "饮水机绑定成功",
         failureMessage = "饮水机绑定失败，请重试。",
         action = { api.campus.bindCampusWaterValve(rawCode) },
     )
 
-    fun openWaterValve() = runWaterValveAction(
+    fun openWaterValve(seqNo: String) = runWaterValveAction(
         successMessage = "饮水机已开启",
         failureMessage = "饮水机开启失败，请重试。",
-        action = api.campus::openCampusWaterValve,
+        action = { api.campus.openCampusWaterValve(seqNo) },
     )
 
-    fun closeWaterValve() = runWaterValveAction(
+    fun closeWaterValve(seqNo: String) = runWaterValveAction(
         successMessage = "饮水机已关闭",
         failureMessage = "饮水机关闭失败，请重试。",
-        action = api.campus::closeCampusWaterValve,
+        action = { api.campus.closeCampusWaterValve(seqNo) },
+    )
+
+    fun unbindWaterValve(seqNo: String) = runWaterValveAction(
+        successMessage = "饮水机绑定已删除",
+        failureMessage = "饮水机绑定删除失败，请重试。",
+        action = { api.campus.unbindCampusWaterValve(seqNo) },
+    )
+
+    fun reorderWaterValves(seqNos: List<String>) = runWaterValveAction(
+        successMessage = "饮水机排序已保存",
+        failureMessage = "饮水机排序保存失败，请重试。",
+        action = { api.campus.reorderCampusWaterValves(seqNos) },
     )
 
     private fun runWaterValveAction(

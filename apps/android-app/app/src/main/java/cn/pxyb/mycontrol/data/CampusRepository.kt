@@ -390,6 +390,28 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         campusWaterValveData(CAMPUS_WATER_VALVE_PATH)
     }
 
+    suspend fun campusWaterBill(month: String): CampusWaterBill = withContext(Dispatchers.IO) {
+        val data = campusData("$CAMPUS_WATER_PATH?mode=month&time=$month")
+        val bill = data.optJSONObject("waterBill")
+        val records = bill?.optJSONArray("data").platformObjects().map { item ->
+            val amount = item.optDouble("monDeal", Double.NaN)
+            CampusWaterBillRecord(
+                title = item.optString("deviceName", item.optString("payTypeName", "生活用水")),
+                amount = if (amount.isFinite()) "¥%.2f".format(amount) else item.displayString("monDeal") ?: "--",
+                time = item.optString("startTime", "--"),
+                detail = item.displayString("waterCount")?.let { "$it L" }
+                    ?: item.displayString("address") ?: "--",
+            )
+        }
+        val total = records.sumOf { it.amount.removePrefix("¥").toDoubleOrNull() ?: 0.0 }
+        CampusWaterBill(
+            month = data.optJSONObject("billQuery")?.nullableString("label") ?: month,
+            totalAmount = "¥%.2f".format(total),
+            records = records,
+            error = bill?.nullableString("error"),
+        )
+    }
+
     suspend fun bindCampusWaterValve(rawCode: String): CampusWaterValve = withContext(Dispatchers.IO) {
         campusWaterValveData(
             CAMPUS_WATER_VALVE_BIND_PATH,
@@ -398,12 +420,36 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         )
     }
 
-    suspend fun openCampusWaterValve(): CampusWaterValve = withContext(Dispatchers.IO) {
-        campusWaterValveData(CAMPUS_WATER_VALVE_OPEN_PATH, method = "POST")
+    suspend fun openCampusWaterValve(seqNo: String): CampusWaterValve = withContext(Dispatchers.IO) {
+        campusWaterValveData(
+            CAMPUS_WATER_VALVE_OPEN_PATH,
+            method = "POST",
+            body = JSONObject().put("seqNo", seqNo),
+        )
     }
 
-    suspend fun closeCampusWaterValve(): CampusWaterValve = withContext(Dispatchers.IO) {
-        campusWaterValveData(CAMPUS_WATER_VALVE_CLOSE_PATH, method = "POST")
+    suspend fun closeCampusWaterValve(seqNo: String): CampusWaterValve = withContext(Dispatchers.IO) {
+        campusWaterValveData(
+            CAMPUS_WATER_VALVE_CLOSE_PATH,
+            method = "POST",
+            body = JSONObject().put("seqNo", seqNo),
+        )
+    }
+
+    suspend fun unbindCampusWaterValve(seqNo: String): CampusWaterValve = withContext(Dispatchers.IO) {
+        campusWaterValveData(
+            CAMPUS_WATER_VALVE_UNBIND_PATH,
+            method = "POST",
+            body = JSONObject().put("seqNo", seqNo),
+        )
+    }
+
+    suspend fun reorderCampusWaterValves(seqNos: List<String>): CampusWaterValve = withContext(Dispatchers.IO) {
+        campusWaterValveData(
+            CAMPUS_WATER_VALVE_REORDER_PATH,
+            method = "POST",
+            body = JSONObject().put("seqNos", JSONArray(seqNos)),
+        )
     }
 
     private suspend fun campusWaterValveData(
@@ -413,8 +459,12 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
     ): CampusWaterValve {
         val envelope = http.execute(path, method = method, body = body).json
         val data = envelope.optJSONObject("data") ?: JSONObject()
+        val devices = data.optJSONArray("devices").platformObjects().map { it.toCampusWaterValveDevice() }
+        val legacyDevice = data.optBoolean("bound")
+            .takeIf { it && devices.isEmpty() }
+            ?.let { data.toCampusWaterValveDevice() }
         return CampusWaterValve(
-            bound = data.optBoolean("bound"),
+            bound = data.optBoolean("bound") || devices.isNotEmpty(),
             seqNo = data.nullableString("seqNo"),
             deviceName = data.nullableString("deviceName"),
             running = data.optBoolean("running"),
@@ -422,8 +472,20 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
             balance = data.nullableString("balance"),
             updatedAt = data.nullableString("updatedAt"),
             error = data.nullableString("error"),
+            devices = devices.ifEmpty { legacyDevice?.let { listOf(it) } ?: emptyList() },
         )
     }
+
+    private fun JSONObject.toCampusWaterValveDevice() = CampusWaterValveDevice(
+        bound = optBoolean("bound", true),
+        seqNo = nullableString("seqNo"),
+        deviceName = nullableString("deviceName"),
+        running = optBoolean("running"),
+        defaultValue = nullableString("defaultValue"),
+        balance = nullableString("balance"),
+        updatedAt = nullableString("updatedAt"),
+        error = nullableString("error"),
+    )
 
     private suspend fun campusEnergy(): CampusEnergy {
         val data = campusData("$CAMPUS_ENERGY_SUMMARY_PATH?time=${YearMonth.now()}")
