@@ -4,6 +4,7 @@ import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.os.Build
 import android.os.CancellationSignal
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import cn.pxyb.mycontrol.AppSessionLifecycle
 import java.util.concurrent.Executor
@@ -50,7 +51,7 @@ internal fun ComponentActivity.promptDeviceAuthentication(
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
                 if (errorCode != BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED && errorCode != BiometricPrompt.BIOMETRIC_ERROR_CANCELED) {
-                    // 身份验证失败由回调处理，不再弹出粗糙的原生 Toast
+                    Toast.makeText(this@promptDeviceAuthentication, errString ?: "身份验证失败", Toast.LENGTH_SHORT).show()
                 }
                 finish(false)
             }

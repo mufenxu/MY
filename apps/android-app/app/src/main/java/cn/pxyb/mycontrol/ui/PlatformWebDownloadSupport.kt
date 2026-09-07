@@ -12,6 +12,7 @@ import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.URLUtil
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.lifecycleScope
@@ -22,7 +23,6 @@ import java.io.File
 
 internal class PlatformWebDownloadSupport(
     private val activity: PlatformWebActivity,
-    private val onFeedback: ((Boolean, String) -> Unit)? = null,
     private val currentWebView: () -> WebView?,
 ) {
     private var pendingLegacyImage: PendingImage? = null
@@ -151,10 +151,7 @@ internal class PlatformWebDownloadSupport(
     }
 
     private fun showToast(message: String) {
-        val isError = "失败" in message || "无法" in message || "不支持" in message
-        if (onFeedback != null) {
-            activity.runOnUiThread { onFeedback.invoke(isError, message) }
-        }
+        Toast.makeText(activity, message, Toast.LENGTH_SHORT).show()
     }
 
     private class ImageDownloadBridge(

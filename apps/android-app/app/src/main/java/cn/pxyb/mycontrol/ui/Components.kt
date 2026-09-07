@@ -1573,77 +1573,7 @@ fun AppConfirmDialog(
     )
 }
 
-/** 导出毛玻璃流光状态模态弹窗相关组件 */
-typealias OperationStatus = cn.pxyb.mycontrol.ui.components.dialog.OperationStatus
-
-@Composable
-fun AppStatusDialog(
-    status: cn.pxyb.mycontrol.ui.components.dialog.OperationStatus,
-    title: String,
-    onDismissRequest: () -> Unit,
-    modifier: Modifier = Modifier,
-    description: String? = null,
-    details: List<Pair<String, String>>? = null,
-    primaryButtonText: String = "我知道了",
-    onPrimaryClick: () -> Unit = onDismissRequest,
-    secondaryButtonText: String? = null,
-    onSecondaryClick: (() -> Unit)? = null,
-    primaryButtonBusy: Boolean = false,
-    autoDismissMillis: Long? = if (status == cn.pxyb.mycontrol.ui.components.dialog.OperationStatus.Success) 3000L else null,
-    content: (@Composable () -> Unit)? = null,
-) = cn.pxyb.mycontrol.ui.components.dialog.AppStatusDialog(
-    status = status,
-    title = title,
-    onDismissRequest = onDismissRequest,
-    modifier = modifier,
-    description = description,
-    details = details,
-    primaryButtonText = primaryButtonText,
-    onPrimaryClick = onPrimaryClick,
-    secondaryButtonText = secondaryButtonText,
-    onSecondaryClick = onSecondaryClick,
-    primaryButtonBusy = primaryButtonBusy,
-    autoDismissMillis = autoDismissMillis,
-    content = content,
-)
-
-@Composable
-fun AppSuccessModalCard(
-    title: String = "操作成功",
-    message: String,
-    onDismiss: () -> Unit,
-    confirmText: String = "我知道了",
-    details: List<Pair<String, String>>? = null,
-    autoDismissMillis: Long? = 3000L,
-) = cn.pxyb.mycontrol.ui.components.dialog.AppSuccessModalCard(
-    title = title,
-    message = message,
-    onDismiss = onDismiss,
-    confirmText = confirmText,
-    details = details,
-    autoDismissMillis = autoDismissMillis,
-)
-
-@Composable
-fun AppErrorModalCard(
-    title: String = "操作未完成",
-    error: String,
-    onDismiss: () -> Unit,
-    onRetry: (() -> Unit)? = null,
-    confirmText: String = if (onRetry != null) "重试" else "我知道了",
-    cancelText: String? = if (onRetry != null) "取消" else null,
-    details: List<Pair<String, String>>? = null,
-) = cn.pxyb.mycontrol.ui.components.dialog.AppErrorModalCard(
-    title = title,
-    error = error,
-    onDismiss = onDismiss,
-    onRetry = onRetry,
-    confirmText = confirmText,
-    cancelText = cancelText,
-    details = details,
-)
-
-/** 顶部悬浮的现代提示 Toast：毛玻璃流光胶囊形态，按成功/失败切换翡翠绿/珊瑚红微光与呼吸图标。 */
+/** 顶部悬浮的现代提示 Toast：浅色模式白卡片 / 深色模式深色卡片，按成功/失败切换图标配色。 */
 @Composable
 fun AppToast(
     message: String,
@@ -1651,50 +1581,46 @@ fun AppToast(
     modifier: Modifier = Modifier,
 ) {
     val dark = isAppInDarkTheme()
-    val accentColor = if (error) cn.pxyb.mycontrol.ui.theme.Coral else cn.pxyb.mycontrol.ui.theme.ForestSoft
-    val cardBg = (if (dark) cn.pxyb.mycontrol.ui.theme.DarkSurface else cn.pxyb.mycontrol.ui.theme.Surface).copy(alpha = 0.94f)
+    val accentColor = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
+    val container = accentColor
+        .copy(alpha = if (dark) 0.1f else 0.035f)
+        .compositeOver(MaterialTheme.colorScheme.surface)
     val contentColor = MaterialTheme.colorScheme.onSurface
-    val border = accentColor.copy(alpha = if (dark) 0.35f else 0.22f)
-    val iconBackground = accentColor.copy(alpha = if (dark) 0.18f else 0.12f)
+    val border = accentColor.copy(alpha = if (dark) 0.3f else 0.16f)
+    val iconBackground = accentColor.copy(alpha = if (dark) 0.18f else 0.1f)
     Surface(
-        modifier = modifier.shadow(
-            elevation = 12.dp,
-            shape = RoundedCornerShape(50),
-            spotColor = accentColor.copy(alpha = if (dark) 0.28f else 0.16f),
-            ambientColor = Color.Transparent,
-        ),
-        shape = RoundedCornerShape(50),
-        color = cardBg,
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        color = container,
         contentColor = contentColor,
         shadowElevation = 0.dp,
         border = BorderStroke(1.dp, border),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(11.dp),
         ) {
             Surface(
                 shape = CircleShape,
                 color = iconBackground,
-                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.4f)),
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(34.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = if (error) Icons.Outlined.ErrorOutline else Icons.Outlined.CheckCircle,
                         contentDescription = null,
                         tint = accentColor,
-                        modifier = Modifier.size(17.dp),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 13.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    lineHeight = 19.sp,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    lineHeight = 20.sp,
                 ),
                 modifier = Modifier.weight(1f),
             )
