@@ -8,10 +8,20 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +30,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -31,10 +42,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material.icons.outlined.Opacity
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.ReceiptLong
@@ -56,14 +69,21 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import cn.pxyb.mycontrol.data.CampusWaterBill
 import cn.pxyb.mycontrol.data.CampusWaterValveDevice
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
@@ -355,20 +375,43 @@ private fun WaterValveDeviceCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(13.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalArrangement = Arrangement.spacedBy(11.dp),
         ) {
+            // 顶部 Header：设备信息 + 状态胶囊 + 现代化磨砂删除按钮
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.DragHandle,
                     contentDescription = "长按拖动排序",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    modifier = Modifier.size(19.dp),
                 )
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (device.running) {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                    },
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Outlined.WaterDrop,
+                            contentDescription = null,
+                            tint = if (device.running) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(17.dp),
+                        )
+                    }
+                }
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(1.dp),
@@ -382,78 +425,140 @@ private fun WaterValveDeviceCard(
                     Text(
                         text = "编号 ${device.seqNo.orEmpty()}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+
+                // 状态指示小胶囊（纯原生样式）
                 Surface(
                     shape = CircleShape,
                     color = if (device.running) {
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f)
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     },
-                    modifier = Modifier.heightIn(min = 27.dp),
-                ) {
-                    Text(
-                        text = if (device.running) "运行中" else "已关闭",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 0.8.dp,
                         color = if (device.running) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         },
+                    ),
+                    modifier = Modifier.heightIn(min = 26.dp),
+                ) {
+                    Row(
                         modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                    )
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(
+                                    color = if (device.running) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                    shape = CircleShape,
+                                ),
+                        )
+                        Text(
+                            text = if (device.running) "出水中" else "待命中",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                            color = if (device.running) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
                 }
+
+                // 现代化微晶磨砂删除按钮（优雅低反差，符合App整体设计）
+                val deleteInteractionSource = remember { MutableInteractionSource() }
+                val isDeletePressed by deleteInteractionSource.collectIsPressedAsState()
                 Surface(
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.48f),
+                    color = if (isDeletePressed) {
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                    },
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 0.8.dp,
+                        color = if (isDeletePressed) {
+                            MaterialTheme.colorScheme.error.copy(alpha = 0.35f)
+                        } else {
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                        },
+                    ),
                     modifier = Modifier
                         .minimumInteractiveComponentSize()
-                        .size(33.dp)
-                        .clickable(enabled = !busy, onClick = onDelete),
+                        .size(31.dp)
+                        .clickable(
+                            interactionSource = deleteInteractionSource,
+                            indication = LocalIndication.current,
+                            enabled = !busy,
+                            onClick = onDelete,
+                        ),
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.DeleteOutline,
-                        contentDescription = "删除绑定",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier
-                            .size(16.dp),
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Outlined.DeleteOutline,
+                            contentDescription = "删除绑定",
+                            tint = if (isDeletePressed) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            },
+                            modifier = Modifier.size(15.dp),
+                        )
+                    }
                 }
             }
 
+            // 主体区域：左右分栏（左侧数据微卡，右侧环形中控仪表罗盘）
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                WaterValveMetric(
-                    label = "钱包余额",
-                    value = device.balance.orEmpty().ifBlank { "--" },
+                // 左侧数据指标列
+                Column(
                     modifier = Modifier.weight(1f),
-                )
-                WaterValveMetric(
-                    label = "默认水量",
-                    value = device.defaultValue.orEmpty().ifBlank { "--" },
-                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    WaterValveMetricTile(
+                        label = "钱包余额",
+                        value = device.balance.orEmpty().ifBlank { "--" },
+                        unit = "元",
+                        icon = Icons.Outlined.AccountBalanceWallet,
+                        running = device.running,
+                    )
+                    WaterValveMetricTile(
+                        label = "单次规格",
+                        value = device.defaultValue.orEmpty().ifBlank { "--" },
+                        unit = "mL",
+                        icon = Icons.Outlined.Opacity,
+                        running = device.running,
+                    )
+                }
+
+                // 右侧环形中控仪表控制大罗盘
+                WaterValveRingDialButton(
+                    running = device.running,
+                    busy = busy,
+                    onToggle = onToggle,
                 )
             }
-
-            WaterValvePowerButton(
-                running = device.running,
-                busy = busy,
-                onToggle = onToggle,
-            )
 
             if (device.error != null) {
                 FeedbackBanner(message = device.error, error = true)
             }
             Text(
                 text = "同步于 ${formatPlatformTime(device.updatedAt)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier.align(Alignment.End),
             )
         }
@@ -461,113 +566,211 @@ private fun WaterValveDeviceCard(
 }
 
 @Composable
-private fun WaterValveMetric(
+private fun WaterValveMetricTile(
     label: String,
     value: String,
+    unit: String,
+    icon: ImageVector,
+    running: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(15.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(13.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (running) 0.38f else 0.26f),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 0.6.dp,
+            color = if (running) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+            },
+        ),
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Surface(
+                shape = CircleShape,
+                color = if (running) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+                } else {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                },
+                modifier = Modifier.size(26.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = if (running) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(1.dp),
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 15.5.sp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (value != "--") {
+                        Text(
+                            text = unit,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            modifier = Modifier.padding(bottom = 1.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun WaterValvePowerButton(
+private fun WaterValveRingDialButton(
     running: Boolean,
     busy: Boolean,
     onToggle: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 53.dp)
-            .clickable(enabled = !busy) { onToggle(!running) },
-        shape = RoundedCornerShape(27.dp),
-        color = if (running) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.88f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.44f)
-        },
-        border = androidx.compose.foundation.BorderStroke(
-            width = 1.dp,
-            color = if (running) {
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.26f)
-            } else {
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.70f)
-            },
+    val haptics = LocalHapticFeedback.current
+    val transition = rememberInfiniteTransition(label = "ringDialTransition")
+    val sweepAngle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
         ),
+        label = "ringSweepAngle",
+    )
+    val pulseAlpha by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1600, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "ringPulseAlpha",
+    )
+
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.tertiary
+    val outlineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
+
+    val dialInteractionSource = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = modifier
+            .size(86.dp)
+            .pressFeedback(dialInteractionSource, pressedScale = 0.94f)
+            .clickable(
+                enabled = !busy,
+                indication = null,
+                interactionSource = dialInteractionSource,
+            ) {
+                AppHaptics.tick(haptics)
+                onToggle(!running)
+            },
+        contentAlignment = Alignment.Center,
     ) {
-        Row(
-            modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    text = if (running) "正在出水" else "阀门已关闭",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = if (running) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
+        // 外圈环形轨道（出水时为旋转跑马灯流光圆环，待机时为细腻发丝轨道）
+        Canvas(modifier = Modifier.size(84.dp)) {
+            val strokeWidth = 2.4.dp.toPx()
+            if (running) {
+                val sweepBrush = Brush.sweepGradient(
+                    colors = listOf(
+                        primaryColor,
+                        secondaryColor,
+                        primaryColor.copy(alpha = 0.1f),
+                        primaryColor,
+                    ),
                 )
-                Text(
-                    text = if (running) "点击结束本次用水" else "点击开启饮水机",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(41.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                if (busy) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                    )
-                } else {
-                    Icon(
-                        imageVector = if (running) Icons.Outlined.Stop else Icons.Outlined.PlayArrow,
-                        contentDescription = if (running) "关闭饮水机" else "开启饮水机",
-                        tint = if (running) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            MaterialTheme.colorScheme.onPrimary
-                        },
-                        modifier = Modifier.size(19.dp),
+                rotate(sweepAngle) {
+                    drawCircle(
+                        brush = sweepBrush,
+                        style = Stroke(width = strokeWidth),
                     )
                 }
+            } else {
+                drawCircle(
+                    color = outlineColor,
+                    style = Stroke(width = 1.2.dp.toPx()),
+                )
             }
+        }
+
+        // 核心圆盘实体
+        Surface(
+            shape = CircleShape,
+            color = if (running) {
+                primaryColor
+            } else {
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
+            },
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = if (running) {
+                    primaryColor.copy(alpha = pulseAlpha)
+                } else {
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                },
+            ),
+            modifier = Modifier.size(70.dp),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                if (busy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.5.dp,
+                        color = if (running) MaterialTheme.colorScheme.onPrimary else primaryColor,
+                    )
+                } else {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            imageVector = if (running) Icons.Outlined.Stop else Icons.Outlined.PlayArrow,
+                            contentDescription = if (running) "停止供水" else "开启供水",
+                            tint = if (running) MaterialTheme.colorScheme.onPrimary else primaryColor,
+                            modifier = Modifier.size(21.dp),
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (running) "停水" else "出水",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                            ),
+                            color = if (running) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
         }
     }
+}
 
 @Composable
 private fun WaterValveBillCard(
