@@ -80,9 +80,11 @@ fun AuthenticatorScreen(
     state: AuthenticatorUiState,
     contentPadding: PaddingValues,
     onBack: () -> Unit,
+    pendingQrUri: String?,
     onAddFromUri: (String) -> Unit,
     onAddManual: (String, String, String) -> Unit,
     onDelete: (String) -> Unit,
+    onPendingQrUriConsumed: () -> Unit,
 ) {
     var scannerOpen by remember { mutableStateOf(false) }
     var manualOpen by remember { mutableStateOf(false) }
@@ -95,6 +97,13 @@ fun AuthenticatorScreen(
                 value = now
                 delay(1000L - now % 1000L)
             }
+        }
+    }
+
+    LaunchedEffect(pendingQrUri) {
+        if (pendingQrUri != null) {
+            onAddFromUri(pendingQrUri)
+            onPendingQrUriConsumed()
         }
     }
 

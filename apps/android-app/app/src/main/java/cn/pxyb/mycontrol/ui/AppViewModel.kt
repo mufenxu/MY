@@ -105,6 +105,8 @@ import javax.net.ssl.HttpsURLConnection
 import java.security.cert.X509Certificate
 
 @OptIn(kotlinx.coroutines.FlowPreview::class)
+enum class QrScanDestination { Login, Authenticator, WaterValve, Unsupported }
+
 class AppViewModel(
     application: Application,
     private val savedStateHandle: SavedStateHandle,
@@ -1547,9 +1549,46 @@ class AppViewModel(
         }
     }
 
-    fun scanQrCode(rawValue: String) {
-        if (mutableState.value.qrLoginBusy || mutableState.value.qrLoginTarget != null) return
-        handleQrLoginUrl(rawValue)
+    fun scanQrCode(rawValue: String): QrScanDestination {
+        if (mutableState.value.qrLoginBusy || mutableState.value.qrLoginTarget != null) {
+            return QrScanDestination.Login
+        }
+        if (parseQrLoginUrl(rawValue) != null) {
+            handleQrLoginUrl(rawValue)
+            return QrScanDestination.Login
+        }
+        if (rawValue.trim().startsWith("otpauth://", ignoreCase = true)) {
+            mutableState.update {
+                it.copy(
+                    qrLoginOpen = false,
+                    pendingAuthenticatorUri = rawValue,
+                    qrLoginBusy = false,
+                    qrLoginTarget = null,
+                    qrLoginError = null,
+                )
+            }
+            return QrScanDestination.Authenticator
+        }
+        if (parseWaterValveSeqNo(rawValue) != null) {
+            mutableState.update {
+                it.copy(
+                    qrLoginOpen = false,
+                    qrLoginBusy = false,
+                    qrLoginTarget = null,
+                    qrLoginError = null,
+                )
+            }
+            bindWaterValve(rawValue)
+            return QrScanDestination.WaterValve
+        }
+        mutableState.update {
+            it.copy(qrLoginOpen = true, qrLoginTarget = null, qrLoginError = "未识别的二维码，请扫描网页登录、验证器或饮水机二维码。")
+        }
+        return QrScanDestination.Unsupported
+    }
+
+    fun consumePendingAuthenticatorUri() {
+        mutableState.update { it.copy(pendingAuthenticatorUri = null) }
     }
 
     fun resetQrScanner() {
@@ -1708,6 +1747,22 @@ class AppViewModel(
             if (!requestId.matches(Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")) || scanToken.length !in 32..128) return null
             requestId to scanToken
         }.getOrNull()
+    }
+
+    private fun parseWaterValveSeqNo(rawCode: String): String? {
+        val value = rawCode.trim()
+        if (value.isEmpty()) return null
+        if (value.startsWith("http://", ignoreCase = true) || value.startsWith("https://", ignoreCase = true)) {
+            return runCatching {
+                val uri = Uri.parse(value)
+                val hashQuery = uri.fragment.orEmpty().substringAfter('?', "")
+                val fragmentUri = Uri.parse("https://local.invalid/?$hashQuery")
+                uri.getQueryParameter("sn") ?: fragmentUri.getQueryParameter("sn")
+            }.getOrNull()?.takeIf { it.length == 12 }
+        }
+        if (value.matches(Regex("^[A-Za-z0-9]{12}$"))) return value
+        val parts = value.split("_")
+        return parts.getOrNull(2)?.takeIf { it.length == 12 }
     }
 
     private fun qrErrorMessage(error: Throwable): String {

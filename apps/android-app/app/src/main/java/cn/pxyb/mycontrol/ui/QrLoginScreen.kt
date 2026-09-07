@@ -134,7 +134,7 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
                 Icon(Icons.Outlined.CenterFocusWeak, contentDescription = null, tint = Color.White, modifier = Modifier.size(42.dp))
                 Text("需要相机权限", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 16.dp))
                 Text(
-                    if (permissionRequested) "相机权限未开启，请重新授权或前往系统设置。" else "授权后即可扫描网页登录二维码",
+                    if (permissionRequested) "相机权限未开启，请重新授权或前往系统设置。" else "授权后即可扫描功能二维码",
                     color = Color.White.copy(alpha = 0.72f),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 6.dp),
@@ -170,7 +170,7 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", tint = Color.White)
                 }
             }
-            Text("扫描网页登录二维码", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(start = 12.dp))
+            Text("扫描功能二维码", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(start = 12.dp))
         }
 
         Surface(
@@ -178,7 +178,7 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
             color = Color.Black.copy(alpha = 0.58f),
         ) {
             Text(
-                "将网页中的二维码放入取景框",
+                "将网页登录、验证器或饮水机二维码放入取景框",
                 color = Color.White,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 24.dp),

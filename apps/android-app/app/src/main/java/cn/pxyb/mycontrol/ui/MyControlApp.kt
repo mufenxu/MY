@@ -1437,18 +1437,6 @@ private fun AuthenticatedShell(
     showInitialSetup: Boolean,
     onInitialSetupComplete: () -> Unit,
 ) {
-    if (state.qrLoginOpen) {
-        val qrLoginState by viewModel.qrLoginState.collectAsStateWithLifecycle()
-        QrLoginScreen(
-            state = qrLoginState,
-            onCodeDetected = viewModel::scanQrCode,
-            onApprove = { viewModel.approveQrLogin(onPasskeyRequest, onBiometricConfirmation) },
-            onReject = viewModel::rejectQrLogin,
-            onRetry = viewModel::resetQrScanner,
-            onClose = viewModel::closeQrLogin,
-        )
-        return
-    }
     var toastVisible by remember { mutableStateOf(false) }
     var toastMessage by remember { mutableStateOf("") }
     var toastError by remember { mutableStateOf(false) }
@@ -1525,6 +1513,25 @@ private fun AuthenticatedShell(
     }
 
     val onRefresh = remember(viewModel) { { viewModel.refreshCurrentTab(true) } }
+
+    if (state.qrLoginOpen) {
+        val qrLoginState by viewModel.qrLoginState.collectAsStateWithLifecycle()
+        QrLoginScreen(
+            state = qrLoginState,
+            onCodeDetected = { rawCode ->
+                when (viewModel.scanQrCode(rawCode)) {
+                    QrScanDestination.Authenticator -> navigateToSubScreen(AppRoute.Authenticator)
+                    QrScanDestination.WaterValve -> navigateToSubScreen(AppRoute.CampusWaterValve)
+                    QrScanDestination.Login, QrScanDestination.Unsupported -> Unit
+                }
+            },
+            onApprove = { viewModel.approveQrLogin(onPasskeyRequest, onBiometricConfirmation) },
+            onReject = viewModel::rejectQrLogin,
+            onRetry = viewModel::resetQrScanner,
+            onClose = viewModel::closeQrLogin,
+        )
+        return
+    }
 
     // 仅响应由外部或 ViewModel 显式打开的非 Tab 二级子界面（如全局搜索、Google 桌面等）
     LaunchedEffect(state.accountManagementOpen, state.googleAccountDeskOpen, state.githubProjectsOpen, state.globalSearchOpen, state.assistantOpen, state.workspaceDestination) {
@@ -1766,9 +1773,11 @@ private fun AuthenticatedShell(
                         state = authenticatorState,
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
+                        pendingQrUri = state.pendingAuthenticatorUri,
                         onAddFromUri = authenticatorViewModel::addFromUri,
                         onAddManual = authenticatorViewModel::addManual,
                         onDelete = authenticatorViewModel::delete,
+                        onPendingQrUriConsumed = viewModel::consumePendingAuthenticatorUri,
                     )
                 }
                 composable(AppRoute.Profile) {
