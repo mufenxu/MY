@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import java.time.YearMonth
 
 import cn.pxyb.mycontrol.util.QrUtils
@@ -571,7 +572,7 @@ private fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit, error: Stri
                     Box(
                         modifier = Modifier
                             .size(6.dp)
-                            .background(Color(0xFF10B981), CircleShape)
+                            .background(ColorTokens.Green.foreground, CircleShape)
                     )
                     Spacer(Modifier.width(6.dp))
                     Icon(
@@ -660,7 +661,7 @@ private fun LoginHeader() {
         Surface(
             modifier = Modifier.size(76.dp),
             shape = RoundedCornerShape(22.dp),
-            color = Color.White,
+            color = MaterialTheme.colorScheme.surface,
             shadowElevation = 4.dp,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
         ) {
@@ -701,7 +702,7 @@ private fun LoginHeader() {
                     Box(
                         modifier = Modifier
                             .size(6.dp)
-                            .background(Color(0xFF10B981), CircleShape)
+                            .background(ColorTokens.Green.foreground, CircleShape)
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
@@ -830,7 +831,7 @@ private fun LoginScreen(
                                                 Icon(
                                                     if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
                                                     contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
-                                                    tint = Color(0xFF94A3B8),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                             }
@@ -987,7 +988,7 @@ private fun LoginScreen(
                                                 Icon(
                                                     if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
                                                     contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
-                                                    tint = Color(0xFF94A3B8),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                             }
@@ -1127,7 +1128,7 @@ private fun PrototypeInputField(
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val containerBgColor = if (isFocused) {
-        Color.White
+        MaterialTheme.colorScheme.surfaceContainerHigh
     } else {
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f)
     }
@@ -2426,7 +2427,7 @@ private fun FloatingAssistantButton(
                     Icon(
                         imageVector = Icons.Outlined.AutoAwesome,
                         contentDescription = "展开 AI 小助手",
-                        tint = Color.White.copy(alpha = 0.95f),
+                        tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.95f),
                         modifier = Modifier.size(13.dp),
                     )
                 }
@@ -2469,7 +2470,7 @@ private fun FloatingAssistantButton(
                     Icon(
                         imageVector = Icons.Outlined.AutoAwesome,
                         contentDescription = "AI 小助手",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(26.dp),
                     )
                 }
@@ -2665,7 +2666,7 @@ private fun AppHeader(tab: MainTab) {
                     Box(
                         Modifier
                             .size(6.dp)
-                            .background(Color(0xFF10B981), CircleShape)
+                            .background(ColorTokens.Green.foreground, CircleShape)
                     )
                     Text(
                         "生产环境 · 智控中心 LIVE",

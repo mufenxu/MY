@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.display.AppListCard
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
@@ -221,8 +222,8 @@ fun NotificationCenterScreen(
                                 icon = Icons.Outlined.DoneAll,
                                 contentDescription = "全部已读",
                                 onClick = onMarkAllRead,
-                                iconTint = Color(0xFF059669),
-                                containerColor = Color(0xFFECFDF5),
+                                iconTint = ColorTokens.Green.foreground,
+                                containerColor = ColorTokens.Green.container,
                             )
                         }
                         if (hasReadAlerts) {
@@ -230,8 +231,8 @@ fun NotificationCenterScreen(
                                 icon = Icons.Outlined.DeleteOutline,
                                 contentDescription = "清理已读",
                                 onClick = onClearRead,
-                                iconTint = Color(0xFFDC2626),
-                                containerColor = Color(0xFFFEF2F2),
+                                iconTint = ColorTokens.Red.foreground,
+                                containerColor = ColorTokens.Red.container,
                             )
                         }
                         AppHeaderIconButton(
@@ -378,8 +379,8 @@ fun NotificationCenterScreen(
                         icon = Icons.Outlined.DoneAll,
                         contentDescription = "全部已读",
                         onClick = onMarkAllRead,
-                        iconTint = Color(0xFF059669),
-                        containerColor = Color(0xFFECFDF5),
+                        iconTint = ColorTokens.Green.foreground,
+                        containerColor = ColorTokens.Green.container,
                     )
                 }
                 if (hasReadAlerts) {
@@ -387,8 +388,8 @@ fun NotificationCenterScreen(
                         icon = Icons.Outlined.DeleteOutline,
                         contentDescription = "清理已读",
                         onClick = onClearRead,
-                        iconTint = Color(0xFFDC2626),
-                        containerColor = Color(0xFFFEF2F2),
+                        iconTint = ColorTokens.Red.foreground,
+                        containerColor = ColorTokens.Red.container,
                     )
                 }
                 AppHeaderIconButton(
@@ -533,7 +534,7 @@ private fun CompactNotificationFilterBar(
             onClick = { onTabSelect("unread") },
             label = "未读",
             count = unreadCount,
-            activeColor = Color(0xFF2563EB),
+            activeColor = ColorTokens.Blue.foreground,
             icon = if (unreadCount > 0) Icons.Outlined.NotificationsActive else null,
         )
         if (incidentCount > 0) {
@@ -542,7 +543,7 @@ private fun CompactNotificationFilterBar(
                 onClick = { onTabSelect("incident") },
                 label = "告警",
                 count = incidentCount,
-                activeColor = Color(0xFFDC2626),
+                activeColor = ColorTokens.Red.foreground,
                 icon = Icons.Outlined.Warning,
             )
         }
@@ -552,7 +553,7 @@ private fun CompactNotificationFilterBar(
                 onClick = { onTabSelect("task") },
                 label = "任务",
                 count = taskCount,
-                activeColor = Color(0xFFD97706),
+                activeColor = ColorTokens.Amber.foreground,
                 icon = Icons.Outlined.Assignment,
             )
         }
@@ -562,7 +563,7 @@ private fun CompactNotificationFilterBar(
                 onClick = { onTabSelect("iot") },
                 label = "设备",
                 count = iotCount,
-                activeColor = Color(0xFF059669),
+                activeColor = ColorTokens.Green.foreground,
                 icon = Icons.Outlined.Devices,
             )
         }
@@ -572,7 +573,7 @@ private fun CompactNotificationFilterBar(
                 onClick = { onTabSelect("security") },
                 label = "安全",
                 count = securityCount,
-                activeColor = Color(0xFF7C3AED),
+                activeColor = ColorTokens.Purple.foreground,
                 icon = Icons.Outlined.Security,
             )
         }
@@ -582,7 +583,7 @@ private fun CompactNotificationFilterBar(
                 onClick = { onTabSelect("snoozed") },
                 label = "稍后",
                 count = snoozedCount,
-                activeColor = Color(0xFF64748B),
+                activeColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 icon = Icons.Outlined.AccessTime,
             )
         }
@@ -642,7 +643,7 @@ private fun ModernNotificationFilterPill(
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp,
                         ),
-                        color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
                     )
                 }
@@ -658,11 +659,11 @@ private fun NotificationDetailPane(
     modifier: Modifier = Modifier,
 ) {
     val (categoryLabel, categoryBg, categoryFg) = when {
-        alert.priority == "urgent" || alert.priority == "high" || alert.type == "incident" -> Triple("高危告警", Color(0xFFFEE2E2), Color(0xFF991B1B))
-        alert.type == "task" -> Triple("任务待办", Color(0xFFFEF3C7), Color(0xFF92400E))
-        alert.type == "iot" -> Triple("IoT设备", Color(0xFFD1FAE5), Color(0xFF065F46))
-        alert.type == "security" -> Triple("安全提醒", Color(0xFFEDE9FE), Color(0xFF5B21B6))
-        else -> Triple("系统通知", Color(0xFFDBEAFE), Color(0xFF1E40AF))
+        alert.priority == "urgent" || alert.priority == "high" || alert.type == "incident" -> Triple("高危告警", ColorTokens.Red.container, ColorTokens.Red.foreground)
+        alert.type == "task" -> Triple("任务待办", ColorTokens.Amber.container, ColorTokens.Amber.foreground)
+        alert.type == "iot" -> Triple("IoT设备", ColorTokens.Green.container, ColorTokens.Green.foreground)
+        alert.type == "security" -> Triple("安全提醒", ColorTokens.Purple.container, ColorTokens.Purple.foreground)
+        else -> Triple("系统通知", ColorTokens.Blue.container, ColorTokens.Blue.foreground)
     }
 
     Surface(
@@ -750,11 +751,11 @@ private fun NotificationDetailDialog(
     onAction: (AppNotificationAction) -> Unit,
 ) {
     val (categoryLabel, _, _) = when {
-        alert.priority == "urgent" || alert.priority == "high" || alert.type == "incident" -> Triple("高危告警", Color(0xFFFEE2E2), Color(0xFF991B1B))
-        alert.type == "task" -> Triple("任务待办", Color(0xFFFEF3C7), Color(0xFF92400E))
-        alert.type == "iot" -> Triple("IoT设备", Color(0xFFD1FAE5), Color(0xFF065F46))
-        alert.type == "security" -> Triple("安全提醒", Color(0xFFEDE9FE), Color(0xFF5B21B6))
-        else -> Triple("系统通知", Color(0xFFDBEAFE), Color(0xFF1E40AF))
+        alert.priority == "urgent" || alert.priority == "high" || alert.type == "incident" -> Triple("高危告警", ColorTokens.Red.container, ColorTokens.Red.foreground)
+        alert.type == "task" -> Triple("任务待办", ColorTokens.Amber.container, ColorTokens.Amber.foreground)
+        alert.type == "iot" -> Triple("IoT设备", ColorTokens.Green.container, ColorTokens.Green.foreground)
+        alert.type == "security" -> Triple("安全提醒", ColorTokens.Purple.container, ColorTokens.Purple.foreground)
+        else -> Triple("系统通知", ColorTokens.Blue.container, ColorTokens.Blue.foreground)
     }
 
     AppDialog(
@@ -999,45 +1000,52 @@ internal fun NotificationCard(
     val isIot = alert.type == "iot"
     val isSecurity = alert.type == "security"
 
-    val (categoryLabel, categoryBg, categoryFg, categoryBorder, icon, gradientBrush) = remember(isUrgent, isTask, isIot, isSecurity) {
+    val categoryColors = when {
+        isUrgent -> ColorTokens.Red
+        isTask -> ColorTokens.Amber
+        isIot -> ColorTokens.Green
+        isSecurity -> ColorTokens.Purple
+        else -> ColorTokens.Blue
+    }
+    val (categoryLabel, categoryBg, categoryFg, categoryBorder, icon, gradientBrush) = remember(isUrgent, isTask, isIot, isSecurity, categoryColors) {
         when {
             isUrgent -> Hexa(
                 "告警",
-                Color(0xFFFEF2F2),
-                Color(0xFFDC2626),
-                Color(0xFFFECACA),
+                categoryColors.container,
+                categoryColors.foreground,
+                categoryColors.border,
                 Icons.Outlined.Warning,
                 Brush.linearGradient(listOf(Color(0xFFEF4444), Color(0xFFDC2626))),
             )
             isTask -> Hexa(
                 "任务",
-                Color(0xFFFFFBEB),
-                Color(0xFFD97706),
-                Color(0xFFFDE68A),
+                categoryColors.container,
+                categoryColors.foreground,
+                categoryColors.border,
                 Icons.Outlined.Assignment,
                 Brush.linearGradient(listOf(Color(0xFFF59E0B), Color(0xFFD97706))),
             )
             isIot -> Hexa(
                 "设备",
-                Color(0xFFECFDF5),
-                Color(0xFF059669),
-                Color(0xFFA7F3D0),
+                categoryColors.container,
+                categoryColors.foreground,
+                categoryColors.border,
                 Icons.Outlined.Devices,
                 Brush.linearGradient(listOf(Color(0xFF10B981), Color(0xFF059669))),
             )
             isSecurity -> Hexa(
                 "安全",
-                Color(0xFFF5F3FF),
-                Color(0xFF7C3AED),
-                Color(0xFFDDD6FE),
+                categoryColors.container,
+                categoryColors.foreground,
+                categoryColors.border,
                 Icons.Outlined.Security,
                 Brush.linearGradient(listOf(Color(0xFF8B5CF6), Color(0xFF7C3AED))),
             )
             else -> Hexa(
                 "通知",
-                Color(0xFFEFF6FF),
-                Color(0xFF2563EB),
-                Color(0xFFBFDBFE),
+                categoryColors.container,
+                categoryColors.foreground,
+                categoryColors.border,
                 Icons.Outlined.Notifications,
                 Brush.linearGradient(listOf(Color(0xFF3B82F6), Color(0xFF2563EB))),
             )
@@ -1092,7 +1100,7 @@ internal fun NotificationCard(
             border = BorderStroke(
                 if (selected) 1.5.dp else if (!alert.read && isUrgent) 1.2.dp else 0.6.dp,
                 if (selected) MaterialTheme.colorScheme.primary
-                else if (!alert.read && isUrgent) Color(0xFFF87171)
+                else if (!alert.read && isUrgent) ColorTokens.Red.foreground
                 else if (!alert.read) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
                 else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
             ),
@@ -1166,7 +1174,7 @@ internal fun NotificationCard(
                                 Box(
                                     modifier = Modifier
                                         .size(7.dp)
-                                        .background(Color(0xFF2563EB), CircleShape),
+                                        .background(ColorTokens.Blue.foreground, CircleShape),
                                 )
                             }
                         }
@@ -1249,8 +1257,8 @@ internal fun NotificationCard(
                                     .clip(RoundedCornerShape(12.dp))
                                     .clickable { onMarkRead(alert.id) },
                                 shape = RoundedCornerShape(12.dp),
-                                color = Color(0xFFEFF6FF),
-                                border = BorderStroke(0.6.dp, Color(0xFFBFDBFE)),
+                                color = ColorTokens.Blue.container,
+                                border = BorderStroke(0.6.dp, ColorTokens.Blue.border),
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -1261,7 +1269,7 @@ internal fun NotificationCard(
                                         Icons.Outlined.MarkEmailRead,
                                         contentDescription = null,
                                         modifier = Modifier.size(13.dp),
-                                        tint = Color(0xFF2563EB),
+                                        tint = ColorTokens.Blue.foreground,
                                     )
                                     Text(
                                         "设已读",
@@ -1269,7 +1277,7 @@ internal fun NotificationCard(
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 11.5.sp,
                                         ),
-                                        color = Color(0xFF2563EB),
+                                        color = ColorTokens.Blue.foreground,
                                     )
                                 }
                             }
@@ -1280,8 +1288,8 @@ internal fun NotificationCard(
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable { onSnooze(alert.id) },
                             shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFFF1F5F9),
-                            border = BorderStroke(0.6.dp, Color(0xFFE2E8F0)),
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -1292,7 +1300,7 @@ internal fun NotificationCard(
                                     Icons.Outlined.AccessTime,
                                     contentDescription = null,
                                     modifier = Modifier.size(13.dp),
-                                    tint = Color(0xFF475569),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Text(
                                     "稍后",
@@ -1300,7 +1308,7 @@ internal fun NotificationCard(
                                         fontWeight = FontWeight.Medium,
                                         fontSize = 11.5.sp,
                                     ),
-                                    color = Color(0xFF475569),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }

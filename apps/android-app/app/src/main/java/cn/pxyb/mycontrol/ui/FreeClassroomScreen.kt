@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -431,7 +432,7 @@ private fun FreeClassroomBuildingHeader(building: CampusFreeClassroomBuilding) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            IconTile(Icons.Outlined.Apartment, Color(0xFF047857), Color(0xFFD1FAE5))
+            IconTile(Icons.Outlined.Apartment, ColorTokens.Green.foreground, ColorTokens.Green.container)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     building.name.ifBlank { "教学楼" },
@@ -450,7 +451,7 @@ private fun FreeClassroomBuildingHeader(building: CampusFreeClassroomBuilding) {
                 Text(
                     "${building.roomCount} 间",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = Color(0xFF047857),
+                    color = ColorTokens.Green.foreground,
                 )
                 Text(
                     "${building.seats} 座",

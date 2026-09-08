@@ -1,9 +1,11 @@
 package cn.pxyb.mycontrol.ui.theme
 
 import android.app.Activity
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -20,65 +22,76 @@ private val LightColors = lightColorScheme(
     onPrimary = Surface,
     primaryContainer = OceanPale,
     onPrimaryContainer = Ink,
-    secondary = BrandGreen,
+    secondary = ColorTokens.GreenLight.foreground,
     onSecondary = Surface,
-    secondaryContainer = MintPale,
-    onSecondaryContainer = Forest,
-    tertiary = BrandAccent,
-    onTertiary = AccentInk,
-    tertiaryContainer = AmberPale,
-    onTertiaryContainer = Ink,
-    error = Coral,
-    errorContainer = CoralPale,
-    onErrorContainer = Ink,
+    secondaryContainer = ColorTokens.GreenLight.container,
+    onSecondaryContainer = ColorTokens.GreenLight.foreground,
+    tertiary = ColorTokens.AmberLight.foreground,
+    onTertiary = Surface,
+    tertiaryContainer = ColorTokens.AmberLight.container,
+    onTertiaryContainer = ColorTokens.AmberLight.foreground,
+    error = ColorTokens.RedLight.foreground,
+    onError = Surface,
+    errorContainer = ColorTokens.RedLight.container,
+    onErrorContainer = ColorTokens.RedLight.foreground,
     background = Canvas,
     onBackground = Ink,
     surface = Surface,
     onSurface = Ink,
     surfaceVariant = ColorTokens.SurfaceSubtle,
     onSurfaceVariant = InkMuted,
-    outline = Border,
+    outline = ColorTokens.OutlineLight,
     outlineVariant = ColorTokens.OutlineVariantLight,
+    surfaceTint = BrandBlue,
+    inverseSurface = DarkSurface,
+    inverseOnSurface = DarkText,
+    inversePrimary = ColorTokens.BlueDark.foreground,
+    surfaceDim = ColorTokens.SurfaceDim,
+    surfaceBright = Surface,
+    surfaceContainerLowest = Surface,
+    surfaceContainerLow = ColorTokens.SurfaceContainerLow,
+    surfaceContainer = ColorTokens.SurfaceContainer,
+    surfaceContainerHigh = ColorTokens.SurfaceContainerHigh,
+    surfaceContainerHighest = ColorTokens.SurfaceContainerHighest,
 )
 
 private val DarkColors = darkColorScheme(
-    primary = BrandCyan,
+    primary = ColorTokens.BlueDark.foreground,
     onPrimary = DarkCanvas,
-    primaryContainer = ColorTokens.BlueContainerDark,
-    onPrimaryContainer = DarkText,
-    secondary = ColorTokens.GreenDark,
+    primaryContainer = ColorTokens.BlueDark.container,
+    onPrimaryContainer = ColorTokens.BlueDark.foreground,
+    secondary = ColorTokens.GreenDark.foreground,
     onSecondary = DarkCanvas,
-    secondaryContainer = ColorTokens.GreenContainerDark,
-    onSecondaryContainer = DarkText,
-    tertiary = ColorTokens.AmberDark,
+    secondaryContainer = ColorTokens.GreenDark.container,
+    onSecondaryContainer = ColorTokens.GreenDark.foreground,
+    tertiary = ColorTokens.AmberDark.foreground,
     onTertiary = DarkCanvas,
-    tertiaryContainer = ColorTokens.AmberContainerDark,
-    onTertiaryContainer = DarkText,
-    error = ColorTokens.CoralDark,
-    errorContainer = ColorTokens.CoralContainerDark,
-    onErrorContainer = DarkText,
+    tertiaryContainer = ColorTokens.AmberDark.container,
+    onTertiaryContainer = ColorTokens.AmberDark.foreground,
+    error = ColorTokens.RedDark.foreground,
+    onError = DarkCanvas,
+    errorContainer = ColorTokens.RedDark.container,
+    onErrorContainer = ColorTokens.RedDark.foreground,
     background = DarkCanvas,
     onBackground = DarkText,
     surface = DarkSurface,
     onSurface = DarkText,
     surfaceVariant = DarkSurfaceRaised,
     onSurfaceVariant = DarkMuted,
-    outline = DarkBorder,
+    outline = ColorTokens.OutlineDark,
     outlineVariant = ColorTokens.OutlineVariantDark,
+    surfaceTint = ColorTokens.BlueDark.foreground,
+    inverseSurface = ColorTokens.SurfaceContainerHighest,
+    inverseOnSurface = Ink,
+    inversePrimary = BrandBlue,
+    surfaceDim = DarkCanvas,
+    surfaceBright = DarkSurfaceRaised,
+    surfaceContainerLowest = ColorTokens.DarkSurfaceLowest,
+    surfaceContainerLow = ColorTokens.DarkSurfaceLow,
+    surfaceContainer = DarkSurface,
+    surfaceContainerHigh = ColorTokens.DarkSurfaceHigh,
+    surfaceContainerHighest = DarkSurfaceRaised,
 )
-
-object ColorTokens {
-    val SurfaceSubtle = androidx.compose.ui.graphics.Color(0xFFF1F5F9)
-    val OutlineVariantLight = androidx.compose.ui.graphics.Color(0xFFE2E8F0)
-    val OutlineVariantDark = androidx.compose.ui.graphics.Color(0xFF334155)
-    val BlueContainerDark = androidx.compose.ui.graphics.Color(0xFF1E3A8A)
-    val GreenContainerDark = androidx.compose.ui.graphics.Color(0xFF065F46)
-    val AmberContainerDark = androidx.compose.ui.graphics.Color(0xFF78350F)
-    val GreenDark = androidx.compose.ui.graphics.Color(0xFF34D399)
-    val AmberDark = androidx.compose.ui.graphics.Color(0xFFFBBF24)
-    val CoralDark = androidx.compose.ui.graphics.Color(0xFFF87171)
-    val CoralContainerDark = androidx.compose.ui.graphics.Color(0xFF7F1D1D)
-}
 
 private val LocalAppDarkTheme = staticCompositionLocalOf { false }
 
@@ -96,7 +109,8 @@ fun MYControlTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colors.background.toArgb()
+            window.setBackgroundDrawable(ColorDrawable(colors.background.toArgb()))
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
             window.navigationBarColor = android.graphics.Color.TRANSPARENT
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 window.isStatusBarContrastEnforced = false
@@ -108,7 +122,10 @@ fun MYControlTheme(
             }
         }
     }
-    CompositionLocalProvider(LocalAppDarkTheme provides darkTheme) {
+    CompositionLocalProvider(
+        LocalAppDarkTheme provides darkTheme,
+        LocalContentColor provides colors.onBackground,
+    ) {
         MaterialTheme(
             colorScheme = colors,
             typography = AppTypography,

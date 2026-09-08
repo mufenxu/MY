@@ -3,7 +3,6 @@ package cn.pxyb.mycontrol.ui.components.input
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,7 +26,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -65,7 +63,6 @@ fun AppTextField(
     keyboardOptions: KeyboardOptions = if (isPassword) KeyboardOptions(keyboardType = KeyboardType.Password) else KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
-    val dark = isAppInDarkTheme()
     var passwordVisible by remember { mutableStateOf(false) }
     val isError = !errorMessage.isNullOrBlank()
 
@@ -92,7 +89,7 @@ fun AppTextField(
                     Text(
                         text = it,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             },
@@ -141,13 +138,14 @@ fun AppTextField(
             isError = isError,
             shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = if (dark) Color.White.copy(alpha = 0.07f) else Color(0xFFF8FAFC),
-                unfocusedContainerColor = if (dark) Color.White.copy(alpha = 0.04f) else Color(0xFFF8FAFC),
-                disabledContainerColor = if (dark) Color.White.copy(alpha = 0.02f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-                unfocusedBorderColor = if (dark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0),
-                disabledBorderColor = if (dark) Color.White.copy(alpha = 0.06f) else Color(0xFFE2E8F0).copy(alpha = 0.5f),
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
                 errorBorderColor = MaterialTheme.colorScheme.error,
+                errorContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 focusedLabelColor = MaterialTheme.colorScheme.primary,
                 unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 cursorColor = MaterialTheme.colorScheme.primary,

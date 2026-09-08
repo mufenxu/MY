@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
@@ -59,9 +60,6 @@ import coil.compose.SubcomposeAsyncImageContent
 import cn.pxyb.mycontrol.data.GitHubProfileRecord
 import cn.pxyb.mycontrol.data.GitHubReleaseRecord
 import cn.pxyb.mycontrol.data.GitHubRepositoryRecord
-import cn.pxyb.mycontrol.ui.theme.Amber
-import cn.pxyb.mycontrol.ui.theme.Ocean
-import cn.pxyb.mycontrol.ui.theme.OceanPale
 
 @Composable
 fun GitHubProjectsScreen(
@@ -360,7 +358,7 @@ private fun GitHubRepositoryCard(
                         onToggleVisibility(if (checked) "public" else "private")
                     },
                     enabled = enabled && !isInternal,
-                    tint = Ocean,
+                    tint = ColorTokens.Blue.foreground,
                 )
             }
             Spacer(modifier = Modifier.height(10.dp))
@@ -402,7 +400,7 @@ private fun GitHubRepositoryCard(
                     if (repository.starCount > 0) {
                         GitHubMetricItem(
                             icon = Icons.Filled.Star,
-                            tint = Amber,
+                            tint = ColorTokens.Amber.foreground,
                             text = repository.starCount.toString(),
                         )
                     }
@@ -615,13 +613,13 @@ private fun GitHubInitialAvatar(name: String, size: Dp) {
         modifier = Modifier
             .size(size)
             .clip(CircleShape)
-            .background(OceanPale),
+            .background(ColorTokens.Blue.container),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = name.take(1).uppercase(),
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            color = Ocean,
+            color = ColorTokens.Blue.foreground,
         )
     }
 }

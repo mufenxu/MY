@@ -7,6 +7,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
+import android.view.ContextThemeWrapper
 import android.view.ViewGroup
 import android.view.View
 import android.view.WindowManager
@@ -50,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
@@ -66,6 +69,7 @@ import kotlinx.coroutines.Job
 import cn.pxyb.mycontrol.data.ExternalApplicationAutoLogin
 import cn.pxyb.mycontrol.data.PlatformWebCookie
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -389,6 +393,8 @@ private fun PlatformWebScreen(
     var loadProgress by remember { mutableFloatStateOf(0f) }
     var canGoBack by remember { mutableStateOf(false) }
     var restoredInitialHash by remember { mutableStateOf(false) }
+    val dark = isAppInDarkTheme()
+    val webBackground = MaterialTheme.colorScheme.background.toArgb()
 
     BackHandler {
         if (webView?.canGoBack() == true) {
@@ -413,7 +419,13 @@ private fun PlatformWebScreen(
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { context ->
-                    WebView(context).apply {
+                    val webContext = ContextThemeWrapper(
+                        context,
+                        if (dark) android.R.style.Theme_Material_NoActionBar
+                        else android.R.style.Theme_Material_Light_NoActionBar,
+                    )
+                    WebView(webContext).apply {
+                        setBackgroundColor(webBackground)
                         layoutParams = ViewGroup.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -445,6 +457,12 @@ private fun PlatformWebScreen(
                             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                             cacheMode = WebSettings.LOAD_DEFAULT
                             defaultTextEncodingName = "UTF-8"
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                isAlgorithmicDarkeningAllowed = dark
+                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                @Suppress("DEPRECATION")
+                                setForceDark(if (dark) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF)
+                            }
                         }
 
                         if (BuildConfig.DEBUG) {

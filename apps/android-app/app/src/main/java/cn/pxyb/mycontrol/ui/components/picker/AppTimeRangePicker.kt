@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.components.picker
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -129,8 +130,8 @@ fun AppTimeRangePicker(
                 val hours = durationMin / 60
                 val mins = durationMin % 60
                 val durationText = "${if (hours > 0) "${hours}小时" else ""}${if (mins > 0) "${mins}分钟" else ""}"
-                val statusColor = if (isDurationValid) Color(0xFF15803D) else MaterialTheme.colorScheme.error
-                val statusBg = if (isDurationValid) Color(0xFFDCFCE7).copy(alpha = 0.55f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+                val statusColor = if (isDurationValid) ColorTokens.Green.foreground else MaterialTheme.colorScheme.error
+                val statusBg = if (isDurationValid) ColorTokens.Green.container.copy(alpha = 0.55f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
                 val ruleText = when {
                     minDurationMinutes != null && maxDurationMinutes != null ->
                         "需${minDurationMinutes / 60}~${maxDurationMinutes / 60}小时"

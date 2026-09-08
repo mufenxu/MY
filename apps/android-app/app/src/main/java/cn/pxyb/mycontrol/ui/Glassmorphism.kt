@@ -48,7 +48,7 @@ fun rememberGlassPalette(radius: Dp = 20.dp): GlassPalette {
     return remember(dark, surface, radius) {
         val highlightColor = if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.2f)
         GlassPalette(
-            base = surface.copy(alpha = if (dark) 0.5f else 0.35f),
+            base = surface.copy(alpha = if (dark) 0.76f else 0.72f),
             highlight = Brush.verticalGradient(
                 colorStops = arrayOf(
                     0.0f to highlightColor,
@@ -66,7 +66,7 @@ fun rememberGlassPalette(radius: Dp = 20.dp): GlassPalette {
 @Composable
 fun glassCardColor(): Color {
     val dark = isAppInDarkTheme()
-    return MaterialTheme.colorScheme.surface.copy(alpha = if (dark) 0.5f else 0.55f)
+    return MaterialTheme.colorScheme.surface.copy(alpha = if (dark) 0.76f else 0.82f)
 }
 
 /** 将组件渲染为毛玻璃面板：半透明底色 + 顶部高光 + 发丝描边 */
@@ -77,7 +77,7 @@ fun Modifier.glassPanel(palette: GlassPalette): Modifier = this
 
 /** 页面底层极光光斑背景（固定不随内容滚动），为玻璃面板提供可透出的色彩。已采用 drawWithCache 缓存渐变着色器避免滚动掉帧 */
 fun Modifier.auroraBackdrop(dark: Boolean): Modifier = this.drawWithCache {
-    val blobAlpha = if (dark) 0.30f else 0.26f
+    val blobAlpha = if (dark) 0.18f else 0.20f
     val c1 = if (dark) Color(0xFF3B82F6) else Color(0xFF60A5FA)
     val c2 = if (dark) Color(0xFF8B5CF6) else Color(0xFFA78BFA)
     val c3 = if (dark) Color(0xFF14B8A6) else Color(0xFF5EEAD4)
@@ -102,7 +102,7 @@ fun Modifier.auroraBackdrop(dark: Boolean): Modifier = this.drawWithCache {
 }
 
 fun DrawScope.drawAurora(dark: Boolean) {
-    val blobAlpha = if (dark) 0.30f else 0.26f
+    val blobAlpha = if (dark) 0.18f else 0.20f
     drawAuroraBlob(
         color = if (dark) Color(0xFF3B82F6) else Color(0xFF60A5FA),
         alpha = blobAlpha,

@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
 
@@ -637,21 +638,21 @@ private fun DeskStatsDashboard(
         DeskStatCard(
             label = "别名",
             count = aliasesCount,
-            accentColor = Color(0xFF6366F1),
+            accentColor = ColorTokens.Indigo.foreground,
             icon = Icons.Outlined.AlternateEmail,
             modifier = Modifier.weight(1f),
         )
         DeskStatCard(
             label = "已注册",
             count = registeredCount,
-            accentColor = Color(0xFF059669),
+            accentColor = ColorTokens.Green.foreground,
             icon = Icons.Outlined.CheckCircle,
             modifier = Modifier.weight(1f),
         )
         DeskStatCard(
             label = "待处理",
             count = pendingCount,
-            accentColor = Color(0xFFD97706),
+            accentColor = ColorTokens.Amber.foreground,
             icon = Icons.Outlined.Schedule,
             modifier = Modifier.weight(1f),
         )

@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.picker.AppDatePickerModal
 
@@ -721,8 +722,8 @@ private fun SingleReservationPanel(
                                             onClearFeedback()
                                         },
                                         shape = RoundedCornerShape(6.dp),
-                                        color = if (isPicked) Color(0xFFDCFCE7).copy(alpha = 0.55f) else Color(0xFFF0FDF4).copy(alpha = 0.55f),
-                                        border = BorderStroke(1.dp, if (isPicked) Color(0xFF16A34A) else Color(0xFFBBF7D0)),
+                                        color = if (isPicked) ColorTokens.Green.container.copy(alpha = 0.55f) else ColorTokens.Green.container.copy(alpha = 0.55f),
+                                        border = BorderStroke(1.dp, if (isPicked) ColorTokens.Green.foreground else ColorTokens.Green.border),
                                     ) {
                                         Row(
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
@@ -732,14 +733,14 @@ private fun SingleReservationPanel(
                                             Icon(
                                                 Icons.Outlined.CheckCircle,
                                                 contentDescription = null,
-                                                tint = Color(0xFF15803D),
+                                                tint = ColorTokens.Green.foreground,
                                                 modifier = Modifier.size(13.dp),
                                             )
                                             Text(
                                                 text = "${win.start} - ${win.end}",
                                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF15803D),
+                                                color = ColorTokens.Green.foreground,
                                             )
                                         }
                                     }
@@ -1139,10 +1140,10 @@ private fun AvailableSpacesByTimeBlock(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(10.dp),
-        color = if (availableSpaces.isNotEmpty()) Color(0xFFF0FDF4) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        color = if (availableSpaces.isNotEmpty()) ColorTokens.Green.container else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
         border = BorderStroke(
             1.dp,
-            if (availableSpaces.isNotEmpty()) Color(0xFF86EFAC) else MaterialTheme.colorScheme.outlineVariant,
+            if (availableSpaces.isNotEmpty()) ColorTokens.Green.border else MaterialTheme.colorScheme.outlineVariant,
         ),
     ) {
         Column(
@@ -1161,21 +1162,21 @@ private fun AvailableSpacesByTimeBlock(
                     Icon(
                         if (availableSpaces.isNotEmpty()) Icons.Outlined.CheckCircle else Icons.Outlined.Info,
                         contentDescription = null,
-                        tint = if (availableSpaces.isNotEmpty()) Color(0xFF16803B) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (availableSpaces.isNotEmpty()) ColorTokens.Green.foreground else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp),
                     )
                     Text(
                         text = if (availableSpaces.isNotEmpty()) "在该时段找到 ${availableSpaces.size} 间空闲学习间" else "该时段暂无空闲学习间",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (availableSpaces.isNotEmpty()) Color(0xFF16803B) else MaterialTheme.colorScheme.onSurface,
+                        color = if (availableSpaces.isNotEmpty()) ColorTokens.Green.foreground else MaterialTheme.colorScheme.onSurface,
                     )
                 }
                 if (availableSpaces.isNotEmpty()) {
                     Text(
                         text = "点击可直接选中",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF15803D),
+                        color = ColorTokens.Green.foreground,
                         fontWeight = FontWeight.Medium,
                     )
                 }
@@ -1193,10 +1194,10 @@ private fun AvailableSpacesByTimeBlock(
                             onClick = { onSelectSpace(space) },
                             shape = RoundedCornerShape(8.dp),
                             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                            contentColor = if (isSelected) Color.White else Color(0xFF1E293B),
+                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                             border = BorderStroke(
                                 1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFFBBF7D0),
+                                if (isSelected) MaterialTheme.colorScheme.primary else ColorTokens.Green.border,
                             ),
                             shadowElevation = 0.dp,
                         ) {
@@ -1208,7 +1209,7 @@ private fun AvailableSpacesByTimeBlock(
                                 Icon(
                                     imageVector = if (isSelected) Icons.Outlined.CheckCircle else Icons.Outlined.MeetingRoom,
                                     contentDescription = null,
-                                    tint = if (isSelected) Color.White else Color(0xFF059669),
+                                    tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else ColorTokens.Green.foreground,
                                     modifier = Modifier.size(14.dp),
                                 )
                                 Text(
@@ -1452,13 +1453,13 @@ private fun ReservationCard(
 
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFFDCFCE7).copy(alpha = 0.6f),
-                    border = BorderStroke(1.dp, Color(0xFF86EFAC)),
+                    color = ColorTokens.Green.container.copy(alpha = 0.6f),
+                    border = BorderStroke(1.dp, ColorTokens.Green.border),
                 ) {
                     Text(
                         text = reservation.statusText,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                        color = Color(0xFF15803D),
+                        color = ColorTokens.Green.foreground,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                     )
@@ -1738,9 +1739,9 @@ private fun AutoTaskCard(
 ) {
     val spaceMap = remember(spaces) { spaces.associateBy({ it.id }, { it.name }) }
     val badge = when {
-        task.enabled -> "待执行" to Color(0xFF16803B)
-        task.lastStatus == "succeeded" -> "已完成" to Color(0xFF2563EB)
-        !task.lastStatus.isNullOrBlank() -> "已结束" to Color(0xFFD97706)
+        task.enabled -> "待执行" to ColorTokens.Green.foreground
+        task.lastStatus == "succeeded" -> "已完成" to ColorTokens.Blue.foreground
+        !task.lastStatus.isNullOrBlank() -> "已结束" to ColorTokens.Amber.foreground
         else -> "已停用" to MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -1893,13 +1894,13 @@ private fun AutoTaskCard(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(6.dp),
-                color = if (task.lastStatus == "succeeded") Color(0xFF16803B).copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                color = if (task.lastStatus == "succeeded") ColorTokens.Green.foreground.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
             ) {
                 Text(
                     text = "执行结果：$resultText",
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (task.lastStatus == "succeeded") Color(0xFF16803B) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (task.lastStatus == "succeeded") ColorTokens.Green.foreground else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )

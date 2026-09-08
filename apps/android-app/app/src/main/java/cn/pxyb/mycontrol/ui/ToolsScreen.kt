@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -71,12 +72,6 @@ import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.IotScene
 import cn.pxyb.mycontrol.data.TelemetryMetricSummary
 import cn.pxyb.mycontrol.data.TelemetrySeriesPoint
-import cn.pxyb.mycontrol.ui.theme.Amber
-import cn.pxyb.mycontrol.ui.theme.AmberPale
-import cn.pxyb.mycontrol.ui.theme.Forest
-import cn.pxyb.mycontrol.ui.theme.MintPale
-import cn.pxyb.mycontrol.ui.theme.Ocean
-import cn.pxyb.mycontrol.ui.theme.OceanPale
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 
@@ -95,15 +90,16 @@ private data class RelayTarget(
     val activeBgGradient: Pair<Color, Color>,
 )
 
-private val relayTargets = listOf(
+@Composable
+private fun relayTargets() = listOf(
     RelayTarget(
         deviceId = "esp8266_living",
         relayId = "relay1",
         name = "客厅主灯",
         description = "客厅主控节点 · 通道 1",
         icon = Icons.Outlined.Lightbulb,
-        activeAccent = Color(0xFFD97706), // 暖金暖光
-        activeBgGradient = Pair(Color(0xFFFFFBEB), Color(0xFFFEF3C7)),
+        activeAccent = ColorTokens.Amber.foreground, // 暖金暖光
+        activeBgGradient = Pair(ColorTokens.Amber.container, ColorTokens.Amber.container),
     ),
     RelayTarget(
         deviceId = "relay_balcony",
@@ -111,8 +107,8 @@ private val relayTargets = listOf(
         name = "阳台智能插座",
         description = "阳台继电器 · 通道 2",
         icon = Icons.Outlined.PowerSettingsNew,
-        activeAccent = Color(0xFF059669), // 极光绿
-        activeBgGradient = Pair(Color(0xFFECFDF5), Color(0xFFD1FAE5)),
+        activeAccent = ColorTokens.Green.foreground, // 极光绿
+        activeBgGradient = Pair(ColorTokens.Green.container, ColorTokens.Green.container),
     ),
 )
 
@@ -134,6 +130,7 @@ fun ToolsScreen(
         confirmation = null
     }
 
+    val relayTargets = relayTargets()
     val canOperate = state.user?.role in setOf("operator", "super_admin")
     val iot = state.iot
     val ct8 = state.ct8
@@ -217,7 +214,7 @@ fun ToolsScreen(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            ToolSectionTitle(title = "IoT 实时状态", subtitle = "智控节点与全网数据吞吐", accent = Color(0xFF2563EB))
+                            ToolSectionTitle(title = "IoT 实时状态", subtitle = "智控节点与全网数据吞吐", accent = ColorTokens.Blue.foreground)
                             ModernMqttStatusPanel(
                                 mqttConnected = iot?.mqttConnected == true,
                                 connectionState = iot?.connectionState ?: "等待 IoT 状态",
@@ -226,7 +223,7 @@ fun ToolsScreen(
                                 messagesReceived = iot?.messagesReceived ?: 0,
                             )
 
-                            ToolSectionTitle(title = "环境感知", subtitle = "多维度室内环境指标", accent = Color(0xFF059669))
+                            ToolSectionTitle(title = "环境感知", subtitle = "多维度室内环境指标", accent = ColorTokens.Green.foreground)
                             if (sensorDevices.size > 1) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -248,7 +245,7 @@ fun ToolsScreen(
                                 TelemetryInsightUnavailable()
                             }
 
-                            ToolSectionTitle(title = "CT8 自动化执行", subtitle = "GitHub Actions 任务流水线", accent = Color(0xFF0284C7))
+                            ToolSectionTitle(title = "CT8 自动化执行", subtitle = "GitHub Actions 任务流水线", accent = ColorTokens.Sky.foreground)
                             ModernCt8Panel(
                                 ct8 = ct8,
                                 canOperate = canOperate,
@@ -263,7 +260,7 @@ fun ToolsScreen(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            ToolSectionTitle(title = "设备与开关", subtitle = "低延迟 MQTT 实时触控", accent = Color(0xFFD97706))
+                            ToolSectionTitle(title = "设备与开关", subtitle = "低延迟 MQTT 实时触控", accent = ColorTokens.Amber.foreground)
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 relayTargets.forEach { target ->
                                     ModernRelayCard(
@@ -279,7 +276,7 @@ fun ToolsScreen(
                             }
 
                             if (!iot?.scenes.isNullOrEmpty()) {
-                                ToolSectionTitle(title = "快捷自动化", subtitle = "一键触发预设联动场景", accent = Color(0xFF7C3AED))
+                                ToolSectionTitle(title = "快捷自动化", subtitle = "一键触发预设联动场景", accent = ColorTokens.Purple.foreground)
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(24.dp),
@@ -312,7 +309,7 @@ fun ToolsScreen(
             } else {
                 // 手机单列流
                 item(key = "iot-title", contentType = "section") {
-                    ToolSectionTitle(title = "IoT 实时状态", subtitle = "智控节点与全网数据吞吐", accent = Color(0xFF2563EB))
+                    ToolSectionTitle(title = "IoT 实时状态", subtitle = "智控节点与全网数据吞吐", accent = ColorTokens.Blue.foreground)
                 }
                 item(key = "iot-status", contentType = "card") {
                     ModernMqttStatusPanel(
@@ -325,7 +322,7 @@ fun ToolsScreen(
                 }
 
                 item(key = "environment-title", contentType = "section") {
-                    ToolSectionTitle(title = "环境感知", subtitle = "多维度室内环境指标", accent = Color(0xFF059669))
+                    ToolSectionTitle(title = "环境感知", subtitle = "多维度室内环境指标", accent = ColorTokens.Green.foreground)
                 }
                 if (sensorDevices.size > 1) {
                     item(key = "sensor-filter", contentType = "filter") {
@@ -357,7 +354,7 @@ fun ToolsScreen(
                 }
 
                 item(key = "relay-title", contentType = "section") {
-                    ToolSectionTitle(title = "设备与开关", subtitle = "低延迟 MQTT 实时触控", accent = Color(0xFFD97706))
+                    ToolSectionTitle(title = "设备与开关", subtitle = "低延迟 MQTT 实时触控", accent = ColorTokens.Amber.foreground)
                 }
                 item(key = "relays", contentType = "card") {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -378,7 +375,7 @@ fun ToolsScreen(
                 if (!iot?.scenes.isNullOrEmpty()) {
                     item(key = "scenes", contentType = "card") {
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            ToolSectionTitle(title = "快捷自动化", subtitle = "一键触发预设联动场景", accent = Color(0xFF7C3AED))
+                            ToolSectionTitle(title = "快捷自动化", subtitle = "一键触发预设联动场景", accent = ColorTokens.Purple.foreground)
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(24.dp),
@@ -409,7 +406,7 @@ fun ToolsScreen(
                 }
 
                 item(key = "ct8-title", contentType = "section") {
-                    ToolSectionTitle(title = "CT8 自动化执行", subtitle = "GitHub Actions 任务流水线", accent = Color(0xFF0284C7))
+                    ToolSectionTitle(title = "CT8 自动化执行", subtitle = "GitHub Actions 任务流水线", accent = ColorTokens.Sky.foreground)
                 }
                 item(key = "ct8", contentType = "card") {
                     ModernCt8Panel(
@@ -496,19 +493,19 @@ private fun TelemetryInsightPanel(insight: DeviceTelemetryInsight) {
                 summary = insight.temperature,
                 values = temperatureValues,
                 suffix = "°C",
-                color = Color(0xFFF97316),
+                color = ColorTokens.Orange.foreground,
             )
             TelemetryMetricChart(
                 label = "湿度",
                 summary = insight.humidity,
                 values = humidityValues,
                 suffix = "%",
-                color = Color(0xFF0284C7),
+                color = ColorTokens.Sky.foreground,
             )
             Text(
                 if (insight.anomalyCount == 0) "当前范围未发现明显异常" else "检测到 ${insight.anomalyCount} 个异常采样，请结合设备状态检查。",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (insight.anomalyCount == 0) Forest else Amber,
+                color = if (insight.anomalyCount == 0) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
             )
         }
     }
@@ -637,8 +634,8 @@ private fun LightweightHeaderBanner(
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = if (mqttConnected) Color(0xFFECFDF5) else Color(0xFFFEF2F2),
-                    border = BorderStroke(0.5.dp, if (mqttConnected) Color(0xFFA7F3D0) else Color(0xFFFECACA)),
+                    color = if (mqttConnected) ColorTokens.Green.container else ColorTokens.Red.container,
+                    border = BorderStroke(0.5.dp, if (mqttConnected) ColorTokens.Green.border else ColorTokens.Red.border),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -650,14 +647,14 @@ private fun LightweightHeaderBanner(
                                 .size(7.dp)
                                 .graphicsLayer { alpha = dotAlpha }
                                 .background(
-                                    color = if (mqttConnected) Color(0xFF10B981) else Color(0xFFEF4444),
+                                    color = if (mqttConnected) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
                                     shape = CircleShape,
                                 )
                         )
                         Text(
                             text = if (mqttConnected) "LIVE · 智控中心" else "OFFLINE · 离线模式",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (mqttConnected) Color(0xFF047857) else Color(0xFFB91C1C),
+                            color = if (mqttConnected) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
                         )
                     }
                 }
@@ -722,8 +719,8 @@ private fun ModernMqttStatusPanel(
             ) {
                 IconTile(
                     if (mqttConnected) Icons.Outlined.Router else Icons.Outlined.WifiOff,
-                    if (mqttConnected) Forest else Amber,
-                    if (mqttConnected) MintPale else AmberPale,
+                    if (mqttConnected) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
+                    if (mqttConnected) ColorTokens.Green.container else ColorTokens.Amber.container,
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -748,27 +745,27 @@ private fun ModernMqttStatusPanel(
                     label = "在线设备",
                     value = onlineDevices.toString(),
                     subText = "正常运行",
-                    valueColor = Color(0xFF047857),
-                    bgColor = Color(0xFFECFDF5),
-                    borderColor = Color(0xFFA7F3D0),
+                    valueColor = ColorTokens.Green.foreground,
+                    bgColor = ColorTokens.Green.container,
+                    borderColor = ColorTokens.Green.border,
                     modifier = Modifier.weight(1f),
                 )
                 LightBentoMetricCard(
                     label = "设备总数",
                     value = totalDevices.toString(),
                     subText = "全网注册",
-                    valueColor = Color(0xFF1D4ED8),
-                    bgColor = Color(0xFFEFF6FF),
-                    borderColor = Color(0xFFBFDBFE),
+                    valueColor = ColorTokens.Blue.foreground,
+                    bgColor = ColorTokens.Blue.container,
+                    borderColor = ColorTokens.Blue.border,
                     modifier = Modifier.weight(1f),
                 )
                 LightBentoMetricCard(
                     label = "接收消息",
                     value = if (messagesReceived > 9999) "${messagesReceived / 1000}k" else messagesReceived.toString(),
                     subText = "数据包",
-                    valueColor = Color(0xFF6D28D9),
-                    bgColor = Color(0xFFF5F3FF),
-                    borderColor = Color(0xFFDDD6FE),
+                    valueColor = ColorTokens.Purple.foreground,
+                    bgColor = ColorTokens.Purple.container,
+                    borderColor = ColorTokens.Purple.border,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -856,8 +853,8 @@ private fun ModernEnvironmentCard(device: DeviceInfo?) {
             ) {
                 IconTile(
                     if (online) Icons.Outlined.Sensors else Icons.Outlined.WifiOff,
-                    if (online) Ocean else Amber,
-                    if (online) OceanPale else AmberPale,
+                    if (online) ColorTokens.Blue.foreground else ColorTokens.Amber.foreground,
+                    if (online) ColorTokens.Blue.container else ColorTokens.Amber.container,
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -867,7 +864,7 @@ private fun ModernEnvironmentCard(device: DeviceInfo?) {
                     Text(
                         comfortLabel,
                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                        color = if (online) Forest else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (online) ColorTokens.Green.foreground else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 StatusBadge(
@@ -884,16 +881,16 @@ private fun ModernEnvironmentCard(device: DeviceInfo?) {
                     label = "室内温度",
                     value = if (tempStr != "--") "$tempStr°C" else "--",
                     icon = Icons.Outlined.Thermostat,
-                    accentColor = Color(0xFF0284C7),
-                    bgColor = Color(0xFFF0F9FF),
+                    accentColor = ColorTokens.Sky.foreground,
+                    bgColor = ColorTokens.Sky.container,
                     modifier = Modifier.weight(1f),
                 )
                 ModernSensorCell(
                     label = "相对湿度",
                     value = if (humStr != "--") "$humStr%" else "--",
                     icon = Icons.Outlined.WaterDrop,
-                    accentColor = Color(0xFF059669),
-                    bgColor = Color(0xFFECFDF5),
+                    accentColor = ColorTokens.Green.foreground,
+                    bgColor = ColorTokens.Green.container,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -1012,7 +1009,7 @@ private fun ModernRelayCard(
                     Icon(
                         imageVector = target.icon,
                         contentDescription = null,
-                        tint = if (isOn) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (isOn) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(22.dp),
                     )
                 }
@@ -1054,7 +1051,7 @@ private fun ModernRelayCard(
                         modifier = Modifier
                             .size(7.dp)
                             .background(
-                                color = if (isOn) target.activeAccent else Color.Gray,
+                                color = if (isOn) target.activeAccent else MaterialTheme.colorScheme.onSurfaceVariant,
                                 shape = CircleShape,
                             )
                     )
@@ -1108,7 +1105,7 @@ private fun ModernSceneRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        IconTile(Icons.Outlined.AutoMode, Color(0xFF7C3AED), Color(0xFFEDE9FE))
+        IconTile(Icons.Outlined.AutoMode, ColorTokens.Purple.foreground, ColorTokens.Purple.container)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 scene.name,
@@ -1154,7 +1151,7 @@ private fun ModernCt8Panel(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                IconTile(Icons.Outlined.AutoMode, Color(0xFF0284C7), Color(0xFFE0F2FE))
+                IconTile(Icons.Outlined.AutoMode, ColorTokens.Sky.foreground, ColorTokens.Sky.container)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "流水线 ${ct8?.latestRunId?.let { "#${it.takeLast(8)}" } ?: "--"}",
@@ -1174,8 +1171,8 @@ private fun ModernCt8Panel(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 MetricCell("目标主机", ct8?.totalHosts?.toString() ?: "--", Modifier.weight(1f))
-                MetricCell("成功节点", ct8?.successHosts?.toString() ?: "--", Modifier.weight(1f), Forest)
-                MetricCell("异常节点", ct8?.failedHosts?.toString() ?: "--", Modifier.weight(1f), Amber)
+                MetricCell("成功节点", ct8?.successHosts?.toString() ?: "--", Modifier.weight(1f), ColorTokens.Green.foreground)
+                MetricCell("异常节点", ct8?.failedHosts?.toString() ?: "--", Modifier.weight(1f), ColorTokens.Amber.foreground)
             }
 
             AppButton(

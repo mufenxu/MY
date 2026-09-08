@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.display.AppListCard
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
@@ -312,8 +313,8 @@ fun TodayScreen(
                                         ) {
                                             IconTile(
                                                 icon = Icons.Outlined.CheckCircle,
-                                                tint = Color(0xFF059669),
-                                                background = Color(0xFFECFDF5),
+                                                tint = ColorTokens.Green.foreground,
+                                                background = ColorTokens.Green.container,
                                                 modifier = Modifier.size(34.dp),
                                             )
                                             Column {
@@ -432,8 +433,8 @@ fun TodayScreen(
                                 ) {
                                     IconTile(
                                         icon = Icons.Outlined.CheckCircle,
-                                        tint = Color(0xFF059669),
-                                        background = Color(0xFFECFDF5),
+                                        tint = ColorTokens.Green.foreground,
+                                        background = ColorTokens.Green.container,
                                         modifier = Modifier.size(34.dp),
                                     )
                                     Column {
@@ -780,25 +781,20 @@ internal fun WorkspacePage(
 
 private enum class TimetableDisplayMode { Grid, List }
 
-private data class CourseColorScheme(
-    val background: Color,
-    val contentColor: Color,
-    val accentColor: Color,
+private val LightCoursePalette = listOf(
+    ColorTokens.BlueLight, ColorTokens.GreenLight, ColorTokens.PurpleLight,
+    ColorTokens.OrangeLight, ColorTokens.CyanLight, ColorTokens.PinkLight, ColorTokens.AmberLight,
+)
+private val DarkCoursePalette = listOf(
+    ColorTokens.BlueDark, ColorTokens.GreenDark, ColorTokens.PurpleDark,
+    ColorTokens.OrangeDark, ColorTokens.CyanDark, ColorTokens.PinkDark, ColorTokens.AmberDark,
 )
 
-private val CoursePalette = listOf(
-    CourseColorScheme(Color(0xFFEFF6FF), Color(0xFF1E40AF), Color(0xFF3B82F6)), // 湛蓝
-    CourseColorScheme(Color(0xFFF0FDF4), Color(0xFF166534), Color(0xFF22C55E)), // 翡翠
-    CourseColorScheme(Color(0xFFFAF5FF), Color(0xFF6B21A8), Color(0xFFA855F7)), // 罗兰紫
-    CourseColorScheme(Color(0xFFFFF7ED), Color(0xFF9A3412), Color(0xFFF97316)), // 暖橙
-    CourseColorScheme(Color(0xFFECFEFF), Color(0xFF155E75), Color(0xFF06B6D4)), // 蓝绿
-    CourseColorScheme(Color(0xFFFDF2F8), Color(0xFF9D174D), Color(0xFFEC4899)), // 珊瑚粉
-    CourseColorScheme(Color(0xFFFEFCE8), Color(0xFF854D0E), Color(0xFFEAB308)), // 琥珀黄
-)
-
-private fun getCourseColorScheme(courseName: String): CourseColorScheme {
-    val index = kotlin.math.abs(courseName.hashCode()) % CoursePalette.size
-    return CoursePalette[index]
+@Composable
+private fun getCourseColorScheme(courseName: String): cn.pxyb.mycontrol.ui.theme.AccentColors {
+    val palette = if (isAppInDarkTheme()) DarkCoursePalette else LightCoursePalette
+    val index = kotlin.math.abs(courseName.hashCode()) % palette.size
+    return palette[index]
 }
 
 @Composable
@@ -877,13 +873,13 @@ private fun AcademicCalendarSummary(calendar: CampusAcademicCalendar) {
                 CalendarFactBlock(
                     label = "总教学周",
                     value = calendar.teachingWeeks?.let { "共 $it 周" } ?: "--",
-                    accent = Color(0xFF059669),
+                    accent = ColorTokens.Green.foreground,
                     modifier = Modifier.weight(1f),
                 )
                 CalendarFactBlock(
                     label = "当前状态",
                     value = calendar.statusText.ifBlank { if (calendar.isHoliday) "假期" else "正常教学" },
-                    accent = Color(0xFF7C3AED),
+                    accent = ColorTokens.Purple.foreground,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -1361,11 +1357,11 @@ private fun CourseGridMatrix(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(6.dp))
                                     .clickable { onCourseClick(course) },
-                                color = if (isThisWeek) colorScheme.background.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                color = if (isThisWeek) colorScheme.container.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                 shape = RoundedCornerShape(6.dp),
                                 border = BorderStroke(
                                     0.5.dp,
-                                    if (isThisWeek) colorScheme.accentColor.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                    if (isThisWeek) colorScheme.foreground.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
                                 ),
                                 shadowElevation = 0.dp,
                             ) {
@@ -1383,7 +1379,7 @@ private fun CourseGridMatrix(
                                                 lineHeight = if (wideGrid) 16.sp else 11.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                             ),
-                                            color = if (isThisWeek) colorScheme.contentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                            color = if (isThisWeek) colorScheme.foreground else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                                             maxLines = if (span >= 3) 4 else if (span == 2) 3 else 2,
                                             overflow = TextOverflow.Ellipsis,
                                         )
@@ -1397,7 +1393,7 @@ private fun CourseGridMatrix(
                                                     fontSize = if (wideGrid) 11.sp else 8.sp,
                                                     lineHeight = if (wideGrid) 14.sp else 9.5.sp,
                                                 ),
-                                                color = colorScheme.contentColor.copy(alpha = 0.85f),
+                                                color = colorScheme.foreground.copy(alpha = 0.85f),
                                                 maxLines = if (span >= 3) 2 else 1,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
@@ -1636,8 +1632,8 @@ private fun DormEnergyCard(
             ) {
                 IconTile(
                     Icons.Outlined.Bolt,
-                    if (isWarning) Color(0xFFD97706) else Color(0xFF0284C7),
-                    if (isWarning) Color(0xFFFEF3C7) else Color(0xFFE0F2FE),
+                    if (isWarning) ColorTokens.Amber.foreground else ColorTokens.Sky.foreground,
+                    if (isWarning) ColorTokens.Amber.container else ColorTokens.Sky.container,
                 )
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
@@ -1660,7 +1656,7 @@ private fun DormEnergyCard(
                     energyBalance?.let(::formatCampusAmount) ?: "¥ --",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (isWarning) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurface,
+                    color = if (isWarning) ColorTokens.Amber.foreground else MaterialTheme.colorScheme.onSurface,
                 )
             }
 
@@ -1672,13 +1668,13 @@ private fun DormEnergyCard(
                     Text(
                         if (isWarning) "电量偏低，建议充值" else "能耗状态良好",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isWarning) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isWarning) ColorTokens.Amber.foreground else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 LinearProgressIndicator(
                     progress = { (amountVal / 100f).coerceIn(0.1f, 1f) },
                     modifier = Modifier.fillMaxWidth().height(5.dp),
-                    color = if (isWarning) Color(0xFFF59E0B) else Color(0xFF0284C7),
+                    color = if (isWarning) ColorTokens.Amber.foreground else ColorTokens.Sky.foreground,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                 )
             }
@@ -1703,10 +1699,10 @@ private fun AcademicGpaCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconTile(Icons.Outlined.School, Color(0xFF7C3AED), Color(0xFFF3E8FF))
+                IconTile(Icons.Outlined.School, ColorTokens.Purple.foreground, ColorTokens.Purple.container)
                 Surface(
-                    color = Color(0xFFF3E8FF),
-                    contentColor = Color(0xFF7C3AED),
+                    color = ColorTokens.Purple.container,
+                    contentColor = ColorTokens.Purple.foreground,
                     shape = RoundedCornerShape(8.dp),
                 ) {
                     Text(
@@ -1767,24 +1763,24 @@ private fun CampusQuickToolsGrid(
                     QuickToolItem(
                         icon = Icons.Outlined.MeetingRoom,
                         label = "自习空教室",
-                        accent = Color(0xFF059669),
-                        accentPale = Color(0xFFD1FAE5),
+                        accent = ColorTokens.Green.foreground,
+                        accentPale = ColorTokens.Green.container,
                         modifier = Modifier.weight(1f),
                         onClick = onOpenFreeClassrooms,
                     )
                     QuickToolItem(
                         icon = Icons.Outlined.CalendarMonth,
                         label = "研讨间预约",
-                        accent = Color(0xFF2563EB),
-                        accentPale = Color(0xFFEFF6FF),
+                        accent = ColorTokens.Blue.foreground,
+                        accentPale = ColorTokens.Blue.container,
                         modifier = Modifier.weight(1f),
                         onClick = onOpenReservation,
                     )
                     QuickToolItem(
                         icon = Icons.Outlined.Chair,
                         label = "座位预约",
-                        accent = Color(0xFF0F766E),
-                        accentPale = Color(0xFFCCFBF1),
+                        accent = ColorTokens.Teal.foreground,
+                        accentPale = ColorTokens.Teal.container,
                         modifier = Modifier.weight(1f),
                         onClick = onOpenLibrarySeatReservation,
                     )
@@ -1801,15 +1797,15 @@ private fun CampusQuickToolsGrid(
                     QuickToolItem(
                         icon = Icons.Outlined.School,
                         label = "成绩明细",
-                        accent = Color(0xFF7C3AED),
-                        accentPale = Color(0xFFF3E8FF),
+                        accent = ColorTokens.Purple.foreground,
+                        accentPale = ColorTokens.Purple.container,
                         modifier = Modifier.weight(1f),
                     )
                     QuickToolItem(
                         icon = Icons.Outlined.Bolt,
                         label = "水电充值",
-                        accent = Color(0xFF0284C7),
-                        accentPale = Color(0xFFE0F2FE),
+                        accent = ColorTokens.Sky.foreground,
+                        accentPale = ColorTokens.Sky.container,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -1875,8 +1871,8 @@ private fun CourseCard(
         ) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = if (isThisWeek) colorScheme.background.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                contentColor = if (isThisWeek) colorScheme.contentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isThisWeek) colorScheme.container.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                contentColor = if (isThisWeek) colorScheme.foreground else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(42.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -1908,7 +1904,7 @@ private fun CourseCard(
                     )
                     if (tag != null) {
                         Surface(
-                            color = Color(0xFF7C3AED).copy(alpha = 0.12f),
+                            color = ColorTokens.Purple.foreground.copy(alpha = 0.12f),
                             shape = RoundedCornerShape(6.dp),
                         ) {
                             Text(
@@ -1918,7 +1914,7 @@ private fun CourseCard(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                 ),
-                                color = Color(0xFF7C3AED),
+                                color = ColorTokens.Purple.foreground,
                             )
                         }
                     }
@@ -1967,7 +1963,7 @@ private fun CourseCard(
                             }
                         }
                         if (showWeek && course.weekText.isNotBlank()) {
-                            Text(course.weekText, style = MaterialTheme.typography.bodySmall, color = colorScheme.accentColor, fontWeight = FontWeight.Medium)
+                            Text(course.weekText, style = MaterialTheme.typography.bodySmall, color = colorScheme.foreground, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -1988,8 +1984,8 @@ private fun CourseDetailDialog(
     AppDialog(
         onDismissRequest = onDismiss,
         icon = Icons.Outlined.CalendarMonth,
-        iconTint = colorScheme.contentColor,
-        iconBackground = colorScheme.background,
+        iconTint = colorScheme.foreground,
+        iconBackground = colorScheme.container,
         title = course.courseName,
         subtitle = "${course.dayName} ${course.sectionText}",
         footer = {
@@ -2078,7 +2074,7 @@ private fun AttentionCard(label: String, value: Int, onClick: () -> Unit, modifi
 private fun ResourceExpiryCard(resource: ResourceExpiry, days: Int) {
     AppPanel {
         Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            IconTile(Icons.Outlined.Event, if (days <= 7) Color(0xFFB91C1C) else Color(0xFFB45309), if (days <= 7) Color(0xFFFEE2E2) else Color(0xFFFEF3C7))
+            IconTile(Icons.Outlined.Event, if (days <= 7) ColorTokens.Red.foreground else ColorTokens.Amber.foreground, if (days <= 7) ColorTokens.Red.container else ColorTokens.Amber.container)
             Column(Modifier.weight(1f)) {
                 Text(resource.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(if (resource.type == "domain") "域名" else "服务器", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -2089,7 +2085,7 @@ private fun ResourceExpiryCard(resource: ResourceExpiry, days: Int) {
                     days == 0 -> "今天到期"
                     else -> "$days 天后"
                 },
-                color = if (days <= 7) MaterialTheme.colorScheme.error else Color(0xFFB45309),
+                color = if (days <= 7) MaterialTheme.colorScheme.error else ColorTokens.Amber.foreground,
                 fontWeight = FontWeight.SemiBold,
             )
         }
@@ -2112,7 +2108,7 @@ private fun SceneCard(
     AppPanel {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                IconTile(Icons.Outlined.Tune, Color(0xFF047857), Color(0xFFD1FAE5))
+                IconTile(Icons.Outlined.Tune, ColorTokens.Green.foreground, ColorTokens.Green.container)
                 Column(Modifier.weight(1f)) {
                     Text(scene.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text("${scene.actionCount} 个设备动作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -2321,8 +2317,8 @@ private fun AutomationRuleCard(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 IconTile(
                     icon = if (matched) Icons.Outlined.Bolt else Icons.Outlined.Tune,
-                    tint = if (rule.enabled) Color(0xFF2563EB) else Color(0xFF94A3B8),
-                    background = if (rule.enabled) Color(0xFFDBEAFE) else Color(0xFFF1F5F9),
+                    tint = if (rule.enabled) ColorTokens.Blue.foreground else MaterialTheme.colorScheme.onSurfaceVariant,
+                    background = if (rule.enabled) ColorTokens.Blue.container else MaterialTheme.colorScheme.surfaceContainerLow,
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(rule.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -2357,7 +2353,7 @@ private fun AutomationRunCard(run: AutomationRun) {
     AppPanel {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                IconTile(Icons.Outlined.PlayArrow, Color(0xFF2563EB), Color(0xFFDBEAFE))
+                IconTile(Icons.Outlined.PlayArrow, ColorTokens.Blue.foreground, ColorTokens.Blue.container)
                 Column(Modifier.weight(1f)) {
                     Text(run.sourceName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Text(

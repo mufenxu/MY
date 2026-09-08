@@ -442,7 +442,7 @@ private fun AssistantInputBar(
                 Icons.AutoMirrored.Filled.Send,
                 contentDescription = "发送",
                 tint = if (canSend) {
-                    Color.White
+                    MaterialTheme.colorScheme.onPrimary
                 } else {
                     onSurfaceVariant.copy(alpha = 0.4f)
                 },

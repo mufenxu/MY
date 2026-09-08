@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -263,7 +264,7 @@ fun AccountManagementScreen(
                                     title = "二次动态验证（TOTP MFA）",
                                     subtitle = if (totpEnabled) "已开启 · 动态口令双重防护" else "尚未开启 · 建议绑定 Auth 验证器",
                                     statusText = if (totpEnabled) "已开启" else "去开启",
-                                    statusColor = if (totpEnabled) Color(0xFF166534) else Color(0xFFD97706),
+                                    statusColor = if (totpEnabled) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
                                     onClick = {
                                         if (totpEnabled) showTotpManageDialog = true else showTotpSetupDialog = true
                                     }
@@ -371,7 +372,7 @@ fun AccountManagementScreen(
                             title = "二次动态验证（TOTP MFA）",
                             subtitle = if (totpEnabled) "已开启 · 动态口令双重防护" else "尚未开启 · 建议绑定 Auth 验证器",
                             statusText = if (totpEnabled) "已开启" else "去开启",
-                            statusColor = if (totpEnabled) Color(0xFF166534) else Color(0xFFD97706),
+                            statusColor = if (totpEnabled) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
                             onClick = {
                                 if (totpEnabled) showTotpManageDialog = true else showTotpSetupDialog = true
                             }

@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.BrandCyan
+import cn.pxyb.mycontrol.ui.theme.BrandBlue
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.picker.AppWheelPicker
 import cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal
 import cn.pxyb.mycontrol.ui.components.picker.AppTimeRangePicker
@@ -98,6 +101,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -437,7 +441,7 @@ fun MetricCell(
     modifier: Modifier = Modifier,
     valueColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
-    val displayValueColor = if (isAppInDarkTheme()) lerp(valueColor, Color.White, 0.28f) else valueColor
+    val displayValueColor = valueColor
     Column(modifier = modifier.padding(vertical = 2.dp)) {
         Text(
             text = label,
@@ -461,7 +465,7 @@ fun MetricCell(
 @Composable
 fun IconTile(icon: ImageVector, tint: Color, background: Color, modifier: Modifier = Modifier) {
     val darkTheme = isAppInDarkTheme()
-    val contentTint = if (darkTheme) lerp(tint, Color.White, 0.3f) else tint
+    val contentTint = tint
     val container = if (darkTheme) {
         contentTint.copy(alpha = 0.16f).compositeOver(MaterialTheme.colorScheme.surface)
     } else {
@@ -489,7 +493,7 @@ fun QuickActionGlassTile(
     val darkTheme = isAppInDarkTheme()
     val shape = RoundedCornerShape(19.dp)
     val glassColors = if (darkTheme) {
-        listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.06f))
+        listOf(Color.White.copy(alpha = 0.08f), Color.Transparent)
     } else {
         listOf(Color.White.copy(alpha = 0.64f), accentPale.copy(alpha = 0.34f))
     }
@@ -513,7 +517,7 @@ fun QuickActionGlassTile(
         Icon(
             icon,
             contentDescription = contentDescription,
-            tint = if (darkTheme) lerp(accent, Color.White, 0.30f) else accent,
+            tint = accent,
             modifier = Modifier.size(iconSize),
         )
     }
@@ -891,18 +895,18 @@ fun AppButton(
     val interactionSource = remember { MutableInteractionSource() }
 
     // 1. 清澈鲜活科技蓝立体微弧渐变（提亮纯度，消除深沉暗色，绝不泛白）
-    val gradientBrush = if (enabled && !loading) {
+    val gradientBrush = if (enabled || loading) {
         Brush.verticalGradient(
             listOf(
-                Color(0xFF3B82F6), // BrandCyan 鲜活明朗科技蓝（顶部）
-                Color(0xFF2563EB), // BrandBlue 经典品牌科技蓝（底部）
+                BrandCyan, // BrandCyan 鲜活明朗科技蓝（顶部）
+                BrandBlue, // BrandBlue 经典品牌科技蓝（底部）
             ),
         )
     } else {
         Brush.verticalGradient(
             listOf(
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
             ),
         )
     }
@@ -910,8 +914,8 @@ fun AppButton(
     // 2. 清澈同色系柔光发丝切边
     val borderBrush = Brush.verticalGradient(
         listOf(
-            Color(0xFF93C5FD).copy(alpha = 0.40f), // 浅天蓝微光边
-            Color(0xFF2563EB).copy(alpha = 0.25f),
+            ColorTokens.BlueDark.foreground.copy(alpha = 0.40f), // 浅天蓝微光边
+            BrandBlue.copy(alpha = 0.25f),
         ),
     )
 
@@ -926,7 +930,7 @@ fun AppButton(
             .shadow(
                 elevation = if (enabled && !loading) 2.5.dp else 0.dp,
                 shape = shape,
-                spotColor = Color(0xFF3B82F6).copy(alpha = 0.35f),
+                spotColor = BrandCyan.copy(alpha = 0.35f),
                 ambientColor = Color.Black.copy(alpha = 0.08f),
             )
             .clip(shape)
@@ -947,7 +951,7 @@ fun AppButton(
             containerColor = Color.Transparent,
             contentColor = Color.White,
             disabledContainerColor = Color.Transparent,
-            disabledContentColor = Color.White.copy(alpha = 0.70f),
+            disabledContentColor = if (loading) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
         ),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
     ) {
@@ -955,7 +959,7 @@ fun AppButton(
             CircularProgressIndicator(
                 modifier = Modifier.size(18.dp),
                 strokeWidth = 2.dp,
-                color = Color.White,
+                color = LocalContentColor.current,
             )
         } else {
             Row(
@@ -967,7 +971,7 @@ fun AppButton(
                         imageVector = icon,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
-                        tint = Color.White,
+                        tint = LocalContentColor.current,
                     )
                 }
                 Text(
@@ -975,7 +979,7 @@ fun AppButton(
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.5.sp,
                     letterSpacing = (-0.1).sp,
-                    color = Color.White,
+                    color = LocalContentColor.current,
                 )
             }
         }
@@ -1002,21 +1006,9 @@ fun AppSecondaryButton(
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 
-    val gradientBrush = if (dark) {
-        Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.10f),
-                Color.White.copy(alpha = 0.05f),
-            ),
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFFF8FAFC),
-                Color(0xFFE2E8F0),
-            ),
-        )
-    }
+    val gradientBrush = Brush.verticalGradient(
+        listOf(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.surfaceContainerLow),
+    )
 
     val borderBrush = Brush.verticalGradient(
         listOf(
@@ -1071,7 +1063,7 @@ fun AppSecondaryButton(
                         imageVector = icon,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = LocalContentColor.current,
                     )
                 }
                 Text(
@@ -1105,10 +1097,13 @@ fun AppDangerButton(
     val interactionSource = remember { MutableInteractionSource() }
 
     val gradientBrush = Brush.verticalGradient(
-        listOf(
+        if (enabled || loading) listOf(
             Color(0xFFEF4444), // 纯正警告红（顶部）
             Color(0xFFDC2626), // 饱满深红（中部）
-            Color(0xFFB91C1C), // 底部阴影收边暗红
+            ColorTokens.RedLight.foreground, // 底部阴影收边暗红
+        ) else listOf(
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
         ),
     )
 
@@ -1145,7 +1140,7 @@ fun AppDangerButton(
             containerColor = Color.Transparent,
             contentColor = Color.White,
             disabledContainerColor = Color.Transparent,
-            disabledContentColor = Color.White.copy(alpha = 0.70f),
+            disabledContentColor = if (loading) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
         ),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
     ) {
@@ -1153,7 +1148,7 @@ fun AppDangerButton(
             CircularProgressIndicator(
                 modifier = Modifier.size(18.dp),
                 strokeWidth = 2.dp,
-                color = Color.White,
+                color = LocalContentColor.current,
             )
         } else {
             Row(
@@ -1165,7 +1160,7 @@ fun AppDangerButton(
                         imageVector = icon,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
-                        tint = Color.White,
+                        tint = LocalContentColor.current,
                     )
                 }
                 Text(
@@ -1173,7 +1168,7 @@ fun AppDangerButton(
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.5.sp,
                     letterSpacing = (-0.1).sp,
-                    color = Color.White,
+                    color = LocalContentColor.current,
                 )
             }
         }
@@ -1195,25 +1190,12 @@ fun AppInlineDangerButton(
     enabled: Boolean = true,
     loading: Boolean = false,
 ) {
-    val dark = isAppInDarkTheme()
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 
-    val bgColor = if (dark) {
-        Color(0xFF7F1D1D).copy(alpha = 0.38f)
-    } else {
-        Color(0xFFFEE2E2).copy(alpha = 0.75f)
-    }
-    val contentColor = if (dark) {
-        Color(0xFFFCA5A5)
-    } else {
-        Color(0xFFDC2626)
-    }
-    val borderColor = if (dark) {
-        Color(0xFFEF4444).copy(alpha = 0.30f)
-    } else {
-        Color(0xFFF87171).copy(alpha = 0.35f)
-    }
+    val bgColor = if (enabled || loading) ColorTokens.Red.container else MaterialTheme.colorScheme.surfaceContainerHigh
+    val contentColor = if (enabled || loading) ColorTokens.Red.foreground else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    val borderColor = if (enabled || loading) ColorTokens.Red.border else MaterialTheme.colorScheme.outlineVariant
 
     Surface(
         onClick = {
@@ -1430,7 +1412,6 @@ fun DialogTextField(
     isPassword: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
 ) {
-    val dark = isAppInDarkTheme()
     var passwordVisible by remember { mutableStateOf(false) }
     OutlinedTextField(
         value = value,
@@ -1472,11 +1453,11 @@ fun DialogTextField(
         shape = RoundedCornerShape(18.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-            unfocusedBorderColor = if (dark) Color.White.copy(alpha = 0.10f) else Color(0xFFE2E8F0),
-            disabledBorderColor = if (dark) Color.White.copy(alpha = 0.06f) else Color(0xFFE2E8F0),
-            focusedContainerColor = if (dark) Color.White.copy(alpha = 0.06f) else Color(0xFFF8FAFC),
-            unfocusedContainerColor = if (dark) Color.White.copy(alpha = 0.04f) else Color(0xFFF8FAFC),
-            disabledContainerColor = if (dark) Color.White.copy(alpha = 0.02f) else MaterialTheme.colorScheme.surfaceVariant,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+            disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             focusedLabelColor = MaterialTheme.colorScheme.primary,
             unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
             cursorColor = MaterialTheme.colorScheme.primary,
@@ -1869,9 +1850,9 @@ fun ModernHeaderIconButton(
     size: Dp = 38.dp,
     iconSize: Dp = 20.dp,
     shape: RoundedCornerShape = RoundedCornerShape(12.dp),
-    iconTint: Color = Color(0xFF2563EB),
-    containerColor: Color = Color(0xFFEFF6FF),
-    borderColor: Color = Color(0xFFDBEAFE),
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
+    borderColor: Color = ColorTokens.Blue.border,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Surface(
@@ -2377,8 +2358,8 @@ fun AppSwitch(
         label = "appSwitchTrack",
     )
     val thumbColor = when {
-        checked -> if (enabled) Color.White else if (dark) Color.White.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.70f)
-        else -> if (dark) Color(0xFFE2E8F0) else Color.White
+        checked -> if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+        else -> if (dark) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.surface
     }
     val thumbBorder = when {
         checked || !enabled -> Color.Transparent

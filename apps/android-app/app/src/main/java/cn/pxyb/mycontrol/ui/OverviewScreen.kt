@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 
 import android.content.Intent
@@ -99,12 +100,6 @@ import cn.pxyb.mycontrol.data.ExternalApplication
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.ServiceInfo
-import cn.pxyb.mycontrol.ui.theme.Amber
-import cn.pxyb.mycontrol.ui.theme.Coral
-import cn.pxyb.mycontrol.ui.theme.CoralPale
-import cn.pxyb.mycontrol.ui.theme.Mint
-import cn.pxyb.mycontrol.ui.theme.Ocean
-import cn.pxyb.mycontrol.ui.theme.OceanPale
 import kotlinx.coroutines.launch
 import java.util.Date
 import java.time.LocalDate
@@ -368,9 +363,9 @@ fun OverviewScreen(
                         ) {
                             // 1. 系统状态 Hero Card
                             val topGradientStart = if (stable) {
-                                if (isDark) Color(0xFF064E3B).copy(alpha = 0.30f) else Color(0xFFECFDF5).copy(alpha = 0.85f)
+                                if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.30f) else ColorTokens.Green.container.copy(alpha = 0.85f)
                             } else {
-                                if (isDark) Color(0xFF78350F).copy(alpha = 0.30f) else Color(0xFFFFFBEB).copy(alpha = 0.85f)
+                                if (isDark) ColorTokens.AmberDark.container.copy(alpha = 0.30f) else ColorTokens.Amber.container.copy(alpha = 0.85f)
                             }
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
@@ -402,7 +397,7 @@ fun OverviewScreen(
                                                 CircularProgressIndicator(
                                                     progress = { progress },
                                                     modifier = Modifier.size(42.dp),
-                                                    color = if (stable) Color(0xFF059669) else Color(0xFFD97706),
+                                                    color = if (stable) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
                                                     trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
                                                     strokeWidth = 3.8.dp,
                                                     strokeCap = StrokeCap.Round,
@@ -410,7 +405,7 @@ fun OverviewScreen(
                                                 Icon(
                                                     if (stable) Icons.Outlined.CloudDone else Icons.Outlined.ErrorOutline,
                                                     contentDescription = null,
-                                                    tint = if (stable) Color(0xFF059669) else Color(0xFFD97706),
+                                                    tint = if (stable) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
                                                     modifier = Modifier.size(20.dp),
                                                 )
                                             }
@@ -443,25 +438,25 @@ fun OverviewScreen(
                                             ModernOverviewMetric(
                                                 label = "健康服务",
                                                 value = "$healthyCount/$monitoredCount",
-                                                accent = Color(0xFF059669),
-                                                bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5),
+                                                accent = ColorTokens.Green.foreground,
+                                                bgColor = if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.22f) else ColorTokens.Green.container,
                                                 modifier = Modifier.weight(1f),
                                             )
                                             ModernOverviewMetric(
                                                 label = "平均响应",
                                                 value = averageLatencyMs?.let { "$it ms" } ?: "--",
-                                                accent = Color(0xFF2563EB),
-                                                bgColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.22f) else Color(0xFFEFF6FF),
+                                                accent = ColorTokens.Blue.foreground,
+                                                bgColor = if (isDark) ColorTokens.BlueDark.container.copy(alpha = 0.22f) else ColorTokens.Blue.container,
                                                 modifier = Modifier.weight(1f),
                                             )
                                             ModernOverviewMetric(
                                                 label = "待处理事项",
                                                 value = activeIncidents.size.toString(),
-                                                accent = if (activeIncidents.isEmpty()) Color(0xFF059669) else Color(0xFFDC2626),
+                                                accent = if (activeIncidents.isEmpty()) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
                                                 bgColor = if (activeIncidents.isEmpty()) {
-                                                    if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5)
+                                                    if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.22f) else ColorTokens.Green.container
                                                 } else {
-                                                    if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.22f) else Color(0xFFFEF2F2)
+                                                    if (isDark) ColorTokens.RedDark.container.copy(alpha = 0.22f) else ColorTokens.Red.container
                                                 },
                                                 modifier = Modifier.weight(1f),
                                             )
@@ -471,7 +466,7 @@ fun OverviewScreen(
                             }
 
                             // 2. 校园智览卡片
-                            OverviewSectionTitle("校园工作台", "课表、成绩与校园日常", dotColor = Ocean)
+                            OverviewSectionTitle("校园工作台", "课表、成绩与校园日常", dotColor = ColorTokens.Blue.foreground)
                             Surface(
                                 onClick = openTodayWorkspace,
                                 interactionSource = campusInteractionSource,
@@ -496,15 +491,15 @@ fun OverviewScreen(
                                                 .size(34.dp)
                                                 .clip(RoundedCornerShape(10.dp))
                                                 .background(
-                                                    if (isDark) Ocean.copy(alpha = 0.20f)
-                                                    else OceanPale.copy(alpha = 0.65f)
+                                                    if (isDark) ColorTokens.Blue.foreground.copy(alpha = 0.20f)
+                                                    else ColorTokens.Blue.container.copy(alpha = 0.65f)
                                                 ),
                                             contentAlignment = Alignment.Center,
                                         ) {
                                             Icon(
                                                 Icons.Outlined.CalendarMonth,
                                                 contentDescription = null,
-                                                tint = Ocean,
+                                                tint = ColorTokens.Blue.foreground,
                                                 modifier = Modifier.size(18.dp),
                                             )
                                         }
@@ -542,22 +537,22 @@ fun OverviewScreen(
                                         ModernOverviewMetric(
                                             label = "今日课程",
                                             value = "$todayCourseTotal 节",
-                                            accent = Color(0xFF2563EB),
-                                            bgColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.22f) else Color(0xFFEFF6FF),
+                                            accent = ColorTokens.Blue.foreground,
+                                            bgColor = if (isDark) ColorTokens.BlueDark.container.copy(alpha = 0.22f) else ColorTokens.Blue.container,
                                             modifier = Modifier.weight(1f),
                                         )
                                         ModernOverviewMetric(
                                             label = "本学期课程",
                                             value = if (courseCount > 0) "$courseCount 门" else "--",
-                                            accent = Color(0xFF059669),
-                                            bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5),
+                                            accent = ColorTokens.Green.foreground,
+                                            bgColor = if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.22f) else ColorTokens.Green.container,
                                             modifier = Modifier.weight(1f),
                                         )
                                         ModernOverviewMetric(
                                             label = "综合绩点",
                                             value = campus?.gpa?.overall ?: "--",
-                                            accent = Color(0xFF7C3AED),
-                                            bgColor = if (isDark) Color(0xFF581C87).copy(alpha = 0.22f) else Color(0xFFF5F3FF),
+                                            accent = ColorTokens.Purple.foreground,
+                                            bgColor = if (isDark) ColorTokens.PurpleDark.container.copy(alpha = 0.22f) else ColorTokens.Purple.container,
                                             modifier = Modifier.weight(1f),
                                         )
                                     }
@@ -568,7 +563,7 @@ fun OverviewScreen(
                             OverviewSectionTitle(
                                 title = "快捷中心",
                                 subtitle = "高频工具与常用入口一键直达",
-                                dotColor = Amber,
+                                dotColor = ColorTokens.Amber.foreground,
                                 trailing = {
                                     val editInteractionSource = remember { MutableInteractionSource() }
                                     Surface(
@@ -619,7 +614,7 @@ fun OverviewScreen(
                                             horizontalArrangement = Arrangement.SpaceEvenly,
                                         ) {
                                             rowActions.forEach { action ->
-                                                val spec = remember(action) { homeQuickActionSpec(
+                                                val spec = homeQuickActionSpec(
                                                     action = action,
                                                     onSelectTab = onSelectTab,
                                                     onRunDiagnostics = onRunDiagnostics,
@@ -634,7 +629,7 @@ fun OverviewScreen(
                                                     onOpenSearch = onOpenSearch,
                                                     onOpenQrLogin = onOpenQrLogin,
                                                     onOpenAccountManagement = onOpenAccountManagement,
-                                                ) }
+                                                )
                                                 QuickAction(
                                                     icon = spec.icon,
                                                     label = spec.label,
@@ -652,7 +647,7 @@ fun OverviewScreen(
 
                             // 4. 待处理事项
                             if (activeIncidents.isNotEmpty()) {
-                                OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知", dotColor = Coral)
+                                OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知", dotColor = ColorTokens.Red.foreground)
                                 visibleIncidents.forEach { incident ->
                                     val incidentCardShape = RoundedCornerShape(16.dp)
                                     val incidentInteractionSource = remember(incident.id) { MutableInteractionSource() }
@@ -663,15 +658,15 @@ fun OverviewScreen(
                                             .fillMaxWidth()
                                             .pressFeedback(incidentInteractionSource),
                                         shape = incidentCardShape,
-                                        color = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.20f) else Color(0xFFFEF2F2).copy(alpha = 0.6f),
-                                        border = BorderStroke(0.5.dp, if (isDark) Color(0xFF991B1B).copy(alpha = 0.4f) else Color(0xFFFECACA)),
+                                        color = if (isDark) ColorTokens.RedDark.container.copy(alpha = 0.20f) else ColorTokens.Red.container.copy(alpha = 0.6f),
+                                        border = BorderStroke(0.5.dp, if (isDark) ColorTokens.RedDark.border.copy(alpha = 0.4f) else ColorTokens.Red.border),
                                     ) {
                                         Row(
                                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                                         ) {
-                                            IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale, modifier = Modifier.size(34.dp))
+                                            IconTile(Icons.Outlined.ErrorOutline, ColorTokens.Red.foreground, ColorTokens.Red.container, modifier = Modifier.size(34.dp))
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
                                                     incident.title,
@@ -706,7 +701,7 @@ fun OverviewScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
-                                OverviewSectionTitle("外部应用", "独立项目免密快捷直达", dotColor = Color(0xFF7C3AED))
+                                OverviewSectionTitle("外部应用", "独立项目免密快捷直达", dotColor = ColorTokens.Purple.foreground)
                                 externalApplicationOpenError?.let { message ->
                                     FeedbackBanner(message, error = true)
                                 }
@@ -723,7 +718,7 @@ fun OverviewScreen(
                                 }
                             }
 
-                            OverviewSectionTitle("服务监控", "核心微服务运行指标与状态", dotColor = Mint)
+                            OverviewSectionTitle("服务监控", "核心微服务运行指标与状态", dotColor = ColorTokens.Green.foreground)
                             serviceOpenError?.let { message ->
                                 FeedbackBanner(message, error = true)
                             }
@@ -748,9 +743,9 @@ fun OverviewScreen(
                     val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
                     val isDark = isAppInDarkTheme()
                     val topGradientStart = if (stable) {
-                        if (isDark) Color(0xFF064E3B).copy(alpha = 0.30f) else Color(0xFFECFDF5).copy(alpha = 0.85f)
+                        if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.30f) else ColorTokens.Green.container.copy(alpha = 0.85f)
                     } else {
-                        if (isDark) Color(0xFF78350F).copy(alpha = 0.30f) else Color(0xFFFFFBEB).copy(alpha = 0.85f)
+                        if (isDark) ColorTokens.AmberDark.container.copy(alpha = 0.30f) else ColorTokens.Amber.container.copy(alpha = 0.85f)
                     }
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -782,7 +777,7 @@ fun OverviewScreen(
                                         CircularProgressIndicator(
                                             progress = { progress },
                                             modifier = Modifier.size(42.dp),
-                                            color = if (stable) Color(0xFF059669) else Color(0xFFD97706),
+                                            color = if (stable) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
                                             trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
                                             strokeWidth = 3.8.dp,
                                             strokeCap = StrokeCap.Round,
@@ -790,7 +785,7 @@ fun OverviewScreen(
                                         Icon(
                                             if (stable) Icons.Outlined.CloudDone else Icons.Outlined.ErrorOutline,
                                             contentDescription = null,
-                                            tint = if (stable) Color(0xFF059669) else Color(0xFFD97706),
+                                            tint = if (stable) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
                                             modifier = Modifier.size(20.dp),
                                         )
                                     }
@@ -823,25 +818,25 @@ fun OverviewScreen(
                                     ModernOverviewMetric(
                                         label = "健康服务",
                                         value = "$healthyCount/$monitoredCount",
-                                        accent = Color(0xFF059669),
-                                        bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5),
+                                        accent = ColorTokens.Green.foreground,
+                                        bgColor = if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.22f) else ColorTokens.Green.container,
                                         modifier = Modifier.weight(1f),
                                     )
                                     ModernOverviewMetric(
                                         label = "平均响应",
                                         value = averageLatencyMs?.let { "$it ms" } ?: "--",
-                                        accent = Color(0xFF2563EB),
-                                        bgColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.22f) else Color(0xFFEFF6FF),
+                                        accent = ColorTokens.Blue.foreground,
+                                        bgColor = if (isDark) ColorTokens.BlueDark.container.copy(alpha = 0.22f) else ColorTokens.Blue.container,
                                         modifier = Modifier.weight(1f),
                                     )
                                     ModernOverviewMetric(
                                         label = "待处理事项",
                                         value = activeIncidents.size.toString(),
-                                        accent = if (activeIncidents.isEmpty()) Color(0xFF059669) else Color(0xFFDC2626),
+                                        accent = if (activeIncidents.isEmpty()) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
                                         bgColor = if (activeIncidents.isEmpty()) {
-                                            if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5)
+                                            if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.22f) else ColorTokens.Green.container
                                         } else {
-                                            if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.22f) else Color(0xFFFEF2F2)
+                                            if (isDark) ColorTokens.RedDark.container.copy(alpha = 0.22f) else ColorTokens.Red.container
                                         },
                                         modifier = Modifier.weight(1f),
                                     )
@@ -852,7 +847,7 @@ fun OverviewScreen(
                 }
 
                 item(key = "campus-title", contentType = "section") {
-                    OverviewSectionTitle("校园工作台", "课表、成绩与校园日常", dotColor = Ocean)
+                    OverviewSectionTitle("校园工作台", "课表、成绩与校园日常", dotColor = ColorTokens.Blue.foreground)
                 }
                 item(key = "campus-card", contentType = "card") {
                     val campus = state.campusOverview
@@ -882,15 +877,15 @@ fun OverviewScreen(
                                         .size(34.dp)
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(
-                                            if (isDark) Ocean.copy(alpha = 0.20f)
-                                            else OceanPale.copy(alpha = 0.65f)
+                                            if (isDark) ColorTokens.Blue.foreground.copy(alpha = 0.20f)
+                                            else ColorTokens.Blue.container.copy(alpha = 0.65f)
                                         ),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
                                         Icons.Outlined.CalendarMonth,
                                         contentDescription = null,
-                                        tint = Ocean,
+                                        tint = ColorTokens.Blue.foreground,
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -928,22 +923,22 @@ fun OverviewScreen(
                                 ModernOverviewMetric(
                                     label = "今日课程",
                                     value = "$todayCourseTotal 节",
-                                    accent = Color(0xFF2563EB),
-                                    bgColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.22f) else Color(0xFFEFF6FF),
+                                    accent = ColorTokens.Blue.foreground,
+                                    bgColor = if (isDark) ColorTokens.BlueDark.container.copy(alpha = 0.22f) else ColorTokens.Blue.container,
                                     modifier = Modifier.weight(1f),
                                 )
                                 ModernOverviewMetric(
                                     label = "本学期课程",
                                     value = if (courseCount > 0) "$courseCount 门" else "--",
-                                    accent = Color(0xFF059669),
-                                    bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.22f) else Color(0xFFECFDF5),
+                                    accent = ColorTokens.Green.foreground,
+                                    bgColor = if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.22f) else ColorTokens.Green.container,
                                     modifier = Modifier.weight(1f),
                                 )
                                 ModernOverviewMetric(
                                     label = "综合绩点",
                                     value = campus?.gpa?.overall ?: "--",
-                                    accent = Color(0xFF7C3AED),
-                                    bgColor = if (isDark) Color(0xFF581C87).copy(alpha = 0.22f) else Color(0xFFF5F3FF),
+                                    accent = ColorTokens.Purple.foreground,
+                                    bgColor = if (isDark) ColorTokens.PurpleDark.container.copy(alpha = 0.22f) else ColorTokens.Purple.container,
                                     modifier = Modifier.weight(1f),
                                 )
                             }
@@ -955,7 +950,7 @@ fun OverviewScreen(
                     OverviewSectionTitle(
                         title = "快捷中心",
                         subtitle = "高频工具与常用入口一键直达",
-                        dotColor = Amber,
+                        dotColor = ColorTokens.Amber.foreground,
                         trailing = {
                             val editInteractionSource = remember { MutableInteractionSource() }
                             Surface(
@@ -1009,7 +1004,7 @@ fun OverviewScreen(
                                     horizontalArrangement = Arrangement.SpaceEvenly,
                                 ) {
                                     rowActions.forEach { action ->
-                                        val spec = remember(action) { homeQuickActionSpec(
+                                        val spec = homeQuickActionSpec(
                                             action = action,
                                             onSelectTab = onSelectTab,
                                             onRunDiagnostics = onRunDiagnostics,
@@ -1024,7 +1019,7 @@ fun OverviewScreen(
                                             onOpenSearch = onOpenSearch,
                                             onOpenQrLogin = onOpenQrLogin,
                                             onOpenAccountManagement = onOpenAccountManagement,
-                                        ) }
+                                        )
                                         QuickAction(
                                             icon = spec.icon,
                                             label = spec.label,
@@ -1043,7 +1038,7 @@ fun OverviewScreen(
 
                 if (activeIncidents.isNotEmpty()) {
                     item(key = "incident-title", contentType = "section") {
-                        OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知", dotColor = Coral)
+                        OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知", dotColor = ColorTokens.Red.foreground)
                     }
                     items(
                         items = visibleIncidents,
@@ -1060,15 +1055,15 @@ fun OverviewScreen(
                                 .fillMaxWidth()
                                 .pressFeedback(incidentInteractionSource),
                             shape = incidentCardShape,
-                            color = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.20f) else Color(0xFFFEF2F2).copy(alpha = 0.6f),
-                            border = BorderStroke(0.5.dp, if (isDark) Color(0xFF991B1B).copy(alpha = 0.4f) else Color(0xFFFECACA)),
+                            color = if (isDark) ColorTokens.RedDark.container.copy(alpha = 0.20f) else ColorTokens.Red.container.copy(alpha = 0.6f),
+                            border = BorderStroke(0.5.dp, if (isDark) ColorTokens.RedDark.border.copy(alpha = 0.4f) else ColorTokens.Red.border),
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale, modifier = Modifier.size(34.dp))
+                                IconTile(Icons.Outlined.ErrorOutline, ColorTokens.Red.foreground, ColorTokens.Red.container, modifier = Modifier.size(34.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         incident.title,
@@ -1098,7 +1093,7 @@ fun OverviewScreen(
 
                 if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
                     item(key = "external-apps-title", contentType = "section") {
-                        OverviewSectionTitle("外部应用", "独立项目免密快捷直达", dotColor = Color(0xFF7C3AED))
+                        OverviewSectionTitle("外部应用", "独立项目免密快捷直达", dotColor = ColorTokens.Purple.foreground)
                     }
                     externalApplicationOpenError?.let { message ->
                         item(key = "external-apps-error", contentType = "banner") {
@@ -1123,7 +1118,7 @@ fun OverviewScreen(
                 }
 
                 item(key = "services-title", contentType = "section") {
-                    OverviewSectionTitle("服务监控", "核心微服务运行指标与状态", dotColor = Mint)
+                    OverviewSectionTitle("服务监控", "核心微服务运行指标与状态", dotColor = ColorTokens.Green.foreground)
                 }
                 serviceOpenError?.let { message ->
                     item(key = "services-error", contentType = "banner") {
@@ -1480,23 +1475,25 @@ private data class QuickActionVisual(
     val accent: Color,
 )
 
+@Composable
 private fun homeQuickActionVisual(action: HomeQuickAction): QuickActionVisual = when (action) {
-    HomeQuickAction.Today -> QuickActionVisual(Icons.Outlined.CalendarMonth, Color(0xFF2563EB))
-    HomeQuickAction.Notifications -> QuickActionVisual(Icons.Outlined.Notifications, Color(0xFFE11D48))
-    HomeQuickAction.Scenes -> QuickActionVisual(Icons.Outlined.Tune, Color(0xFF7C3AED))
-    HomeQuickAction.Reservation -> QuickActionVisual(Icons.Outlined.MeetingRoom, Color(0xFF2563EB))
-    HomeQuickAction.FreeClassrooms -> QuickActionVisual(Icons.Outlined.School, Color(0xFF0284C7))
-    HomeQuickAction.SeatReservation -> QuickActionVisual(Icons.Outlined.Chair, Color(0xFF16A34A))
-    HomeQuickAction.WaterValve -> QuickActionVisual(Icons.Outlined.WaterDrop, Color(0xFF0284C7))
-    HomeQuickAction.Devices -> QuickActionVisual(Icons.Outlined.Hub, Color(0xFF0284C7))
-    HomeQuickAction.Diagnostics -> QuickActionVisual(Icons.Outlined.Speed, Color(0xFFD97706))
-    HomeQuickAction.Backup -> QuickActionVisual(Icons.Outlined.Backup, Color(0xFF0D9488))
-    HomeQuickAction.GoogleAccounts -> QuickActionVisual(Icons.Outlined.Email, Color(0xFF4F46E5))
-    HomeQuickAction.Operations -> QuickActionVisual(Icons.Outlined.Settings, Color(0xFF64748B))
-    HomeQuickAction.Search -> QuickActionVisual(Icons.Outlined.Search, Color(0xFFEA580C))
-    HomeQuickAction.QrScanner -> QuickActionVisual(Icons.Outlined.CenterFocusWeak, Color(0xFF0EA5E9))
-    HomeQuickAction.Account -> QuickActionVisual(Icons.Outlined.Security, Color(0xFF059669))
+    HomeQuickAction.Today -> QuickActionVisual(Icons.Outlined.CalendarMonth, ColorTokens.Blue.foreground)
+    HomeQuickAction.Notifications -> QuickActionVisual(Icons.Outlined.Notifications, ColorTokens.Pink.foreground)
+    HomeQuickAction.Scenes -> QuickActionVisual(Icons.Outlined.Tune, ColorTokens.Purple.foreground)
+    HomeQuickAction.Reservation -> QuickActionVisual(Icons.Outlined.MeetingRoom, ColorTokens.Blue.foreground)
+    HomeQuickAction.FreeClassrooms -> QuickActionVisual(Icons.Outlined.School, ColorTokens.Sky.foreground)
+    HomeQuickAction.SeatReservation -> QuickActionVisual(Icons.Outlined.Chair, ColorTokens.Green.foreground)
+    HomeQuickAction.WaterValve -> QuickActionVisual(Icons.Outlined.WaterDrop, ColorTokens.Sky.foreground)
+    HomeQuickAction.Devices -> QuickActionVisual(Icons.Outlined.Hub, ColorTokens.Sky.foreground)
+    HomeQuickAction.Diagnostics -> QuickActionVisual(Icons.Outlined.Speed, ColorTokens.Amber.foreground)
+    HomeQuickAction.Backup -> QuickActionVisual(Icons.Outlined.Backup, ColorTokens.Teal.foreground)
+    HomeQuickAction.GoogleAccounts -> QuickActionVisual(Icons.Outlined.Email, ColorTokens.Indigo.foreground)
+    HomeQuickAction.Operations -> QuickActionVisual(Icons.Outlined.Settings, MaterialTheme.colorScheme.onSurfaceVariant)
+    HomeQuickAction.Search -> QuickActionVisual(Icons.Outlined.Search, ColorTokens.Orange.foreground)
+    HomeQuickAction.QrScanner -> QuickActionVisual(Icons.Outlined.CenterFocusWeak, ColorTokens.Sky.foreground)
+    HomeQuickAction.Account -> QuickActionVisual(Icons.Outlined.Security, ColorTokens.Green.foreground)
 }
+@Composable
 private fun homeQuickActionSpec(
     action: HomeQuickAction,
     onSelectTab: (MainTab) -> Unit,
@@ -1516,116 +1513,116 @@ private fun homeQuickActionSpec(
     HomeQuickAction.Today -> HomeQuickActionSpec(
         icon = Icons.Outlined.CalendarMonth,
         label = "今日工作台",
-        accent = Color(0xFF2563EB),
-        accentPale = Color(0xFFEFF6FF),
+        accent = ColorTokens.Blue.foreground,
+        accentPale = ColorTokens.Blue.container,
     ) { onOpenWorkspace(WorkspaceDestination.Today) }
 
     HomeQuickAction.Notifications -> HomeQuickActionSpec(
         icon = Icons.Outlined.Notifications,
         label = "通知中心",
-        accent = Color(0xFFE11D48),
-        accentPale = Color(0xFFFFF1F2),
+        accent = ColorTokens.Pink.foreground,
+        accentPale = ColorTokens.Pink.container,
     ) { onOpenWorkspace(WorkspaceDestination.Notifications) }
 
     HomeQuickAction.Scenes -> HomeQuickActionSpec(
         icon = Icons.Outlined.Tune,
         label = "智能场景",
-        accent = Color(0xFF7C3AED),
-        accentPale = Color(0xFFF5F3FF),
+        accent = ColorTokens.Purple.foreground,
+        accentPale = ColorTokens.Purple.container,
     ) { onOpenWorkspace(WorkspaceDestination.Scenes) }
 
     HomeQuickAction.Reservation -> HomeQuickActionSpec(
         icon = Icons.Outlined.MeetingRoom,
         label = "研讨间预约",
-        accent = Color(0xFF2563EB),
-        accentPale = Color(0xFFEFF6FF),
+        accent = ColorTokens.Blue.foreground,
+        accentPale = ColorTokens.Blue.container,
         onClick = onOpenReservation,
     )
 
     HomeQuickAction.FreeClassrooms -> HomeQuickActionSpec(
         icon = Icons.Outlined.School,
         label = "空闲教室",
-        accent = Color(0xFF0284C7),
-        accentPale = Color(0xFFF0F9FF),
+        accent = ColorTokens.Sky.foreground,
+        accentPale = ColorTokens.Sky.container,
         onClick = onOpenFreeClassrooms,
     )
 
     HomeQuickAction.SeatReservation -> HomeQuickActionSpec(
         icon = Icons.Outlined.Chair,
         label = "座位预约",
-        accent = Color(0xFF16A34A),
-        accentPale = Color(0xFFF0FDF4),
+        accent = ColorTokens.Green.foreground,
+        accentPale = ColorTokens.Green.container,
         onClick = onOpenSeatReservation,
     )
 
     HomeQuickAction.WaterValve -> HomeQuickActionSpec(
         icon = Icons.Outlined.WaterDrop,
         label = "饮水机",
-        accent = Color(0xFF0284C7),
-        accentPale = Color(0xFFF0F9FF),
+        accent = ColorTokens.Sky.foreground,
+        accentPale = ColorTokens.Sky.container,
         onClick = onOpenWaterValve,
     )
 
     HomeQuickAction.Devices -> HomeQuickActionSpec(
         icon = Icons.Outlined.Hub,
         label = "设备控制",
-        accent = Color(0xFF0284C7),
-        accentPale = Color(0xFFF0F9FF),
+        accent = ColorTokens.Sky.foreground,
+        accentPale = ColorTokens.Sky.container,
     ) { onSelectTab(MainTab.Tools) }
 
     HomeQuickAction.Diagnostics -> HomeQuickActionSpec(
         icon = Icons.Outlined.Speed,
         label = "一键巡检",
-        accent = Color(0xFFD97706),
-        accentPale = Color(0xFFFFFBEB),
+        accent = ColorTokens.Amber.foreground,
+        accentPale = ColorTokens.Amber.container,
         onClick = onRunDiagnostics,
     )
 
     HomeQuickAction.Backup -> HomeQuickActionSpec(
         icon = Icons.Outlined.Backup,
         label = "数据备份",
-        accent = Color(0xFF0D9488),
-        accentPale = Color(0xFFF0FDFA),
+        accent = ColorTokens.Teal.foreground,
+        accentPale = ColorTokens.Teal.container,
         onClick = onTriggerBackup,
     )
 
     HomeQuickAction.GoogleAccounts -> HomeQuickActionSpec(
         icon = Icons.Outlined.Email,
         label = "邮箱台账",
-        accent = Color(0xFF4F46E5),
-        accentPale = Color(0xFFEEF2FF),
+        accent = ColorTokens.Indigo.foreground,
+        accentPale = ColorTokens.Indigo.container,
         onClick = onOpenGoogleAccountDesk,
     )
 
     HomeQuickAction.Operations -> HomeQuickActionSpec(
         icon = Icons.Outlined.Settings,
         label = "系统状态",
-        accent = Color(0xFF64748B),
-        accentPale = Color(0xFFF8FAFC),
+        accent = MaterialTheme.colorScheme.onSurfaceVariant,
+        accentPale = MaterialTheme.colorScheme.surfaceContainerLow,
         onClick = onOpenOperations,
     )
 
     HomeQuickAction.Search -> HomeQuickActionSpec(
         icon = Icons.Outlined.Search,
         label = "全局搜索",
-        accent = Color(0xFFEA580C),
-        accentPale = Color(0xFFFFF7ED),
+        accent = ColorTokens.Orange.foreground,
+        accentPale = ColorTokens.Orange.container,
         onClick = onOpenSearch,
     )
 
     HomeQuickAction.QrScanner -> HomeQuickActionSpec(
         icon = Icons.Outlined.CenterFocusWeak,
         label = "扫码登录",
-        accent = Color(0xFF0EA5E9),
-        accentPale = Color(0xFFF0F9FF),
+        accent = ColorTokens.Sky.foreground,
+        accentPale = ColorTokens.Sky.container,
         onClick = onOpenQrLogin,
     )
 
     HomeQuickAction.Account -> HomeQuickActionSpec(
         icon = Icons.Outlined.Security,
         label = "安全中心",
-        accent = Color(0xFF059669),
-        accentPale = Color(0xFFECFDF5),
+        accent = ColorTokens.Green.foreground,
+        accentPale = ColorTokens.Green.container,
         onClick = onOpenAccountManagement,
     )
 }
@@ -2089,75 +2086,77 @@ private data class VisualTheme(
     val accentPale: Color,
 )
 
+@Composable
 private fun applicationVisualTheme(application: ExternalApplication): VisualTheme {
     val name = application.name.lowercase()
     val id = application.id.lowercase()
     return when {
         "ar" in name || "签到" in name || "sign" in id -> VisualTheme(
             icon = Icons.Outlined.CenterFocusWeak,
-            accent = Color(0xFF0EA5E9), // 极光青蓝
-            accentPale = Color(0xFFF0F9FF),
+            accent = ColorTokens.Sky.foreground, // 极光青蓝
+            accentPale = ColorTokens.Sky.container,
         )
         "chat" in name || "api" in name || "ai" in id || "gpt" in name -> VisualTheme(
             icon = Icons.Outlined.AutoAwesome,
-            accent = Color(0xFF8B5CF6), // 智感紫罗兰
-            accentPale = Color(0xFFF5F3FF),
+            accent = ColorTokens.Purple.foreground, // 智感紫罗兰
+            accentPale = ColorTokens.Purple.container,
         )
         "monkey" in name || "code" in name || "调度" in name || "dev" in id -> VisualTheme(
             icon = Icons.Outlined.Terminal,
-            accent = Color(0xFF4F46E5), // 极客靛蓝
-            accentPale = Color(0xFFEEF2FF),
+            accent = ColorTokens.Indigo.foreground, // 极客靛蓝
+            accentPale = ColorTokens.Indigo.container,
         )
         else -> VisualTheme(
             icon = Icons.Outlined.Public,
-            accent = Color(0xFF059669), // 矩阵绿
-            accentPale = Color(0xFFECFDF5),
+            accent = ColorTokens.Green.foreground, // 矩阵绿
+            accentPale = ColorTokens.Green.container,
         )
     }
 }
 
+@Composable
 private fun serviceVisualTheme(service: ServiceInfo): VisualTheme {
     val id = service.id.lowercase()
     val name = service.name.lowercase()
     return when {
         "mqtt" in id || "mqtt" in name -> VisualTheme(
             icon = Icons.Outlined.Speed,
-            accent = Color(0xFF06B6D4), // 物联青
-            accentPale = Color(0xFFECFEFF),
+            accent = ColorTokens.Cyan.foreground, // 物联青
+            accentPale = ColorTokens.Cyan.container,
         )
         "campus" in id || "校园" in name -> VisualTheme(
             icon = Icons.Outlined.CalendarMonth,
-            accent = Color(0xFF2563EB), // 校园蓝
-            accentPale = Color(0xFFEFF6FF),
+            accent = ColorTokens.Blue.foreground, // 校园蓝
+            accentPale = ColorTokens.Blue.container,
         )
         "platform" in id || "控制台" in name || "统一" in name -> VisualTheme(
             icon = Icons.Outlined.Security,
-            accent = Color(0xFF059669), // 盾牌绿
-            accentPale = Color(0xFFECFDF5),
+            accent = ColorTokens.Green.foreground, // 盾牌绿
+            accentPale = ColorTokens.Green.container,
         )
         "exam" in id || "考试" in name -> VisualTheme(
             icon = Icons.Outlined.FactCheck,
-            accent = Color(0xFFEA580C), // 能量橙
-            accentPale = Color(0xFFFFF7ED),
+            accent = ColorTokens.Orange.foreground, // 能量橙
+            accentPale = ColorTokens.Orange.container,
         )
         "notify" in id || "通知" in name -> VisualTheme(
             icon = Icons.Outlined.Notifications,
-            accent = Color(0xFFE11D48), // 活力玫红
-            accentPale = Color(0xFFFFF1F2),
+            accent = ColorTokens.Pink.foreground, // 活力玫红
+            accentPale = ColorTokens.Pink.container,
         )
         "ct8" in id || "自动化" in name -> VisualTheme(
             icon = Icons.Outlined.CloudSync,
-            accent = Color(0xFF64748B), // 钛金灰
-            accentPale = Color(0xFFF8FAFC),
+            accent = MaterialTheme.colorScheme.onSurfaceVariant, // 钛金灰
+            accentPale = MaterialTheme.colorScheme.surfaceContainerLow,
         )
         else -> if (service.category == "miniapp") VisualTheme(
             icon = Icons.Outlined.Hub,
-            accent = Color(0xFF7C3AED), // 微应用紫
-            accentPale = Color(0xFFF5F3FF),
+            accent = ColorTokens.Purple.foreground, // 微应用紫
+            accentPale = ColorTokens.Purple.container,
         ) else VisualTheme(
             icon = Icons.Outlined.Hub,
-            accent = Color(0xFF3B82F6),
-            accentPale = Color(0xFFEFF6FF),
+            accent = ColorTokens.Blue.foreground,
+            accentPale = ColorTokens.Blue.container,
         )
     }
 }
@@ -2168,7 +2167,7 @@ private fun ServiceRow(
     opening: Boolean,
     onOpen: (ServiceInfo) -> Unit,
 ) {
-    val theme = remember(service.id, service.name) { serviceVisualTheme(service) }
+    val theme = serviceVisualTheme(service)
     val hasAdminUrl = !service.adminUrl.isNullOrBlank()
 
     OverviewServiceCardShell(
@@ -2186,8 +2185,8 @@ private fun ServiceRow(
         ).joinToString(" · ").ifBlank { "等待监测数据" }
         val statusColor = when {
             service.httpStatus == null -> MaterialTheme.colorScheme.onSurfaceVariant
-            service.httpStatus in 200..299 -> Color(0xFF059669)
-            else -> Color(0xFFDC2626)
+            service.httpStatus in 200..299 -> ColorTokens.Green.foreground
+            else -> ColorTokens.Red.foreground
         }
 
         if (service.httpStatus == null) {
@@ -2303,7 +2302,7 @@ private fun ExternalApplicationRow(
     opening: Boolean,
     onOpen: (ExternalApplication) -> Unit,
 ) {
-    val theme = remember(application.id, application.name) { applicationVisualTheme(application) }
+    val theme = applicationVisualTheme(application)
 
     OverviewServiceCardShell(
         title = application.name,

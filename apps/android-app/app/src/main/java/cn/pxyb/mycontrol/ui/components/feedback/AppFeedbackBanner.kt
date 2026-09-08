@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.components.feedback
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -61,15 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.pressFeedback
-import cn.pxyb.mycontrol.ui.theme.Amber
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
-import cn.pxyb.mycontrol.ui.theme.BrandBlue
-import cn.pxyb.mycontrol.ui.theme.Coral
-import cn.pxyb.mycontrol.ui.theme.DarkMuted
-import cn.pxyb.mycontrol.ui.theme.DarkText
-import cn.pxyb.mycontrol.ui.theme.ForestSoft
-import cn.pxyb.mycontrol.ui.theme.Ink
-import cn.pxyb.mycontrol.ui.theme.InkMuted
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 /**
@@ -87,7 +80,7 @@ enum class AppFeedbackType {
  *
  * 采用 2026 视觉规范【极光微光毛玻璃胶囊 (Aurora Glass Capsule)】+【方案 D 灵动倒计时微光圆环】：
  * - 20dp 饱满圆角 + 75% 半透明磨砂毛玻璃底座，透出底层极光光斑；
- * - 顶部纳米级高光渐变 + 1dp 发丝级状态微光描边（翠绿 ForestSoft / 珊瑚红 Coral）；
+ * - 顶部纳米级高光渐变 + 1dp 发丝级状态微光描边（翠绿 ColorTokens.Green.foreground / 珊瑚红 ColorTokens.Red.foreground）；
  * - 左侧 32dp 同心光环 3D 拟态微徽标舱，立体透亮；
  * - 右侧方案 D 倒计时微光进度圆环：成功类通知支持 4 秒平滑倒计时收窄并在结束时自动向上折叠淡出；
  * - 随时支持点击叉号手动立即关闭，满足 48×48 dp 无障碍判定热区与弹性触控微震动；
@@ -110,10 +103,10 @@ fun AppFeedbackBanner(
     val haptics = LocalHapticFeedback.current
 
     val accentColor = when (type) {
-        AppFeedbackType.Success -> ForestSoft
-        AppFeedbackType.Error -> Coral
-        AppFeedbackType.Warning -> Amber
-        AppFeedbackType.Info -> BrandBlue
+        AppFeedbackType.Success -> ColorTokens.Green.foreground
+        AppFeedbackType.Error -> ColorTokens.Red.foreground
+        AppFeedbackType.Warning -> ColorTokens.Amber.foreground
+        AppFeedbackType.Info -> ColorTokens.Blue.foreground
     }
 
     // 内部自主控制显示与隐藏
@@ -162,9 +155,9 @@ fun AppFeedbackBanner(
 
     // 半透明磨砂底色（透出底层动态极光）
     val surfaceColor = if (dark) {
-        Color(0xFF0F172A).copy(alpha = 0.72f)
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
     } else {
-        Color.White.copy(alpha = 0.85f)
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
     }
 
     // 顶部纳米高光微渐变
@@ -179,8 +172,8 @@ fun AppFeedbackBanner(
     val borderStrokeColor = accentColor.copy(alpha = if (dark) 0.35f else 0.45f)
 
     // 主文本与次文本颜色
-    val primaryTextColor = if (dark) DarkText else Ink
-    val secondaryTextColor = if (dark) DarkMuted else InkMuted
+    val primaryTextColor = MaterialTheme.colorScheme.onSurface
+    val secondaryTextColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     // 解析左侧图标
     val defaultIcon = when (type) {

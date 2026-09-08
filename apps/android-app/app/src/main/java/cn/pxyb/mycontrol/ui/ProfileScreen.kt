@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
@@ -229,8 +230,8 @@ fun ProfileScreen(
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileCardHeader(
                                         icon = Icons.Outlined.ManageAccounts,
-                                        iconTint = Color(0xFF2563EB),
-                                        iconBackground = Color(0xFFEFF6FF),
+                                        iconTint = ColorTokens.Blue.foreground,
+                                        iconBackground = ColorTokens.Blue.container,
                                         title = "账号安全",
                                         subtitle = "密码、MFA、Passkey 与恢复码",
                                         trailing = { StatusBadge(protectionStatus, protectionBadgeLabel) },
@@ -266,8 +267,8 @@ fun ProfileScreen(
                                     ProfileDivider()
                                     ProfileActionRow(
                                         icon = Icons.Outlined.Security,
-                                        iconTint = Color(0xFF2563EB),
-                                        iconBackground = Color(0xFFEFF6FF),
+                                        iconTint = ColorTokens.Blue.foreground,
+                                        iconBackground = ColorTokens.Blue.container,
                                         title = "账号安全管理",
                                         subtitle = "修改密码、绑定 MFA 与管理恢复码",
                                         onClick = onOpenAccountManagement,
@@ -285,8 +286,8 @@ fun ProfileScreen(
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileCardHeader(
                                         icon = Icons.Outlined.Devices,
-                                        iconTint = Color(0xFF059669),
-                                        iconBackground = Color(0xFFECFDF5),
+                                        iconTint = ColorTokens.Green.foreground,
+                                        iconBackground = ColorTokens.Green.container,
                                         title = "设备与会话",
                                         subtitle = sessionSummary,
                                         onClick = if (security != null) {
@@ -299,7 +300,7 @@ fun ProfileScreen(
                                                 Text(
                                                     if (showSessions) "收起" else "管理会话",
                                                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                                    color = Color(0xFF059669),
+                                                    color = ColorTokens.Green.foreground,
                                                 )
                                             }
                                         },
@@ -307,8 +308,8 @@ fun ProfileScreen(
                                     ProfileDivider()
                                     ProfileActionRow(
                                         icon = Icons.Outlined.Laptop,
-                                        iconTint = Color(0xFF2563EB),
-                                        iconBackground = Color(0xFFEFF6FF),
+                                        iconTint = ColorTokens.Blue.foreground,
+                                        iconBackground = ColorTokens.Blue.container,
                                         title = "电脑端快捷免密登录",
                                         subtitle = "生成单次使用、5 分钟内有效的登录链接",
                                         busy = state.busyAction == "desktop-magic-link",
@@ -357,13 +358,13 @@ fun ProfileScreen(
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(20.dp),
-                                    color = Color(0xFFFFFBEB).copy(alpha = 0.6f),
-                                    border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                                    color = ColorTokens.Amber.container.copy(alpha = 0.6f),
+                                    border = BorderStroke(1.dp, ColorTokens.Amber.border),
                                 ) {
                                     ProfileActionRow(
                                         icon = Icons.Outlined.Notifications,
-                                        iconTint = Color(0xFFD97706),
-                                        iconBackground = Color(0xFFFEF3C7),
+                                        iconTint = ColorTokens.Amber.foreground,
+                                        iconBackground = ColorTokens.Amber.container,
                                         title = "系统通知权限未开启",
                                         subtitle = "建议开启通知，及时接收系统异常与任务状态提醒",
                                         onClick = onRequestNotifications,
@@ -372,7 +373,7 @@ fun ProfileScreen(
                                             Text(
                                                 "开启提醒",
                                                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                                color = Color(0xFFD97706),
+                                                color = ColorTokens.Amber.foreground,
                                             )
                                         },
                                     )
@@ -389,8 +390,8 @@ fun ProfileScreen(
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileCardHeader(
                                         icon = Icons.Outlined.NotificationsActive,
-                                        iconTint = Color(0xFFEA580C),
-                                        iconBackground = Color(0xFFFFF7ED),
+                                        iconTint = ColorTokens.Orange.foreground,
+                                        iconBackground = ColorTokens.Orange.container,
                                         title = "告警推送与免打扰",
                                         subtitle = if (state.alertPreferences.quietHoursEnabled) {
                                             "免打扰已开启 · ${state.alertPreferences.quietStartHour}:00 - ${state.alertPreferences.quietEndHour}:00"
@@ -404,14 +405,14 @@ fun ProfileScreen(
                                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                             ) {
                                                 Surface(
-                                                    color = if (state.alertPreferences.quietHoursEnabled) Color(0xFFF3E8FF) else Color(0xFFECFDF5),
+                                                    color = if (state.alertPreferences.quietHoursEnabled) ColorTokens.Purple.container else ColorTokens.Green.container,
                                                     shape = RoundedCornerShape(8.dp),
-                                                    border = BorderStroke(0.5.dp, if (state.alertPreferences.quietHoursEnabled) Color(0xFFDDD6FE) else Color(0xFFA7F3D0)),
+                                                    border = BorderStroke(0.5.dp, if (state.alertPreferences.quietHoursEnabled) ColorTokens.Purple.border else ColorTokens.Green.border),
                                                 ) {
                                                     Text(
                                                         text = if (state.alertPreferences.quietHoursEnabled) "夜间免打扰" else "全天提醒",
                                                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                        color = if (state.alertPreferences.quietHoursEnabled) Color(0xFF7C3AED) else Color(0xFF047857),
+                                                        color = if (state.alertPreferences.quietHoursEnabled) ColorTokens.Purple.foreground else ColorTokens.Green.foreground,
                                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                                     )
                                                 }
@@ -439,8 +440,8 @@ fun ProfileScreen(
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileActionRow(
                                         icon = Icons.Outlined.Email,
-                                        iconTint = Color(0xFF7C3AED),
-                                        iconBackground = Color(0xFFF5F3FF),
+                                        iconTint = ColorTokens.Purple.foreground,
+                                        iconBackground = ColorTokens.Purple.container,
                                         title = "Google 邮箱台账",
                                         subtitle = "管理主邮箱、别名和 OpenAI 使用状态",
                                         onClick = onOpenGoogleAccountDesk,
@@ -458,8 +459,8 @@ fun ProfileScreen(
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileActionRow(
                                         icon = Icons.Outlined.Code,
-                                        iconTint = Color(0xFF0284C7),
-                                        iconBackground = Color(0xFFE0F2FE),
+                                        iconTint = ColorTokens.Sky.foreground,
+                                        iconBackground = ColorTokens.Sky.container,
                                         title = "GitHub 项目",
                                         subtitle = "管理仓库公开性",
                                         onClick = onOpenGitHubProjects,
@@ -476,15 +477,15 @@ fun ProfileScreen(
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileCardHeader(
                                         icon = Icons.Outlined.AutoAwesome,
-                                        iconTint = Color(0xFF7C3AED),
-                                        iconBackground = Color(0xFFF5F3FF),
+                                        iconTint = ColorTokens.Purple.foreground,
+                                        iconBackground = ColorTokens.Purple.container,
                                         title = "AI 小助手",
                                         subtitle = "悬浮助手按钮与快捷入口",
                                         trailing = {
                                             AppSwitch(
                                                 checked = assistantButtonVisible,
                                                 onCheckedChange = onAssistantButtonVisibleChange,
-                                                tint = Color(0xFF7C3AED),
+                                                tint = ColorTokens.Purple.foreground,
                                             )
                                         },
                                     )
@@ -508,23 +509,23 @@ fun ProfileScreen(
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileCardHeader(
                                         icon = Icons.Outlined.CleaningServices,
-                                        iconTint = Color(0xFF0D9488),
-                                        iconBackground = Color(0xFFF0FDFA),
+                                        iconTint = ColorTokens.Teal.foreground,
+                                        iconBackground = ColorTokens.Teal.container,
                                         title = "App 维护",
                                         subtitle = "本地缓存与数据同步",
                                         trailing = {
                                             Text(
                                                 state.cacheStorageInfo.totalFormatted,
                                                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                                color = Color(0xFF0D9488),
+                                                color = ColorTokens.Teal.foreground,
                                             )
                                         },
                                     )
                                     ProfileDivider()
                                     ProfileActionRow(
                                         icon = Icons.Outlined.CloudSync,
-                                        iconTint = Color(0xFF2563EB),
-                                        iconBackground = Color(0xFFEFF6FF),
+                                        iconTint = ColorTokens.Blue.foreground,
+                                        iconBackground = ColorTokens.Blue.container,
                                         title = "强制全量重新同步",
                                         subtitle = "重新拉取全部模块的最新数据",
                                         onClick = {
@@ -535,8 +536,8 @@ fun ProfileScreen(
                                     ProfileDivider()
                                     ProfileActionRow(
                                         icon = Icons.Outlined.CleaningServices,
-                                        iconTint = Color(0xFF0D9488),
-                                        iconBackground = Color(0xFFF0FDFA),
+                                        iconTint = ColorTokens.Teal.foreground,
+                                        iconBackground = ColorTokens.Teal.container,
                                         title = "清理本地缓存",
                                         subtitle = "释放 ${state.cacheStorageInfo.totalFormatted}，保留登录、个人设置与外部系统登录态",
                                         onClick = { confirmClearCache = true },
@@ -555,8 +556,8 @@ fun ProfileScreen(
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     ProfileActionRow(
                                         icon = Icons.Outlined.SystemUpdate,
-                                        iconTint = Color(0xFF2563EB),
-                                        iconBackground = Color(0xFFEFF6FF),
+                                        iconTint = ColorTokens.Blue.foreground,
+                                        iconBackground = ColorTokens.Blue.container,
                                         title = "关于 MY Control",
                                         subtitle = "当前版本 v${BuildConfig.VERSION_NAME} · 查看版本与更新",
                                         busy = state.appUpdate.phase == AppUpdatePhase.Checking,
@@ -568,14 +569,14 @@ fun ProfileScreen(
                                             Text(
                                                 "查看",
                                                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                                color = Color(0xFF2563EB),
+                                                color = ColorTokens.Blue.foreground,
                                             )
                                         },
                                     )
                                     ProfileActionRow(
                                         icon = Icons.Outlined.Security,
-                                        iconTint = Color(0xFF6D28D9),
-                                        iconBackground = Color(0xFFF5F3FF),
+                                        iconTint = ColorTokens.Purple.foreground,
+                                        iconBackground = ColorTokens.Purple.container,
                                         title = "隐私政策",
                                         subtitle = "查看 MY Control 如何收集、存储与保护你的数据",
                                         onClick = { showPrivacyPolicy = true },
@@ -583,7 +584,7 @@ fun ProfileScreen(
                                             Text(
                                                 "查看",
                                                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                                color = Color(0xFF2563EB),
+                                                color = ColorTokens.Blue.foreground,
                                             )
                                         },
                                     )
@@ -601,8 +602,8 @@ fun ProfileScreen(
                                         onClick = { confirmLogout = true },
                                     ),
                                 shape = RoundedCornerShape(20.dp),
-                                color = Color(0xFFFEF2F2).copy(alpha = 0.6f),
-                                border = BorderStroke(1.dp, Color(0xFFFCA5A5).copy(alpha = 0.6f)),
+                                color = ColorTokens.Red.container.copy(alpha = 0.6f),
+                                border = BorderStroke(1.dp, ColorTokens.Red.border.copy(alpha = 0.6f)),
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -615,20 +616,20 @@ fun ProfileScreen(
                                         CircularProgressIndicator(
                                             modifier = Modifier.size(18.dp),
                                             strokeWidth = 2.dp,
-                                            color = Color(0xFFDC2626),
+                                            color = ColorTokens.Red.foreground,
                                         )
                                     } else {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Outlined.Logout,
                                             contentDescription = null,
-                                            tint = Color(0xFFDC2626),
+                                            tint = ColorTokens.Red.foreground,
                                             modifier = Modifier.size(20.dp),
                                         )
                                         Spacer(Modifier.size(8.dp))
                                         Text(
                                             "退出当前账号",
                                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                            color = Color(0xFFDC2626),
+                                            color = ColorTokens.Red.foreground,
                                         )
                                     }
                                 }
@@ -655,13 +656,13 @@ fun ProfileScreen(
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(20.dp),
-                            color = Color(0xFFFFFBEB).copy(alpha = 0.6f),
-                            border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                            color = ColorTokens.Amber.container.copy(alpha = 0.6f),
+                            border = BorderStroke(1.dp, ColorTokens.Amber.border),
                         ) {
                             ProfileActionRow(
                                 icon = Icons.Outlined.Notifications,
-                                iconTint = Color(0xFFD97706),
-                                iconBackground = Color(0xFFFEF3C7),
+                                iconTint = ColorTokens.Amber.foreground,
+                                iconBackground = ColorTokens.Amber.container,
                                 title = "系统通知权限未开启",
                                 subtitle = "建议开启通知，及时接收系统异常与任务状态提醒",
                                 onClick = onRequestNotifications,
@@ -670,7 +671,7 @@ fun ProfileScreen(
                                     Text(
                                         "开启提醒",
                                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                        color = Color(0xFFD97706),
+                                        color = ColorTokens.Amber.foreground,
                                     )
                                 },
                             )
@@ -689,8 +690,8 @@ fun ProfileScreen(
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileCardHeader(
                                 icon = Icons.Outlined.NotificationsActive,
-                                iconTint = Color(0xFFEA580C),
-                                iconBackground = Color(0xFFFFF7ED),
+                                iconTint = ColorTokens.Orange.foreground,
+                                iconBackground = ColorTokens.Orange.container,
                                 title = "告警推送与免打扰",
                                 subtitle = if (state.alertPreferences.quietHoursEnabled) {
                                     "免打扰已开启 · ${state.alertPreferences.quietStartHour}:00 - ${state.alertPreferences.quietEndHour}:00"
@@ -704,14 +705,14 @@ fun ProfileScreen(
                                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                                     ) {
                                         Surface(
-                                            color = if (state.alertPreferences.quietHoursEnabled) Color(0xFFF3E8FF) else Color(0xFFECFDF5),
+                                            color = if (state.alertPreferences.quietHoursEnabled) ColorTokens.Purple.container else ColorTokens.Green.container,
                                             shape = RoundedCornerShape(8.dp),
-                                            border = BorderStroke(0.5.dp, if (state.alertPreferences.quietHoursEnabled) Color(0xFFDDD6FE) else Color(0xFFA7F3D0)),
+                                            border = BorderStroke(0.5.dp, if (state.alertPreferences.quietHoursEnabled) ColorTokens.Purple.border else ColorTokens.Green.border),
                                         ) {
                                             Text(
                                                 text = if (state.alertPreferences.quietHoursEnabled) "夜间免打扰" else "全天提醒",
                                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                color = if (state.alertPreferences.quietHoursEnabled) Color(0xFF7C3AED) else Color(0xFF047857),
+                                                color = if (state.alertPreferences.quietHoursEnabled) ColorTokens.Purple.foreground else ColorTokens.Green.foreground,
                                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                             )
                                         }
@@ -743,8 +744,8 @@ fun ProfileScreen(
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileCardHeader(
                                 icon = Icons.Outlined.ManageAccounts,
-                                iconTint = Color(0xFF2563EB),
-                                iconBackground = Color(0xFFEFF6FF),
+                                iconTint = ColorTokens.Blue.foreground,
+                                iconBackground = ColorTokens.Blue.container,
                                 title = "账号安全",
                                 subtitle = "密码、MFA、Passkey 与恢复码",
                                 trailing = { StatusBadge(protectionStatus, protectionBadgeLabel) },
@@ -780,8 +781,8 @@ fun ProfileScreen(
                             ProfileDivider()
                             ProfileActionRow(
                                 icon = Icons.Outlined.Security,
-                                iconTint = Color(0xFF2563EB),
-                                iconBackground = Color(0xFFEFF6FF),
+                                iconTint = ColorTokens.Blue.foreground,
+                                iconBackground = ColorTokens.Blue.container,
                                 title = "账号安全管理",
                                 subtitle = "修改密码、绑定 MFA 与管理恢复码",
                                 onClick = onOpenAccountManagement,
@@ -801,8 +802,8 @@ fun ProfileScreen(
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileActionRow(
                                 icon = Icons.Outlined.Email,
-                                iconTint = Color(0xFF7C3AED),
-                                iconBackground = Color(0xFFF5F3FF),
+                                iconTint = ColorTokens.Purple.foreground,
+                                iconBackground = ColorTokens.Purple.container,
                                 title = "Google 邮箱台账",
                                 subtitle = "管理主邮箱、别名和 OpenAI 使用状态",
                                 onClick = onOpenGoogleAccountDesk,
@@ -822,8 +823,8 @@ fun ProfileScreen(
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileActionRow(
                                 icon = Icons.Outlined.Code,
-                                iconTint = Color(0xFF0284C7),
-                                iconBackground = Color(0xFFE0F2FE),
+                                iconTint = ColorTokens.Sky.foreground,
+                                iconBackground = ColorTokens.Sky.container,
                                 title = "GitHub 项目",
                                 subtitle = "管理仓库公开性",
                                 onClick = onOpenGitHubProjects,
@@ -842,8 +843,8 @@ fun ProfileScreen(
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileCardHeader(
                                 icon = Icons.Outlined.Devices,
-                                iconTint = Color(0xFF059669),
-                                iconBackground = Color(0xFFECFDF5),
+                                iconTint = ColorTokens.Green.foreground,
+                                iconBackground = ColorTokens.Green.container,
                                 title = "设备与会话",
                                 subtitle = sessionSummary,
                                 onClick = if (security != null) {
@@ -856,7 +857,7 @@ fun ProfileScreen(
                                         Text(
                                             if (showSessions) "收起" else "管理会话",
                                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                            color = Color(0xFF059669),
+                                            color = ColorTokens.Green.foreground,
                                         )
                                     }
                                 },
@@ -864,8 +865,8 @@ fun ProfileScreen(
                             ProfileDivider()
                             ProfileActionRow(
                                 icon = Icons.Outlined.Laptop,
-                                iconTint = Color(0xFF2563EB),
-                                iconBackground = Color(0xFFEFF6FF),
+                                iconTint = ColorTokens.Blue.foreground,
+                                iconBackground = ColorTokens.Blue.container,
                                 title = "电脑端快捷免密登录",
                                 subtitle = "生成单次使用、5 分钟内有效的登录链接",
                                 busy = state.busyAction == "desktop-magic-link",
@@ -918,15 +919,15 @@ fun ProfileScreen(
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileCardHeader(
                                 icon = Icons.Outlined.AutoAwesome,
-                                iconTint = Color(0xFF7C3AED),
-                                iconBackground = Color(0xFFF5F3FF),
+                                iconTint = ColorTokens.Purple.foreground,
+                                iconBackground = ColorTokens.Purple.container,
                                 title = "AI 小助手",
                                 subtitle = "悬浮助手按钮与快捷入口",
                                 trailing = {
                                     AppSwitch(
                                         checked = assistantButtonVisible,
                                         onCheckedChange = onAssistantButtonVisibleChange,
-                                        tint = Color(0xFF7C3AED),
+                                        tint = ColorTokens.Purple.foreground,
                                     )
                                 },
                             )
@@ -952,23 +953,23 @@ fun ProfileScreen(
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileCardHeader(
                                 icon = Icons.Outlined.CleaningServices,
-                                iconTint = Color(0xFF0D9488),
-                                iconBackground = Color(0xFFF0FDFA),
+                                iconTint = ColorTokens.Teal.foreground,
+                                iconBackground = ColorTokens.Teal.container,
                                 title = "App 维护",
                                 subtitle = "本地缓存与数据同步",
                                 trailing = {
                                     Text(
                                         state.cacheStorageInfo.totalFormatted,
                                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                        color = Color(0xFF0D9488),
+                                        color = ColorTokens.Teal.foreground,
                                     )
                                 },
                             )
                             ProfileDivider()
                             ProfileActionRow(
                                 icon = Icons.Outlined.CloudSync,
-                                iconTint = Color(0xFF2563EB),
-                                iconBackground = Color(0xFFEFF6FF),
+                                iconTint = ColorTokens.Blue.foreground,
+                                iconBackground = ColorTokens.Blue.container,
                                 title = "强制全量重新同步",
                                 subtitle = "重新拉取全部模块的最新数据",
                                 onClick = {
@@ -979,8 +980,8 @@ fun ProfileScreen(
                             ProfileDivider()
                             ProfileActionRow(
                                 icon = Icons.Outlined.CleaningServices,
-                                iconTint = Color(0xFF0D9488),
-                                iconBackground = Color(0xFFF0FDFA),
+                                iconTint = ColorTokens.Teal.foreground,
+                                iconBackground = ColorTokens.Teal.container,
                                 title = "清理本地缓存",
                                 subtitle = "释放 ${state.cacheStorageInfo.totalFormatted}，保留登录、个人设置与外部系统登录态",
                                 onClick = { confirmClearCache = true },
@@ -1001,8 +1002,8 @@ fun ProfileScreen(
                         Column(modifier = Modifier.fillMaxWidth()) {
                             ProfileActionRow(
                                 icon = Icons.Outlined.SystemUpdate,
-                                iconTint = Color(0xFF2563EB),
-                                iconBackground = Color(0xFFEFF6FF),
+                                iconTint = ColorTokens.Blue.foreground,
+                                iconBackground = ColorTokens.Blue.container,
                                 title = "关于 MY Control",
                                 subtitle = "当前版本 v${BuildConfig.VERSION_NAME} · 查看版本与更新",
                                 busy = state.appUpdate.phase == AppUpdatePhase.Checking,
@@ -1014,14 +1015,14 @@ fun ProfileScreen(
                                     Text(
                                         "查看",
                                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                        color = Color(0xFF2563EB),
+                                        color = ColorTokens.Blue.foreground,
                                     )
                                 },
                             )
                             ProfileActionRow(
                                 icon = Icons.Outlined.Security,
-                                iconTint = Color(0xFF6D28D9),
-                                iconBackground = Color(0xFFF5F3FF),
+                                iconTint = ColorTokens.Purple.foreground,
+                                iconBackground = ColorTokens.Purple.container,
                                 title = "隐私政策",
                                 subtitle = "查看 MY Control 如何收集、存储与保护你的数据",
                                 onClick = { showPrivacyPolicy = true },
@@ -1029,7 +1030,7 @@ fun ProfileScreen(
                                     Text(
                                         "查看",
                                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                        color = Color(0xFF2563EB),
+                                        color = ColorTokens.Blue.foreground,
                                     )
                                 },
                             )
@@ -1049,8 +1050,8 @@ fun ProfileScreen(
                                 onClick = { confirmLogout = true },
                             ),
                         shape = RoundedCornerShape(20.dp),
-                        color = Color(0xFFFEF2F2).copy(alpha = 0.6f),
-                        border = BorderStroke(1.dp, Color(0xFFFCA5A5).copy(alpha = 0.6f)),
+                        color = ColorTokens.Red.container.copy(alpha = 0.6f),
+                        border = BorderStroke(1.dp, ColorTokens.Red.border.copy(alpha = 0.6f)),
                     ) {
                         Row(
                             modifier = Modifier
@@ -1063,20 +1064,20 @@ fun ProfileScreen(
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
                                     strokeWidth = 2.dp,
-                                    color = Color(0xFFDC2626),
+                                    color = ColorTokens.Red.foreground,
                                 )
                             } else {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Outlined.Logout,
                                     contentDescription = null,
-                                    tint = Color(0xFFDC2626),
+                                    tint = ColorTokens.Red.foreground,
                                     modifier = Modifier.size(20.dp),
                                 )
                                 Spacer(Modifier.size(8.dp))
                                 Text(
                                     "退出当前账号",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFFDC2626),
+                                    color = ColorTokens.Red.foreground,
                                 )
                             }
                         }
@@ -1110,7 +1111,7 @@ fun ProfileScreen(
             ) {
                 Column(modifier = Modifier.padding(22.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconTile(Icons.Outlined.Laptop, Color(0xFF2563EB), Color(0xFFEFF6FF), modifier = Modifier.size(44.dp))
+                        IconTile(Icons.Outlined.Laptop, ColorTokens.Blue.foreground, ColorTokens.Blue.container, modifier = Modifier.size(44.dp))
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text("电脑端快捷免密登录", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
@@ -1188,7 +1189,7 @@ fun ProfileScreen(
             ) {
                 Column(modifier = Modifier.padding(22.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconTile(Icons.Outlined.SystemUpdate, Color(0xFF2563EB), Color(0xFFEFF6FF), modifier = Modifier.size(44.dp))
+                        IconTile(Icons.Outlined.SystemUpdate, ColorTokens.Blue.foreground, ColorTokens.Blue.container, modifier = Modifier.size(44.dp))
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text("关于 MY Control", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
@@ -1203,8 +1204,8 @@ fun ProfileScreen(
                         AppUpdatePhase.Checking,
                         -> AppUpdateStatusPanel(
                             icon = Icons.Outlined.SystemUpdate,
-                            tint = Color(0xFF2563EB),
-                            background = Color(0xFFEFF6FF),
+                            tint = ColorTokens.Blue.foreground,
+                            background = ColorTokens.Blue.container,
                             title = "正在检查 GitHub Releases",
                             detail = "正在读取最新稳定版信息...",
                             loading = true,
@@ -1212,16 +1213,16 @@ fun ProfileScreen(
 
                         AppUpdatePhase.Current -> AppUpdateStatusPanel(
                             icon = Icons.Outlined.CheckCircle,
-                            tint = Color(0xFF047857),
-                            background = Color(0xFFECFDF5),
+                            tint = ColorTokens.Green.foreground,
+                            background = ColorTokens.Green.container,
                             title = "当前已是最新稳定版",
                             detail = "本机 v${BuildConfig.VERSION_NAME} · GitHub v${state.appUpdate.info?.versionName ?: BuildConfig.VERSION_NAME}",
                         )
 
                         AppUpdatePhase.Available -> AppUpdateStatusPanel(
                             icon = Icons.Outlined.SystemUpdate,
-                            tint = Color(0xFF1D4ED8),
-                            background = Color(0xFFEFF6FF),
+                            tint = ColorTokens.Blue.foreground,
+                            background = ColorTokens.Blue.container,
                             title = "发现新版本 v${state.appUpdate.info?.versionName.orEmpty()}",
                             detail = state.appUpdate.info?.notes?.ifBlank { "包含新的功能与稳定性改进" }
                                 ?: "包含新的功能与稳定性改进",
@@ -1229,8 +1230,8 @@ fun ProfileScreen(
 
                         AppUpdatePhase.Downloading -> AppUpdateStatusPanel(
                             icon = Icons.Outlined.FileDownload,
-                            tint = Color(0xFF2563EB),
-                            background = Color(0xFFEFF6FF),
+                            tint = ColorTokens.Blue.foreground,
+                            background = ColorTokens.Blue.container,
                             title = "正在下载并校验安装包",
                             detail = "${state.appUpdate.progress}% · 完成后将打开系统安装器",
                             progress = state.appUpdate.progress,
@@ -1238,32 +1239,32 @@ fun ProfileScreen(
 
                         AppUpdatePhase.ReadyToInstall -> AppUpdateStatusPanel(
                             icon = Icons.Outlined.CheckCircle,
-                            tint = Color(0xFF047857),
-                            background = Color(0xFFECFDF5),
+                            tint = ColorTokens.Green.foreground,
+                            background = ColorTokens.Green.container,
                             title = "安装包校验通过",
                             detail = "可以继续交给 Android 系统安装器安装。",
                         )
 
                         AppUpdatePhase.InstallPermissionRequired -> AppUpdateStatusPanel(
                             icon = Icons.Outlined.SystemUpdate,
-                            tint = Color(0xFFB45309),
-                            background = Color(0xFFFFFBEB),
+                            tint = ColorTokens.Amber.foreground,
+                            background = ColorTokens.Amber.container,
                             title = "需要允许此来源安装应用",
                             detail = "在系统设置中开启权限，返回后点击继续安装。",
                         )
 
                         AppUpdatePhase.Installing -> AppUpdateStatusPanel(
                             icon = Icons.Outlined.SystemUpdate,
-                            tint = Color(0xFF047857),
-                            background = Color(0xFFECFDF5),
+                            tint = ColorTokens.Green.foreground,
+                            background = ColorTokens.Green.container,
                             title = "系统安装器已打开",
                             detail = "请按系统提示完成更新安装。",
                         )
 
                         AppUpdatePhase.Error -> AppUpdateStatusPanel(
                             icon = Icons.Outlined.SystemUpdate,
-                            tint = Color(0xFFB91C1C),
-                            background = Color(0xFFFEF2F2),
+                            tint = ColorTokens.Red.foreground,
+                            background = ColorTokens.Red.container,
                             title = "更新检查或安装未完成",
                             detail = state.appUpdate.error ?: "请稍后重试，或前往 GitHub Releases 手动下载。",
                         )
@@ -1547,9 +1548,9 @@ private fun ModernProfileCard(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Surface(
-                            color = Color(0xFFEFF6FF).copy(alpha = 0.6f),
+                            color = ColorTokens.Blue.container.copy(alpha = 0.6f),
                             shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(0.5.dp, Color(0xFFBFDBFE)),
+                            border = BorderStroke(0.5.dp, ColorTokens.Blue.border),
                         ) {
                             Text(
                                 text = roleLabel(role),
@@ -1557,7 +1558,7 @@ private fun ModernProfileCard(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 11.sp,
                                 ),
-                                color = Color(0xFF1D4ED8),
+                                color = ColorTokens.Blue.foreground,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                             )
                         }
@@ -1585,9 +1586,9 @@ private fun LightSecurityCell(
     isGood: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val bgColor = if (isGood) Color(0xFFECFDF5) else Color(0xFFFFFBEB)
-    val borderColor = if (isGood) Color(0xFFA7F3D0) else Color(0xFFFDE68A)
-    val textColor = if (isGood) Color(0xFF047857) else Color(0xFFB45309)
+    val bgColor = if (isGood) ColorTokens.Green.container else ColorTokens.Amber.container
+    val borderColor = if (isGood) ColorTokens.Green.border else ColorTokens.Amber.border
+    val textColor = if (isGood) ColorTokens.Green.foreground else ColorTokens.Amber.foreground
 
     Surface(
         modifier = modifier,
@@ -1651,7 +1652,7 @@ private fun NotificationPreferencesDialog(
         ) {
             Column(modifier = Modifier.padding(22.dp).verticalScroll(rememberScrollState())) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconTile(Icons.Outlined.NotificationsActive, Color(0xFFEA580C), Color(0xFFFFF7ED), modifier = Modifier.size(44.dp))
+                    IconTile(Icons.Outlined.NotificationsActive, ColorTokens.Orange.foreground, ColorTokens.Orange.container, modifier = Modifier.size(44.dp))
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text("告警与通知偏好", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
@@ -1674,7 +1675,7 @@ private fun NotificationPreferencesDialog(
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Outlined.Bedtime, contentDescription = null, tint = Color(0xFF7C3AED), modifier = Modifier.size(20.dp))
+                                Icon(Icons.Outlined.Bedtime, contentDescription = null, tint = ColorTokens.Purple.foreground, modifier = Modifier.size(20.dp))
                                 Column {
                                     Text("夜间免打扰 (DND)", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                                     Text("时段内静音普通告警 (保留 P0 致命提醒)", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1683,7 +1684,7 @@ private fun NotificationPreferencesDialog(
                             AppSwitch(
                                 checked = quietEnabled,
                                 onCheckedChange = { quietEnabled = it },
-                                tint = Color(0xFF7C3AED),
+                                tint = ColorTokens.Purple.foreground,
                             )
                         }
 
@@ -1698,7 +1699,7 @@ private fun NotificationPreferencesDialog(
                                 Text(
                                     "${quietStart}:00 至 次日 ${quietEnd}:00",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFF7C3AED),
+                                    color = ColorTokens.Purple.foreground,
                                 )
                             }
                         }
@@ -1810,13 +1811,13 @@ private fun SeverityChip(id: String, label: String, selected: Boolean, onSelect:
     Surface(
         onClick = onSelect,
         shape = RoundedCornerShape(10.dp),
-        color = if (selected) Color(0xFFEFF6FF) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        border = BorderStroke(1.dp, if (selected) Color(0xFF2563EB) else Color.Transparent),
+        color = if (selected) ColorTokens.Blue.container else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        border = BorderStroke(1.dp, if (selected) ColorTokens.Blue.foreground else Color.Transparent),
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal),
-            color = if (selected) Color(0xFF1D4ED8) else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (selected) ColorTokens.Blue.foreground else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
         )
     }

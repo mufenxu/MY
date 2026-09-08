@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -41,13 +42,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cn.pxyb.mycontrol.ui.theme.Amber
-import cn.pxyb.mycontrol.ui.theme.AmberPale
-import cn.pxyb.mycontrol.ui.theme.Coral
-import cn.pxyb.mycontrol.ui.theme.CoralPale
-import cn.pxyb.mycontrol.ui.theme.Forest
-import cn.pxyb.mycontrol.ui.theme.MintPale
-import cn.pxyb.mycontrol.ui.theme.Ocean
 import cn.pxyb.mycontrol.data.IncidentInfo
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -139,10 +133,10 @@ fun OperationsScreen(
                                         .padding(horizontal = 14.dp, vertical = 12.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    MetricCell("健康服务", "$healthyServices/$monitoredServices", Modifier.weight(1f), if (state.overview != null && healthyServices == monitoredServices) Forest else Amber)
-                                    MetricCell("活动问题", activeIncidents.toString(), Modifier.weight(1f), if (activeIncidents == 0) Forest else Coral)
-                                    MetricCell("在线设备", "$onlineDevices/$totalDevices", Modifier.weight(1f), if (state.iot != null && onlineDevices == totalDevices) Forest else Amber)
-                                    MetricCell("即将到期", upcomingResources.size.toString(), Modifier.weight(1f), if (upcomingResources.isEmpty()) Forest else Amber)
+                                    MetricCell("健康服务", "$healthyServices/$monitoredServices", Modifier.weight(1f), if (state.overview != null && healthyServices == monitoredServices) ColorTokens.Green.foreground else ColorTokens.Amber.foreground)
+                                    MetricCell("活动问题", activeIncidents.toString(), Modifier.weight(1f), if (activeIncidents == 0) ColorTokens.Green.foreground else ColorTokens.Red.foreground)
+                                    MetricCell("在线设备", "$onlineDevices/$totalDevices", Modifier.weight(1f), if (state.iot != null && onlineDevices == totalDevices) ColorTokens.Green.foreground else ColorTokens.Amber.foreground)
+                                    MetricCell("即将到期", upcomingResources.size.toString(), Modifier.weight(1f), if (upcomingResources.isEmpty()) ColorTokens.Green.foreground else ColorTokens.Amber.foreground)
                                 }
                             }
 
@@ -151,8 +145,8 @@ fun OperationsScreen(
                                 Column {
                                     OperationsStatusRow(
                                         icon = Icons.Outlined.NotificationsActive,
-                                        iconTint = if (state.unreadAlerts == 0) Forest else Coral,
-                                        iconBackground = if (state.unreadAlerts == 0) MintPale else CoralPale,
+                                        iconTint = if (state.unreadAlerts == 0) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
+                                        iconBackground = if (state.unreadAlerts == 0) ColorTokens.Green.container else ColorTokens.Red.container,
                                         title = "通知中心",
                                         subtitle = if (state.unreadAlerts == 0) "当前没有未读提醒" else "${state.unreadAlerts} 条未读提醒需要查看",
                                         onClick = onOpenNotifications,
@@ -161,8 +155,8 @@ fun OperationsScreen(
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
                                     OperationsStatusRow(
                                         icon = Icons.Outlined.Wifi,
-                                        iconTint = Ocean,
-                                        iconBackground = Color(0xFFE0F2FE),
+                                        iconTint = ColorTokens.Blue.foreground,
+                                        iconBackground = ColorTokens.Sky.container,
                                         title = "远程服务器连通性",
                                         subtitle = state.networkHealth.message
                                             ?: state.networkHealth.gatewayUrl.ifBlank { "测量 DNS 解析与 API 响应延迟" },
@@ -185,7 +179,7 @@ fun OperationsScreen(
                                                     Icon(
                                                         imageVector = if (check.ok) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
                                                         contentDescription = null,
-                                                        tint = if (check.ok) Forest else Coral,
+                                                        tint = if (check.ok) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
                                                         modifier = Modifier.size(16.dp),
                                                     )
                                                     Text(check.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
@@ -235,8 +229,8 @@ fun OperationsScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                         IconTile(
                                             Icons.Outlined.Backup,
-                                            if (backup?.rpoState == "healthy") Forest else Amber,
-                                            if (backup?.rpoState == "healthy") MintPale else AmberPale,
+                                            if (backup?.rpoState == "healthy") ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
+                                            if (backup?.rpoState == "healthy") ColorTokens.Green.container else ColorTokens.Amber.container,
                                         )
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(backup?.latestName ?: "尚无可恢复备份", style = MaterialTheme.typography.titleMedium)
@@ -275,7 +269,7 @@ fun OperationsScreen(
                                     AppPanel {
                                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                                                IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale, modifier = Modifier.size(36.dp))
+                                                IconTile(Icons.Outlined.ErrorOutline, ColorTokens.Red.foreground, ColorTokens.Red.container, modifier = Modifier.size(36.dp))
                                                 Column(Modifier.weight(1f)) {
                                                     Text(incident.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                                                     Text(
@@ -320,8 +314,8 @@ fun OperationsScreen(
                                         ) {
                                             IconTile(
                                                 Icons.Outlined.ErrorOutline,
-                                                if (days <= 7) Coral else Amber,
-                                                if (days <= 7) CoralPale else AmberPale,
+                                                if (days <= 7) ColorTokens.Red.foreground else ColorTokens.Amber.foreground,
+                                                if (days <= 7) ColorTokens.Red.container else ColorTokens.Amber.container,
                                             )
                                             Column(Modifier.weight(1f)) {
                                                 Text(resource.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -334,7 +328,7 @@ fun OperationsScreen(
                                                     else -> "$days 天后"
                                                 },
                                                 style = MaterialTheme.typography.labelLarge,
-                                                color = if (days <= 7) Coral else Amber,
+                                                color = if (days <= 7) ColorTokens.Red.foreground else ColorTokens.Amber.foreground,
                                             )
                                         }
                                     }
@@ -356,10 +350,10 @@ fun OperationsScreen(
                                 .padding(horizontal = 14.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            MetricCell("健康服务", "$healthyServices/$monitoredServices", Modifier.weight(1f), if (state.overview != null && healthyServices == monitoredServices) Forest else Amber)
-                            MetricCell("活动问题", activeIncidents.toString(), Modifier.weight(1f), if (activeIncidents == 0) Forest else Coral)
-                            MetricCell("在线设备", "$onlineDevices/$totalDevices", Modifier.weight(1f), if (state.iot != null && onlineDevices == totalDevices) Forest else Amber)
-                            MetricCell("即将到期", upcomingResources.size.toString(), Modifier.weight(1f), if (upcomingResources.isEmpty()) Forest else Amber)
+                            MetricCell("健康服务", "$healthyServices/$monitoredServices", Modifier.weight(1f), if (state.overview != null && healthyServices == monitoredServices) ColorTokens.Green.foreground else ColorTokens.Amber.foreground)
+                            MetricCell("活动问题", activeIncidents.toString(), Modifier.weight(1f), if (activeIncidents == 0) ColorTokens.Green.foreground else ColorTokens.Red.foreground)
+                            MetricCell("在线设备", "$onlineDevices/$totalDevices", Modifier.weight(1f), if (state.iot != null && onlineDevices == totalDevices) ColorTokens.Green.foreground else ColorTokens.Amber.foreground)
+                            MetricCell("即将到期", upcomingResources.size.toString(), Modifier.weight(1f), if (upcomingResources.isEmpty()) ColorTokens.Green.foreground else ColorTokens.Amber.foreground)
                         }
                     }
                 }
@@ -372,8 +366,8 @@ fun OperationsScreen(
                         Column {
                             OperationsStatusRow(
                                 icon = Icons.Outlined.NotificationsActive,
-                                iconTint = if (state.unreadAlerts == 0) Forest else Coral,
-                                iconBackground = if (state.unreadAlerts == 0) MintPale else CoralPale,
+                                iconTint = if (state.unreadAlerts == 0) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
+                                iconBackground = if (state.unreadAlerts == 0) ColorTokens.Green.container else ColorTokens.Red.container,
                                 title = "通知中心",
                                 subtitle = if (state.unreadAlerts == 0) "当前没有未读提醒" else "${state.unreadAlerts} 条未读提醒需要查看",
                                 onClick = onOpenNotifications,
@@ -382,8 +376,8 @@ fun OperationsScreen(
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
                             OperationsStatusRow(
                                 icon = Icons.Outlined.Wifi,
-                                iconTint = Ocean,
-                                iconBackground = Color(0xFFE0F2FE),
+                                iconTint = ColorTokens.Blue.foreground,
+                                iconBackground = ColorTokens.Sky.container,
                                 title = "远程服务器连通性",
                                 subtitle = state.networkHealth.message
                                     ?: state.networkHealth.gatewayUrl.ifBlank { "测量 DNS 解析与 API 响应延迟" },
@@ -406,7 +400,7 @@ fun OperationsScreen(
                                             Icon(
                                                 imageVector = if (check.ok) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
                                                 contentDescription = null,
-                                                tint = if (check.ok) Forest else Coral,
+                                                tint = if (check.ok) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
                                                 modifier = Modifier.size(16.dp),
                                             )
                                             Text(check.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
@@ -437,7 +431,7 @@ fun OperationsScreen(
                         AppPanel {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                                    IconTile(Icons.Outlined.ErrorOutline, Coral, CoralPale, modifier = Modifier.size(36.dp))
+                                    IconTile(Icons.Outlined.ErrorOutline, ColorTokens.Red.foreground, ColorTokens.Red.container, modifier = Modifier.size(36.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text(incident.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                                         Text(
@@ -515,8 +509,8 @@ fun OperationsScreen(
                             ) {
                                 IconTile(
                                     Icons.Outlined.ErrorOutline,
-                                    if (days <= 7) Coral else Amber,
-                                    if (days <= 7) CoralPale else AmberPale,
+                                    if (days <= 7) ColorTokens.Red.foreground else ColorTokens.Amber.foreground,
+                                    if (days <= 7) ColorTokens.Red.container else ColorTokens.Amber.container,
                                 )
                                 Column(Modifier.weight(1f)) {
                                     Text(resource.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -529,7 +523,7 @@ fun OperationsScreen(
                                         else -> "$days 天后"
                                     },
                                     style = MaterialTheme.typography.labelLarge,
-                                    color = if (days <= 7) Coral else Amber,
+                                    color = if (days <= 7) ColorTokens.Red.foreground else ColorTokens.Amber.foreground,
                                 )
                             }
                         }
@@ -546,8 +540,8 @@ fun OperationsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 IconTile(
                                     Icons.Outlined.Backup,
-                                    if (backup?.rpoState == "healthy") Forest else Amber,
-                                    if (backup?.rpoState == "healthy") MintPale else AmberPale,
+                                    if (backup?.rpoState == "healthy") ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
+                                    if (backup?.rpoState == "healthy") ColorTokens.Green.container else ColorTokens.Amber.container,
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(backup?.latestName ?: "尚无可恢复备份", style = MaterialTheme.typography.titleMedium)

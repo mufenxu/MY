@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -1085,8 +1086,6 @@ private fun SecondFloorSeatMap(
     }
 }
 
-private val FreeSeatGreen = Color(0xFF2E7D32)
-
 @Composable
 private fun SecondFloorSeatCell(
     label: Int,
@@ -1101,20 +1100,20 @@ private fun SecondFloorSeatCell(
     val background = when {
         selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
         seat == null -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f)
-        seat.isFree -> FreeSeatGreen.copy(alpha = 0.16f)
+        seat.isFree -> ColorTokens.Green.foreground.copy(alpha = 0.16f)
         seat.status.equals("IN_USE", ignoreCase = true) -> MaterialTheme.colorScheme.surfaceVariant
         else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
     }
     val borderColor = when {
         selected -> MaterialTheme.colorScheme.primary
         seat == null -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-        seat.isFree -> FreeSeatGreen.copy(alpha = 0.8f)
+        seat.isFree -> ColorTokens.Green.foreground.copy(alpha = 0.8f)
         else -> MaterialTheme.colorScheme.outlineVariant
     }
     val backColor = when {
         selected -> MaterialTheme.colorScheme.primary
         seat == null -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        seat.isFree -> FreeSeatGreen
+        seat.isFree -> ColorTokens.Green.foreground
         else -> MaterialTheme.colorScheme.outlineVariant
     }
     Column(

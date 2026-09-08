@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -125,7 +126,7 @@ fun AppNavigationRail(
                     Box(
                         modifier = Modifier
                             .size(5.dp)
-                            .background(Color(0xFF10B981), CircleShape),
+                            .background(ColorTokens.Green.foreground, CircleShape),
                     )
                     Text(
                         "LIVE",
@@ -134,7 +135,7 @@ fun AppNavigationRail(
                             fontSize = 9.sp,
                             letterSpacing = 0.5.sp,
                         ),
-                        color = Color(0xFF10B981),
+                        color = ColorTokens.Green.foreground,
                     )
                 }
             }
