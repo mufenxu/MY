@@ -560,7 +560,7 @@ fun ProfileScreen(
                                         iconBackground = Color(0xFFEFF6FF),
                                         title = "关于 MY Control",
                                         subtitle = "当前版本 v${BuildConfig.VERSION_NAME} · 查看版本与更新",
-                                        busy = state.busyAction == "check-updates",
+                                        busy = state.appUpdate.phase == AppUpdatePhase.Checking,
                                         onClick = {
                                             onCheckUpdates()
                                             showUpdateDialog = true
@@ -1006,7 +1006,7 @@ fun ProfileScreen(
                                 iconBackground = Color(0xFFEFF6FF),
                                 title = "关于 MY Control",
                                 subtitle = "当前版本 v${BuildConfig.VERSION_NAME} · 查看版本与更新",
-                                busy = state.busyAction == "check-updates",
+                                busy = state.appUpdate.phase == AppUpdatePhase.Checking,
                                 onClick = {
                                     onCheckUpdates()
                                     showUpdateDialog = true

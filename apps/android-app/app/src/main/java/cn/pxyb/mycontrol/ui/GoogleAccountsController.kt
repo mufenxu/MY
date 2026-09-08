@@ -23,9 +23,10 @@ class GoogleAccountsController(
     parentScope: CoroutineScope,
     private val api: PlatformApi,
     private val googleAccountStore: GoogleAccountStore,
-    // These records also feed overview and global search; operations share the app-wide busy state.
+    // These records also feed overview and global search; only account mutations share a resource lock.
     private val mutableState: MutableStateFlow<AppUiState>,
     private val onSessionExpired: (String) -> Unit,
+    private val actions: ActionStateHolder,
 ) {
     private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
 
@@ -309,28 +310,17 @@ class GoogleAccountsController(
     }
 
     fun discardLocalGoogleAccounts() {
-        if (mutableState.value.busyAction != null || !mutableState.value.googleAccountMigrationPending) return
-        scope.launch {
-            mutableState.update { it.copy(busyAction = "google-accounts", error = null, message = null) }
-            runCatching { withContext(Dispatchers.IO) { googleAccountStore.clear() } }
-                .onSuccess {
-                    mutableState.update {
-                        it.copy(
-                            googleAccounts = emptyList(),
-                            googleAccountsLoaded = true,
-                            googleAccountMigrationPending = false,
-                            googleAccountsRemoteReady = true,
-                            busyAction = null,
-                            message = "已清除本机缓存，服务器台账仍为空。",
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    handleFeatureRequestFailure(error, onSessionExpired)
-                    mutableState.update {
-                        it.copy(busyAction = null, error = error.message ?: "本机缓存清除失败。")
-                    }
-                }
+        if (!mutableState.value.googleAccountMigrationPending) return
+        actions.run("google-accounts", "已清除本机缓存，服务器台账仍为空。", failureMessage = "本机缓存清除失败。") {
+            withContext(Dispatchers.IO) { googleAccountStore.clear() }
+            mutableState.update {
+                it.copy(
+                    googleAccounts = emptyList(),
+                    googleAccountsLoaded = true,
+                    googleAccountMigrationPending = false,
+                    googleAccountsRemoteReady = true,
+                )
+            }
         }
     }
 
@@ -339,19 +329,15 @@ class GoogleAccountsController(
         successMessage: String,
     ) {
         val current = mutableState.value
-        if (current.busyAction != null) return
         if (!current.googleAccountsRemoteReady && !current.googleAccountMigrationPending) {
             setGoogleAccountError("服务器暂时不可用，邮箱台账当前为只读缓存。")
             return
         }
-        scope.launch {
-            mutableState.update { it.copy(busyAction = "google-accounts", error = null, message = null) }
-            runCatching {
+        actions.run("google-accounts", successMessage, failureMessage = "Google 邮箱台账保存失败。") {
+            try {
                 val accounts = transform(mutableState.value.googleAccounts)
                 val snapshot = api.replaceGoogleAccounts(accounts, mutableState.value.googleAccountsRevision)
                 withContext(Dispatchers.IO) { googleAccountStore.write(snapshot.accounts) }
-                snapshot
-            }.onSuccess { snapshot ->
                 mutableState.update {
                     it.copy(
                         googleAccounts = snapshot.accounts,
@@ -359,27 +345,15 @@ class GoogleAccountsController(
                         googleAccountsRevision = snapshot.revision,
                         googleAccountMigrationPending = false,
                         googleAccountsRemoteReady = true,
-                        busyAction = null,
-                        message = successMessage,
                     )
                 }
-            }.onFailure { error ->
-                handleFeatureRequestFailure(error, onSessionExpired)
+            } catch (error: Throwable) {
                 if (error is ApiException && error.code == "GOOGLE_ACCOUNT_REVISION_CONFLICT") {
-                    mutableState.update {
-                        it.copy(
-                            busyAction = null,
-                            googleAccountsLoaded = false,
-                            googleAccountsRemoteReady = false,
-                            error = "服务器上的邮箱台账已更新，正在重新加载。",
-                        )
-                    }
+                    mutableState.update { it.copy(googleAccountsLoaded = false, googleAccountsRemoteReady = false) }
                     loadGoogleAccounts()
-                } else {
-                    mutableState.update {
-                        it.copy(busyAction = null, error = error.message ?: "Google 邮箱台账保存失败。")
-                    }
+                    throw IllegalStateException("服务器上的邮箱台账已更新，正在重新加载。", error)
                 }
+                throw error
             }
         }
     }

@@ -483,7 +483,7 @@ class PersonalWorkspaceStore(context: Context) {
 
     fun writePendingTodoMutations(mutations: List<TodoMutation>) {
         scopedKey(KEY_TODO_QUEUE)?.let { key ->
-            codec.write(key, JSONArray().apply { mutations.takeLast(MAX_PENDING_MUTATIONS).forEach { put(it.toJson()) } }.toString())
+            codec.write(key, JSONArray().apply { mutations.forEach { put(it.toJson()) } }.toString())
         }
     }
 

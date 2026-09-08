@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
     private val nfcAdapter by lazy { NfcAdapter.getDefaultAdapter(this) }
     private var pendingNfcScene: Pair<String, String>? = null
     private var notificationsEnabled = mutableStateOf(false)
+    private val permissionPreferences by lazy { getSharedPreferences("permission_requests", MODE_PRIVATE) }
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -222,7 +223,11 @@ class MainActivity : ComponentActivity() {
         if (hasNotificationPermission()) return
         val permissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        if (!permissionGranted) {
+        val canRequest = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            (!permissionPreferences.getBoolean("notifications_requested", false) ||
+                shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS))
+        if (!permissionGranted && canRequest) {
+            permissionPreferences.edit().putBoolean("notifications_requested", true).apply()
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
             startActivity(
@@ -234,6 +239,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        notificationsEnabled.value = hasNotificationPermission()
         // 前台活跃时清除安全遮蔽，保证用户正常截屏与使用
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (pendingNfcScene != null) enableNfcForegroundDispatch()

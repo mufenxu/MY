@@ -11,8 +11,7 @@ import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.ResponseSnapshotStore
 import cn.pxyb.mycontrol.data.SessionStore
-import cn.pxyb.mycontrol.data.TodoMutation
-import cn.pxyb.mycontrol.data.TodoSnapshot
+import cn.pxyb.mycontrol.data.TodoRepository
 import cn.pxyb.mycontrol.data.applyNotificationMutations
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
@@ -29,55 +28,49 @@ class NotificationActionReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun applyAction(context: Context, intent: Intent) {
+    private suspend fun applyAction(context: Context, intent: Intent) {
         val action = intent.action ?: return
         val alertId = intent.getStringExtra(EXTRA_ALERT_ID)?.takeIf(String::isNotBlank) ?: return
         val sessionStore = SessionStore(context)
-        val username = sessionStore.readActiveUsername() ?: return
+        val session = sessionStore.captureRequestSession()
+        val username = session.username ?: return
         val store = PersonalWorkspaceStore(context).apply { setAccount(username) }
-        val alerts = store.readAlerts()
-        val alert = alerts.firstOrNull { it.id == alertId }
-        val remote = alert?.origin == "remote" || intent.getBooleanExtra(EXTRA_REMOTE, false)
-        val mutation = when (action) {
-            ACTION_MARK_READ -> NotificationMutation(NotificationMutationType.MarkRead, alertId)
-            ACTION_SNOOZE -> NotificationMutation(
-                NotificationMutationType.Snooze,
-                alertId,
-                System.currentTimeMillis() + TimeUnit.HOURS.toMillis(1),
-            )
-            ACTION_ARCHIVE -> NotificationMutation(NotificationMutationType.Archive, alertId)
-            ACTION_COMPLETE_TODO -> {
-                completeTodo(store, intent.getStringExtra(EXTRA_SOURCE_ID))
-                NotificationMutation(NotificationMutationType.Archive, alertId)
+        val api = PlatformApi(sessionStore, ResponseSnapshotStore(context))
+        api.withRequestMetadata {
+            val alerts = sessionStore.withRequestSession(session) { store.readAlerts() }
+            val alert = alerts.firstOrNull { it.id == alertId }
+            val remote = alert?.origin == "remote" || intent.getBooleanExtra(EXTRA_REMOTE, false)
+            val mutation = when (action) {
+                ACTION_MARK_READ -> NotificationMutation(NotificationMutationType.MarkRead, alertId)
+                ACTION_SNOOZE -> NotificationMutation(
+                    NotificationMutationType.Snooze,
+                    alertId,
+                    System.currentTimeMillis() + TimeUnit.HOURS.toMillis(1),
+                )
+                ACTION_ARCHIVE -> NotificationMutation(NotificationMutationType.Archive, alertId)
+                ACTION_COMPLETE_TODO -> {
+                    val id = intent.getStringExtra(EXTRA_SOURCE_ID)?.takeIf(String::isNotBlank)
+                    if (id != null) {
+                        TodoRepository(context, api, sessionStore).updateTask(id) { it.copy(completed = true) }
+                    }
+                    NotificationMutation(NotificationMutationType.Archive, alertId)
+                }
+                else -> return@withRequestMetadata
             }
-            else -> return
+            sessionStore.withRequestSession(session) {
+                store.writeAlerts(applyNotificationMutations(store.readAlerts(), listOf(mutation)))
+                if (remote) {
+                    store.writeNotificationMutations(store.readNotificationMutations() + mutation)
+                }
+                if (mutation.type == NotificationMutationType.Snooze) {
+                    SnoozedAlertScheduler.schedule(context, alertId, TimeUnit.HOURS.toMillis(1))
+                }
+                intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0).takeIf { it != 0 }?.let { notificationId ->
+                    context.getSystemService(NotificationManager::class.java)?.cancel(notificationId)
+                }
+                OperationalSyncScheduler.runNow(context)
+            }
         }
-
-        store.writeAlerts(applyNotificationMutations(alerts, listOf(mutation)))
-        if (remote) {
-            store.writeNotificationMutations(store.readNotificationMutations() + mutation)
-        }
-        if (mutation.type == NotificationMutationType.Snooze) {
-            SnoozedAlertScheduler.schedule(context, alertId, TimeUnit.HOURS.toMillis(1))
-        }
-        intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0).takeIf { it != 0 }?.let { notificationId ->
-            context.getSystemService(NotificationManager::class.java)?.cancel(notificationId)
-        }
-        OperationalSyncScheduler.runNow(context)
-    }
-
-    private fun completeTodo(store: PersonalWorkspaceStore, sourceId: String?) {
-        val id = sourceId?.takeIf(String::isNotBlank) ?: return
-        val snapshot = store.readTodoSnapshot()
-        val task = snapshot.tasks.firstOrNull { it.id == id } ?: return
-        val updated = task.copy(completed = true, updatedAt = System.currentTimeMillis())
-        store.writeTodoSnapshot(
-            TodoSnapshot(
-                tasks = snapshot.tasks.map { if (it.id == id) updated else it },
-                revision = snapshot.revision,
-            ),
-        )
-        store.writePendingTodoMutations(store.readPendingTodoMutations() + TodoMutation("upsert", task = updated))
     }
 
     companion object {

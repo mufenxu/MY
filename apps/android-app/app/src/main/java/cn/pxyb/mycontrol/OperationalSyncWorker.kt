@@ -15,6 +15,7 @@ import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.ResponseSnapshotStore
 import cn.pxyb.mycontrol.data.SessionStore
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
+import cn.pxyb.mycontrol.data.TodoRepository
 import cn.pxyb.mycontrol.data.mergeRemoteAlerts
 import cn.pxyb.mycontrol.assistant.buildPersonalAssistantSnapshot
 import cn.pxyb.mycontrol.assistant.buildGuardianAlerts
@@ -53,21 +54,7 @@ class OperationalSyncWorker(
                 // 提醒、待办和课程保持 15 分钟同步；概要、设备和安全巡检每小时更新。
                 val incidents = api.incidents()
                 val tasks = api.tasks().tasks
-                val todo = api.todos()
-                val pending = personalStore.readPendingTodoMutations()
-                val syncedTodo = if (pending.isEmpty()) todo else {
-                    try {
-                        api.mutateTodos(todo.revision, pending)
-                    } catch (error: ApiException) {
-                        if (error.code != "TODO_REVISION_CONFLICT") throw error
-                        val latest = api.todos()
-                        api.mutateTodos(latest.revision, pending)
-                    }
-                }
-                sessionStore.withRequestSession(session) {
-                    personalStore.writeTodoSnapshot(syncedTodo)
-                    if (pending.isNotEmpty()) personalStore.writePendingTodoMutations(emptyList())
-                }
+                val syncedTodo = TodoRepository(applicationContext, api, sessionStore).sync(refresh = true).snapshot
                 val timetable = api.campus.campusTimetable()
                 val resources = api.resourceExpiries()
                 flushNotificationMutations(api, personalStore)

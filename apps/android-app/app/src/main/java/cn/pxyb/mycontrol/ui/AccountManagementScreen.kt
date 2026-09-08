@@ -592,11 +592,11 @@ private fun ChangePasswordDialog(
     var confirmPassword by remember { mutableStateOf("") }
     var totp by remember { mutableStateOf("") }
     var localError by remember { mutableStateOf<String?>(null) }
-    var submitted by remember { mutableStateOf(false) }
+    var submittedAt by remember { mutableStateOf<Int?>(null) }
     val busy = state.busyAction == "password"
 
-    LaunchedEffect(state.busyAction, state.error, state.message) {
-        if (submitted && state.busyAction == null && state.error == null) onFinished()
+    LaunchedEffect(state.actionCompletions["password"]) {
+        if (submittedAt?.let { (state.actionCompletions["password"] ?: 0) > it } == true) onFinished()
     }
 
     AppDialog(
@@ -639,7 +639,7 @@ private fun ChangePasswordDialog(
                         enabled = !busy,
                     )
                 }
-                DialogError(localError ?: state.error)
+                DialogError(localError ?: state.actionErrors["password"].takeIf { submittedAt != null })
             }
         },
         footer = {
@@ -660,7 +660,7 @@ private fun ChangePasswordDialog(
                             newPassword == oldPassword -> localError = "新密码不能与当前密码相同。"
                             totpEnabled && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
                             else -> {
-                                submitted = true
+                                submittedAt = state.actionCompletions["password"] ?: 0
                                 onSubmit(oldPassword, newPassword, totp)
                             }
                         }
@@ -686,6 +686,7 @@ private fun TotpSetupDialog(
     var password by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var localError by remember { mutableStateOf<String?>(null) }
+    var attemptedAction by remember { mutableStateOf<String?>(null) }
     val busy = state.busyAction == "totp-enroll" || state.busyAction == "totp-confirm"
     val step = when {
         codes.isNotEmpty() -> "codes"
@@ -788,7 +789,7 @@ private fun TotpSetupDialog(
                         }
                     }
                 }
-                DialogError(localError ?: state.error)
+                DialogError(localError ?: attemptedAction?.let(state.actionErrors::get))
             }
         },
         footer = {
@@ -806,6 +807,7 @@ private fun TotpSetupDialog(
                             if (password.isBlank()) {
                                 localError = "请输入当前密码。"
                             } else {
+                                attemptedAction = "totp-enroll"
                                 onBegin(password)
                             }
                         },
@@ -827,6 +829,7 @@ private fun TotpSetupDialog(
                             if (code.length != 6) {
                                 localError = "请输入 6 位动态验证码。"
                             } else {
+                                attemptedAction = "totp-confirm"
                                 onConfirm(code)
                             }
                         },
@@ -857,10 +860,11 @@ private fun TotpManageDialog(
     var totp by remember { mutableStateOf("") }
     var localError by remember { mutableStateOf<String?>(null) }
     var pendingAction by remember { mutableStateOf<String?>(null) }
+    var pendingCompletion by remember { mutableStateOf<Int?>(null) }
     val busy = state.busyAction == "recovery-codes" || state.busyAction == "totp-disable"
 
-    LaunchedEffect(state.busyAction, state.error, state.recoveryCodes) {
-        if (pendingAction == "recovery" && state.busyAction == null && state.error == null && state.recoveryCodes.isNotEmpty()) {
+    LaunchedEffect(state.actionCompletions["recovery-codes"]) {
+        if (pendingAction == "recovery" && pendingCompletion?.let { (state.actionCompletions["recovery-codes"] ?: 0) > it } == true && state.recoveryCodes.isNotEmpty()) {
             onShowRecoveryCodes()
         }
     }
@@ -889,7 +893,7 @@ private fun TotpManageDialog(
                     keyboardType = KeyboardType.Number,
                     enabled = !busy,
                 )
-                DialogError(localError ?: state.error)
+                DialogError(localError ?: pendingAction?.let { state.actionErrors[if (it == "recovery") "recovery-codes" else "totp-disable"] })
             }
         },
         footer = {
@@ -902,6 +906,7 @@ private fun TotpManageDialog(
                             totp.length != 6 -> localError = "请输入 6 位动态验证码。"
                             else -> {
                                 pendingAction = "recovery"
+                                pendingCompletion = state.actionCompletions["recovery-codes"] ?: 0
                                 onRegenerate(password, totp)
                             }
                         }
@@ -1041,7 +1046,7 @@ private fun PasskeyListDialog(
                         }
                     }
                 }
-                DialogError(state.error)
+                DialogError(state.actionErrors["passkey-list"])
             }
         },
         footer = {
@@ -1075,11 +1080,11 @@ private fun PasskeyRegisterDialog(
     var password by remember { mutableStateOf("") }
     var totp by remember { mutableStateOf("") }
     var localError by remember { mutableStateOf<String?>(null) }
-    var submitted by remember { mutableStateOf(false) }
+    var submittedAt by remember { mutableStateOf<Int?>(null) }
     val busy = state.busyAction == "passkey-register"
 
-    LaunchedEffect(state.busyAction, state.error, state.message) {
-        if (submitted && state.busyAction == null && state.error == null) onFinished()
+    LaunchedEffect(state.actionCompletions["passkey-register"]) {
+        if (submittedAt?.let { (state.actionCompletions["passkey-register"] ?: 0) > it } == true) onFinished()
     }
 
     AppDialog(
@@ -1114,7 +1119,7 @@ private fun PasskeyRegisterDialog(
                         enabled = !busy,
                     )
                 }
-                DialogError(localError ?: state.error)
+                DialogError(localError ?: state.actionErrors["passkey-register"].takeIf { submittedAt != null })
             }
         },
         footer = {
@@ -1132,7 +1137,7 @@ private fun PasskeyRegisterDialog(
                             password.isBlank() -> localError = "请输入当前密码。"
                             totpEnabled && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
                             else -> {
-                                submitted = true
+                                submittedAt = state.actionCompletions["passkey-register"] ?: 0
                                 onRegister(name.trim().ifBlank { "Passkey" }, password, totp)
                             }
                         }
@@ -1158,11 +1163,11 @@ private fun DeletePasskeyDialog(
     var password by remember { mutableStateOf("") }
     var totp by remember { mutableStateOf("") }
     var localError by remember { mutableStateOf<String?>(null) }
-    var submitted by remember { mutableStateOf(false) }
+    var submittedAt by remember { mutableStateOf<Int?>(null) }
     val busy = state.busyAction == "passkey-delete"
 
-    LaunchedEffect(state.busyAction, state.error, state.message) {
-        if (submitted && state.busyAction == null && state.error == null) onFinished()
+    LaunchedEffect(state.actionCompletions["passkey-delete"]) {
+        if (submittedAt?.let { (state.actionCompletions["passkey-delete"] ?: 0) > it } == true) onFinished()
     }
 
     AppDialog(
@@ -1193,7 +1198,7 @@ private fun DeletePasskeyDialog(
                         enabled = !busy,
                     )
                 }
-                DialogError(localError ?: state.error)
+                DialogError(localError ?: state.actionErrors["passkey-delete"].takeIf { submittedAt != null })
             }
         },
         footer = {
@@ -1211,7 +1216,7 @@ private fun DeletePasskeyDialog(
                             password.isBlank() -> localError = "请输入当前密码。"
                             totpEnabled && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
                             else -> {
-                                submitted = true
+                                submittedAt = state.actionCompletions["passkey-delete"] ?: 0
                                 onDelete(password, totp)
                             }
                         }

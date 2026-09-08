@@ -253,8 +253,8 @@ fun ToolsScreen(
                             ModernCt8Panel(
                                 ct8 = ct8,
                                 canOperate = canOperate,
-                                busy = state.busyAction == "ct8",
-                                enabled = state.busyAction == null,
+                                busy = "ct8" in state.busyActions,
+                                enabled = !state.busyActions.blocksAction("ct8"),
                                 onTrigger = { confirmation = ToolConfirmation.Ct8 },
                             )
                         }
@@ -272,7 +272,8 @@ fun ToolsScreen(
                                         device = iot?.devices?.firstOrNull { it.id == target.deviceId },
                                         mqttConnected = iot?.mqttConnected == true,
                                         canOperate = canOperate,
-                                        busy = state.busyAction == "relay:${target.deviceId}:${target.relayId}",
+                                        busy = "relay:${target.deviceId}:${target.relayId}" in state.busyActions,
+                                        enabled = !state.busyActions.blocksAction("relay:${target.deviceId}:${target.relayId}"),
                                         onControlRelay = onControlRelay,
                                     )
                                 }
@@ -292,8 +293,8 @@ fun ToolsScreen(
                                             ModernSceneRow(
                                                 scene = scene,
                                                 canOperate = canOperate,
-                                                busy = state.busyAction == "scene",
-                                                enabled = state.busyAction == null,
+                                                busy = "scene" in state.busyActions,
+                                                enabled = !state.busyActions.blocksAction("scene"),
                                                 onRun = { confirmation = ToolConfirmation.Scene(scene) },
                                             )
                                             if (index < iot.scenes.lastIndex) {
@@ -367,7 +368,8 @@ fun ToolsScreen(
                                 device = iot?.devices?.firstOrNull { it.id == target.deviceId },
                                 mqttConnected = iot?.mqttConnected == true,
                                 canOperate = canOperate,
-                                busy = state.busyAction == "relay:${target.deviceId}:${target.relayId}",
+                                busy = "relay:${target.deviceId}:${target.relayId}" in state.busyActions,
+                                enabled = !state.busyActions.blocksAction("relay:${target.deviceId}:${target.relayId}"),
                                 onControlRelay = onControlRelay,
                             )
                         }
@@ -390,8 +392,8 @@ fun ToolsScreen(
                                         ModernSceneRow(
                                             scene = scene,
                                             canOperate = canOperate,
-                                            busy = state.busyAction == "scene",
-                                            enabled = state.busyAction == null,
+                                            busy = "scene" in state.busyActions,
+                                            enabled = !state.busyActions.blocksAction("scene"),
                                             onRun = { confirmation = ToolConfirmation.Scene(scene) },
                                         )
                                         if (index < iot.scenes.lastIndex) {
@@ -414,8 +416,8 @@ fun ToolsScreen(
                     ModernCt8Panel(
                         ct8 = ct8,
                         canOperate = canOperate,
-                        busy = state.busyAction == "ct8",
-                        enabled = state.busyAction == null,
+                        busy = "ct8" in state.busyActions,
+                        enabled = !state.busyActions.blocksAction("ct8"),
                         onTrigger = { confirmation = ToolConfirmation.Ct8 },
                     )
                 }
@@ -954,13 +956,14 @@ private fun ModernRelayCard(
     mqttConnected: Boolean,
     canOperate: Boolean,
     busy: Boolean,
+    enabled: Boolean,
     onControlRelay: (String, String, Boolean) -> Unit,
 ) {
     val status = device?.relays?.get(target.relayId)?.uppercase()
     val isKnown = status == "ON" || status == "OFF"
     val isOn = status == "ON"
     val available = device?.online == true && mqttConnected
-    val switchEnabled = canOperate && available && isKnown && !busy
+    val switchEnabled = enabled && canOperate && available && isKnown && !busy
 
     val interactionSource = remember { MutableInteractionSource() }
 

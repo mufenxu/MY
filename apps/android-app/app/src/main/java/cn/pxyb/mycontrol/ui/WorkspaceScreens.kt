@@ -90,6 +90,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -151,12 +153,13 @@ fun TodayScreen(
     onOpenWaterValve: () -> Unit,
     onConsumeSharedDraft: () -> Unit,
 ) {
-    var editingTodo by remember { mutableStateOf<TodoTask?>(null) }
-    var addingTodo by remember { mutableStateOf(false) }
-    var campusSection by remember { mutableStateOf(CampusWorkspaceSection.Today) }
+    var editingTodoId by rememberSaveable { mutableStateOf<String?>(null) }
+    val editingTodo = state.todoSnapshot.tasks.firstOrNull { it.id == editingTodoId }
+    var addingTodo by rememberSaveable { mutableStateOf(false) }
+    var campusSection by rememberSaveable { mutableStateOf(CampusWorkspaceSection.Today) }
     LaunchedEffect(state.sharedTodoDraft) {
         if (!state.sharedTodoDraft.isNullOrBlank()) {
-            editingTodo = null
+            editingTodoId = null
             addingTodo = true
         }
     }
@@ -368,7 +371,7 @@ fun TodayScreen(
                                     }
                                 } else {
                                     state.todoSnapshot.tasks.forEach { task ->
-                                        TodoCard(task, onToggleTodo, { editingTodo = task }, onDeleteTodo)
+                                        TodoCard(task, onToggleTodo, { editingTodoId = task.id }, onDeleteTodo)
                                     }
                                 }
 
@@ -487,7 +490,7 @@ fun TodayScreen(
                         }
                     } else {
                         items(state.todoSnapshot.tasks, key = TodoTask::id, contentType = { "todo" }) { task ->
-                            TodoCard(task, onToggleTodo, { editingTodo = task }, onDeleteTodo)
+                            TodoCard(task, onToggleTodo, { editingTodoId = task.id }, onDeleteTodo)
                         }
                     }
 
@@ -543,13 +546,13 @@ fun TodayScreen(
             courses = state.timetable?.courses.orEmpty().distinctBy(CampusCourse::id),
             onDismiss = {
                 addingTodo = false
-                editingTodo = null
+                editingTodoId = null
                 onConsumeSharedDraft()
             },
             onSave = {
                 onSaveTodo(it)
                 addingTodo = false
-                editingTodo = null
+                editingTodoId = null
                 onConsumeSharedDraft()
             },
         )
@@ -573,12 +576,30 @@ fun ScenesScreen(
     onSetQuickScene: (String, String) -> Unit,
     onConsumePendingScene: () -> Unit,
 ) {
-    var editing by remember { mutableStateOf<IotScene?>(null) }
-    var adding by remember { mutableStateOf(false) }
-    var editingRule by remember { mutableStateOf<AutomationRule?>(null) }
-    var addingRule by remember { mutableStateOf(false) }
+    var editingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var adding by rememberSaveable { mutableStateOf(false) }
+    var editingRuleId by rememberSaveable { mutableStateOf<String?>(null) }
+    var addingRule by rememberSaveable { mutableStateOf(false) }
+    var pendingSceneSave by rememberSaveable { mutableStateOf<Int?>(null) }
+    var pendingRuleSave by rememberSaveable { mutableStateOf<Int?>(null) }
     val scenes = state.iot?.scenes.orEmpty()
     val rules = state.iot?.rules.orEmpty()
+    val editing = scenes.firstOrNull { it.id == editingId }
+    val editingRule = rules.firstOrNull { it.id == editingRuleId }
+    LaunchedEffect(state.sceneSaveCount) {
+        if (pendingSceneSave?.let { state.sceneSaveCount > it } == true) {
+            adding = false
+            editingId = null
+            pendingSceneSave = null
+        }
+    }
+    LaunchedEffect(state.ruleSaveCount) {
+        if (pendingRuleSave?.let { state.ruleSaveCount > it } == true) {
+            addingRule = false
+            editingRuleId = null
+            pendingRuleSave = null
+        }
+    }
     val runs = state.iot?.runs.orEmpty()
     val pendingScene = scenes.firstOrNull { it.id == state.pendingSceneId }
     LaunchedEffect(state.pendingSceneId, scenes) {
@@ -635,7 +656,7 @@ fun ScenesScreen(
                     busy = state.busyAction != null,
                     enabled = !state.offlineMode,
                     onRun = onRun,
-                    onEdit = { editing = scene },
+                    onEdit = { editingId = scene.id },
                     onDelete = onDelete,
                     onWriteNfc = { onWriteNfc(scene.id, scene.name) },
                     onSetQuickScene = { onSetQuickScene(scene.id, scene.name) },
@@ -674,7 +695,7 @@ fun ScenesScreen(
                     devices = state.iot?.devices.orEmpty(),
                     busy = state.busyAction != null,
                     onToggle = { enabled -> onToggleRule(rule.id, enabled) },
-                    onEdit = { editingRule = rule },
+                    onEdit = { editingRuleId = rule.id },
                     onDelete = { onDeleteRule(rule.id) },
                 )
             }
@@ -697,11 +718,12 @@ fun ScenesScreen(
         SceneEditorDialog(
             scene = editing,
             devices = state.iot?.devices.orEmpty(),
-            onDismiss = { adding = false; editing = null },
+            busy = state.busyAction == "scene-edit",
+            error = state.sceneSaveError.takeIf { pendingSceneSave != null },
+            onDismiss = { adding = false; editingId = null; pendingSceneSave = null },
             onSave = { id, name, actions ->
+                pendingSceneSave = state.sceneSaveCount
                 onSave(id, name, actions)
-                adding = false
-                editing = null
             },
         )
     }
@@ -710,11 +732,12 @@ fun ScenesScreen(
             rule = editingRule,
             devices = state.iot?.devices.orEmpty(),
             scenes = state.iot?.scenes.orEmpty(),
-            onDismiss = { addingRule = false; editingRule = null },
+            busy = state.busyAction == "rule-edit",
+            error = state.ruleSaveError.takeIf { pendingRuleSave != null },
+            onDismiss = { addingRule = false; editingRuleId = null; pendingRuleSave = null },
             onSave = { id, name, enabled, condition, actions, cooldownSeconds ->
+                pendingRuleSave = state.ruleSaveCount
                 onSaveRule(id, name, enabled, condition, actions, cooldownSeconds)
-                addingRule = false
-                editingRule = null
             },
         )
     }
@@ -2131,25 +2154,28 @@ private fun TodoEditorDialog(
     onDismiss: () -> Unit,
     onSave: (TodoTask) -> Unit,
 ) {
-    var title by remember(task?.id, initialTitle) { mutableStateOf(task?.title ?: initialTitle) }
-    var priority by remember(task?.id) { mutableStateOf(task?.priority ?: "normal") }
-    var recurrence by remember(task?.id) { mutableStateOf(task?.recurrence ?: "none") }
-    var duePreset by remember(task?.id) { mutableStateOf(duePreset(task?.dueAt)) }
-    var courseId by remember(task?.id) { mutableStateOf(task?.courseRef?.id) }
+    var title by rememberSaveable(task?.id, initialTitle) { mutableStateOf(task?.title ?: initialTitle) }
+    var priority by rememberSaveable(task?.id) { mutableStateOf(task?.priority ?: "normal") }
+    var recurrence by rememberSaveable(task?.id) { mutableStateOf(task?.recurrence ?: "none") }
+    var duePreset by rememberSaveable(task?.id) { mutableStateOf(if (task?.dueAt != null) "keep" else "none") }
+    var courseId by rememberSaveable(task?.id) { mutableStateOf(task?.courseRef?.id) }
     AppDialogForm(
         onConfirm = {
             val now = System.currentTimeMillis()
             val selectedCourse = courses.firstOrNull { it.id == courseId }
-            val dueAt = dueFromPreset(duePreset)
+            val dueAt = if (duePreset == "keep") task?.dueAt else dueFromPreset(duePreset)
+            val dueChanged = dueAt != task?.dueAt
             onSave(
                 (task ?: TodoTask(id = UUID.randomUUID().toString(), title = title.trim())).copy(
                     title = title.trim(),
                     priority = priority,
                     recurrence = recurrence,
                     dueAt = dueAt,
-                    reminderAt = dueAt?.minus(60 * 60_000L),
-                    reminderStatus = "pending",
-                    courseRef = selectedCourse?.let { TodoCourseRef(it.id, it.courseName) },
+                    reminderAt = if (dueChanged) dueAt?.minus(60 * 60_000L) else task?.reminderAt,
+                    reminderStatus = if (dueChanged) "pending" else task?.reminderStatus ?: "pending",
+                    remindedAt = if (dueChanged) null else task?.remindedAt,
+                    courseRef = selectedCourse?.let { TodoCourseRef(it.id, it.courseName) }
+                        ?: task?.courseRef?.takeIf { it.id == courseId },
                     updatedAt = now,
                 ),
             )
@@ -2163,7 +2189,9 @@ private fun TodoEditorDialog(
     ) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             DialogTextField(title, { title = it }, "待办内容")
-            ChoiceRow("截止", listOf("none" to "无", "today" to "今天", "tomorrow" to "明天", "week" to "7 天后"), duePreset) { duePreset = it }
+            val dueOptions = listOfNotNull(task?.dueAt?.let { "keep" to formatMillis(it) }) +
+                listOf("none" to "无", "today" to "今天", "tomorrow" to "明天", "week" to "7 天后")
+            ChoiceRow("截止", dueOptions, duePreset) { duePreset = it }
             ChoiceRow("优先级", listOf("low" to "低", "normal" to "普通", "high" to "高"), priority) { priority = it }
             ChoiceRow("重复", listOf("none" to "不重复", "daily" to "每天", "weekly" to "每周", "monthly" to "每月"), recurrence) { recurrence = it }
             if (courses.isNotEmpty()) {
@@ -2180,12 +2208,12 @@ private fun TodoEditorDialog(
 }
 
 @Composable
-private fun ChoiceRow(title: String, choices: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
+private fun ChoiceRow(title: String, choices: List<Pair<String, String>>, selected: String, enabled: Boolean = true, onSelect: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title, style = MaterialTheme.typography.labelLarge)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             choices.forEach { (value, label) ->
-                AppFilterChip(label = label, selected = selected == value, onClick = { onSelect(value) })
+                AppFilterChip(label = label, selected = selected == value, enabled = enabled, onClick = { onSelect(value) })
             }
         }
     }
@@ -2196,27 +2224,33 @@ private fun ChoiceRow(title: String, choices: List<Pair<String, String>>, select
 private fun SceneEditorDialog(
     scene: IotScene?,
     devices: List<cn.pxyb.mycontrol.data.DeviceInfo>,
+    busy: Boolean,
+    error: String?,
     onDismiss: () -> Unit,
     onSave: (String?, String, List<IotSceneAction>) -> Unit,
 ) {
-    var name by remember(scene?.id) { mutableStateOf(scene?.name.orEmpty()) }
-    var actions by remember(scene?.id) { mutableStateOf(scene?.actions.orEmpty()) }
+    var name by rememberSaveable(scene?.id) { mutableStateOf(scene?.name.orEmpty()) }
+    val actionsSaver = remember {
+        listSaver<List<IotSceneAction>, String>(
+            save = { actions -> actions.flatMap { listOf(it.deviceId, it.relayId, it.status) } },
+            restore = { values -> values.chunked(3).map { IotSceneAction(it[0], it[1], it[2]) } },
+        )
+    }
+    var actions by rememberSaveable(scene?.id, stateSaver = actionsSaver) { mutableStateOf(scene?.actions.orEmpty()) }
     val endpoints = devices.flatMap { device -> device.relays.keys.sorted().map { relay -> Triple(device.id, device.name, relay) } }
-    AppDialog(
-        onDismissRequest = onDismiss,
+    AppDialogForm(
+        onDismissRequest = { if (!busy) onDismiss() },
         icon = Icons.Outlined.Tune,
         title = if (scene == null) "新建智能场景" else "编辑智能场景",
         subtitle = "只显示后端已确认的真实设备与继电器",
         modifier = Modifier.heightIn(max = 760.dp),
-        footer = {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                AppDialogSecondaryButton("取消", onDismiss, Modifier.weight(1f))
-                AppDialogPrimaryButton("保存", { onSave(scene?.id, name.trim(), actions) }, Modifier.weight(1f), enabled = name.isNotBlank() && actions.isNotEmpty())
-            }
-        },
+        onConfirm = { onSave(scene?.id, name.trim(), actions) },
+        enabled = name.isNotBlank() && actions.isNotEmpty(),
+        loading = busy,
+        errorMessage = error,
     ) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            DialogTextField(name, { name = it }, "场景名称")
+            DialogTextField(name, { name = it }, "场景名称", enabled = !busy)
             if (endpoints.isEmpty()) {
                 DialogInfoText("当前没有可配置的继电器设备。")
             } else {
@@ -2231,6 +2265,7 @@ private fun SceneEditorDialog(
                                 }
                                 AppSwitch(
                                     checked = current != null,
+                                    enabled = !busy,
                                     onCheckedChange = { checked ->
                                         actions = if (checked) actions + IotSceneAction(deviceId, relayId, "ON")
                                         else actions.filterNot { it.deviceId == deviceId && it.relayId == relayId }
@@ -2239,8 +2274,8 @@ private fun SceneEditorDialog(
                             }
                             if (current != null) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    AppFilterChip(label = "打开", selected = current.status == "ON", onClick = { actions = actions.map { if (it.deviceId == deviceId && it.relayId == relayId) it.copy(status = "ON") else it } })
-                                    AppFilterChip(label = "关闭", selected = current.status == "OFF", onClick = { actions = actions.map { if (it.deviceId == deviceId && it.relayId == relayId) it.copy(status = "OFF") else it } })
+                                    AppFilterChip(label = "打开", selected = current.status == "ON", enabled = !busy, onClick = { actions = actions.map { if (it.deviceId == deviceId && it.relayId == relayId) it.copy(status = "ON") else it } })
+                                    AppFilterChip(label = "关闭", selected = current.status == "OFF", enabled = !busy, onClick = { actions = actions.map { if (it.deviceId == deviceId && it.relayId == relayId) it.copy(status = "OFF") else it } })
                                 }
                             }
                         }
@@ -2257,16 +2292,6 @@ private fun todoMeta(task: TodoTask): String = listOfNotNull(
     task.courseRef?.name,
     when (task.recurrence) { "daily" -> "每天"; "weekly" -> "每周"; "monthly" -> "每月"; else -> null },
 ).joinToString(" · ")
-
-private fun duePreset(value: Long?): String {
-    if (value == null) return "none"
-    val date = Instant.ofEpochMilli(value).atZone(ZoneId.systemDefault()).toLocalDate()
-    return when (date) {
-        LocalDate.now() -> "today"
-        LocalDate.now().plusDays(1) -> "tomorrow"
-        else -> "week"
-    }
-}
 
 private fun dueFromPreset(preset: String): Long? {
     val date = when (preset) {
@@ -2363,20 +2388,22 @@ private fun AutomationRuleEditorDialog(
     rule: AutomationRule?,
     devices: List<DeviceInfo>,
     scenes: List<IotScene>,
+    busy: Boolean,
+    error: String?,
     onDismiss: () -> Unit,
     onSave: (String?, String, Boolean, AutomationCondition, List<IotSceneAction>, Int) -> Unit,
 ) {
     val initialSceneId = remember(rule?.id, scenes) {
         scenes.firstOrNull { it.actions == rule?.actions }?.id ?: if (rule == null) scenes.firstOrNull()?.id else null
     }
-    var name by remember(rule?.id) { mutableStateOf(rule?.name.orEmpty()) }
-    var deviceId by remember(rule?.id, devices) { mutableStateOf(rule?.condition?.deviceId ?: devices.firstOrNull()?.id.orEmpty()) }
-    var metric by remember(rule?.id) { mutableStateOf(rule?.condition?.metric ?: "temperature") }
-    var operator by remember(rule?.id) { mutableStateOf(rule?.condition?.operator ?: "gte") }
-    var value by remember(rule?.id) { mutableStateOf(rule?.condition?.value ?: "30") }
-    var relayId by remember(rule?.id) { mutableStateOf(rule?.condition?.relayId) }
-    var sceneId by remember(rule?.id, initialSceneId) { mutableStateOf(initialSceneId) }
-    var cooldownSeconds by remember(rule?.id) { mutableStateOf(rule?.cooldownSeconds ?: 300) }
+    var name by rememberSaveable(rule?.id) { mutableStateOf(rule?.name.orEmpty()) }
+    var deviceId by rememberSaveable(rule?.id) { mutableStateOf(rule?.condition?.deviceId ?: devices.firstOrNull()?.id.orEmpty()) }
+    var metric by rememberSaveable(rule?.id) { mutableStateOf(rule?.condition?.metric ?: "temperature") }
+    var operator by rememberSaveable(rule?.id) { mutableStateOf(rule?.condition?.operator ?: "gte") }
+    var value by rememberSaveable(rule?.id) { mutableStateOf(rule?.condition?.value ?: "30") }
+    var relayId by rememberSaveable(rule?.id) { mutableStateOf(rule?.condition?.relayId) }
+    var sceneId by rememberSaveable(rule?.id) { mutableStateOf(initialSceneId) }
+    var cooldownSeconds by rememberSaveable(rule?.id) { mutableStateOf(rule?.cooldownSeconds ?: 300) }
     val selectedDevice = devices.firstOrNull { it.id == deviceId }
     val selectedActions = scenes.firstOrNull { it.id == sceneId }?.actions ?: rule?.actions.orEmpty()
     val stateMetric = metric in setOf("online", "relay")
@@ -2386,41 +2413,35 @@ private fun AutomationRuleEditorDialog(
         (metric !in setOf("temperature", "humidity") || value.toDoubleOrNull() != null) &&
         (metric != "relay" || effectiveRelayId != null)
 
-    AppDialog(
-        onDismissRequest = onDismiss,
+    AppDialogForm(
+        onDismissRequest = { if (!busy) onDismiss() },
         icon = Icons.Outlined.AutoAwesome,
         title = if (rule == null) "新建自动化规则" else "编辑自动化规则",
         subtitle = "条件由 IoT 服务持续判断，命中后执行所选场景的动作快照",
         modifier = Modifier.heightIn(max = 760.dp),
-        footer = {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                AppDialogSecondaryButton("取消", onDismiss, Modifier.weight(1f))
-                AppDialogPrimaryButton(
-                    "保存",
-                    {
-                        onSave(
-                            rule?.id,
-                            name.trim(),
-                            rule?.enabled ?: true,
-                            AutomationCondition(deviceId, metric, effectiveOperator, value, effectiveRelayId),
-                            selectedActions,
-                            cooldownSeconds,
-                        )
-                    },
-                    Modifier.weight(1f),
-                    enabled = valid,
-                )
-            }
+        onConfirm = {
+            onSave(
+                rule?.id,
+                name.trim(),
+                rule?.enabled ?: true,
+                AutomationCondition(deviceId, metric, effectiveOperator, value, effectiveRelayId),
+                selectedActions,
+                cooldownSeconds,
+            )
         },
+        enabled = valid,
+        loading = busy,
+        errorMessage = error,
     ) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            DialogTextField(name, { name = it }, "规则名称")
+            DialogTextField(name, { name = it }, "规则名称", enabled = !busy)
             Text("监控设备", style = MaterialTheme.typography.labelLarge)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 devices.forEach { device ->
                     AppFilterChip(
                         label = device.name,
                         selected = device.id == deviceId,
+                        enabled = !busy,
                         onClick = {
                             deviceId = device.id
                             relayId = device.relays.keys.firstOrNull()
@@ -2432,6 +2453,7 @@ private fun AutomationRuleEditorDialog(
                 "监控指标",
                 listOf("temperature" to "温度", "humidity" to "湿度", "online" to "在线状态", "relay" to "继电器"),
                 metric,
+                enabled = !busy,
             ) { selected ->
                 metric = selected
                 when (selected) {
@@ -2446,24 +2468,25 @@ private fun AutomationRuleEditorDialog(
                         "比较方式",
                         listOf("gt" to "大于", "gte" to "大于等于", "lt" to "小于", "lte" to "小于等于"),
                         operator,
+                        enabled = !busy,
                     ) { operator = it }
-                    DialogTextField(value, { value = it.filter { char -> char.isDigit() || char in ".-" } }, "阈值")
+                    DialogTextField(value, { value = it.filter { char -> char.isDigit() || char in ".-" } }, "阈值", enabled = !busy)
                 }
-                "online" -> ChoiceRow("目标状态", listOf("ONLINE" to "在线", "OFFLINE" to "离线"), value.uppercase()) { value = it }
+                "online" -> ChoiceRow("目标状态", listOf("ONLINE" to "在线", "OFFLINE" to "离线"), value.uppercase(), enabled = !busy) { value = it }
                 "relay" -> {
                     Text("监控继电器", style = MaterialTheme.typography.labelLarge)
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         selectedDevice?.relays?.keys.orEmpty().sorted().forEach { id ->
-                            AppFilterChip(label = id, selected = relayId == id, onClick = { relayId = id })
+                            AppFilterChip(label = id, selected = relayId == id, enabled = !busy, onClick = { relayId = id })
                         }
                     }
-                    ChoiceRow("目标状态", listOf("ON" to "开启", "OFF" to "关闭"), value.uppercase()) { value = it }
+                    ChoiceRow("目标状态", listOf("ON" to "开启", "OFF" to "关闭"), value.uppercase(), enabled = !busy) { value = it }
                 }
             }
             Text("命中后执行", style = MaterialTheme.typography.labelLarge)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 scenes.forEach { scene ->
-                    AppFilterChip(label = scene.name, selected = scene.id == sceneId, onClick = { sceneId = scene.id })
+                    AppFilterChip(label = scene.name, selected = scene.id == sceneId, enabled = !busy, onClick = { sceneId = scene.id })
                 }
             }
             if (sceneId == null && rule?.actions.orEmpty().isNotEmpty()) {
@@ -2473,6 +2496,7 @@ private fun AutomationRuleEditorDialog(
                 "触发冷却",
                 listOf("60" to "1 分钟", "300" to "5 分钟", "900" to "15 分钟", "3600" to "1 小时"),
                 cooldownSeconds.toString(),
+                enabled = !busy,
             ) { cooldownSeconds = it.toInt() }
         }
     }

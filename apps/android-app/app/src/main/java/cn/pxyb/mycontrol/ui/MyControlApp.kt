@@ -1574,11 +1574,13 @@ private fun AuthenticatedShell(
             toastVisible = true
         }
     }
-    LaunchedEffect(toastVisible, toastDragging) {
+    LaunchedEffect(toastVisible, toastDragging, state.error, state.message) {
         if (toastVisible && !toastDragging) {
+            val displayedError = state.error
+            val displayedMessage = state.message
             delay(3800)
             toastVisible = false
-            viewModel.clearFeedback()
+            viewModel.clearFeedback(displayedError, displayedMessage)
         }
     }
     val layoutDirection = LocalLayoutDirection.current
@@ -2163,7 +2165,7 @@ private fun AuthenticatedShell(
                                         toastDismissThreshold * 1.5f
                                     }
                                     toastVisible = false
-                                    viewModel.clearFeedback()
+                                    viewModel.clearFeedback(state.error, state.message)
                                 } else {
                                     toastDragOffset = 0f
                                 }

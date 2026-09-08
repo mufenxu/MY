@@ -211,9 +211,9 @@ fun OperationsScreen(
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
                                     AppDialogPrimaryButton(
-                                        text = if (state.busyAction == "diagnostics") "巡检进行中..." else "立即运行一键巡检",
+                                        text = if ("diagnostics" in state.busyActions) "巡检进行中..." else "立即运行一键巡检",
                                         onClick = onRunDiagnostics,
-                                        enabled = state.busyAction == null,
+                                        enabled = !state.busyActions.blocksAction("diagnostics"),
                                         modifier = Modifier.fillMaxWidth(),
                                     )
                                     state.diagnostics?.checks.orEmpty().take(4).forEach { check ->
@@ -252,9 +252,9 @@ fun OperationsScreen(
                                     }
                                     if (canOperate && backup?.canBackup == true) {
                                         AppDialogPrimaryButton(
-                                            text = if (state.busyAction == "backup") "备份提交中..." else "立即备份",
+                                            text = if ("backup" in state.busyActions) "备份提交中..." else "立即备份",
                                             onClick = { confirmBackup = true },
-                                            enabled = state.busyAction == null,
+                                            enabled = !state.busyActions.blocksAction("backup"),
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     }
@@ -476,9 +476,9 @@ fun OperationsScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             AppDialogPrimaryButton(
-                                text = if (state.busyAction == "diagnostics") "巡检进行中..." else "立即运行一键巡检",
+                                text = if ("diagnostics" in state.busyActions) "巡检进行中..." else "立即运行一键巡检",
                                 onClick = onRunDiagnostics,
-                                enabled = state.busyAction == null,
+                                enabled = !state.busyActions.blocksAction("diagnostics"),
                                 modifier = Modifier.fillMaxWidth(),
                             )
                             state.diagnostics?.checks.orEmpty().take(4).forEach { check ->
@@ -563,9 +563,9 @@ fun OperationsScreen(
                             }
                             if (canOperate && backup?.canBackup == true) {
                                 AppDialogPrimaryButton(
-                                    text = if (state.busyAction == "backup") "备份提交中..." else "立即备份",
+                                    text = if ("backup" in state.busyActions) "备份提交中..." else "立即备份",
                                     onClick = { confirmBackup = true },
-                                    enabled = state.busyAction == null,
+                                    enabled = !state.busyActions.blocksAction("backup"),
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                             }

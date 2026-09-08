@@ -84,6 +84,7 @@ data class AppUiState(
     val deviceLoginError: String? = null,
     val refreshing: Boolean = false,
     val busyAction: String? = null,
+    val actions: ActionUiState = ActionUiState(),
     val overview: OverviewData? = null,
     val externalApplications: List<ExternalApplication> = emptyList(),
     val incidents: List<IncidentInfo> = emptyList(),
@@ -232,7 +233,7 @@ data class OverviewUiState(
 data class OperationsUiState(
     val refreshing: Boolean,
     val sectionError: String?,
-    val busyAction: String?,
+    val busyActions: Set<String> = emptySet(),
     val user: PlatformUser?,
     val overview: OverviewData?,
     val incidents: List<IncidentInfo>,
@@ -248,7 +249,7 @@ data class OperationsUiState(
 data class ToolsUiState(
     val refreshing: Boolean,
     val sectionError: String?,
-    val busyAction: String?,
+    val busyActions: Set<String> = emptySet(),
     val user: PlatformUser?,
     val overview: OverviewData?,
     val iot: IotData?,
@@ -318,6 +319,8 @@ data class AccountManagementUiState(
     val passkeys: List<PlatformPasskey>,
     val error: String?,
     val message: String?,
+    val actionErrors: Map<String, String> = emptyMap(),
+    val actionCompletions: Map<String, Int> = emptyMap(),
 )
 
 @Immutable
@@ -464,6 +467,10 @@ data class ScenesUiState(
     val iot: IotData?,
     val quickScene: QuickScenePreference?,
     val pendingSceneId: String?,
+    val sceneSaveError: String? = null,
+    val ruleSaveError: String? = null,
+    val sceneSaveCount: Int = 0,
+    val ruleSaveCount: Int = 0,
 )
 
 internal fun AppUiState.toEntryUiState() = AppEntryUiState(
@@ -491,8 +498,8 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     githubReleases = githubReleases,
     githubReleasesLoaded = githubReleasesLoaded,
     githubReleasesRepoFullName = githubReleasesRepoFullName,
-    githubReleasesBusy = busyAction?.startsWith("github-release:") == true,
-    githubVisibilityBusy = busyAction?.startsWith("github-visibility:") == true,
+    githubReleasesBusy = actions.running.any { it.startsWith("github-release:") },
+    githubVisibilityBusy = actions.running.any { it.startsWith("github-visibility:") },
     globalSearchOpen = globalSearchOpen,
     assistantOpen = assistantOpen,
     assistantButtonVisible = assistantButtonVisible,
@@ -522,7 +529,7 @@ internal fun AppUiState.toOverviewUiState() = OverviewUiState(
 internal fun AppUiState.toOperationsUiState() = OperationsUiState(
     refreshing = isRefreshing(DataSection.Overview, DataSection.Incidents, DataSection.Backup, DataSection.Iot, DataSection.Resources),
     sectionError = sectionError(DataSection.Overview, DataSection.Incidents, DataSection.Backup, DataSection.Iot, DataSection.Resources),
-    busyAction = busyAction,
+    busyActions = actions.running.filter { actionResources(it).any(setOf("incidents", "backup", "diagnostics")::contains) }.toSet(),
     user = user,
     overview = overview,
     incidents = incidents,
@@ -537,7 +544,7 @@ internal fun AppUiState.toOperationsUiState() = OperationsUiState(
 internal fun AppUiState.toToolsUiState() = ToolsUiState(
     refreshing = isRefreshing(DataSection.Iot, DataSection.Ct8),
     sectionError = sectionError(DataSection.Iot, DataSection.Ct8),
-    busyAction = busyAction,
+    busyActions = actions.running.filter { actionResources(it).any(setOf("iot", "ct8")::contains) }.toSet(),
     user = user,
     overview = overview,
     iot = iot,
@@ -548,7 +555,7 @@ internal fun AppUiState.toToolsUiState() = ToolsUiState(
 internal fun AppUiState.toProfileUiState() = ProfileUiState(
     refreshing = isRefreshing(DataSection.Security),
     sectionError = sectionError(DataSection.Security),
-    busyAction = busyAction,
+    busyAction = busyAction ?: actions.running.firstOrNull { "security" in actionResources(it) },
     user = user,
     security = security,
     alertPreferences = alertPreferences,
@@ -566,7 +573,7 @@ internal fun AppUiState.toProfileUiState() = ProfileUiState(
 internal fun AppUiState.toAccountManagementUiState() = AccountManagementUiState(
     refreshing = isRefreshing(DataSection.Security),
     sectionError = sectionError(DataSection.Security),
-    busyAction = busyAction,
+    busyAction = busyAction ?: actions.running.firstOrNull { "security" in actionResources(it) },
     user = user,
     security = security,
     androidPasskeySupported = androidPasskeySupported,
@@ -576,10 +583,12 @@ internal fun AppUiState.toAccountManagementUiState() = AccountManagementUiState(
     passkeys = passkeys,
     error = error,
     message = message,
+    actionErrors = actions.errors.filterKeys { "security" in actionResources(it) },
+    actionCompletions = actions.completions.filterKeys { "security" in actionResources(it) },
 )
 
 internal fun AppUiState.toGoogleAccountDeskUiState() = GoogleAccountDeskUiState(
-    busyAction = busyAction,
+    busyAction = actions.running.firstOrNull { it == "google-accounts" },
     googleAccounts = googleAccounts,
     googleAccountMigrationPending = googleAccountMigrationPending,
 )
@@ -747,9 +756,9 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
 
 internal fun AppUiState.toTodayUiState() = TodayUiState(
     refreshing = isRefreshing(DataSection.Todos, DataSection.Campus, DataSection.Resources, DataSection.Incidents),
-    calendarSyncing = busyAction == "calendar-sync",
+    calendarSyncing = "calendar-sync" in actions.running,
     sectionError = sectionError(DataSection.Todos, DataSection.Campus, DataSection.Resources),
-    offlineMode = offlineMode,
+    offlineMode = listOf(DataSection.Todos, DataSection.Campus, DataSection.Resources).any { sectionLoadStates[it]?.fromCache == true },
     todoSnapshot = todoSnapshot,
     pendingTodoMutations = pendingTodoMutations,
     timetable = campusTimetable,
@@ -786,11 +795,15 @@ internal fun AppUiState.toNotificationCenterUiState() = NotificationCenterUiStat
 internal fun AppUiState.toScenesUiState() = ScenesUiState(
     refreshing = isRefreshing(DataSection.Iot),
     sectionError = sectionError(DataSection.Iot),
-    busyAction = busyAction,
-    offlineMode = offlineMode,
+    busyAction = actions.running.firstOrNull { "iot" in actionResources(it) },
+    offlineMode = sectionLoadStates[DataSection.Iot]?.fromCache == true,
     iot = iot,
     quickScene = quickScene,
     pendingSceneId = pendingSceneId,
+    sceneSaveError = actions.errors["scene-edit"],
+    ruleSaveError = actions.errors["rule-edit"],
+    sceneSaveCount = actions.completions["scene-edit"] ?: 0,
+    ruleSaveCount = actions.completions["rule-edit"] ?: 0,
 )
 
 private fun AppUiState.isRefreshing(vararg sections: DataSection): Boolean =
