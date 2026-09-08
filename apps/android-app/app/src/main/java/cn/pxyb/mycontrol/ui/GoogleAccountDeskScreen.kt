@@ -170,8 +170,7 @@ fun GoogleAccountDeskScreen(
 
     val accounts = state.googleAccounts
     val aliases = accounts.flatMap { it.aliases }
-    val adaptive = LocalAdaptiveWindow.current
-    val isTablet = adaptive.isTabletOrExpanded
+    val isTablet = useTwoPaneLayout()
     val filteredAccounts = accounts.filter { account ->
         val matchesQuery = query.isBlank() ||
             account.primaryEmail.contains(query.trim(), ignoreCase = true) ||

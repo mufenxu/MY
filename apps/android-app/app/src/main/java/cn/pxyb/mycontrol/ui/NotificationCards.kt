@@ -31,8 +31,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.key
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -146,10 +149,18 @@ fun NotificationCenterScreen(
     onUpdatePreferences: (AlertPreferences) -> Unit,
     onBack: () -> Unit,
 ) {
-    var filterTab by remember { mutableStateOf("all") }
-    var settingsOpen by remember { mutableStateOf(false) }
-    var selectedAlert by remember { mutableStateOf<AppAlertRecord?>(null) }
+    var filterTab by rememberSaveable { mutableStateOf("all") }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var selectedAlertId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingArchiveId by remember { mutableStateOf<String?>(null) }
+    val listState = rememberLazyListState()
+    val selectedAlert = state.alerts.firstOrNull {
+        it.id == selectedAlertId && it.id != pendingArchiveId
+    }
+
+    LaunchedEffect(state.alerts, pendingArchiveId) {
+        if (selectedAlertId != null && selectedAlert == null) selectedAlertId = null
+    }
 
     LaunchedEffect(pendingArchiveId) {
         val id = pendingArchiveId ?: return@LaunchedEffect
@@ -183,8 +194,7 @@ fun NotificationCenterScreen(
     val hasUnreadAlerts = unreadCount > 0
     val hasReadAlerts = remember(state.alerts) { state.alerts.any(AppAlertRecord::read) }
 
-    val adaptive = LocalAdaptiveWindow.current
-    val isTablet = adaptive.isTabletOrExpanded
+    val isTablet = useTwoPaneLayout()
 
     if (isTablet) {
         // 平板 / 大屏：经典自适应 List-Detail 双栏布局
@@ -199,18 +209,13 @@ fun NotificationCenterScreen(
                     .weight(1f)
                     .fillMaxHeight(),
             ) {
-                Row(
+                AppSecondaryHeader(
+                    title = "通知中心",
+                    subtitle = if (unreadCount > 0) "$unreadCount 条未读消息" else "系统告警、任务与设备消息",
+                    onBack = onBack,
                     modifier = Modifier
-                        .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column {
-                        Text("通知中心", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text(if (unreadCount > 0) "$unreadCount 条未读消息" else "系统告警、任务与设备消息", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    actions = {
                         if (hasUnreadAlerts) {
                             AppHeaderIconButton(
                                 icon = Icons.Outlined.DoneAll,
@@ -236,8 +241,8 @@ fun NotificationCenterScreen(
                             iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         )
-                    }
-                }
+                    },
+                )
 
                 Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     CompactNotificationFilterBar(
@@ -266,12 +271,13 @@ fun NotificationCenterScreen(
                 PullToRefresh(
                     isRefreshing = refreshing,
                     onRefresh = onRefresh,
-                    atTop = { true },
+                    atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
                 ) {
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         if (visibleAlerts.isEmpty()) {
                             item(key = "empty") {
@@ -285,7 +291,7 @@ fun NotificationCenterScreen(
                                 NotificationCard(
                                     alert = alert,
                                     onOpen = {
-                                        selectedAlert = alert
+                                        selectedAlertId = alert.id
                                         onMarkRead(alert.id)
                                     },
                                     onMarkRead = onMarkRead,
@@ -313,13 +319,15 @@ fun NotificationCenterScreen(
                     .fillMaxHeight()
                     .padding(16.dp),
             ) {
-                val currentSelected = selectedAlert ?: visibleAlerts.firstOrNull()
+                val currentSelected = selectedAlert
                 if (currentSelected != null) {
+                    key(currentSelected.id) {
                     NotificationDetailPane(
                         alert = currentSelected,
                         onAction = { onAction(currentSelected, it) },
                         modifier = Modifier.fillMaxSize(),
                     )
+                    }
                 } else {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
@@ -363,6 +371,7 @@ fun NotificationCenterScreen(
             refreshing = refreshing,
             onRefresh = onRefresh,
             onBack = onBack,
+            listState = listState,
             actions = {
                 if (hasUnreadAlerts) {
                     AppHeaderIconButton(
@@ -442,7 +451,7 @@ fun NotificationCenterScreen(
                         alert = alert,
                         onOpen = {
                             if (alert.contentBlocks.isNotEmpty()) {
-                                selectedAlert = alert
+                                selectedAlertId = alert.id
                                 onMarkRead(alert.id)
                             } else {
                                 onOpen(alert)
@@ -465,12 +474,12 @@ fun NotificationCenterScreen(
         )
     }
 
-    selectedAlert?.let { alert ->
+    if (!isTablet) selectedAlert?.let { alert ->
         NotificationDetailDialog(
             alert = alert,
-            onDismiss = { selectedAlert = null },
+            onDismiss = { selectedAlertId = null },
             onAction = { action ->
-                selectedAlert = null
+                selectedAlertId = null
                 onAction(alert, action)
             },
         )
@@ -881,10 +890,10 @@ private fun NotificationWorkspacePage(
     refreshing: Boolean,
     onRefresh: () -> Unit,
     onBack: () -> Unit,
+    listState: LazyListState = rememberLazyListState(),
     actions: (@Composable RowScope.() -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
-    val listState = rememberLazyListState()
     val dark = isAppInDarkTheme()
     PullToRefresh(
         isRefreshing = refreshing,

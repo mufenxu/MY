@@ -4,53 +4,33 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 
 @Composable
 fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
-    Dialog(
+    AppDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        title = "隐私政策",
+        subtitle = "更新日期：2026年8月31日",
+        modifier = Modifier.heightIn(max = 680.dp),
+        footer = {
+            AppDialogPrimaryButton("已知晓", onDismiss, Modifier.fillMaxWidth())
+        },
     ) {
-        Surface(
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .padding(16.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 6.dp,
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
         ) {
-            Column(modifier = Modifier.padding(22.dp)) {
-                Text(
-                    "隐私政策",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                )
-                Text(
-                    "更新日期：2026年8月31日",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                Spacer(Modifier.height(14.dp))
-
-                Column(
-                    modifier = Modifier
-                        .height(420.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
                     PrivacySection(
                         "1. 我们收集的信息",
                         "· 账号信息：你主动输入的用户名，用于登录本应用与 MY 平台。" +
@@ -88,16 +68,6 @@ fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
                         "7. 联系我们",
                         "如对本隐私政策有任何疑问，可通过 MY 项目仓库提交 Issue 与我们联系。",
                     )
-                }
-
-                Spacer(Modifier.height(18.dp))
-
-                AppButton(
-                    text = "已知晓",
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
         }
     }
 }

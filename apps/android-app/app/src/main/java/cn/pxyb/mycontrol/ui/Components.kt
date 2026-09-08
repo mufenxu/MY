@@ -54,6 +54,9 @@ import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -711,8 +714,7 @@ fun AppDialog(
                 modifier = if (isTablet) {
                     Modifier
                         .imePadding()
-                        .statusBarsPadding()
-                        .navigationBarsPadding()
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
                         .padding(horizontal = 24.dp, vertical = 20.dp)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
@@ -722,7 +724,7 @@ fun AppDialog(
                 } else {
                     Modifier
                         .imePadding()
-                        .navigationBarsPadding()
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
                         .fillMaxWidth()
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
@@ -830,6 +832,7 @@ fun AppDialog(
                         // 弹窗内容区域
                         Column(
                             modifier = Modifier
+                                .weight(1f, fill = false)
                                 .fillMaxWidth()
                                 .padding(contentPadding),
                             horizontalAlignment = Alignment.Start,

@@ -101,9 +101,12 @@ fun FreeClassroomScreen(
         onQuery(dayplus, selectedSections, building)
     }
 
-    val adaptive = LocalAdaptiveWindow.current
-    val isTablet = adaptive.isTabletOrExpanded
-    val roomColumns = if (isTablet) 4 else 2
+    val roomColumns = adaptiveGridColumnCount(
+        maxWidth = appContentWidth() - AppPageHorizontalPadding * 2,
+        fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale,
+        minCellWidth = 148.dp,
+        maxColumns = 4,
+    )
 
     WorkspacePage(
         title = "空教室查询",

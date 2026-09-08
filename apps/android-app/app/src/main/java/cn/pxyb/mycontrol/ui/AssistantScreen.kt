@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -77,18 +78,23 @@ fun AssistantScreen(
         }
     }
 
+    Box(
+        modifier = Modifier.fillMaxSize().auroraBackdrop(dark),
+        contentAlignment = Alignment.TopCenter,
+    ) {
     Column(
         modifier = Modifier
+            .widthIn(max = 840.dp)
             .fillMaxSize()
-            .auroraBackdrop(dark)
-            .imePadding(),
+            .imePadding()
+            .navigationBarsPadding(),
     ) {
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            contentPadding = appPageContentPadding(contentPadding),
+            contentPadding = appPageContentPadding(PaddingValues(top = contentPadding.calculateTopPadding())),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "assistant-header") {
@@ -146,6 +152,7 @@ fun AssistantScreen(
                 onSend(text)
             },
         )
+    }
     }
     pendingAction?.let { action ->
         AlertDialog(

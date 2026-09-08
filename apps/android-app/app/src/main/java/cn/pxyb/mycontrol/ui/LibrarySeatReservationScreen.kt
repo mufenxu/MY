@@ -122,7 +122,7 @@ fun LibrarySeatReservationScreen(
     var seatListExpanded by rememberSaveable { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableStateOf(LibrarySeatTab.Book) }
 
-    val isTablet = LocalAdaptiveWindow.current.isTabletOrExpanded
+    val isTablet = useTwoPaneLayout()
     val onAreaClick: (LibrarySeatArea) -> Unit = { clickedArea ->
         val isSameArea = selectedAreaId == clickedArea.id
         selectedAreaId = if (isSameArea) "" else clickedArea.id
@@ -591,7 +591,13 @@ fun LibrarySeatReservationScreen(
                     } else if (selectedSeats.isEmpty()) {
                         EmptyBlock("暂无座位结果", "如果阅览区已选中，请尝试刷新或重新查询。")
                     } else {
-                        val seatsPerRow = if (isTablet) 8 else 4
+                        val seatsPerRow = adaptiveGridColumnCount(
+                            maxWidth = appContentWidth() - AppPageHorizontalPadding * 2 - 28.dp,
+                            fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale,
+                            minCellWidth = 64.dp,
+                            maxColumns = 8,
+                            spacing = 8.dp,
+                        )
                         selectedSeats.chunked(seatsPerRow).forEach { rowSeats ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),

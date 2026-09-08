@@ -8,6 +8,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -61,6 +62,29 @@ val LocalAdaptiveWindow = compositionLocalOf {
         windowWidth = 360.dp,
         windowHeight = 800.dp,
     )
+}
+
+internal val LocalAppContentWidth = compositionLocalOf<Dp?> { null }
+
+@Composable
+internal fun appContentWidth(): Dp =
+    LocalAppContentWidth.current ?: LocalAdaptiveWindow.current.windowWidth
+
+@Composable
+internal fun useTwoPaneLayout(): Boolean =
+    appContentWidth() >= 840.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+
+@Composable
+internal fun ProvideAppContentLayout(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    // 页面按扣除侧栏、安全区和最大宽度后的空间布局，弹窗仍使用完整窗口尺寸。
+    BoxWithConstraints(modifier = modifier) {
+        CompositionLocalProvider(LocalAppContentWidth provides maxWidth) {
+            content()
+        }
+    }
 }
 
 internal fun computeWidthSizeClass(width: Dp): WindowWidthSizeClass = when {

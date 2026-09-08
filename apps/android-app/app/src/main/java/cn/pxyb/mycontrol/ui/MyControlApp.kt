@@ -49,6 +49,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -449,9 +450,12 @@ private fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit, error: Stri
 
         Column(
             modifier = Modifier
+                .widthIn(max = 520.dp)
                 .fillMaxSize()
+                .align(Alignment.Center)
                 .statusBarsPadding()
                 .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 28.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
@@ -737,6 +741,8 @@ private fun LoginScreen(
 
     val adaptive = LocalAdaptiveWindow.current
     val isExpanded = adaptive.isExpanded
+    val showFooter = adaptive.heightSizeClass != WindowHeightSizeClass.Compact &&
+        WindowInsets.ime.getBottom(LocalDensity.current) == 0
 
     Box(modifier = Modifier.fillMaxSize()) {
         LoginAmbientBackground()
@@ -757,13 +763,17 @@ private fun LoginScreen(
                 if (isExpanded) {
                     Row(
                         modifier = Modifier
+                            .widthIn(max = AppTabletContentMaxWidth)
                             .fillMaxSize()
+                            .align(Alignment.Center)
                             .padding(vertical = 24.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(48.dp, Alignment.CenterHorizontally),
                     ) {
                         Box(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState()),
                             contentAlignment = Alignment.Center,
                         ) {
                             LoginHeader()
@@ -779,7 +789,9 @@ private fun LoginScreen(
                             shadowElevation = 2.dp,
                         ) {
                             Column(
-                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp)
+                                modifier = Modifier
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = 24.dp, vertical = 24.dp),
                             ) {
                                 if (!state.message.isNullOrBlank()) {
                                     FeedbackBanner(state.message, error = false, modifier = Modifier.padding(bottom = 14.dp))
@@ -1072,9 +1084,11 @@ private fun LoginScreen(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
-            LoginFooter()
-            Spacer(Modifier.height(20.dp))
+            if (showFooter) {
+                Spacer(Modifier.height(12.dp))
+                LoginFooter()
+                Spacer(Modifier.height(20.dp))
+            }
         }
     }
 }
@@ -1589,14 +1603,26 @@ private fun AuthenticatedShell(
     val layoutDirection = LocalLayoutDirection.current
     val adaptive = LocalAdaptiveWindow.current
     val isTablet = adaptive.isTabletOrExpanded
+    val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        Row(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    start = if (layoutDirection == LayoutDirection.Ltr) padding.calculateLeftPadding(layoutDirection) else padding.calculateRightPadding(layoutDirection),
+                    end = if (layoutDirection == LayoutDirection.Ltr) padding.calculateRightPadding(layoutDirection) else padding.calculateLeftPadding(layoutDirection),
+                ),
+        ) {
             if (isTablet) {
                 AppNavigationRail(
+                    modifier = Modifier.padding(
+                        top = padding.calculateTopPadding(),
+                        bottom = padding.calculateBottomPadding(),
+                    ),
                     selectedTab = primaryTabForRoute(currentRoute) ?: state.selectedTab,
                     onSelectTab = navigateToTab,
                     unreadAlerts = settingsProfileState.unreadAlerts,
@@ -1641,24 +1667,29 @@ private fun AuthenticatedShell(
                         padding.calculateLeftPadding(layoutDirection)
                     },
                     safeBottom = padding.calculateBottomPadding(),
-                    isSubScreen = isSubScreen,
+                    isSubScreen = isSubScreen || keyboardVisible,
                     isTablet = isTablet,
                 )
                 val contentPadding = PaddingValues(
-                    bottom = shellInsets.contentBottom,
+                    bottom = if (keyboardVisible) AppPageBottomSpacing else shellInsets.contentBottom,
                 )
-                NavHost(
-                    navController = navController,
-                    startDestination = initialRoute,
+                ProvideAppContentLayout(
                     modifier = Modifier
-                        .widthIn(max = if (isTablet) 1440.dp else 960.dp)
+                        .widthIn(max = AppTabletContentMaxWidth)
                         .fillMaxSize()
                         .align(Alignment.TopCenter)
-                        .padding(
+                        .padding(top = shellInsets.navigationTop)
+                        .consumeWindowInsets(PaddingValues(
                             start = shellInsets.navigationStart,
                             top = shellInsets.navigationTop,
                             end = shellInsets.navigationEnd,
-                        ),
+                        ))
+                        .imePadding(),
+                ) {
+                NavHost(
+                    navController = navController,
+                    startDestination = initialRoute,
+                    modifier = Modifier.fillMaxSize(),
                 enterTransition = {
                     slideInHorizontally(
                         initialOffsetX = { fullWidth -> (fullWidth * 0.08f).toInt() },
@@ -2098,18 +2129,19 @@ private fun AuthenticatedShell(
                     )
                 }
             }
+                }
 
             FloatingAssistantButton(
                 anchorSize = assistantAnchorSize,
                 visible = state.assistantButtonVisible,
-                hidden = state.assistantOpen || settingsOpen,
+                hidden = state.assistantOpen || settingsOpen || keyboardVisible,
                 bottomInset = shellInsets.contentBottom,
                 modifier = Modifier.align(Alignment.TopStart),
                 onOpen = viewModel::openAssistant,
             )
 
             androidx.compose.animation.AnimatedVisibility(
-                visible = !isTablet && !isSubScreen,
+                visible = !isTablet && !isSubScreen && !keyboardVisible,
                 enter = slideInVertically(animationSpec = tween(160, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeIn(animationSpec = tween(160)),
                 exit = slideOutVertically(animationSpec = tween(140, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeOut(animationSpec = tween(120)),
                 modifier = Modifier

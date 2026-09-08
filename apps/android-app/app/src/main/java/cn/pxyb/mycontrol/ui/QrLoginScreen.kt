@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,7 +30,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -117,18 +117,27 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
         if (!cameraGranted) permissionLauncher.launch(Manifest.permission.CAMERA)
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF111827))) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().background(Color(0xFF111827))) {
+        val frameSize = minOf(
+            if (LocalAdaptiveWindow.current.isTabletOrExpanded) 320.dp else 248.dp,
+            maxWidth - 48.dp,
+            maxHeight - 144.dp,
+        ).coerceAtLeast(0.dp)
         if (cameraGranted) {
             QrCameraPreview(onCodeDetected, Modifier.fillMaxSize())
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(248.dp)
+                    .size(frameSize)
                     .border(2.dp, Color.White.copy(alpha = 0.9f), RoundedCornerShape(18.dp)),
             )
         } else {
             Column(
-                modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .widthIn(max = 480.dp)
+                    .padding(horizontal = 32.dp, vertical = 72.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(Icons.Outlined.CenterFocusWeak, contentDescription = null, tint = Color.White, modifier = Modifier.size(42.dp))
@@ -162,7 +171,7 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(color = Color.Black.copy(alpha = 0.46f), shape = CircleShape) {
@@ -290,6 +299,7 @@ private fun QrApprovedScreen(target: QrLoginTarget, onClose: () -> Unit) {
             modifier = Modifier
                 .widthIn(max = 520.dp)
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = 24.dp, vertical = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -408,7 +418,13 @@ private fun QrErrorScreen(error: String, onRetry: () -> Unit, onClose: () -> Uni
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         QrHeader("扫码登录", onClose)
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp),
+            modifier = Modifier
+                .widthIn(max = 640.dp)
+                .fillMaxSize()
+                .align(Alignment.CenterHorizontally)
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -427,7 +443,7 @@ private fun QrErrorScreen(error: String, onRetry: () -> Unit, onClose: () -> Uni
 @Composable
 private fun QrHeader(title: String, onClose: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 14.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {

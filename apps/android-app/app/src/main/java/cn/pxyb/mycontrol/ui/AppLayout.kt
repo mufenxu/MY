@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -272,7 +273,7 @@ fun AppSubPage(
                 // 吸顶模式：页头固定于顶部，下方为 LazyColumn
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxHeight()
                         .then(contentMaxWidthModifier)
                         .padding(
                             top = contentPadding.calculateTopPadding() + AppPageTopSpacing,
@@ -311,7 +312,7 @@ fun AppSubPage(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxHeight()
                         .then(contentMaxWidthModifier),
                     contentPadding = appPageContentPadding(contentPadding),
                     verticalArrangement = Arrangement.spacedBy(12.dp),

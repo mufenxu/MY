@@ -9,11 +9,14 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -46,15 +49,26 @@ fun QrCameraPreview(onCodeDetected: (String) -> Unit, modifier: Modifier = Modif
                 .build(),
         )
     }
+    val preview = remember { Preview.Builder().build() }
+    val analysis = remember {
+        ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+    }
+    val view = LocalView.current
+    val rotation = remember(LocalConfiguration.current) {
+        view.display?.rotation ?: android.view.Surface.ROTATION_0
+    }
+    SideEffect {
+        preview.targetRotation = rotation
+        analysis.targetRotation = rotation
+    }
 
     DisposableEffect(lifecycleOwner) {
         val providerFuture = ProcessCameraProvider.getInstance(context)
         providerFuture.addListener({
             val provider = providerFuture.get()
-            val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-            val analysis = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
+            preview.setSurfaceProvider(previewView.surfaceProvider)
             analysis.setAnalyzer(executor) { imageProxy ->
                 if (delivered.get() || !processing.compareAndSet(false, true)) {
                     imageProxy.close()

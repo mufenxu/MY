@@ -203,8 +203,7 @@ fun TodayScreen(
             (resource to days).takeIf { days <= maxOf(60, resource.advanceNoticeDays) }
         }.sortedBy { it.second }
     }
-    val adaptive = LocalAdaptiveWindow.current
-    val isTablet = adaptive.isTabletOrExpanded
+    val isTablet = useTwoPaneLayout()
 
     WorkspacePage(
         title = "今日工作台",
@@ -1183,7 +1182,9 @@ private fun CourseGridMatrix(
     val totalSections = remember(courses) {
         maxOf(12, courses.maxOfOrNull { it.endSection } ?: 12)
     }
-    val sectionHeight = 44.dp
+    val wideGrid = appContentWidth() >= 600.dp
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+    val sectionHeight = (if (wideGrid) 64.dp else 44.dp) * fontScale.coerceAtLeast(1f)
     val gridGap = 2.5.dp
     val mealGap = 12.dp
     val totalGridHeight = getSectionTopOffset(totalSections, sectionHeight, gridGap, mealGap) + sectionHeight
@@ -1205,7 +1206,7 @@ private fun CourseGridMatrix(
                 Box(
                     modifier = Modifier
                         .width(30.dp)
-                        .height(38.dp),
+                        .heightIn(min = if (wideGrid) 48.dp else 38.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(
@@ -1214,12 +1215,12 @@ private fun CourseGridMatrix(
                     ) {
                         Text(
                             currentMonthText,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = if (wideGrid) 11.sp else 9.sp, fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Text(
                             "节次",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Medium),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = if (wideGrid) 11.sp else 9.5.sp, fontWeight = FontWeight.Medium),
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                         )
                     }
@@ -1231,7 +1232,7 @@ private fun CourseGridMatrix(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(38.dp)
+                            .heightIn(min = if (wideGrid) 48.dp else 38.dp)
                             .padding(horizontal = 1.5.dp)
                             .background(
                                 if (isToday) MaterialTheme.colorScheme.primaryContainer
@@ -1247,14 +1248,14 @@ private fun CourseGridMatrix(
                             if (dateText.isNotBlank()) {
                                 Text(
                                     dateText,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = if (wideGrid) 11.sp else 9.sp),
                                     fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             Text(
                                 "周$day",
-                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
+                                style = MaterialTheme.typography.labelMedium.copy(fontSize = if (wideGrid) 13.sp else 11.sp),
                                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             )
@@ -1378,8 +1379,8 @@ private fun CourseGridMatrix(
                                         Text(
                                             text = course.courseName,
                                             style = MaterialTheme.typography.labelSmall.copy(
-                                                fontSize = 9.5.sp,
-                                                lineHeight = 11.5.sp,
+                                                fontSize = if (wideGrid) 13.sp else 9.5.sp,
+                                                lineHeight = if (wideGrid) 16.sp else 11.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                             ),
                                             color = if (isThisWeek) colorScheme.contentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
@@ -1393,8 +1394,8 @@ private fun CourseGridMatrix(
                                             Text(
                                                 text = course.location,
                                                 style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontSize = 8.sp,
-                                                    lineHeight = 9.5.sp,
+                                                    fontSize = if (wideGrid) 11.sp else 8.sp,
+                                                    lineHeight = if (wideGrid) 14.sp else 9.5.sp,
                                                 ),
                                                 color = colorScheme.contentColor.copy(alpha = 0.85f),
                                                 maxLines = if (span >= 3) 2 else 1,
@@ -1403,7 +1404,7 @@ private fun CourseGridMatrix(
                                         } else if (!isThisWeek) {
                                             Text(
                                                 text = "(非本周)",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.5.sp),
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = if (wideGrid) 10.sp else 7.5.sp),
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                                                 maxLines = 1,
                                             )

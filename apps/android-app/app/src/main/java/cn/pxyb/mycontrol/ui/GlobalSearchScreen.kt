@@ -59,8 +59,7 @@ fun GlobalSearchScreen(
         }
     }
 
-    val adaptive = LocalAdaptiveWindow.current
-    val isTablet = adaptive.isTabletOrExpanded
+    val isTablet = useTwoPaneLayout()
 
     AppSubPage(
         title = "全局搜索",

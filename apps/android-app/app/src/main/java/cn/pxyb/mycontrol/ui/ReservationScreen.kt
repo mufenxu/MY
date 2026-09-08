@@ -414,8 +414,7 @@ private fun SingleReservationPanel(
         }
     }
 
-    val adaptive = LocalAdaptiveWindow.current
-    val isTablet = adaptive.isTabletOrExpanded
+    val isTablet = useTwoPaneLayout()
 
     val cardSpaceAndTime = @Composable {
         AppPanel {
@@ -1358,8 +1357,7 @@ private fun MyReservationsPanel(
                     }
                 }
             } else {
-                val adaptive = LocalAdaptiveWindow.current
-                val isTablet = adaptive.isTabletOrExpanded
+                val isTablet = useTwoPaneLayout()
 
                 if (isTablet) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1672,8 +1670,7 @@ private fun AutoReservationPanel(
                     }
                 }
 
-                val adaptive = LocalAdaptiveWindow.current
-                val isTablet = adaptive.isTabletOrExpanded
+                val isTablet = useTwoPaneLayout()
 
                 if (tasks.isNotEmpty()) {
                     if (isTablet) {

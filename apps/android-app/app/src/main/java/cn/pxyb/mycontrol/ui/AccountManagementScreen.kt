@@ -92,8 +92,7 @@ fun AccountManagementScreen(
     var showPasskeyDialog by remember { mutableStateOf(false) }
     var showPasskeyRegisterDialog by remember { mutableStateOf(false) }
     var passkeyToDelete by remember { mutableStateOf<PlatformPasskey?>(null) }
-    val adaptive = LocalAdaptiveWindow.current
-    val isTablet = adaptive.isTabletOrExpanded
+    val isTablet = useTwoPaneLayout()
 
     val listState = rememberLazyListState()
     val dark = isAppInDarkTheme()

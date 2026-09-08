@@ -15,6 +15,16 @@ internal fun metricGridColumnCount(maxWidth: Dp, fontScale: Float, maxColumns: I
     else -> maxColumns
 }
 
+internal fun adaptiveGridColumnCount(
+    maxWidth: Dp,
+    fontScale: Float,
+    minCellWidth: Dp,
+    maxColumns: Int,
+    spacing: Dp = 12.dp,
+): Int = ((maxWidth + spacing) / (minCellWidth * fontScale.coerceAtLeast(1f) + spacing))
+    .toInt()
+    .coerceIn(1, maxColumns)
+
 internal fun unreadBadgeLabel(count: Int): String = when {
     count <= 0 -> ""
     count > 99 -> "99+"

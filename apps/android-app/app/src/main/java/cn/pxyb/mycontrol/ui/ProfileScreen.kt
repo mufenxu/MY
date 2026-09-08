@@ -168,8 +168,7 @@ fun ProfileScreen(
         else -> "$otherSessionCount 个其他登录会话 · ${currentSession?.let { sessionTitle(it) } ?: "当前设备"}"
     }
 
-    val adaptive = LocalAdaptiveWindow.current
-    val isTablet = adaptive.isTabletOrExpanded
+    val isTablet = useTwoPaneLayout()
 
     val listState = rememberLazyListState()
     val dark = isAppInDarkTheme()

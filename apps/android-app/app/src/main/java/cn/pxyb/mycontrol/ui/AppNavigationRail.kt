@@ -9,22 +9,25 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,6 +38,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.data.AppThemePreference
+import cn.pxyb.mycontrol.ui.theme.AppHaptics
 
 /**
  * 现代平板自适应侧边导航轨（Navigation Rail）
@@ -71,7 +77,7 @@ fun AppNavigationRail(
     modifier: Modifier = Modifier,
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
-    val isDark = isAppInDarkTheme()
+    val haptics = LocalHapticFeedback.current
 
     Surface(
         modifier = modifier
@@ -81,11 +87,12 @@ fun AppNavigationRail(
         border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         shadowElevation = 0.dp,
     ) {
+        BoxWithConstraints {
         Column(
             modifier = Modifier
-                .fillMaxHeight()
-                .statusBarsPadding()
-                .navigationBarsPadding()
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
                 .padding(vertical = 12.dp, horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
@@ -136,8 +143,7 @@ fun AppNavigationRail(
 
             // 中间：主 Tab 导航项
             Column(
-                modifier = Modifier.weight(1f, fill = false),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 appNavigationTabs.forEach { item ->
@@ -145,7 +151,10 @@ fun AppNavigationRail(
                     NavigationRailItem(
                         item = item,
                         selected = isSelected,
-                        onClick = { onSelectTab(item.tab) },
+                        onClick = {
+                            AppHaptics.tick(haptics)
+                            onSelectTab(item.tab)
+                        },
                     )
                 }
             }
@@ -209,6 +218,7 @@ fun AppNavigationRail(
                 )
             }
         }
+        }
     }
 }
 
@@ -251,14 +261,15 @@ private fun NavigationRailItem(
 
     Column(
         modifier = Modifier
-            .size(width = 68.dp, height = 58.dp)
+            .width(68.dp)
+            .heightIn(min = 58.dp)
             .clip(itemShape)
             .background(background)
-            .clickable(
+            .selectable(
+                selected = selected,
                 interactionSource = interactionSource,
                 indication = null,
                 role = Role.Tab,
-                onClickLabel = item.label,
                 onClick = onClick,
             )
             .padding(vertical = 6.dp),
@@ -302,6 +313,7 @@ private fun RailActionButton(
         onClick = onClick,
         interactionSource = interactionSource,
         modifier = modifier
+            .minimumInteractiveComponentSize()
             .size(36.dp)
             .pressFeedback(interactionSource, pressedScale = 0.92f),
         shape = RoundedCornerShape(12.dp),

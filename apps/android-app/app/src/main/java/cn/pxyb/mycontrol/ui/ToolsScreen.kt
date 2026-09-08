@@ -154,8 +154,7 @@ fun ToolsScreen(
         iot?.insights?.firstOrNull { it.deviceId == sensorDevice?.id }
     }
 
-    val adaptive = LocalAdaptiveWindow.current
-    val isTablet = adaptive.isTabletOrExpanded
+    val isTablet = useTwoPaneLayout()
 
     val listState = rememberLazyListState()
     val dark = isAppInDarkTheme()

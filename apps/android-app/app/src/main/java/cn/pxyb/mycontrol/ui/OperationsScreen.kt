@@ -85,8 +85,7 @@ fun OperationsScreen(
     val listState = rememberLazyListState()
     val dark = isAppInDarkTheme()
 
-    val adaptive = LocalAdaptiveWindow.current
-    val isTablet = adaptive.isTabletOrExpanded
+    val isTablet = useTwoPaneLayout()
 
     PullToRefresh(
         isRefreshing = state.refreshing,

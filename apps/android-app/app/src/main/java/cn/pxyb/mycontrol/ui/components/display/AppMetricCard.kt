@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,12 +24,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.AppPanel
-import cn.pxyb.mycontrol.ui.LocalAdaptiveWindow
+import cn.pxyb.mycontrol.ui.adaptiveGridColumnCount
 import cn.pxyb.mycontrol.ui.pressFeedback
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
 
@@ -147,17 +149,21 @@ fun AppMetricDashboard(
     modifier: Modifier = Modifier,
     columns: Int? = null,
 ) {
-    val adaptive = LocalAdaptiveWindow.current
-    val resolvedColumns = columns ?: if (adaptive.isTabletOrExpanded) 4 else 2
-
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+    val resolvedColumns = adaptiveGridColumnCount(
+        maxWidth = maxWidth,
+        fontScale = LocalDensity.current.fontScale,
+        minCellWidth = 144.dp,
+        maxColumns = columns ?: 4,
+    )
     Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         metrics.chunked(resolvedColumns).forEach { rowMetrics ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 rowMetrics.forEach { metricSlot ->
                     Box(modifier = Modifier.weight(1f)) {
@@ -169,5 +175,6 @@ fun AppMetricDashboard(
                 }
             }
         }
+    }
     }
 }

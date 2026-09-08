@@ -87,7 +87,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -164,10 +163,16 @@ fun OverviewScreen(
     val currentDate = LocalDate.now()
     val todayCourseTotal = remember(state.timetable, currentDate) { todayCourseCount(state) }
     val listState = rememberLazyListState()
-    val configuration = LocalConfiguration.current
+    val isTablet = useTwoPaneLayout()
+    val contentWidth = appContentWidth()
+    val quickActionWidth = if (isTablet) {
+        (contentWidth - AppPageHorizontalPadding * 2 - 16.dp) / 2 - 12.dp
+    } else {
+        contentWidth
+    }
     val density = LocalDensity.current
-    val quickActionColumns = remember(configuration.screenWidthDp, density.fontScale) {
-        quickActionColumnCount(configuration.screenWidthDp.dp, density.fontScale)
+    val quickActionColumns = remember(quickActionWidth, density.fontScale) {
+        quickActionColumnCount(quickActionWidth, density.fontScale)
     }
     val visibleQuickActions = remember(state.homeQuickActionOrder, state.hiddenHomeQuickActions) {
         state.homeQuickActionOrder.filterNot(state.hiddenHomeQuickActions::contains)
@@ -265,9 +270,6 @@ fun OverviewScreen(
     val stableOpenExternalApplication: (ExternalApplication) -> Unit = remember {
         { application -> openExternalApplication(application) }
     }
-    val adaptive = LocalAdaptiveWindow.current
-    val isTablet = adaptive.isTabletOrExpanded
-
     val openTodayWorkspace = remember { { onOpenWorkspace(WorkspaceDestination.Today) } }
     val openNotificationsWorkspace = remember { { onOpenWorkspace(WorkspaceDestination.Notifications) } }
     val startCustomizingQuickActions = remember { { customizingQuickActions = true } }
