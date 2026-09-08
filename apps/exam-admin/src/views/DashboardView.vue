@@ -1965,7 +1965,6 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         const fourthStatLabel = computed(() => (isConsoleMode.value ? '已发布题库' : '累计考试'));
         const hasAdminSecurityActions = computed(() => !isConsoleMode.value);
         let fourthStatValue;
-        let consolePracticeCount;
         let displayName;
         let roleText;
         const allowedMenus = computed(() => (
@@ -2116,7 +2115,6 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             : (isConsoleMode.value
                 ? (dashboardStats.counts.publishedCategories || 0)
                 : (dashboardStats.counts.examResults || 0))));
-        consolePracticeCount = computed(() => (dashboardStats.error ? '--' : (dashboardStats.counts.practiceRecords || 0)));
         let qrcodeModulePromise = null;
         const viewRequestControllers = new Map();
 
@@ -2791,12 +2789,6 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             }
         });
 
-        const formatAvatar = (url) => {
-            const defaultAvatar = 'https://mmbiz.qpic.cn/mmbiz/icTdbqWNOwNRna42FI242Lcia07jQodd2FJGIYQfG0LAJGFxM4FbnQP6yfMxBgJ0F3YRqJCJ1aPAK2dQagdusBZg/0';
-            if (!url || url.startsWith('wxfile://')) return defaultAvatar;
-            return url;
-        };
-
         // --- Methods: Data Loading ---
         const loadDashboardData = async () => {
             const controller = beginViewRequest('dashboard');
@@ -2857,19 +2849,6 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             } finally {
                 finishViewRequest('categories', controller);
             }
-        };
-
-        const refreshData = () => {
-            if (activeMenu.value === 'dashboard') loadDashboardData();
-            if (activeMenu.value === 'major-categories' || activeMenu.value === 'demo-manage') {
-                loadMajorCategories();
-            }
-            if (activeMenu.value === 'categories') loadCategories();
-            if (activeMenu.value === 'exam-results') loadExamResults(1);
-            if (activeMenu.value === 'users') loadUsers(1);
-            if (activeMenu.value === 'learning-plans') loadLearningOperations();
-            if (activeMenu.value === 'personal-categories') loadPersonalCategories(personalCategories.page || 1);
-            if (activeMenu.value === 'feedbacks') loadFeedbacks();
         };
 
         const loadFeedbackSummary = async () => {
@@ -4480,15 +4459,6 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                 }
             }
         };
-
-        const categoryMajorIdMap = computed(() => {
-            const map = {};
-            (userAssignmentDialog.options.categories || []).forEach((item) => {
-                const majorId = item.majorCategoryId?._id || item.majorCategoryId || '';
-                map[item._id] = majorId ? String(majorId) : '';
-            });
-            return map;
-        });
 
         const groupedAssignmentCategories = computed(() => {
             const groups = {};

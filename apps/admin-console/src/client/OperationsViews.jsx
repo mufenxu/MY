@@ -5,7 +5,6 @@ import {
   Activity,
   AlertTriangle,
   BellRing,
-  CalendarDays,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -20,7 +19,6 @@ import {
   FileClock,
   Fingerprint,
   Gauge,
-  HardDrive,
   History,
   KeyRound,
   LoaderCircle,
@@ -29,21 +27,16 @@ import {
   PackageCheck,
   Play,
   RefreshCw,
-  RotateCcw,
   Rocket,
   Save,
-  Search,
   ServerCog,
   Settings2,
   ShieldCheck,
-  TerminalSquare,
-  Target,
   UserRoundCheck,
   Wrench,
   XCircle,
 } from 'lucide-react';
 import { requestJson } from './api.js';
-import { resolveConsoleView } from './navigation.js';
 import {
   environmentLabel,
   releaseStateClass,
@@ -124,15 +117,6 @@ const ACTION_LABELS = {
 };
 const CHART_COLORS = ['#2877f7', '#11ad78', '#ff8a00', '#8a45ef', '#d75467', '#13bad6'];
 const RELEASE_HISTORY_COLLAPSED_LIMIT = 5;
-const SLO_STATUS_LABELS = { healthy: '预算充足', at_risk: '预算承压', exhausted: '预算耗尽', no_data: '暂无数据' };
-const CALENDAR_TYPE_LABELS = { release: '发布', configuration: '配置', maintenance: '维护', incident: '事件' };
-const SEARCH_TYPE_LABELS = { service: '服务', incident: '事件', task: '任务', release: '发布', configuration: '配置' };
-const OPERATIONAL_STATUS_LABELS = {
-  open: '待处理', acknowledged: '已确认', resolved: '已恢复',
-  pending: '待处理', action_required: '需要处理', applying: '应用中', applied: '已应用', rejected: '已拒绝',
-  queued: '已排队', running: '执行中', succeeded: '已成功', failed: '已失败', cancelled: '已取消',
-  scheduled: '已计划', active: '进行中', completed: '已完成',
-};
 function formatDateTime(value) {
   if (!value) return '--';
   return new Intl.DateTimeFormat('zh-CN', {
@@ -188,27 +172,6 @@ function StatePill({ value }) {
 
 function SeverityPill({ value }) {
   return <span className={`ops-severity severity-${value}`}>{value === 'critical' ? '严重' : value === 'warning' ? '警告' : '提示'}</span>;
-}
-
-function SloStatusPill({ value }) {
-  const state = value === 'healthy' ? 'healthy' : value === 'at_risk' ? 'degraded' : value === 'exhausted' ? 'offline' : 'unmonitored';
-  return <span className={`ops-state state-${state}`}><i />{SLO_STATUS_LABELS[value] || value || '--'}</span>;
-}
-
-function sourceAvailabilityError(data) {
-  const unavailable = (data?.sources || []).filter((source) => !source.available).map((source) => source.id);
-  return unavailable.length ? `部分数据源暂不可用：${unavailable.join('、')}` : '';
-}
-
-function sourceScanLimitWarning(data) {
-  const limited = (data?.sources || []).filter((source) => source.scanLimitReached).map((source) => source.id);
-  return limited.length ? `部分数据源已达扫描上限：${limited.join('、')}，当前结果可能不完整` : '';
-}
-
-function operationalStatusLabel(value, type) {
-  if (!value) return '--';
-  if (type === 'release') return releaseStatusLabel(value);
-  return OPERATIONAL_STATUS_LABELS[value] || value;
 }
 
 function MonitoringChart({ groups }) {
@@ -333,235 +296,6 @@ function TrendMonitoringPanel({ services }) {
           </div>
         ))}
       </section>
-    </>
-  );
-}
-
-function SloPanel({ services }) {
-  const [windowValue, setWindowValue] = useState('7d');
-  const [selected, setSelected] = useState('all');
-  const [data, setData] = useState(null);
-  const { loading, error, runRequest } = useLatestRequest();
-
-  const load = useCallback(async () => {
-    await runRequest(async (signal) => {
-      const query = new URLSearchParams({ window: windowValue });
-      if (selected !== 'all') query.set('serviceId', selected);
-      return requestJson(`/api/operations/slo?${query}`, { signal });
-    }, setData);
-  }, [selected, windowValue, runRequest]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const reports = data?.services || [];
-  const overall = data?.overall || {};
-  const remaining = overall.errorBudget?.remainingPercent;
-  const burnRate = overall.errorBudget?.burnRate;
-
-  return (
-    <>
-      <div className="ops-toolbar">
-        <SegmentedTabs ariaLabel="SLO 时间窗口" idPrefix="slo-window-tab" items={[{ id: '1d', label: '1 天' }, { id: '7d', label: '7 天' }, { id: '30d', label: '30 天' }]} value={windowValue} onChange={setWindowValue} />
-        <div className="ops-select-label"><span>服务</span>
-          <SelectControl
-            ariaLabel="筛选 SLO 服务"
-            value={selected}
-            onChange={setSelected}
-            options={[
-              { value: 'all', label: '全部服务' },
-              ...services.filter((service) => service.healthPath).map((service) => ({ value: service.id, label: service.shortName || service.name })),
-            ]}
-          />
-        </div>
-        <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />刷新</button>
-      </div>
-      <Feedback error={error} />
-      {loading && !data ? <LoadingBlock label="正在计算 SLO 与错误预算" /> : (
-        <>
-          <div className="ops-kpis">
-            <article><Target size={20} /><div><span>目标可用率</span><strong>{data ? `${data.targetPercent}%` : '--'}</strong><small>{data?.window || windowValue} 统一目标</small></div></article>
-            <article><Activity size={20} /><div><span>实际可用率</span><strong>{Number.isFinite(overall.availabilityPercent) ? `${overall.availabilityPercent.toFixed(3)}%` : '--'}</strong><small>排除维护与未监测</small></div></article>
-            <article><Gauge size={20} /><div><span>剩余错误预算</span><strong>{Number.isFinite(remaining) ? `${remaining.toFixed(1)}%` : '--'}</strong><small>{SLO_STATUS_LABELS[overall.status] || '暂无数据'}</small></div></article>
-            <article><History size={20} /><div><span>预算烧毁率</span><strong>{Number.isFinite(burnRate) ? `${burnRate.toFixed(2)}x` : '--'}</strong><small>{reports.length} 项服务目标</small></div></article>
-          </div>
-          <section className="ops-panel ops-table-panel" aria-busy={loading}>
-            <div className="ops-table-head monitoring-table slo-table"><span>服务</span><span>状态</span><span>可用率</span><span>目标</span><span>剩余预算</span><span>烧毁率</span></div>
-            {reports.length ? reports.map((report) => (
-              <div className="ops-table-row monitoring-table slo-table" key={report.serviceId}>
-                <strong>{report.name || report.serviceId}</strong>
-                <SloStatusPill value={report.status} />
-                <span>{Number.isFinite(report.availabilityPercent) ? `${report.availabilityPercent.toFixed(3)}%` : '--'}</span>
-                <span>{report.targetPercent}%</span>
-                <span>{Number.isFinite(report.errorBudget?.remainingPercent) ? `${report.errorBudget.remainingPercent.toFixed(1)}%` : '--'}</span>
-                <span>{Number.isFinite(report.errorBudget?.burnRate) ? `${report.errorBudget.burnRate.toFixed(2)}x` : '--'}</span>
-              </div>
-            )) : <div className="ops-empty">当前时间窗口暂无可用 SLO 样本</div>}
-          </section>
-        </>
-      )}
-    </>
-  );
-}
-
-function ChangeCalendarPanel({ services }) {
-  const [period, setPeriod] = useState(30);
-  const [type, setType] = useState('all');
-  const [selected, setSelected] = useState('all');
-  const [page, setPage] = useState(1);
-  const [data, setData] = useState(null);
-  const { loading, error, runRequest } = useLatestRequest();
-
-  const load = useCallback(async () => {
-    await runRequest(async (signal) => {
-      const current = new Date();
-      const futureDays = period === 90 ? 30 : 15;
-      const query = new URLSearchParams({
-        from: new Date(current.getTime() - (period - futureDays) * 86400000).toISOString(),
-        to: new Date(current.getTime() + futureDays * 86400000).toISOString(),
-        page: String(page),
-        pageSize: '20',
-      });
-      if (type !== 'all') query.set('type', type);
-      if (selected !== 'all') query.set('serviceId', selected);
-      return requestJson(`/api/operations/change-calendar?${query}`, { signal });
-    }, setData);
-  }, [page, period, selected, type, runRequest]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    const pages = Math.max(1, data?.pagination?.pages || 1);
-    if (data && page > pages) setPage(pages);
-  }, [data, page]);
-
-  const events = data?.events || [];
-  const pagination = data?.pagination || { page, pages: 1, total: 0, hasMore: false };
-  const warning = [sourceAvailabilityError(data), sourceScanLimitWarning(data)].filter(Boolean).join('；');
-
-  return (
-    <>
-      <div className="ops-toolbar">
-        <SegmentedTabs ariaLabel="变更日历范围" idPrefix="change-calendar-range-tab" items={[{ id: 30, label: '30 天' }, { id: 90, label: '90 天' }]} value={period} onChange={(value) => { setPeriod(value); setPage(1); }} />
-        <div className="ops-select-label"><span>类型</span><SelectControl ariaLabel="筛选变更类型" value={type} onChange={(value) => { setType(value); setPage(1); }} options={[{ value: 'all', label: '全部类型' }, ...Object.entries(CALENDAR_TYPE_LABELS).map(([value, label]) => ({ value, label }))]} /></div>
-        <div className="ops-select-label"><span>服务</span><SelectControl ariaLabel="筛选变更服务" value={selected} onChange={(value) => { setSelected(value); setPage(1); }} options={[{ value: 'all', label: '全部服务' }, ...services.map((service) => ({ value: service.id, label: service.shortName || service.name }))]} /></div>
-        <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />刷新</button>
-      </div>
-      <Feedback error={error || warning} />
-      {loading && !data ? <LoadingBlock label="正在读取变更日历" /> : (
-        <section className="ops-panel ops-table-panel" aria-busy={loading}>
-          <header><div><span>变更日历</span><h3>发布、配置、维护与事件</h3></div><CalendarDays size={20} /></header>
-          <div className="ops-table-head monitoring-table change-calendar-table"><span>开始时间</span><span>类型</span><span>变更</span><span>状态</span><span>范围</span><span>结束时间</span></div>
-          {events.length ? events.map((event) => (
-            <div className="ops-table-row monitoring-table change-calendar-table" key={event.id}>
-              <strong>{formatDateTime(event.startsAt)}</strong>
-              <span>{CALENDAR_TYPE_LABELS[event.type] || event.type}</span>
-              <span className="audit-target"><strong>{event.title}</strong><small>{event.timeline?.length ? `${event.timeline.length} 个时间线节点` : event.category}</small></span>
-              <span>{operationalStatusLabel(event.status, event.type)}</span>
-              <span>{event.serviceId || event.scope?.join(', ') || '--'}</span>
-              <span>{formatDateTime(event.endsAt)}</span>
-            </div>
-          )) : <div className="ops-empty">当前筛选范围暂无变更记录</div>}
-          <footer className="notify-pagination"><span>共 {pagination.total || 0} 项 · 第 {pagination.page || page} / {Math.max(1, pagination.pages || 1)} 页</span><div><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((current) => Math.max(1, current - 1))}>上一页</button><button type="button" disabled={!pagination.hasMore || loading} onClick={() => setPage((current) => current + 1)}>下一页</button></div></footer>
-        </section>
-      )}
-    </>
-  );
-}
-
-function OperationalSearchPanel({ onNavigate }) {
-  const [query, setQuery] = useState('');
-  const [lastQuery, setLastQuery] = useState('');
-  const [type, setType] = useState('all');
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const requestRef = useRef(null);
-
-  const runSearch = useCallback(async (value, selectedType) => {
-    const normalized = value.trim();
-    if (normalized.length < 2) {
-      setError('请输入至少 2 个字符');
-      return;
-    }
-    requestRef.current?.abort();
-    const controller = new AbortController();
-    requestRef.current = controller;
-    setLoading(true);
-    setError('');
-    try {
-      const search = new URLSearchParams({ q: normalized, limit: '20' });
-      if (selectedType !== 'all') search.set('type', selectedType);
-      const result = await requestJson(`/api/operations/search?${search}`, { signal: controller.signal });
-      if (requestRef.current === controller) setData(result);
-    } catch (requestError) {
-      if (requestRef.current === controller && requestError.code !== 'REQUEST_ABORTED') setError(requestError.message);
-    } finally {
-      if (requestRef.current === controller) {
-        requestRef.current = null;
-        setLoading(false);
-      }
-    }
-  }, []);
-
-  useEffect(() => () => {
-    const controller = requestRef.current;
-    requestRef.current = null;
-    controller?.abort();
-  }, []);
-
-  function submit(event) {
-    event.preventDefault();
-    const normalized = query.trim();
-    if (normalized.length < 2) {
-      setError('请输入至少 2 个字符');
-      return;
-    }
-    setLastQuery(normalized);
-    runSearch(normalized, type);
-  }
-
-  function changeType(value) {
-    setType(value);
-    if (lastQuery) runSearch(lastQuery, value);
-  }
-
-  const results = data?.results || [];
-  const warning = sourceAvailabilityError(data);
-
-  return (
-    <>
-      <section className="ops-panel">
-        <header><div><span>运营检索</span><h3>跨服务查找运营对象</h3></div><Search size={20} /></header>
-        <form className="ops-inline-form" role="search" onSubmit={submit}>
-          <label>关键词<input type="search" minLength={2} maxLength={80} value={query} placeholder="服务、事件、任务、发布或配置变更" onChange={(event) => setQuery(event.target.value)} /></label>
-          <div className="ops-toolbar">
-            <SelectControl ariaLabel="筛选检索类型" value={type} onChange={changeType} options={[{ value: 'all', label: '全部类型' }, ...Object.entries(SEARCH_TYPE_LABELS).map(([value, label]) => ({ value, label }))]} />
-            <button className="primary-button" type="submit" disabled={loading || query.trim().length < 2}><Search size={17} />检索</button>
-            <button className="secondary-action" type="button" disabled={loading || !lastQuery} onClick={() => runSearch(lastQuery, type)}><RefreshCw className={loading ? 'spin' : ''} size={17} />刷新</button>
-          </div>
-        </form>
-      </section>
-      <Feedback error={error || warning} />
-      {loading && !data ? <LoadingBlock label="正在检索运营数据" /> : data ? (
-        <section className="ops-panel ops-table-panel" aria-busy={loading}>
-          <div className="ops-table-head monitoring-table operational-search-table"><span>类型</span><span>对象</span><span>状态</span><span>服务</span><span>更新时间</span><span>操作</span></div>
-          {results.length ? results.map((result) => (
-            <div className="ops-table-row monitoring-table operational-search-table" key={result.id}>
-              <strong>{SEARCH_TYPE_LABELS[result.type] || result.type}</strong>
-              <span className="audit-target"><strong>{result.title}</strong><small>{result.subtitle || result.entityId}</small></span>
-              <span>{operationalStatusLabel(result.status, result.type)}</span>
-              <span>{result.serviceId || '--'}</span>
-              <span>{formatDateTime(result.occurredAt)}</span>
-              <span>{result.view && onNavigate ? <button className="secondary-action" type="button" onClick={() => onNavigate(resolveConsoleView(result.view), { entity: result.entityId })}><ExternalLink size={15} />打开对象</button> : '--'}</span>
-            </div>
-          )) : <div className="ops-empty">没有找到匹配的运营对象</div>}
-          <footer className="notify-pagination"><span>{data.truncated ? `匹配 ${data.totalMatched || results.length} 项，仅展示前 ${results.length} 项` : `共 ${data.totalMatched || 0} 项`}</span></footer>
-        </section>
-      ) : <div className="ops-empty compact">输入关键词开始检索</div>}
     </>
   );
 }
@@ -1176,28 +910,6 @@ export function SettingsDiagnosticsView({ session }) {
         <p>检查服务健康、运维数据库、平台就绪状态、备份执行器、通知服务和发布集成，不读取或返回任何凭据。</p>
         {diagnostics && <div className="diagnostics-grid">{diagnostics.checks.map((check) => <div key={check.id} className={check.status}><span>{check.status === 'passed' ? <CheckCircle2 size={18} /> : check.status === 'skipped' ? <Clock3 size={18} /> : <XCircle size={18} />}</span><div><strong>{check.id}</strong><small>{check.status === 'passed' ? '检查通过' : check.status === 'skipped' ? '未配置，已跳过' : typeof check.detail === 'string' ? check.detail : '需要处理'}</small></div></div>)}</div>}
       </section>
-    </section>
-  );
-}
-
-export function OverviewOperations({ summary, onOpenIncidents, onOpenAudit }) {
-  const incidents = summary?.incidents || [];
-  const audit = summary?.audit || [];
-  return (
-    <section className="overview-operations" aria-label="事件与最近活动">
-      <header className="overview-operations-heading">
-        <div><Activity size={18} /><span><strong>运维动态</strong><small>事件处置与关键操作</small></span></div>
-      </header>
-      <div className="overview-operations-grid">
-        <div className="overview-band">
-          <header><div><BellRing size={18} /><span><strong>未解决事件</strong><small>{incidents.length ? `${incidents.length} 项需要关注` : '当前运行平稳'}</small></span></div><button type="button" onClick={onOpenIncidents}>查看全部 <ChevronRight size={15} /></button></header>
-          <div>{incidents.length ? incidents.slice(0, 3).map((incident) => <button type="button" key={incident.id} onClick={onOpenIncidents}><SeverityPill value={incident.severity} /><span><strong>{incident.title}</strong><small>{formatRelative(incident.lastSeenAt)}</small></span></button>) : <div className="overview-empty"><CheckCircle2 size={18} />没有待处理事件</div>}</div>
-        </div>
-        <div className="overview-band">
-          <header><div><FileClock size={18} /><span><strong>最近活动</strong><small>关键操作均已审计</small></span></div><button type="button" onClick={onOpenAudit}>审计日志 <ChevronRight size={15} /></button></header>
-          <div>{audit.length ? audit.slice(0, 3).map((event) => <button type="button" key={event.id} onClick={onOpenAudit}><span className={`activity-icon ${event.outcome}`}><TerminalSquare size={16} /></span><span><strong>{ACTION_LABELS[event.action] || event.action}</strong><small>{event.actor} · {formatRelative(event.occurredAt)}</small></span></button>) : <div className="overview-empty"><History size={18} />暂无最近活动</div>}</div>
-        </div>
-      </div>
     </section>
   );
 }

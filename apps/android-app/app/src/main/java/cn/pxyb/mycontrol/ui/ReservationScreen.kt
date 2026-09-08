@@ -46,7 +46,6 @@ import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FactCheck
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Public
@@ -1099,97 +1098,6 @@ private fun ScrollableRuleText(text: String) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 20.sp,
             )
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun FreeWindowList(
-    windows: List<CampusReservationTimeWindow>,
-    selectedStart: String,
-    selectedEnd: String,
-    onSelectWindow: (CampusReservationTimeWindow) -> Unit,
-) {
-    if (windows.isEmpty()) return
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        windows.forEach { window ->
-            val isSelected = selectedStart == window.start && selectedEnd == window.end
-            Surface(
-                onClick = { onSelectWindow(window) },
-                shape = RoundedCornerShape(999.dp),
-                border = BorderStroke(
-                    1.dp,
-                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                ),
-                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    if (isSelected) {
-                        Icon(
-                            Icons.Outlined.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(13.dp),
-                        )
-                    }
-                    Text(
-                        text = "${window.start} - ${window.end}",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun BusyWindowList(
-    windows: List<CampusReservationTimeWindow>,
-) {
-    if (windows.isEmpty()) return
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        windows.forEach { window ->
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                border = BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.error.copy(alpha = 0.35f),
-                ),
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.22f),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Icon(
-                        Icons.Outlined.Lock,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(12.dp),
-                    )
-                    Text(
-                        text = "${window.start} - ${window.end} (已预约)",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
         }
     }
 }
@@ -2728,22 +2636,6 @@ private const val CAMPUS_LIBROOM_MAX_START_TIME = "20:45"
 private const val CAMPUS_LIBROOM_MIN_END_TIME = "08:15"
 private const val CAMPUS_LIBROOM_MAX_END_TIME = "21:45"
 private const val CAMPUS_LIBROOM_TIME_STEP_MINUTES = 15
-
-private fun isReservationTimeValid(
-    startTime: String,
-    endTime: String,
-    windows: List<CampusReservationTimeWindow>?,
-): Boolean {
-    val start = reservationTimeMinutes(startTime) ?: return false
-    val end = reservationTimeMinutes(endTime) ?: return false
-    if (start < 480 || end > 1305 || start >= end) return false
-    if (end - start !in 60..240) return false
-    return windows.orEmpty().any { window ->
-        val windowStart = reservationTimeMinutes(window.start) ?: return@any false
-        val windowEnd = reservationTimeMinutes(window.end) ?: return@any false
-        start >= windowStart && end <= windowEnd
-    }
-}
 
 private fun isReservationDurationValid(startTime: String, endTime: String): Boolean {
     val start = reservationTimeMinutes(startTime) ?: return false

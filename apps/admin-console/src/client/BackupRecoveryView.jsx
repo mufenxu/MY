@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   Trash2,
   Upload,
-  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { requestJson } from './api.js';

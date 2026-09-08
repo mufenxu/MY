@@ -3,7 +3,7 @@ const CourseOrder = require('../models/CourseOrder');
 const CourseCategory = require('../models/CourseCategory');
 const mxPlatform = require('../utils/mxPlatform');
 const logger = require('../utils/logger');
-const { encrypt, decrypt } = require('../utils/crypto');
+const { encrypt } = require('../utils/crypto');
 const { parsePagination } = require('../utils/pagination');
 
 // 转义正则表达式特殊字符，防止 ReDoS 攻击

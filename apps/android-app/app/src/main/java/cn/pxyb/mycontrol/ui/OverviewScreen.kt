@@ -54,7 +54,6 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Notifications
@@ -96,7 +95,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cn.pxyb.mycontrol.data.AuditInfo
 import cn.pxyb.mycontrol.data.CampusCourse
 import cn.pxyb.mycontrol.data.ExternalApplication
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
@@ -2331,15 +2329,6 @@ private fun ExternalApplicationRow(
     }
 }
 
-private fun externalApplicationDetail(application: ExternalApplication): String = listOfNotNull(
-    application.description.takeIf(String::isNotBlank),
-    application.health.latencyMs?.let { "$it ms" },
-    "最低权限 ${externalRoleLabel(application.requiredRole)}",
-    if (application.canAccess) null else "当前账号无权访问",
-).joinToString(" · ").ifBlank {
-    if (application.health.state == "unmonitored") "未配置健康检查" else "等待健康状态"
-}
-
 private fun externalRoleLabel(role: String): String = when (role) {
     "super_admin" -> "超级管理员"
     "operator" -> "运维人员"
@@ -2391,31 +2380,6 @@ private fun ServiceJumpIndicator() {
                 .size(18.dp)
                 .graphicsLayer { translationX = arrowOffset },
         )
-    }
-}
-
-@Composable
-private fun AuditRow(audit: AuditInfo) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
-    ) {
-        IconTile(
-            if (audit.outcome == "failure") Icons.Outlined.ErrorOutline else Icons.Outlined.History,
-            if (audit.outcome == "failure") Coral else Ocean,
-            if (audit.outcome == "failure") CoralPale else OceanPale,
-            modifier = Modifier.size(36.dp),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(audit.action, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                "${audit.actor} · ${formatPlatformTime(audit.occurredAt)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        StatusBadge(audit.outcome, if (audit.outcome == "failure") "失败" else "完成")
     }
 }
 

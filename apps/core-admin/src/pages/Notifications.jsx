@@ -1,4 +1,3 @@
-import React from 'react';
 import { Button, Card, Space, Typography } from 'antd';
 import { BellOutlined } from '@ant-design/icons';
 

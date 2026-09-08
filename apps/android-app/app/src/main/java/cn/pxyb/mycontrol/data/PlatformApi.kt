@@ -1090,29 +1090,6 @@ private fun JSONObject.toReservationTimeWindow(): CampusReservationTimeWindow? {
     }
 }
 
-private fun JSONObject.reservationTimeWindows(): List<CampusReservationTimeWindow> {
-    val windows = mutableListOf<CampusReservationTimeWindow>()
-    collectReservationTimeWindows(this, windows)
-    return windows.distinct().ifEmpty { listOf(CampusReservationTimeWindow()) }
-}
-
-private fun collectReservationTimeWindows(value: Any?, windows: MutableList<CampusReservationTimeWindow>) {
-    when (value) {
-        is JSONArray -> {
-            for (index in 0 until value.length()) collectReservationTimeWindows(value.opt(index), windows)
-        }
-        is JSONObject -> {
-            val start = value.firstReservationTime(reservationStartTimeKeys)
-            val end = value.firstReservationTime(reservationEndTimeKeys)
-            if (start != null && end != null && end > start) {
-                windows.add(CampusReservationTimeWindow(start = start.toReservationTimeText(), end = end.toReservationTimeText()))
-            }
-            val keys = value.keys()
-            while (keys.hasNext()) collectReservationTimeWindows(value.opt(keys.next()), windows)
-        }
-    }
-}
-
 private fun JSONObject.firstReservationTime(keys: List<String>): Int? {
     for (key in keys) {
         if (!has(key) || isNull(key)) continue

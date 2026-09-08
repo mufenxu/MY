@@ -1,15 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Row, Col, Switch, Typography, Spin, Tag, Space, Button, Statistic, Slider, Radio, Divider, Tooltip } from 'antd';
+import { Card, Row, Col, Switch, Typography, Spin, Tag, Space, Button, Statistic, Slider, Radio, Divider } from 'antd';
 import {
     ThunderboltOutlined,
     ReloadOutlined,
     CheckCircleOutlined,
     CloseCircleOutlined,
-    ExclamationCircleOutlined,
     FireOutlined,
-    DotChartOutlined,
     HistoryOutlined,
-    AreaChartOutlined,
     DashboardOutlined,
     GlobalOutlined,
     ToolOutlined,
@@ -18,7 +15,7 @@ import {
 import { message } from '../utils/feedback';
 import api from '../utils/api';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 // 涂鸦 DP ID 映射
 const DP_MAP = {

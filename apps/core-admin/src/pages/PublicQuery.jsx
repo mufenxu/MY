@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Input, Button, Card, Progress, Empty, Tag, Typography, Spin } from 'antd';
 import {
   CheckCircleOutlined,

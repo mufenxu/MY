@@ -190,7 +190,7 @@ exports.wechatLogin = async (code, userInfo) => {
         upstreamError.code = timedOut ? 'WECHAT_UPSTREAM_TIMEOUT' : 'WECHAT_UPSTREAM_UNAVAILABLE';
         throw upstreamError;
     }
-    const { openid, session_key, errcode, errmsg } = response.data;
+    const { openid, errcode, errmsg } = response.data;
 
     if (errcode) {
         throw new AppError(`WeChat API Error: ${errmsg}`, 400);

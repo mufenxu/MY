@@ -8,8 +8,7 @@ const AppError = require('../utils/AppError');
 const { decrypt } = require('../utils/crypto');
 const {
     extractWorkflowSummary,
-    normalizeWorkflowResults,
-    pickFirst
+    normalizeWorkflowResults
 } = require('../utils/githubResultParser');
 
 const secretService = require('./secretService');

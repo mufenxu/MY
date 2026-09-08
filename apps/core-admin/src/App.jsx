@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, memo, useEffect, useState } from 'react';
+import { Suspense, lazy, memo, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router';
 import { App as AntApp, Button, ConfigProvider, Result, Spin, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';

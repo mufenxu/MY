@@ -1,5 +1,4 @@
 const request = require('../../utils/request').default;
-const logger = require('../../utils/logger');
 
 Component({
     properties: {

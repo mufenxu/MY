@@ -1,5 +1,4 @@
 const axios = require('axios');
-const qs = require('querystring');
 const PlatformConfig = require('../models/PlatformConfig');
 const logger = require('./logger');
 

@@ -39,7 +39,6 @@ const BackupOffsitePanel = lazyNamed(loadOperationsViews, 'BackupOffsitePanel');
 const BackupQualityStrip = lazyNamed(loadOperationsViews, 'BackupQualityStrip');
 const IncidentsView = lazyNamed(loadOperationsViews, 'IncidentsView');
 const MonitoringView = lazyNamed(loadOperationsViews, 'MonitoringView');
-const OverviewOperations = lazyNamed(loadOperationsViews, 'OverviewOperations');
 const ReleasesView = lazyNamed(loadOperationsViews, 'ReleasesView');
 const SecurityAuditView = lazyNamed(loadOperationsViews, 'SecurityAuditView');
 const SettingsDiagnosticsView = lazyNamed(loadOperationsViews, 'SettingsDiagnosticsView');

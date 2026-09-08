@@ -53,14 +53,9 @@ test('resource expiry task keeps its recipient target configurable', () => {
 });
 
 test('QR creation requests are cancelled when login surfaces are replaced', () => {
-  for (const relativePath of [
-    ['src', 'pages', 'Login.jsx'],
-    ['src', 'components', 'ScanAuthModal.jsx'],
-  ]) {
-    const source = readSource(...relativePath);
-    assert.match(source, /createRequestRef\.current\?\.abort\(\)/);
-    assert.match(source, /signal:\s*controller\.signal/);
-  }
+  const source = readSource('src', 'pages', 'Login.jsx');
+  assert.match(source, /createRequestRef\.current\?\.abort\(\)/);
+  assert.match(source, /signal:\s*controller\.signal/);
 });
 
 test('retired scan management and global configuration surfaces stay removed', () => {

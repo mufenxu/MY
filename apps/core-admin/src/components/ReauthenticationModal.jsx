@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Form, Input, Modal } from 'antd';
 import { IS_PLATFORM_SSO } from '../utils/runtime';
 

@@ -100,8 +100,6 @@ exports.queryCourseList = async (req, res) => {
             return res.status(404).json({ code: 404, message: '无效的网课分类' });
         }
         
-        const platformId = category.getnoun; 
-        
         // 并发锁防刷逻辑
         const queryKey = `${categoryId}:${user}`;
         if (activeQueries.has(queryKey)) {
@@ -340,7 +338,7 @@ exports.getOrderBatchStatus = async (req, res) => {
 exports.getMyOrders = async (req, res) => {
     try {
         const userId = req.user._id;
-        const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 10, maxLimit: 50 });
+        const { limit, skip } = parsePagination(req.query, { defaultLimit: 10, maxLimit: 50 });
         const keyword = req.query.keyword ? req.query.keyword.trim().slice(0, 80) : '';
         const searchField = req.query.searchField ? req.query.searchField.trim() : '';
 

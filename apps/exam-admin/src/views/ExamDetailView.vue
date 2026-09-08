@@ -1222,7 +1222,6 @@ import { useQuestionEditor } from '@/features/exam-editor/useQuestionEditor';
 import { useQuestionRendering } from '@/features/exam-editor/useQuestionRendering';
 import {
     cloneBatchQuestionForImport,
-    formatBatchSourceRange,
     formatDateTime,
     getBatchIssueLabel,
     getBatchIssueTagType,
