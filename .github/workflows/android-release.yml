@@ -226,15 +226,34 @@ jobs:
           trap 'rm -rf "${qshell_workspace}" "${qshell_dir}"' EXIT
           pushd "${qshell_workspace}" >/dev/null
           "${qshell_bin}" -L account "${QINIU_ACCESS_KEY}" "${QINIU_SECRET_KEY}" android-release
-          "${qshell_bin}" -L fput "${QINIU_BUCKET}" "android/${APK_NAME}" \
+
+          upload_with_retry() {
+            local key="$1"
+            local file="$2"
+            local mimetype="$3"
+            local attempt
+            for attempt in {1..3}; do
+              if "${qshell_bin}" -L fput "${QINIU_BUCKET}" "${key}" "${file}" \
+                --overwrite --mimetype "${mimetype}"; then
+                return 0
+              fi
+              echo "::warning::Qiniu upload failed for ${key} (attempt ${attempt}/3)"
+              if [[ "${attempt}" != "3" ]]; then
+                sleep 15
+              fi
+            done
+            return 1
+          }
+
+          upload_with_retry "android/${APK_NAME}" \
             "${GITHUB_WORKSPACE}/android-release-assets/${APK_NAME}" \
-            --overwrite --mimetype application/vnd.android.package-archive
-          "${qshell_bin}" -L fput "${QINIU_BUCKET}" android/latest.json \
+            "application/vnd.android.package-archive"
+          upload_with_retry android/latest.json \
             "${GITHUB_WORKSPACE}/android-release-assets/latest.json" \
-            --overwrite --mimetype application/json
-          "${qshell_bin}" -L fput "${QINIU_BUCKET}" "android/${APK_NAME}.sha256" \
+            "application/json"
+          upload_with_retry "android/${APK_NAME}.sha256" \
             "${GITHUB_WORKSPACE}/android-release-assets/${APK_NAME}.sha256" \
-            --overwrite --mimetype text/plain
+            "text/plain"
 
           refresh_file="${RUNNER_TEMP}/qiniu-cdn-refresh.txt"
           printf '%s\n' \
