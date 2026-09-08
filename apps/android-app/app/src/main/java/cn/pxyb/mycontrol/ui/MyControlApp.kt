@@ -150,7 +150,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.dismiss
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -2138,12 +2141,15 @@ private fun AuthenticatedShell(
 
             androidx.compose.animation.AnimatedVisibility(
                 visible = toastVisible,
-                enter = slideInVertically(animationSpec = tween(260, easing = FastOutSlowInEasing)) { -it } + fadeIn(animationSpec = tween(180)),
-                exit = slideOutVertically(animationSpec = tween(180, easing = FastOutSlowInEasing)) { -it } + fadeOut(animationSpec = tween(140)),
+                enter = slideInVertically(animationSpec = MotionTokens.standardTween()) { -it / 5 } +
+                    fadeIn(animationSpec = MotionTokens.standardTween()) +
+                    scaleIn(initialScale = 0.98f, animationSpec = MotionTokens.standardTween()),
+                exit = slideOutVertically(animationSpec = MotionTokens.fastTween()) { -it / 6 } +
+                    fadeOut(animationSpec = MotionTokens.fastTween()),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = AppPageHorizontalPadding, vertical = 12.dp)
                     .graphicsLayer {
                         translationX = animatedToastOffset
                         alpha = (1f - abs(animatedToastOffset) / (toastDismissThreshold * 2f))
@@ -2176,12 +2182,19 @@ private fun AuthenticatedShell(
                             },
                         )
                     }
-                    .zIndex(10f),
+                    .zIndex(10f)
+                    .semantics(mergeDescendants = true) {
+                        liveRegion = LiveRegionMode.Polite
+                        dismiss(label = "关闭提示") {
+                            toastVisible = false
+                            viewModel.clearFeedback(state.error, state.message)
+                            true
+                        }
+                    },
             ) {
                 AppToast(
                     message = toastMessage,
                     error = toastError,
-                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }

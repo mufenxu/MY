@@ -118,6 +118,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material3.minimumInteractiveComponentSize
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
+import cn.pxyb.mycontrol.ui.theme.Forest
 import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -1548,7 +1549,7 @@ fun AppConfirmDialog(
     )
 }
 
-/** 顶部悬浮的现代提示 Toast：浅色模式白卡片 / 深色模式深色卡片，按成功/失败切换图标配色。 */
+/** 短提示按内容收紧，长文本在有限宽度内换行，避免撑满屏幕。 */
 @Composable
 fun AppToast(
     message: String,
@@ -1556,48 +1557,45 @@ fun AppToast(
     modifier: Modifier = Modifier,
 ) {
     val dark = isAppInDarkTheme()
-    val accentColor = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
-    val container = accentColor
-        .copy(alpha = if (dark) 0.1f else 0.035f)
-        .compositeOver(MaterialTheme.colorScheme.surface)
-    val contentColor = MaterialTheme.colorScheme.onSurface
-    val border = accentColor.copy(alpha = if (dark) 0.3f else 0.16f)
-    val iconBackground = accentColor.copy(alpha = if (dark) 0.18f else 0.1f)
+    val colors = MaterialTheme.colorScheme
+    val accentColor = when {
+        error -> colors.error
+        dark -> colors.secondary
+        else -> Forest
+    }
     Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        color = container,
-        contentColor = contentColor,
+        modifier = modifier.widthIn(max = 360.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = colors.surface,
+        contentColor = colors.onSurface,
+        tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, border),
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.7f)),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(11.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Surface(
                 shape = CircleShape,
-                color = iconBackground,
-                modifier = Modifier.size(34.dp),
+                color = accentColor,
+                modifier = Modifier.size(20.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = if (error) Icons.Outlined.ErrorOutline else Icons.Outlined.CheckCircle,
+                        imageVector = if (error) Icons.Outlined.Close else Icons.Rounded.Check,
                         contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(18.dp),
+                        tint = if (error) colors.onError else colors.onSecondary,
+                        modifier = Modifier.size(14.dp),
                     )
                 }
             }
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    lineHeight = 20.sp,
-                ),
-                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             )
         }
     }
