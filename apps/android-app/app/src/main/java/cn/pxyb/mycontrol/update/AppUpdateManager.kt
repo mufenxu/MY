@@ -50,6 +50,19 @@ class AppUpdateManager(private val context: Context) {
         .callTimeout(10, TimeUnit.MINUTES)
         .build()
 
+    fun cleanupInstalledUpdates() {
+        val files = File(context.cacheDir, "updates").listFiles() ?: return
+        files.forEach { file ->
+            if (!file.isFile) return@forEach
+            val packageInfo = runCatching {
+                context.packageManager.getPackageArchiveInfo(file.path, 0)
+            }.getOrNull()
+            if (packageInfo == null || packageInfo.longVersionCode <= BuildConfig.VERSION_CODE) {
+                file.delete()
+            }
+        }
+    }
+
     suspend fun fetchLatest(): AppUpdateInfo = withContext(Dispatchers.IO) {
         var lastError: Throwable? = null
         manifestUrls().forEach { manifestUrl ->

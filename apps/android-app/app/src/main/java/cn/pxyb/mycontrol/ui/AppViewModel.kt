@@ -139,7 +139,8 @@ class AppViewModel(
     private val accountSecurity: AccountSecurityController = AccountSecurityController(api, actions, mutableState, ::forceReauthentication) {
         refreshSecurity(force = true)
     }
-    private val appUpdates = AppUpdateStateHolder(viewModelScope, AppUpdateManager(application)) { message ->
+    private val appUpdateManager = AppUpdateManager(application)
+    private val appUpdates = AppUpdateStateHolder(viewModelScope, appUpdateManager) { message ->
         mutableState.update { it.copy(message = message, error = null) }
     }
     val todos = TodoController(viewModelScope, TodoRepository(application, api, sessionStore), mutableState, ::forceReauthentication)
@@ -187,6 +188,9 @@ class AppViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), transform(mutableState.value))
 
     init {
+        viewModelScope.launch(Dispatchers.IO) {
+            appUpdateManager.cleanupInstalledUpdates()
+        }
         viewModelScope.launch {
             actions.state.collect { actions -> mutableState.update { it.copy(actions = actions) } }
         }
