@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class NotificationController(
@@ -46,6 +48,7 @@ class NotificationController(
         }
     }
     private var deviceRegistered = false
+    private val preferenceMutex = Mutex()
 
     fun cancelPending() = scope.coroutineContext.cancelChildren()
 
@@ -83,36 +86,39 @@ class NotificationController(
         val snoozedUntil = System.currentTimeMillis() + durationMillis
         updateAlerts { alerts -> alerts.map { if (it.id == id) it.copy(read = false, snoozedUntil = snoozedUntil) else it } }
         if (record?.origin == "remote") launch { request { api.snoozeAppNotification(id, snoozedUntil) } }
-        SnoozedAlertScheduler.schedule(application, id, durationMillis)
+        SnoozedAlertScheduler.schedule(application, appState.value.user?.username, id, durationMillis)
     }
 
     fun updateAlertPreferences(preferences: AlertPreferences) = launch {
-        withStore { writeAlertPreferences(preferences) }
-        request {
-            api.saveAppNotificationPreference(
-                AppNotificationPreference(
-                    quietHoursEnabled = preferences.quietHoursEnabled,
-                    quietStartHour = preferences.quietStartHour,
-                    quietEndHour = preferences.quietEndHour,
-                    timezoneOffsetMinutes = ZoneId.systemDefault().rules.getOffset(Instant.now()).totalSeconds / 60,
-                ),
-            )
+        preferenceMutex.withLock {
+            val previous = withStore { readAlertPreferences() }
+            if (previous.quietHoursEnabled != preferences.quietHoursEnabled ||
+                previous.quietStartHour != preferences.quietStartHour || previous.quietEndHour != preferences.quietEndHour
+            ) {
+                api.saveAppNotificationPreference(
+                    AppNotificationPreference(
+                        quietHoursEnabled = preferences.quietHoursEnabled,
+                        quietStartHour = preferences.quietStartHour,
+                        quietEndHour = preferences.quietEndHour,
+                        timezoneOffsetMinutes = ZoneId.systemDefault().rules.getOffset(Instant.now()).totalSeconds / 60,
+                    ),
+                )
+            }
+            withStore {
+                writeAlertPreferences(preferences)
+                DailyBriefScheduler.schedule(application, appState.value.user?.username)
+            }
+            appState.update { it.copy(alertPreferences = preferences, error = null, message = "提醒设置已保存。") }
         }
-        appState.update { it.copy(alertPreferences = preferences, message = "提醒设置已保存。") }
     }
 
-    fun updateNotificationPreferences(preferences: AlertPreferences) = launch {
-        withStore {
-            writeAlertPreferences(preferences)
-            DailyBriefScheduler.schedule(application, appState.value.user?.username)
-        }
-        appState.update { it.copy(alertPreferences = preferences) }
-        reloadLocal()
-    }
+    fun updateNotificationPreferences(preferences: AlertPreferences) = updateAlertPreferences(preferences)
 
     fun reloadLocal() = launch {
-        val (alerts, preferences) = withStore { readAlerts() to readAlertPreferences() }
-        appState.update { it.copy(alerts = mergeHydratedAlerts(alerts, it.alerts), alertPreferences = preferences) }
+        preferenceMutex.withLock {
+            val (alerts, preferences) = withStore { readAlerts() to readAlertPreferences() }
+            appState.update { it.copy(alerts = mergeHydratedAlerts(alerts, it.alerts), alertPreferences = preferences) }
+        }
         onSync()
     }
 
@@ -123,10 +129,23 @@ class NotificationController(
                 .onSuccess { deviceRegistered = true }
                 .exceptionOrNull()
         } else null
-        val (remoteItems, remotePreference) = supervisorScope {
+        val remoteItems = supervisorScope {
             val notifications = async { api.allAppNotifications() }
-            val preference = async { request { api.appNotificationPreference() }.getOrNull() }
-            notifications.await() to preference.await()
+            val preference = async {
+                preferenceMutex.withLock {
+                    request { api.withRequestMetadata(allowCache = false) { api.appNotificationPreference() }.value }.getOrNull()?.let { remote ->
+                        val merged = withStore {
+                            readAlertPreferences().copy(
+                                quietHoursEnabled = remote.quietHoursEnabled,
+                                quietStartHour = remote.quietStartHour.coerceIn(0, 23),
+                                quietEndHour = remote.quietEndHour.coerceIn(0, 23),
+                            ).also { writeAlertPreferences(it) }
+                        }
+                        appState.update { it.copy(alertPreferences = merged) }
+                    }
+                }
+            }
+            notifications.await().also { preference.await() }
         }
         val currentAlerts = appState.value.alerts
         val currentById = currentAlerts.associateBy(AppAlertRecord::id)
@@ -139,18 +158,11 @@ class NotificationController(
             }
         }
         val merged = mergeRemoteAlerts(appState.value.alerts, remoteItems)
-        val mergedPreference = remotePreference?.let { remote ->
-            withStore {
-                readAlertPreferences().copy(
-                    quietHoursEnabled = remote.quietHoursEnabled,
-                    quietStartHour = remote.quietStartHour.coerceIn(0, 23),
-                    quietEndHour = remote.quietEndHour.coerceIn(0, 23),
-                ).also { writeAlertPreferences(it) }
-            }
+        withStore {
+            writeAlerts(merged)
+            notifier.evaluateRemote(merged)
         }
-        withStore { writeAlerts(merged) }
-        withContext(Dispatchers.IO) { notifier.evaluateRemote(merged) }
-        appState.update { it.copy(alerts = merged, alertPreferences = mergedPreference ?: it.alertPreferences) }
+        appState.update { it.copy(alerts = merged) }
         registrationError?.let { throw it }
     }
 

@@ -58,6 +58,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -149,7 +152,7 @@ class AppViewModel(
     val toolsState = deriveState(AppUiState::toToolsUiState)
     val profileState = deriveState(AppUiState::toProfileUiState)
     val accountManagementState = deriveState(AppUiState::toAccountManagementUiState)
-    val googleAccounts = GoogleAccountsController(viewModelScope, api, googleAccountStore, mutableState, ::forceReauthentication, actions)
+    val googleAccounts = GoogleAccountsController(viewModelScope, api, googleAccountStore, sessionStore, mutableState, ::forceReauthentication, actions)
     val googleAccountDeskState = deriveState(AppUiState::toGoogleAccountDeskUiState)
     val qrLoginState = deriveState(AppUiState::toQrLoginUiState)
     val globalSearchState = deriveState(AppUiState::toGlobalSearchUiState)
@@ -165,6 +168,9 @@ class AppViewModel(
     private var pendingQrLogin: Pair<String, String>? = null
     private var pollJob: Job? = null
     private var deviceLoginJob: Job? = null
+    private val accountRequestScope = CoroutineScope(viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job]))
+    private var qrLoginJob: Job? = null
+    private var waterBillJob: Job? = null
     private var appInForeground = false
     private val refreshJobs = mutableMapOf<DataSection, Job>()
     private val lastRefreshElapsedMs = mutableMapOf<DataSection, Long>()
@@ -490,9 +496,10 @@ class AppViewModel(
 
     fun lockSession() {
         if (!sessionStore.isLockEnabled()) return
-        if (mutableState.value.user != null && !mutableState.value.qrLoginBusy) {
+        if (mutableState.value.user != null) {
             stopOperationalPolling()
             cancelRefreshes()
+            cancelAccountRequests()
             googleAccounts.cancelPending()
             todos.cancelPending()
             notifications.cancelPending()
@@ -520,6 +527,7 @@ class AppViewModel(
                     )
                 }
             } else {
+                clearAccountScopedState()
                 alertsSeeded = false
                 initialIncidentsLoaded = false
                 initialTasksLoaded = false
@@ -599,9 +607,9 @@ class AppViewModel(
         initialIncidentsLoaded = false
         initialTasksLoaded = false
         startOperationalPolling()
-        refreshInitialData()
+        refreshInitialData(force = true)
         scanPendingQrLogin()
-        viewModelScope.launch {
+        accountRequestScope.launch {
             hydrateLocalState()
             syncRemoteNotifications()
         }
@@ -609,6 +617,10 @@ class AppViewModel(
 
     private fun setAccountScope(username: String?) {
         if (featureAccountUsername != username) {
+            cancelRefreshes()
+            clearRefreshCache()
+            cancelAccountRequests()
+            assistantChatMutable.value = AssistantChatUiState()
             googleAccounts.cancelPending()
             todos.cancelPending()
             notifications.cancelPending()
@@ -627,16 +639,39 @@ class AppViewModel(
     }
 
     private fun clearAccountScopedState() {
+        cancelAccountRequests()
+        assistantChatMutable.value = AssistantChatUiState()
+        pendingQrLogin = null
+        clearRefreshCache()
         googleAccounts.cancelPending()
         todos.cancelPending()
         notifications.cancelPending()
         actions.cancelPending()
         appUpdates.cancelPending()
         alertNotifier.clear()
-        personalStore.clearAccountData()
-        snapshotStore.clear()
-        googleAccountStore.clear()
+        sessionStore.withRequestSession(null) {
+            personalStore.clearAccountData(preservePendingTodos = true)
+            snapshotStore.clear()
+            googleAccountStore.clear()
+        }
         setAccountScope(null)
+    }
+
+    private fun cancelAccountRequests() {
+        accountRequestScope.coroutineContext.cancelChildren()
+        qrLoginJob = null
+        waterBillJob = null
+        operationalEffectsJob?.cancel()
+        operationalEffectsJob = null
+        assistantChatMutable.update { it.copy(sending = false) }
+        mutableState.update {
+            it.copy(
+                qrLoginBusy = false,
+                campusWaterValveBusy = false,
+                campusWaterValveLoading = false,
+                campusWaterBillLoading = false,
+            )
+        }
     }
 
     private fun handleLoginFailure(error: Throwable) {
@@ -675,6 +710,8 @@ class AppViewModel(
     fun logout() {
         if (mutableState.value.busyAction == "logout") return
         mutableState.update { it.copy(busyAction = "logout", error = null) }
+        cancelAccountRequests()
+        assistantChatMutable.value = AssistantChatUiState()
         googleAccounts.cancelPending()
         todos.cancelPending()
         notifications.cancelPending()
@@ -792,20 +829,27 @@ class AppViewModel(
             openWorkspace(WorkspaceDestination.Notifications)
             return
         }
-        val resolvedTab = tab
+        val resolvedTab = tab ?: mutableState.value.selectedTab
         mutableState.update {
             it.copy(
-                selectedTab = resolvedTab ?: it.selectedTab,
+                selectedTab = resolvedTab,
+                pendingTabNavigation = resolvedTab,
                 accountManagementOpen = false,
                 googleAccountDeskOpen = false,
+                githubProjectsOpen = false,
                 globalSearchOpen = false,
+                assistantOpen = false,
                 workspaceDestination = null,
                 error = null,
                 message = null,
             )
         }
         persistNavigationState()
-        resolvedTab?.let(::refreshForTab)
+        refreshForTab(resolvedTab)
+    }
+
+    fun consumeTabNavigation(tab: MainTab) {
+        mutableState.update { if (it.pendingTabNavigation == tab) it.copy(pendingTabNavigation = null) else it }
     }
 
     fun openSharedTodo(subject: String?, text: String?) {
@@ -841,6 +885,7 @@ class AppViewModel(
         mutableState.update {
             it.copy(
                 selectedTab = MainTab.Overview,
+                pendingTabNavigation = null,
                 accountManagementOpen = false,
                 googleAccountDeskOpen = false,
                 globalSearchOpen = false,
@@ -907,35 +952,35 @@ class AppViewModel(
         val trimmed = text.trim()
         if (trimmed.isEmpty() || assistantChatMutable.value.sending) return
         val current = mutableState.value
-        if (current.user == null || current.locked) {
+        if (current.user == null || current.locked || current.busyAction == "logout") {
             assistantChatMutable.update { it.copy(error = "请先登录后再使用 AI 助手。") }
             return
         }
         val userTurn = AssistantChatMessageUi(role = "user", content = trimmed)
         val history = (assistantChatMutable.value.messages + userTurn).takeLast(12)
         assistantChatMutable.update { it.copy(messages = history, sending = true, error = null) }
-        viewModelScope.launch {
-            val context = buildAssistantContext(current)
-            val turns = history.map { AssistantChatTurn(role = it.role, content = it.content) }
-            runCatching { api.assistantChat(turns, context) }
-                .onSuccess { reply ->
-                    assistantChatMutable.update { state ->
-                        state.copy(
-                            messages = state.messages + AssistantChatMessageUi(
-                                role = "assistant",
-                                content = reply.reply,
-                                suggestions = reply.suggestions,
-                                actions = reply.actions,
-                            ),
-                            sending = false,
-                            error = null,
-                        )
-                    }
+        accountRequestScope.launch {
+            try {
+                val context = buildAssistantContext(current)
+                val turns = history.map { AssistantChatTurn(role = it.role, content = it.content) }
+                val reply = api.withRequestMetadata(allowCache = false) { api.assistantChat(turns, context) }.value
+                assistantChatMutable.update { state ->
+                    state.copy(
+                        messages = state.messages + AssistantChatMessageUi(
+                            role = "assistant",
+                            content = reply.reply,
+                            suggestions = reply.suggestions,
+                            actions = reply.actions,
+                        ),
+                        error = null,
+                    )
                 }
-                .onFailure { error ->
-                    if (error is CancellationException) throw error
-                    assistantChatMutable.update { it.copy(sending = false, error = mapAssistantError(error)) }
-                }
+            } catch (error: Throwable) {
+                handleFeatureRequestFailure(error, ::forceReauthentication)
+                assistantChatMutable.update { it.copy(error = mapAssistantError(error)) }
+            } finally {
+                if (isActive) assistantChatMutable.update { it.copy(sending = false) }
+            }
         }
     }
 
@@ -1239,6 +1284,8 @@ class AppViewModel(
     }
 
     fun resetQrScanner() {
+        qrLoginJob?.cancel()
+        qrLoginJob = null
         pendingQrLogin = null
         mutableState.update {
             it.copy(qrLoginOpen = true, qrLoginBusy = false, qrLoginTarget = null, qrLoginError = null)
@@ -1246,6 +1293,8 @@ class AppViewModel(
     }
 
     fun closeQrLogin() {
+        qrLoginJob?.cancel()
+        qrLoginJob = null
         pendingQrLogin = null
         mutableState.update {
             it.copy(qrLoginOpen = false, qrLoginBusy = false, qrLoginTarget = null, qrLoginError = null)
@@ -1254,18 +1303,19 @@ class AppViewModel(
 
     fun rejectQrLogin() {
         val target = mutableState.value.qrLoginTarget ?: return closeQrLogin()
-        if (mutableState.value.qrLoginBusy) return
-        viewModelScope.launch {
+        if (mutableState.value.let { it.qrLoginBusy || it.user == null || it.locked || it.busyAction == "logout" }) return
+        qrLoginJob = accountRequestScope.launch {
             mutableState.update { it.copy(qrLoginBusy = true, qrLoginError = null) }
-            runCatching { api.auth.rejectQrLogin(target.requestId) }
-                .onSuccess {
-                    mutableState.update {
-                        it.copy(qrLoginOpen = false, qrLoginBusy = false, qrLoginTarget = null, message = "已拒绝本次网页登录。")
-                    }
+            try {
+                api.withRequestMetadata(allowCache = false) { api.auth.rejectQrLogin(target.requestId) }
+                mutableState.update {
+                    it.copy(qrLoginOpen = false, qrLoginTarget = null, message = "已拒绝本次网页登录。")
                 }
-                .onFailure { error ->
-                    if (error is CancellationException) throw error
-                    mutableState.update { it.copy(qrLoginBusy = false, qrLoginError = qrErrorMessage(error)) }
+            } catch (error: Throwable) {
+                handleFeatureRequestFailure(error, ::forceReauthentication)
+                mutableState.update { it.copy(qrLoginError = qrErrorMessage(error)) }
+            } finally {
+                if (isActive) mutableState.update { it.copy(qrLoginBusy = false) }
             }
         }
     }
@@ -1304,7 +1354,7 @@ class AppViewModel(
         requestBiometric: suspend () -> Boolean,
     ) {
         val target = mutableState.value.qrLoginTarget ?: return
-        if (mutableState.value.qrLoginBusy || target.status == "approved") return
+        if (mutableState.value.let { it.qrLoginBusy || it.user == null || it.locked || it.busyAction == "logout" } || target.status == "approved") return
         if (
             target.confirmationMethod == "unavailable" ||
             target.confirmationMethod == "passkey" && !mutableState.value.androidPasskeySupported
@@ -1312,48 +1362,52 @@ class AppViewModel(
             mutableState.update { it.copy(qrLoginError = "服务器尚未关联当前 Android App 的签名证书。") }
             return
         }
-        viewModelScope.launch {
+        qrLoginJob = accountRequestScope.launch {
             mutableState.update { it.copy(qrLoginBusy = true, qrLoginError = null) }
-            runCatching {
-                if (target.confirmationMethod == "passkey") {
-                    val challenge = api.auth.beginQrPasskey(target.requestId)
-                    api.auth.approveQrWithPasskey(
-                        target.requestId,
-                        challenge,
-                        requestCredential(challenge.optionsJson),
-                    )
-                } else {
-                    if (!requestBiometric()) throw IllegalStateException("身份验证已取消，未批准网页登录。")
-                    api.auth.approveQrWithBiometric(target.requestId)
-                }
-            }.onSuccess { approved ->
+            try {
+                val approved = api.withRequestMetadata(allowCache = false) {
+                    if (target.confirmationMethod == "passkey") {
+                        val challenge = api.auth.beginQrPasskey(target.requestId)
+                        api.auth.approveQrWithPasskey(
+                            target.requestId,
+                            challenge,
+                            requestCredential(challenge.optionsJson),
+                        )
+                    } else {
+                        if (!requestBiometric()) throw IllegalStateException("身份验证已取消，未批准网页登录。")
+                        api.auth.approveQrWithBiometric(target.requestId)
+                    }
+                }.value
                 mutableState.update {
-                    it.copy(qrLoginBusy = false, qrLoginTarget = approved, message = "网页登录已安全批准。")
+                    it.copy(qrLoginTarget = approved, message = "网页登录已安全批准。")
                 }
-            }.onFailure { error ->
-                if (error is CancellationException) throw error
-                mutableState.update { it.copy(qrLoginBusy = false, qrLoginError = qrErrorMessage(error)) }
+            } catch (error: Throwable) {
+                handleFeatureRequestFailure(error, ::forceReauthentication)
+                mutableState.update { it.copy(qrLoginError = qrErrorMessage(error)) }
+            } finally {
+                if (isActive) mutableState.update { it.copy(qrLoginBusy = false) }
             }
         }
     }
 
     private fun scanPendingQrLogin() {
         val pending = pendingQrLogin ?: return
-        if (mutableState.value.user == null || mutableState.value.locked || mutableState.value.qrLoginBusy) return
-        viewModelScope.launch {
+        if (mutableState.value.let { it.user == null || it.locked || it.qrLoginBusy || it.busyAction == "logout" }) return
+        qrLoginJob = accountRequestScope.launch {
             mutableState.update {
                 it.copy(qrLoginOpen = true, qrLoginBusy = true, qrLoginTarget = null, qrLoginError = null)
             }
-            runCatching { api.auth.scanQrLogin(pending.first, pending.second) }
-                .onSuccess { target ->
-                    pendingQrLogin = null
-                    mutableState.update { it.copy(qrLoginBusy = false, qrLoginTarget = target) }
-                }
-                .onFailure { error ->
-                    if (error is CancellationException) throw error
-                    pendingQrLogin = null
-                    mutableState.update { it.copy(qrLoginBusy = false, qrLoginError = qrErrorMessage(error)) }
-                }
+            try {
+                val target = api.withRequestMetadata(allowCache = false) { api.auth.scanQrLogin(pending.first, pending.second) }.value
+                pendingQrLogin = null
+                mutableState.update { it.copy(qrLoginTarget = target) }
+            } catch (error: Throwable) {
+                handleFeatureRequestFailure(error, ::forceReauthentication)
+                pendingQrLogin = null
+                mutableState.update { it.copy(qrLoginError = qrErrorMessage(error)) }
+            } finally {
+                if (isActive) mutableState.update { it.copy(qrLoginBusy = false) }
+            }
         }
     }
 
@@ -1442,7 +1496,7 @@ class AppViewModel(
                 reloadPersonalState()
             }
             googleAccountDeskOpen -> {
-                googleAccounts.loadGoogleAccounts()
+                googleAccounts.loadGoogleAccounts(force)
             }
             githubProjectsOpen -> {
                 refreshGitHubProjects()
@@ -1591,53 +1645,59 @@ class AppViewModel(
     }
 
     fun refreshWaterValve(force: Boolean = false) {
-        viewModelScope.launch {
+        if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" || it.campusWaterValveLoading }) return
+        accountRequestScope.launch {
             waterValveMutex.withLock {
                 if (!force && mutableState.value.campusWaterValve.bound) return@withLock
                 mutableState.update { it.copy(campusWaterValveLoading = true, campusWaterValveError = null) }
                 try {
-                    val valve = api.campus.campusWaterValve()
+                    val valve = api.withRequestMetadata { api.campus.campusWaterValve() }.value
                     mutableState.update {
                         it.copy(
                             campusWaterValve = valve,
-                            campusWaterValveLoading = false,
                             campusWaterValveError = valve.error,
                         )
                     }
                 } catch (error: Throwable) {
-                    if (error is CancellationException) throw error
+                    handleFeatureRequestFailure(error, ::forceReauthentication)
                     mutableState.update {
                         it.copy(
-                            campusWaterValveLoading = false,
                             campusWaterValveError = error.message ?: "饮水机状态加载失败，请重试。",
                         )
                     }
+                } finally {
+                    if (isActive) mutableState.update { it.copy(campusWaterValveLoading = false) }
                 }
             }
         }
     }
 
     fun refreshWaterBill(month: String, force: Boolean = false) {
-        if (!force && mutableState.value.campusWaterBill?.month == month) return
-        viewModelScope.launch {
+        if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" }) return
+        waterBillJob?.cancel()
+        if (!force && mutableState.value.campusWaterBill?.month == month) {
+            mutableState.update { it.copy(campusWaterBillLoading = false) }
+            return
+        }
+        waterBillJob = accountRequestScope.launch {
             mutableState.update { it.copy(campusWaterBillLoading = true, campusWaterBillError = null) }
             try {
-                val bill = api.campus.campusWaterBill(month)
+                val bill = api.withRequestMetadata { api.campus.campusWaterBill(month) }.value
                 mutableState.update {
                     it.copy(
                         campusWaterBill = bill,
-                        campusWaterBillLoading = false,
                         campusWaterBillError = bill.error,
                     )
                 }
             } catch (error: Throwable) {
-                if (error is CancellationException) throw error
+                handleFeatureRequestFailure(error, ::forceReauthentication)
                 mutableState.update {
                     it.copy(
-                        campusWaterBillLoading = false,
                         campusWaterBillError = error.message ?: "生活用水账单加载失败，请重试。",
                     )
                 }
+            } finally {
+                if (isActive) mutableState.update { it.copy(campusWaterBillLoading = false) }
             }
         }
     }
@@ -1677,30 +1737,26 @@ class AppViewModel(
         failureMessage: String,
         action: suspend () -> CampusWaterValve,
     ) {
-        if (mutableState.value.campusWaterValveBusy) return
-        viewModelScope.launch {
-            waterValveMutex.withLock {
-                mutableState.update {
-                    it.copy(campusWaterValveBusy = true, campusWaterValveError = null, campusWaterValveMessage = null)
-                }
-                try {
-                    val valve = action()
+        if (mutableState.value.let { it.campusWaterValveBusy || it.user == null || it.locked || it.busyAction == "logout" }) return
+        mutableState.update {
+            it.copy(campusWaterValveBusy = true, campusWaterValveError = null, campusWaterValveMessage = null)
+        }
+        accountRequestScope.launch {
+            try {
+                waterValveMutex.withLock {
+                    val valve = api.withRequestMetadata(allowCache = false) { action() }.value
                     mutableState.update {
                         it.copy(
                             campusWaterValve = valve,
-                            campusWaterValveBusy = false,
                             campusWaterValveMessage = successMessage,
                         )
                     }
-                } catch (error: Throwable) {
-                    if (error is CancellationException) throw error
-                    mutableState.update {
-                        it.copy(
-                            campusWaterValveBusy = false,
-                            campusWaterValveError = error.message ?: failureMessage,
-                        )
-                    }
                 }
+            } catch (error: Throwable) {
+                handleFeatureRequestFailure(error, ::forceReauthentication)
+                mutableState.update { it.copy(campusWaterValveError = error.message ?: failureMessage) }
+            } finally {
+                if (isActive) mutableState.update { it.copy(campusWaterValveBusy = false) }
             }
         }
     }

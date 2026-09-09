@@ -215,7 +215,18 @@ fun shouldSuppressNotification(
     classFocusUntilMillis: Long? = null,
     critical: Boolean,
     zoneId: ZoneId = ZoneId.systemDefault(),
+    type: String? = null,
 ): Boolean {
+    if (settings.severityFilter == "none" || settings.severityFilter == "critical_only" && !critical) return true
+    val categoryEnabled = when (type?.substringBefore('.')?.lowercase()) {
+        "incident", "system", "task", "configuration", "release", "release_build" -> settings.incidentAlerts
+        "iot" -> settings.iotAlerts
+        "campus", "course", "todo" -> settings.campusAlerts
+        "backup" -> settings.backupAlerts
+        "daily" -> settings.dailyBriefEnabled
+        else -> true
+    }
+    if (!categoryEnabled) return true
     if (critical) return false
     if (settings.classFocusEnabled && classFocusUntilMillis?.let { nowMillis < it } == true) return true
     if (!settings.quietHoursEnabled) return false

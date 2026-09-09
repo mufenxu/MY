@@ -172,11 +172,20 @@ class AndroidCalendarSync(context: Context) {
                         put(CalendarContract.Events.DESCRIPTION, draft.description)
                         put(CalendarContract.Events.EVENT_LOCATION, draft.location)
                         put(CalendarContract.Events.DTSTART, draft.startAtMillis)
-                        put(CalendarContract.Events.DTEND, draft.endAtMillis)
                         put(CalendarContract.Events.EVENT_TIMEZONE, draft.timeZone)
                         put(CalendarContract.Events.ALL_DAY, if (draft.allDay) 1 else 0)
                         put(CalendarContract.Events.HAS_ALARM, if (draft.reminderMinutes != null) 1 else 0)
-                        draft.rrule?.let { put(CalendarContract.Events.RRULE, it) }
+                        if (draft.rrule != null) {
+                            put(CalendarContract.Events.RRULE, draft.rrule)
+                            val durationMillis = draft.endAtMillis - draft.startAtMillis
+                            put(CalendarContract.Events.DURATION, if (draft.allDay) {
+                                "P${durationMillis / 86_400_000L}D"
+                            } else {
+                                "PT${durationMillis / 1_000L}S"
+                            })
+                        } else {
+                            put(CalendarContract.Events.DTEND, draft.endAtMillis)
+                        }
                     },
                 )
                 .build()

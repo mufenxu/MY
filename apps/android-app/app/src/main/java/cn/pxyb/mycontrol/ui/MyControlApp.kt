@@ -1551,7 +1551,15 @@ private fun AuthenticatedShell(
         return
     }
 
-    // 仅响应由外部或 ViewModel 显式打开的非 Tab 二级子界面（如全局搜索、Google 桌面等）
+    // 外部 Tab 请求单独消费，避免与下方路由回写互相触发。
+    LaunchedEffect(state.pendingTabNavigation) {
+        val tab = state.pendingTabNavigation ?: return@LaunchedEffect
+        navigateToTab(tab)
+        navController.popBackStack(tab.route(), inclusive = false)
+        viewModel.consumeTabNavigation(tab)
+    }
+
+    // 响应由 ViewModel 显式打开的二级子界面。
     LaunchedEffect(state.accountManagementOpen, state.googleAccountDeskOpen, state.githubProjectsOpen, state.globalSearchOpen, state.assistantOpen, state.workspaceDestination) {
         val targetRoute = state.requestedRoute()
         if (targetRoute != currentRoute && targetRoute !in setOf(AppRoute.Overview, AppRoute.Operations, AppRoute.Tools, AppRoute.Profile)) {
@@ -1881,6 +1889,7 @@ private fun AuthenticatedShell(
                         state = googleAccountState,
                         contentPadding = contentPadding,
                         onDismiss = navigateBackFromSubScreen,
+                        onRefresh = { viewModel.googleAccounts.loadGoogleAccounts(force = true) },
                         onAddAccount = viewModel.googleAccounts::addGoogleAccount,
                         onImportAccounts = viewModel.googleAccounts::importGoogleAccounts,
                         onUpdateAccount = viewModel.googleAccounts::updateGoogleAccount,
@@ -2057,6 +2066,7 @@ private fun AuthenticatedShell(
                         onBack = navigateBackFromSubScreen,
                         onRefresh = viewModel.librarySeats::refreshLibrarySeat,
                         onLoadOverview = { force -> viewModel.librarySeats.loadLibrarySeatOverview(force) },
+                        onInvalidateQuery = viewModel.librarySeats::clearLibrarySeatQuery,
                         onQueryAreas = { venueId, date, startMinute, endMinute, floorId, pageSize, power, window ->
                             viewModel.librarySeats.queryLibrarySeatAreas(
                                 venueId = venueId,

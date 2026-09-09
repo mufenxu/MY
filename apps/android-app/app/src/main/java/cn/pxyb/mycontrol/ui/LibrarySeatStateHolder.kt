@@ -2,20 +2,24 @@ package cn.pxyb.mycontrol.ui
 
 import cn.pxyb.mycontrol.data.CampusRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
 import cn.pxyb.mycontrol.data.LibrarySeatWaitlistRequest
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.supervisorScope
 
 class LibrarySeatStateHolder(
     parentScope: CoroutineScope,
     private val campus: CampusRepository,
     onSessionExpired: (String) -> Unit,
 ) : FeatureStateHolder<LibrarySeatUiState>(parentScope, LibrarySeatUiState(), onSessionExpired) {
+    private var queryJob: Job? = null
+
     override fun clearPendingState(current: LibrarySeatUiState) = current.copy(
         overviewLoading = false,
         areasLoading = false,
@@ -31,6 +35,24 @@ class LibrarySeatStateHolder(
 
     fun showError(message: String) {
         mutableState.update { it.copy(error = message) }
+    }
+
+    fun clearLibrarySeatQuery() {
+        queryJob?.cancel()
+        queryJob = null
+        mutableState.update {
+            it.copy(
+                query = null,
+                areas = emptyList(),
+                seats = emptyList(),
+                floorSeats = emptyList(),
+                areasLoading = false,
+                seatsLoading = false,
+                floorSeatsLoading = false,
+                selectedAreaId = null,
+                selectedSeatId = null,
+            )
+        }
     }
 
     fun refreshLibrarySeat() {
@@ -86,12 +108,14 @@ class LibrarySeatStateHolder(
             venueId.isBlank() ||
             date.isBlank() ||
             startMinute < 0 ||
-            endMinute <= startMinute ||
-            mutableState.value.areasLoading
+            endMinute <= startMinute
         ) return
-        scope.launch {
+        clearLibrarySeatQuery()
+        val query = LibrarySeatQuery(venueId, date, startMinute, endMinute, floorId, power, window)
+        queryJob = scope.launch {
             mutableState.update {
                 it.copy(
+                    query = query,
                     areasLoading = true,
                     areas = emptyList(),
                     error = null,
@@ -116,6 +140,7 @@ class LibrarySeatStateHolder(
                     power = power,
                     window = window,
                 )
+                if (!isActive || mutableState.value.query != query) return@launch
                 mutableState.update {
                     it.copy(
                         areas = areas,
@@ -141,8 +166,14 @@ class LibrarySeatStateHolder(
         endMinute: Int,
         amPm: Int = 0,
     ) {
-        if (roomId.isBlank() || date.isBlank() || endMinute <= startMinute || mutableState.value.seatsLoading) return
-        scope.launch {
+        if (roomId.isBlank() || date.isBlank() || endMinute <= startMinute) return
+        val query = mutableState.value.query ?: return
+        if (query.date != date || query.startMinute != startMinute || query.endMinute != endMinute) {
+            showError("查询条件已变更，请重新查询阅览区。")
+            return
+        }
+        queryJob?.cancel()
+        queryJob = scope.launch {
             mutableState.update {
                 it.copy(
                     seatsLoading = true,
@@ -156,6 +187,7 @@ class LibrarySeatStateHolder(
             }
             try {
                 val seats = campus.librarySeatSeats(roomId, date, startMinute, endMinute, amPm)
+                if (!isActive || mutableState.value.query != query) return@launch
                 mutableState.update {
                     it.copy(
                         seats = seats,
@@ -188,14 +220,19 @@ class LibrarySeatStateHolder(
             floorId.isBlank() ||
             date.isBlank() ||
             startMinute < 0 ||
-            endMinute <= startMinute ||
-            mutableState.value.floorSeatsLoading
+            endMinute <= startMinute
         ) return
-        scope.launch {
+        clearLibrarySeatQuery()
+        val query = LibrarySeatQuery(venueId, date, startMinute, endMinute, floorId)
+        queryJob = scope.launch {
             mutableState.update {
                 it.copy(
+                    query = query,
                     floorSeatsLoading = true,
                     floorSeats = emptyList(),
+                    selectedVenueId = venueId,
+                    selectedFloorId = floorId,
+                    selectedDate = date,
                     error = null,
                     message = null,
                 )
@@ -212,7 +249,7 @@ class LibrarySeatStateHolder(
                     power = false,
                     window = false,
                 )
-                val floorSeats = supervisorScope {
+                val floorSeats = coroutineScope {
                     areas.map { area ->
                         async {
                             campus.librarySeatSeats(area.id, date, startMinute, endMinute, 0)
@@ -226,6 +263,7 @@ class LibrarySeatStateHolder(
                         .thenBy { it.seat.label }
                         .thenBy { it.areaName },
                 )
+                if (!isActive || mutableState.value.query != query) return@launch
                 mutableState.update {
                     it.copy(
                         floorSeats = floorSeats,
@@ -244,22 +282,34 @@ class LibrarySeatStateHolder(
         }
     }
 
-    fun submitLibrarySeatReservation(request: LibrarySeatReservationRequest, onSuccess: () -> Unit = {}) = launchAction(
-        isBusy = { submitLoading },
-        start = { copy(submitLoading = true, error = null, message = null) },
-        action = { campus.submitLibrarySeatReservation(request) },
-        success = {
-            copy(
-                submitLoading = false,
-                message = "座位预约已提交成功，请以学校预约系统记录为准。",
-            )
-        },
-        failure = { error -> copy(submitLoading = false, error = error.message ?: "座位预约提交失败，请重试。") },
-        afterSuccess = {
-            loadLibrarySeatReservations()
-            onSuccess()
-        },
-    )
+    fun submitLibrarySeatReservation(request: LibrarySeatReservationRequest, onSuccess: () -> Unit = {}) {
+        val current = mutableState.value
+        val query = current.query
+        val seat = current.seats.firstOrNull { it.id == request.seatId }
+            ?: current.floorSeats.firstOrNull { it.seat.id == request.seatId }?.seat
+        if (query == null || query.date != request.date || query.startMinute != request.startMinute ||
+            query.endMinute != request.endMinute || seat?.isFree != true || current.seatsLoading || current.floorSeatsLoading
+        ) {
+            showError("座位查询结果已失效，请按当前日期与时段重新查询后提交。")
+            return
+        }
+        launchAction(
+            isBusy = { submitLoading },
+            start = { copy(submitLoading = true, error = null, message = null) },
+            action = { campus.submitLibrarySeatReservation(request) },
+            success = {
+                copy(
+                    submitLoading = false,
+                    message = "座位预约已提交成功，请以学校预约系统记录为准。",
+                )
+            },
+            failure = { error -> copy(submitLoading = false, error = error.message ?: "座位预约提交失败，请重试。") },
+            afterSuccess = {
+                loadLibrarySeatReservations()
+                onSuccess()
+            },
+        )
+    }
 
     fun loadLibrarySeatReservations(force: Boolean = false) = launchAction(
         isBusy = { reservationsLoading && !force },

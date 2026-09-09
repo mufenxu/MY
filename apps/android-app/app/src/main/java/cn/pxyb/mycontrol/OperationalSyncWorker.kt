@@ -29,6 +29,9 @@ class OperationalSyncWorker(
     appContext: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
+    private var syncFailed = false
+    private var retryRequired = false
+
     override suspend fun doWork(): Result {
         MyControlWidgetProvider.refresh(applicationContext)
         CourseWidgetProvider.refresh(applicationContext)
@@ -51,64 +54,80 @@ class OperationalSyncWorker(
         return try {
             api.withRequestMetadata(allowCache = false) {
                 sessionStore.withRequestSession(session) { }
-                // 提醒、待办和课程保持 15 分钟同步；概要、设备和安全巡检每小时更新。
-                val incidents = api.incidents()
-                val tasks = api.tasks().tasks
-                val syncedTodo = TodoRepository(applicationContext, api, sessionStore).sync(refresh = true).snapshot
-                val timetable = api.campus.campusTimetable()
-                val resources = api.resourceExpiries()
-                flushNotificationMutations(api, personalStore)
-                val remoteNotifications = api.allAppNotifications()
-                val currentAlerts = personalStore.readAlerts()
-                val currentById = currentAlerts.associateBy { it.id }
-                remoteNotifications.forEach { remote ->
-                    val local = currentById[remote.id] ?: return@forEach
-                    if (local.read && !remote.read) optionalSync { api.markAppNotificationRead(remote.id) }
-                    val localSnooze = local.snoozedUntil
-                    if (localSnooze != null && localSnooze != remote.snoozedUntil) {
-                        optionalSync { api.snoozeAppNotification(remote.id, localSnooze) }
+                // 通知先独立同步，校园等服务暂不可用时仍可投递平台消息。
+                optionalSync { flushNotificationMutations(api, personalStore) }
+                val remoteNotifications = optionalSync { api.allAppNotifications() }
+                if (remoteNotifications != null) {
+                    val currentById = sessionStore.withRequestSession(session) {
+                        personalStore.readAlerts().associateBy { it.id }
+                    }
+                    remoteNotifications.forEach { remote ->
+                        val local = currentById[remote.id] ?: return@forEach
+                        if (local.read && !remote.read) optionalSync { api.markAppNotificationRead(remote.id) }
+                        val localSnooze = local.snoozedUntil
+                        if (localSnooze != null && localSnooze != remote.snoozedUntil) {
+                            optionalSync { api.snoozeAppNotification(remote.id, localSnooze) }
+                        }
+                    }
+                    sessionStore.withRequestSession(session) {
+                        val mergedAlerts = mergeRemoteAlerts(personalStore.readAlerts(), remoteNotifications)
+                        personalStore.writeAlerts(mergedAlerts)
+                        alertNotifier.evaluateRemote(mergedAlerts)
                     }
                 }
-                val mergedAlerts = mergeRemoteAlerts(currentAlerts, remoteNotifications)
-                sessionStore.withRequestSession(session) {
-                    personalStore.writeAlerts(mergedAlerts)
-                    alertNotifier.evaluateRemote(mergedAlerts)
-                    alertNotifier.evaluate(incidents = incidents, tasks = tasks)
-                    alertNotifier.evaluatePersonal(syncedTodo, timetable)
-                    alertNotifier.evaluateResourceExpiries(resources)
-                    CourseWidgetProvider.publish(applicationContext, timetable)
-                }
-                if (!fullSyncDue) return@withRequestMetadata Result.success()
 
-                val overview = api.overview()
-                val iot = api.iot.dashboard(includeAutomations = false)
+                // 提醒、待办和课程保持 15 分钟同步；概要、设备和安全巡检每小时更新。
+                val incidents = optionalSync { api.incidents() }
+                val tasks = optionalSync { api.tasks().tasks }
+                val syncedTodo = optionalSync { TodoRepository(applicationContext, api, sessionStore).sync(refresh = true).snapshot }
+                val timetable = optionalSync { api.campus.campusTimetable() }
+                val resources = optionalSync { api.resourceExpiries() }
+                sessionStore.withRequestSession(session) {
+                    if (incidents != null && tasks != null) alertNotifier.evaluate(incidents = incidents, tasks = tasks)
+                    if (syncedTodo != null || timetable != null) {
+                        alertNotifier.evaluatePersonal(syncedTodo ?: personalStore.readTodoSnapshot(), timetable)
+                    }
+                    if (resources != null) alertNotifier.evaluateResourceExpiries(resources)
+                    if (timetable != null) CourseWidgetProvider.publish(applicationContext, timetable)
+                }
+                if (!fullSyncDue) return@withRequestMetadata syncResult()
+
+                val overview = optionalSync { api.overview() }
+                val iot = optionalSync { api.iot.dashboard(includeAutomations = false) }
                 val backup = optionalSync { api.backupQuality() }
                 val security = optionalSync { api.auth.security() }
-                val assistant = buildPersonalAssistantSnapshot(
-                    timetable = timetable,
-                    todos = syncedTodo,
-                    incidents = incidents,
-                    alerts = mergedAlerts,
-                    resources = resources,
-                    backup = backup,
-                    security = security,
-                )
                 sessionStore.withRequestSession(session) {
-                    personalStore.writeAssistantSnapshot(assistant)
+                    val assistant = if (timetable != null && syncedTodo != null && incidents != null &&
+                        resources != null && backup != null && security != null && remoteNotifications != null
+                    ) {
+                        buildPersonalAssistantSnapshot(
+                            timetable = timetable,
+                            todos = syncedTodo,
+                            incidents = incidents,
+                            alerts = personalStore.readAlerts(),
+                            resources = resources,
+                            backup = backup,
+                            security = security,
+                        ).also { personalStore.writeAssistantSnapshot(it) }
+                    } else {
+                        personalStore.readAssistantSnapshot()
+                    }
                     val guardianAlerts = buildGuardianAlerts(backup = backup, security = security)
                     personalStore.appendAlerts(guardianAlerts)
                     guardianAlerts.forEach { alertNotifier.notifyRecord(it) }
-                    MyControlWidgetProvider.publish(
-                        applicationContext,
-                        overview,
-                        incidents.filter { it.status != "resolved" },
-                        iot,
-                        assistant,
-                        personalStore.readQuickScene(),
-                    )
-                    syncPreferences.edit().putLong(fullSyncKey, System.currentTimeMillis()).apply()
+                    if (overview != null && incidents != null && iot != null) {
+                        MyControlWidgetProvider.publish(
+                            applicationContext,
+                            overview,
+                            incidents.filter { it.status != "resolved" },
+                            iot,
+                            assistant,
+                            personalStore.readQuickScene(),
+                        )
+                    }
+                    if (!syncFailed) syncPreferences.edit().putLong(fullSyncKey, System.currentTimeMillis()).apply()
                 }
-                Result.success()
+                syncResult()
             }.value
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
@@ -121,9 +140,16 @@ class OperationalSyncWorker(
     } catch (error: Exception) {
         if (error is CancellationException || error is ApiException &&
             cn.pxyb.mycontrol.data.shouldInvalidatePlatformSession(error.status, error.code)) throw error
+        syncFailed = true
+        retryRequired = retryRequired || error is IOException || error is ApiException && error.status >= 500
         null
     }
 
+    private fun syncResult(): Result = when {
+        retryRequired -> Result.retry()
+        syncFailed -> Result.failure()
+        else -> Result.success()
+    }
 }
 
 object OperationalSyncScheduler {

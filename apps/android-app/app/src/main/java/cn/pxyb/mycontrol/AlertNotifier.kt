@@ -147,6 +147,7 @@ class AlertNotifier(context: Context) {
     fun clear() {
         ResourceExpiryReminderScheduler.cancel(appContext, accountUsername)
         DailyBriefScheduler.cancel(appContext, accountUsername)
+        SnoozedAlertScheduler.cancel(appContext, accountUsername)
         accountScope?.let { scope ->
             val prefix = "account_${scope}_"
             preferences.edit().apply {
@@ -201,27 +202,34 @@ class AlertNotifier(context: Context) {
     }
 
     fun notifyRecord(alert: AppAlertRecord): Boolean {
-        val critical = alert.priority in setOf("urgent", "high", "critical") || alert.type == "incident"
-        if (isSuppressed(critical)) return false
-        val intent = when (alert.type) {
-            "incident" -> DeepLinks.openIntent(appContext, destination = "notifications")
-            "task" -> DeepLinks.openIntent(appContext, destination = "notifications")
-            "todo", "course", "resource" -> DeepLinks.openIntent(appContext, destination = "today")
-            else -> DeepLinks.openIntent(appContext, destination = "notifications")
+        val sessionStore = SessionStore(appContext)
+        val session = sessionStore.captureRequestSession()
+        if (accountScope == null || session.accountScope != accountScope) return false
+        return sessionStore.withRequestSession(session) {
+            if (alert.read || alert.snoozedUntil?.let { it > System.currentTimeMillis() } == true) return@withRequestSession false
+            val critical = alert.priority in setOf("urgent", "high", "critical") || alert.type == "incident"
+            if (isSuppressed(alert.type, critical)) return@withRequestSession false
+            val intent = when (alert.type) {
+                "incident" -> DeepLinks.openIntent(appContext, destination = "notifications")
+                "task" -> DeepLinks.openIntent(appContext, destination = "notifications")
+                "todo", "course", "resource" -> DeepLinks.openIntent(appContext, destination = "today")
+                else -> DeepLinks.openIntent(appContext, destination = "notifications")
+            }
+            val channelId = if (critical) CHANNEL_ID else MESSAGE_CHANNEL_ID
+            ensureChannel()
+            val posted = notify(
+                notificationId = PERSONAL_BASE + alert.id.hashCode(),
+                title = alert.title,
+                body = alert.body,
+                intent = intent,
+                channelId = channelId,
+                alert = alert,
+            )
+            if (posted && alert.origin == "remote") {
+                markRemoteSeen(alert.id)
+            }
+            posted
         }
-        val channelId = if (alert.priority in setOf("high", "critical")) CHANNEL_ID else MESSAGE_CHANNEL_ID
-        val posted = notify(
-            notificationId = PERSONAL_BASE + alert.id.hashCode(),
-            title = alert.title,
-            body = alert.body,
-            intent = intent,
-            channelId = channelId,
-            alert = alert,
-        )
-        if (posted && alert.origin == "remote") {
-            markRemoteSeen(alert.id)
-        }
-        return posted
     }
 
     fun evaluateRemote(alerts: List<AppAlertRecord>) {
@@ -229,7 +237,10 @@ class AlertNotifier(context: Context) {
         ensureChannel()
         val seen = readRemoteSeenIds().toMutableSet()
         val unread = alerts.filter { it.origin == "remote" && !it.read && it.id !in seen }
-        unread.take(3).forEach(::notifyRecord)
+        var posted = 0
+        for (alert in unread) {
+            if (notifyRecord(alert) && ++posted >= 3) break
+        }
     }
 
     fun notifyDailyBrief(snapshot: PersonalAssistantSnapshot, period: DailyBriefPeriod): Boolean {
@@ -370,10 +381,11 @@ class AlertNotifier(context: Context) {
             .putExtra(NotificationActionReceiver.EXTRA_ALERT_ID, alert.id)
             .putExtra(NotificationActionReceiver.EXTRA_SOURCE_ID, alert.sourceId)
             .putExtra(NotificationActionReceiver.EXTRA_REMOTE, alert.origin == "remote")
+            .putExtra(NotificationActionReceiver.EXTRA_ACCOUNT_SCOPE, accountScope)
             .putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
         return PendingIntent.getBroadcast(
             appContext,
-            31 * notificationId + action.hashCode(),
+            31 * notificationId + "$accountScope:$action".hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -414,12 +426,13 @@ class AlertNotifier(context: Context) {
         else -> source
     }
 
-    private fun isSuppressed(critical: Boolean): Boolean {
+    private fun isSuppressed(type: String, critical: Boolean): Boolean {
         val settings = personalStore.readAlertPreferences()
         return shouldSuppressNotification(
             settings = settings,
             classFocusUntilMillis = personalStore.readAssistantSnapshot()?.classFocusUntilMillis,
             critical = critical,
+            type = type,
         )
     }
 

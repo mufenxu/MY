@@ -3,12 +3,11 @@ package cn.pxyb.mycontrol.ui
 import cn.pxyb.mycontrol.data.CampusRepository
 import kotlinx.coroutines.CoroutineScope
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
-import cn.pxyb.mycontrol.data.CampusReservationAvailability
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.coroutineScope
 
 class ReservationStateHolder(
     parentScope: CoroutineScope,
@@ -64,26 +63,15 @@ class ReservationStateHolder(
                 )
             }
             try {
-                supervisorScope {
+                coroutineScope {
                     val rulesDeferred = async {
-                        try {
-                            campus.campusReservationRules(spaceId)
-                        } catch (error: Throwable) {
-                            handleRequestFailure(error)
-                            null
-                        }
+                        campus.campusReservationRules(spaceId)
                     }
                     val availabilityDeferred = async {
-                        try {
-                            campus.campusReservationAvailability(spaceId, date)
-                        } catch (error: Throwable) {
-                            handleRequestFailure(error)
-                            null
-                        }
+                        campus.campusReservationAvailability(spaceId, date)
                     }
-                    val rules = rulesDeferred.await() ?: "暂无规则信息"
+                    val rules = rulesDeferred.await()
                     val availability = availabilityDeferred.await()
-                        ?: CampusReservationAvailability(detail = "暂无时段占用信息")
                     mutableState.update {
                         it.copy(
                             rules = rules,

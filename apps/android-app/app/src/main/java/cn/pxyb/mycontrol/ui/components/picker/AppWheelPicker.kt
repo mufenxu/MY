@@ -27,6 +27,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,37 +73,40 @@ fun <T> AppWheelPicker(
     val coroutineScope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val dark = isAppInDarkTheme()
+    val currentSelectedIndex by rememberUpdatedState(selectedIndex.coerceIn(items.indices))
+    val currentOnSelectedIndexChanged by rememberUpdatedState(onSelectedIndexChanged)
 
-    val centerIndex by remember(items) {
+    val centerIndex by remember(listState) {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
             val visibleItems = layoutInfo.visibleItemsInfo
-            if (visibleItems.isEmpty()) return@derivedStateOf selectedIndex
+            if (visibleItems.isEmpty()) return@derivedStateOf currentSelectedIndex
             val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
             val closest = visibleItems.minByOrNull { item ->
                 val itemCenter = item.offset + item.size / 2
                 abs(itemCenter - viewportCenter)
             }
-            closest?.index ?: selectedIndex
+            closest?.index ?: currentSelectedIndex
         }
     }
 
     // 实时感知当前处于正中心的项，触发微震动并通知外层
-    LaunchedEffect(listState) {
+    LaunchedEffect(listState, items) {
+        listState.scrollToItem(currentSelectedIndex)
         snapshotFlow { centerIndex }
             .distinctUntilChanged()
             .collect { index ->
-                if (index in items.indices && index != selectedIndex) {
+                if (index in items.indices && index != currentSelectedIndex) {
                     AppHaptics.tick(haptics)
-                    onSelectedIndexChanged(index)
+                    currentOnSelectedIndexChanged(index)
                 }
             }
     }
 
-    // 外部主动变更 selectedIndex 且列表未滚动时平滑滚动定位
-    LaunchedEffect(selectedIndex) {
+    // 外部联动直接定位，避免动画途中回写旧列表的索引。
+    LaunchedEffect(items, selectedIndex) {
         if (!listState.isScrollInProgress && centerIndex != selectedIndex && selectedIndex in items.indices) {
-            listState.animateScrollToItem(selectedIndex)
+            listState.scrollToItem(selectedIndex)
         }
     }
 

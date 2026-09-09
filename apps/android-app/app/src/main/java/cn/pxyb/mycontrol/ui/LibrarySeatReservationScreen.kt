@@ -91,6 +91,7 @@ fun LibrarySeatReservationScreen(
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     onLoadOverview: (Boolean) -> Unit,
+    onInvalidateQuery: () -> Unit,
     onQueryAreas: (String, String, Int, Int, String?, Int, Boolean, Boolean) -> Unit,
     onLoadSeats: (String, String, Int, Int, Int) -> Unit,
     onQueryFloorSeats: (String, String, String, Int, Int) -> Unit,
@@ -123,6 +124,15 @@ fun LibrarySeatReservationScreen(
     var seatListExpanded by rememberSaveable { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableStateOf(LibrarySeatTab.Book) }
 
+    fun clearQuerySelection() {
+        onInvalidateQuery()
+        selectedAreaId = ""
+        selectedSeatId = ""
+        selectedFloorSeat = null
+        showConfirmDialog = false
+        seatListExpanded = false
+    }
+
     val isTablet = useTwoPaneLayout()
     val onAreaClick: (LibrarySeatArea) -> Unit = { clickedArea ->
         val isSameArea = selectedAreaId == clickedArea.id
@@ -142,14 +152,21 @@ fun LibrarySeatReservationScreen(
     val selectedVenue = state.venues.firstOrNull { it.id == selectedVenueId } ?: state.venues.firstOrNull()
     val selectedFloor = selectedVenue?.floors?.firstOrNull { it.id == selectedFloorId }
     val secondFloor = selectedVenue?.floors?.firstOrNull { isSecondFloorName(it.name) }
-    val selectedAreas = state.areas.filter { area ->
+    val startMinute = timeTextToMinute(startTime)
+    val endMinute = timeTextToMinute(endTime)
+    val areaQuery = LibrarySeatQuery(
+        selectedVenue?.id.orEmpty(), selectedDate, startMinute ?: -1, endMinute ?: -1,
+        selectedFloorId.takeIf(String::isNotBlank), wantPower, wantWindow,
+    )
+    val selectedAreas = state.areas.takeIf { state.query == areaQuery }.orEmpty().filter { area ->
         (selectedVenue?.id.isNullOrBlank() || area.venueId.isBlank() || area.venueId == selectedVenue?.id) &&
             (selectedFloor?.id.isNullOrBlank() || area.floorId.isBlank() || area.floorId == selectedFloor?.id)
     }
     val selectedArea = selectedAreas.firstOrNull { it.id == selectedAreaId || it.id == state.selectedAreaId }
-    val selectedSeats = state.seats
-    val startMinute = timeTextToMinute(startTime)
-    val endMinute = timeTextToMinute(endTime)
+    val selectedSeats = state.seats.takeIf { state.query == areaQuery && state.selectedAreaId == selectedAreaId }.orEmpty()
+    val floorSeats = state.floorSeats.takeIf {
+        state.query == areaQuery.copy(floorId = secondFloor?.id, power = false, window = false)
+    }.orEmpty()
     val canQuery = selectedVenue != null && selectedDate.isNotBlank() && startMinute != null && endMinute != null && endMinute > startMinute
 
     val queryAreasButton: @Composable (Modifier) -> Unit = { buttonModifier ->
@@ -165,6 +182,7 @@ fun LibrarySeatReservationScreen(
                 } else {
                     queryHint = null
                     onClearFeedback()
+                    clearQuerySelection()
                     queryMode = "areas"
                     seatListExpanded = false
                     selectedAreaId = ""
@@ -200,6 +218,7 @@ fun LibrarySeatReservationScreen(
                 } else {
                     queryHint = null
                     onClearFeedback()
+                    clearQuerySelection()
                     selectedFloorId = floor.id
                     selectedAreaId = ""
                     selectedSeatId = ""
@@ -223,6 +242,7 @@ fun LibrarySeatReservationScreen(
     LaunchedEffect(state.venues) {
         if (state.venues.isNotEmpty()) {
             if (selectedVenueId.isBlank() || state.venues.none { it.id == selectedVenueId }) {
+                clearQuerySelection()
                 selectedVenueId = state.selectedVenueId?.takeIf { id -> state.venues.any { it.id == id } }
                     ?: state.venues.first().id
             }
@@ -231,6 +251,7 @@ fun LibrarySeatReservationScreen(
     LaunchedEffect(state.dates) {
         if (state.dates.isNotEmpty()) {
             if (selectedDate.isBlank() || !state.dates.contains(selectedDate)) {
+                clearQuerySelection()
                 selectedDate = state.selectedDate?.takeIf(state.dates::contains) ?: state.dates.first()
             }
         }
@@ -238,6 +259,7 @@ fun LibrarySeatReservationScreen(
     LaunchedEffect(selectedVenueId, state.venues) {
         val floors = state.venues.firstOrNull { it.id == selectedVenueId }?.floors.orEmpty()
         if (floors.isNotEmpty() && (selectedFloorId.isBlank() || floors.none { it.id == selectedFloorId })) {
+            clearQuerySelection()
             selectedFloorId = state.selectedFloorId?.takeIf { id -> floors.any { it.id == id } }
                 ?: floors.firstOrNull { isSecondFloorName(it.name) }?.id
                 ?: floors.first().id
@@ -441,6 +463,7 @@ fun LibrarySeatReservationScreen(
                                 SelectionOption(venue.id, venue.name, if (venue.floors.isNotEmpty()) "${venue.floors.size} 层" else "暂无楼层")
                             },
                             onSelect = { option ->
+                                clearQuerySelection()
                                 selectedVenueId = option.id
                                 selectedFloorId = state.venues.firstOrNull { it.id == option.id }?.floors?.firstOrNull()?.id.orEmpty()
                                 selectedAreaId = ""
@@ -462,6 +485,7 @@ fun LibrarySeatReservationScreen(
                                 }
                             },
                             onSelect = { option ->
+                                clearQuerySelection()
                                 selectedFloorId = option.id
                                 selectedAreaId = ""
                                 selectedSeatId = ""
@@ -477,6 +501,7 @@ fun LibrarySeatReservationScreen(
                             FilterChip(
                                 selected = selectedDate == date,
                                 onClick = {
+                                    clearQuerySelection()
                                     selectedDate = date
                                     selectedAreaId = ""
                                     selectedSeatId = ""
@@ -489,11 +514,13 @@ fun LibrarySeatReservationScreen(
                         startTime = startTime,
                         endTime = endTime,
                         onStartTimeChange = {
+                            clearQuerySelection()
                             startTime = it
                             selectedAreaId = ""
                             selectedSeatId = ""
                         },
                         onEndTimeChange = {
+                            clearQuerySelection()
                             endTime = it
                             selectedAreaId = ""
                             selectedSeatId = ""
@@ -511,12 +538,12 @@ fun LibrarySeatReservationScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = wantWindow,
-                            onClick = { wantWindow = !wantWindow },
+                            onClick = { clearQuerySelection(); wantWindow = !wantWindow },
                             label = { Text("靠窗") },
                         )
                         FilterChip(
                             selected = wantPower,
-                            onClick = { wantPower = !wantPower },
+                            onClick = { clearQuerySelection(); wantPower = !wantPower },
                             label = { Text("电源") },
                         )
                     }
@@ -639,11 +666,11 @@ fun LibrarySeatReservationScreen(
                         )
                     if (state.floorSeatsLoading) {
                         LoadingBlock("正在查询二层座位...")
-                    } else if (state.floorSeats.isEmpty()) {
+                    } else if (floorSeats.isEmpty()) {
                         EmptyBlock("暂无 1-45 号座位结果", "请选择时段后点击上方按钮查询。")
                     } else {
                         Text(
-                            text = "共 ${state.floorSeats.size} 个座位 · ${state.floorSeats.count { it.seat.isFree }} 个可预约",
+                            text = "共 ${floorSeats.size} 个座位 · ${floorSeats.count { it.seat.isFree }} 个可预约",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -653,7 +680,7 @@ fun LibrarySeatReservationScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         SecondFloorSeatMap(
-                            floorSeats = state.floorSeats,
+                            floorSeats = floorSeats,
                             onSeatClick = { floorSeat ->
                                 selectedFloorSeat = floorSeat
                                 selectedAreaId = floorSeat.areaId
@@ -689,22 +716,25 @@ fun LibrarySeatReservationScreen(
                     startTime = startTime,
                     endTime = endTime,
                     secondFloor = secondFloor,
-                    floorSeats = state.floorSeats,
+                    floorSeats = floorSeats,
                     floorSeatsLoading = state.floorSeatsLoading,
-                    onStartTimeChange = { startTime = it },
-                    onEndTimeChange = { endTime = it },
+                    onStartTimeChange = { clearQuerySelection(); startTime = it },
+                    onEndTimeChange = { clearQuerySelection(); endTime = it },
                     onVenueSelected = { venueId ->
+                        clearQuerySelection()
                         selectedVenueId = venueId
                         selectedFloorId = ""
                         selectedAreaId = ""
                         selectedSeatId = ""
                     },
                     onFloorSelected = { floorId ->
+                        clearQuerySelection()
                         selectedFloorId = floorId
                         selectedAreaId = ""
                         selectedSeatId = ""
                     },
                     onDateSelected = { date ->
+                        clearQuerySelection()
                         selectedDate = date
                         selectedAreaId = ""
                         selectedSeatId = ""
@@ -723,7 +753,7 @@ fun LibrarySeatReservationScreen(
         val startMinute = timeTextToMinute(startTime) ?: return
         val endMinute = timeTextToMinute(endTime) ?: return
         if (endMinute <= startMinute) return
-        val floorSeat = selectedFloorSeat
+        val floorSeat = selectedFloorSeat?.takeIf { selected -> floorSeats.any { it.seat.id == selected.seat.id } }
         val seat = floorSeat?.seat ?: selectedSeats.firstOrNull { it.id == selectedSeatId }
         if (seat == null) return
         val areaName = floorSeat?.areaName ?: selectedArea?.name ?: return

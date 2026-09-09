@@ -64,6 +64,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -125,6 +126,7 @@ fun GoogleAccountDeskScreen(
     state: GoogleAccountDeskUiState,
     contentPadding: PaddingValues,
     onDismiss: () -> Unit,
+    onRefresh: () -> Unit,
     onAddAccount: (String, String, String, String, String, String, String) -> Unit,
     onImportAccounts: (String) -> Unit,
     onUpdateAccount: (String, String, String, String, String, String, String, String) -> Unit,
@@ -194,7 +196,7 @@ fun GoogleAccountDeskScreen(
         .filter { showArchived || !it.archived }
         .sortedWith(accountComparator(sort))
     val detailAccount = accounts.firstOrNull { it.id == detailAccountId }
-    val busy = state.busyAction == "google-accounts"
+    val busy = state.busyAction == "google-accounts" || state.loading
     val context = LocalContext.current
     val selectedAccounts = accounts.filter { it.id in selectedAccountIds }
 
@@ -223,6 +225,13 @@ fun GoogleAccountDeskScreen(
                 subtitle = "记录主邮箱、别名和 OpenAI 使用状态",
                 onBack = onDismiss,
                 actions = {
+                    AppHeaderIconButton(
+                        icon = Icons.Outlined.Refresh,
+                        contentDescription = "刷新邮箱台账",
+                        onClick = onRefresh,
+                        enabled = !busy,
+                        loading = state.loading,
+                    )
                     AppHeaderIconButton(
                         icon = Icons.Outlined.Add,
                         contentDescription = "添加主邮箱",
@@ -282,6 +291,12 @@ fun GoogleAccountDeskScreen(
                     }
                 },
             )
+        }
+
+        state.error?.let { message ->
+            item(key = "google-accounts-error") {
+                FeedbackBanner(message, error = true, onRetry = onRefresh, autoDismissDurationMillis = null)
+            }
         }
 
         item {
@@ -392,7 +407,9 @@ fun GoogleAccountDeskScreen(
             }
         }
 
-        if (sortedAccounts.isEmpty()) {
+        if (state.loading && accounts.isEmpty()) {
+            item(key = "google-accounts-loading") { GlassShimmerList() }
+        } else if (sortedAccounts.isEmpty()) {
             item {
                 AppPanel {
                     EmptyBlock(

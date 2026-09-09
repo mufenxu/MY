@@ -75,6 +75,7 @@ data class AppUiState(
     val appLockEnabled: Boolean = false,
     val user: PlatformUser? = null,
     val selectedTab: MainTab = MainTab.Overview,
+    val pendingTabNavigation: MainTab? = null,
     val loginBusy: Boolean = false,
     val secondFactorRequired: Boolean = false,
     val recoveryCodeAllowed: Boolean = false,
@@ -118,6 +119,8 @@ data class AppUiState(
     val workspaceDestination: WorkspaceDestination? = null,
     val googleAccounts: List<GoogleAccountRecord> = emptyList(),
     val googleAccountsLoaded: Boolean = false,
+    val googleAccountsLoading: Boolean = false,
+    val googleAccountsError: String? = null,
     val googleAccountsRevision: Int = 0,
     val googleAccountMigrationPending: Boolean = false,
     val googleAccountsRemoteReady: Boolean = false,
@@ -165,6 +168,7 @@ data class AppEntryUiState(
     val locked: Boolean,
     val user: PlatformUser?,
     val selectedTab: MainTab,
+    val pendingTabNavigation: MainTab? = null,
     val loginBusy: Boolean,
     val secondFactorRequired: Boolean,
     val recoveryCodeAllowed: Boolean,
@@ -329,6 +333,8 @@ data class GoogleAccountDeskUiState(
     val busyAction: String?,
     val googleAccounts: List<GoogleAccountRecord>,
     val googleAccountMigrationPending: Boolean,
+    val loading: Boolean = false,
+    val error: String? = null,
 )
 
 @Immutable
@@ -422,7 +428,19 @@ data class ReservationUiState(
 )
 
 @Immutable
+data class LibrarySeatQuery(
+    val venueId: String,
+    val date: String,
+    val startMinute: Int,
+    val endMinute: Int,
+    val floorId: String? = null,
+    val power: Boolean = false,
+    val window: Boolean = false,
+)
+
+@Immutable
 data class LibrarySeatUiState(
+    val query: LibrarySeatQuery? = null,
     val overview: LibrarySeatOverview = LibrarySeatOverview(),
     val overviewLoading: Boolean = false,
     val areas: List<LibrarySeatArea> = emptyList(),
@@ -450,7 +468,7 @@ data class LibrarySeatUiState(
 ) {
     val venues: List<LibrarySeatVenue> get() = overview.venues
     val dates: List<String> get() = overview.dates
-    val refreshing: Boolean get() = overviewLoading || areasLoading || seatsLoading || submitLoading ||
+    val refreshing: Boolean get() = overviewLoading || areasLoading || seatsLoading || floorSeatsLoading || submitLoading ||
         reservationsLoading || historyReservationsLoading
 }
 
@@ -482,6 +500,7 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     locked = locked,
     user = user,
     selectedTab = selectedTab,
+    pendingTabNavigation = pendingTabNavigation,
     loginBusy = loginBusy,
     secondFactorRequired = secondFactorRequired,
     recoveryCodeAllowed = recoveryCodeAllowed,
@@ -595,6 +614,8 @@ internal fun AppUiState.toGoogleAccountDeskUiState() = GoogleAccountDeskUiState(
     busyAction = actions.running.firstOrNull { it == "google-accounts" },
     googleAccounts = googleAccounts,
     googleAccountMigrationPending = googleAccountMigrationPending,
+    loading = googleAccountsLoading,
+    error = googleAccountsError,
 )
 
 internal fun AppUiState.toQrLoginUiState() = QrLoginUiState(

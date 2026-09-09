@@ -13,8 +13,10 @@ import cn.pxyb.mycontrol.data.ResponseSnapshotStore
 import cn.pxyb.mycontrol.data.SessionStore
 import cn.pxyb.mycontrol.data.TodoRepository
 import cn.pxyb.mycontrol.data.applyNotificationMutations
+import cn.pxyb.mycontrol.data.shouldInvalidatePlatformSession
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -34,6 +36,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val sessionStore = SessionStore(context)
         val session = sessionStore.captureRequestSession()
         val username = session.username ?: return
+        if (intent.getStringExtra(EXTRA_ACCOUNT_SCOPE) != session.accountScope) return
         val store = PersonalWorkspaceStore(context).apply { setAccount(username) }
         val api = PlatformApi(sessionStore, ResponseSnapshotStore(context))
         api.withRequestMetadata {
@@ -63,7 +66,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     store.writeNotificationMutations(store.readNotificationMutations() + mutation)
                 }
                 if (mutation.type == NotificationMutationType.Snooze) {
-                    SnoozedAlertScheduler.schedule(context, alertId, TimeUnit.HOURS.toMillis(1))
+                    SnoozedAlertScheduler.schedule(context, username, alertId, TimeUnit.HOURS.toMillis(1))
                 }
                 intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0).takeIf { it != 0 }?.let { notificationId ->
                     context.getSystemService(NotificationManager::class.java)?.cancel(notificationId)
@@ -81,6 +84,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_ALERT_ID = "alert_id"
         const val EXTRA_SOURCE_ID = "source_id"
         const val EXTRA_REMOTE = "remote"
+        const val EXTRA_ACCOUNT_SCOPE = "account_scope"
         const val EXTRA_NOTIFICATION_ID = "notification_id"
     }
 }
@@ -100,7 +104,9 @@ suspend fun flushNotificationMutations(api: PlatformApi, store: PersonalWorkspac
                 NotificationMutationType.Archive -> api.archiveAppNotification(mutation.alertId)
             }
         }
-        val missingRemoteRecord = (result.exceptionOrNull() as? ApiException)?.status == 404
+        val error = result.exceptionOrNull()
+        if (error is CancellationException || error is ApiException && shouldInvalidatePlatformSession(error.status, error.code)) throw error
+        val missingRemoteRecord = (error as? ApiException)?.status == 404
         if (result.isFailure && !missingRemoteRecord) remaining += mutation
     }
     store.writeNotificationMutations(remaining)

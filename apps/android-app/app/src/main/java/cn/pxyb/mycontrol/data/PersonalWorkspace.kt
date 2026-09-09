@@ -611,11 +611,17 @@ class PersonalWorkspaceStore(context: Context) {
             }
     }
 
-    fun clearAccountData() {
+    fun clearAccountData(preservePendingTodos: Boolean = false) {
         val scope = accountScope ?: return
         val prefix = "account_${scope}_"
+        // 未同步的编辑仍属于原账号，重新登录前不能当作可丢弃缓存删除。
+        val retainedKeys = if (preservePendingTodos && readPendingTodoMutations().isNotEmpty()) {
+            setOf("$prefix$KEY_TODOS", "$prefix$KEY_TODO_QUEUE")
+        } else {
+            emptySet()
+        }
         preferences.edit().apply {
-            preferences.all.keys.filter { it.startsWith(prefix) }.forEach(::remove)
+            preferences.all.keys.filter { it.startsWith(prefix) && it !in retainedKeys }.forEach(::remove)
         }.apply()
     }
 

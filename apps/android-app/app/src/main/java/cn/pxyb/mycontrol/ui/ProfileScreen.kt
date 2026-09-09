@@ -1168,7 +1168,6 @@ fun ProfileScreen(
             onSave = { updated ->
                 onUpdateNotificationPreferences(updated)
                 showNotificationDialog = false
-                Toast.makeText(context, "推送与免打扰偏好已保存", Toast.LENGTH_SHORT).show()
             },
         )
     }
