@@ -76,12 +76,11 @@ test('backup downloads require super_admin reauthentication and record denials',
       },
       body: JSON.stringify({ password: submittedPassword }),
     });
-    assert.equal((await reauthenticate('viewer', password)).status, 403);
+    const viewerReauthenticated = await reauthenticate('viewer', password);
+    assert.equal(viewerReauthenticated.status, 200);
+    assert.equal((await viewerReauthenticated.json()).reauthenticated, true);
+    assert.ok(sessions.verify(tokens.viewer).reauthenticatedUntil > Math.floor(Date.now() / 1000));
     assert.equal((await reauthenticate('super_admin', 'wrong-password')).status, 403);
-    const reauthenticated = await reauthenticate('super_admin', password);
-    assert.equal(reauthenticated.status, 200);
-    assert.equal((await reauthenticated.json()).reauthenticated, true);
-    assert.ok(sessions.verify(tokens.super_admin).reauthenticatedUntil > Math.floor(Date.now() / 1000));
 
     assert.equal((await request(origin, 'viewer')).status, 403);
     assert.equal((await request(origin, 'operator')).status, 403);
@@ -89,6 +88,11 @@ test('backup downloads require super_admin reauthentication and record denials',
       body: JSON.stringify({ password: 'wrong-password' }),
     })).status, 403);
     assert.equal(downloadCalls, 0);
+
+    const reauthenticated = await reauthenticate('super_admin', password);
+    assert.equal(reauthenticated.status, 200);
+    assert.equal((await reauthenticated.json()).reauthenticated, true);
+    assert.ok(sessions.verify(tokens.super_admin).reauthenticatedUntil > Math.floor(Date.now() / 1000));
 
     const legacyGet = await fetch(`${origin}/api/backups/secure-backup/download`, {
       headers: {
@@ -99,7 +103,7 @@ test('backup downloads require super_admin reauthentication and record denials',
     assert.equal(legacyGet.status, 405);
     assert.equal(legacyGet.headers.get('allow'), 'POST');
 
-    const download = await request(origin, 'super_admin');
+    const download = await request(origin, 'super_admin', { body: '{}' });
     assert.equal(download.status, 200);
     assert.equal(await download.text(), 'archive');
     assert.match(download.headers.get('content-disposition'), /secure-backup\.tar\.gz/);
@@ -114,6 +118,8 @@ test('backup downloads require super_admin reauthentication and record denials',
   const successes = await operationsStore.listAudit({ action: 'backup.downloaded' });
   assert.equal(successes.length, 1);
   assert.equal(successes[0].actor, 'super_admin');
-  assert.equal((await operationsStore.listAudit({ action: 'auth.reauthenticate', outcome: 'success' })).length, 1);
+  const successfulReauthentications = await operationsStore.listAudit({ action: 'auth.reauthenticate', outcome: 'success' });
+  assert.equal(successfulReauthentications.length, 2);
+  assert.deepEqual(new Set(successfulReauthentications.map((entry) => entry.actor)), new Set(['viewer', 'super_admin']));
   assert.equal((await operationsStore.listAudit({ action: 'auth.reauthenticate', outcome: 'failure' })).length, 1);
 });
