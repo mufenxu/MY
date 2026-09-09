@@ -1585,8 +1585,6 @@ private fun homeQuickActionVisual(action: HomeQuickAction): QuickActionVisual = 
     HomeQuickAction.Backup -> QuickActionVisual(Icons.Outlined.Backup, ColorTokens.Teal.foreground)
     HomeQuickAction.GoogleAccounts -> QuickActionVisual(Icons.Outlined.Email, ColorTokens.Indigo.foreground)
     HomeQuickAction.Operations -> QuickActionVisual(Icons.Outlined.Settings, MaterialTheme.colorScheme.onSurfaceVariant)
-    HomeQuickAction.Search -> QuickActionVisual(Icons.Outlined.Search, ColorTokens.Orange.foreground)
-    HomeQuickAction.QrScanner -> QuickActionVisual(Icons.Outlined.CenterFocusWeak, ColorTokens.Sky.foreground)
     HomeQuickAction.Account -> QuickActionVisual(Icons.Outlined.Security, ColorTokens.Green.foreground)
 }
 @Composable
@@ -1696,22 +1694,6 @@ private fun homeQuickActionSpec(
         accent = MaterialTheme.colorScheme.onSurfaceVariant,
         accentPale = MaterialTheme.colorScheme.surfaceContainerLow,
         onClick = onOpenOperations,
-    )
-
-    HomeQuickAction.Search -> HomeQuickActionSpec(
-        icon = Icons.Outlined.Search,
-        label = "全局搜索",
-        accent = ColorTokens.Orange.foreground,
-        accentPale = ColorTokens.Orange.container,
-        onClick = onOpenSearch,
-    )
-
-    HomeQuickAction.QrScanner -> HomeQuickActionSpec(
-        icon = Icons.Outlined.CenterFocusWeak,
-        label = "扫码登录",
-        accent = ColorTokens.Sky.foreground,
-        accentPale = ColorTokens.Sky.container,
-        onClick = onOpenQrLogin,
     )
 
     HomeQuickAction.Account -> HomeQuickActionSpec(
@@ -1898,8 +1880,6 @@ private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action
     HomeQuickAction.Backup -> "数据备份"
     HomeQuickAction.GoogleAccounts -> "邮箱台账"
     HomeQuickAction.Operations -> "系统状态"
-    HomeQuickAction.Search -> "全局搜索"
-    HomeQuickAction.QrScanner -> "扫码登录"
     HomeQuickAction.Account -> "安全中心"
 }
 

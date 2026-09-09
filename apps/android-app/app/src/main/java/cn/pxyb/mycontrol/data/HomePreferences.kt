@@ -17,8 +17,6 @@ enum class HomeQuickAction {
     Backup,
     GoogleAccounts,
     Operations,
-    Search,
-    QrScanner,
     Account,
 }
 
