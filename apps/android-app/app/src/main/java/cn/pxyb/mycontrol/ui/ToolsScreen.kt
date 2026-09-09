@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -619,58 +620,101 @@ private fun LightweightHeaderBanner(
         1f
     }
 
-    val glass = rememberGlassPalette(radius = 20.dp)
+    val isDark = isAppInDarkTheme()
+    val glass = rememberGlassPalette(radius = 22.dp)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .glassPanel(glass)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 11.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (mqttConnected) ColorTokens.Green.container else ColorTokens.Red.container,
-                    border = BorderStroke(0.5.dp, if (mqttConnected) ColorTokens.Green.border else ColorTokens.Red.border),
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.weight(1f, fill = false),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    Text(
+                        text = "设备与自动化",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Black,
+                            fontSize = 21.sp,
+                            letterSpacing = (-0.3).sp,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        ),
+                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = if (mqttConnected) {
+                            if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.5f) else ColorTokens.Green.container.copy(alpha = 0.85f)
+                        } else {
+                            if (isDark) ColorTokens.RedDark.container.copy(alpha = 0.5f) else ColorTokens.Red.container.copy(alpha = 0.85f)
+                        },
+                        border = BorderStroke(
+                            0.6.dp,
+                            if (mqttConnected) {
+                                if (isDark) ColorTokens.GreenDark.border else ColorTokens.Green.border
+                            } else {
+                                if (isDark) ColorTokens.RedDark.border else ColorTokens.Red.border
+                            },
+                        ),
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .graphicsLayer { alpha = dotAlpha }
-                                .background(
+                        Row(
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .graphicsLayer { alpha = dotAlpha }
+                                    .background(
+                                        color = if (mqttConnected) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
+                                        shape = CircleShape,
+                                    ),
+                            )
+                            Text(
+                                text = if (mqttConnected) "LIVE · 智控" else "OFFLINE",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
                                     color = if (mqttConnected) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
-                                    shape = CircleShape,
-                                )
-                        )
-                        Text(
-                            text = if (mqttConnected) "LIVE · 智控中心" else "OFFLINE · 离线模式",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (mqttConnected) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
-                        )
+                                ),
+                            )
+                        }
                     }
                 }
-                Text(
-                    text = "设备与自动化",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 22.sp,
-                        letterSpacing = (-0.2).sp,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    ),
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(if (mqttConnected) ColorTokens.Green.foreground else ColorTokens.Red.foreground, CircleShape),
+                    )
+                    Text(
+                        text = if (mqttConnected) "连接正常 · IoT 场景自动化联动" else "离线模式 · 等待网关连接恢复",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             AppNotificationButton(
                 unreadCount = unreadCount,
                 onClick = onOpenNotifications,
+                shape = CircleShape,
             )
         }
     }

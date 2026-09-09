@@ -83,6 +83,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
@@ -297,12 +298,14 @@ fun AppNotificationButton(
     unreadCount: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    shape: Shape = CircleShape,
 ) {
     Box(modifier = modifier) {
         AppHeaderIconButton(
             icon = Icons.Outlined.Notifications,
             contentDescription = if (unreadCount > 0) "通知中心，$unreadCount 条未读" else "通知中心",
             onClick = onClick,
+            shape = shape,
         )
         val badge = unreadBadgeLabel(unreadCount)
         if (badge.isNotEmpty()) {
@@ -1787,7 +1790,7 @@ fun ImmersiveHeader(
     actions: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val glass = rememberGlassPalette(radius = 20.dp)
+    val glass = rememberGlassPalette(radius = 22.dp)
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -1816,7 +1819,7 @@ fun ImmersiveHeader(
                     Box(
                         Modifier
                             .size(7.dp)
-                            .background(MaterialTheme.colorScheme.secondary, CircleShape)
+                            .background(ColorTokens.Green.foreground, CircleShape)
                     )
                     Text(
                         subtitle,
@@ -1849,7 +1852,7 @@ fun ModernHeaderIconButton(
     modifier: Modifier = Modifier,
     size: Dp = 38.dp,
     iconSize: Dp = 20.dp,
-    shape: RoundedCornerShape = RoundedCornerShape(12.dp),
+    shape: Shape = CircleShape,
     iconTint: Color = MaterialTheme.colorScheme.primary,
     containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
     borderColor: Color = ColorTokens.Blue.border,

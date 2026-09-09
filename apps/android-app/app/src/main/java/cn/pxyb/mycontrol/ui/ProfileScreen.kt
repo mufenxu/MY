@@ -1415,7 +1415,7 @@ private fun AppUpdateStatusPanel(
 // 极简通透现代化 UI 组件
 // ------------------------------------------------------------------------------------------------
 
-/** 通透顶栏：与首页「工作台」一致的标题节奏，毛玻璃面板 */
+/** 顶部玻璃 Header：方案 A【灵动智感胶囊款】家族化顶栏 */
 @Composable
 private fun ModernProfileHeader(
     onOpenQrLogin: () -> Unit,
@@ -1423,54 +1423,104 @@ private fun ModernProfileHeader(
     onOpenNotifications: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    val glass = rememberGlassPalette(radius = 20.dp)
+    val isDark = isAppInDarkTheme()
+    val glass = rememberGlassPalette(radius = 22.dp)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .glassPanel(glass)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 11.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = "我的",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 22.sp,
-                        letterSpacing = (-0.2).sp,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    ),
-                )
-                Text(
-                    text = "账号、安全与设备中心",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    ),
-                )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.weight(1f, fill = false),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = "我的",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Black,
+                            fontSize = 21.sp,
+                            letterSpacing = (-0.3).sp,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        ),
+                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isDark) {
+                            ColorTokens.PurpleDark.container.copy(alpha = 0.5f)
+                        } else {
+                            ColorTokens.Purple.container.copy(alpha = 0.85f)
+                        },
+                        border = BorderStroke(
+                            0.6.dp,
+                            if (isDark) ColorTokens.PurpleDark.border else ColorTokens.Purple.border,
+                        ),
+                    ) {
+                        Text(
+                            text = "个人中心",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) ColorTokens.PurpleDark.foreground else ColorTokens.Purple.foreground,
+                            ),
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(ColorTokens.Green.foreground, CircleShape),
+                    )
+                    Text(
+                        text = "账号正常 · 安全与设备中心",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 AppNotificationButton(
                     unreadCount = unreadCount,
                     onClick = onOpenNotifications,
+                    shape = CircleShape,
                 )
                 ModernHeaderIconButton(
                     icon = Icons.Outlined.Settings,
                     contentDescription = "应用设置",
                     onClick = onOpenSettings,
+                    size = 36.dp,
+                    iconSize = 18.dp,
+                    shape = CircleShape,
                 )
                 ModernHeaderIconButton(
                     icon = Icons.Outlined.CenterFocusWeak,
                     contentDescription = "扫码登录",
                     onClick = onOpenQrLogin,
+                    size = 36.dp,
+                    iconSize = 18.dp,
+                    shape = CircleShape,
                 )
             }
         }
