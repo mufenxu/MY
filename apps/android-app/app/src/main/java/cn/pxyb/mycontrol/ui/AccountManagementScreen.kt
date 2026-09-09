@@ -453,39 +453,6 @@ fun AccountManagementScreen(
                 }
             }
         }
-
-        item {
-            AppPanel {
-                Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
-                    AccountSectionHeader("会话策略")
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(18.dp),
-                    ) {
-                        MetricCell(
-                            "最长会话",
-                            security?.sessionTtlHours?.let { "$it 小时" } ?: "同步中",
-                            Modifier.weight(1f),
-                            MaterialTheme.colorScheme.primary,
-                        )
-                        MetricCell(
-                            "空闲超时",
-                            security?.sessionIdleMinutes?.let { "$it 分钟" } ?: "同步中",
-                            Modifier.weight(1f),
-                            MaterialTheme.colorScheme.secondary,
-                        )
-                    }
-                    Text(
-                        "由服务端强制执行",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-            }
-        }
     }
     }
 
