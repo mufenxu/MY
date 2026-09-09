@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const Admin = require('../models/Admin');
 const { AuthError, ForbiddenError } = require('../utils/errors');
-const { ADMIN_AUTH_COOKIE, getAuthToken } = require('../utils/authCookies');
+const { ADMIN_AUTH_COOKIE, getAuthToken, isAuthTokenRevoked } = require('../utils/authCookies');
 const { verifyPlatformSso } = require('./platformSso');
 const { resolvePlatformSsoAdmin } = require('../services/platformSsoAccountService');
 const { platformRoleAllowsRequest } = require('./platformRole');
@@ -17,7 +17,9 @@ async function authenticateAdmin(req, res, next) {
         if (!platformRoleAllowsRequest(platformIdentity.role, req.method, req.originalUrl || req.url)) {
             throw new ForbiddenError('The unified-platform role cannot perform this operation.');
         }
-        const mappedUsername = process.env.PLATFORM_SSO_EXAM_USERNAME || platformIdentity.sub;
+        const mappedUsername = platformIdentity.account_id
+            ? platformIdentity.local_username
+            : process.env.PLATFORM_SSO_EXAM_USERNAME || platformIdentity.sub;
         const admin = await resolvePlatformSsoAdmin({ mappedUsername });
         if (!admin) {
             throw new ForbiddenError('统一管理员未映射到考试平台管理员账号');
@@ -51,7 +53,7 @@ async function authenticateAdmin(req, res, next) {
         }
 
         const admin = await Admin.findById(decoded.id).select('tokenVersion').lean();
-        if (!admin || (admin.tokenVersion || 0) !== decoded.tokenVersion) {
+        if (!admin || (admin.tokenVersion || 0) !== decoded.tokenVersion || await isAuthTokenRevoked(token)) {
             throw new AuthError('Token 已失效，请重新登录');
         }
 

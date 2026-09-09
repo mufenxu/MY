@@ -138,6 +138,7 @@ class Database {
       this.db.collection('api_keys').createIndex({ key_id: 1 }, { unique: true }),
       this.db.collection('api_keys').createIndex({ token_hash: 1 }, { unique: true, sparse: true }),
       this.db.collection('settings').createIndex({ key: 1 }, { unique: true }),
+      this.db.collection('revoked_auth_tokens').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
       this.db.collection('automation_rules').createIndex({ id: 1 }, { unique: true }),
       this.db.collection('automation_rules').createIndex({ enabled: 1, updated_at: -1 }),
       this.db.collection('automation_scenes').createIndex({ id: 1 }, { unique: true }),
@@ -158,6 +159,16 @@ class Database {
     if (!this.db) return false;
     const result = await this.db.command({ ping: 1 });
     return result.ok === 1;
+  }
+
+  async isAuthSessionRevoked(fingerprint) {
+    return Boolean(await this.db.collection('revoked_auth_tokens').findOne({ _id: fingerprint }));
+  }
+
+  async revokeAuthSession(fingerprint, expiresAt) {
+    await this.db.collection('revoked_auth_tokens').updateOne(
+      { _id: fingerprint }, { $set: { expiresAt: new Date(expiresAt) } }, { upsert: true }
+    );
   }
 
   async close() {

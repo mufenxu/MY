@@ -1,6 +1,6 @@
 function registerAuthRoutes(app, { authManager, loginLimiter }) {
-  app.get('/api/auth/status', (req, res) => {
-    const authState = authManager.getRequestAuth(req);
+  app.get('/api/auth/status', async (req, res) => {
+    const authState = await authManager.getRequestAuth(req);
 
     res.json({
       enabled: authState.enabled,
@@ -38,8 +38,8 @@ function registerAuthRoutes(app, { authManager, loginLimiter }) {
     });
   });
 
-  app.post('/api/auth/logout', (req, res) => {
-    authManager.clearSession(res);
+  app.post('/api/auth/logout', async (req, res) => {
+    await authManager.clearSession(res, req);
     res.json({
       message: '已退出登录。'
     });

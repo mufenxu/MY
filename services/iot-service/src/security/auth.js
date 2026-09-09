@@ -112,6 +112,8 @@ class AuthManager {
   constructor(settingsStore, db = null) {
     this.settingsStore = settingsStore;
     this.db = db;
+    this.revokedSessions = new Map();
+    this.onSessionRevoked = () => {};
   }
 
   getConfig() {
@@ -130,7 +132,8 @@ class AuthManager {
   issueSession(username) {
     const auth = this.getConfig();
     const expiresAt = Date.now() + auth.sessionTtlHours * 60 * 60 * 1000;
-    const payload = toBase64Url(JSON.stringify({ username, expiresAt }));
+    const credentialVersion = crypto.createHash('sha256').update(`${auth.username}:${auth.password}`).digest('hex');
+    const payload = toBase64Url(JSON.stringify({ username, expiresAt, nonce: crypto.randomUUID(), credentialVersion }));
     const signature = this.createSignature(payload, auth.sessionSecret);
 
     return {
@@ -139,7 +142,7 @@ class AuthManager {
     };
   }
 
-  verifyToken(token) {
+  async verifyToken(token) {
     if (!token || typeof token !== 'string') {
       return null;
     }
@@ -159,17 +162,21 @@ class AuthManager {
 
     try {
       const data = JSON.parse(fromBase64Url(payload));
-      if (!data.expiresAt || data.expiresAt < Date.now()) {
+      const credentialVersion = crypto.createHash('sha256').update(`${auth.username}:${auth.password}`).digest('hex');
+      if (!data.expiresAt || data.expiresAt <= Date.now() || !safeEqual(data.credentialVersion, credentialVersion)) {
         return null;
       }
-
+      const fingerprint = crypto.createHash('sha256').update(token).digest('hex');
+      if (this.db?.isAuthSessionRevoked) {
+        if (await this.db.isAuthSessionRevoked(fingerprint)) return null;
+      } else if (this.revokedSessions.has(fingerprint)) return null;
       return data;
     } catch {
       return null;
     }
   }
 
-  getRequestAuth(req) {
+  async getRequestAuth(req) {
     const platformIdentity = verifyPlatformSso(req);
     if (platformIdentity) {
       return {
@@ -195,7 +202,7 @@ class AuthManager {
     }
 
     const cookies = parseCookies(req.headers.cookie || '');
-    const session = this.verifyToken(cookies[COOKIE_NAME]);
+    const session = await this.verifyToken(cookies[COOKIE_NAME]);
 
     return {
       enabled: true,
@@ -246,7 +253,23 @@ class AuthManager {
     );
   }
 
-  clearSession(res) {
+  sessionFingerprint(req) {
+    const token = parseCookies(req.headers.cookie || '')[COOKIE_NAME];
+    return token ? crypto.createHash('sha256').update(token).digest('hex') : '';
+  }
+
+  async clearSession(res, req) {
+    const token = parseCookies(req.headers.cookie || '')[COOKIE_NAME];
+    const session = await this.verifyToken(token);
+    if (session) {
+      const fingerprint = this.sessionFingerprint(req);
+      if (this.db?.revokeAuthSession) await this.db.revokeAuthSession(fingerprint, session.expiresAt);
+      else {
+        for (const [key, expiresAt] of this.revokedSessions) if (expiresAt <= Date.now()) this.revokedSessions.delete(key);
+        this.revokedSessions.set(fingerprint, session.expiresAt);
+      }
+      this.onSessionRevoked(fingerprint);
+    }
     res.setHeader(
       'Set-Cookie',
       serializeCookie(COOKIE_NAME, '', {
@@ -294,7 +317,7 @@ class AuthManager {
     const insufficientScopeMessage = options.insufficientScopeMessage || '当前凭证没有访问该接口的权限。';
 
     return async (req, res, next) => {
-      const authState = this.getRequestAuth(req);
+      const authState = await this.getRequestAuth(req);
       if (authState.platformSso) {
         req.auth = authState;
         if (!platformRoleAllowsRequest(authState.platformRole, req.method, requiredScopes)) {
@@ -367,8 +390,8 @@ class AuthManager {
     return this.requireAccess([], { allowApiKey: false });
   }
 
-  canAccessRealtime(req) {
-    const authState = this.getRequestAuth(req);
+  async canAccessRealtime(req) {
+    const authState = await this.getRequestAuth(req);
     return !authState.enabled || authState.authenticated;
   }
 }

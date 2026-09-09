@@ -70,6 +70,14 @@ export function createMemoryWebLoginTicketStore({
       record.consumedAt = now().toISOString();
       return publicRecord(record);
     },
+    async revokeForSessions({ subject, nonce, exceptNonce } = {}) {
+      for (const record of tickets.values()) {
+        if (record.status === 'pending' && (!subject || record.username === subject)
+          && (!nonce || record.appSessionNonce === nonce) && record.appSessionNonce !== exceptNonce) {
+          record.status = 'revoked';
+        }
+      }
+    },
     async ping() { return true; },
     async close() {},
   };
@@ -131,6 +139,13 @@ export async function createMongoWebLoginTicketStore({
         { $set: { status: 'consumed', consumedAt: new Date() } },
         { returnDocument: 'after' },
       ));
+    },
+    async revokeForSessions({ subject, nonce, exceptNonce } = {}) {
+      await tickets.updateMany({
+        status: 'pending',
+        ...(subject ? { username: subject } : {}),
+        ...(nonce ? { appSessionNonce: nonce } : exceptNonce ? { appSessionNonce: { $ne: exceptNonce } } : {}),
+      }, { $set: { status: 'revoked' } });
     },
     async ping() { return (await db.command({ ping: 1 })).ok === 1; },
     async close() { if (!sharedClient) await client.close(); },

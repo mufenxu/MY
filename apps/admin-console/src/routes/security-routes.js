@@ -33,9 +33,20 @@ export function registerSecurityRoutes(app, {
     }
   });
 
-  app.delete('/api/security/sessions/:nonce', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+  app.delete('/api/security/sessions', requireConsoleRequest, async (req, res, next) => {
     try {
-      const revoked = await sessions.revokeByNonce?.(req.params.nonce);
+      const revoked = await app.locals.revokeConsoleSessions({ subject: req.consoleUser.username, exceptNonce: req.consoleSession.nonce });
+      await recordAudit(req, { action: 'security.other_sessions_revoked', targetType: 'account', targetId: req.consoleUser.username, details: { revoked } });
+      return res.json({ revoked });
+    } catch (error) { return next(error); }
+  });
+
+  app.delete('/api/security/sessions/:nonce', requireConsoleRequest, async (req, res, next) => {
+    try {
+      const revoked = await app.locals.revokeConsoleSessions({
+        nonce: req.params.nonce,
+        subject: req.consoleUser.role === 'super_admin' ? undefined : req.consoleUser.username,
+      });
       if (!revoked) return res.status(404).json({ error: '会话不存在或已经失效。', code: 'SESSION_NOT_FOUND' });
       await recordAudit(req, {
         action: 'security.session_revoked',
@@ -61,6 +72,21 @@ export function registerSecurityRoutes(app, {
     }
   });
 
+  app.post('/api/security/accounts/:username/recovery', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
+    try {
+      if (!await confirmSensitiveAuthentication(req, res, 'security.account_recovery_issued')) return undefined;
+      const account = await accounts.findAccount(req.params.username);
+      if (!account?.active) return res.status(404).json({ error: '账号不存在或已停用。', code: 'ACCOUNT_NOT_FOUND' });
+      const recoveryToken = await accounts.saveChallenge({
+        kind: 'account_recovery', username: account.username, ttlMs: 10 * 60_000,
+        challenge: { accountId: account.id, authVersion: account.authVersion || 0 },
+      });
+      await recordAudit(req, { action: 'security.account_recovery_issued', targetType: 'account', targetId: account.username });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json({ recoveryToken, username: account.username, expiresAt: new Date(Date.now() + 10 * 60_000).toISOString() });
+    } catch (error) { return next(error); }
+  });
+
   app.post('/api/security/accounts', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
     try {
       if (!await confirmSensitiveAuthentication(req, res, 'security.account_created')) return undefined;
@@ -69,11 +95,13 @@ export function registerSecurityRoutes(app, {
         username: req.body?.username,
         passwordHash,
         role: req.body?.role,
+        serviceBindings: req.body?.serviceBindings,
       });
       await recordAudit(req, { action: 'security.account_created', targetType: 'account', targetId: account.username, details: { role: account.role } });
       return res.status(201).json({ account });
     } catch (error) {
       if (error.message === 'ACCOUNT_EXISTS') return res.status(409).json({ error: '管理员账号已经存在。', code: 'ACCOUNT_EXISTS' });
+      if (error.message === 'INVALID_SERVICE_BINDINGS') return res.status(400).json({ error: '业务账号绑定格式无效。', code: error.message });
       if (error.message === 'INVALID_ACCOUNT' || error.message.includes('15 到 256')) {
         return res.status(400).json({ error: error.message === 'INVALID_ACCOUNT' ? '管理员账号或角色格式无效。' : error.message, code: 'INVALID_ACCOUNT' });
       }
@@ -85,16 +113,16 @@ export function registerSecurityRoutes(app, {
   app.patch('/api/security/accounts/:username', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
     try {
       if (!await confirmSensitiveAuthentication(req, res, 'security.account_updated')) return undefined;
-      const account = await accounts.updateAccount(req.params.username, { role: req.body?.role, active: req.body?.active });
+      const account = await accounts.updateAccount(req.params.username, { role: req.body?.role, active: req.body?.active, serviceBindings: req.body?.serviceBindings });
       if (!account) return res.status(404).json({ error: '管理员账号不存在。', code: 'ACCOUNT_NOT_FOUND' });
-      await sessions.revokeBySubject?.(account.username);
-      await app.locals.onConsoleSessionsChanged();
+      await app.locals.revokeConsoleSessions({ subject: account.username });
       await recordAudit(req, { action: 'security.account_updated', targetType: 'account', targetId: account.username, details: { role: account.role, active: account.active } });
       if (account.username === req.consoleUser.username) clearSessionCookies(res, config);
       return res.json({ account, currentSessionRevoked: account.username === req.consoleUser.username });
     } catch (error) {
       if (error.message === 'LAST_SUPER_ADMIN') return res.status(409).json({ error: '不能停用或降级最后一个超级管理员。', code: 'LAST_SUPER_ADMIN' });
       if (error.message === 'INVALID_ROLE') return res.status(400).json({ error: '管理员角色无效。', code: 'INVALID_ROLE' });
+      if (error.message === 'INVALID_SERVICE_BINDINGS') return res.status(400).json({ error: '业务账号绑定格式无效。', code: error.message });
       next(error);
       return undefined;
     }
@@ -109,8 +137,7 @@ export function registerSecurityRoutes(app, {
       }
       const passwordHash = await createPasswordHash(newPassword);
       await accounts.setPasswordHash(req.consoleUser.username, passwordHash);
-      await sessions.revokeBySubject?.(req.consoleUser.username);
-      await app.locals.onConsoleSessionsChanged();
+      await app.locals.revokeConsoleSessions({ subject: req.consoleUser.username });
       clearSessionCookies(res, config);
       await recordAudit(req, { action: 'security.password_changed', targetType: 'account', targetId: req.consoleUser.username });
       return res.json({ changed: true, currentSessionRevoked: true });
@@ -164,15 +191,14 @@ export function registerSecurityRoutes(app, {
   app.delete('/api/security/totp', requireConsoleRequest, async (req, res, next) => {
     try {
       if (!await confirmSensitiveAuthentication(req, res, 'security.totp_disabled')) return undefined;
-      if (config.requireMfa) {
+      if (config.requireMfa && !req.consoleAccount.passkeyCount) {
         return res.status(409).json({
-          error: '生产多因素策略已启用，不能停用动态验证。',
-          code: 'MFA_REQUIRED',
+          error: '请先添加 Passkey，再停用最后一种登录保护。',
+          code: 'LAST_AUTHENTICATOR',
         });
       }
       await accounts.disableTotp(req.consoleUser.username);
-      await sessions.revokeBySubject?.(req.consoleUser.username);
-      await app.locals.onConsoleSessionsChanged();
+      await app.locals.revokeConsoleSessions({ subject: req.consoleUser.username });
       clearSessionCookies(res, config);
       await recordAudit(req, { action: 'security.totp_disabled', targetType: 'account', targetId: req.consoleUser.username });
       return res.json({ disabled: true, currentSessionRevoked: true });
@@ -218,6 +244,9 @@ export function registerSecurityRoutes(app, {
   app.delete('/api/security/passkeys/:id', requireConsoleRequest, async (req, res, next) => {
     try {
       if (!await confirmSensitiveAuthentication(req, res, 'security.passkey_deleted')) return undefined;
+      if (config.requireMfa && !req.consoleAccount.totpEnabled && req.consoleAccount.passkeyCount <= 1) {
+        return res.status(409).json({ error: '请先添加其他 Passkey 或启用动态验证，再移除最后一个密钥。', code: 'LAST_AUTHENTICATOR' });
+      }
       const deleted = await accounts.deletePasskey(req.consoleUser.username, req.params.id);
       if (!deleted) return res.status(404).json({ error: 'Passkey 不存在。', code: 'PASSKEY_NOT_FOUND' });
       await recordAudit(req, { action: 'security.passkey_deleted', targetType: 'passkey', targetId: req.params.id });

@@ -43,6 +43,7 @@ COPY --chown=node:node packages/platform-auth/ ./packages/platform-auth/
 COPY --chown=node:node services/platform-api/ ./services/platform-api/
 COPY --from=platform-api-deps --chown=node:node /build/services/platform-api/node_modules ./services/platform-api/node_modules
 COPY --chown=node:node apps/admin-console/src ./apps/admin-console/src
+COPY --chown=node:node apps/admin-console/scripts ./apps/admin-console/scripts
 COPY --chown=node:node apps/admin-console/package.json ./apps/admin-console/package.json
 COPY --from=admin-console-build --chown=node:node /build/apps/admin-console/node_modules ./apps/admin-console/node_modules
 COPY --from=admin-console-build --chown=node:node /build/apps/admin-console/dist ./apps/admin-console/dist

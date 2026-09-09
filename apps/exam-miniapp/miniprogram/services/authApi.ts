@@ -122,6 +122,10 @@ export const authApi = {
     },
 
     clearSession: () => {
+        const token = authApi.getToken();
+        if (token) {
+            void request({ url: '/api/user/logout', method: 'POST', showError: false }).catch(() => {});
+        }
         clearLocalSession();
     },
 };

@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { randomUUID } = require('crypto');
 const config = require('../config');
 const Admin = require('../models/Admin');
 const ConsoleAccount = require('../models/ConsoleAccount');
@@ -40,7 +41,7 @@ function buildAdminLoginResult(admin) {
             tokenVersion: admin.tokenVersion || 0,
         },
         config.jwtSecret,
-        { expiresIn: config.jwtExpiresIn },
+        { expiresIn: config.jwtExpiresIn, jwtid: randomUUID() },
     );
 
     return {
@@ -62,9 +63,11 @@ function buildConsoleToken(account) {
             openid: account.openid,
             role: 'console',
             consoleRole: account.role,
+            accountId: String(account._id),
+            tokenVersion: account.tokenVersion || 0,
         },
         config.jwtSecret,
-        { expiresIn: config.jwtExpiresIn },
+        { expiresIn: config.jwtExpiresIn, jwtid: randomUUID() },
     );
 }
 

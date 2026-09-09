@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema(
     {
+        tokenVersion: { type: Number, default: 0 },
         openid: {
             type: String,
             required: [true, 'OpenID不能为空'],

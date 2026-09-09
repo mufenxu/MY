@@ -25,7 +25,7 @@ export function createPasskeyService({ authStore, rpName, rpID, origin } = {}) {
       const options = await generateRegistrationOptions({
         rpName,
         rpID,
-        userID: userId(username),
+        userID: userId(account.id || username),
         userName: username,
         userDisplayName: username,
         attestationType: 'none',
@@ -33,16 +33,17 @@ export function createPasskeyService({ authStore, rpName, rpID, origin } = {}) {
         authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
         supportedAlgorithmIDs: [-7, -257],
       });
-      const challengeId = await authStore.saveChallenge({ kind: 'passkey_registration', username, challenge: options.challenge });
+      const challengeId = await authStore.saveChallenge({ kind: 'passkey_registration', username, challenge: { value: options.challenge, accountId: account.id, authVersion: account.authVersion || 0 } });
       return { challengeId, options };
     },
 
     async verifyRegistration(username, { challengeId, response, name } = {}) {
       const challenge = await authStore.consumeChallenge(challengeId, 'passkey_registration', username);
-      if (!challenge || !response) return { verified: false };
+      const account = await authStore.findAccount(username);
+      if (!challenge || !response || !account?.active || challenge.accountId !== account.id || challenge.authVersion !== (account.authVersion || 0)) return { verified: false };
       const verification = await verifyRegistrationResponse({
         response,
-        expectedChallenge: challenge,
+        expectedChallenge: challenge.value,
         expectedOrigin: origin,
         expectedRPID: rpID,
         requireUserVerification: true,
@@ -60,11 +61,11 @@ export function createPasskeyService({ authStore, rpName, rpID, origin } = {}) {
         name: boundedName(name),
         createdAt: new Date().toISOString(),
         lastUsedAt: null,
-      });
+      }, { accountId: account.id, authVersion: challenge.authVersion });
       return { verified: saved };
     },
 
-    async authenticationOptions(username) {
+    async authenticationOptions(username, { purpose = 'authentication', sessionNonce = '' } = {}) {
       const normalizedUsername = String(username || '').trim();
       const passkeys = normalizedUsername
         ? (await authStore.findAccount(normalizedUsername))?.active ? await authStore.getPasskeys(normalizedUsername) : []
@@ -78,22 +79,28 @@ export function createPasskeyService({ authStore, rpName, rpID, origin } = {}) {
         optionInput.allowCredentials = passkeys.map((passkey) => ({ id: passkey.id, transports: passkey.transports || [] }));
       }
       const options = await generateAuthenticationOptions(optionInput);
-      const challengeId = await authStore.saveChallenge({ kind: 'passkey_authentication', username: normalizedUsername, challenge: options.challenge });
+      const account = normalizedUsername ? await authStore.findAccount(normalizedUsername) : null;
+      const challengeId = await authStore.saveChallenge({
+        kind: `passkey_${purpose}`, username: normalizedUsername,
+        challenge: { value: options.challenge, sessionNonce, accountId: account?.id, authVersion: account?.authVersion || 0 },
+      });
       return { challengeId, options };
     },
 
-    async verifyAuthentication(username, { challengeId, response } = {}) {
+    async verifyAuthentication(username, { challengeId, response } = {}, { purpose = 'authentication', sessionNonce = '' } = {}) {
       const normalizedUsername = String(username || '').trim();
-      const challenge = await authStore.consumeChallenge(challengeId, 'passkey_authentication', normalizedUsername);
-      if (!challenge || !response?.id) return { verified: false };
+      const challenge = await authStore.consumeChallenge(challengeId, `passkey_${purpose}`, normalizedUsername);
+      if (!challenge || !response?.id || challenge.sessionNonce !== sessionNonce) return { verified: false };
       const resolved = normalizedUsername
         ? { username: normalizedUsername, passkey: (await authStore.getPasskeys(normalizedUsername)).find((item) => item.id === response.id) }
         : await authStore.findPasskey(response.id);
       const passkey = resolved?.passkey;
       if (!passkey) return { verified: false };
+      const account = await authStore.findAccount(resolved.username);
+      if (!account?.active || (normalizedUsername && (challenge.accountId !== account.id || challenge.authVersion !== (account.authVersion || 0)))) return { verified: false };
       const verification = await verifyAuthenticationResponse({
         response,
-        expectedChallenge: challenge,
+        expectedChallenge: challenge.value,
         expectedOrigin: origin,
         expectedRPID: rpID,
         credential: {
@@ -105,8 +112,11 @@ export function createPasskeyService({ authStore, rpName, rpID, origin } = {}) {
         requireUserVerification: true,
       });
       if (!verification.verified) return { verified: false };
-      await authStore.updatePasskeyCounter(resolved.username, passkey.id, verification.authenticationInfo.newCounter);
-      return { verified: true, method: 'passkey', username: resolved.username };
+      const updated = await authStore.updatePasskeyCounter(resolved.username, passkey.id, verification.authenticationInfo.newCounter, {
+        accountId: account.id, authVersion: account.authVersion || 0, previousCounter: passkey.counter,
+      });
+      if (!updated) return { verified: false };
+      return { verified: true, method: 'passkey', username: resolved.username, accountId: account.id, authVersion: account.authVersion || 0 };
     },
   };
 }

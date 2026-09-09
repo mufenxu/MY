@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const ConsoleAccount = require('../models/ConsoleAccount');
 const { AuthError, ForbiddenError } = require('../utils/errors');
-const { CONSOLE_AUTH_COOKIE, getAuthToken } = require('../utils/authCookies');
+const { CONSOLE_AUTH_COOKIE, getAuthToken, isAuthTokenRevoked } = require('../utils/authCookies');
 
 async function authenticateConsole(req, res, next) {
     const token = getAuthToken(req, CONSOLE_AUTH_COOKIE);
@@ -14,12 +14,12 @@ async function authenticateConsole(req, res, next) {
     try {
         const decoded = jwt.verify(token, config.jwtSecret);
 
-        if (decoded.role !== 'console' || !decoded.openid || !decoded.consoleRole) {
+        if (decoded.role !== 'console' || !decoded.openid || !decoded.consoleRole || !decoded.accountId || !Number.isSafeInteger(decoded.tokenVersion)) {
             throw new ForbiddenError('个人题库后台 Token 无效');
         }
 
         const account = await ConsoleAccount.findOne({ openid: decoded.openid }).lean();
-        if (!account) {
+        if (!account || String(account._id) !== decoded.accountId || (account.tokenVersion || 0) !== decoded.tokenVersion || await isAuthTokenRevoked(token)) {
             throw new AuthError('个人题库后台账号不存在，请重新扫码登录');
         }
 

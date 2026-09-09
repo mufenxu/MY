@@ -22,6 +22,18 @@ function normalizeRole(value) {
   return ROLES.has(role) ? role : '';
 }
 
+export function normalizeServiceBindings(value = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('INVALID_SERVICE_BINDINGS');
+  const result = {};
+  for (const [service, input] of Object.entries(value)) {
+    if (!['core', 'exam', 'campus'].includes(service) || typeof input !== 'string') throw new Error('INVALID_SERVICE_BINDINGS');
+    const username = input.trim();
+    if (username && !/^[A-Za-z0-9._@-]{1,128}$/.test(username)) throw new Error('INVALID_SERVICE_BINDINGS');
+    if (username) result[service] = username;
+  }
+  return result;
+}
+
 function decodeKey(value) {
   const key = Buffer.from(String(value || ''), 'base64url');
   if (key.length !== 32) throw new Error('PLATFORM_AUTH_ENCRYPTION_KEY must be a Base64URL-encoded 32-byte key.');
@@ -82,12 +94,14 @@ function generateBase32(bytes = 20) {
 function publicAccount(account) {
   if (!account) return null;
   return {
+    id: account.id || String(account._id),
     username: account.username,
     role: account.role,
     active: account.active !== false,
     totpEnabled: Boolean(account.totpSecretEncrypted),
     recoveryCodesRemaining: Array.isArray(account.recoveryCodeHashes) ? account.recoveryCodeHashes.length : 0,
     passkeyCount: Array.isArray(account.passkeys) ? account.passkeys.length : 0,
+    serviceBindings: { ...account.serviceBindings },
     createdAt: account.createdAt?.toISOString?.() || account.createdAt || null,
     updatedAt: account.updatedAt?.toISOString?.() || account.updatedAt || null,
     lastLoginAt: account.lastLoginAt?.toISOString?.() || account.lastLoginAt || null,
@@ -99,6 +113,7 @@ function privateAccount(account, key) {
   return {
     ...publicAccount(account),
     passwordHash: account.passwordHash,
+    authVersion: Number(account.authVersion) || 0,
     totpSecret: decryptSecret(account.totpSecretEncrypted, key),
     lastTotpCounter: Number.isSafeInteger(account.lastTotpCounter) ? account.lastTotpCounter : -1,
   };
@@ -117,12 +132,15 @@ function totpUri({ issuer, username, secret }) {
   return `otpauth://totp/${encodeURIComponent(label)}?${query}`;
 }
 
-export function createMemoryAuthStore({ bootstrap, encryptionKey, issuer = 'MY Platform', now = () => Date.now() } = {}) {
+export function createMemoryAuthStore({ bootstrap, encryptionKey, issuer = 'MY Platform', legacyBindings = {}, now = () => Date.now() } = {}) {
   const key = decodeKey(encryptionKey);
   const initial = validateBootstrap(bootstrap);
   const accounts = new Map();
   const challenges = new Map();
   accounts.set(initial.username, {
+    id: crypto.randomUUID(),
+    authVersion: 0,
+    serviceBindings: normalizeServiceBindings(Object.fromEntries(['core', 'exam', 'campus'].map((service) => [service, legacyBindings[service] || initial.username]))),
     username: initial.username,
     passwordHash: initial.passwordHash,
     role: initial.role,
@@ -168,12 +186,15 @@ export function createMemoryAuthStore({ bootstrap, encryptionKey, issuer = 'MY P
     async listAccounts() {
       return [...accounts.values()].map(publicAccount).sort((left, right) => left.username.localeCompare(right.username));
     },
-    async createAccount({ username, passwordHash, role }) {
+    async createAccount({ username, passwordHash, role, serviceBindings = {} }) {
       const normalizedUsername = normalizeUsername(username);
       const normalizedRole = normalizeRole(role);
       if (!normalizedUsername || !passwordHash || !normalizedRole) throw new Error('INVALID_ACCOUNT');
       if (accounts.has(normalizedUsername)) throw new Error('ACCOUNT_EXISTS');
       const account = {
+        id: crypto.randomUUID(),
+        authVersion: 0,
+        serviceBindings: normalizeServiceBindings(serviceBindings),
         username: normalizedUsername,
         passwordHash,
         role: normalizedRole,
@@ -195,12 +216,15 @@ export function createMemoryAuthStore({ bootstrap, encryptionKey, issuer = 'MY P
       const role = patch.role === undefined ? account.role : normalizeRole(patch.role);
       const active = patch.active === undefined ? account.active : Boolean(patch.active);
       if (!role) throw new Error('INVALID_ROLE');
+      const serviceBindings = patch.serviceBindings === undefined ? account.serviceBindings : normalizeServiceBindings(patch.serviceBindings);
       if ((account.role === 'super_admin') && (role !== 'super_admin' || !active)) {
         const remaining = [...accounts.values()].filter((item) => item.active !== false && item.role === 'super_admin' && item.username !== account.username);
         if (remaining.length === 0) throw new Error('LAST_SUPER_ADMIN');
       }
       account.role = role;
       account.active = active;
+      account.serviceBindings = serviceBindings;
+      account.authVersion = (account.authVersion || 0) + 1;
       account.updatedAt = nowDate(now());
       return publicAccount(account);
     },
@@ -215,7 +239,15 @@ export function createMemoryAuthStore({ bootstrap, encryptionKey, issuer = 'MY P
       const account = accountFor(username);
       if (!account || !passwordHash) return false;
       account.passwordHash = passwordHash;
+      account.authVersion = (account.authVersion || 0) + 1;
       account.updatedAt = nowDate(now());
+      return true;
+    },
+    async resetCredentials(username, authVersion, passwordHash) {
+      const account = accountFor(username);
+      if (!account?.active || (account.authVersion || 0) !== authVersion) return false;
+      Object.assign(account, { passwordHash, authVersion: authVersion + 1, totpSecretEncrypted: '', lastTotpCounter: -1, recoveryCodeHashes: [], passkeys: [], updatedAt: nowDate(now()) });
+      delete account.pendingTotp;
       return true;
     },
     consumeSecondFactor,
@@ -224,12 +256,15 @@ export function createMemoryAuthStore({ bootstrap, encryptionKey, issuer = 'MY P
       if (!account) return null;
       const secret = generateBase32();
       const uri = totpUri({ issuer, username: account.username, secret });
-      account.pendingTotp = { secretEncrypted: encryptSecret(secret, key), expiresAt: now() + 10 * 60_000 };
-      return { secret, uri, qrDataUrl: await QRCode.toDataURL(uri, { errorCorrectionLevel: 'M', margin: 1, width: 240 }), expiresAt: new Date(account.pendingTotp.expiresAt).toISOString() };
+      const id = crypto.randomUUID();
+      const expiresAt = now() + 10 * 60_000;
+      account.pendingTotp = { id, secretEncrypted: encryptSecret(secret, key), expiresAt };
+      return { id, secret, uri, qrDataUrl: await QRCode.toDataURL(uri, { errorCorrectionLevel: 'M', margin: 1, width: 240 }), expiresAt: new Date(expiresAt).toISOString() };
     },
-    async confirmTotpEnrollment(username, token) {
+    async confirmTotpEnrollment(username, token, { enrollmentId, authVersion } = {}) {
       const account = accountFor(username);
-      if (!account?.pendingTotp || account.pendingTotp.expiresAt <= now()) return null;
+      if (!account?.active || !account.pendingTotp || account.pendingTotp.expiresAt <= now()
+        || (enrollmentId && enrollmentId !== account.pendingTotp.id) || (authVersion !== undefined && authVersion !== account.authVersion)) return null;
       const secret = decryptSecret(account.pendingTotp.secretEncrypted, key);
       const counter = matchTotp(token, secret, now(), { window: 1 });
       if (counter === null) return null;
@@ -275,16 +310,19 @@ export function createMemoryAuthStore({ bootstrap, encryptionKey, issuer = 'MY P
       }
       return null;
     },
-    async savePasskey(username, passkey) {
+    async savePasskey(username, passkey, { accountId, authVersion } = {}) {
       const account = accountFor(username);
-      if (!account || account.passkeys.some((item) => item.id === passkey.id)) return false;
+      if (!account?.active || (accountId && account.id !== accountId) || (authVersion !== undefined && account.authVersion !== authVersion)
+        || account.passkeys.some((item) => item.id === passkey.id)) return false;
       account.passkeys.push(structuredClone(passkey));
       account.updatedAt = nowDate(now());
       return true;
     },
-    async updatePasskeyCounter(username, id, counter) {
-      const passkey = accountFor(username)?.passkeys.find((item) => item.id === id);
-      if (!passkey) return false;
+    async updatePasskeyCounter(username, id, counter, { accountId, authVersion, previousCounter } = {}) {
+      const account = accountFor(username);
+      if (!account?.active || (accountId && account.id !== accountId) || (authVersion !== undefined && account.authVersion !== authVersion)) return false;
+      const passkey = account.passkeys.find((item) => item.id === id);
+      if (!passkey || (previousCounter !== undefined && passkey.counter !== previousCounter)) return false;
       passkey.counter = counter;
       passkey.lastUsedAt = new Date(now()).toISOString();
       return true;
@@ -298,13 +336,23 @@ export function createMemoryAuthStore({ bootstrap, encryptionKey, issuer = 'MY P
     },
     async saveChallenge({ kind, username, challenge, ttlMs = 5 * 60_000 }) {
       const id = crypto.randomBytes(24).toString('base64url');
-      challenges.set(id, { kind, username: normalizeUsername(username), challenge, expiresAt: now() + ttlMs });
+      for (const [key, value] of challenges) if (value.expiresAt <= now()) challenges.delete(key);
+      challenges.set(keyedHash(id, key, 'challenge'), { kind, username: normalizeUsername(username), challenge, attempts: 0, expiresAt: now() + ttlMs });
       return id;
     },
+    async findChallenge(id, kind) {
+      const value = challenges.get(keyedHash(id, key, 'challenge'));
+      return value && value.kind === kind && value.expiresAt > now() && value.attempts < 5 ? structuredClone(value) : null;
+    },
+    async failChallenge(id, kind) {
+      const value = challenges.get(keyedHash(id, key, 'challenge'));
+      if (value?.kind === kind) value.attempts += 1;
+    },
     async consumeChallenge(id, kind, username) {
-      const value = challenges.get(String(id || ''));
-      challenges.delete(String(id || ''));
-      if (!value || value.expiresAt <= now() || value.kind !== kind || value.username !== normalizeUsername(username)) return null;
+      const hash = keyedHash(id, key, 'challenge');
+      const value = challenges.get(hash);
+      if (!value || value.attempts >= 5 || value.expiresAt <= now() || value.kind !== kind || value.username !== normalizeUsername(username)) return null;
+      challenges.delete(hash);
       return value.challenge;
     },
     async rememberLoginIp(username, ip) {
@@ -327,6 +375,7 @@ export async function createMongoAuthStore({
   encryptionKey,
   bootstrap,
   issuer = 'MY Platform',
+  legacyBindings = {},
   databaseName = process.env.PLATFORM_MONGODB_DATABASE || 'platform_app',
   now = () => Date.now(),
 } = {}) {
@@ -345,6 +394,9 @@ export async function createMongoAuthStore({
   const createdAt = nowDate(now());
   await accounts.updateOne({ username: initial.username }, {
     $setOnInsert: {
+      id: crypto.randomUUID(),
+      authVersion: 0,
+      serviceBindings: normalizeServiceBindings(Object.fromEntries(['core', 'exam', 'campus'].map((service) => [service, legacyBindings[service] || initial.username]))),
       username: initial.username,
       passwordHash: initial.passwordHash,
       role: initial.role,
@@ -360,6 +412,13 @@ export async function createMongoAuthStore({
     },
   }, { upsert: true });
 
+  // Preserve each existing account's effective mappings when introducing explicit bindings.
+  await accounts.updateMany({ id: { $exists: false } }, [{ $set: {
+    id: { $toString: '$_id' },
+    authVersion: { $ifNull: ['$authVersion', 0] },
+    serviceBindings: Object.fromEntries(['core', 'exam', 'campus'].map((service) => [service, normalizeServiceBindings(legacyBindings)[service] || '$username'])),
+  } }]);
+
   async function rawAccount(username) {
     const normalized = normalizeUsername(username);
     return normalized ? accounts.findOne({ username: normalized }) : null;
@@ -373,13 +432,16 @@ export async function createMongoAuthStore({
       return accounts.find({}, { projection: { passwordHash: 0, knownIpHashes: 0, pendingTotp: 0 } })
         .sort({ username: 1 }).toArray().then((rows) => rows.map(publicAccount));
     },
-    async createAccount({ username, passwordHash, role }) {
+    async createAccount({ username, passwordHash, role, serviceBindings = {} }) {
       const normalizedUsername = normalizeUsername(username);
       const normalizedRole = normalizeRole(role);
       if (!normalizedUsername || !passwordHash || !normalizedRole) throw new Error('INVALID_ACCOUNT');
       const timestamp = nowDate(now());
       try {
         await accounts.insertOne({
+          id: crypto.randomUUID(),
+          authVersion: 0,
+          serviceBindings: normalizeServiceBindings(serviceBindings),
           username: normalizedUsername,
           passwordHash,
           role: normalizedRole,
@@ -409,7 +471,8 @@ export async function createMongoAuthStore({
         const remaining = await accounts.countDocuments({ username: { $ne: account.username }, active: true, role: 'super_admin' });
         if (remaining === 0) throw new Error('LAST_SUPER_ADMIN');
       }
-      await accounts.updateOne({ username: account.username }, { $set: { role, active, updatedAt: nowDate(now()) } });
+      const serviceBindings = patch.serviceBindings === undefined ? account.serviceBindings : normalizeServiceBindings(patch.serviceBindings);
+      await accounts.updateOne({ username: account.username }, { $set: { role, active, serviceBindings, updatedAt: nowDate(now()) }, $inc: { authVersion: 1 } });
       return publicAccount(await rawAccount(account.username));
     },
     async upgradePasswordHash(username, expectedHash, passwordHash) {
@@ -422,9 +485,16 @@ export async function createMongoAuthStore({
     async setPasswordHash(username, passwordHash) {
       const result = await accounts.updateOne(
         { username: normalizeUsername(username) },
-        { $set: { passwordHash, source: 'managed', updatedAt: nowDate(now()) } },
+        { $set: { passwordHash, source: 'managed', updatedAt: nowDate(now()) }, $inc: { authVersion: 1 } },
       );
       return result.matchedCount === 1;
+    },
+    async resetCredentials(username, authVersion, passwordHash) {
+      const result = await accounts.updateOne(
+        { username: normalizeUsername(username), active: true, authVersion },
+        { $set: { passwordHash, source: 'managed', totpSecretEncrypted: '', lastTotpCounter: -1, recoveryCodeHashes: [], passkeys: [], updatedAt: nowDate(now()) }, $unset: { pendingTotp: '' }, $inc: { authVersion: 1 } },
+      );
+      return result.modifiedCount === 1;
     },
     async consumeSecondFactor(username, { totp = '', recoveryCode = '' } = {}) {
       const account = await rawAccount(username);
@@ -455,20 +525,23 @@ export async function createMongoAuthStore({
       const secret = generateBase32();
       const uriValue = totpUri({ issuer, username: account.username, secret });
       const expiresAt = new Date(now() + 10 * 60_000);
-      await accounts.updateOne({ username: account.username }, { $set: {
-        pendingTotp: { secretEncrypted: encryptSecret(secret, key), expiresAt },
+      const id = crypto.randomUUID();
+      const result = await accounts.updateOne({ _id: account._id, active: true, authVersion: account.authVersion || 0 }, { $set: {
+        pendingTotp: { id, secretEncrypted: encryptSecret(secret, key), expiresAt },
         updatedAt: nowDate(now()),
       } });
-      return { secret, uri: uriValue, qrDataUrl: await QRCode.toDataURL(uriValue, { errorCorrectionLevel: 'M', margin: 1, width: 240 }), expiresAt: expiresAt.toISOString() };
+      if (!result.matchedCount) return null;
+      return { id, secret, uri: uriValue, qrDataUrl: await QRCode.toDataURL(uriValue, { errorCorrectionLevel: 'M', margin: 1, width: 240 }), expiresAt: expiresAt.toISOString() };
     },
-    async confirmTotpEnrollment(username, token) {
+    async confirmTotpEnrollment(username, token, { enrollmentId, authVersion } = {}) {
       const account = await rawAccount(username);
-      if (!account?.pendingTotp || account.pendingTotp.expiresAt.getTime() <= now()) return null;
+      if (!account?.active || !account.pendingTotp || account.pendingTotp.expiresAt.getTime() <= now()
+        || (enrollmentId && enrollmentId !== account.pendingTotp.id) || (authVersion !== undefined && authVersion !== account.authVersion)) return null;
       const secret = decryptSecret(account.pendingTotp.secretEncrypted, key);
       const counter = matchTotp(token, secret, now(), { window: 1 });
       if (counter === null) return null;
       const recoveryCodes = createRecoveryCodes();
-      const result = await accounts.updateOne({ username: account.username, 'pendingTotp.expiresAt': account.pendingTotp.expiresAt }, {
+      const result = await accounts.updateOne({ _id: account._id, active: true, authVersion: account.authVersion || 0, 'pendingTotp.id': account.pendingTotp.id, 'pendingTotp.expiresAt': account.pendingTotp.expiresAt }, {
         $set: {
           totpSecretEncrypted: encryptSecret(secret, key),
           lastTotpCounter: counter,
@@ -513,19 +586,19 @@ export async function createMongoAuthStore({
       const passkey = account?.passkeys?.[0];
       return passkey ? { username: account.username, passkey } : null;
     },
-    async savePasskey(username, passkey) {
+    async savePasskey(username, passkey, { accountId, authVersion } = {}) {
       const result = await accounts.updateOne(
-        { username: normalizeUsername(username), 'passkeys.id': { $ne: passkey.id } },
+        { username: normalizeUsername(username), active: true, ...(accountId ? { id: accountId } : {}), ...(authVersion !== undefined ? { authVersion } : {}), 'passkeys.id': { $ne: passkey.id } },
         { $push: { passkeys: passkey }, $set: { updatedAt: nowDate(now()) } },
       );
       return result.modifiedCount === 1;
     },
-    async updatePasskeyCounter(username, id, counter) {
+    async updatePasskeyCounter(username, id, counter, { accountId, authVersion, previousCounter } = {}) {
       const result = await accounts.updateOne(
-        { username: normalizeUsername(username), 'passkeys.id': id },
+        { username: normalizeUsername(username), active: true, ...(accountId ? { id: accountId } : {}), ...(authVersion !== undefined ? { authVersion } : {}), passkeys: { $elemMatch: { id, ...(previousCounter !== undefined ? { counter: previousCounter } : {}) } } },
         { $set: { 'passkeys.$.counter': counter, 'passkeys.$.lastUsedAt': nowDate(now()), updatedAt: nowDate(now()) } },
       );
-      return result.modifiedCount === 1;
+      return result.matchedCount === 1;
     },
     async deletePasskey(username, id) {
       const result = await accounts.updateOne(
@@ -536,13 +609,20 @@ export async function createMongoAuthStore({
     },
     async saveChallenge({ kind, username, challenge, ttlMs = 5 * 60_000 }) {
       const id = crypto.randomBytes(24).toString('base64url');
-      await challenges.insertOne({ id, kind, username: normalizeUsername(username), challenge, expiresAt: new Date(now() + ttlMs) });
+      await challenges.insertOne({ id: keyedHash(id, key, 'challenge'), kind, username: normalizeUsername(username), challenge, attempts: 0, expiresAt: new Date(now() + ttlMs) });
       return id;
+    },
+    async findChallenge(id, kind) {
+      return challenges.findOne({ id: keyedHash(id, key, 'challenge'), kind, attempts: { $lt: 5 }, expiresAt: { $gt: nowDate(now()) } });
+    },
+    async failChallenge(id, kind) {
+      await challenges.updateOne({ id: keyedHash(id, key, 'challenge'), kind, attempts: { $lt: 5 } }, { $inc: { attempts: 1 } });
     },
     async consumeChallenge(id, kind, username) {
       const value = await challenges.findOneAndDelete({
-        id: String(id || ''),
+        id: keyedHash(id, key, 'challenge'),
         kind,
+        attempts: { $lt: 5 },
         username: normalizeUsername(username),
         expiresAt: { $gt: nowDate(now()) },
       });

@@ -6,7 +6,7 @@ import {
   ViewLoadingFallback,
   ViewModuleBoundary,
 } from './shared.jsx';
-import { LoginScreen } from './Login.jsx';
+import { LoginScreen, NativeChallengeScreen } from './Login.jsx';
 import { Dashboard } from './Dashboard.jsx';
 
 const PublicStatusView = lazy(() => import('./PlatformControlViews.jsx').then((module) => ({ default: module.PublicStatusView })));
@@ -68,6 +68,11 @@ function AuthenticatedApp() {
 }
 
 export default function App() {
+  const [recovering, setRecovering] = useState(() => new URLSearchParams(window.location.hash.slice(1)).has('recover'));
+  if (recovering) return <LoginScreen onAuthenticated={() => setRecovering(false)} />;
+  if (window.location.pathname === '/console' && new URLSearchParams(window.location.search).has('nativeChallenge')) {
+    return <NativeChallengeScreen />;
+  }
   if (window.location.pathname === '/status') {
     return <ViewModuleBoundary><Suspense fallback={<ViewLoadingFallback />}><PublicStatusView /></Suspense></ViewModuleBoundary>;
   }

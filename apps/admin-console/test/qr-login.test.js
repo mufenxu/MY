@@ -78,7 +78,7 @@ test('authenticated Android approval issues a browser-bound central session', as
       body: JSON.stringify({ username: 'operator', password }),
     });
     assert.equal(loginResponse.status, 200);
-    const appCookie = loginResponse.headers.get('set-cookie').split(';', 1)[0];
+    let appCookie = loginResponse.headers.get('set-cookie').split(';', 1)[0];
 
     const scanResponse = await fetch(`${origin}/api/auth/qr/requests/${created.requestId}/scan`, {
       method: 'POST',
@@ -118,6 +118,12 @@ test('authenticated Android approval issues a browser-bound central session', as
     assert.equal((await reused.json()).code, 'QR_LOGIN_NOT_APPROVED');
 
     await authStore.updateAccount('operator', { role: 'super_admin' });
+    const refreshedLogin = await fetch(`${origin}/api/auth/login`, {
+      method: 'POST', headers: consoleHeaders,
+      body: JSON.stringify({ username: 'operator', password }),
+    });
+    assert.equal(refreshedLogin.status, 200);
+    appCookie = refreshedLogin.headers.get('set-cookie').split(';', 1)[0];
     const privilegedCreatedResponse = await fetch(`${origin}/api/auth/qr/requests`, {
       method: 'POST', headers: consoleHeaders, body: '{}',
     });

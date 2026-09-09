@@ -84,14 +84,14 @@ test('production login enforces HTTPS, mandatory MFA enrollment, and host-only s
       headers,
       body: JSON.stringify({ username: 'admin', password }),
     });
-    assert.equal(first.status, 428);
-    const enrollment = (await first.json()).details.enrollment;
+    assert.equal(first.status, 202);
+    const { enrollment, challengeId } = (await first.json()).details;
     assert.match(enrollment.qrDataUrl, /^data:image\/png;base64,/);
 
-    const confirmed = await fetch(`${origin}/api/auth/login`, {
+    const confirmed = await fetch(`${origin}/api/auth/login/complete`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ username: 'admin', password, enrollmentCode: totp(enrollment.secret) }),
+      body: JSON.stringify({ challengeId, enrollmentCode: totp(enrollment.secret) }),
     });
     assert.equal(confirmed.status, 200);
     const session = await confirmed.json();
@@ -114,10 +114,17 @@ test('production login enforces HTTPS, mandatory MFA enrollment, and host-only s
     assert.equal(statusBody.authenticated, true);
     assert.equal(statusBody.mfaRequired, true);
 
-    const androidLogin = await fetch(`${origin}/api/auth/login`, {
+    const androidFirst = await fetch(`${origin}/api/auth/login`, {
       method: 'POST',
       headers: { ...headers, 'User-Agent': 'MY-Control-Android/1.0.0' },
-      body: JSON.stringify({ username: 'admin', password, recoveryCode: session.recoveryCodes[0] }),
+      body: JSON.stringify({ username: 'admin', password }),
+    });
+    assert.equal(androidFirst.status, 202);
+    const androidChallenge = (await androidFirst.json()).details;
+    const androidLogin = await fetch(`${origin}/api/auth/login/complete`, {
+      method: 'POST',
+      headers: { ...headers, 'User-Agent': 'MY-Control-Android/1.0.0' },
+      body: JSON.stringify({ challengeId: androidChallenge.challengeId, recoveryCode: session.recoveryCodes[0] }),
     });
     assert.equal(androidLogin.status, 200);
     const androidSession = await androidLogin.json();
@@ -179,13 +186,13 @@ test('mandatory MFA enrollment does not fail when a legacy short password cannot
       headers,
       body: JSON.stringify({ username: 'admin', password }),
     });
-    assert.equal(first.status, 428);
-    const enrollment = (await first.json()).details.enrollment;
+    assert.equal(first.status, 202);
+    const { enrollment, challengeId } = (await first.json()).details;
 
-    const confirmed = await fetch(`${origin}/api/auth/login`, {
+    const confirmed = await fetch(`${origin}/api/auth/login/complete`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ username: 'admin', password, enrollmentCode: totp(enrollment.secret) }),
+      body: JSON.stringify({ challengeId, enrollmentCode: totp(enrollment.secret) }),
     });
     assert.equal(confirmed.status, 200);
     const session = await confirmed.json();

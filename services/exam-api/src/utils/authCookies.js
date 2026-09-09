@@ -1,5 +1,23 @@
 const crypto = require('crypto');
 const config = require('../config');
+const jwt = require('jsonwebtoken');
+const RevokedAuthToken = require('../models/RevokedAuthToken');
+
+async function isAuthTokenRevoked(token) {
+    return Boolean(await RevokedAuthToken.exists({ _id: crypto.createHash('sha256').update(token).digest('hex') }));
+}
+
+async function revokeAuthToken(token) {
+    if (!token) return;
+    let claims;
+    try { claims = jwt.verify(token, config.jwtSecret); } catch { return; }
+    if (!Number.isFinite(claims.exp)) return;
+    await RevokedAuthToken.updateOne(
+        { _id: crypto.createHash('sha256').update(token).digest('hex') },
+        { $set: { expiresAt: new Date(claims.exp * 1000) } },
+        { upsert: true },
+    );
+}
 
 const ADMIN_AUTH_COOKIE = 'manage_admin_token';
 const CONSOLE_AUTH_COOKIE = 'manage_console_token';
@@ -112,6 +130,8 @@ function clearAuthCookies(res) {
 }
 
 module.exports = {
+    isAuthTokenRevoked,
+    revokeAuthToken,
     ADMIN_AUTH_COOKIE,
     CONSOLE_AUTH_COOKIE,
     CSRF_COOKIE,

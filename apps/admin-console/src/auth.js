@@ -54,9 +54,11 @@ export function parseCookies(header = '') {
     }, {});
 }
 
-export function issueSession({ username, role = 'super_admin', secret, ttlHours, now = Date.now() }) {
+export function issueSession({ username, accountId, authVersion = 0, role = 'super_admin', secret, ttlHours, now = Date.now() }) {
   const payload = encodeJson({
     sub: username,
+    accountId,
+    authVersion,
     role,
     iat: Math.floor(now / 1000),
     exp: Math.floor(now / 1000) + ttlHours * 60 * 60,
@@ -108,6 +110,8 @@ export function createSessionRegistry({
 
   function issue({
     username,
+    accountId,
+    authVersion = 0,
     role = 'super_admin',
     ttlHours,
     idleTimeoutMinutes: sessionIdleTimeoutMinutes = defaultIdleTimeoutMinutes,
@@ -124,7 +128,7 @@ export function createSessionRegistry({
     while (activeSessions.size >= maxSessions) {
       activeSessions.delete(activeSessions.keys().next().value);
     }
-    const token = issueSession({ username, role, secret, ttlHours, now });
+    const token = issueSession({ username, accountId, authVersion, role, secret, ttlHours, now });
     const session = verifySession(token, secret, now);
     const normalizedKind = String(sessionKind || 'browser').slice(0, 32);
     const normalizedParentNonce = String(parentSessionNonce || '').slice(0, 160);
@@ -164,6 +168,7 @@ export function createSessionRegistry({
     const session = verifySession(token, secret, now);
     const active = session ? activeSessions.get(session.nonce) : null;
     if (!active || active.exp !== session.exp || active.sub !== session.sub) return null;
+    if (active.parentSessionNonce && !isActive({ nonce: active.parentSessionNonce, subject: active.sub, now })) return null;
     const idleTimeoutMs = sessionIdleTimeoutMs(active);
     if (active.lastSeenAt + idleTimeoutMs <= now) {
       activeSessions.delete(session.nonce);
@@ -195,17 +200,26 @@ export function createSessionRegistry({
   function revoke(token, now = Date.now()) {
     const session = verifySession(token, secret, now);
     if (!session) return false;
-    return activeSessions.delete(session.nonce);
+    return revokeByNonce(session.nonce);
   }
 
-  function revokeByNonce(nonce) {
-    return activeSessions.delete(String(nonce || ''));
+  function revokeByNonce(nonce, { subject } = {}) {
+    const target = activeSessions.get(String(nonce || ''));
+    if (!target || (subject && target.sub !== subject)) return false;
+    activeSessions.delete(target.nonce);
+    for (const [childNonce, session] of activeSessions) {
+      if (session.parentSessionNonce === target.nonce && session.sub === target.sub) activeSessions.delete(childNonce);
+    }
+    return true;
   }
 
-  function revokeBySubject(subject) {
+  function revokeBySubject(subject, { exceptNonce } = {}) {
     let revoked = 0;
+    const retained = activeSessions.get(exceptNonce);
+    // Keeping this browser must not depend on another device that is about to be revoked.
+    if (retained?.sub === subject) retained.parentSessionNonce = '';
     for (const [nonce, session] of activeSessions) {
-      if (session.sub === subject && activeSessions.delete(nonce)) revoked += 1;
+      if (session.sub === subject && nonce !== exceptNonce && activeSessions.delete(nonce)) revoked += 1;
     }
     return revoked;
   }

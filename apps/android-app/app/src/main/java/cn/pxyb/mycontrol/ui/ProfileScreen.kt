@@ -89,6 +89,7 @@ fun ProfileScreen(
     state: ProfileUiState,
     contentPadding: PaddingValues,
     onRevokeSession: (String) -> Unit,
+    onRevokeOtherSessions: () -> Unit,
     onOpenQrLogin: () -> Unit,
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
@@ -325,6 +326,8 @@ fun ProfileScreen(
                                     )
                                     if (showSessions) {
                                         ProfileDivider()
+                                        AppSecondaryButton(text = "退出我的其他设备", onClick = onRevokeOtherSessions,
+                                            enabled = state.busyAction != "session", modifier = Modifier.fillMaxWidth().padding(12.dp))
                                         when {
                                             security == null -> LoadingBlock("正在同步登录设备")
                                             visibleSessions.isNullOrEmpty() -> Text(
@@ -882,6 +885,8 @@ fun ProfileScreen(
                             )
                             if (showSessions) {
                                 ProfileDivider()
+                                AppSecondaryButton(text = "退出我的其他设备", onClick = onRevokeOtherSessions,
+                                    enabled = state.busyAction != "session", modifier = Modifier.fillMaxWidth().padding(12.dp))
                                 when {
                                     security == null -> LoadingBlock("正在同步登录设备")
                                     visibleSessions.isNullOrEmpty() -> Text(
@@ -2005,13 +2010,11 @@ private fun SessionRow(session: SecuritySession, busy: Boolean, onRevoke: () -> 
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (!session.current) {
-            AppInlineDangerButton(
-                text = "撤销",
+        AppInlineDangerButton(
+                text = if (session.current) "退出" else "撤销",
                 onClick = onRevoke,
                 enabled = !busy,
             )
-        }
     }
 }
 

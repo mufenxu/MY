@@ -13,20 +13,44 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
     suspend fun login(
         username: String,
         password: String,
-        totp: String = "",
-        recoveryCode: String = "",
+        challengeToken: String = "",
         deviceName: String = "",
-    ): LoginResult = withContext(Dispatchers.IO) {
+    ): PasswordLoginResponse = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("username", username.trim())
             .put("password", password)
-        if (totp.isNotBlank()) body.put("totp", totp.trim())
-        if (recoveryCode.isNotBlank()) body.put("recoveryCode", recoveryCode.trim())
+        if (challengeToken.isNotBlank()) body.put("challengeToken", challengeToken)
         if (deviceName.isNotBlank()) body.put("deviceName", deviceName)
 
         val response = http.execute("/api/auth/login", "POST", body, authenticated = false)
+        if (response.json.optString("code") in setOf("SECOND_FACTOR_REQUIRED", "MFA_ENROLLMENT_REQUIRED")) {
+            val details = response.json.getJSONObject("details")
+            return@withContext LoginChallenge(
+                challengeId = details.getString("challengeId"),
+                expiresAt = details.getString("expiresAt"),
+                recoveryCodeAllowed = details.optBoolean("recoveryCodeAllowed"),
+                enrollment = details.optJSONObject("enrollment")?.let {
+                    TotpEnrollment(it.optString("secret"), it.optString("uri"), it.nullableString("qrDataUrl"), it.nullableString("expiresAt"))
+                },
+            )
+        }
         val user = response.json.optJSONObject("user").toPlatformUser()
         response.toLoginResult(user, response.json.optJSONArray("recoveryCodes").toStringList())
+    }
+
+    suspend fun completeLogin(challenge: LoginChallenge, factor: String, recovery: Boolean, deviceName: String): LoginResult = withContext(Dispatchers.IO) {
+        val field = if (challenge.enrollment != null) "enrollmentCode" else if (recovery) "recoveryCode" else "totp"
+        val response = http.execute(
+            "/api/auth/login/complete", "POST",
+            JSONObject().put("challengeId", challenge.challengeId).put(field, factor.trim()).put("deviceName", deviceName),
+            authenticated = false,
+        )
+        response.toLoginResult(response.json.optJSONObject("user").toPlatformUser(), response.json.optJSONArray("recoveryCodes").toStringList())
+    }
+
+    suspend fun recoverAccount(recoveryToken: String, newPassword: String): String = withContext(Dispatchers.IO) {
+        http.execute("/api/auth/recovery", "POST", JSONObject().put("recoveryToken", recoveryToken.trim()).put("newPassword", newPassword), authenticated = false)
+            .json.getString("username")
     }
 
     suspend fun loginCapabilities(): LoginCapabilities = withContext(Dispatchers.IO) {
@@ -34,12 +58,12 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
         LoginCapabilities(androidPasskeySupported = json.optBoolean("androidPasskeySupported"))
     }
 
-    suspend fun beginPasskeyLogin(username: String): PasskeyChallenge = withContext(Dispatchers.IO) {
+    suspend fun beginPasskeyLogin(username: String, challengeToken: String = ""): PasskeyChallenge = withContext(Dispatchers.IO) {
         val normalizedUsername = username.trim()
         val json = http.execute(
             "/api/auth/passkey/options",
             "POST",
-            JSONObject().put("username", normalizedUsername),
+            JSONObject().put("username", normalizedUsername).put("challengeToken", challengeToken),
             authenticated = false,
         ).json
         PasskeyChallenge(
@@ -273,9 +297,23 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
         )
     }
 
-    suspend fun revokeSession(nonce: String): Unit = withContext(Dispatchers.IO) {
-        http.execute("/api/security/sessions/${encodePath(nonce)}", "DELETE", JSONObject())
+    suspend fun revokeSession(nonce: String): Boolean = withContext(Dispatchers.IO) {
+        http.execute("/api/security/sessions/${encodePath(nonce)}", "DELETE", JSONObject()).json.optBoolean("current")
+    }
+
+    suspend fun revokeOtherSessions(): Unit = withContext(Dispatchers.IO) {
+        http.execute("/api/security/sessions", "DELETE", JSONObject())
         Unit
+    }
+
+    suspend fun beginPasskeyReauthentication(): PasskeyRegistrationChallenge = withContext(Dispatchers.IO) {
+        val json = http.execute("/api/auth/reauth/passkey/options", "POST", JSONObject()).json
+        PasskeyRegistrationChallenge(json.getString("challengeId"), json.getJSONObject("options").toString())
+    }
+
+    suspend fun completePasskeyReauthentication(challengeId: String, responseJson: String): Long = withContext(Dispatchers.IO) {
+        val json = http.execute("/api/auth/reauth/passkey/verify", "POST", JSONObject().put("challengeId", challengeId).put("response", JSONObject(responseJson))).json
+        Instant.parse(json.getString("expiresAt")).toEpochMilli()
     }
 
     suspend fun changePassword(password: String, newPassword: String, totp: String = ""): Boolean =
@@ -408,6 +446,7 @@ private fun JSONObject?.toPlatformUser(): PlatformUser {
         role = json.optString("role", "viewer"),
         totpEnabled = json.optBoolean("totpEnabled"),
         passkeyCount = json.optInt("passkeyCount"),
+        id = json.optString("id"),
     )
 }
 

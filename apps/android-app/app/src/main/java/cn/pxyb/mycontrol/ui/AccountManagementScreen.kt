@@ -58,6 +58,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.data.PlatformPasskey
+import cn.pxyb.mycontrol.data.TotpEnrollment
+import cn.pxyb.mycontrol.ui.components.input.AppTextField
+import kotlinx.coroutines.delay
 
 @Composable
 fun AccountManagementScreen(
@@ -75,6 +78,7 @@ fun AccountManagementScreen(
     onRegisterPasskey: (name: String, password: String, totp: String, requestCredential: suspend (String) -> String) -> Unit,
     onDeletePasskey: (id: String, password: String, totp: String) -> Unit,
     onRegisterPasskeyRequest: suspend (String) -> String,
+    onReauthenticatePasskey: () -> Unit,
     onSetAppLockEnabled: (Boolean) -> Unit,
 ) {
     // 支持按键与滑动手势返回上一级
@@ -85,6 +89,13 @@ fun AccountManagementScreen(
     val totpEnabled = security?.totpEnabled == true || user.totpEnabled
     val passkeyCount = security?.passkeyCount ?: user.passkeyCount
     val recoveryCodesRemaining = security?.recoveryCodesRemaining
+    var reauthenticated by remember(state.reauthenticatedUntil) { mutableStateOf(state.reauthenticatedUntil > System.currentTimeMillis()) }
+    LaunchedEffect(state.reauthenticatedUntil) {
+        if (reauthenticated) {
+            delay((state.reauthenticatedUntil - System.currentTimeMillis()).coerceAtLeast(0))
+            reauthenticated = false
+        }
+    }
 
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var showTotpSetupDialog by remember { mutableStateOf(false) }
@@ -119,6 +130,16 @@ fun AccountManagementScreen(
         }
         state.sectionError?.let { message ->
             item(key = "section-error") { FeedbackBanner("安全数据暂不可用：$message", error = true) }
+        }
+        if (passkeyCount > 0 && state.androidPasskeySupported) {
+            item(key = "passkey-reauthentication") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AppSecondaryButton(text = "使用 Passkey 确认身份", icon = Icons.Outlined.Fingerprint,
+                        onClick = onReauthenticatePasskey, enabled = state.busyAction == null, modifier = Modifier.fillMaxWidth())
+                    if (reauthenticated) Text("身份已确认，五分钟内的账号安全操作无需再次输入密码。")
+                    state.actionErrors["passkey-reauth"]?.let { FeedbackBanner(it, error = true, onRetry = onReauthenticatePasskey) }
+                }
+            }
         }
 
         if (isTablet) {
@@ -460,6 +481,7 @@ fun AccountManagementScreen(
     if (showChangePasswordDialog) {
         ChangePasswordDialog(
             state = state,
+            reauthenticated = reauthenticated,
             totpEnabled = totpEnabled,
             onDismiss = { showChangePasswordDialog = false },
             onSubmit = { old, new, totp ->
@@ -473,6 +495,7 @@ fun AccountManagementScreen(
     if (showTotpSetupDialog) {
         TotpSetupDialog(
             state = state,
+            reauthenticated = reauthenticated,
             onDismiss = {
                 onClearTotpFlow()
                 showTotpSetupDialog = false
@@ -486,6 +509,7 @@ fun AccountManagementScreen(
     if (showTotpManageDialog) {
         TotpManageDialog(
             state = state,
+            reauthenticated = reauthenticated,
             onDismiss = { showTotpManageDialog = false },
             onRegenerate = { password, totp -> onRegenerateRecoveryCodes(password, totp) },
             onDisable = { password, totp -> onDisableTotp(password, totp) },
@@ -524,6 +548,7 @@ fun AccountManagementScreen(
     if (showPasskeyRegisterDialog) {
         PasskeyRegisterDialog(
             state = state,
+            reauthenticated = reauthenticated,
             totpEnabled = totpEnabled,
             onDismiss = { showPasskeyRegisterDialog = false },
             onRegister = { name, password, totp ->
@@ -537,6 +562,7 @@ fun AccountManagementScreen(
     passkeyToDelete?.let { passkey ->
         DeletePasskeyDialog(
             state = state,
+            reauthenticated = reauthenticated,
             passkey = passkey,
             totpEnabled = totpEnabled,
             onDismiss = { passkeyToDelete = null },
@@ -549,6 +575,7 @@ fun AccountManagementScreen(
 @Composable
 private fun ChangePasswordDialog(
     state: AccountManagementUiState,
+    reauthenticated: Boolean,
     totpEnabled: Boolean,
     onDismiss: () -> Unit,
     onSubmit: (oldPassword: String, newPassword: String, totp: String) -> Unit,
@@ -576,7 +603,7 @@ private fun ChangePasswordDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                DialogTextField(
+                if (!reauthenticated) DialogTextField(
                     value = oldPassword,
                     onValueChange = { oldPassword = it; localError = null },
                     label = "当前原密码",
@@ -598,7 +625,7 @@ private fun ChangePasswordDialog(
                     enabled = !busy,
                 )
                 if (totpEnabled) {
-                    DialogTextField(
+                    if (!reauthenticated) DialogTextField(
                         value = totp,
                         onValueChange = { totp = it.filter(Char::isDigit).take(6); localError = null },
                         label = "6 位动态验证码",
@@ -625,7 +652,7 @@ private fun ChangePasswordDialog(
                                 localError = "新密码长度需要在 15 到 256 个字符之间。"
                             newPassword != confirmPassword -> localError = "两次输入的新密码不一致。"
                             newPassword == oldPassword -> localError = "新密码不能与当前密码相同。"
-                            totpEnabled && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
+                            !reauthenticated && totpEnabled && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
                             else -> {
                                 submittedAt = state.actionCompletions["password"] ?: 0
                                 onSubmit(oldPassword, newPassword, totp)
@@ -644,6 +671,7 @@ private fun ChangePasswordDialog(
 @Composable
 private fun TotpSetupDialog(
     state: AccountManagementUiState,
+    reauthenticated: Boolean,
     onDismiss: () -> Unit,
     onBegin: (password: String) -> Unit,
     onConfirm: (code: String) -> Unit,
@@ -670,7 +698,7 @@ private fun TotpSetupDialog(
             else -> "开启动态验证"
         },
         subtitle = when (step) {
-            "reauth" -> "开启后登录需要输入动态验证码。请先验证当前密码以继续。"
+            "reauth" -> if (reauthenticated) "身份已确认，可以继续设置动态验证。" else "开启后登录需要输入动态验证码。请验证当前密码，或返回使用 Passkey 确认身份。"
             "qr" -> "使用 Auth 验证器等应用扫描，或手动输入密钥。"
             else -> "以下恢复码仅显示这一次，请立即妥善保存。"
         },
@@ -682,7 +710,7 @@ private fun TotpSetupDialog(
             ) {
                 when (step) {
                     "reauth" -> {
-                        DialogTextField(
+                        if (!reauthenticated) DialogTextField(
                             value = password,
                             onValueChange = { password = it; localError = null },
                             label = "当前密码",
@@ -771,7 +799,7 @@ private fun TotpSetupDialog(
                     AppDialogPrimaryButton(
                         text = "下一步",
                         onClick = {
-                            if (password.isBlank()) {
+                            if (!reauthenticated && password.isBlank()) {
                                 localError = "请输入当前密码。"
                             } else {
                                 attemptedAction = "totp-enroll"
@@ -818,6 +846,7 @@ private fun TotpSetupDialog(
 @Composable
 private fun TotpManageDialog(
     state: AccountManagementUiState,
+    reauthenticated: Boolean,
     onDismiss: () -> Unit,
     onRegenerate: (password: String, totp: String) -> Unit,
     onDisable: (password: String, totp: String) -> Unit,
@@ -840,20 +869,20 @@ private fun TotpManageDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         icon = Icons.Outlined.Shield,
         title = "动态验证管理",
-        subtitle = "敏感操作需要验证当前密码与 6 位动态验证码。",
+        subtitle = if (reauthenticated) "身份已确认，可以执行以下操作。" else "请输入当前密码与动态验证码，或返回使用 Passkey 确认身份。",
         content = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                DialogTextField(
+                if (!reauthenticated) DialogTextField(
                     value = password,
                     onValueChange = { password = it; localError = null },
                     label = "当前密码",
                     isPassword = true,
                     enabled = !busy,
                 )
-                DialogTextField(
+                if (!reauthenticated) DialogTextField(
                     value = totp,
                     onValueChange = { totp = it.filter(Char::isDigit).take(6); localError = null },
                     label = "6 位动态验证码",
@@ -869,8 +898,8 @@ private fun TotpManageDialog(
                     text = "重新生成恢复码",
                     onClick = {
                         when {
-                            password.isBlank() -> localError = "请输入当前密码。"
-                            totp.length != 6 -> localError = "请输入 6 位动态验证码。"
+                            !reauthenticated && password.isBlank() -> localError = "请输入当前密码。"
+                            !reauthenticated && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
                             else -> {
                                 pendingAction = "recovery"
                                 pendingCompletion = state.actionCompletions["recovery-codes"] ?: 0
@@ -886,8 +915,8 @@ private fun TotpManageDialog(
                     text = "关闭动态验证",
                     onClick = {
                         when {
-                            password.isBlank() -> localError = "请输入当前密码。"
-                            totp.length != 6 -> localError = "请输入 6 位动态验证码。"
+                            !reauthenticated && password.isBlank() -> localError = "请输入当前密码。"
+                            !reauthenticated && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
                             else -> {
                                 pendingAction = "disable"
                                 onDisable(password, totp)
@@ -904,12 +933,13 @@ private fun TotpManageDialog(
 }
 
 @Composable
-private fun RecoveryCodesDialog(
+internal fun RecoveryCodesDialog(
     codes: List<String>,
     onDismiss: () -> Unit,
+    requireAcknowledgement: Boolean = false,
 ) {
     AppDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!requireAcknowledgement) onDismiss() },
         icon = Icons.Outlined.VpnKey,
         title = "新恢复码（仅显示一次）",
         subtitle = "旧恢复码已全部失效。请立即妥善保存，每行一个。",
@@ -1038,6 +1068,7 @@ private fun PasskeyListDialog(
 @Composable
 private fun PasskeyRegisterDialog(
     state: AccountManagementUiState,
+    reauthenticated: Boolean,
     totpEnabled: Boolean,
     onDismiss: () -> Unit,
     onRegister: (name: String, password: String, totp: String) -> Unit,
@@ -1058,7 +1089,7 @@ private fun PasskeyRegisterDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         icon = Icons.Outlined.Fingerprint,
         title = "绑定新 Passkey",
-        subtitle = "将调用系统凭据管理器创建生物识别密钥，请先验证当前密码${if (totpEnabled) "与 6 位动态验证码" else ""}。",
+        subtitle = if (reauthenticated) "身份已确认，将使用系统凭据管理器创建 Passkey。" else "将调用系统凭据管理器创建生物识别密钥，请先验证当前密码${if (totpEnabled) "与 6 位动态验证码" else ""}。",
         content = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -1070,7 +1101,7 @@ private fun PasskeyRegisterDialog(
                     label = "名称（可选）",
                     enabled = !busy,
                 )
-                DialogTextField(
+                if (!reauthenticated) DialogTextField(
                     value = password,
                     onValueChange = { password = it; localError = null },
                     label = "当前密码",
@@ -1078,7 +1109,7 @@ private fun PasskeyRegisterDialog(
                     enabled = !busy,
                 )
                 if (totpEnabled) {
-                    DialogTextField(
+                    if (!reauthenticated) DialogTextField(
                         value = totp,
                         onValueChange = { totp = it.filter(Char::isDigit).take(6); localError = null },
                         label = "6 位动态验证码",
@@ -1101,8 +1132,8 @@ private fun PasskeyRegisterDialog(
                     text = "开始绑定",
                     onClick = {
                         when {
-                            password.isBlank() -> localError = "请输入当前密码。"
-                            totpEnabled && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
+                            !reauthenticated && password.isBlank() -> localError = "请输入当前密码。"
+                            !reauthenticated && totpEnabled && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
                             else -> {
                                 submittedAt = state.actionCompletions["passkey-register"] ?: 0
                                 onRegister(name.trim().ifBlank { "Passkey" }, password, totp)
@@ -1121,6 +1152,7 @@ private fun PasskeyRegisterDialog(
 @Composable
 private fun DeletePasskeyDialog(
     state: AccountManagementUiState,
+    reauthenticated: Boolean,
     passkey: PlatformPasskey,
     totpEnabled: Boolean,
     onDismiss: () -> Unit,
@@ -1149,7 +1181,7 @@ private fun DeletePasskeyDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                DialogTextField(
+                if (!reauthenticated) DialogTextField(
                     value = password,
                     onValueChange = { password = it; localError = null },
                     label = "当前密码",
@@ -1157,7 +1189,7 @@ private fun DeletePasskeyDialog(
                     enabled = !busy,
                 )
                 if (totpEnabled) {
-                    DialogTextField(
+                    if (!reauthenticated) DialogTextField(
                         value = totp,
                         onValueChange = { totp = it.filter(Char::isDigit).take(6); localError = null },
                         label = "6 位动态验证码",
@@ -1180,8 +1212,8 @@ private fun DeletePasskeyDialog(
                     text = "确认删除",
                     onClick = {
                         when {
-                            password.isBlank() -> localError = "请输入当前密码。"
-                            totpEnabled && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
+                            !reauthenticated && password.isBlank() -> localError = "请输入当前密码。"
+                            !reauthenticated && totpEnabled && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
                             else -> {
                                 submittedAt = state.actionCompletions["passkey-delete"] ?: 0
                                 onDelete(password, totp)
@@ -1207,6 +1239,51 @@ private fun DialogError(text: String?) {
             modifier = Modifier.fillMaxWidth(),
         )
     }
+}
+
+@Composable
+internal fun LoginTotpEnrollment(enrollment: TotpEnrollment) {
+    val qr = remember(enrollment.qrDataUrl) { QrUtils.decodeDataUrlToBitmap(enrollment.qrDataUrl) }
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("将此密钥添加到身份验证器，再输入下方的六位动态验证码。")
+        if (qr != null) Image(bitmap = qr, contentDescription = "动态验证绑定二维码", modifier = Modifier.size(180.dp).align(Alignment.CenterHorizontally))
+        SelectionContainer { Text(enrollment.secret, fontFamily = FontFamily.Monospace) }
+    }
+}
+
+@Composable
+internal fun AccountRecoveryDialog(state: AppEntryUiState, onDismiss: () -> Unit, onRecover: (String, String) -> Unit) {
+    var recoveryToken by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf("") }
+    var submitted by remember { mutableStateOf(false) }
+    LaunchedEffect(state.loginBusy, state.error, state.message) {
+        if (submitted && !state.loginBusy && state.error == null && state.message != null) onDismiss()
+    }
+    AppDialog(
+        title = "恢复平台账号",
+        subtitle = "输入管理员签发的恢复凭据。恢复后将退出所有设备，并清除原有 Passkey 和动态验证设置。",
+        onDismissRequest = { if (!state.loginBusy) onDismiss() },
+        content = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppTextField(value = recoveryToken, onValueChange = { value ->
+                    val fragment = runCatching { android.net.Uri.parse(value.trim()).encodedFragment }.getOrNull()
+                    recoveryToken = if (fragment != null) android.net.Uri.Builder().scheme("https").authority("recovery").encodedQuery(fragment).build().getQueryParameter("recover") ?: value else value
+                }, label = "一次性恢复凭据或恢复链接", isPassword = true, enabled = !state.loginBusy)
+                AppTextField(value = newPassword, onValueChange = { newPassword = it.take(256) }, label = "新密码（15–256 位）", isPassword = true, enabled = !state.loginBusy)
+                AppTextField(value = confirmation, onValueChange = { confirmation = it.take(256) }, label = "再次输入新密码", isPassword = true, enabled = !state.loginBusy)
+                if (submitted) state.error?.let { FeedbackBanner(it, error = true) }
+            }
+        },
+        footer = {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppDialogSecondaryButton(text = "取消", onClick = onDismiss, enabled = !state.loginBusy, modifier = Modifier.weight(1f))
+                AppDialogPrimaryButton(text = "恢复账号", onClick = { submitted = true; onRecover(recoveryToken, newPassword) },
+                    enabled = !state.loginBusy && recoveryToken.isNotBlank() && newPassword.length in 15..256 && newPassword == confirmation,
+                    busy = state.loginBusy, modifier = Modifier.weight(1f))
+            }
+        },
+    )
 }
 
 @Composable

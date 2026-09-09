@@ -271,6 +271,7 @@ export function createApp({
   const accounts = authStore || createMemoryAuthStore({
     encryptionKey: fallbackEncryptionKey,
     issuer: config.webauthnRpName || 'MY Platform',
+    legacyBindings: config.legacyServiceBindings,
     bootstrap: {
       username: config.adminUsername || 'local-admin',
       passwordHash: config.adminPasswordHash || 'development-only',
@@ -393,7 +394,7 @@ export function createApp({
   }
 
   async function readSession(req) {
-    return sessions.verify(readSessionToken(req));
+    return app.locals.verifyConsoleSession(readSessionToken(req));
   }
 
   async function readExternalPrincipal(req) {
@@ -494,9 +495,10 @@ export function createApp({
 
   async function verifyReauthentication(req) {
     if (config.authDisabled) return true;
+    if (req.consoleSession?.reauthenticatedUntil > Math.floor(Date.now() / 1000)) return true;
     const account = await accounts.findAccount(req.consoleUser?.username);
     if (!account?.active || !await verifyPassword(String(req.body?.password || ''), account.passwordHash)) return false;
-    if (!account.totpEnabled) return true;
+    if (!account.totpEnabled) return !config.requireMfa || !account.passkeyCount;
     return (await accounts.consumeSecondFactor(account.username, {
       totp: req.body?.totp,
       recoveryCode: req.body?.recoveryCode,
@@ -504,7 +506,10 @@ export function createApp({
   }
 
   async function confirmSensitiveAuthentication(req, res, action) {
+    const riskState = await risk.assess({ username: req.consoleUser?.username, ip: req.ip });
+    if (riskState.blocked) { sendRiskResponse(res, riskState); return false; }
     if (await verifyReauthentication(req)) return true;
+    await risk.recordFailure({ username: req.consoleUser?.username, ip: req.ip });
     await recordAudit(req, {
       action,
       outcome: 'failure',
@@ -518,6 +523,7 @@ export function createApp({
 
   function authUser(account) {
     return {
+      id: account.id,
       username: account.username,
       role: account.role,
       totpEnabled: Boolean(account.totpEnabled),
@@ -572,6 +578,8 @@ export function createApp({
     const now = Date.now();
     const token = await sessions.issue({
       username: account.username,
+      accountId: account.id,
+      authVersion: account.authVersion || 0,
       role: account.role,
       ttlHours: policy.ttlHours,
       idleTimeoutMinutes: policy.idleMinutes,
@@ -584,6 +592,7 @@ export function createApp({
       replaceExisting: options.replaceExisting ?? (sessionKind === 'native_app' && Boolean(deviceId)),
       now,
     });
+    await app.locals.onConsoleSessionsChanged();
     res.cookie(sessionCookieName(config.isProduction), token, sessionCookieOptions(config, policy.ttlHours));
     if (config.isProduction) {
       res.clearCookie(SESSION_COOKIE_NAME, { ...sessionCookieOptions(config), maxAge: 0 });
@@ -648,11 +657,20 @@ export function createApp({
     if (!session) return null;
     const account = await accounts.findAccount(session.sub);
     if (!account?.active || (config.requireMfa && !strongFactorEnabled(account))) return null;
-    return { ...session, role: account.role };
+    if ((session.accountId && session.accountId !== account.id) || (session.authVersion || 0) !== (account.authVersion || 0)) return null;
+    return { ...session, role: account.role, accountId: account.id, serviceBindings: account.serviceBindings };
   };
   app.locals.onConsoleSessionRevoked = () => {};
   app.locals.onConsoleSessionChanged = () => {};
   app.locals.onConsoleSessionsChanged = () => {};
+  app.locals.revokeConsoleSessions = async ({ subject, nonce, exceptNonce }) => {
+    const revoked = nonce
+      ? await sessions.revokeByNonce(nonce, { subject })
+      : await sessions.revokeBySubject(subject, { exceptNonce });
+    await webLoginTickets.revokeForSessions({ subject, nonce, exceptNonce });
+    await app.locals.onConsoleSessionsChanged();
+    return revoked;
+  };
   app.locals.recordProxyMetric = (metric) => {
     metrics.recordProxy(metric);
     operations.recordProxyMetric(metric).catch(() => {});
@@ -951,6 +969,7 @@ export function createApp({
       passkeySupported: true,
       androidPasskeySupported: (config.androidAppCertFingerprints || []).length > 0,
       botProtectionConfigured: Boolean(config.turnstileSiteKey && config.turnstileSecretKey),
+      turnstileSiteKey: config.turnstileSiteKey || undefined,
       user: session && account?.active && mfaCompliant ? authUser(account) : null,
     });
   });
@@ -1022,64 +1041,72 @@ export function createApp({
     if (!account?.active || !passwordValid) {
       return sendRiskResponse(res, await recordLoginFailure(req, username, 'invalid_credentials'));
     }
-    if (config.requireMfa && !account.totpEnabled) {
-      if (account.passkeyCount > 0) {
-        return res.status(401).json({
-          error: '该账号必须使用 Passkey 登录。',
-          code: 'PASSKEY_REQUIRED',
-        });
-      }
-      if (!req.body?.enrollmentCode) {
-        const enrollment = await accounts.beginTotpEnrollment(username);
-        await recordAudit(req, {
-          actor: username,
-          action: 'security.totp_enrollment_started',
-          targetType: 'account',
-          targetId: username,
-          details: { requiredByPolicy: true },
-        });
-        return res.status(428).json({
-          error: '首次登录需要绑定动态验证。',
-          code: 'MFA_ENROLLMENT_REQUIRED',
-          details: { enrollment },
-        });
-      }
-      const enrollment = await accounts.confirmTotpEnrollment(username, req.body.enrollmentCode);
-      if (!enrollment) {
-        return sendRiskResponse(res, await recordLoginFailure(req, username, 'invalid_mfa_enrollment'));
-      }
-      await recordAudit(req, {
-        actor: username,
-        action: 'security.totp_enabled',
-        targetType: 'account',
-        targetId: username,
-        details: { requiredByPolicy: true },
-      });
-      await upgradePasswordHashAfterLogin(username, account.passwordHash, password);
-      return issueAuthenticatedSession(
-        req,
-        res,
-        { ...account, totpEnabled: true, recoveryCodesRemaining: enrollment.recoveryCodes.length },
-        'password_totp_enrollment',
-        { recoveryCodes: enrollment.recoveryCodes },
-      );
-    }
-    if (account.totpEnabled && !req.body?.totp && !req.body?.recoveryCode) {
-      return res.status(401).json({
-        error: '请输入动态验证码或恢复码。',
-        code: 'SECOND_FACTOR_REQUIRED',
-        details: { totpRequired: true, recoveryCodeAllowed: account.recoveryCodesRemaining > 0 },
-      });
-    }
-    const secondFactor = await accounts.consumeSecondFactor(username, {
-      totp: req.body?.totp,
-      recoveryCode: req.body?.recoveryCode,
-    });
-    if (!secondFactor.valid) {
-      return sendRiskResponse(res, await recordLoginFailure(req, username, 'invalid_second_factor'));
+    if (config.requireMfa && !account.totpEnabled && account.passkeyCount > 0) {
+      return res.status(401).json({ error: '该账号必须使用 Passkey 登录。', code: 'PASSKEY_REQUIRED' });
     }
     await upgradePasswordHashAfterLogin(username, account.passwordHash, password);
-    return issueAuthenticatedSession(req, res, account, secondFactor.method === 'none' ? 'password' : `password_${secondFactor.method}`);
+    if (!account.totpEnabled && !config.requireMfa) return issueAuthenticatedSession(req, res, account, 'password');
+
+    const enrollment = account.totpEnabled ? null : await accounts.beginTotpEnrollment(username);
+    const challengeId = await accounts.saveChallenge({
+      kind: 'password_login', username,
+      challenge: {
+        accountId: account.id, authVersion: account.authVersion || 0,
+        step: enrollment ? 'enrollment' : 'totp',
+        enrollmentId: enrollment?.id,
+        deviceId: requestDeviceId(req), android: isAndroidAppRequest(req),
+      },
+    });
+    if (enrollment) await recordAudit(req, { actor: username, action: 'security.totp_enrollment_started', targetType: 'account', targetId: username });
+    return res.status(202).json({
+      authenticated: false,
+      code: enrollment ? 'MFA_ENROLLMENT_REQUIRED' : 'SECOND_FACTOR_REQUIRED',
+      details: {
+        challengeId, expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+        totpRequired: true, recoveryCodeAllowed: account.recoveryCodesRemaining > 0,
+        ...(enrollment ? { enrollment } : {}),
+      },
+    });
+  });
+
+  app.post('/api/auth/login/complete', loginLimiter, requireConsoleRequest, async (req, res) => {
+    const invalidChallenge = () => res.status(401).json({ error: '登录验证已过期或失效，请重新输入账号密码。', code: 'LOGIN_CHALLENGE_INVALID' });
+    const pending = await accounts.findChallenge(req.body?.challengeId, 'password_login');
+    if (!pending) return invalidChallenge();
+    const { username, challenge } = pending;
+    const account = await accounts.findAccount(username);
+    if (!account?.active || account.id !== challenge.accountId || (account.authVersion || 0) !== challenge.authVersion
+      || challenge.android !== isAndroidAppRequest(req) || challenge.deviceId !== requestDeviceId(req)) return invalidChallenge();
+    const riskState = await risk.assess({ username, ip: req.ip });
+    if (riskState.blocked) return sendRiskResponse(res, riskState);
+    const factor = challenge.step === 'enrollment'
+      ? await accounts.confirmTotpEnrollment(username, req.body?.enrollmentCode, { enrollmentId: challenge.enrollmentId, authVersion: challenge.authVersion })
+      : await accounts.consumeSecondFactor(username, { totp: req.body?.totp, recoveryCode: req.body?.recoveryCode });
+    if (!factor || (challenge.step !== 'enrollment' && (!account.totpEnabled || !factor.valid))) {
+      await accounts.failChallenge(req.body?.challengeId, 'password_login');
+      return sendRiskResponse(res, await recordLoginFailure(req, username, 'invalid_second_factor'));
+    }
+    if (!await accounts.consumeChallenge(req.body?.challengeId, 'password_login', username)) return invalidChallenge();
+    const current = await accounts.findAccount(username);
+    if (!current?.active || current.id !== challenge.accountId || (current.authVersion || 0) !== challenge.authVersion) return invalidChallenge();
+    if (challenge.step === 'enrollment') await recordAudit(req, { actor: username, action: 'security.totp_enabled', targetType: 'account', targetId: username });
+    return issueAuthenticatedSession(req, res, current, challenge.step === 'enrollment' ? 'password_totp_enrollment' : `password_${factor.method}`, factor.recoveryCodes ? { recoveryCodes: factor.recoveryCodes } : {});
+  });
+
+  app.post('/api/auth/recovery', loginLimiter, requireConsoleRequest, async (req, res) => {
+    const pending = await accounts.findChallenge(req.body?.recoveryToken, 'account_recovery');
+    const account = pending ? await accounts.findAccount(pending.username) : null;
+    const invalid = () => res.status(400).json({ error: '账号恢复凭据无效或已过期。', code: 'ACCOUNT_RECOVERY_INVALID' });
+    if (!account?.active || account.id !== pending.challenge.accountId || (account.authVersion || 0) !== pending.challenge.authVersion) return invalid();
+    const newPassword = String(req.body?.newPassword || '');
+    if (newPassword.length < 15 || newPassword.length > 256) return res.status(400).json({ error: '新密码长度需要在 15 到 256 个字符之间。', code: 'INVALID_PASSWORD' });
+    const passwordHash = await createPasswordHash(newPassword);
+    if (!await accounts.consumeChallenge(req.body.recoveryToken, 'account_recovery', account.username)) return invalid();
+    if (!await accounts.resetCredentials(account.username, pending.challenge.authVersion, passwordHash)) return invalid();
+    await app.locals.revokeConsoleSessions({ subject: account.username });
+    await risk.recordSuccess({ username: account.username, ip: req.ip });
+    await recordAudit(req, { actor: account.username, action: 'security.account_recovered', targetType: 'account', targetId: account.username });
+    return res.json({ recovered: true, username: account.username, mfaEnrollmentRequired: Boolean(config.requireMfa) });
   });
 
   app.post('/api/auth/passkey/options', loginLimiter, requireConsoleRequest, async (req, res) => {
@@ -1118,7 +1145,7 @@ export function createApp({
       const verification = await passkeys.verifyAuthentication(requestedUsername, req.body);
       const username = verification.username || requestedUsername;
       const account = verification.verified ? await accounts.findAccount(username) : null;
-      if (!verification.verified || !account?.active) {
+      if (!verification.verified || !account?.active || verification.accountId !== account.id || verification.authVersion !== (account.authVersion || 0)) {
         return sendRiskResponse(res, await recordLoginFailure(req, username, 'invalid_passkey'));
       }
       return issueAuthenticatedSession(req, res, account, 'passkey');
@@ -1301,6 +1328,9 @@ export function createApp({
       if (consumed.redirect !== requestedRedirect) {
         return res.status(400).send(renderAppLoginErrorHtml('跳转目标无效', '安全重定向目标校验失败。'));
       }
+      if (!await sessions.isActive({ nonce: consumed.appSessionNonce, subject: consumed.username })) {
+        return res.status(410).send(renderAppLoginErrorHtml('来源会话已失效', '原登录设备已退出或会话已撤销，请重新登录后再打开。'));
+      }
       const account = await accounts.findAccount(consumed.username);
       if (!account?.active || (config.requireMfa && !strongFactorEnabled(account))) {
         return res.status(403).send(renderAppLoginErrorHtml('无权访问', '当前账号已被禁用或尚未满足多因素认证要求。'));
@@ -1311,7 +1341,7 @@ export function createApp({
         sessionKind: 'embedded_web',
         parentSessionNonce: consumed.appSessionNonce,
         replaceExisting: true,
-      } : { sessionKind: 'browser' });
+      } : { sessionKind: 'browser', parentSessionNonce: consumed.appSessionNonce });
       await recordAudit(req, {
         actor: account.username,
         action: 'auth.web_login_ticket.consume',
@@ -1333,7 +1363,7 @@ export function createApp({
   app.post('/api/auth/logout', requireConsoleRequest, async (req, res) => {
     const token = readSessionToken(req);
     const session = await sessions.verify(token);
-    await sessions.revoke(token);
+    if (session) await app.locals.revokeConsoleSessions({ subject: session.sub, nonce: session.nonce });
     await app.locals.onConsoleSessionRevoked(token);
     clearSessionCookies(res, config);
     await recordAudit(req, {
@@ -1505,7 +1535,27 @@ export function createApp({
     return res.json({ rejected: true });
   });
 
-  app.post('/api/auth/reauth', loginLimiter, requireConsoleRequest, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/auth/reauth/passkey/options', loginLimiter, requireConsoleRequest, async (req, res) => {
+    const result = await passkeys.authenticationOptions(req.consoleUser.username, { purpose: 'reauthentication', sessionNonce: req.consoleSession.nonce });
+    if (!result) return res.status(400).json({ error: '当前账号没有可用的 Passkey。', code: 'PASSKEY_UNAVAILABLE' });
+    return res.json(result);
+  });
+
+  app.post('/api/auth/reauth/passkey/verify', loginLimiter, requireConsoleRequest, async (req, res) => {
+    try {
+      const result = await passkeys.verifyAuthentication(req.consoleUser.username, req.body, { purpose: 'reauthentication', sessionNonce: req.consoleSession.nonce });
+      if (!result.verified) return res.status(403).json({ error: 'Passkey 二次验证失败。', code: 'REAUTHENTICATION_FAILED' });
+      const expiresAt = await sessions.markReauthenticated(readSessionToken(req));
+      if (!expiresAt) return res.status(401).json({ error: '登录会话已失效。', code: 'UNAUTHORIZED' });
+      await app.locals.onConsoleSessionChanged(readSessionToken(req));
+      await recordAudit(req, { action: 'auth.reauthenticate', targetType: 'account', targetId: req.consoleUser.username, details: { method: 'passkey' } });
+      return res.json({ reauthenticated: true, expiresAt: new Date(expiresAt * 1000).toISOString() });
+    } catch {
+      return res.status(403).json({ error: 'Passkey 二次验证失败。', code: 'REAUTHENTICATION_FAILED' });
+    }
+  });
+
+  app.post('/api/auth/reauth', loginLimiter, requireConsoleRequest, async (req, res) => {
     if (!await verifyReauthentication(req)) {
       await recordAudit(req, {
         action: 'auth.reauthenticate',

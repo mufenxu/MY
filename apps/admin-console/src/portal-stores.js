@@ -73,6 +73,7 @@ export async function createPersistentPortalStores({
       uri: config.mongoUri,
       encryptionKey: config.authEncryptionKey,
       issuer: config.webauthnRpName,
+      legacyBindings: config.legacyServiceBindings,
       bootstrap: {
         username: config.adminUsername,
         passwordHash: config.adminPasswordHash,

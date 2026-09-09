@@ -136,14 +136,20 @@ function createApiServer({ settingsStore, mqttService, automationEngine = null }
     scheduleRealtimePayload(socket, 'snapshot', { immediate: true });
   });
 
-  server.on('upgrade', (req, socket, head) => {
+  authManager.onSessionRevoked = (fingerprint) => {
+    for (const client of wsServer.clients) {
+      if (client.sessionFingerprint === fingerprint) client.close(1008, '登录会话已撤销');
+    }
+  };
+
+  server.on('upgrade', async (req, socket, head) => {
     const requestUrl = new URL(req.url || '/', 'http://localhost');
     if (requestUrl.pathname !== '/ws') {
       socket.destroy();
       return;
     }
 
-    if (!authManager.canAccessRealtime(req)) {
+    if (!await authManager.canAccessRealtime(req).catch(() => false)) {
       rejectUpgrade(socket, 401, 'Unauthorized');
       return;
     }
@@ -154,6 +160,7 @@ function createApiServer({ settingsStore, mqttService, automationEngine = null }
     }
 
     wsServer.handleUpgrade(req, socket, head, (client) => {
+      client.sessionFingerprint = authManager.sessionFingerprint(req);
       wsServer.emit('connection', client, req);
     });
   });

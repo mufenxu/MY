@@ -167,6 +167,10 @@ class AppViewModel(
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
     val scenesState = deriveState(AppUiState::toScenesUiState)
     private var pendingQrLogin: Pair<String, String>? = null
+    private var passwordLoginChallenge: cn.pxyb.mycontrol.data.LoginChallenge? = null
+    private var pendingLoginResult: cn.pxyb.mycontrol.data.LoginResult? = null
+    private var botChallengeToken = ""
+    private var botChallengeExpiresAt = 0L
     private var pollJob: Job? = null
     private var deviceLoginJob: Job? = null
     private val accountRequestScope = CoroutineScope(viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job]))
@@ -347,22 +351,32 @@ class AppViewModel(
         useRecoveryCode: Boolean,
         authorizeSession: suspend () -> Boolean,
     ) {
-        if (username.isBlank() || password.isBlank()) {
+        if (mutableState.value.loginBusy) return
+        val pending = passwordLoginChallenge
+        if (pending == null && (username.isBlank() || password.isBlank())) {
             mutableState.update { it.copy(error = "请输入平台账号和密码。", message = null) }
             return
         }
         viewModelScope.launch {
             mutableState.update { it.copy(loginBusy = true, error = null, message = null) }
             runCatching {
-                val result = api.auth.login(
-                    username,
-                    password,
-                    totp = factor.takeUnless { useRecoveryCode }.orEmpty(),
-                    recoveryCode = factor.takeIf { useRecoveryCode }.orEmpty(),
-                    deviceName = currentDeviceName(),
-                )
-                protectLogin(result, authorizeSession)
-            }.onSuccess(::completeLogin).onFailure(::handleLoginFailure)
+                val response = if (pending != null) {
+                    api.auth.completeLogin(pending, factor, useRecoveryCode, currentDeviceName())
+                } else {
+                    api.auth.login(username, password, challengeToken = takeBotChallengeToken(), deviceName = currentDeviceName())
+                }
+                when (response) {
+                    is cn.pxyb.mycontrol.data.LoginChallenge -> {
+                        passwordLoginChallenge = response
+                        mutableState.update {
+                            it.copy(loginBusy = false, secondFactorRequired = true,
+                                recoveryCodeAllowed = response.recoveryCodeAllowed, loginEnrollment = response.enrollment,
+                                message = if (response.enrollment != null) "请先设置动态验证以保护账号。" else "账号密码已通过，请完成第二步验证。")
+                        }
+                    }
+                    is cn.pxyb.mycontrol.data.LoginResult -> completeLogin(protectLogin(response, authorizeSession))
+                }
+            }.onFailure(::handleLoginFailure)
         }
     }
 
@@ -371,10 +385,11 @@ class AppViewModel(
         requestCredential: suspend (String) -> String,
         authorizeSession: suspend () -> Boolean,
     ) {
+        if (mutableState.value.loginBusy) return
         viewModelScope.launch {
             mutableState.update { it.copy(loginBusy = true, error = null, message = null) }
             runCatching {
-                val challenge = api.auth.beginPasskeyLogin(username)
+                val challenge = api.auth.beginPasskeyLogin(username, takeBotChallengeToken())
                 val result = api.auth.completePasskeyLogin(
                     challenge,
                     requestCredential(challenge.optionsJson),
@@ -487,15 +502,51 @@ class AppViewModel(
     }
 
     fun resetSecondFactor() {
+        passwordLoginChallenge = null
+        botChallengeToken = ""
         mutableState.update {
             it.copy(
                 loginBusy = false,
                 secondFactorRequired = false,
                 recoveryCodeAllowed = false,
+                loginEnrollment = null,
+                botChallengeRequired = false,
+                botChallengeReady = false,
                 error = null,
                 message = null,
             )
         }
+    }
+
+    fun completeBotChallenge(token: String) {
+        botChallengeToken = token
+        botChallengeExpiresAt = System.currentTimeMillis() + 4 * 60_000
+        mutableState.update { it.copy(botChallengeReady = token.isNotBlank(), error = null, message = "人机验证已完成，请继续登录。") }
+    }
+
+    private fun takeBotChallengeToken(): String {
+        val token = botChallengeToken.takeIf { System.currentTimeMillis() < botChallengeExpiresAt }.orEmpty()
+        botChallengeToken = ""
+        mutableState.update { it.copy(botChallengeRequired = false, botChallengeReady = false) }
+        return token
+    }
+
+    fun recoverAccount(token: String, newPassword: String) {
+        if (mutableState.value.loginBusy) return
+        viewModelScope.launch {
+            mutableState.update { it.copy(loginBusy = true, error = null, message = null) }
+            runCatching { api.auth.recoverAccount(token, newPassword) }
+                .onSuccess { username ->
+                    resetSecondFactor()
+                    mutableState.update { it.copy(suggestedUsername = username, message = "账号已恢复。请使用新密码登录并重新设置登录保护。") }
+                }.onFailure(::handleLoginFailure)
+        }
+    }
+
+    fun acknowledgeLoginRecoveryCodes() {
+        val result = pendingLoginResult ?: return
+        pendingLoginResult = null
+        completeLogin(result.copy(recoveryCodes = emptyList()))
     }
 
     fun lockSession() {
@@ -590,6 +641,13 @@ class AppViewModel(
     }
 
     private fun completeLogin(result: cn.pxyb.mycontrol.data.LoginResult) {
+        passwordLoginChallenge = null
+        botChallengeToken = ""
+        if (result.recoveryCodes.isNotEmpty()) {
+            pendingLoginResult = result
+            mutableState.update { it.copy(loginBusy = false, loginEnrollment = null, loginRecoveryCodes = result.recoveryCodes, error = null) }
+            return
+        }
         setAccountScope(result.user.username)
         mutableState.update {
             it.copy(
@@ -599,9 +657,12 @@ class AppViewModel(
                 suggestedUsername = result.user.username,
                 secondFactorRequired = false,
                 recoveryCodeAllowed = false,
-                message = result.recoveryCodes.takeIf(List<String>::isNotEmpty)?.let {
-                    "动态验证已启用，请妥善保存网页登录页显示的恢复码。"
-                },
+                loginEnrollment = null,
+                loginRecoveryCodes = emptyList(),
+                botChallengeRequired = false,
+                botChallengeReady = false,
+                reauthenticatedUntil = 0,
+                message = null,
                 offlineMode = false,
                 cachedAtMillis = null,
             )
@@ -643,6 +704,10 @@ class AppViewModel(
     }
 
     private fun clearAccountScopedState() {
+        passwordLoginChallenge = null
+        pendingLoginResult = null
+        botChallengeToken = ""
+        mutableState.update { it.copy(loginEnrollment = null, loginRecoveryCodes = emptyList(), reauthenticatedUntil = 0) }
         cancelAccountRequests()
         assistantChatMutable.value = AssistantChatUiState()
         pendingQrLogin = null
@@ -680,31 +745,18 @@ class AppViewModel(
 
     private fun handleLoginFailure(error: Throwable) {
         val apiError = error as? ApiException
-        if (apiError?.code == "SECOND_FACTOR_REQUIRED") {
-            mutableState.update {
-                it.copy(
-                    loginBusy = false,
-                    secondFactorRequired = true,
-                    recoveryCodeAllowed = apiError.details?.optBoolean("recoveryCodeAllowed") == true,
-                    error = null,
-                    message = "账号密码验证通过，请完成第二步验证。",
-                )
-            }
-            return
-        }
-        val requiresFactor = apiError?.code == "SECOND_FACTOR_REQUIRED" || mutableState.value.secondFactorRequired
-        val recoveryAllowed = apiError?.details?.optBoolean("recoveryCodeAllowed") == true || mutableState.value.recoveryCodeAllowed
+        if (apiError?.code == "LOGIN_CHALLENGE_INVALID") resetSecondFactor()
+        val needsBotChallenge = apiError?.code == "BOT_CHALLENGE_REQUIRED" || apiError?.details?.optBoolean("challengeRequired") == true
         val message = when (apiError?.code) {
-            "MFA_ENROLLMENT_REQUIRED" -> "首次绑定动态验证请先在网页控制台完成。"
             "PASSKEY_REQUIRED" -> "该账号要求使用 Passkey，请使用下方 Passkey 登录。"
-            "BOT_CHALLENGE_REQUIRED" -> "登录触发了安全验证，请先在网页控制台完成验证。"
+            "BOT_CHALLENGE_REQUIRED" -> "请完成下方人机验证后继续登录。"
             else -> error.message ?: "登录失败，请稍后重试。"
         }
         mutableState.update {
             it.copy(
                 loginBusy = false,
-                secondFactorRequired = requiresFactor,
-                recoveryCodeAllowed = recoveryAllowed,
+                botChallengeRequired = needsBotChallenge && passwordLoginChallenge == null,
+                botChallengeReady = false,
                 error = message,
                 message = null,
             )
@@ -2082,6 +2134,8 @@ class AppViewModel(
     }
 
     fun revokeSession(nonce: String, confirmation: suspend () -> Boolean) = accountSecurity.revokeSession(nonce, confirmation)
+    fun revokeOtherSessions(confirmation: suspend () -> Boolean) = accountSecurity.revokeOtherSessions(confirmation)
+    fun reauthenticateWithPasskey(requestCredential: suspend (String) -> String) = accountSecurity.reauthenticateWithPasskey(requestCredential)
 
     fun changePassword(oldPassword: String, newPassword: String, totp: String) =
         accountSecurity.changePassword(oldPassword, newPassword, totp)

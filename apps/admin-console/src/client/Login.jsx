@@ -68,15 +68,44 @@ export function QrLoginPanel({ request, busy, error, remainingSeconds, onRefresh
   );
 }
 
-export function LoginScreen({ onAuthenticated, totpRequired = false, externalAuth = false }) {
-  const [loginMode, setLoginMode] = useState('credentials');
+export function NativeChallengeScreen() {
+  const [siteKey, setSiteKey] = useState('');
+  const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const callbackState = new URLSearchParams(window.location.search).get('nativeChallenge') || '';
+  useEffect(() => {
+    const controller = new AbortController();
+    requestJson('/api/auth/status', { signal: controller.signal })
+      .then((result) => {
+        if (result.turnstileSiteKey) setSiteKey(result.turnstileSiteKey);
+        else setError('平台暂未配置人机验证，请联系管理员。');
+      }).catch((requestError) => {
+        if (requestError.code !== 'REQUEST_ABORTED') setError('验证加载失败，请重试。');
+      });
+    return () => controller.abort();
+  }, [retry]);
+  return <main className="login-page"><section className="login-panel"><h1>安全验证</h1><p>完成后将自动返回 App。</p>
+    {siteKey && <Turnstile key={retry} siteKey={siteKey} options={{ action: 'platform_login', theme: 'auto' }} onSuccess={(token) => {
+      window.location.replace(`mycontrol-auth://challenge#${new URLSearchParams({ token, state: callbackState })}`);
+    }} onError={() => setError('验证暂不可用，请重试。')} onExpire={() => setError('验证已过期，请重试。')} />}
+    {error && <p role="alert">{error}</p>}
+    <button className="secondary-action" type="button" onClick={() => { setError(''); setRetry((value) => value + 1); }}>重新加载验证</button>
+  </section></main>;
+}
+
+export function LoginScreen({ onAuthenticated, externalAuth = false }) {
+  const [recoveryToken, setRecoveryToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('recover') || '');
+  const [loginMode, setLoginMode] = useState(recoveryToken ? 'recovery' : 'credentials');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [totp, setTotp] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
-  const [secondFactorRequired, setSecondFactorRequired] = useState(totpRequired);
+  const [pendingChallenge, setPendingChallenge] = useState(null);
+  const secondFactorRequired = Boolean(pendingChallenge);
+  const [recoveryConfirmation, setRecoveryConfirmation] = useState('');
+  const [notice, setNotice] = useState('');
   const [challenge, setChallenge] = useState(null);
   const [challengeToken, setChallengeToken] = useState('');
   const [mfaEnrollment, setMfaEnrollment] = useState(null);
@@ -91,6 +120,12 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
   const [qrRefreshKey, setQrRefreshKey] = useState(0);
   const [qrNow, setQrNow] = useState(Date.now());
   const turnstileRef = useRef(null);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.hash.slice(1)).has('recover')) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    }
+  }, []);
 
   useEffect(() => {
     if (loginMode !== 'qr' || secondFactorRequired) return undefined;
@@ -260,10 +295,42 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
     setSubmitting(true);
     setError('');
     try {
-      const session = await requestJson('/api/auth/login', {
+      if (loginMode === 'recovery') {
+        if (password !== recoveryConfirmation) {
+          setError('两次输入的新密码不一致。');
+          return;
+        }
+        const result = await requestJson('/api/auth/recovery', {
+          method: 'POST',
+          body: JSON.stringify({ recoveryToken: recoveryToken.trim(), newPassword: password }),
+        });
+        handleResetStep();
+        setUsername(result.username);
+        setRecoveryToken('');
+        setRecoveryConfirmation('');
+        setLoginMode('credentials');
+        setNotice('账号已恢复，旧登录凭据已失效。请使用新密码登录并重新设置登录保护。');
+        return;
+      }
+      const session = await requestJson(pendingChallenge ? '/api/auth/login/complete' : '/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ username, password, totp, recoveryCode, challengeToken, enrollmentCode }),
+        body: JSON.stringify(pendingChallenge
+          ? { challengeId: pendingChallenge.challengeId, ...(mfaEnrollment ? { enrollmentCode } : useRecoveryCode ? { recoveryCode } : { totp }) }
+          : { username, password, challengeToken }),
       });
+      if (session.code === 'SECOND_FACTOR_REQUIRED' || session.code === 'MFA_ENROLLMENT_REQUIRED') {
+        setPendingChallenge(session.details);
+        setPassword('');
+        setMfaEnrollment(session.details.enrollment || null);
+        setEnrollmentCode('');
+        setTotp('');
+        setRecoveryCode('');
+        setUseRecoveryCode(false);
+        setChallenge(null);
+        setChallengeToken('');
+        setNotice('');
+        return;
+      }
       if (session.recoveryCodes?.length) {
         setPendingSession(session);
         setRecoveryCodes(session.recoveryCodes);
@@ -272,17 +339,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
       }
       onAuthenticated(session);
     } catch (loginError) {
-      if (loginError.code === 'MFA_ENROLLMENT_REQUIRED' && loginError.details?.enrollment) {
-        setMfaEnrollment(loginError.details.enrollment);
-        setEnrollmentCode('');
-        setError('');
-        return;
-      }
-      if (loginError.code === 'SECOND_FACTOR_REQUIRED') {
-        setSecondFactorRequired(true);
-        setError('');
-        return;
-      }
+      if (loginError.code === 'LOGIN_CHALLENGE_INVALID') handleResetStep();
       if (loginError.code === 'BOT_CHALLENGE_REQUIRED' || loginError.details?.challengeRequired) {
         setChallenge({ siteKey: loginError.details?.turnstileSiteKey, nonce: Date.now() });
         setChallengeToken('');
@@ -323,9 +380,15 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
   }
 
   function handleResetStep() {
-    setSecondFactorRequired(false);
+    setPendingChallenge(null);
+    setMfaEnrollment(null);
+    setEnrollmentCode('');
+    setPassword('');
+    setUseRecoveryCode(false);
     setTotp('');
     setRecoveryCode('');
+    setChallenge(null);
+    setChallengeToken('');
     setError('');
   }
 
@@ -355,17 +418,18 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
           </span>
           <div>
             <h1 id="login-title">
-              {secondFactorRequired ? '安全二次验证' : loginMode === 'qr' ? 'App 扫码登录' : externalAuth ? '统一身份认证' : '管理员身份验证'}
+              {mfaEnrollment ? '设置登录保护' : secondFactorRequired ? '安全二次验证' : loginMode === 'recovery' ? '恢复平台账号' : loginMode === 'qr' ? 'App 扫码登录' : externalAuth ? '统一身份认证' : '平台身份验证'}
             </h1>
             <p>
-              {secondFactorRequired
+              {loginMode === 'recovery' ? '使用管理员签发的一次性凭据重新设置密码' : mfaEnrollment ? '将密钥添加到身份验证器，并输入动态验证码'
+                : secondFactorRequired
                 ? '为了确保您的账户安全，请输入 6 位动态验证码'
                 : loginMode === 'qr' ? '由已登录的 MY Control 安全确认' : externalAuth ? '登录成功后将返回发起认证的应用' : '登录后掌控平台运维、身份与灾备系统'}
             </p>
           </div>
         </div>
 
-        {!secondFactorRequired && recoveryCodes.length === 0 && (
+        {!secondFactorRequired && loginMode !== 'recovery' && recoveryCodes.length === 0 && (
           <div className="login-method-tabs" role="tablist" aria-label="登录方式">
             <button
               type="button"
@@ -390,6 +454,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
           </div>
         )}
 
+        {notice && <p role="status">{notice}</p>}
         <form onSubmit={handleSubmit} className="login-form">
           {loginMode === 'qr' && !secondFactorRequired && recoveryCodes.length === 0 ? (
             <QrLoginPanel
@@ -399,6 +464,16 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
               remainingSeconds={qrRemainingSeconds}
               onRefresh={() => setQrRefreshKey((value) => value + 1)}
             />
+          ) : loginMode === 'recovery' ? (
+            <>
+              <label className="input-group"><span>一次性恢复凭据</span><div className="input-wrapper"><KeyRound size={18} className="input-icon" /><input type="password" autoComplete="off" value={recoveryToken} onChange={(event) => setRecoveryToken(event.target.value)} required /></div></label>
+              <label className="input-group"><span>新密码（15–256 位）</span><div className="input-wrapper"><LockKeyhole size={18} className="input-icon" /><input type="password" autoComplete="new-password" minLength={15} maxLength={256} value={password} onChange={(event) => setPassword(event.target.value)} required /></div></label>
+              <label className="input-group"><span>再次输入新密码</span><div className="input-wrapper"><LockKeyhole size={18} className="input-icon" /><input type="password" autoComplete="new-password" value={recoveryConfirmation} onChange={(event) => setRecoveryConfirmation(event.target.value)} required /></div></label>
+              <p>恢复后会退出所有设备，并清除原有 Passkey 和动态验证设置。</p>
+              {error && <div className="form-error" role="alert"><ShieldAlert size={16} /><span>{error}</span></div>}
+              <button className="primary-button login-button" type="submit" disabled={submitting || !recoveryToken.trim() || password.length < 15 || password !== recoveryConfirmation}>{submitting ? '正在恢复...' : '恢复账号'}</button>
+              <button className="login-mode-link" type="button" disabled={submitting} onClick={() => { handleResetStep(); setRecoveryToken(''); setRecoveryConfirmation(''); setLoginMode('credentials'); }}>返回登录</button>
+            </>
           ) : recoveryCodes.length > 0 ? (
             <div className="login-recovery-codes">
               <div>
@@ -444,7 +519,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
               {!secondFactorRequired && (
                 <>
                   <label className="input-group">
-                    <span>管理员账号</span>
+                    <span>平台账号</span>
                     <div className="input-wrapper">
                       <User size={18} className="input-icon" />
                       <input
@@ -455,7 +530,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
                           setMfaEnrollment(null);
                           setEnrollmentCode('');
                         }}
-                        placeholder="请输入管理员账号"
+                        placeholder="请输入平台账号"
                         required
                         autoFocus
                       />
@@ -489,7 +564,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
               )}
 
               {/* 第二步：只在需要 2FA 时显示动态验证码或恢复码 */}
-              {secondFactorRequired && !useRecoveryCode && (
+              {secondFactorRequired && !mfaEnrollment && !useRecoveryCode && (
                 <label className="input-group">
                   <span>动态验证码 (2FA)</span>
                   <div className="input-wrapper">
@@ -510,7 +585,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
                 </label>
               )}
 
-              {secondFactorRequired && useRecoveryCode && (
+              {secondFactorRequired && !mfaEnrollment && useRecoveryCode && (
                 <label className="input-group">
                   <span>一次性恢复码</span>
                   <div className="input-wrapper">
@@ -563,7 +638,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
                 </div>
               )}
 
-              {secondFactorRequired && (
+              {secondFactorRequired && !mfaEnrollment && pendingChallenge.recoveryCodeAllowed && (
                 <button
                   className="login-mode-link"
                   type="button"
@@ -593,7 +668,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
                   submitting ||
                   (Boolean(challenge?.siteKey) && !challengeToken) ||
                   (Boolean(mfaEnrollment) && enrollmentCode.length !== 6) ||
-                  (secondFactorRequired && !useRecoveryCode && totp.length !== 6)
+                  (secondFactorRequired && !mfaEnrollment && (useRecoveryCode ? !recoveryCode.trim() : totp.length !== 6))
                 }
                 type="submit"
               >
@@ -612,7 +687,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
               </button>
 
               {!secondFactorRequired && (
-                <button
+                <><button
                   className="secondary-action login-passkey-button"
                   disabled={submitting || (Boolean(challenge?.siteKey) && !challengeToken)}
                   type="button"
@@ -620,7 +695,7 @@ export function LoginScreen({ onAuthenticated, totpRequired = false, externalAut
                 >
                   <Fingerprint size={18} />
                   使用 Passkey 快速登录
-                </button>
+                </button><button className="login-mode-link" type="button" disabled={submitting} onClick={() => { handleResetStep(); setNotice(''); setLoginMode('recovery'); }}>无法登录？使用账号恢复凭据</button></>
               )}
             </>
           )}

@@ -13,8 +13,22 @@ class AccountSecurityController(
 ) {
     fun revokeSession(nonce: String, confirmation: suspend () -> Boolean) =
         actions.run("session", "远程会话已撤销。", confirmation) {
-            api.auth.revokeSession(nonce)
+            if (api.auth.revokeSession(nonce)) onSessionExpired("当前设备已退出，请重新登录。")
+            else onRefresh()
+        }
+
+    fun revokeOtherSessions(confirmation: suspend () -> Boolean) =
+        actions.run("session", "其他设备已退出。", confirmation) {
+            api.auth.revokeOtherSessions()
             onRefresh()
+        }
+
+    fun reauthenticateWithPasskey(requestCredential: suspend (String) -> String) =
+        actions.run("passkey-reauth", "身份已确认，五分钟内可执行账号安全操作。", failureMessage = "Passkey 验证未完成，请重试。") {
+            appState.update { it.copy(reauthenticatedUntil = 0) }
+            val challenge = api.auth.beginPasskeyReauthentication()
+            val expiresAt = api.auth.completePasskeyReauthentication(challenge.challengeId, requestCredential(challenge.optionsJson))
+            appState.update { it.copy(reauthenticatedUntil = expiresAt) }
         }
 
     fun changePassword(oldPassword: String, newPassword: String, totp: String) =

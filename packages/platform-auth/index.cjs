@@ -226,6 +226,7 @@ function issueInternalIdentity({
     iss: TOKEN_ISSUER,
     aud: audience,
     sub: session.sub,
+    ...(session.accountId ? { account_id: session.accountId, local_username: session.serviceBindings?.[audience] || '' } : {}),
     role: session.role,
     csrf,
     m: String(method).toUpperCase(),

@@ -12,6 +12,9 @@ const cv = require('../validators/clientValidator');
 const scanLoginController = require('../controllers/scanLoginController');
 const clientExperienceController = require('../controllers/clientExperienceController');
 const learningPlanController = require('../controllers/learningPlanController');
+const { getBearerToken, revokeAuthToken } = require('../utils/authCookies');
+const { asyncHandler } = require('../utils/exam');
+const { success } = require('../utils/response');
 
 router.use(clientLimiter);
 
@@ -25,6 +28,10 @@ router.get('/major-categories', clientController.getMajorCategories);
 router.post('/demo/exam/preview-submit', optionalClientAuth, validate(cv.submitExam), clientController.previewDemoExam);
 
 // Authenticated APIs
+router.post('/api/user/logout', authenticateUser, asyncHandler(async (req, res) => {
+    await revokeAuthToken(getBearerToken(req));
+    success(res, null, '已退出登录');
+}));
 router.post('/api/user/scan-login/scan', authenticateUser, validate(cv.scanLoginQrCode), scanLoginController.scanQrCode);
 router.post('/api/user/scan-login/confirm', authenticateUser, validate(cv.scanLoginQrCode), scanLoginController.confirmQrCode);
 router.get('/my/major-categories', authenticateUser, clientController.getMyMajorCategories);

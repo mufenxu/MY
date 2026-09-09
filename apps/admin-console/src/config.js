@@ -149,6 +149,11 @@ export function loadConfig(env = process.env) {
     workspaceRoot,
     authDisabled,
     adminUsername: env.PLATFORM_ADMIN_USERNAME || '',
+    legacyServiceBindings: {
+      core: env.PLATFORM_SSO_CORE_USERNAME || '',
+      exam: env.PLATFORM_SSO_EXAM_USERNAME || '',
+      campus: env.PLATFORM_SSO_CAMPUS_USERNAME || '',
+    },
     adminPasswordHash: env.PLATFORM_ADMIN_PASSWORD_HASH || '',
     adminRole: parseRole(env.PLATFORM_ADMIN_ROLE),
     adminTotpSecret: String(env.PLATFORM_ADMIN_TOTP_SECRET || '').replace(/[\s=-]/g, '').toUpperCase(),

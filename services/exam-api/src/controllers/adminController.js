@@ -9,13 +9,14 @@ const ExamResult = require('../models/ExamResult');
 const MajorCategory = require('../models/MajorCategory');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { randomUUID } = require('crypto');
 const config = require('../config');
 const { asyncHandler } = require('../utils/exam');
 const { success } = require('../utils/response');
 const { AuthError, NotFoundError, AppError } = require('../utils/errors');
 const { buildAdminScopeQuery } = require('../utils/libraryScope');
 const { consumeTempAuthCode } = require('../utils/scanLogin');
-const { clearAuthCookies, setAdminAuthCookie } = require('../utils/authCookies');
+const { clearAuthCookies, setAdminAuthCookie, getAuthToken, revokeAuthToken, ADMIN_AUTH_COOKIE, CONSOLE_AUTH_COOKIE } = require('../utils/authCookies');
 const { buildCookieAuthPayload } = require('../utils/authResponse');
 const {
     registerFailedLoginAtomic,
@@ -45,7 +46,7 @@ function buildAdminToken(admin) {
             tokenVersion: admin.tokenVersion || 0,
         },
         config.jwtSecret,
-        { expiresIn: config.jwtExpiresIn },
+        { expiresIn: config.jwtExpiresIn, jwtid: randomUUID() },
     );
 }
 
@@ -172,6 +173,8 @@ exports.changePassword = asyncHandler(async (req, res) => {
 });
 
 exports.logout = asyncHandler(async (req, res) => {
+    const tokens = new Set([getAuthToken(req, ADMIN_AUTH_COOKIE), getAuthToken(req, CONSOLE_AUTH_COOKIE)]);
+    await Promise.all([...tokens].filter(Boolean).map(revokeAuthToken));
     clearAuthCookies(res);
     success(res, null, '退出成功');
 });

@@ -46,7 +46,9 @@ exports.verifyToken = async (req, res, next) => {
                     code: 'PLATFORM_READ_ONLY'
                 });
             }
-            const mappedUsername = process.env.PLATFORM_SSO_CORE_USERNAME || platformIdentity.sub;
+            const mappedUsername = platformIdentity.account_id
+                ? platformIdentity.local_username
+                : process.env.PLATFORM_SSO_CORE_USERNAME || platformIdentity.sub;
             const user = await resolvePlatformSsoUser({ mappedUserId: mappedUsername });
             if (!user) {
                 return res.status(403).json({

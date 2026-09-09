@@ -380,6 +380,9 @@ fun MyControlApp(
                         },
                         onCancelDeviceLogin = viewModel::cancelDeviceQrLogin,
                         onBackFromSecondFactor = viewModel::resetSecondFactor,
+                        onBotChallengeComplete = viewModel::completeBotChallenge,
+                        onRecoverAccount = viewModel::recoverAccount,
+                        onRecoveryCodesSaved = viewModel::acknowledgeLoginRecoveryCodes,
                     )
                     else -> CompositionLocalProvider(LocalAppNavigationHandlesBack provides true) {
                         AuthenticatedShell(
@@ -868,12 +871,24 @@ private fun LoginScreen(
     onStartDeviceLogin: (String) -> Unit,
     onCancelDeviceLogin: () -> Unit,
     onBackFromSecondFactor: () -> Unit,
+    onBotChallengeComplete: (String) -> Unit,
+    onRecoverAccount: (String, String) -> Unit,
+    onRecoveryCodesSaved: () -> Unit,
 ) {
     var username by remember(state.suggestedUsername) { mutableStateOf(state.suggestedUsername) }
     var password by remember { mutableStateOf("") }
     var factor by remember { mutableStateOf("") }
     var factorMode by remember { mutableStateOf(SecondFactorMode.Totp) }
     var passwordVisible by remember { mutableStateOf(false) }
+    var showBotChallenge by remember { mutableStateOf(false) }
+    var showRecovery by remember { mutableStateOf(false) }
+    LaunchedEffect(state.secondFactorRequired) {
+        if (state.secondFactorRequired) {
+            password = ""
+            factor = ""
+            factorMode = SecondFactorMode.Totp
+        }
+    }
     val focusManager = LocalFocusManager.current
     val submit = {
         focusManager.clearFocus()
@@ -884,6 +899,13 @@ private fun LoginScreen(
     val isExpanded = adaptive.isExpanded
     val showFooter = adaptive.heightSizeClass != WindowHeightSizeClass.Compact &&
         WindowInsets.ime.getBottom(LocalDensity.current) == 0
+
+    if (showBotChallenge) LoginBotChallengeDialog(
+        onDismiss = { showBotChallenge = false },
+        onVerified = { token -> showBotChallenge = false; onBotChallengeComplete(token) },
+    )
+    if (showRecovery) AccountRecoveryDialog(state, onDismiss = { showRecovery = false }, onRecover = onRecoverAccount)
+    if (state.loginRecoveryCodes.isNotEmpty()) RecoveryCodesDialog(state.loginRecoveryCodes, onRecoveryCodesSaved, requireAcknowledgement = true)
 
     Box(modifier = Modifier.fillMaxSize()) {
         LoginAmbientBackground()
@@ -986,27 +1008,43 @@ private fun LoginScreen(
                                     PrimaryLoginButton(
                                         text = "登录",
                                         onClick = submit,
-                                        enabled = !state.loginBusy && username.isNotBlank() && password.isNotBlank(),
+                                        enabled = !state.loginBusy && username.isNotBlank() && password.isNotBlank() && (!state.botChallengeRequired || state.botChallengeReady),
                                         loading = state.loginBusy,
                                     )
 
+                                    if (state.botChallengeRequired) {
+                                        Spacer(Modifier.height(12.dp))
+                                        AppSecondaryButton(
+                                            text = if (state.botChallengeReady) "人机验证已完成，可继续登录" else "完成人机验证",
+                                            onClick = { showBotChallenge = true },
+                                            enabled = !state.loginBusy,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
                                     if (state.androidPasskeySupported) {
                                         Spacer(Modifier.height(20.dp))
                                         PasskeyLoginMethod(
-                                            enabled = !state.loginBusy,
+                                            enabled = !state.loginBusy && (!state.botChallengeRequired || state.botChallengeReady),
                                             onClick = {
                                                 focusManager.clearFocus()
                                                 onPasskeyLogin(username)
                                             },
                                         )
                                     }
+                                    AppSecondaryButton(
+                                        text = "使用账号恢复凭据",
+                                        onClick = { showRecovery = true },
+                                        enabled = !state.loginBusy,
+                                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                                    )
                                     DeviceLoginSection(
                                         state = state,
                                         onStartDeviceLogin = onStartDeviceLogin,
                                         onCancelDeviceLogin = onCancelDeviceLogin,
                                     )
                                 } else {
-                                    if (state.recoveryCodeAllowed) {
+                                    state.loginEnrollment?.let { LoginTotpEnrollment(it) }
+                                    if (state.recoveryCodeAllowed && state.loginEnrollment == null) {
                                         SecondFactorSelector(
                                             selected = factorMode,
                                             onSelect = {
@@ -1143,27 +1181,43 @@ private fun LoginScreen(
                                     PrimaryLoginButton(
                                         text = "登录",
                                         onClick = submit,
-                                        enabled = !state.loginBusy && username.isNotBlank() && password.isNotBlank(),
+                                        enabled = !state.loginBusy && username.isNotBlank() && password.isNotBlank() && (!state.botChallengeRequired || state.botChallengeReady),
                                         loading = state.loginBusy,
                                     )
 
+                                    if (state.botChallengeRequired) {
+                                        Spacer(Modifier.height(12.dp))
+                                        AppSecondaryButton(
+                                            text = if (state.botChallengeReady) "人机验证已完成，可继续登录" else "完成人机验证",
+                                            onClick = { showBotChallenge = true },
+                                            enabled = !state.loginBusy,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
                                     if (state.androidPasskeySupported) {
                                         Spacer(Modifier.height(20.dp))
                                         PasskeyLoginMethod(
-                                            enabled = !state.loginBusy,
+                                            enabled = !state.loginBusy && (!state.botChallengeRequired || state.botChallengeReady),
                                             onClick = {
                                                 focusManager.clearFocus()
                                                 onPasskeyLogin(username)
                                             },
                                         )
                                     }
+                                    AppSecondaryButton(
+                                        text = "使用账号恢复凭据",
+                                        onClick = { showRecovery = true },
+                                        enabled = !state.loginBusy,
+                                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                                    )
                                     DeviceLoginSection(
                                         state = state,
                                         onStartDeviceLogin = onStartDeviceLogin,
                                         onCancelDeviceLogin = onCancelDeviceLogin,
                                     )
                                 } else {
-                                    if (state.recoveryCodeAllowed) {
+                                    state.loginEnrollment?.let { LoginTotpEnrollment(it) }
+                                    if (state.recoveryCodeAllowed && state.loginEnrollment == null) {
                                         SecondFactorSelector(
                                             selected = factorMode,
                                             onSelect = {
@@ -1979,6 +2033,7 @@ private fun AuthenticatedShell(
                         state = profileState,
                         contentPadding = contentPadding,
                         onRevokeSession = { nonce -> viewModel.revokeSession(nonce, onSensitiveActionConfirmation) },
+                        onRevokeOtherSessions = { viewModel.revokeOtherSessions(onSensitiveActionConfirmation) },
                         onOpenQrLogin = viewModel::openQrScanner,
                         onLogout = viewModel::logout,
                         onRefresh = onRefresh,
@@ -2019,6 +2074,7 @@ private fun AuthenticatedShell(
                         onRegisterPasskey = viewModel::registerPasskey,
                         onDeletePasskey = viewModel::deletePasskey,
                         onRegisterPasskeyRequest = onPasskeyRegistrationRequest,
+                        onReauthenticatePasskey = { viewModel.reauthenticateWithPasskey(onPasskeyRequest) },
                         onSetAppLockEnabled = { enabled ->
                             if (enabled) {
                                 // 开启“打开应用时验证身份”前，先完成一次设备身份验证并把会话绑定到认证密钥

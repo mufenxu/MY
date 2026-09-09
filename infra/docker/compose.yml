@@ -184,6 +184,7 @@ services:
       MONGODB_IMAGE: ${MONGODB_IMAGE:-my-platform/mongodb:local}
       PLATFORM_SSO_CORE_USERNAME: ${PLATFORM_SSO_CORE_USERNAME:-admin}
       PLATFORM_SSO_EXAM_USERNAME: ${PLATFORM_SSO_EXAM_USERNAME:-admin}
+      PLATFORM_SSO_CAMPUS_USERNAME: ${PLATFORM_SSO_CAMPUS_USERNAME:-admin}
       CORE_HOSTS: ${CORE_HOSTS:-xcx.pxyb.cn}
       EXAM_HOSTS: ${EXAM_HOSTS:-haxx.pxyb.cn}
       NOTIFY_HOSTS: ${NOTIFY_HOSTS:-tongzhiapi.pxyb.cn}

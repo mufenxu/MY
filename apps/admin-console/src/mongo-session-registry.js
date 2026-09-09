@@ -31,6 +31,8 @@ export async function createMongoSessionRegistry({
   return {
     async issue({
       username,
+      accountId,
+      authVersion = 0,
       role = 'super_admin',
       ttlHours,
       idleTimeoutMinutes: sessionIdleTimeoutMinutes = defaultIdleTimeoutMinutes,
@@ -52,7 +54,7 @@ export async function createMongoSessionRegistry({
           .toArray();
         if (oldest.length > 0) await sessions.deleteMany({ _id: { $in: oldest.map((row) => row._id) } });
       }
-      const token = issueSession({ username, role, secret, ttlHours, now });
+      const token = issueSession({ username, accountId, authVersion, role, secret, ttlHours, now });
       const session = verifySession(token, secret, now);
       const normalizedKind = String(sessionKind || 'browser').slice(0, 32);
       const normalizedParentNonce = String(parentSessionNonce || '').slice(0, 160);
@@ -96,6 +98,7 @@ export async function createMongoSessionRegistry({
         expiresAt: { $gt: new Date(now) },
       });
       if (!active) return null;
+      if (active.parentSessionNonce && !await this.isActive({ nonce: active.parentSessionNonce, subject: active.subject, now })) return null;
       const idleTimeoutMs = sessionIdleTimeoutMs(active);
       if (active.lastSeenAt.getTime() + idleTimeoutMs <= now) return null;
       if (now - active.lastSeenAt.getTime() >= touchIntervalMs) {
@@ -138,15 +141,19 @@ export async function createMongoSessionRegistry({
     async revoke(token, now = Date.now()) {
       const session = verifySession(token, secret, now);
       if (!session) return false;
-      return (await sessions.deleteOne({ nonce: session.nonce })).deletedCount === 1;
+      return this.revokeByNonce(session.nonce);
     },
 
-    async revokeByNonce(nonce) {
-      return (await sessions.deleteOne({ nonce: String(nonce || '') })).deletedCount === 1;
+    async revokeByNonce(nonce, { subject } = {}) {
+      return (await sessions.deleteMany({
+        $or: [{ nonce: String(nonce || '') }, { parentSessionNonce: String(nonce || '') }],
+        ...(subject ? { subject } : {}),
+      })).deletedCount > 0;
     },
 
-    async revokeBySubject(subject) {
-      return (await sessions.deleteMany({ subject: String(subject || '') })).deletedCount;
+    async revokeBySubject(subject, { exceptNonce } = {}) {
+      if (exceptNonce) await sessions.updateOne({ subject: String(subject || ''), nonce: exceptNonce }, { $set: { parentSessionNonce: '' } });
+      return (await sessions.deleteMany({ subject: String(subject || ''), ...(exceptNonce ? { nonce: { $ne: exceptNonce } } : {}) })).deletedCount;
     },
 
     async isActive({ nonce, subject, now = Date.now() } = {}) {

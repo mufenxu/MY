@@ -48,6 +48,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +77,71 @@ import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+internal fun LoginBotChallengeDialog(onDismiss: () -> Unit, onVerified: (String) -> Unit) {
+    val origin = remember { Uri.parse(BuildConfig.PLATFORM_BASE_URL) }
+    var revision by remember { mutableStateOf(0) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val verifiedCallback by rememberUpdatedState(onVerified)
+    AppDialog(
+        title = "人机验证",
+        subtitle = "完成验证后将返回登录页面。",
+        onDismissRequest = onDismiss,
+        footer = { AppDialogSecondaryButton(text = "返回登录", onClick = onDismiss, modifier = Modifier.fillMaxWidth()) },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            key(revision) {
+                val callbackState = remember { UUID.randomUUID().toString() }
+                AndroidView(
+                    modifier = Modifier.fillMaxWidth().height(360.dp),
+                    factory = { context ->
+                        WebView(context).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.allowFileAccess = false
+                            settings.allowContentAccess = false
+                            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                            settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                            CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
+                            webViewClient = object : WebViewClient() {
+                                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                                    val uri = request.url
+                                    if (!request.isForMainFrame) return uri.scheme != "https" || uri.host != "challenges.cloudflare.com"
+                                    if (uri.scheme == "mycontrol-auth" && uri.host == "challenge") {
+                                        val source = Uri.parse(view.url.orEmpty())
+                                        val values = Uri.Builder().scheme("https").authority("callback").encodedQuery(uri.encodedFragment).build()
+                                        val token = values.getQueryParameter("token").orEmpty()
+                                        if (source.scheme == origin.scheme && source.authority == origin.authority && source.path == "/console"
+                                            && values.getQueryParameter("state") == callbackState && token.length in 1..4096) {
+                                            verifiedCallback(token)
+                                        }
+                                        return true
+                                    }
+                                    return uri.scheme != origin.scheme || uri.authority != origin.authority || uri.path != "/console"
+                                        || uri.getQueryParameter("nativeChallenge") != callbackState
+                                }
+
+                                override fun onReceivedError(view: WebView, request: WebResourceRequest, failure: android.webkit.WebResourceError) {
+                                    if (request.isForMainFrame) error = "验证页面加载失败，请重试。"
+                                }
+
+                                override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: android.webkit.WebResourceResponse) {
+                                    if (request.isForMainFrame) error = "验证服务暂不可用，请重试。"
+                                }
+                            }
+                            loadUrl("${BuildConfig.PLATFORM_BASE_URL.trimEnd('/')}/console?nativeChallenge=$callbackState")
+                        }
+                    },
+                    onReset = null,
+                    onRelease = { it.stopLoading(); it.destroy() },
+                )
+            }
+            error?.let { message -> FeedbackBanner(message, error = true, onRetry = { error = null; revision++ }) }
+        }
+    }
+}
 
 class PlatformWebActivity : ComponentActivity() {
 

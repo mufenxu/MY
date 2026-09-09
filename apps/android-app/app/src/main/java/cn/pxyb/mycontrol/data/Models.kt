@@ -8,7 +8,18 @@ data class PlatformUser(
     val role: String,
     val totpEnabled: Boolean,
     val passkeyCount: Int,
+    val id: String = "",
 )
+
+sealed interface PasswordLoginResponse
+
+@Immutable
+data class LoginChallenge(
+    val challengeId: String,
+    val expiresAt: String,
+    val recoveryCodeAllowed: Boolean,
+    val enrollment: TotpEnrollment?,
+) : PasswordLoginResponse
 
 @Immutable
 data class LoginResult(
@@ -17,7 +28,7 @@ data class LoginResult(
     val sessionExpiresAtMillis: Long,
     val sessionIdleMinutes: Int,
     val recoveryCodes: List<String> = emptyList(),
-)
+) : PasswordLoginResponse
 
 @Immutable
 data class LoginCapabilities(

@@ -3,6 +3,7 @@
  * Handles API requests from the mini program.
  */
 const jwt = require('jsonwebtoken');
+const { randomUUID } = require('crypto');
 const Question = require('../models/Question');
 const ExamResult = require('../models/ExamResult');
 const ExamProgress = require('../models/ExamProgress');
@@ -1840,9 +1841,9 @@ exports.userLogin = asyncHandler(async (req, res) => {
     }
 
     const token = jwt.sign(
-        { openid, role: 'user' },
+        { openid, role: 'user', accountId: String(user._id), tokenVersion: user.tokenVersion || 0 },
         config.jwtSecret,
-        { expiresIn: config.userJwtExpiresIn },
+        { expiresIn: config.userJwtExpiresIn, jwtid: randomUUID() },
     );
 
     success(res, {

@@ -834,7 +834,9 @@ async function getAppSession(req) {
   if (!APP_AUTH_REQUIRED) return appSessionData(defaultSystemUser, { csrfToken: null, expiresAt: null });
   const platformIdentity = verifyPlatformSso(req);
   if (platformIdentity) {
-    const mappedUsername = process.env.PLATFORM_SSO_CAMPUS_USERNAME || platformIdentity.sub;
+    const mappedUsername = platformIdentity.account_id
+      ? platformIdentity.local_username
+      : process.env.PLATFORM_SSO_CAMPUS_USERNAME || platformIdentity.sub;
     const user = await findUserByUsername(mappedUsername);
     if (!user || user.disabled || user.role !== "admin") {
       throw new HttpError(403, "统一管理员未映射到校园服务管理员账号。", null, "PLATFORM_SSO_ACCOUNT_NOT_MAPPED");

@@ -5,6 +5,7 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config');
 const User = require('../models/User');
+const { isAuthTokenRevoked } = require('../utils/authCookies');
 const { AuthError, ForbiddenError } = require('../utils/errors');
 
 async function authenticateUser(req, res, next) {
@@ -31,12 +32,15 @@ async function authenticateUser(req, res, next) {
         throw new ForbiddenError('Token验证失败');
     }
 
-    if (decoded.role !== 'user' || !decoded.openid) {
+    if (decoded.role !== 'user' || !decoded.openid || !decoded.accountId || !Number.isSafeInteger(decoded.tokenVersion)) {
         throw new ForbiddenError('用户Token无效');
     }
 
-    const user = await User.exists({ openid: decoded.openid });
-    if (!user) {
+    const [user, revoked] = await Promise.all([
+        User.findOne({ _id: decoded.accountId, openid: decoded.openid }).select('tokenVersion').lean(),
+        isAuthTokenRevoked(token),
+    ]);
+    if (!user || revoked || (user.tokenVersion || 0) !== decoded.tokenVersion) {
         throw new AuthError('用户不存在，请重新登录');
     }
 
