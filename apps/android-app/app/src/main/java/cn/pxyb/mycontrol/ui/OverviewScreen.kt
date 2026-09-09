@@ -1397,66 +1397,52 @@ private fun OverviewServiceCardShell(
         onClick = if (enabled) onClick else null,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(
+        Row(
             modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                .alpha(if (enabled) 1f else 0.62f),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
+                .padding(horizontal = 10.dp, vertical = 9.dp)
+                .alpha(if (enabled) 1f else 0.58f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(iconBackground),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(iconBackground),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
 
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.5.sp,
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    content()
-                }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.5.sp,
+                        letterSpacing = (-0.2).sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                content()
+            }
 
-                if (opening) {
-                    ServiceJumpIndicator()
-                } else if (enabled) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(15.dp),
-                        )
-                    }
-                }
+            if (opening) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 1.8.dp,
+                )
             }
         }
     }
@@ -2255,41 +2241,46 @@ private fun ServiceRow(
         opening = opening,
         onClick = { onOpen(service) },
     ) {
-        val statusText = listOfNotNull(
-            service.httpStatus?.let { "HTTP $it" },
-            service.latencyMs?.let { "$it ms" },
-        ).joinToString(" · ").ifBlank { "等待监测数据" }
+        val isOk = service.httpStatus != null && service.httpStatus in 200..299
         val statusColor = when {
             service.httpStatus == null -> MaterialTheme.colorScheme.onSurfaceVariant
-            service.httpStatus in 200..299 -> ColorTokens.Green.foreground
+            isOk -> ColorTokens.Green.foreground
             else -> ColorTokens.Red.foreground
         }
 
-        if (service.httpStatus == null) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(5.dp)
+                    .clip(CircleShape)
+                    .background(statusColor),
+            )
+            if (service.httpStatus != null) {
+                Surface(
+                    shape = RoundedCornerShape(3.dp),
+                    color = statusColor.copy(alpha = 0.12f),
+                ) {
+                    Text(
+                        text = "${service.httpStatus}",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp,
+                            color = statusColor,
+                        ),
+                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 0.5.dp),
+                    )
+                }
+            }
             Text(
-                text = statusText,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                color = statusColor,
+                text = service.latencyMs?.let { "$it ms" } ?: if (service.httpStatus == null) "等待监测" else "正常",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-        } else {
-            Surface(
-                shape = RoundedCornerShape(5.dp),
-                color = statusColor.copy(alpha = 0.12f),
-            ) {
-                Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp,
-                        color = statusColor,
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                )
-            }
         }
     }
 }
@@ -2319,55 +2310,41 @@ private fun ExternalApplicationLoadingCard(index: Int) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(74.dp)
+            .height(56.dp)
             .glassShimmer(isDark),
         shape = RoundedCornerShape(18.dp),
         color = glassCardColor(),
         border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f)),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(skeletonColor),
             )
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(7.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(if (index % 2 == 0) 0.72f else 0.58f)
-                        .height(11.dp)
-                        .clip(RoundedCornerShape(5.dp))
+                        .fillMaxWidth(if (index % 2 == 0) 0.78f else 0.65f)
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(4.dp))
                         .background(skeletonColor),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(width = 30.dp, height = 10.dp)
-                            .clip(RoundedCornerShape(5.dp))
-                            .background(skeletonColor),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(width = 46.dp, height = 10.dp)
-                            .clip(RoundedCornerShape(5.dp))
-                            .background(skeletonColor),
-                    )
-                }
+                Box(
+                    modifier = Modifier
+                        .size(width = 48.dp, height = 9.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(skeletonColor),
+                )
             }
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(skeletonColor),
-            )
         }
     }
 }
@@ -2389,20 +2366,36 @@ private fun ExternalApplicationRow(
         opening = opening,
         onClick = { onOpen(application) },
     ) {
-        Text(
-            text = listOfNotNull(
-                application.health.latencyMs?.let { "$it ms" },
-                when {
-                    !application.canAccess -> "当前账号无权访问"
-                    application.kind == "direct" -> "直接打开"
-                    else -> "最低权限 ${externalRoleLabel(application.requiredRole)}"
-                },
-            ).joinToString(" · "),
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (!application.canAccess) {
+            Text(
+                text = "无访问权限",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(ColorTokens.Green.foreground),
+                )
+                val latencyText = application.health.latencyMs?.let { "$it ms" } ?: "在线"
+                val tagText = if (application.kind == "direct") "免密" else externalRoleLabel(application.requiredRole)
+                Text(
+                    text = "$latencyText · $tagText",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
