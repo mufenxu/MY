@@ -223,6 +223,7 @@ private fun MainTab.route(): String = when (this) {
 }
 
 private fun AppEntryUiState.requestedRoute(): String = when {
+    pendingLibrarySeatMyReservations -> AppRoute.LibrarySeatReservation
     workspaceDestination == WorkspaceDestination.Today -> AppRoute.Today
     workspaceDestination == WorkspaceDestination.Notifications -> AppRoute.Notifications
     workspaceDestination == WorkspaceDestination.Scenes -> AppRoute.Scenes
@@ -1560,7 +1561,15 @@ private fun AuthenticatedShell(
     }
 
     // 响应由 ViewModel 显式打开的二级子界面。
-    LaunchedEffect(state.accountManagementOpen, state.googleAccountDeskOpen, state.githubProjectsOpen, state.globalSearchOpen, state.assistantOpen, state.workspaceDestination) {
+    LaunchedEffect(
+        state.accountManagementOpen,
+        state.googleAccountDeskOpen,
+        state.githubProjectsOpen,
+        state.globalSearchOpen,
+        state.assistantOpen,
+        state.workspaceDestination,
+        state.pendingLibrarySeatMyReservations,
+    ) {
         val targetRoute = state.requestedRoute()
         if (targetRoute != currentRoute && targetRoute !in setOf(AppRoute.Overview, AppRoute.Operations, AppRoute.Tools, AppRoute.Profile)) {
             navigateToSubScreen(targetRoute)
@@ -2060,8 +2069,19 @@ private fun AuthenticatedShell(
                 composable(AppRoute.LibrarySeatReservation) {
                     val librarySeatState by viewModel.librarySeats.state.collectAsStateWithLifecycle()
                     val context = LocalContext.current
+                    val initialTab = if (state.pendingLibrarySeatMyReservations) {
+                        LibrarySeatTab.My
+                    } else {
+                        LibrarySeatTab.Book
+                    }
+                    LaunchedEffect(state.pendingLibrarySeatMyReservations) {
+                        if (state.pendingLibrarySeatMyReservations) {
+                            viewModel.consumePendingLibrarySeatMyReservations()
+                        }
+                    }
                     LibrarySeatReservationScreen(
                         state = librarySeatState,
+                        initialTab = initialTab,
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
                         onRefresh = viewModel.librarySeats::refreshLibrarySeat,

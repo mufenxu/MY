@@ -1359,6 +1359,8 @@ fun ProfileScreen(
     }
 }
 
+
+
 @Composable
 private fun AppUpdateStatusPanel(
     icon: ImageVector,
@@ -1687,73 +1689,91 @@ private fun NotificationPreferencesDialog(
     var eveningHour by remember { mutableStateOf(current.eveningBriefHour.toString()) }
     var classFocusEnabled by remember { mutableStateOf(current.classFocusEnabled) }
 
-    Dialog(
+    AppDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        icon = Icons.Outlined.NotificationsActive,
+        iconTint = ColorTokens.Orange.foreground,
+        iconBackground = ColorTokens.Orange.container,
+        title = "告警与通知偏好",
+        subtitle = "配置夜间免打扰与业务订阅开关",
+        footer = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                AppDialogSecondaryButton(
+                    text = "取消",
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                )
+                AppDialogPrimaryButton(
+                    text = "保存配置",
+                    onClick = {
+                        onSave(
+                            current.copy(
+                                quietHoursEnabled = quietEnabled,
+                                quietStartHour = quietStart,
+                                quietEndHour = quietEnd,
+                                severityFilter = severity,
+                                incidentAlerts = incidentAlerts,
+                                iotAlerts = iotAlerts,
+                                campusAlerts = campusAlerts,
+                                backupAlerts = backupAlerts,
+                                dailyBriefEnabled = dailyBriefEnabled,
+                                morningBriefHour = morningHour.toIntOrNull()?.coerceIn(0, 23) ?: 7,
+                                eveningBriefHour = eveningHour.toIntOrNull()?.coerceIn(0, 23) ?: 21,
+                                classFocusEnabled = classFocusEnabled,
+                            )
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        },
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .padding(16.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 6.dp,
-        ) {
-            Column(modifier = Modifier.padding(22.dp).verticalScroll(rememberScrollState())) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconTile(Icons.Outlined.NotificationsActive, ColorTokens.Orange.foreground, ColorTokens.Orange.container, modifier = Modifier.size(44.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("告警与通知偏好", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
-                        Text("配置夜间免打扰与业务订阅开关", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            Spacer(Modifier.height(4.dp))
+
+            // 1. 夜间免打扰
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Outlined.Bedtime, contentDescription = null, tint = ColorTokens.Purple.foreground, modifier = Modifier.size(20.dp))
+                            Column {
+                                Text("夜间免打扰 (DND)", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                                Text("时段内静音普通告警 (保留 P0 致命提醒)", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        AppSwitch(
+                            checked = quietEnabled,
+                            onCheckedChange = { quietEnabled = it },
+                            tint = ColorTokens.Purple.foreground,
+                        )
                     }
-                }
 
-                Spacer(Modifier.height(16.dp))
-
-                // 1. 夜间免打扰
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    if (quietEnabled) {
+                        Spacer(Modifier.height(10.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Outlined.Bedtime, contentDescription = null, tint = ColorTokens.Purple.foreground, modifier = Modifier.size(20.dp))
-                                Column {
-                                    Text("夜间免打扰 (DND)", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-                                    Text("时段内静音普通告警 (保留 P0 致命提醒)", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                            AppSwitch(
-                                checked = quietEnabled,
-                                onCheckedChange = { quietEnabled = it },
-                                tint = ColorTokens.Purple.foreground,
+                            Text("免打扰时段", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
+                            Text(
+                                "${quietStart}:00 至 次日 ${quietEnd}:00",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = ColorTokens.Purple.foreground,
                             )
-                        }
-
-                        if (quietEnabled) {
-                            Spacer(Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text("免打扰时段", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
-                                Text(
-                                    "${quietStart}:00 至 次日 ${quietEnd}:00",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = ColorTokens.Purple.foreground,
-                                )
-                            }
                         }
                     }
                 }
+            }
 
                 Spacer(Modifier.height(12.dp))
 
@@ -1819,41 +1839,9 @@ private fun NotificationPreferencesDialog(
                     PreferenceToggleRow("自动备份与环境体检报告", backupAlerts) { backupAlerts = it }
                 }
 
-                Spacer(Modifier.height(20.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    AppSecondaryButton(
-                        text = "取消",
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                    )
-                    AppButton(
-                        text = "保存配置",
-                        onClick = {
-                            onSave(
-                                current.copy(
-                                    quietHoursEnabled = quietEnabled,
-                                    quietStartHour = quietStart,
-                                    quietEndHour = quietEnd,
-                                    severityFilter = severity,
-                                    incidentAlerts = incidentAlerts,
-                                    iotAlerts = iotAlerts,
-                                    campusAlerts = campusAlerts,
-                                    backupAlerts = backupAlerts,
-                                    dailyBriefEnabled = dailyBriefEnabled,
-                                    morningBriefHour = morningHour.toIntOrNull()?.coerceIn(0, 23) ?: 7,
-                                    eveningBriefHour = eveningHour.toIntOrNull()?.coerceIn(0, 23) ?: 21,
-                                    classFocusEnabled = classFocusEnabled,
-                                )
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
             }
         }
     }
-}
 
 @Composable
 private fun SeverityChip(id: String, label: String, selected: Boolean, onSelect: () -> Unit) {

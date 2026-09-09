@@ -117,6 +117,7 @@ data class AppUiState(
     val assistantOpen: Boolean = false,
     val assistantButtonVisible: Boolean = true,
     val workspaceDestination: WorkspaceDestination? = null,
+    val pendingLibrarySeatMyReservations: Boolean = false,
     val googleAccounts: List<GoogleAccountRecord> = emptyList(),
     val googleAccountsLoaded: Boolean = false,
     val googleAccountsLoading: Boolean = false,
@@ -195,6 +196,7 @@ data class AppEntryUiState(
     val assistantOpen: Boolean,
     val assistantButtonVisible: Boolean,
     val workspaceDestination: WorkspaceDestination?,
+    val pendingLibrarySeatMyReservations: Boolean,
     val error: String?,
     val message: String?,
 )
@@ -527,6 +529,7 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     assistantOpen = assistantOpen,
     assistantButtonVisible = assistantButtonVisible,
     workspaceDestination = workspaceDestination,
+    pendingLibrarySeatMyReservations = pendingLibrarySeatMyReservations,
     error = error,
     message = message,
 )

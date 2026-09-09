@@ -822,7 +822,11 @@ export function createReservationService({
         blocks: [{ type: "keyValue", items }]
       },
       source: { service: "campus-service", entityType: "librarySeatWaitlist", entityId: task.id },
-      actions: [{ id: "open-today", label: "查看我的预约", deepLink: "mycontrol://open?destination=today" }],
+      actions: [{
+        id: "open-library-seat-reservation",
+        label: "查看我的预约",
+        deepLink: "mycontrol://open?destination=library-seat-reservation"
+      }],
       ...(wecomId ? { wecom: { touser: wecomId } } : {})
     };
     if (!isSuccess) {

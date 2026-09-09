@@ -72,7 +72,7 @@ import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
 
-private enum class LibrarySeatTab(val label: String) {
+internal enum class LibrarySeatTab(val label: String) {
     Book("查询座位"),
     My("我的预约"),
     Waitlist("候补预约"),
@@ -85,8 +85,9 @@ private fun isActiveSeatReservation(record: LibrarySeatReservationRecord): Boole
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LibrarySeatReservationScreen(
+internal fun LibrarySeatReservationScreen(
     state: LibrarySeatUiState,
+    initialTab: LibrarySeatTab = LibrarySeatTab.Book,
     contentPadding: PaddingValues,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
@@ -122,7 +123,7 @@ fun LibrarySeatReservationScreen(
     var initialQueryDone by rememberSaveable { mutableStateOf(false) }
     var queryMode by rememberSaveable { mutableStateOf("areas") }
     var seatListExpanded by rememberSaveable { mutableStateOf(false) }
-    var selectedTab by rememberSaveable { mutableStateOf(LibrarySeatTab.Book) }
+    var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
 
     fun clearQuerySelection() {
         onInvalidateQuery()

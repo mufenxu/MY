@@ -777,6 +777,7 @@ class AppViewModel(
                     globalSearchOpen = globalSearchOpen,
                     assistantOpen = assistantOpen,
                     workspaceDestination = workspaceDestination,
+                    pendingLibrarySeatMyReservations = false,
                 )
             }
         }
@@ -798,8 +799,11 @@ class AppViewModel(
     fun handleOpenIntent(uri: Uri?) {
         if (uri == null) return
         if (uri.scheme == DeepLinks.SCHEME && uri.host == DeepLinks.HOST_OPEN) {
-            val workspace = uri.getQueryParameter(DeepLinks.EXTRA_DESTINATION)
-                ?.let { value -> WorkspaceDestination.entries.firstOrNull { it.name.equals(value, ignoreCase = true) } }
+            if (uri.getQueryParameter(DeepLinks.EXTRA_DESTINATION) == "library-seat-reservation") {
+                openLibrarySeatMyReservations()
+                return
+            }
+            val workspace = parseWorkspaceDestination(uri.getQueryParameter(DeepLinks.EXTRA_DESTINATION))
             if (workspace != null) {
                 val sceneId = uri.getQueryParameter(DeepLinks.EXTRA_SCENE_ID)
                     ?.trim()
@@ -850,6 +854,32 @@ class AppViewModel(
 
     fun consumeTabNavigation(tab: MainTab) {
         mutableState.update { if (it.pendingTabNavigation == tab) it.copy(pendingTabNavigation = null) else it }
+    }
+
+    fun openLibrarySeatMyReservations() {
+        mutableState.update {
+            it.copy(
+                selectedTab = MainTab.Overview,
+                pendingTabNavigation = null,
+                accountManagementOpen = false,
+                googleAccountDeskOpen = false,
+                githubProjectsOpen = false,
+                globalSearchOpen = false,
+                assistantOpen = false,
+                workspaceDestination = null,
+                pendingLibrarySeatMyReservations = true,
+                error = null,
+                message = null,
+            )
+        }
+        librarySeats.loadLibrarySeatOverview()
+        librarySeats.loadLibrarySeatReservations()
+    }
+
+    fun consumePendingLibrarySeatMyReservations() {
+        mutableState.update {
+            if (it.pendingLibrarySeatMyReservations) it.copy(pendingLibrarySeatMyReservations = false) else it
+        }
     }
 
     fun openSharedTodo(subject: String?, text: String?) {
@@ -2226,18 +2256,20 @@ class AppViewModel(
         }
         if (uri.scheme != "mycontrol" || uri.host != "open") return false
         uri.getQueryParameter("destination")?.let { destination ->
-            when (destination) {
-                "today" -> openWorkspace(WorkspaceDestination.Today)
-                "notifications" -> openWorkspace(WorkspaceDestination.Notifications)
-                "scenes" -> {
+            if (destination == "library-seat-reservation") {
+                openLibrarySeatMyReservations()
+                return true
+            }
+            parseWorkspaceDestination(destination)?.let { workspace ->
+                if (workspace == WorkspaceDestination.Scenes) {
                     uri.getQueryParameter(DeepLinks.EXTRA_SCENE_ID)
                         ?.takeIf(String::isNotBlank)
                         ?.let { id -> mutableState.update { it.copy(pendingSceneId = id) } }
-                    openWorkspace(WorkspaceDestination.Scenes)
                 }
-                else -> return false
+                openWorkspace(workspace)
+                return true
             }
-            return true
+            return false
         }
         uri.getQueryParameter("tab")?.let { tab ->
             val target = DeepLinks.parseTab(tab) ?: return false
@@ -2245,6 +2277,11 @@ class AppViewModel(
             return true
         }
         return false
+    }
+
+    private fun parseWorkspaceDestination(raw: String?): WorkspaceDestination? {
+        val value = raw?.trim()?.lowercase() ?: return null
+        return WorkspaceDestination.entries.firstOrNull { it.name.lowercase() == value }
     }
 
     private suspend fun evaluatePersonalReminders() {
