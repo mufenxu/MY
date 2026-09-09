@@ -2037,6 +2037,7 @@ private fun AuthenticatedShell(
                                 )
                             }
                         },
+                        onRefreshIdentityCode = viewModel.reservations::refreshIdentityCode,
                         onQueryRulesAndAvailability = viewModel.reservations::queryReservationRulesAndAvailability,
                         onQuerySpacesByTime = viewModel.reservations::queryAvailableSpacesByTime,
                         onSubmitReservation = viewModel.reservations::submitReservation,

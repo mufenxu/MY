@@ -209,6 +209,12 @@ data class CampusDashboard(
 )
 
 @Immutable
+data class CampusIdentityCode(
+    val qrImage: String,
+    val expiresAt: String,
+)
+
+@Immutable
 data class CampusReservationTimeWindow(
     val start: String = "08:00",
     val end: String = "21:45",

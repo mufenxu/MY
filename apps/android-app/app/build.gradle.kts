@@ -150,6 +150,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
     implementation(libs.coil.compose)
+    implementation(libs.coil.svg)
     implementation(project(":core:network"))
     implementation(project(":core:security"))
     implementation(libs.mlkit.barcode.scanning)

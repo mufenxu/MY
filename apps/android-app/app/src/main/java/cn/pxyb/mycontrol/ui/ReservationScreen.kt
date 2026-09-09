@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.QrCode
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -86,12 +87,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import cn.pxyb.mycontrol.data.CampusIdentityCode
 import cn.pxyb.mycontrol.data.CampusAutoReservationCandidate
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusMyReservation
@@ -99,15 +103,21 @@ import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.data.CampusReservationTimeWindow
 import java.time.LocalDate
+import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
+import java.time.ZoneId
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 private enum class ReservationTab(val label: String) {
     Single("单次预约"),
     My("已约空间"),
     Auto("自动任务"),
 }
+
+private val identityCodeTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+    .withZone(ZoneId.systemDefault())
 
 @Composable
 fun ReservationScreen(
@@ -118,6 +128,7 @@ fun ReservationScreen(
     onLoadSpaces: () -> Unit,
     onLoadMyReservations: () -> Unit,
     onOpenOfficialReservation: () -> Unit,
+    onRefreshIdentityCode: () -> Unit,
     onQueryRulesAndAvailability: (Int, String) -> Unit,
     onQuerySpacesByTime: (String, String, String) -> Unit,
     onSubmitReservation: (CampusReservationRequest, () -> Unit) -> Unit,
@@ -128,11 +139,30 @@ fun ReservationScreen(
     onClearFeedback: () -> Unit,
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(ReservationTab.Single) }
+    var showIdentityCodeDialog by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         onLoadSpaces()
         onLoadMyReservations()
         onLoadAutoTasks()
+    }
+
+    if (showIdentityCodeDialog) {
+        IdentityCodeDialog(
+            code = state.identityCode,
+            loading = state.identityCodeLoading,
+            error = state.identityCodeError,
+            onRefresh = onRefreshIdentityCode,
+            onDismiss = { showIdentityCodeDialog = false },
+        )
+    }
+
+    val identityCodeExpiresAt = state.identityCode?.expiresAt
+    LaunchedEffect(showIdentityCodeDialog, identityCodeExpiresAt) {
+        if (!showIdentityCodeDialog || identityCodeExpiresAt == null) return@LaunchedEffect
+        val expiresAtMillis = identityCodeExpiryMillis(identityCodeExpiresAt) ?: return@LaunchedEffect
+        delay((expiresAtMillis - System.currentTimeMillis() - 1500).coerceAtLeast(1000))
+        onRefreshIdentityCode()
     }
 
     WorkspacePage(
@@ -143,6 +173,14 @@ fun ReservationScreen(
         refreshing = state.refreshing || state.spacesLoading || state.myReservationsLoading || state.autoTasksLoading,
         onRefresh = onRefresh,
         actions = {
+            AppHeaderIconButton(
+                icon = Icons.Outlined.QrCode,
+                contentDescription = "显示个人身份码",
+                onClick = {
+                    showIdentityCodeDialog = true
+                    onRefreshIdentityCode()
+                },
+            )
             AppHeaderIconButton(
                 icon = Icons.Outlined.Public,
                 contentDescription = "打开学校官方预约",
@@ -287,6 +325,82 @@ fun ReservationScreen(
             }
         }
     }
+}
+
+@Composable
+private fun IdentityCodeDialog(
+    code: CampusIdentityCode?,
+    loading: Boolean,
+    error: String?,
+    onRefresh: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AppDialog(
+        onDismissRequest = onDismiss,
+        icon = Icons.Outlined.QrCode,
+        iconTint = MaterialTheme.colorScheme.primary,
+        iconBackground = MaterialTheme.colorScheme.primaryContainer,
+        title = "个人身份码",
+        subtitle = "一卡通动态码，用于扫码开门",
+        content = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                when {
+                    loading -> CircularProgressIndicator(modifier = Modifier.size(36.dp))
+                    error != null -> Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                    )
+                    code != null && code.qrImage.isNotBlank() -> {
+                        AsyncImage(
+                            model = code.qrImage,
+                            contentDescription = "个人身份二维码",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.size(220.dp),
+                        )
+                        Text(
+                            text = "有效至 ${identityCodeExpiryText(code.expiresAt)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    else -> Text(
+                        text = "正在获取个人身份码",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    text = "动态码不会保存到磁盘",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        footer = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                AppDialogSecondaryButton(
+                    text = "关闭",
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                )
+                AppDialogPrimaryButton(
+                    text = "刷新",
+                    onClick = onRefresh,
+                    modifier = Modifier.weight(1f),
+                    enabled = !loading,
+                    busy = loading,
+                )
+            }
+        },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -2609,6 +2723,14 @@ private fun CandidateEditRow(
 @Composable
 private fun DetailRow(label: String, value: String) {
     AppDetailRow(label = label, value = value)
+}
+
+private fun identityCodeExpiryMillis(expiresAt: String): Long? =
+    runCatching { Instant.parse(expiresAt).toEpochMilli() }.getOrNull()
+
+private fun identityCodeExpiryText(expiresAt: String): String {
+    val expiresAtMillis = identityCodeExpiryMillis(expiresAt) ?: return "短时动态码"
+    return identityCodeTimeFormatter.format(Instant.ofEpochMilli(expiresAtMillis))
 }
 
 private fun weekdayName(date: LocalDate): String {

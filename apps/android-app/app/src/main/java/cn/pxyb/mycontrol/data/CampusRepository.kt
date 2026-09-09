@@ -386,6 +386,14 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         )
     }
 
+    suspend fun campusIdentityCode(): CampusIdentityCode = withContext(Dispatchers.IO) {
+        val data = campusData(CAMPUS_IDENTITY_CARD_CODE_PATH, method = "POST")
+        CampusIdentityCode(
+            qrImage = data.optString("qrImage"),
+            expiresAt = data.optString("expiresAt"),
+        )
+    }
+
     suspend fun campusWaterValve(): CampusWaterValve = withContext(Dispatchers.IO) {
         campusWaterValveData(CAMPUS_WATER_VALVE_PATH)
     }
@@ -498,8 +506,8 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         )
     }
 
-    private suspend fun campusData(path: String): JSONObject {
-        val envelope = http.execute(path).json
+    private suspend fun campusData(path: String, method: String = "GET"): JSONObject {
+        val envelope = http.execute(path, method = method).json
         return envelope.optJSONObject("data") ?: envelope
     }
 

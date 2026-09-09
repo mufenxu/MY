@@ -10,6 +10,7 @@ import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusFreeClassrooms
+import cn.pxyb.mycontrol.data.CampusIdentityCode
 import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.data.CampusWaterBill
@@ -413,6 +414,9 @@ data class ReservationUiState(
     val myReservations: List<CampusMyReservation> = emptyList(),
     val myReservationsLoading: Boolean = false,
     val cancellingReservationId: String? = null,
+    val identityCode: CampusIdentityCode? = null,
+    val identityCodeLoading: Boolean = false,
+    val identityCodeError: String? = null,
     val error: String? = null,
     val message: String? = null,
 )

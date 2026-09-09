@@ -25,6 +25,9 @@ class ReservationStateHolder(
         myReservationsLoading = false,
         deletingTaskId = null,
         cancellingReservationId = null,
+        identityCode = null,
+        identityCodeLoading = false,
+        identityCodeError = null,
     )
 
     fun showError(message: String) {
@@ -147,6 +150,19 @@ class ReservationStateHolder(
         afterSuccess = {
             loadMyReservations(force = true)
             onSuccess()
+        },
+    )
+
+    fun refreshIdentityCode() = launchAction(
+        isBusy = { identityCodeLoading },
+        start = { copy(identityCodeLoading = true, identityCode = null, identityCodeError = null) },
+        action = { campus.campusIdentityCode() },
+        success = { code -> copy(identityCode = code, identityCodeLoading = false) },
+        failure = { error ->
+            copy(
+                identityCodeLoading = false,
+                identityCodeError = error.message ?: "个人身份码获取失败，请重试。",
+            )
         },
     )
 
