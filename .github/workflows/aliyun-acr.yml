@@ -360,6 +360,10 @@ jobs:
           pull_with_retry
           "${compose[@]}" up -d --no-build --wait --wait-timeout 240
           node --env-file=.env.release-smoke scripts/verify-platform-smoke.mjs
+          curl --fail --retry 10 --retry-delay 3 \
+            --header 'X-Forwarded-Proto: https' \
+            http://127.0.0.1:22100/api/iot/api/ready
+          node --env-file=.env.release-smoke scripts/verify-mongodb-isolation.mjs .env.release-smoke
 
       - name: Show exact-candidate logs on failure
         if: failure() && steps.resolve.outputs.targets != '' && hashFiles('.env.release-smoke') != ''
