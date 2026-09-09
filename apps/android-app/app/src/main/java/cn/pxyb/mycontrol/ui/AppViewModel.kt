@@ -2459,6 +2459,8 @@ class AppViewModel(
 
     fun checkAppUpdates() = appUpdates.check()
 
+    fun checkAppUpdatesSilently() = appUpdates.check(silent = true)
+
     fun downloadAndInstallAppUpdate() = appUpdates.downloadAndInstall()
 
     fun installDownloadedAppUpdate() = appUpdates.installDownloaded()
@@ -2470,7 +2472,7 @@ class AppViewModel(
     }
 }
 
-private fun formatBytes(bytes: Long): String = when {
+internal fun formatBytes(bytes: Long): String = when {
     bytes <= 0L -> "0 B"
     bytes < 1024L -> "$bytes B"
     bytes < 1024L * 1024L -> String.format(java.util.Locale.US, "%.1f KB", bytes.toDouble() / 1024.0)

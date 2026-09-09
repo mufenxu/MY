@@ -23,7 +23,7 @@ class AppUpdateStateHolder(
         else -> current
     }
 
-    fun check() = launchAction(
+    fun check(silent: Boolean = false) = launchAction(
         isBusy = { phase == AppUpdatePhase.Checking || phase == AppUpdatePhase.Downloading },
         start = { AppUpdateUiState(phase = AppUpdatePhase.Checking) },
         action = { manager.fetchLatest() },
@@ -34,7 +34,7 @@ class AppUpdateStateHolder(
             )
         },
         failure = { error -> AppUpdateUiState(phase = AppUpdatePhase.Error, error = error.message ?: "检查更新失败，请稍后重试") },
-        afterSuccess = { onFeedback("版本检查完成") },
+        afterSuccess = { if (!silent) onFeedback("版本检查完成") },
     )
 
     fun downloadAndInstall() {
