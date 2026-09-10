@@ -481,7 +481,7 @@ export function createReleaseService({
     return mapped;
   }
 
-  async function dispatchAndroidBuild({ requestedBy = 'system' } = {}) {
+  async function dispatchAndroidBuild({ requestedBy: _requestedBy = 'system' } = {}) {
     if (!config.releaseActionsEnabled) {
       throw new ReleaseOperationError(403, 'RELEASE_ACTIONS_DISABLED', 'Android 构建操作未启用。');
     }
