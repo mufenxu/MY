@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,12 +33,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.data.AndroidReleaseRecord
+import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppErrorState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
+import cn.pxyb.mycontrol.ui.components.picker.AppWheelPicker
 import cn.pxyb.mycontrol.update.AppUpdatePhase
 import cn.pxyb.mycontrol.update.AppUpdateUiState
 import java.time.OffsetDateTime
@@ -156,9 +159,14 @@ private fun AndroidReleasePlanCard(
     val draft = state.draft
     val buildInProgress = state.catalog?.buildInProgress == true
     val planBusy = state.saving || state.building || buildInProgress
-    var versionName by remember(draft?.id ?: "none") {
-        mutableStateOf(draft?.versionName.orEmpty())
+    val currentVersionCode = maxOf(BuildConfig.VERSION_CODE, state.catalog?.latest?.versionCode ?: 0)
+    val canSelectVersion = currentVersionCode < Int.MAX_VALUE
+    val minimumVersionCode = if (canSelectVersion) currentVersionCode + 1 else Int.MAX_VALUE
+    var versionCode by remember(draft?.id, draft?.versionCode, minimumVersionCode) {
+        mutableIntStateOf((draft?.versionCode ?: minimumVersionCode).coerceAtLeast(minimumVersionCode))
     }
+    val versionName = androidReleaseVersionName(versionCode)
+    var showVersionPicker by remember { mutableStateOf(false) }
     var notes by remember(draft?.id ?: "none") {
         mutableStateOf(draft?.notes.orEmpty())
     }
@@ -203,13 +211,16 @@ private fun AndroidReleasePlanCard(
             }
 
             if (canManage) {
-                AppTextField(
-                    value = versionName,
-                    onValueChange = { versionName = it },
-                    label = "版本号",
-                    placeholder = "例如 1.3.0",
-                    leadingIcon = Icons.Outlined.SystemUpdate,
-                    enabled = !planBusy,
+                AppActionRow(
+                    title = "版本号 · v$versionName",
+                    subtitle = if (canSelectVersion) {
+                        "点击选择，最低可选 v${androidReleaseVersionName(minimumVersionCode)}"
+                    } else {
+                        "当前版本已达到可发布上限"
+                    },
+                    icon = Icons.Outlined.SystemUpdate,
+                    enabled = !planBusy && canSelectVersion,
+                    onClick = { showVersionPicker = true },
                 )
                 AppTextField(
                     value = notes,
@@ -231,7 +242,7 @@ private fun AndroidReleasePlanCard(
                         onClick = { onSaveDraft(versionName, notes) },
                         icon = Icons.Outlined.Save,
                         modifier = Modifier.weight(1f),
-                        enabled = !planBusy && versionName.isNotBlank() && notes.isNotBlank(),
+                        enabled = !planBusy && canSelectVersion && notes.isNotBlank(),
                         loading = state.saving,
                     )
                     AppButton(
@@ -239,7 +250,7 @@ private fun AndroidReleasePlanCard(
                         onClick = onDispatchBuild,
                         icon = Icons.Outlined.RocketLaunch,
                         modifier = Modifier.weight(1f),
-                        enabled = !planBusy && draft != null && !draftDirty,
+                        enabled = !planBusy && canSelectVersion && draft != null && !draftDirty,
                         loading = state.building,
                     )
                 }
@@ -275,7 +286,139 @@ private fun AndroidReleasePlanCard(
             }
         }
     }
+
+    if (showVersionPicker && canManage && !planBusy && canSelectVersion) {
+        AndroidReleaseVersionPicker(
+            versionCode = versionCode,
+            minimumVersionCode = minimumVersionCode,
+            onDismiss = { showVersionPicker = false },
+            onConfirm = {
+                versionCode = it
+                showVersionPicker = false
+            },
+        )
+    }
 }
+
+@Composable
+private fun AndroidReleaseVersionPicker(
+    versionCode: Int,
+    minimumVersionCode: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    var selectedVersionCode by remember(versionCode, minimumVersionCode) {
+        mutableIntStateOf(versionCode.coerceAtLeast(minimumVersionCode))
+    }
+    // 与发布接口的编码规则一致，每段选择都限制在可更新的构建号范围内。
+    val major = selectedVersionCode / 1_000_000
+    val minor = selectedVersionCode / 1_000 % 1_000
+    val patch = selectedVersionCode % 1_000
+    val minimumMajor = minimumVersionCode / 1_000_000
+    val maximumMajor = Int.MAX_VALUE / 1_000_000
+    val minimumMinor = if (major == minimumMajor) minimumVersionCode / 1_000 % 1_000 else 0
+    val maximumMinor = if (major == maximumMajor) Int.MAX_VALUE / 1_000 % 1_000 else 999
+    val minimumPatch = if (selectedVersionCode / 1_000 == minimumVersionCode / 1_000) {
+        minimumVersionCode % 1_000
+    } else {
+        0
+    }
+    val maximumPatch = if (selectedVersionCode / 1_000 == Int.MAX_VALUE / 1_000) {
+        Int.MAX_VALUE % 1_000
+    } else {
+        999
+    }
+    val majors = remember(minimumMajor) { (minimumMajor..maximumMajor).toList() }
+    val minors = remember(minimumMinor, maximumMinor) { (minimumMinor..maximumMinor).toList() }
+    val patches = remember(minimumPatch, maximumPatch) { (minimumPatch..maximumPatch).toList() }
+
+    AppDialog(
+        onDismissRequest = onDismiss,
+        icon = Icons.Outlined.SystemUpdate,
+        title = "选择版本号",
+        subtitle = "将发布 v${androidReleaseVersionName(selectedVersionCode)}",
+        footer = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AppDialogSecondaryButton(
+                    text = "取消",
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                )
+                AppDialogPrimaryButton(
+                    text = "使用此版本",
+                    onClick = { onConfirm(selectedVersionCode) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "最低可选 v${androidReleaseVersionName(minimumVersionCode)}，滑动数字自定义版本。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("主版本", style = MaterialTheme.typography.labelMedium)
+                    AppWheelPicker(
+                        items = majors,
+                        selectedIndex = major - minimumMajor,
+                        onSelectedIndexChanged = {
+                            selectedVersionCode = (majors[it] * 1_000_000L + selectedVersionCode % 1_000_000)
+                                .coerceIn(minimumVersionCode.toLong(), Int.MAX_VALUE.toLong()).toInt()
+                        },
+                        itemHeight = 48.dp,
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("次版本", style = MaterialTheme.typography.labelMedium)
+                    AppWheelPicker(
+                        items = minors,
+                        selectedIndex = minor - minimumMinor,
+                        onSelectedIndexChanged = {
+                            selectedVersionCode = (
+                                selectedVersionCode / 1_000_000 * 1_000_000L +
+                                    minors[it] * 1_000L + selectedVersionCode % 1_000
+                                ).coerceIn(minimumVersionCode.toLong(), Int.MAX_VALUE.toLong()).toInt()
+                        },
+                        itemHeight = 48.dp,
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("修订号", style = MaterialTheme.typography.labelMedium)
+                    AppWheelPicker(
+                        items = patches,
+                        selectedIndex = patch - minimumPatch,
+                        onSelectedIndexChanged = {
+                            selectedVersionCode = (selectedVersionCode / 1_000 * 1_000L + patches[it])
+                                .coerceIn(minimumVersionCode.toLong(), Int.MAX_VALUE.toLong()).toInt()
+                        },
+                        itemHeight = 48.dp,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun androidReleaseVersionName(versionCode: Int): String =
+    "${versionCode / 1_000_000}.${versionCode / 1_000 % 1_000}.${versionCode % 1_000}"
 
 @Composable
 private fun AndroidReleaseCard(
