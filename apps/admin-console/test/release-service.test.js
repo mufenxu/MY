@@ -138,6 +138,7 @@ test('android release list maps installable releases and the pending draft', asy
     fetchImpl: async (url, options = {}) => {
       const resource = String(url);
       requests.push({ resource, options });
+      if (resource.endsWith('/runs?per_page=30')) return jsonResponse({ workflow_runs: [] });
       if (resource.endsWith('/releases?per_page=100')) {
         return jsonResponse([
           githubAndroidRelease(),
@@ -175,6 +176,7 @@ test('android draft saves a valid next version and rejects downgrades', async ()
     fetchImpl: async (url, options = {}) => {
       const resource = String(url);
       requests.push({ resource, options });
+      if (resource.endsWith('/runs?per_page=30')) return jsonResponse({ workflow_runs: [] });
       if (resource.endsWith('/releases?per_page=100')) return jsonResponse([githubAndroidRelease()]);
       if (resource.endsWith('/releases') && options.method === 'POST') {
         return jsonResponse(githubAndroidRelease({
@@ -215,14 +217,15 @@ test('android build dispatch uses the dedicated workflow without image-only cont
     config: enabledConfig({ androidReleaseWorkflow: 'android-release.yml' }),
     fetchImpl: async (url, options = {}) => {
       requests.push({ url: String(url), options });
-      return jsonResponse(null, 204);
+      return options.method === 'POST' ? jsonResponse(null, 204) : jsonResponse({ workflow_runs: [] });
     },
   });
 
   const result = await releases.dispatchAndroidBuild({ requestedBy: 'admin' });
   assert.deepEqual(result, { dispatched: true, workflow: 'android-release.yml', ref: 'main' });
-  assert.equal(requests[0].url, 'https://api.github.com/repos/owner/repository/actions/workflows/android-release.yml/dispatches');
-  assert.deepEqual(JSON.parse(requests[0].options.body), { ref: 'main', inputs: {} });
+  const dispatch = requests.find((request) => request.options.method === 'POST');
+  assert.equal(dispatch.url, 'https://api.github.com/repos/owner/repository/actions/workflows/android-release.yml/dispatches');
+  assert.deepEqual(JSON.parse(dispatch.options.body), { ref: 'main', inputs: {} });
 });
 
 test('release center remains explicitly read-only without credentials', async () => {

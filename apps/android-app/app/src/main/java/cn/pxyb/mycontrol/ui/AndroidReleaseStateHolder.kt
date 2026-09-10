@@ -7,6 +7,8 @@ import cn.pxyb.mycontrol.data.AndroidReleaseDraft
 import cn.pxyb.mycontrol.data.AndroidReleaseRecord
 import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.update.AppUpdateManager
+import cn.pxyb.mycontrol.update.AppUpdatePhase
+import cn.pxyb.mycontrol.update.isAppUpdateSigningMismatch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.update
@@ -28,7 +30,7 @@ internal fun androidReleaseDownloadMode(
 
 @Immutable
 data class AndroidReleaseUiState(
-    val loading: Boolean = true,
+    val loading: Boolean = false,
     val refreshing: Boolean = false,
     val error: String? = null,
     val message: String? = null,
@@ -46,6 +48,7 @@ class AndroidReleaseStateHolder(
     parentScope: CoroutineScope,
     private val api: PlatformApi,
     private val updateManager: AppUpdateManager,
+    private val appUpdates: AppUpdateStateHolder,
     onSessionExpired: (String) -> Unit,
 ) : FeatureStateHolder<AndroidReleaseUiState>(
     parentScope,
@@ -71,7 +74,7 @@ class AndroidReleaseStateHolder(
 
     fun saveDraft(versionName: String, notes: String) {
         launchAction(
-            isBusy = { saving },
+            isBusy = { saving || building || catalog?.buildInProgress == true },
             start = { copy(saving = true, error = null, message = null) },
             action = { api.saveAndroidReleaseDraft(versionName.trim(), notes.trim()) },
             success = { draft ->
@@ -88,7 +91,8 @@ class AndroidReleaseStateHolder(
     }
 
     fun dispatchBuild(confirmation: suspend () -> Boolean) {
-        if (mutableState.value.building) return
+        val current = mutableState.value
+        if (current.building || current.saving || current.catalog?.buildInProgress == true) return
         scope.launch {
             mutableState.update { it.copy(building = true, error = null, message = null) }
             try {
@@ -98,7 +102,11 @@ class AndroidReleaseStateHolder(
                 }
                 api.dispatchAndroidBuild()
                 mutableState.update {
-                    it.copy(building = false, message = "Android 构建任务已提交。")
+                    it.copy(
+                        building = false,
+                        catalog = it.catalog?.copy(buildInProgress = true),
+                        message = "Android 构建任务已提交，完成后可下拉刷新发布状态。",
+                    )
                 }
                 load(force = true)
             } catch (error: Throwable) {
@@ -111,7 +119,17 @@ class AndroidReleaseStateHolder(
     }
 
     fun download(record: AndroidReleaseRecord) {
-        if (mutableState.value.downloadingVersion != null) return
+        if (mutableState.value.downloadingVersion != null || appUpdates.state.value.phase == AppUpdatePhase.Downloading) return
+        val update = record.toAppUpdateInfo()
+        if (update == null || !record.installable) {
+            mutableState.update { it.copy(error = "当前版本缺少下载地址或校验信息。", message = null) }
+            return
+        }
+        if (androidReleaseDownloadMode(record) == AndroidReleaseDownloadMode.Install) {
+            mutableState.update { it.copy(error = null, message = null) }
+            appUpdates.downloadAndInstall(update)
+            return
+        }
         launchAction(
             isBusy = { downloadingVersion != null },
             start = {
@@ -123,25 +141,10 @@ class AndroidReleaseStateHolder(
                 )
             },
             action = {
-                val update = record.toAppUpdateInfo() ?: error("当前版本缺少下载地址或校验信息。")
-                when (androidReleaseDownloadMode(record)) {
-                    AndroidReleaseDownloadMode.Install -> {
-                        val file = updateManager.download(update) { progress ->
-                            mutableState.update { it.copy(downloadProgress = progress) }
-                        }
-                        when (updateManager.install(file)) {
-                            cn.pxyb.mycontrol.update.AppInstallResult.Started -> "安装包已校验，正在打开安装器。"
-                            cn.pxyb.mycontrol.update.AppInstallResult.PermissionRequired -> "安装包已就绪，请先授权安装未知应用。"
-                        }
-                    }
-                    AndroidReleaseDownloadMode.Archive -> {
-                        updateManager.downloadArchive(update) { progress ->
-                            mutableState.update { it.copy(downloadProgress = progress) }
-                        }
-                        "历史安装包已校验并保存到系统下载目录。"
-                    }
-                    AndroidReleaseDownloadMode.Disabled -> error("当前版本缺少下载地址或校验信息。")
+                updateManager.downloadArchive(update) { progress ->
+                    mutableState.update { it.copy(downloadProgress = progress) }
                 }
+                "历史安装包已校验并保存到系统下载目录。"
             },
             success = { message ->
                 copy(downloadingVersion = null, downloadProgress = 100, message = message)
@@ -150,7 +153,11 @@ class AndroidReleaseStateHolder(
                 copy(
                     downloadingVersion = null,
                     downloadProgress = 0,
-                    error = error.message ?: "安装包下载失败，请稍后重试。",
+                    error = if (isAppUpdateSigningMismatch(error)) {
+                        "安装包签名与当前应用不一致，已取消归档。"
+                    } else {
+                        error.message ?: "安装包下载失败，请稍后重试。"
+                    },
                 )
             },
         )

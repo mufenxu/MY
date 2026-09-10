@@ -1010,6 +1010,7 @@ internal fun parseAndroidReleaseCatalog(json: JSONObject): AndroidReleaseCatalog
         draft = json.optJSONObject("draft")?.toAndroidReleaseDraft(),
         releases = releases,
         latest = json.optJSONObject("latest")?.toAndroidReleaseRecord(),
+        buildInProgress = json.optBoolean("buildInProgress"),
     )
 }
 

@@ -148,6 +148,7 @@ class AppViewModel(
         viewModelScope,
         api,
         appUpdateManager,
+        appUpdates,
         ::forceReauthentication,
     )
     val androidReleaseState = androidReleases.state

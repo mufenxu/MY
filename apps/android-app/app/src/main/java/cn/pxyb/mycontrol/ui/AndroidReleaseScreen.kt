@@ -38,6 +38,8 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppErrorState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
+import cn.pxyb.mycontrol.update.AppUpdatePhase
+import cn.pxyb.mycontrol.update.AppUpdateUiState
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import kotlin.math.log10
@@ -46,6 +48,7 @@ import kotlin.math.pow
 @Composable
 internal fun AndroidReleaseScreen(
     state: AndroidReleaseUiState,
+    appUpdate: AppUpdateUiState,
     canManage: Boolean,
     contentPadding: PaddingValues,
     onBack: () -> Unit,
@@ -54,6 +57,7 @@ internal fun AndroidReleaseScreen(
     onSaveDraft: (versionName: String, notes: String) -> Unit,
     onDispatchBuild: () -> Unit,
     onDownload: (AndroidReleaseRecord) -> Unit,
+    onInstallDownloaded: () -> Unit,
 ) {
     LaunchedEffect(Unit) {
         onLoad()
@@ -125,13 +129,17 @@ internal fun AndroidReleaseScreen(
                 contentType = { "android-release" },
             ) { index ->
                 val record = state.releases[index]
+                val recordUpdate = appUpdate.takeIf { it.info?.versionCode == record.versionCode }
+                val downloadingUpdate = recordUpdate?.phase == AppUpdatePhase.Downloading
                 AndroidReleaseCard(
                     record = record,
+                    appUpdate = recordUpdate,
                     isLatest = state.catalog?.latest?.id == record.id,
-                    isDownloading = state.downloadingVersion == record.versionName,
-                    anyDownloading = state.downloadingVersion != null,
-                    progress = state.downloadProgress,
+                    isDownloading = state.downloadingVersion == record.versionName || downloadingUpdate,
+                    anyDownloading = state.downloadingVersion != null || appUpdate.phase == AppUpdatePhase.Downloading,
+                    progress = if (downloadingUpdate) appUpdate.progress else state.downloadProgress,
                     onDownload = { onDownload(record) },
+                    onInstallDownloaded = onInstallDownloaded,
                 )
             }
         }
@@ -146,6 +154,8 @@ private fun AndroidReleasePlanCard(
     onDispatchBuild: () -> Unit,
 ) {
     val draft = state.draft
+    val buildInProgress = state.catalog?.buildInProgress == true
+    val planBusy = state.saving || state.building || buildInProgress
     var versionName by remember(draft?.id ?: "none") {
         mutableStateOf(draft?.versionName.orEmpty())
     }
@@ -185,7 +195,9 @@ private fun AndroidReleasePlanCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (draft != null) {
+                if (buildInProgress) {
+                    AppStatusBadge(label = "构建中", semantic = AppStatusSemantic.Info)
+                } else if (draft != null) {
                     AppStatusBadge(label = "已计划", semantic = AppStatusSemantic.Info)
                 }
             }
@@ -197,7 +209,7 @@ private fun AndroidReleasePlanCard(
                     label = "版本号",
                     placeholder = "例如 1.3.0",
                     leadingIcon = Icons.Outlined.SystemUpdate,
-                    enabled = !state.saving && !state.building,
+                    enabled = !planBusy,
                 )
                 AppTextField(
                     value = notes,
@@ -208,7 +220,7 @@ private fun AndroidReleasePlanCard(
                     singleLine = false,
                     minLines = 4,
                     maxLines = 8,
-                    enabled = !state.saving && !state.building,
+                    enabled = !planBusy,
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -219,7 +231,7 @@ private fun AndroidReleasePlanCard(
                         onClick = { onSaveDraft(versionName, notes) },
                         icon = Icons.Outlined.Save,
                         modifier = Modifier.weight(1f),
-                        enabled = versionName.isNotBlank() && notes.isNotBlank(),
+                        enabled = !planBusy && versionName.isNotBlank() && notes.isNotBlank(),
                         loading = state.saving,
                     )
                     AppButton(
@@ -227,11 +239,17 @@ private fun AndroidReleasePlanCard(
                         onClick = onDispatchBuild,
                         icon = Icons.Outlined.RocketLaunch,
                         modifier = Modifier.weight(1f),
-                        enabled = draft != null && !draftDirty,
+                        enabled = !planBusy && draft != null && !draftDirty,
                         loading = state.building,
                     )
                 }
-                if (draft != null && draftDirty) {
+                if (buildInProgress) {
+                    Text(
+                        text = "构建正在排队或执行，完成后下拉刷新即可编辑下一次发布计划。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else if (draft != null && draftDirty) {
                     Text(
                         text = "发布计划已修改，请先保存后再触发构建。",
                         style = MaterialTheme.typography.labelSmall,
@@ -262,14 +280,21 @@ private fun AndroidReleasePlanCard(
 @Composable
 private fun AndroidReleaseCard(
     record: AndroidReleaseRecord,
+    appUpdate: AppUpdateUiState?,
     isLatest: Boolean,
     isDownloading: Boolean,
     anyDownloading: Boolean,
     progress: Int,
     onDownload: () -> Unit,
+    onInstallDownloaded: () -> Unit,
 ) {
     val mode = androidReleaseDownloadMode(record)
     val isCurrent = record.versionCode == BuildConfig.VERSION_CODE
+    val canInstallDownloaded = appUpdate?.downloadedApkPath != null && appUpdate.phase in setOf(
+        AppUpdatePhase.ReadyToInstall,
+        AppUpdatePhase.InstallPermissionRequired,
+        AppUpdatePhase.Installing,
+    )
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -322,8 +347,12 @@ private fun AndroidReleaseCard(
 
             when (mode) {
                 AndroidReleaseDownloadMode.Install -> AppButton(
-                    text = if (isDownloading) "下载中 $progress%" else "下载并安装",
-                    onClick = onDownload,
+                    text = when {
+                        isDownloading -> "下载中 $progress%"
+                        canInstallDownloaded -> "继续安装"
+                        else -> "下载并安装"
+                    },
+                    onClick = if (canInstallDownloaded) onInstallDownloaded else onDownload,
                     icon = Icons.Outlined.FileDownload,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !anyDownloading,
@@ -350,6 +379,17 @@ private fun AndroidReleaseCard(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = false,
                 )
+            }
+
+            if (appUpdate?.phase == AppUpdatePhase.InstallPermissionRequired) {
+                Text(
+                    text = "安装包已就绪，授权安装未知应用后点击“继续安装”。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            appUpdate?.error?.let { message ->
+                AppFeedbackBanner(message = message, error = true)
             }
 
             if (isDownloading) {

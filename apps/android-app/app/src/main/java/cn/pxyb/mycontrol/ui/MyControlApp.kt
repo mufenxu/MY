@@ -2145,6 +2145,7 @@ private fun AuthenticatedShell(
                     val profileState by viewModel.profileState.collectAsStateWithLifecycle()
                     AndroidReleaseScreen(
                         state = androidReleaseState,
+                        appUpdate = profileState.appUpdate,
                         canManage = profileState.user?.role == "super_admin",
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
@@ -2157,6 +2158,7 @@ private fun AuthenticatedShell(
                             viewModel.dispatchAndroidBuild(onSensitiveActionConfirmation)
                         },
                         onDownload = viewModel::downloadAndroidRelease,
+                        onInstallDownloaded = viewModel::installDownloadedAppUpdate,
                     )
                 }
                 composable(AppRoute.Search) {

@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui
 
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.update.AppInstallResult
+import cn.pxyb.mycontrol.update.AppUpdateInfo
 import cn.pxyb.mycontrol.update.AppUpdateManager
 import cn.pxyb.mycontrol.update.AppUpdatePhase
 import cn.pxyb.mycontrol.update.AppUpdateUiState
@@ -39,14 +40,20 @@ class AppUpdateStateHolder(
 
     fun downloadAndInstall() {
         val update = mutableState.value.info ?: return
+        downloadAndInstall(update)
+    }
+
+    fun downloadAndInstall(update: AppUpdateInfo) {
         if (mutableState.value.phase in setOf(AppUpdatePhase.Checking, AppUpdatePhase.Downloading)) return
         if (BuildConfig.DEBUG) {
-            mutableState.update { it.copy(phase = AppUpdatePhase.Error, error = DEBUG_RELEASE_UPDATE_MESSAGE) }
+            mutableState.update {
+                it.copy(phase = AppUpdatePhase.Error, info = update, error = DEBUG_RELEASE_UPDATE_MESSAGE, downloadedApkPath = null)
+            }
             return
         }
         launchAction(
             isBusy = { phase == AppUpdatePhase.Checking || phase == AppUpdatePhase.Downloading },
-            start = { copy(phase = AppUpdatePhase.Downloading, progress = 0, error = null, downloadedApkPath = null) },
+            start = { copy(phase = AppUpdatePhase.Downloading, info = update, progress = 0, error = null, downloadedApkPath = null) },
             action = {
                 val requestContext = currentCoroutineContext()
                 manager.download(update) { progress ->

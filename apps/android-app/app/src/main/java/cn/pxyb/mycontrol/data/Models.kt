@@ -268,6 +268,7 @@ data class AndroidReleaseCatalog(
     val draft: AndroidReleaseDraft?,
     val releases: List<AndroidReleaseRecord>,
     val latest: AndroidReleaseRecord?,
+    val buildInProgress: Boolean = false,
 )
 
 @Immutable

@@ -128,12 +128,16 @@ function parseAndroidVersion(versionName) {
   if (minor > 999 || patch > 999) {
     throw new ReleaseOperationError(400, 'INVALID_ANDROID_VERSION', 'Android 版本号的次版本和补丁号不能超过 999。');
   }
+  const versionCode = major * 1_000_000 + minor * 1_000 + patch;
+  if (![major, minor, patch, versionCode].every(Number.isSafeInteger) || versionCode > 2_147_483_647) {
+    throw new ReleaseOperationError(400, 'INVALID_ANDROID_VERSION', 'Android 版本号对应的构建号不能超过 2147483647。');
+  }
   return {
     versionName: `${major}.${minor}.${patch}`,
     major,
     minor,
     patch,
-    versionCode: major * 1_000_000 + minor * 1_000 + patch,
+    versionCode,
   };
 }
 
@@ -255,6 +259,8 @@ export function createReleaseService({
 } = {}) {
   const githubConfigured = Boolean(config.githubRepository && config.githubToken);
   let androidReleaseCache = null;
+  let androidReleaseMutationPending = false;
+  let pendingAndroidDispatch = null;
   const callbackConfigured = Boolean(config.releaseCallbackToken);
   const artifactRepositoryConfigured = Boolean(config.releaseAllowedImageRepository);
   const componentImages = Object.entries(config.releaseImages || {}).map(([id, image]) => ({
@@ -377,11 +383,33 @@ export function createReleaseService({
     return Array.isArray(data) ? data : [];
   }
 
+  async function loadAndroidBuildStatus() {
+    const [owner, repository] = config.githubRepository.split('/');
+    const workflow = config.androidReleaseWorkflow || 'android-release.yml';
+    const data = await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/actions/workflows/${encodeURIComponent(workflow)}/runs?per_page=30`);
+    const runs = data.workflow_runs || [];
+    if (pendingAndroidDispatch) {
+      const observed = runs.some((run) => run.event === 'workflow_dispatch'
+        && !pendingAndroidDispatch.knownRunIds.has(String(run.id))
+        && sortTimestamp(run.created_at) >= pendingAndroidDispatch.requestedAt - WORKFLOW_DISPATCH_MATCH_BEFORE_MS);
+      if (observed || Date.now() - pendingAndroidDispatch.requestedAt >= WORKFLOW_DISPATCH_MATCH_AFTER_MS) {
+        pendingAndroidDispatch = null;
+      }
+    }
+    return {
+      runs,
+      buildInProgress: Boolean(pendingAndroidDispatch || runs.some((run) => run.status && run.status !== 'completed')),
+    };
+  }
+
   async function getAndroidReleases() {
     if (androidReleaseCache && Date.now() - androidReleaseCache.cachedAt < 60_000) {
       return androidReleaseCache.data;
     }
-    const releases = await loadAndroidGitHubReleases();
+    const [releases, buildStatus] = await Promise.all([
+      loadAndroidGitHubReleases(),
+      loadAndroidBuildStatus(),
+    ]);
     const downloadBase = String(config.androidReleaseDownloadBaseUrl || 'https://7n.pxyb.cn').replace(/\/$/, '');
     const published = releases
       .filter((release) => !release.draft && androidVersionFromTag(release.tag_name))
@@ -413,6 +441,7 @@ export function createReleaseService({
       draft: drafts[0] || null,
       releases: published.sort((left, right) => right.versionCode - left.versionCode),
       latest: published[0] || null,
+      buildInProgress: buildStatus.buildInProgress,
       refreshedAt: nowIso(),
     };
     androidReleaseCache = { cachedAt: Date.now(), data };
@@ -429,47 +458,58 @@ export function createReleaseService({
       throw new ReleaseOperationError(400, 'INVALID_ANDROID_NOTES', 'Android 发布说明不能超过 20000 字符。');
     }
 
-    const releases = await loadAndroidGitHubReleases();
-    const drafts = releases
-      .filter((release) => release.draft)
-      .map(mapAndroidDraft)
-      .filter(Boolean);
-    if (drafts.length > 1) {
-      throw new ReleaseOperationError(409, 'MULTIPLE_ANDROID_DRAFTS', '当前存在多个 Android 待发布草稿，请先在 GitHub 清理后再保存。');
+    if (androidReleaseMutationPending) {
+      throw new ReleaseOperationError(409, 'ANDROID_RELEASE_BUSY', 'Android 发布计划正在保存或提交构建，请稍后重试。');
     }
-    const latest = releases
-      .filter((release) => !release.draft)
-      .map((release) => androidVersionFromTag(release.tag_name))
-      .filter(Boolean)
-      .sort((left, right) => right.versionCode - left.versionCode)[0];
-    if (latest && version.versionCode <= latest.versionCode) {
-      throw new ReleaseOperationError(400, 'INVALID_ANDROID_VERSION', `下一个 Android 版本必须大于 ${latest.versionName}。`);
-    }
+    androidReleaseMutationPending = true;
+    try {
+      if ((await loadAndroidBuildStatus()).buildInProgress) {
+        throw new ReleaseOperationError(409, 'ANDROID_BUILD_IN_PROGRESS', 'Android 构建正在排队或执行，完成后才能修改发布计划。');
+      }
+      const releases = await loadAndroidGitHubReleases();
+      const drafts = releases
+        .filter((release) => release.draft)
+        .map(mapAndroidDraft)
+        .filter(Boolean);
+      if (drafts.length > 1) {
+        throw new ReleaseOperationError(409, 'MULTIPLE_ANDROID_DRAFTS', '当前存在多个 Android 待发布草稿，请先在 GitHub 清理后再保存。');
+      }
+      const latest = releases
+        .filter((release) => !release.draft)
+        .map((release) => androidVersionFromTag(release.tag_name))
+        .filter(Boolean)
+        .sort((left, right) => right.versionCode - left.versionCode)[0];
+      if (latest && version.versionCode <= latest.versionCode) {
+        throw new ReleaseOperationError(400, 'INVALID_ANDROID_VERSION', `下一个 Android 版本必须大于 ${latest.versionName}。`);
+      }
 
-    const tag = `android-v${version.versionName}`;
-    const body = {
-      tag_name: tag,
-      target_commitish: config.githubRef,
-      name: `MY Control v${version.versionName}`,
-      body: releaseNotes,
-      draft: true,
-    };
-    const [owner, repository] = config.githubRepository.split('/');
-    const saved = drafts[0]
-      ? await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/releases/${encodeURIComponent(drafts[0].id)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      : await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/releases`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-    const mapped = mapAndroidDraft(saved);
-    if (!mapped) throw new ReleaseOperationError(502, 'INVALID_ANDROID_DRAFT_RESPONSE', 'GitHub 返回的 Android 草稿数据无效。');
-    androidReleaseCache = null;
-    return mapped;
+      const tag = `android-v${version.versionName}`;
+      const body = {
+        tag_name: tag,
+        target_commitish: config.githubRef,
+        name: `MY Control v${version.versionName}`,
+        body: releaseNotes,
+        draft: true,
+      };
+      const [owner, repository] = config.githubRepository.split('/');
+      const saved = drafts[0]
+        ? await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/releases/${encodeURIComponent(drafts[0].id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        : await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/releases`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      const mapped = mapAndroidDraft(saved);
+      if (!mapped) throw new ReleaseOperationError(502, 'INVALID_ANDROID_DRAFT_RESPONSE', 'GitHub 返回的 Android 草稿数据无效。');
+      return mapped;
+    } finally {
+      androidReleaseMutationPending = false;
+      androidReleaseCache = null;
+    }
   }
 
   async function dispatchAndroidBuild({ requestedBy: _requestedBy = 'system' } = {}) {
@@ -479,15 +519,30 @@ export function createReleaseService({
     if (!githubConfigured) {
       throw new ReleaseOperationError(403, 'ANDROID_BUILD_DISABLED', 'GitHub Token 或仓库未配置。');
     }
-    const workflow = String(config.androidReleaseWorkflow || 'android-release.yml');
-    const [owner, repository] = config.githubRepository.split('/');
-    await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/actions/workflows/${encodeURIComponent(workflow)}/dispatches`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ref: config.githubRef, inputs: {} }),
-    });
-    androidReleaseCache = null;
-    return { dispatched: true, workflow, ref: config.githubRef };
+    if (androidReleaseMutationPending) {
+      throw new ReleaseOperationError(409, 'ANDROID_RELEASE_BUSY', 'Android 发布计划正在保存或提交构建，请稍后重试。');
+    }
+    androidReleaseMutationPending = true;
+    try {
+      const { runs, buildInProgress } = await loadAndroidBuildStatus();
+      if (buildInProgress) {
+        throw new ReleaseOperationError(409, 'ANDROID_BUILD_IN_PROGRESS', 'Android 构建正在排队或执行，请勿重复提交。');
+      }
+      const workflow = String(config.androidReleaseWorkflow || 'android-release.yml');
+      const [owner, repository] = config.githubRepository.split('/');
+      const requestedAt = Date.now();
+      await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/actions/workflows/${encodeURIComponent(workflow)}/dispatches`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: config.githubRef, inputs: {} }),
+      });
+      // GitHub 接受触发请求后，运行记录可能尚未出现在列表中。
+      pendingAndroidDispatch = { requestedAt, knownRunIds: new Set(runs.map((run) => String(run.id))) };
+      return { dispatched: true, workflow, ref: config.githubRef };
+    } finally {
+      androidReleaseMutationPending = false;
+      androidReleaseCache = null;
+    }
   }
 
   function capabilityReasons() {

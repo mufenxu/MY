@@ -13,7 +13,7 @@ import cn.pxyb.mycontrol.core.network.HttpClientProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 import okhttp3.Request
@@ -22,6 +22,7 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.CancellationException
 import java.util.concurrent.TimeUnit
+import java.util.UUID
 
 enum class AppUpdatePhase {
     Idle,
@@ -93,14 +94,7 @@ class AppUpdateManager(private val context: Context) {
         update.apkUrls.forEach { apkUrl ->
             try {
                 downloadArtifact(apkUrl, update, temporary, onProgress)
-                val archiveIdentity = packageIdentity(temporary)
-                val installedIdentity = packageIdentity(
-                    context.packageManager.getPackageInfo(
-                        context.packageName,
-                        PackageManager.GET_SIGNING_CERTIFICATES,
-                    ),
-                )
-                verifyUpdateArtifact(update, temporary, archiveIdentity, installedIdentity, requireNewer)
+                verifyDownloadedApk(update, temporary, requireNewer)
                 if (target.exists()) target.delete()
                 check(temporary.renameTo(target)) { "无法保存已验证的 APK" }
                 onProgress(100)
@@ -116,10 +110,29 @@ class AppUpdateManager(private val context: Context) {
 
     suspend fun downloadArchive(update: AppUpdateInfo, onProgress: (Int) -> Unit): File =
         withContext(Dispatchers.IO) {
+            val existing = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "MY/my-control-${update.versionName}.apk",
+            )
+            if (existing.isFile) {
+                try {
+                    verifyDownloadedApk(update, existing, requireNewer = false)
+                    currentCoroutineContext().ensureActive()
+                    onProgress(100)
+                    return@withContext existing
+                } catch (error: Exception) {
+                    if (error is CancellationException || isAppUpdateSigningMismatch(error)) throw error
+                }
+            }
+            val fileName = if (existing.exists()) {
+                "MY/my-control-${update.versionName}-${UUID.randomUUID()}.apk"
+            } else {
+                "MY/${existing.name}"
+            }
             var lastError: Throwable? = null
             for (apkUrl in update.apkUrls) {
                 try {
-                    return@withContext downloadArchiveWithManager(apkUrl, update, onProgress)
+                    return@withContext downloadArchiveWithManager(apkUrl, update, fileName, onProgress)
                 } catch (error: Throwable) {
                     if (error is CancellationException) throw error
                     lastError = error
@@ -131,9 +144,10 @@ class AppUpdateManager(private val context: Context) {
     private suspend fun downloadArchiveWithManager(
         apkUrl: String,
         update: AppUpdateInfo,
+        fileName: String,
         onProgress: (Int) -> Unit,
     ): File {
-        val fileName = "MY/my-control-${update.versionName}.apk"
+        currentCoroutineContext().ensureActive()
         val request = DownloadManager.Request(Uri.parse(apkUrl))
             .setTitle("MY Control ${update.versionName}")
             .setDescription("正在下载历史安装包")
@@ -145,50 +159,38 @@ class AppUpdateManager(private val context: Context) {
         val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val downloadId = manager.enqueue(request)
         val query = DownloadManager.Query().setFilterById(downloadId)
-        while (currentCoroutineContext().isActive) {
-            manager.query(query).use { cursor ->
-                if (!cursor.moveToFirst()) throw IOException("系统下载任务已丢失")
-                val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                val totalBytes = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-                val downloadedBytes = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-                if (totalBytes > 0) onProgress(((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100))
-                when (status) {
-                    DownloadManager.STATUS_SUCCESSFUL -> {
-                        val localUri = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
-                        val filePath = Uri.parse(localUri).path ?: throw IOException("系统下载地址无效")
-                        val apkFile = File(filePath)
-                        val archiveIdentity = packageIdentity(apkFile)
-                        val installedIdentity = packageIdentity(
-                            context.packageManager.getPackageInfo(
-                                context.packageName,
-                                PackageManager.GET_SIGNING_CERTIFICATES,
-                            ),
-                        )
-                        try {
-                            return verifyUpdateArtifact(
-                                update,
-                                apkFile,
-                                archiveIdentity,
-                                installedIdentity,
-                                requireNewer = false,
-                            )
-                        } catch (error: Throwable) {
-                            manager.remove(downloadId)
-                            throw error
+        var verified = false
+        try {
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                manager.query(query).use { cursor ->
+                    if (!cursor.moveToFirst()) throw IOException("系统下载任务已丢失")
+                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    val totalBytes = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    val downloadedBytes = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                    if (totalBytes > 0) onProgress(((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100))
+                    when (status) {
+                        DownloadManager.STATUS_SUCCESSFUL -> {
+                            val localUri = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+                            val filePath = Uri.parse(localUri).path ?: throw IOException("系统下载地址无效")
+                            val apkFile = verifyDownloadedApk(update, File(filePath), requireNewer = false)
+                            currentCoroutineContext().ensureActive()
+                            onProgress(100)
+                            verified = true
+                            return apkFile
                         }
+                        DownloadManager.STATUS_FAILED -> {
+                            val reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                            throw IOException("系统下载失败（原因 $reason）")
+                        }
+                        else -> Unit
                     }
-                    DownloadManager.STATUS_FAILED -> {
-                        val reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
-                        manager.remove(downloadId)
-                        throw IOException("系统下载失败（原因 $reason）")
-                    }
-                    else -> Unit
                 }
+                delay(500)
             }
-            delay(500)
+        } finally {
+            if (!verified) manager.remove(downloadId)
         }
-        manager.remove(downloadId)
-        throw CancellationException("安装包下载已取消")
     }
 
     private fun manifestUrls(): List<String> = listOf(
@@ -274,6 +276,15 @@ class AppUpdateManager(private val context: Context) {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
     }
+
+    private fun verifyDownloadedApk(update: AppUpdateInfo, file: File, requireNewer: Boolean): File =
+        verifyUpdateArtifact(
+            update,
+            file,
+            packageIdentity(file),
+            packageIdentity(context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)),
+            requireNewer,
+        )
 
     private fun packageIdentity(file: File): AppPackageIdentity {
         val packageInfo = context.packageManager.getPackageArchiveInfo(
