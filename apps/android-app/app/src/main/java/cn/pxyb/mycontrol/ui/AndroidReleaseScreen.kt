@@ -1,13 +1,24 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FileDownload
@@ -30,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.data.AndroidReleaseRecord
@@ -41,6 +53,8 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppErrorState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.picker.AppWheelPicker
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import cn.pxyb.mycontrol.update.AppUpdatePhase
 import cn.pxyb.mycontrol.update.AppUpdateUiState
 import java.time.OffsetDateTime
@@ -74,9 +88,11 @@ internal fun AndroidReleaseScreen(
         refreshing = state.refreshing,
         onRefresh = onRefresh,
     ) {
-        if (state.loading) {
+        // 首次进入时状态仍为初始值，按“暂无数据且无错误”直接渲染骨架，避免闪现旧内容
+        val catalogPending = state.catalog == null && state.error == null
+        if (state.loading || catalogPending) {
             item(key = "android-release-loading", contentType = "loading") {
-                GlassShimmerList(itemCount = 3, itemHeight = 104.dp)
+                AndroidReleaseLoadingSkeleton()
             }
             return@AppSubPage
         }
@@ -560,6 +576,114 @@ private fun AndroidReleaseSectionTitle(title: String, detail: String) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+// 应用版本管理预加载骨架：按真实区块同构占位，叠加微光扫过与呼吸脉冲，数据到达后自然渲染
+@Composable
+private fun AndroidReleaseLoadingSkeleton() {
+    val transition = rememberInfiniteTransition(label = "android-release-loading")
+    val pulse by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = MotionTokens.DurationMedium * 3, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "android-release-loading-pulse",
+    )
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = "正在同步发布信息",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp),
+        )
+        ReleaseSkeletonCard {
+            ReleaseSkeletonBlock(Modifier.width(132.dp).height(16.dp), pulse, corner = 8.dp)
+            ReleaseSkeletonBlock(Modifier.width(212.dp).height(10.dp), pulse)
+            ReleaseSkeletonBlock(Modifier.fillMaxWidth().height(48.dp), pulse, corner = 24.dp)
+            ReleaseSkeletonBlock(Modifier.fillMaxWidth().height(96.dp), pulse, corner = 16.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ReleaseSkeletonBlock(Modifier.weight(1f).height(44.dp), pulse, corner = 22.dp)
+                ReleaseSkeletonBlock(Modifier.weight(1f).height(44.dp), pulse, corner = 22.dp)
+            }
+        }
+        ReleaseSkeletonSectionTitle(pulse)
+        repeat(3) {
+            ReleaseRowSkeletonCard(pulse)
+        }
+    }
+}
+
+@Composable
+private fun ReleaseSkeletonCard(content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(20.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(glassCardColor())
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f), shape)
+            .glassShimmer(isAppInDarkTheme()),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun ReleaseSkeletonBlock(
+    modifier: Modifier,
+    pulse: Float,
+    corner: Dp = 6.dp,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(corner))
+            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f * pulse)),
+    )
+}
+
+@Composable
+private fun ReleaseSkeletonSectionTitle(pulse: Float) {
+    Column(
+        modifier = Modifier.padding(top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        ReleaseSkeletonBlock(Modifier.width(88.dp).height(16.dp), pulse, corner = 8.dp)
+        ReleaseSkeletonBlock(Modifier.width(178.dp).height(10.dp), pulse)
+    }
+}
+
+@Composable
+private fun ReleaseRowSkeletonCard(pulse: Float) {
+    ReleaseSkeletonCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ReleaseSkeletonBlock(Modifier.width(96.dp).height(15.dp), pulse)
+                ReleaseSkeletonBlock(Modifier.fillMaxWidth(0.72f).height(10.dp), pulse)
+            }
+            ReleaseSkeletonBlock(Modifier.width(56.dp).height(20.dp), pulse, corner = 10.dp)
+        }
+        ReleaseSkeletonBlock(Modifier.fillMaxWidth(0.9f).height(11.dp), pulse)
+        ReleaseSkeletonBlock(Modifier.fillMaxWidth().height(44.dp), pulse, corner = 22.dp)
     }
 }
 
