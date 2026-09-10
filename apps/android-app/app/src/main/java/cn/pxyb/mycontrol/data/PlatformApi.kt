@@ -243,6 +243,30 @@ class PlatformApi(
         )
     }
 
+    suspend fun androidReleases(): AndroidReleaseCatalog = withContext(Dispatchers.IO) {
+        parseAndroidReleaseCatalog(execute("/api/android-releases").json)
+    }
+
+    suspend fun saveAndroidReleaseDraft(versionName: String, notes: String): AndroidReleaseDraft =
+        withContext(Dispatchers.IO) {
+            execute(
+                "/api/android-releases/draft",
+                "PUT",
+                JSONObject()
+                    .put("versionName", versionName)
+                    .put("notes", notes),
+            ).json.toAndroidReleaseDraft()
+        }
+
+    suspend fun dispatchAndroidBuild(): AndroidReleaseDispatchResult = withContext(Dispatchers.IO) {
+        val json = execute("/api/android-releases/build", "POST", JSONObject()).json
+        AndroidReleaseDispatchResult(
+            dispatched = json.optBoolean("dispatched"),
+            workflow = json.optString("workflow"),
+            ref = json.optString("ref"),
+        )
+    }
+
     suspend fun backupQuality(): BackupQuality = withContext(Dispatchers.IO) {
         val json = execute("/api/backups/quality").json
         val latest = json.optJSONObject("latestBackup")
@@ -978,6 +1002,40 @@ private fun JSONObject.toGitHubReleaseRecord(): GitHubReleaseRecord = GitHubRele
     htmlUrl = nullableString("html_url"),
     targetCommitish = nullableString("target_commitish"),
     assetsCount = optInt("assets_count", 0),
+)
+
+internal fun parseAndroidReleaseCatalog(json: JSONObject): AndroidReleaseCatalog {
+    val releases = json.optJSONArray("releases").platformObjects().map { it.toAndroidReleaseRecord() }
+    return AndroidReleaseCatalog(
+        draft = json.optJSONObject("draft")?.toAndroidReleaseDraft(),
+        releases = releases,
+        latest = json.optJSONObject("latest")?.toAndroidReleaseRecord(),
+    )
+}
+
+private fun JSONObject.toAndroidReleaseDraft(): AndroidReleaseDraft = AndroidReleaseDraft(
+    id = optString("id"),
+    versionName = optString("versionName"),
+    versionCode = optInt("versionCode"),
+    tag = optString("tag"),
+    notes = optString("notes"),
+    createdAt = nullableString("createdAt"),
+    updatedAt = nullableString("updatedAt"),
+)
+
+private fun JSONObject.toAndroidReleaseRecord(): AndroidReleaseRecord = AndroidReleaseRecord(
+    id = optString("id"),
+    versionName = optString("versionName"),
+    versionCode = optInt("versionCode"),
+    tag = optString("tag"),
+    apkUrl = nullableString("apkUrl"),
+    fallbackApkUrl = nullableString("fallbackApkUrl"),
+    sha256 = nullableString("sha256"),
+    apkSize = optLong("apkSize"),
+    releaseUrl = nullableString("releaseUrl"),
+    publishedAt = nullableString("publishedAt"),
+    notes = optString("notes"),
+    installable = optBoolean("installable"),
 )
 internal fun JSONObject.nullableString(key: String): String? =
     takeIf { has(key) && !isNull(key) }?.optString(key)?.takeIf { it.isNotBlank() }

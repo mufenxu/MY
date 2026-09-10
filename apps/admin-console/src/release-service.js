@@ -13,6 +13,8 @@ const WORKFLOW_DISPATCH_MATCH_AFTER_MS = 10 * 60 * 1000;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const REVISION_PATTERN = /^[a-f0-9]{40}$/i;
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/i;
+const ANDROID_TAG_PATTERN = /^android-v(\d+)\.(\d+)\.(\d+)$/;
+const ANDROID_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/;
 
 function shortRevision(value) {
   const revision = String(value || '');
@@ -117,6 +119,49 @@ function releaseEvent(status, detail = '') {
   return { status, detail: stringValue(detail, 300), occurredAt: nowIso() };
 }
 
+function parseAndroidVersion(versionName) {
+  const match = ANDROID_VERSION_PATTERN.exec(String(versionName || '').trim());
+  if (!match) {
+    throw new ReleaseOperationError(400, 'INVALID_ANDROID_VERSION', 'Android 版本号必须是 x.y.z 格式。');
+  }
+  const [major, minor, patch] = match.slice(1).map(Number);
+  if (minor > 999 || patch > 999) {
+    throw new ReleaseOperationError(400, 'INVALID_ANDROID_VERSION', 'Android 版本号的次版本和补丁号不能超过 999。');
+  }
+  return {
+    versionName: `${major}.${minor}.${patch}`,
+    major,
+    minor,
+    patch,
+    versionCode: major * 1_000_000 + minor * 1_000 + patch,
+  };
+}
+
+function androidVersionFromTag(tagName) {
+  const match = ANDROID_TAG_PATTERN.exec(String(tagName || ''));
+  if (!match) return null;
+  const [major, minor, patch] = match.slice(1).map(Number);
+  return {
+    versionName: `${major}.${minor}.${patch}`,
+    versionCode: major * 1_000_000 + minor * 1_000 + patch,
+  };
+}
+
+function mapAndroidDraft(release) {
+  const version = androidVersionFromTag(release.tag_name);
+  if (!version) return null;
+  return {
+    id: String(release.id),
+    versionName: version.versionName,
+    versionCode: version.versionCode,
+    tag: String(release.tag_name),
+    notes: String(release.body || '').trim(),
+    createdAt: release.created_at || null,
+    updatedAt: release.updated_at || null,
+    targetCommitish: release.target_commitish || null,
+  };
+}
+
 function artifactReferences(artifacts) {
   return (artifacts || []).map((artifact) => `${artifact.component}:${artifact.reference}`).sort();
 }
@@ -204,6 +249,7 @@ export function createReleaseService({
   idFactory = () => crypto.randomUUID(),
 } = {}) {
   const githubConfigured = Boolean(config.githubRepository && config.githubToken);
+  let androidReleaseCache = null;
   const callbackConfigured = Boolean(config.releaseCallbackToken);
   const artifactRepositoryConfigured = Boolean(config.releaseAllowedImageRepository);
   const componentImages = Object.entries(config.releaseImages || {}).map(([id, image]) => ({
@@ -318,6 +364,139 @@ export function createReleaseService({
     } catch {
       return [];
     }
+  }
+
+  async function loadAndroidGitHubReleases() {
+    const [owner, repository] = config.githubRepository.split('/');
+    const data = await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/releases?per_page=100`);
+    return Array.isArray(data) ? data : [];
+  }
+
+  async function loadAndroidSha256(asset) {
+    if (!asset?.id) return null;
+    const [owner, repository] = config.githubRepository.split('/');
+    const content = await githubRequestBuffer(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/releases/assets/${encodeURIComponent(asset.id)}`,
+      { headers: { Accept: 'application/octet-stream' } },
+    );
+    const match = /([a-f0-9]{64})/i.exec(content.toString('utf8').trim());
+    return match ? match[1].toLowerCase() : null;
+  }
+
+  async function getAndroidReleases() {
+    if (androidReleaseCache && Date.now() - androidReleaseCache.cachedAt < 60_000) {
+      return androidReleaseCache.data;
+    }
+    const releases = await loadAndroidGitHubReleases();
+    const downloadBase = String(config.androidReleaseDownloadBaseUrl || 'https://7n.pxyb.cn').replace(/\/$/, '');
+    const published = await Promise.all(releases
+      .filter((release) => !release.draft && androidVersionFromTag(release.tag_name))
+      .map(async (release) => {
+        const version = androidVersionFromTag(release.tag_name);
+        const assets = Array.isArray(release.assets) ? release.assets : [];
+        const apkAsset = assets.find((asset) => /^my-control-.*\.apk$/i.test(String(asset.name || '')));
+        const hashAsset = apkAsset
+          ? assets.find((asset) => String(asset.name || '').toLowerCase() === `${String(apkAsset.name).toLowerCase()}.sha256`)
+          : null;
+        const sha256 = hashAsset ? await loadAndroidSha256(hashAsset) : null;
+        return {
+          id: String(release.id),
+          versionName: version.versionName,
+          versionCode: version.versionCode,
+          tag: String(release.tag_name),
+          apkUrl: apkAsset ? `${downloadBase}/android/my-control-${version.versionName}.apk` : null,
+          fallbackApkUrl: apkAsset?.browser_download_url || null,
+          sha256,
+          apkSize: Number(apkAsset?.size) || 0,
+          releaseUrl: release.html_url || null,
+          publishedAt: release.published_at || null,
+          notes: String(release.body || '').trim(),
+          installable: Boolean(apkAsset && sha256),
+        };
+      }));
+    const drafts = releases
+      .filter((release) => release.draft)
+      .map(mapAndroidDraft)
+      .filter(Boolean);
+    const data = {
+      draft: drafts[0] || null,
+      releases: published.sort((left, right) => right.versionCode - left.versionCode),
+      latest: published[0] || null,
+      refreshedAt: nowIso(),
+    };
+    androidReleaseCache = { cachedAt: Date.now(), data };
+    return data;
+  }
+
+  async function saveAndroidReleaseDraft({ versionName, notes } = {}) {
+    const version = parseAndroidVersion(versionName);
+    const releaseNotes = String(notes || '').trim();
+    if (!releaseNotes) {
+      throw new ReleaseOperationError(400, 'INVALID_ANDROID_NOTES', '请填写下一次 Android 发布说明。');
+    }
+    if (releaseNotes.length > 20_000) {
+      throw new ReleaseOperationError(400, 'INVALID_ANDROID_NOTES', 'Android 发布说明不能超过 20000 字符。');
+    }
+
+    const releases = await loadAndroidGitHubReleases();
+    const drafts = releases
+      .filter((release) => release.draft)
+      .map(mapAndroidDraft)
+      .filter(Boolean);
+    if (drafts.length > 1) {
+      throw new ReleaseOperationError(409, 'MULTIPLE_ANDROID_DRAFTS', '当前存在多个 Android 待发布草稿，请先在 GitHub 清理后再保存。');
+    }
+    const latest = releases
+      .filter((release) => !release.draft)
+      .map((release) => androidVersionFromTag(release.tag_name))
+      .filter(Boolean)
+      .sort((left, right) => right.versionCode - left.versionCode)[0];
+    if (latest && version.versionCode <= latest.versionCode) {
+      throw new ReleaseOperationError(400, 'INVALID_ANDROID_VERSION', `下一个 Android 版本必须大于 ${latest.versionName}。`);
+    }
+
+    const tag = `android-v${version.versionName}`;
+    const body = {
+      tag_name: tag,
+      target_commitish: config.githubRef,
+      name: `MY Control v${version.versionName}`,
+      body: releaseNotes,
+      draft: true,
+    };
+    const [owner, repository] = config.githubRepository.split('/');
+    const saved = drafts[0]
+      ? await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/releases/${encodeURIComponent(drafts[0].id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      : await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/releases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    const mapped = mapAndroidDraft(saved);
+    if (!mapped) throw new ReleaseOperationError(502, 'INVALID_ANDROID_DRAFT_RESPONSE', 'GitHub 返回的 Android 草稿数据无效。');
+    androidReleaseCache = null;
+    return mapped;
+  }
+
+  async function dispatchAndroidBuild({ requestedBy = 'system' } = {}) {
+    if (!config.releaseActionsEnabled) {
+      throw new ReleaseOperationError(403, 'RELEASE_ACTIONS_DISABLED', 'Android 构建操作未启用。');
+    }
+    if (!githubConfigured) {
+      throw new ReleaseOperationError(403, 'ANDROID_BUILD_DISABLED', 'GitHub Token 或仓库未配置。');
+    }
+    const workflow = String(config.androidReleaseWorkflow || 'android-release.yml');
+    const [owner, repository] = config.githubRepository.split('/');
+    await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/actions/workflows/${encodeURIComponent(workflow)}/dispatches`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref: config.githubRef, inputs: {} }),
+    });
+    androidReleaseCache = null;
+    return { dispatched: true, workflow, ref: config.githubRef };
   }
 
   function capabilityReasons() {
@@ -583,6 +762,9 @@ export function createReleaseService({
   return {
     acceptCallback,
     dispatchBuild,
+    dispatchAndroidBuild,
     getSummary,
+    getAndroidReleases,
+    saveAndroidReleaseDraft,
   };
 }

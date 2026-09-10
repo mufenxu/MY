@@ -97,8 +97,134 @@ function zipStoredText(filename, content) {
 test('release service exposes build operations without deployment controls', () => {
   const releases = createReleaseService({ config: config() });
   assert.equal(typeof releases.dispatchBuild, 'function');
+  assert.equal(typeof releases.getAndroidReleases, 'function');
+  assert.equal(typeof releases.saveAndroidReleaseDraft, 'function');
+  assert.equal(typeof releases.dispatchAndroidBuild, 'function');
   assert.equal('dispatchDeployment' in releases, false);
   assert.equal('getPreflight' in releases, false);
+});
+
+function githubAndroidRelease(overrides = {}) {
+  return {
+    id: 1001,
+    tag_name: 'android-v1.2.0',
+    name: 'MY Control v1.2.0',
+    body: '修复更新体验',
+    draft: false,
+    prerelease: false,
+    published_at: '2026-08-18T11:00:00Z',
+    html_url: 'https://github.com/owner/repository/releases/tag/android-v1.2.0',
+    target_commitish: 'main',
+    assets: [{
+      id: 9001,
+      name: 'my-control-1.2.0.apk',
+      size: 27_171_336,
+      browser_download_url: 'https://github.com/owner/repository/releases/download/android-v1.2.0/my-control-1.2.0.apk',
+    }, {
+      id: 9002,
+      name: 'my-control-1.2.0.apk.sha256',
+      size: 96,
+      browser_download_url: 'https://github.com/owner/repository/releases/download/android-v1.2.0/my-control-1.2.0.apk.sha256',
+    }],
+    ...overrides,
+  };
+}
+
+test('android release list maps installable releases and the pending draft', async () => {
+  const requests = [];
+  const releases = createReleaseService({
+    config: enabledConfig({ androidReleaseDownloadBaseUrl: 'https://cdn.example.com' }),
+    fetchImpl: async (url, options = {}) => {
+      const resource = String(url);
+      requests.push({ resource, options });
+      if (resource.endsWith('/releases?per_page=100')) {
+        return jsonResponse([
+          githubAndroidRelease(),
+          githubAndroidRelease({
+            id: 1002,
+            tag_name: 'android-v1.3.0',
+            name: 'MY Control v1.3.0',
+            body: '下一次发布计划',
+            draft: true,
+            published_at: null,
+            assets: [],
+          }),
+          githubAndroidRelease({ id: 1003, tag_name: 'platform-v1.0.0' }),
+        ]);
+      }
+      if (resource.endsWith('/releases/assets/9002')) {
+        return binaryResponse(Buffer.from(`${'a'.repeat(64)}  my-control-1.2.0.apk\n`));
+      }
+      throw new Error(`Unexpected request: ${resource}`);
+    },
+  });
+
+  const summary = await releases.getAndroidReleases();
+  assert.equal(summary.releases.length, 1);
+  assert.equal(summary.releases[0].versionName, '1.2.0');
+  assert.equal(summary.releases[0].versionCode, 1_002_000);
+  assert.equal(summary.releases[0].apkUrl, 'https://cdn.example.com/android/my-control-1.2.0.apk');
+  assert.equal(summary.releases[0].sha256, 'a'.repeat(64));
+  assert.equal(summary.draft.versionName, '1.3.0');
+  assert.equal(summary.draft.notes, '下一次发布计划');
+  assert.equal(requests.find((request) => request.resource.endsWith('/releases/assets/9002')).options.headers.Accept, 'application/octet-stream');
+});
+
+test('android draft saves a valid next version and rejects downgrades', async () => {
+  const requests = [];
+  const releases = createReleaseService({
+    config: enabledConfig({ androidReleaseDownloadBaseUrl: 'https://cdn.example.com' }),
+    fetchImpl: async (url, options = {}) => {
+      const resource = String(url);
+      requests.push({ resource, options });
+      if (resource.endsWith('/releases?per_page=100')) return jsonResponse([githubAndroidRelease()]);
+      if (resource.endsWith('/releases') && options.method === 'POST') {
+        return jsonResponse(githubAndroidRelease({
+          id: 1002,
+          tag_name: 'android-v1.3.0',
+          name: 'MY Control v1.3.0',
+          body: '新增版本管理',
+          draft: true,
+          published_at: null,
+          assets: [],
+        }), 201);
+      }
+      throw new Error(`Unexpected request: ${resource}`);
+    },
+  });
+
+  const draft = await releases.saveAndroidReleaseDraft({ versionName: '1.3.0', notes: '新增版本管理' });
+  assert.equal(draft.versionName, '1.3.0');
+  assert.equal(draft.tag, 'android-v1.3.0');
+  const createBody = JSON.parse(requests.find((request) => request.options.method === 'POST').options.body);
+  assert.deepEqual(createBody, {
+    tag_name: 'android-v1.3.0',
+    target_commitish: 'main',
+    name: 'MY Control v1.3.0',
+    body: '新增版本管理',
+    draft: true,
+  });
+
+  await assert.rejects(
+    releases.saveAndroidReleaseDraft({ versionName: '1.1.0', notes: '回退版本' }),
+    (error) => error instanceof ReleaseOperationError && error.code === 'INVALID_ANDROID_VERSION',
+  );
+});
+
+test('android build dispatch uses the dedicated workflow without image-only controls', async () => {
+  const requests = [];
+  const releases = createReleaseService({
+    config: enabledConfig({ androidReleaseWorkflow: 'android-release.yml' }),
+    fetchImpl: async (url, options = {}) => {
+      requests.push({ url: String(url), options });
+      return jsonResponse(null, 204);
+    },
+  });
+
+  const result = await releases.dispatchAndroidBuild({ requestedBy: 'admin' });
+  assert.deepEqual(result, { dispatched: true, workflow: 'android-release.yml', ref: 'main' });
+  assert.equal(requests[0].url, 'https://api.github.com/repos/owner/repository/actions/workflows/android-release.yml/dispatches');
+  assert.deepEqual(JSON.parse(requests[0].options.body), { ref: 'main', inputs: {} });
 });
 
 test('release center remains explicitly read-only without credentials', async () => {

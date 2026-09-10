@@ -230,6 +230,8 @@ export function loadConfig(env = process.env) {
     githubToken: env.GH_TOKEN || '',
     githubWorkflow: String(env.PLATFORM_GITHUB_WORKFLOW || 'aliyun-acr.yml').trim(),
     githubRef: String(env.PLATFORM_GITHUB_REF || 'main').trim(),
+    androidReleaseWorkflow: String(env.PLATFORM_ANDROID_RELEASE_WORKFLOW || 'android-release.yml').trim(),
+    androidReleaseDownloadBaseUrl: parseHttpUrl(env.PLATFORM_ANDROID_RELEASE_DOWNLOAD_BASE_URL || 'https://7n.pxyb.cn'),
     releaseActionsEnabled: parseBoolean(env.PLATFORM_RELEASE_ACTIONS_ENABLED, false),
     releaseEnvironment: String(env.PLATFORM_RELEASE_ENVIRONMENT || 'production').trim().slice(0, 32),
     releaseCallbackToken: env.PLATFORM_RELEASE_CALLBACK_TOKEN || '',

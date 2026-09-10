@@ -32,6 +32,7 @@ fun verifyUpdateArtifact(
     apkFile: File,
     archiveIdentity: AppPackageIdentity,
     installedIdentity: AppPackageIdentity,
+    requireNewer: Boolean = true,
 ): File {
     require(apkFile.isFile) { "Downloaded APK is missing" }
     require(apkFile.length() == update.apkSize) { "Downloaded APK size does not match release" }
@@ -39,7 +40,10 @@ fun verifyUpdateArtifact(
     require(archiveIdentity.packageName == update.packageName) { "Downloaded APK package does not match release" }
     require(archiveIdentity.versionCode == update.versionCode.toLong()) { "Downloaded APK version does not match release" }
     require(installedIdentity.packageName == update.packageName) { "Installed package does not match release" }
-    require(update.isNewerThan(installedIdentity.versionCode.toInt())) { "Downloaded APK is not newer than installed version" }
+    if (requireNewer) {
+        require(update.isNewerThan(installedIdentity.versionCode.toInt())) { "Downloaded APK is not newer than installed version" }
+    }
+
     if (archiveIdentity.signerSha256 != installedIdentity.signerSha256) {
         throw AppUpdateSignatureMismatchException()
     }

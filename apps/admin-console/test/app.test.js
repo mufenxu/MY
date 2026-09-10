@@ -207,6 +207,68 @@ test('release deployment route is not exposed', async () => {
   });
 });
 
+test('android release routes expose packages, draft control, and build dispatch', async () => {
+  const calls = [];
+  const releaseManager = {
+    getSummary: async () => ({ capabilities: {} }),
+    getAndroidReleases: async () => {
+      calls.push({ type: 'list' });
+      return {
+        draft: { versionName: '1.3.0', notes: '下一次发布' },
+        releases: [{ versionName: '1.2.0', installable: true }],
+      };
+    },
+    saveAndroidReleaseDraft: async (input, actor) => {
+      calls.push({ type: 'draft', input, actor });
+      return { ...input, tag: 'android-v1.3.0' };
+    },
+    dispatchAndroidBuild: async (input) => {
+      calls.push({ type: 'build', input });
+      return { dispatched: true, workflow: 'android-release.yml', ref: 'main' };
+    },
+  };
+  const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
+  const app = createApp({ config, releaseManager });
+
+  await withServer(app, async (origin) => {
+    const listResponse = await fetch(`${origin}/api/android-releases`);
+    assert.equal(listResponse.status, 200);
+    assert.equal((await listResponse.json()).draft.versionName, '1.3.0');
+
+    assert.equal((await fetch(`${origin}/api/android-releases/draft`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ versionName: '1.3.0', notes: '下一次发布' }),
+    })).status, 403);
+
+    const draftResponse = await fetch(`${origin}/api/android-releases/draft`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Platform-Request': 'console',
+      },
+      body: JSON.stringify({ versionName: '1.3.0', notes: '下一次发布' }),
+    });
+    assert.equal(draftResponse.status, 200);
+    assert.equal((await draftResponse.json()).tag, 'android-v1.3.0');
+
+    const buildResponse = await fetch(`${origin}/api/android-releases/build`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Platform-Request': 'console',
+      },
+      body: JSON.stringify({}),
+    });
+    assert.equal(buildResponse.status, 202);
+    assert.deepEqual(calls, [
+      { type: 'list' },
+      { type: 'draft', input: { versionName: '1.3.0', notes: '下一次发布' }, actor: 'local-admin' },
+      { type: 'build', input: { requestedBy: 'local-admin' } },
+    ]);
+  });
+});
+
 test('notification management routes enforce console mutations and preserve the actor', async () => {
   const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
   const calls = [];

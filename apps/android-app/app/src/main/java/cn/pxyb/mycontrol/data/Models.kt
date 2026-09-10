@@ -1,6 +1,7 @@
 package cn.pxyb.mycontrol.data
 
 import androidx.compose.runtime.Immutable
+import cn.pxyb.mycontrol.update.AppUpdateInfo
 
 @Immutable
 data class PlatformUser(
@@ -216,6 +217,66 @@ data class ReleaseBuild(
 data class ReleaseData(
     val builds: List<ReleaseBuild>,
 )
+
+@Immutable
+data class AndroidReleaseDraft(
+    val id: String,
+    val versionName: String,
+    val versionCode: Int,
+    val tag: String,
+    val notes: String,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+)
+
+@Immutable
+data class AndroidReleaseRecord(
+    val id: String,
+    val versionName: String,
+    val versionCode: Int,
+    val tag: String,
+    val apkUrl: String?,
+    val fallbackApkUrl: String?,
+    val sha256: String?,
+    val apkSize: Long,
+    val releaseUrl: String?,
+    val publishedAt: String?,
+    val notes: String,
+    val installable: Boolean,
+) {
+    fun toAppUpdateInfo(): AppUpdateInfo? {
+        val primaryApkUrl = apkUrl ?: return null
+        val apkSha256 = sha256 ?: return null
+        return AppUpdateInfo(
+            packageName = "cn.pxyb.mycontrol",
+            versionName = versionName,
+            versionCode = versionCode,
+            tag = tag,
+            apkUrl = primaryApkUrl,
+            fallbackApkUrl = fallbackApkUrl,
+            sha256 = apkSha256,
+            apkSize = apkSize,
+            releaseUrl = releaseUrl ?: "https://github.com/mufenxu/MY/releases",
+            publishedAt = publishedAt.orEmpty(),
+            notes = notes,
+        )
+    }
+}
+
+@Immutable
+data class AndroidReleaseCatalog(
+    val draft: AndroidReleaseDraft?,
+    val releases: List<AndroidReleaseRecord>,
+    val latest: AndroidReleaseRecord?,
+)
+
+@Immutable
+data class AndroidReleaseDispatchResult(
+    val dispatched: Boolean,
+    val workflow: String,
+    val ref: String,
+)
+
 
 @Immutable
 data class BackupQuality(

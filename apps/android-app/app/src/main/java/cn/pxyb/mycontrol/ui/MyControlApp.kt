@@ -198,6 +198,7 @@ internal object AppRoute {
     const val Account = "account"
     const val GoogleAccounts = "google-accounts"
     const val GitHubProjects = "github-projects"
+    const val AndroidReleases = "android-releases"
     const val Search = "search"
     const val Assistant = "assistant"
     const val Today = "today"
@@ -258,6 +259,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Profile,
     AppRoute.Account -> MainTab.Profile
     AppRoute.GitHubProjects -> MainTab.Profile
+    AppRoute.AndroidReleases -> MainTab.Profile
     else -> null
 }
 
@@ -267,6 +269,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Authenticator -> MainTab.Tools
     AppRoute.Assistant -> MainTab.Overview
     AppRoute.GitHubProjects -> MainTab.Profile
+    AppRoute.AndroidReleases -> MainTab.Profile
     AppRoute.Notifications,
     AppRoute.Search,
     AppRoute.Today,
@@ -2047,6 +2050,7 @@ private fun AuthenticatedShell(
                         onOpenAccountManagement = viewModel::openAccountManagement,
                         onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
                         onOpenGitHubProjects = viewModel::openGitHubProjects,
+                        onOpenAndroidReleases = { navigateToSubScreen(AppRoute.AndroidReleases) },
                         notificationsEnabled = notificationsEnabled,
                         onRequestNotifications = onRequestNotifications,
                         onCreateDesktopMagicLink = viewModel::createDesktopMagicLink,
@@ -2134,6 +2138,25 @@ private fun AuthenticatedShell(
                         onUpdateVisibility = { owner, repo, visibility ->
                             viewModel.updateGitHubVisibility(owner, repo, visibility, onSensitiveActionConfirmation)
                         },
+                    )
+                }
+                composable(AppRoute.AndroidReleases) {
+                    val androidReleaseState by viewModel.androidReleaseState.collectAsStateWithLifecycle()
+                    val profileState by viewModel.profileState.collectAsStateWithLifecycle()
+                    AndroidReleaseScreen(
+                        state = androidReleaseState,
+                        canManage = profileState.user?.role == "super_admin",
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onRefresh = { viewModel.loadAndroidReleases(force = true) },
+                        onLoad = { viewModel.loadAndroidReleases() },
+                        onSaveDraft = { versionName, notes ->
+                            viewModel.saveAndroidReleaseDraft(versionName, notes)
+                        },
+                        onDispatchBuild = {
+                            viewModel.dispatchAndroidBuild(onSensitiveActionConfirmation)
+                        },
+                        onDownload = viewModel::downloadAndroidRelease,
                     )
                 }
                 composable(AppRoute.Search) {

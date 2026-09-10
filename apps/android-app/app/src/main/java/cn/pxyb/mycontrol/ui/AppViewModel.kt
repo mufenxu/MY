@@ -24,6 +24,7 @@ import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AndroidCalendarSync
 import cn.pxyb.mycontrol.data.AutomationCondition
+import cn.pxyb.mycontrol.data.AndroidReleaseRecord
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationAction
 import cn.pxyb.mycontrol.data.CampusTimetable
@@ -143,6 +144,13 @@ class AppViewModel(
     private val appUpdates = AppUpdateStateHolder(viewModelScope, appUpdateManager) { message ->
         mutableState.update { it.copy(message = message, error = null) }
     }
+    private val androidReleases = AndroidReleaseStateHolder(
+        viewModelScope,
+        api,
+        appUpdateManager,
+        ::forceReauthentication,
+    )
+    val androidReleaseState = androidReleases.state
     val todos = TodoController(viewModelScope, TodoRepository(application, api, sessionStore), mutableState, ::forceReauthentication)
     private val notifications: NotificationController = NotificationController(
         application, viewModelScope, api, sessionStore, personalStore, alertNotifier, mutableState, ::forceReauthentication,
@@ -561,6 +569,7 @@ class AppViewModel(
             notifications.cancelPending()
             actions.cancelPending()
             appUpdates.cancelPending()
+            androidReleases.cancelPending()
             reservations.cancelPending()
             librarySeats.cancelPending()
             clearRefreshCache()
@@ -692,6 +701,7 @@ class AppViewModel(
             notifications.cancelPending()
             actions.reset()
             appUpdates.reset()
+            androidReleases.reset()
             reservations.reset()
             librarySeats.reset()
             featureAccountUsername = username
@@ -718,6 +728,7 @@ class AppViewModel(
         notifications.cancelPending()
         actions.cancelPending()
         appUpdates.cancelPending()
+        androidReleases.cancelPending()
         alertNotifier.clear()
         sessionStore.withRequestSession(null) {
             personalStore.clearAccountData(preservePendingTodos = true)
@@ -772,9 +783,10 @@ class AppViewModel(
         googleAccounts.cancelPending()
         todos.cancelPending()
         notifications.cancelPending()
-        actions.cancelPending()
-        appUpdates.cancelPending()
-        reservations.cancelPending()
+            actions.cancelPending()
+            appUpdates.cancelPending()
+            androidReleases.cancelPending()
+            reservations.cancelPending()
         librarySeats.cancelPending()
         viewModelScope.launch {
             stopOperationalPolling()
@@ -2526,6 +2538,16 @@ class AppViewModel(
     fun installDownloadedAppUpdate() = appUpdates.installDownloaded()
 
     fun openAppReleasesPage(url: String? = null) = appUpdates.openReleasesPage(url)
+
+    fun loadAndroidReleases(force: Boolean = false) = androidReleases.load(force)
+
+    fun saveAndroidReleaseDraft(versionName: String, notes: String) =
+        androidReleases.saveDraft(versionName, notes)
+
+    fun dispatchAndroidBuild(confirmation: suspend () -> Boolean) =
+        androidReleases.dispatchBuild(confirmation)
+
+    fun downloadAndroidRelease(record: AndroidReleaseRecord) = androidReleases.download(record)
 
     private companion object {
         const val REFRESH_CACHE_WINDOW_MS = 30_000L

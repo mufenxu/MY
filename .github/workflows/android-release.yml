@@ -54,22 +54,34 @@ jobs:
         id: version
         env:
           BUMP: ${{ github.event_name == 'workflow_dispatch' && inputs.bump || 'patch' }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          node scripts/android-release.mjs draft \
+            --repository "${GITHUB_REPOSITORY}" \
+            --token "${GH_TOKEN}" > android-release-draft.json
+          draft_version="$(node -e 'const draft=require("./android-release-draft.json"); process.stdout.write(draft ? draft.version : "")')"
           existing_tag=""
           if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
             existing_tag="$(git tag --points-at "${GITHUB_SHA}" --list 'android-v*' | sort -V | tail -n 1)"
           fi
-          if [[ -n "${existing_tag}" ]]; then
+          if [[ -n "${draft_version}" ]]; then
+            version="${draft_version}"
+            node -e 'const draft=require("./android-release-draft.json"); process.stdout.write(draft.notes)' > android-release-notes.md
+            use_draft=true
+          elif [[ -n "${existing_tag}" ]]; then
             version="${existing_tag#android-v}"
+            use_draft=false
           else
             version="$(node scripts/android-release.mjs next --bump "${BUMP}" --base 1.1.0)"
+            use_draft=false
           fi
           version_code="$(node scripts/android-release.mjs version-code --version "${version}")"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "version_code=${version_code}" >> "${GITHUB_OUTPUT}"
           echo "tag=android-v${version}" >> "${GITHUB_OUTPUT}"
+          echo "use_draft=${use_draft}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify Android quality for the release commit
         working-directory: apps/android-app
@@ -146,20 +158,23 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
+          USE_DRAFT: ${{ steps.version.outputs.use_draft }}
           SHA256: ${{ steps.assets.outputs.sha256 }}
           APK_SIZE: ${{ steps.assets.outputs.apk_size }}
           DOWNLOAD_BASE_URL: https://7n.pxyb.cn
         shell: bash
         run: |
           set -euo pipefail
-          previous_tag="$(git tag --list 'android-v*' --sort=-version:refname | grep -Fvx "${TAG}" | head -n 1 || true)"
-          if [[ -n "${previous_tag}" ]]; then
-            git log --format='- %s (%h)' "${previous_tag}..${GITHUB_SHA}" -- apps/android-app > android-release-notes.md
-          else
-            git log -n 20 --format='- %s (%h)' "${GITHUB_SHA}" -- apps/android-app > android-release-notes.md
-          fi
-          if [[ ! -s android-release-notes.md ]]; then
-            printf '%s\n' '- Android application update' > android-release-notes.md
+          if [[ "${USE_DRAFT}" != "true" ]]; then
+            previous_tag="$(git tag --list 'android-v*' --sort=-version:refname | grep -Fvx "${TAG}" | head -n 1 || true)"
+            if [[ -n "${previous_tag}" ]]; then
+              git log --format='- %s (%h)' "${previous_tag}..${GITHUB_SHA}" -- apps/android-app > android-release-notes.md
+            else
+              git log -n 20 --format='- %s (%h)' "${GITHUB_SHA}" -- apps/android-app > android-release-notes.md
+            fi
+            if [[ ! -s android-release-notes.md ]]; then
+              printf '%s\n' '- Android application update' > android-release-notes.md
+            fi
           fi
           published_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           node scripts/android-release.mjs manifest \
@@ -177,10 +192,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
           VERSION: ${{ steps.version.outputs.version }}
+          USE_DRAFT: ${{ steps.version.outputs.use_draft }}
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "${TAG}" >/dev/null 2>&1; then
+          if [[ "${USE_DRAFT}" == "true" ]]; then
+            gh release upload "${TAG}" android-release-assets/* --clobber
+            gh release edit "${TAG}" \
+              --target "${GITHUB_SHA}" \
+              --title "MY Control v${VERSION}" \
+              --notes-file android-release-notes.md \
+              --draft=false \
+              --latest
+          elif gh release view "${TAG}" >/dev/null 2>&1; then
             gh release upload "${TAG}" android-release-assets/* --clobber
             gh release edit "${TAG}" --title "MY Control v${VERSION}" --notes-file android-release-notes.md --latest
           else

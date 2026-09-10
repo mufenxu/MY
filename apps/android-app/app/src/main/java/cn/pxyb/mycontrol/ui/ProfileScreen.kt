@@ -98,6 +98,7 @@ fun ProfileScreen(
     onOpenAccountManagement: () -> Unit,
     onOpenGoogleAccountDesk: () -> Unit,
     onOpenGitHubProjects: () -> Unit,
+    onOpenAndroidReleases: () -> Unit,
     notificationsEnabled: Boolean,
     onRequestNotifications: () -> Unit,
     onCreateDesktopMagicLink: ((String?, String?) -> Unit) -> Unit,
@@ -831,6 +832,15 @@ fun ProfileScreen(
                                 title = "GitHub 项目",
                                 subtitle = "管理仓库公开性",
                                 onClick = onOpenGitHubProjects,
+                            )
+                            ProfileDivider()
+                            ProfileActionRow(
+                                icon = Icons.Outlined.SystemUpdate,
+                                iconTint = ColorTokens.Green.foreground,
+                                iconBackground = ColorTokens.Green.container,
+                                title = "应用版本管理",
+                                subtitle = "下载历史安装包，配置下一次发布",
+                                onClick = onOpenAndroidReleases,
                             )
                         }
                     }

@@ -75,6 +75,26 @@ export function createAndroidReleaseManifest({
   };
 }
 
+export function selectAndroidDraftRelease(releases) {
+  const drafts = (Array.isArray(releases) ? releases : [])
+    .filter((release) => release?.draft)
+    .filter((release) => String(release.tag_name || '').startsWith('android-v'));
+  if (drafts.length > 1) throw new Error('Multiple Android draft releases exist');
+  const release = drafts[0];
+  if (!release) return null;
+
+  const version = String(release.tag_name).slice('android-v'.length);
+  versionCodeFor(version);
+  const notes = String(release.body || '').trim();
+  if (!notes) throw new Error(`Android draft release ${release.tag_name} has empty release notes`);
+  return {
+    id: String(release.id),
+    tag: String(release.tag_name),
+    version,
+    notes,
+  };
+}
+
 function normalizeDownloadBaseUrl(value) {
   if (!value) return '';
   const url = new URL(value);
@@ -90,7 +110,7 @@ function option(name) {
   return process.argv[index + 1];
 }
 
-function runCli() {
+async function runCli() {
   const command = process.argv[2];
   if (command === 'next') {
     const tags = execFileSync('git', ['tag', '--list', 'android-v*'], { encoding: 'utf8' })
@@ -119,12 +139,33 @@ function runCli() {
     return;
   }
 
-  throw new Error('Usage: android-release.mjs <next|version-code|manifest> [options]');
+  if (command === 'draft') {
+    const repository = option('--repository');
+    const token = option('--token');
+    const [owner, name] = repository.split('/');
+    const response = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/releases?per_page=100`,
+      {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'MY-Android-Release/1.0',
+        },
+      },
+    );
+    if (!response.ok) throw new Error(`GitHub release request failed with HTTP ${response.status}`);
+    const draft = selectAndroidDraftRelease(await response.json());
+    process.stdout.write(JSON.stringify(draft));
+    return;
+  }
+
+  throw new Error('Usage: android-release.mjs <next|version-code|manifest|draft> [options]');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    runCli();
+    await runCli();
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;

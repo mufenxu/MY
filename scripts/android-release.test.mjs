@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   createAndroidReleaseManifest,
   nextAndroidVersion,
+  selectAndroidDraftRelease,
   versionCodeFor,
 } from './android-release.mjs';
 
@@ -58,5 +59,33 @@ test('release manifest uses Qiniu as the primary APK source when configured', ()
   assert.equal(
     manifest.fallbackApkUrl,
     'https://github.com/mufenxu/MY/releases/download/android-v1.2.0/my-control-1.2.0.apk',
+  );
+});
+
+test('android release workflow selects one configured draft release', () => {
+  const draft = selectAndroidDraftRelease([
+    { tag_name: 'platform-v1.0.0', draft: true, body: '镜像发布' },
+    {
+      id: 1002,
+      tag_name: 'android-v1.3.0',
+      body: '新增应用版本管理\n',
+      draft: true,
+      created_at: '2026-09-10T01:00:00Z',
+    },
+  ]);
+
+  assert.deepEqual(draft, {
+    id: '1002',
+    tag: 'android-v1.3.0',
+    version: '1.3.0',
+    notes: '新增应用版本管理',
+  });
+  assert.equal(selectAndroidDraftRelease([{ tag_name: 'android-v1.2.0', draft: false }]), null);
+  assert.throws(
+    () => selectAndroidDraftRelease([
+      { id: 1, tag_name: 'android-v1.3.0', draft: true, body: '一' },
+      { id: 2, tag_name: 'android-v1.4.0', draft: true, body: '二' },
+    ]),
+    /Multiple Android draft releases/,
   );
 });

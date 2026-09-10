@@ -24,6 +24,31 @@ class AppUpdateVerificationTest {
         assertEquals(file, verifyUpdateArtifact(update, file, identity, identity.copy(versionCode = 1_001_000)))
     }
 
+    @Test
+    fun `archive download may be an older release when installation is not implied`() {
+        val file = File.createTempFile("my-control-archive", ".apk").apply {
+            writeText("verified archive payload")
+            deleteOnExit()
+        }
+        val update = updateInfo.copy(sha256 = sha256(file), apkSize = file.length())
+        val identity = AppPackageIdentity(
+            packageName = "cn.pxyb.mycontrol",
+            versionCode = 1_001_001,
+            signerSha256 = setOf("release-certificate"),
+        )
+
+        assertEquals(
+            file,
+            verifyUpdateArtifact(
+                update,
+                file,
+                identity,
+                identity.copy(versionCode = 1_002_000),
+                requireNewer = false,
+            ),
+        )
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `downloaded APK rejects a different signing certificate`() {
         val file = File.createTempFile("my-control-update", ".apk").apply {
