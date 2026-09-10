@@ -1004,6 +1004,7 @@ fun AppSecondaryButton(
     loading: Boolean = false,
     height: Dp = 46.dp,
     shape: RoundedCornerShape = RoundedCornerShape(50),
+    compact: Boolean = false,
 ) {
     val dark = isAppInDarkTheme()
     val haptics = LocalHapticFeedback.current
@@ -1048,7 +1049,7 @@ fun AppSecondaryButton(
             disabledContainerColor = Color.Transparent,
             disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
         ),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 20.dp, vertical = 4.dp),
     ) {
         if (loading) {
             CircularProgressIndicator(
@@ -1072,8 +1073,10 @@ fun AppSecondaryButton(
                 Text(
                     text = text,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.5.sp,
+                    fontSize = if (compact) 13.sp else 14.5.sp,
                     letterSpacing = (-0.1).sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -1095,6 +1098,7 @@ fun AppDangerButton(
     loading: Boolean = false,
     height: Dp = 46.dp,
     shape: RoundedCornerShape = RoundedCornerShape(50),
+    compact: Boolean = false,
 ) {
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -1145,7 +1149,7 @@ fun AppDangerButton(
             disabledContainerColor = Color.Transparent,
             disabledContentColor = if (loading) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
         ),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 20.dp, vertical = 4.dp),
     ) {
         if (loading) {
             CircularProgressIndicator(
@@ -1169,9 +1173,11 @@ fun AppDangerButton(
                 Text(
                     text = text,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.5.sp,
+                    fontSize = if (compact) 13.sp else 14.5.sp,
                     letterSpacing = (-0.1).sp,
                     color = LocalContentColor.current,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

@@ -19,6 +19,7 @@ import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.data.CampusReservationTimeWindow
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.Ct8Data
+import cn.pxyb.mycontrol.data.DailyNews
 import cn.pxyb.mycontrol.data.DiagnosticData
 import cn.pxyb.mycontrol.data.ExternalApplication
 import cn.pxyb.mycontrol.data.GitHubReleaseRecord
@@ -57,7 +58,7 @@ enum class MainTab { Overview, Notifications, Operations, Tools, Profile }
 
 enum class WorkspaceDestination { Today, Notifications, Scenes }
 
-enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, IotInsights, Ct8, Security, Todos, Campus, FreeClassrooms, Resources, Notifications, Reservation }
+enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, IotInsights, Ct8, Security, Todos, Campus, FreeClassrooms, Resources, Notifications, Reservation, DailyNews }
 
 @Immutable
 data class SectionLoadState(
@@ -144,6 +145,7 @@ data class AppUiState(
     val pendingTodoMutations: Int = 0,
     val campusTimetable: CampusTimetable? = null,
     val campusOverview: CampusOverview? = null,
+    val dailyNews: DailyNews? = null,
     val campusWaterValve: CampusWaterValve = CampusWaterValve(),
     val campusWaterValveLoading: Boolean = false,
     val campusWaterValveBusy: Boolean = false,
@@ -410,6 +412,13 @@ data class FreeClassroomUiState(
 )
 
 @Immutable
+data class DailyNewsUiState(
+    val refreshing: Boolean,
+    val error: String?,
+    val news: DailyNews?,
+)
+
+@Immutable
 data class ReservationUiState(
     val refreshing: Boolean = false,
     val spaces: List<CampusReservationSpace> = emptyList(),
@@ -590,6 +599,12 @@ internal fun AppUiState.toToolsUiState() = ToolsUiState(
     iot = iot,
     ct8 = ct8,
     unreadAlerts = alerts.count { !it.read },
+)
+
+internal fun AppUiState.toDailyNewsUiState() = DailyNewsUiState(
+    refreshing = isRefreshing(DataSection.DailyNews),
+    error = sectionError(DataSection.DailyNews),
+    news = dailyNews,
 )
 
 internal fun AppUiState.toProfileUiState() = ProfileUiState(

@@ -57,6 +57,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.MeetingRoom
+import androidx.compose.material.icons.outlined.Newspaper
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -118,6 +119,7 @@ fun OverviewScreen(
     onOpenQrLogin: () -> Unit,
     onOpenWorkspace: (WorkspaceDestination) -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenDailyNews: () -> Unit = {},
     onOpenReservation: () -> Unit = {},
     onOpenFreeClassrooms: () -> Unit = {},
     onOpenSeatReservation: () -> Unit = {},
@@ -627,6 +629,7 @@ fun OverviewScreen(
                                                     onOpenFreeClassrooms = onOpenFreeClassrooms,
                                                     onOpenSeatReservation = onOpenSeatReservation,
                                                     onOpenWaterValve = onOpenWaterValve,
+                                                    onOpenDailyNews = onOpenDailyNews,
                                                     onOpenSearch = onOpenSearch,
                                                     onOpenQrLogin = onOpenQrLogin,
                                                     onOpenAccountManagement = onOpenAccountManagement,
@@ -1015,9 +1018,10 @@ fun OverviewScreen(
                                             onOpenWorkspace = onOpenWorkspace,
                                             onOpenReservation = onOpenReservation,
                                             onOpenFreeClassrooms = onOpenFreeClassrooms,
-                                            onOpenSeatReservation = onOpenSeatReservation,
-                                            onOpenWaterValve = onOpenWaterValve,
-                                            onOpenSearch = onOpenSearch,
+                                                            onOpenSeatReservation = onOpenSeatReservation,
+                                                            onOpenWaterValve = onOpenWaterValve,
+                                                            onOpenDailyNews = onOpenDailyNews,
+                                                            onOpenSearch = onOpenSearch,
                                             onOpenQrLogin = onOpenQrLogin,
                                             onOpenAccountManagement = onOpenAccountManagement,
                                         )
@@ -1561,6 +1565,7 @@ private data class QuickActionVisual(
 private fun homeQuickActionVisual(action: HomeQuickAction): QuickActionVisual = when (action) {
     HomeQuickAction.Today -> QuickActionVisual(Icons.Outlined.CalendarMonth, ColorTokens.Blue.foreground)
     HomeQuickAction.Notifications -> QuickActionVisual(Icons.Outlined.Notifications, ColorTokens.Pink.foreground)
+    HomeQuickAction.DailyNews -> QuickActionVisual(Icons.Outlined.Newspaper, ColorTokens.Teal.foreground)
     HomeQuickAction.Scenes -> QuickActionVisual(Icons.Outlined.Tune, ColorTokens.Purple.foreground)
     HomeQuickAction.Reservation -> QuickActionVisual(Icons.Outlined.MeetingRoom, ColorTokens.Blue.foreground)
     HomeQuickAction.FreeClassrooms -> QuickActionVisual(Icons.Outlined.School, ColorTokens.Sky.foreground)
@@ -1586,6 +1591,7 @@ private fun homeQuickActionSpec(
     onOpenFreeClassrooms: () -> Unit,
     onOpenSeatReservation: () -> Unit,
     onOpenWaterValve: () -> Unit,
+    onOpenDailyNews: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenQrLogin: () -> Unit,
     onOpenAccountManagement: () -> Unit,
@@ -1603,6 +1609,14 @@ private fun homeQuickActionSpec(
         accent = ColorTokens.Pink.foreground,
         accentPale = ColorTokens.Pink.container,
     ) { onOpenWorkspace(WorkspaceDestination.Notifications) }
+
+    HomeQuickAction.DailyNews -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Newspaper,
+        label = "近日趣事",
+        accent = ColorTokens.Teal.foreground,
+        accentPale = ColorTokens.Teal.container,
+        onClick = onOpenDailyNews,
+    )
 
     HomeQuickAction.Scenes -> HomeQuickActionSpec(
         icon = Icons.Outlined.Tune,
@@ -1856,6 +1870,7 @@ private fun QuickActionArrowButton(
 private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action) {
     HomeQuickAction.Today -> "今日工作台"
     HomeQuickAction.Notifications -> "通知中心"
+    HomeQuickAction.DailyNews -> "近日趣事"
     HomeQuickAction.Scenes -> "智能场景"
     HomeQuickAction.Reservation -> "研讨间预约"
     HomeQuickAction.FreeClassrooms -> "空闲教室"

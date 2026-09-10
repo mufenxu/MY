@@ -206,6 +206,7 @@ internal object AppRoute {
     const val LibrarySeatReservation = "library-seat-reservation"
     const val CampusWaterValve = "campus-water-valve"
     const val Notifications = "notifications"
+    const val DailyNews = "daily-news"
     const val Scenes = "scenes"
 }
 
@@ -248,6 +249,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Reservation,
     AppRoute.LibrarySeatReservation,
     AppRoute.CampusWaterValve,
+    AppRoute.DailyNews,
     AppRoute.Scenes -> MainTab.Overview
     AppRoute.Notifications -> MainTab.Overview
     AppRoute.Operations -> MainTab.Operations
@@ -272,6 +274,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Reservation,
     AppRoute.LibrarySeatReservation,
     AppRoute.CampusWaterValve,
+    AppRoute.DailyNews,
     AppRoute.Scenes -> MainTab.Overview
     else -> null
 }
@@ -1789,6 +1792,7 @@ private fun AuthenticatedShell(
             AppRoute.FreeClassrooms -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.Reservation -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.LibrarySeatReservation -> viewModel.syncNavigationDestination(MainTab.Overview)
+            AppRoute.DailyNews -> viewModel.syncNavigationDestination(MainTab.Overview, autoRefresh = false)
             AppRoute.Scenes -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Scenes)
         }
     }
@@ -1943,6 +1947,7 @@ private fun AuthenticatedShell(
                         onOpenQrLogin = viewModel::openQrScanner,
                         onOpenWorkspace = viewModel::openWorkspace,
                         onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
+                        onOpenDailyNews = { navigateToSubScreen(AppRoute.DailyNews) },
                         onOpenReservation = { navigateToSubScreen(AppRoute.Reservation) },
                         onOpenFreeClassrooms = {
                             navigateToSubScreen(AppRoute.FreeClassrooms)
@@ -2200,6 +2205,15 @@ private fun AuthenticatedShell(
                             navigateToSubScreen(AppRoute.CampusWaterValve)
                         },
                         onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
+                    )
+                }
+                composable(AppRoute.DailyNews) {
+                    val dailyNewsState by viewModel.dailyNewsState.collectAsStateWithLifecycle()
+                    DailyNewsScreen(
+                        state = dailyNewsState,
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onRefresh = viewModel::refreshDailyNews,
                     )
                 }
                 composable(AppRoute.FreeClassrooms) {

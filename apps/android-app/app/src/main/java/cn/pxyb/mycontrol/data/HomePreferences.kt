@@ -7,6 +7,7 @@ import android.content.Context
 enum class HomeQuickAction {
     Today,
     Notifications,
+    DailyNews,
     Scenes,
     Reservation,
     FreeClassrooms,

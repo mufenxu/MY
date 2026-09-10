@@ -104,6 +104,16 @@ class PlatformApi(
         execute(TODOS_PATH).json.toTodoSnapshotEnvelope()
     }
 
+    suspend fun dailyNews(): DailyNews = withContext(Dispatchers.IO) {
+        val data = execute(DAILY_NEWS_PATH).json.optJSONObject("data") ?: JSONObject()
+        DailyNews(
+            news = data.optJSONArray("news").toStringList(),
+            tip = data.optString("tip"),
+            date = data.optString("date"),
+            isMaintenance = data.optBoolean("isMaintenance"),
+        )
+    }
+
     suspend fun appNotifications(
         limit: Int = 50,
         cursor: String? = null,
@@ -429,6 +439,7 @@ class PlatformApi(
         const val AUTH_STATUS_PATH = "/api/auth/status"
         const val EXTERNAL_APPLICATIONS_PATH = "/api/external-apps"
         const val TODOS_PATH = "/apps/core/api/todos"
+        const val DAILY_NEWS_PATH = "/apps/core/api/news/daily"
         const val RESOURCE_EXPIRIES_PATH = "/apps/core/api/resources/expiry-summary"
     }
 }

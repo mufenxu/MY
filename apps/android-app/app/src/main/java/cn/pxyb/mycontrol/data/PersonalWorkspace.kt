@@ -99,6 +99,14 @@ data class CampusTimetable(
 )
 
 @Immutable
+data class DailyNews(
+    val news: List<String> = emptyList(),
+    val tip: String = "",
+    val date: String = "",
+    val isMaintenance: Boolean = false,
+)
+
+@Immutable
 data class CampusGpa(
     val overall: String? = null,
     val core: String? = null,

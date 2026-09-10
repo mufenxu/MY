@@ -51,7 +51,6 @@ import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
@@ -2227,28 +2226,31 @@ private fun AutoTaskCard(
             // 操作栏
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AppSecondaryButton(
                     text = "编辑",
-                    icon = Icons.Outlined.Edit,
                     onClick = onEdit,
                     modifier = Modifier.weight(1f),
+                    height = 40.dp,
+                    compact = true,
                 )
                 AppSecondaryButton(
                     text = "再次预约",
-                    icon = Icons.Outlined.ContentCopy,
                     onClick = onCopy,
-                    modifier = Modifier.weight(1.25f),
+                    modifier = Modifier.weight(1f),
+                    height = 40.dp,
+                    compact = true,
                 )
                 AppDangerButton(
                     text = "删除",
-                    icon = Icons.Outlined.Delete,
                     onClick = onDelete,
                     enabled = !isDeleting,
                     loading = isDeleting,
                     modifier = Modifier.weight(1f),
+                    height = 40.dp,
+                    compact = true,
                 )
             }
         }

@@ -152,6 +152,7 @@ class AppViewModel(
     val operationsState = deriveState(AppUiState::toOperationsUiState)
     val toolsState = deriveState(AppUiState::toToolsUiState)
     val profileState = deriveState(AppUiState::toProfileUiState)
+    val dailyNewsState = deriveState(AppUiState::toDailyNewsUiState)
     val accountManagementState = deriveState(AppUiState::toAccountManagementUiState)
     val googleAccounts = GoogleAccountsController(viewModelScope, api, googleAccountStore, sessionStore, mutableState, ::forceReauthentication, actions)
     val googleAccountDeskState = deriveState(AppUiState::toGoogleAccountDeskUiState)
@@ -1682,6 +1683,11 @@ class AppViewModel(
     private fun refreshBackup(force: Boolean = false) = launchRefresh(DataSection.Backup, force) {
         val backup = api.backupQuality()
         mutableState.update { it.copy(backup = backup) }
+    }
+
+    fun refreshDailyNews(force: Boolean = false) = launchRefresh(DataSection.DailyNews, force) {
+        val dailyNews = api.dailyNews()
+        mutableState.update { it.copy(dailyNews = dailyNews) }
     }
 
     private fun refreshIot(force: Boolean = false) = launchRefresh(DataSection.Iot, force) {
