@@ -119,6 +119,7 @@ function githubAndroidRelease(overrides = {}) {
       id: 9001,
       name: 'my-control-1.2.0.apk',
       size: 27_171_336,
+      digest: `sha256:${'a'.repeat(64)}`,
       browser_download_url: 'https://github.com/owner/repository/releases/download/android-v1.2.0/my-control-1.2.0.apk',
     }, {
       id: 9002,
@@ -152,9 +153,6 @@ test('android release list maps installable releases and the pending draft', asy
           githubAndroidRelease({ id: 1003, tag_name: 'platform-v1.0.0' }),
         ]);
       }
-      if (resource.endsWith('/releases/assets/9002')) {
-        return binaryResponse(Buffer.from(`${'a'.repeat(64)}  my-control-1.2.0.apk\n`));
-      }
       throw new Error(`Unexpected request: ${resource}`);
     },
   });
@@ -167,7 +165,7 @@ test('android release list maps installable releases and the pending draft', asy
   assert.equal(summary.releases[0].sha256, 'a'.repeat(64));
   assert.equal(summary.draft.versionName, '1.3.0');
   assert.equal(summary.draft.notes, '下一次发布计划');
-  assert.equal(requests.find((request) => request.resource.endsWith('/releases/assets/9002')).options.headers.Accept, 'application/octet-stream');
+  assert.equal(requests.some((request) => request.resource.includes('/releases/assets/')), false);
 });
 
 test('android draft saves a valid next version and rejects downgrades', async () => {

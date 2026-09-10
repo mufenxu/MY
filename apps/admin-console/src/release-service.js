@@ -147,6 +147,11 @@ function androidVersionFromTag(tagName) {
   };
 }
 
+function androidAssetSha256(asset) {
+  const match = /^sha256:([a-f0-9]{64})$/i.exec(String(asset?.digest || '').trim());
+  return match ? match[1].toLowerCase() : null;
+}
+
 function mapAndroidDraft(release) {
   const version = androidVersionFromTag(release.tag_name);
   if (!version) return null;
@@ -372,33 +377,19 @@ export function createReleaseService({
     return Array.isArray(data) ? data : [];
   }
 
-  async function loadAndroidSha256(asset) {
-    if (!asset?.id) return null;
-    const [owner, repository] = config.githubRepository.split('/');
-    const content = await githubRequestBuffer(
-      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/releases/assets/${encodeURIComponent(asset.id)}`,
-      { headers: { Accept: 'application/octet-stream' } },
-    );
-    const match = /([a-f0-9]{64})/i.exec(content.toString('utf8').trim());
-    return match ? match[1].toLowerCase() : null;
-  }
-
   async function getAndroidReleases() {
     if (androidReleaseCache && Date.now() - androidReleaseCache.cachedAt < 60_000) {
       return androidReleaseCache.data;
     }
     const releases = await loadAndroidGitHubReleases();
     const downloadBase = String(config.androidReleaseDownloadBaseUrl || 'https://7n.pxyb.cn').replace(/\/$/, '');
-    const published = await Promise.all(releases
+    const published = releases
       .filter((release) => !release.draft && androidVersionFromTag(release.tag_name))
-      .map(async (release) => {
+      .map((release) => {
         const version = androidVersionFromTag(release.tag_name);
         const assets = Array.isArray(release.assets) ? release.assets : [];
         const apkAsset = assets.find((asset) => /^my-control-.*\.apk$/i.test(String(asset.name || '')));
-        const hashAsset = apkAsset
-          ? assets.find((asset) => String(asset.name || '').toLowerCase() === `${String(apkAsset.name).toLowerCase()}.sha256`)
-          : null;
-        const sha256 = hashAsset ? await loadAndroidSha256(hashAsset) : null;
+        const sha256 = apkAsset ? androidAssetSha256(apkAsset) : null;
         return {
           id: String(release.id),
           versionName: version.versionName,
@@ -413,7 +404,7 @@ export function createReleaseService({
           notes: String(release.body || '').trim(),
           installable: Boolean(apkAsset && sha256),
         };
-      }));
+      });
     const drafts = releases
       .filter((release) => release.draft)
       .map(mapAndroidDraft)
