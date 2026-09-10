@@ -1143,10 +1143,40 @@ internal fun JSONObject.toCampusAutoReservationTask(): CampusAutoReservationTask
             )
         }
     }
+    val attemptsArray = optJSONArray("lastAttempts") ?: JSONArray()
+    val attempts = buildList {
+        for (i in 0 until attemptsArray.length()) {
+            val obj = attemptsArray.optJSONObject(i) ?: continue
+            add(
+                CampusAutoReservationAttempt(
+                    candidateIndex = obj.optInt("candidateIndex", obj.optInt("candidate_index", -1)),
+                    status = obj.optString("status"),
+                    conflict = obj.optBoolean("conflict", false),
+                    transient = obj.optBoolean("transient", false),
+                    attempt = obj.optInt("attempt", 1),
+                    message = obj.optString("message").ifBlank { null },
+                )
+            )
+        }
+    }
+    val enabled = optBoolean("enabled", true)
+    val lastStatus = nullableString("lastStatus")
+    val status = optString("status").ifBlank {
+        when {
+            enabled -> "waiting"
+            lastStatus != null -> lastStatus
+            else -> "disabled"
+        }
+    }
+    val statusText = optString("statusText").ifBlank { campusAutoReservationStatusText(status) }
+    val reservationObject = optJSONObject("lastReservation")
     return CampusAutoReservationTask(
         id = optString("id"),
         name = optString("name"),
-        enabled = optBoolean("enabled", true),
+        enabled = enabled,
+        status = status,
+        statusText = statusText,
+        nextRunAt = nullableString("nextRunAt"),
         reservationDate = optString("reservationDate", optString("reservation_date", optString("startDate", optString("start_date", "")))),
         executeDate = optString("executeDate", optString("execute_date", optString("runDate", optString("run_date", "")))),
         executeTime = optString("executeTime", optString("execute_time", "08:30")),
@@ -1155,13 +1185,34 @@ internal fun JSONObject.toCampusAutoReservationTask(): CampusAutoReservationTask
         content = optString("content"),
         mobile = optString("mobile", optString("phone", "")),
         open = optBoolean("open", false),
-        lastStatus = nullableString("lastStatus"),
+        lastStatus = lastStatus,
         lastMessage = nullableString("lastMessage"),
         lastCandidateIndex = optIntOrNull("lastCandidateIndex"),
-        lastExecutedAt = nullableString("lastExecutedAt"),
+        lastRunAt = nullableString("lastRunAt"),
+        lastAttempts = attempts,
+        lastReservation = reservationObject?.let {
+            CampusAutoReservationRecord(
+                id = it.optString("id", it.optString("order_id", it.optString("orderId", ""))),
+                date = it.optString("date", it.optString("start_date", it.optString("startDate", ""))),
+                startTime = it.optString("startTime", it.optString("start_time", "")),
+                endTime = it.optString("endTime", it.optString("end_time", "")),
+            )
+        },
         createdAt = nullableString("createdAt"),
         updatedAt = nullableString("updatedAt"),
     )
+}
+
+private fun campusAutoReservationStatusText(status: String): String = when (status) {
+    "waiting" -> "等待运行"
+    "ready" -> "待执行"
+    "running" -> "正在执行"
+    "succeeded" -> "已完成"
+    "failed" -> "执行失败"
+    "auth_required" -> "需重新登录"
+    "expired" -> "已过期"
+    "invalid" -> "配置无效"
+    else -> "已停用"
 }
 
 internal fun CampusAutoReservationTask.toJson(): JSONObject = JSONObject().apply {

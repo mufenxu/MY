@@ -396,10 +396,31 @@ data class CampusAutoReservationCandidate(
 )
 
 @Immutable
+data class CampusAutoReservationAttempt(
+    val candidateIndex: Int,
+    val status: String,
+    val conflict: Boolean = false,
+    val transient: Boolean = false,
+    val attempt: Int = 1,
+    val message: String? = null,
+)
+
+@Immutable
+data class CampusAutoReservationRecord(
+    val id: String = "",
+    val date: String = "",
+    val startTime: String = "",
+    val endTime: String = "",
+)
+
+@Immutable
 data class CampusAutoReservationTask(
     val id: String = "",
     val name: String = "",
     val enabled: Boolean = true,
+    val status: String = "disabled",
+    val statusText: String = "已停用",
+    val nextRunAt: String? = null,
     val reservationDate: String = "",
     val executeDate: String = "",
     val executeTime: String = "08:30",
@@ -411,7 +432,9 @@ data class CampusAutoReservationTask(
     val lastStatus: String? = null,
     val lastMessage: String? = null,
     val lastCandidateIndex: Int? = null,
-    val lastExecutedAt: String? = null,
+    val lastRunAt: String? = null,
+    val lastAttempts: List<CampusAutoReservationAttempt> = emptyList(),
+    val lastReservation: CampusAutoReservationRecord? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )

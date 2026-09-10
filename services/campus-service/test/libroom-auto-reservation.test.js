@@ -70,9 +70,12 @@ test("runs at the configured execute date for a future target date", () => {
     autoReservationRunPlan(task, new Date("2026-08-24T08:30:00+08:00")),
     {
       due: true,
+      state: "ready",
+      reason: null,
       targetDate: "2026-08-27",
       executeDate: "2026-08-24",
       executeTime: "08:30",
+      nextRunAt: null,
       runKey: "2026-08-27:2026-08-24T08:30"
     }
   );
@@ -102,6 +105,46 @@ test("schedules the next scan exactly at the configured Beijing run minute", () 
     ),
     0
   );
+});
+
+test("classifies waiting, ready, invalid, and expired auto-reservation tasks", () => {
+  const waitingTask = normalizeAutoReservationTaskInput({
+    ...baseInput,
+    reservationDate: "2026-08-28",
+    executeDate: "2026-08-26",
+    executeTime: "07:43"
+  });
+
+  assert.deepEqual(
+    autoReservationRunPlan(waitingTask, new Date("2026-08-25T23:42:58.250Z")),
+    {
+      due: false,
+      state: "waiting",
+      reason: null,
+      targetDate: "2026-08-28",
+      executeDate: "2026-08-26",
+      executeTime: "07:43",
+      nextRunAt: "2026-08-25T23:43:00.000Z",
+      runKey: "2026-08-28:2026-08-26T07:43"
+    }
+  );
+
+  const readyTask = normalizeAutoReservationTaskInput(baseInput);
+  assert.equal(
+    autoReservationRunPlan(readyTask, new Date("2026-08-24T08:30:00+08:00")).state,
+    "ready"
+  );
+
+  const invalidTask = { ...readyTask, executeDate: "2026-08-20" };
+  assert.equal(
+    autoReservationRunPlan(invalidTask, new Date("2026-08-24T08:30:00+08:00")).state,
+    "invalid"
+  );
+
+  const expiredTask = { ...readyTask, reservationDate: "2026-08-23", executeDate: "2026-08-23" };
+  const expiredPlan = autoReservationRunPlan(expiredTask, new Date("2026-08-24T08:30:00+08:00"));
+  assert.equal(expiredPlan.state, "expired");
+  assert.match(expiredPlan.reason, /预约目标日期已过期/);
 });
 
 test("legacy tasks without execute date run when the target enters the three-day booking window", () => {
@@ -136,6 +179,54 @@ test("does not run stored tasks whose execute date is outside the booking window
   );
 });
 
+test("retries transient candidate failures a bounded number of times", async () => {
+  const task = normalizeAutoReservationTaskInput(baseInput);
+  let calls = 0;
+
+  const result = await executeAutoReservationCandidates({
+    task,
+    date: task.reservationDate,
+    submitReservation: async () => {
+      calls += 1;
+      if (calls === 1) {
+        const error = new Error("学校预约系统暂时不可用。");
+        error.status = 502;
+        throw error;
+      }
+      return { id: "reservation-1" };
+    },
+    transientRetryDelayMs: 0
+  });
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(calls, 2);
+  assert.equal(result.attempts.length, 2);
+  assert.equal(result.attempts[0].transient, true);
+  assert.equal(result.attempts[0].attempt, 1);
+});
+
+test("does not retry authentication failures and pauses with an auth-required result", async () => {
+  const task = normalizeAutoReservationTaskInput(baseInput);
+  let calls = 0;
+
+  const result = await executeAutoReservationCandidates({
+    task,
+    date: task.reservationDate,
+    submitReservation: async () => {
+      calls += 1;
+      const error = new Error("空间预约会话已过期，请重新登录学校账号。");
+      error.status = 401;
+      throw error;
+    },
+    transientRetryDelayMs: 0
+  });
+
+  assert.equal(result.status, "auth_required");
+  assert.equal(calls, 1);
+  assert.equal(result.attempts.length, 1);
+  assert.equal(result.attempts[0].transient, false);
+});
+
 test("tries candidates in order and continues only after a conflict", async () => {
   const attempts = [];
   const result = await executeAutoReservationCandidates({
@@ -166,7 +257,7 @@ test("stops on a non-conflict error", async () => {
     submitReservation: async () => {
       calls += 1;
       const error = new Error("请重新登录学校账号");
-      error.status = 401;
+      error.status = 400;
       throw error;
     }
   });

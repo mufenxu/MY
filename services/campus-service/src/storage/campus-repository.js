@@ -462,19 +462,29 @@ export class CampusRepository {
   }
 
   async claimAutoReservationTask(userId, id, runKey, now, lockUntil) {
+    const lockAvailable = {
+      $or: [
+        { run_lock_until: { $exists: false } },
+        { run_lock_until: null },
+        { run_lock_until: { $lte: now } }
+      ]
+    };
     const result = await this.db.collection("auto_reservation_tasks").findOneAndUpdate(
       {
         id,
         user_id: userId,
         enabled: true,
-        last_run_key: { $ne: runKey },
-        $or: [
-          { run_lock_until: { $exists: false } },
-          { run_lock_until: null },
-          { run_lock_until: { $lte: now } }
+        $and: [
+          lockAvailable,
+          {
+            $or: [
+              { last_run_key: { $ne: runKey } },
+              { last_run_key: runKey, run_status: "running" }
+            ]
+          }
         ]
       },
-      { $set: { last_run_key: runKey, run_lock_until: lockUntil, last_run_started_at: now } },
+      { $set: { last_run_key: runKey, run_lock_until: lockUntil, run_status: "running", last_run_started_at: now } },
       { returnDocument: "after", projection: { _id: 0 } }
     );
     return result?.value || result || null;
@@ -486,6 +496,7 @@ export class CampusRepository {
       {
         $set: {
           run_lock_until: null,
+          run_status: "finished",
           last_run_at: timestamp,
           enabled: false,
           last_status: result.status,
@@ -754,9 +765,13 @@ export class MemoryCampusRepository {
 
   async claimAutoReservationTask(userId, id, runKey, now, lockUntil) {
     const row = this.autoReservationTasks.get(id);
-    if (!row || row.user_id !== userId || !row.enabled || row.last_run_key === runKey) return null;
-    if (row.run_lock_until && row.run_lock_until > now) return null;
-    Object.assign(row, { last_run_key: runKey, run_lock_until: lockUntil, last_run_started_at: now });
+    if (!row || row.user_id !== userId || !row.enabled) return null;
+    const lockExpired = !row.run_lock_until || row.run_lock_until <= now;
+    const newOccurrence = row.last_run_key !== runKey;
+    const recoverInterruptedRun = row.last_run_key === runKey && row.run_status === "running";
+    if (!lockExpired || (!newOccurrence && !recoverInterruptedRun)) return null;
+
+    Object.assign(row, { last_run_key: runKey, run_lock_until: lockUntil, run_status: "running", last_run_started_at: now });
     return clone(row);
   }
 
@@ -765,6 +780,7 @@ export class MemoryCampusRepository {
     if (!row || row.user_id !== userId) return;
     Object.assign(row, {
       run_lock_until: null,
+      run_status: "finished",
       last_run_at: timestamp,
       enabled: false,
       last_status: result.status,

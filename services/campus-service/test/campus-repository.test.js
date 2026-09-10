@@ -94,7 +94,7 @@ test('repository list methods honor bounded windows', async () => {
   assert.equal((await repository.listActiveUsers({ offset: Infinity, limit: Infinity })).length, 5);
 });
 
-test('auto reservation tasks stay scoped and can be claimed once per occurrence', async () => {
+test('auto reservation tasks stay scoped and recover interrupted runs after the lock expires', async () => {
   const repository = new MemoryCampusRepository();
   const task = {
     id: 'task-1',
@@ -123,10 +123,13 @@ test('auto reservation tasks stay scoped and can be claimed once per occurrence'
   assert.equal('endDate' in updated, false);
   assert.equal((await repository.claimAutoReservationTask('user-1', 'task-1', '2026-08-25', '2026-08-25T01:00:00.000Z', '2026-08-25T01:05:00.000Z'))?.id, 'task-1');
   assert.equal(await repository.claimAutoReservationTask('user-1', 'task-1', '2026-08-25', '2026-08-25T01:00:01.000Z', '2026-08-25T01:05:01.000Z'), null);
+  assert.equal((await repository.claimAutoReservationTask('user-1', 'task-1', '2026-08-25', '2026-08-25T01:06:00.000Z', '2026-08-25T01:08:00.000Z'))?.id, 'task-1');
   await repository.finishAutoReservationTask('user-1', 'task-1', { status: 'succeeded', candidateIndex: 0, attempts: [] }, '2026-08-25T01:01:00.000Z');
   const saved = (await repository.listAutoReservationTasks('user-1'))[0];
   assert.equal(saved.last_status, 'succeeded');
   assert.equal(saved.enabled, false);
+  assert.equal(saved.run_status, 'finished');
+  assert.equal(await repository.claimAutoReservationTask('user-1', 'task-1', '2026-08-25', '2026-08-25T01:09:00.000Z', '2026-08-25T01:11:00.000Z'), null);
   await repository.deleteAutoReservationTask('user-1', 'task-1');
   assert.equal((await repository.listAutoReservationTasks('user-1')).length, 0);
 });
@@ -145,7 +148,9 @@ test('Mongo auto reservation claims tasks with a null lock timestamp', async () 
       assert.equal(name, 'auto_reservation_tasks');
       return {
         async findOneAndUpdate(query, update) {
-          const matchesLock = query.$or.some((condition) => {
+          const lockQuery = query.$and[0].$or;
+          const occurrenceQuery = query.$and[1].$or;
+          const matchesLock = lockQuery.some((condition) => {
             if (Object.hasOwn(condition, 'run_lock_until')) {
               const value = condition.run_lock_until;
               if (value === null) return row.run_lock_until === null;
@@ -154,12 +159,16 @@ test('Mongo auto reservation claims tasks with a null lock timestamp', async () 
             }
             return false;
           });
+          const matchesOccurrence = occurrenceQuery.some((condition) => {
+            if (condition.last_run_key?.$ne !== undefined) return row.last_run_key !== condition.last_run_key.$ne;
+            return condition.last_run_key === row.last_run_key && condition.run_status === row.run_status;
+          });
           if (
             query.id === row.id &&
             query.user_id === row.user_id &&
             query.enabled === row.enabled &&
-            row.last_run_key !== query.last_run_key.$ne &&
-            matchesLock
+            matchesLock &&
+            matchesOccurrence
           ) {
             Object.assign(row, update.$set);
             return { value: { ...row } };

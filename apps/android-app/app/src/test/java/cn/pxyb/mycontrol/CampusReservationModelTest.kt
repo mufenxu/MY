@@ -18,6 +18,7 @@ import cn.pxyb.mycontrol.data.LibrarySeatArea
 import cn.pxyb.mycontrol.data.LibrarySeatFloor
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
 import cn.pxyb.mycontrol.data.LibrarySeatVenue
+import cn.pxyb.mycontrol.data.toCampusAutoReservationTask
 import cn.pxyb.mycontrol.data.formatCampusReservationRulesForDisplay
 import cn.pxyb.mycontrol.data.parseCampusReservationSpacesPayload
 import cn.pxyb.mycontrol.data.parseLibrarySeatAreasPayload
@@ -27,6 +28,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import cn.pxyb.mycontrol.ui.LibrarySeatUiState
 import cn.pxyb.mycontrol.ui.ReservationUiState
+import cn.pxyb.mycontrol.ui.copyForNextRun
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -140,6 +143,89 @@ class CampusReservationModelTest {
         assertEquals(2, task.candidates[1].areaId)
         assertEquals("succeeded", task.lastStatus)
         assertEquals(0, task.lastCandidateIndex)
+    }
+
+    @Test
+    fun `campus auto reservation task parses lifecycle and attempt details`() {
+        val payload = JSONObject()
+            .put("id", "task-123")
+            .put("name", "周三研讨")
+            .put("enabled", true)
+            .put("reservationDate", "2026-08-27")
+            .put("executeDate", "2026-08-24")
+            .put("executeTime", "07:43")
+            .put(
+                "candidates",
+                JSONArray().put(JSONObject().put("areaId", 9).put("startTime", "09:00").put("endTime", "11:00"))
+            )
+            .put("title", "个人学习")
+            .put("content", "完成课程阅读")
+            .put("mobile", "13800138000")
+            .put("open", false)
+            .put("status", "waiting")
+            .put("statusText", "等待运行")
+            .put("nextRunAt", "2026-08-24T07:43:00.000Z")
+            .put("lastRunAt", "2026-08-23T07:43:00.000Z")
+            .put(
+                "lastAttempts",
+                JSONArray().put(
+                    JSONObject()
+                        .put("candidateIndex", 0)
+                        .put("status", "failed")
+                        .put("conflict", true)
+                        .put("transient", false)
+                        .put("attempt", 1)
+                        .put("message", "该时段已被占用")
+                )
+            )
+            .put(
+                "lastReservation",
+                JSONObject()
+                    .put("id", "reservation-1")
+                    .put("date", "2026-08-27")
+                    .put("startTime", "09:00")
+                    .put("endTime", "11:00")
+            )
+
+        val task = payload.toCampusAutoReservationTask()
+
+        assertEquals("waiting", task.status)
+        assertEquals("等待运行", task.statusText)
+        assertEquals("2026-08-24T07:43:00.000Z", task.nextRunAt)
+        assertEquals("2026-08-23T07:43:00.000Z", task.lastRunAt)
+        assertEquals(1, task.lastAttempts.size)
+        assertEquals(0, task.lastAttempts[0].candidateIndex)
+        assertTrue(task.lastAttempts[0].conflict)
+        assertEquals("reservation-1", task.lastReservation?.id)
+        assertEquals("09:00", task.lastReservation?.startTime)
+    }
+
+    @Test
+    fun `campus auto reservation task copies to the next weekly target and resets execution state`() {
+        val task = CampusAutoReservationTask(
+            id = "task-123",
+            name = "周三研讨",
+            enabled = false,
+            status = "succeeded",
+            statusText = "已完成",
+            reservationDate = "2026-08-26",
+            executeDate = "2026-08-23",
+            executeTime = "07:43",
+            candidates = listOf(CampusAutoReservationCandidate(areaId = 9)),
+            lastStatus = "succeeded",
+            lastCandidateIndex = 0,
+        )
+
+        val copied = task.copyForNextRun(LocalDate.parse("2026-08-26"))
+
+        assertEquals("", copied.id)
+        assertTrue(copied.enabled)
+        assertEquals("waiting", copied.status)
+        assertEquals("2026-09-02", copied.reservationDate)
+        assertEquals("2026-08-30", copied.executeDate)
+        assertEquals("07:43", copied.executeTime)
+        assertEquals(null, copied.lastStatus)
+        assertEquals(null, copied.lastCandidateIndex)
     }
 
     @Test

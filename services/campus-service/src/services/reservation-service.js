@@ -518,12 +518,36 @@ export function createReservationService({
     return date;
   }
 
-  function autoReservationTaskPublic(row) {
+  function autoReservationStatusText(status) {
+    if (status === "waiting") return "等待运行";
+    if (status === "ready") return "待执行";
+    if (status === "running") return "正在执行";
+    if (status === "succeeded") return "已完成";
+    if (status === "failed") return "执行失败";
+    if (status === "auth_required") return "需重新登录";
+    if (status === "expired") return "已过期";
+    if (status === "invalid") return "配置无效";
+    return "已停用";
+  }
+
+  function autoReservationTaskPublic(row, now = new Date()) {
     if (!row) return null;
+    const plan = autoReservationRunPlan(row, now);
+    const running = row.run_status === "running"
+      && row.run_lock_until
+      && Date.parse(row.run_lock_until) > now.getTime();
+    const status = running
+      ? "running"
+      : row.enabled
+        ? plan.state
+        : row.last_status || "disabled";
     return {
       id: row.id,
       name: row.name,
       enabled: Boolean(row.enabled),
+      status,
+      statusText: autoReservationStatusText(status),
+      nextRunAt: status === "waiting" ? plan.nextRunAt : null,
       reservationDate: row.reservationDate || row.startDate || null,
       executeDate: row.executeDate || row.execute_date || row.runDate || row.run_date || null,
       executeTime: row.executeTime,
@@ -552,6 +576,7 @@ export function createReservationService({
       updated_at: timestamp,
       last_run_key: null,
       run_lock_until: null,
+      run_status: null,
       last_run_at: null,
       last_status: null,
       last_message: null,
@@ -564,19 +589,142 @@ export function createReservationService({
   async function saveAutoReservationTask(userId, body, existing = null) {
     const normalized = normalizeAutoReservationTaskInput(body);
     const timestamp = nowIso();
+    const tasks = await repository.listAutoReservationTasks(userId);
+    const duplicate = tasks.find((task) =>
+      task.enabled
+      && task.id !== existing?.id
+      && String(task.reservationDate || task.startDate || "") === normalized.reservationDate
+    );
+    if (duplicate) {
+      throw new HttpError(
+        409,
+        "该预约目标日期已有启用的自动任务，请先停用或删除后再创建。",
+        null,
+        "AUTO_RESERVATION_DUPLICATE_TARGET_DATE"
+      );
+    }
     if (!existing) {
       const row = await repository.insertAutoReservationTask(autoReservationTaskRecord(userId, normalized, timestamp));
       return autoReservationTaskPublic(row);
     }
-    const row = await repository.updateAutoReservationTask(userId, existing.id, normalized, timestamp);
+    const scheduleChanged = [
+      "reservationDate",
+      "executeDate",
+      "executeTime",
+      "candidates"
+    ].some((key) => JSON.stringify(existing[key] ?? null) !== JSON.stringify(normalized[key] ?? null));
+    const row = await repository.updateAutoReservationTask(
+      userId,
+      existing.id,
+      scheduleChanged ? {
+        ...normalized,
+        last_run_key: null,
+        run_lock_until: null,
+        run_status: null,
+        last_run_started_at: null
+      } : normalized,
+      timestamp
+    );
     return autoReservationTaskPublic(row);
+  }
+
+  async function notifyAutoReservationTask(user, task, result) {
+    const targets = await librarySeatWaitlistRequestTargets(user?.id || task?.user_id);
+    if (!targets.appId) return null;
+    const status = String(result?.status || "failed");
+    const isSuccess = status === "succeeded";
+    const title = {
+      succeeded: "研讨间自动预约成功",
+      failed: "研讨间自动预约失败",
+      auth_required: "研讨间自动预约已暂停",
+      expired: "研讨间自动预约已过期",
+      invalid: "研讨间自动预约配置无效"
+    }[status] || "研讨间自动预约已结束";
+    const targetDate = String(task?.reservationDate || task?.startDate || "");
+    const runAt = String(result?.runAt || nowIso());
+    const items = [
+      { key: "任务", value: String(task?.name || "") },
+      { key: "目标日期", value: targetDate },
+      { key: "运行时间", value: `${task?.executeDate || ""} ${task?.executeTime || ""}`.trim() }
+    ];
+    if (Number.isInteger(result?.candidateIndex) && result.candidateIndex >= 0) {
+      items.push({ key: "命中候选", value: `第 ${result.candidateIndex + 1} 个` });
+    }
+    if (!isSuccess) {
+      items.push({ key: "原因", value: String(result?.message || "未返回具体原因。") });
+    }
+    const payload = {
+      idempotencyKey: `libroom-auto-reservation-${task.id}-${status}-${runAt}`,
+      audience: { users: [targets.appId] },
+      channels: targets.wecomId ? ["app", "wecom"] : ["app"],
+      priority: isSuccess ? "high" : "normal",
+      category: "campus.libroom.auto-reservation",
+      content: {
+        kind: "text",
+        title,
+        summary: isSuccess
+          ? `“${task.name}”已自动预约 ${targetDate} 的研讨间。`
+          : `“${task.name}”未能完成自动预约：${result?.message || "请查看任务详情。"}`,
+        blocks: [{ type: "keyValue", items }]
+      },
+      source: { service: "campus-service", entityType: "libroomAutoReservation", entityId: task.id },
+      actions: [{ id: "open-today", label: "查看今日", deepLink: "mycontrol://open?destination=today" }],
+      ...(targets.wecomId ? { wecom: { touser: targets.wecomId } } : {})
+    };
+    await sendCampusNotification(payload, { requestId: `libroom-auto-reservation-${randomUUID()}` });
+    logger.info("libroom_auto_reservation_notified", {
+      userId: user?.id,
+      taskId: task.id,
+      status,
+      wecom: Boolean(targets.wecomId)
+    });
+    return payload;
   }
 
   async function runAutoReservationTask(task, user, now = new Date()) {
     const plan = autoReservationRunPlan(task, now);
     const date = plan.targetDate;
-    if (!date || !plan.runKey) return null;
+    if (plan.state === "invalid" || plan.state === "expired") {
+      const result = {
+        status: plan.state,
+        candidateIndex: -1,
+        message: plan.reason,
+        attempts: [],
+        runAt: now.toISOString()
+      };
+      await repository.finishAutoReservationTask(user.id, task.id, result, now.toISOString());
+      await notifyAutoReservationTask(user, task, result).catch((error) => {
+        logger.warn("libroom_auto_reservation_notify_failed", { taskId: task.id, error: error?.message });
+      });
+      logger.info("libroom_auto_reservation_completed", {
+        userId: user.id,
+        taskId: task.id,
+        date,
+        executeDate: plan.executeDate,
+        status: result.status,
+        candidateIndex: result.candidateIndex
+      });
+      return result;
+    }
+    if (!plan.due || !date || !plan.runKey) return null;
     const nowValue = now.toISOString();
+    let client;
+    try {
+      client = await libroomClient();
+    } catch (error) {
+      const result = {
+        status: [401, 403].includes(Number(error?.status)) ? "auth_required" : "failed",
+        candidateIndex: -1,
+        message: error.message || "自动预约执行失败。",
+        attempts: [],
+        runAt: nowValue
+      };
+      await repository.finishAutoReservationTask(user.id, task.id, result, nowValue);
+      await notifyAutoReservationTask(user, task, result).catch((notifyError) => {
+        logger.warn("libroom_auto_reservation_notify_failed", { taskId: task.id, error: notifyError?.message });
+      });
+      return result;
+    }
     const claimed = await repository.claimAutoReservationTask(
       user.id,
       task.id,
@@ -588,7 +736,6 @@ export function createReservationService({
 
     let result;
     try {
-      const client = await libroomClient();
       result = await executeAutoReservationCandidates({
         task: claimed,
         date,
@@ -603,6 +750,10 @@ export function createReservationService({
       };
     }
     await repository.finishAutoReservationTask(user.id, task.id, result, nowValue);
+    result.runAt = nowValue;
+    await notifyAutoReservationTask(user, task, result).catch((error) => {
+      logger.warn("libroom_auto_reservation_notify_failed", { taskId: task.id, error: error?.message });
+    });
     logger.info("libroom_auto_reservation_completed", {
       userId: user.id,
       taskId: task.id,
@@ -918,6 +1069,7 @@ export function createReservationService({
     libroomDate,
     autoReservationTaskPublic,
     saveAutoReservationTask,
+    notifyAutoReservationTask,
     runAutoReservationTask,
     librarySeatWaitlistPublic,
     saveLibrarySeatWaitlist,

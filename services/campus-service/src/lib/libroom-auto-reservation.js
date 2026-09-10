@@ -173,22 +173,50 @@ export function autoReservationRunPlan(task, now = new Date()) {
   const executeDate = taskExecuteDate(task, current.date, targetDate);
   const targetDelta = dateDelta(targetDate, current.date);
   const executeDelta = dateDelta(targetDate, executeDate);
-  const due = Boolean(task?.enabled)
-    && Boolean(targetDate)
-    && Boolean(executeDate)
-    && TIME_PATTERN.test(executeTime)
-    && Number.isInteger(executeDelta)
-    && executeDelta >= 0
-    && executeDelta <= 3
-    && Number.isInteger(targetDelta)
+  const validTarget = Boolean(utcDay(targetDate));
+  const validExecuteDate = Boolean(utcDay(executeDate));
+  const validExecuteTime = TIME_PATTERN.test(executeTime);
+  let state = "invalid";
+  let reason = "任务配置不正确，无法自动预约。";
+
+  if (!validTarget) {
+    reason = "预约目标日期格式不正确。";
+  } else if (!validExecuteDate) {
+    reason = "任务运行日期格式不正确。";
+  } else if (!validExecuteTime) {
+    reason = "任务运行时间格式不正确。";
+  } else if (!Number.isInteger(executeDelta) || executeDelta < 0 || executeDelta > 3) {
+    reason = "任务运行日期不在预约目标日期前 3 天至预约当天内。";
+  } else if (Number.isInteger(targetDelta) && targetDelta < 0) {
+    state = "expired";
+    reason = "预约目标日期已过期。";
+  } else if (
+    Number.isInteger(targetDelta)
     && targetDelta >= 0
     && targetDelta <= 3
-    && `${current.date}T${current.time}` >= `${executeDate}T${executeTime}`;
+    && `${current.date}T${current.time}` >= `${executeDate}T${executeTime}`
+  ) {
+    state = "ready";
+    reason = null;
+  } else if (Number.isInteger(targetDelta) && targetDelta > 3) {
+    state = "waiting";
+    reason = null;
+  } else if (`${current.date}T${current.time}` < `${executeDate}T${executeTime}`) {
+    state = "waiting";
+    reason = null;
+  }
+
+  const runAtMs = validExecuteDate && validExecuteTime
+    ? beijingDateTimeMs(executeDate, executeTime)
+    : null;
   return {
-    due,
+    due: Boolean(task?.enabled) && state === "ready",
+    state,
+    reason,
     targetDate: targetDate || null,
     executeDate: executeDate || null,
     executeTime: executeTime || null,
+    nextRunAt: state === "waiting" && Number.isFinite(runAtMs) ? new Date(runAtMs).toISOString() : null,
     runKey: targetDate && executeDate && executeTime ? `${targetDate}:${executeDate}T${executeTime}` : null
   };
 }
@@ -218,27 +246,70 @@ function isConflictError(error) {
     || (error?.code === "LIBROOM_UPSTREAM_REJECTED" && Number(error?.status) === 409);
 }
 
-export async function executeAutoReservationCandidates({ task, date, submitReservation }) {
+function isAuthReservationError(error) {
+  return [401, 403].includes(Number(error?.status));
+}
+
+function isTransientReservationError(error) {
+  const status = Number(error?.status);
+  return !Number.isFinite(status) || status >= 500;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+
+export async function executeAutoReservationCandidates({
+  task,
+  date,
+  submitReservation,
+  maxTransientAttempts = 2,
+  transientRetryDelayMs = 500
+}) {
   const attempts = [];
   for (let index = 0; index < task.candidates.length; index += 1) {
     const candidate = task.candidates[index];
-    try {
-      const result = await submitReservation({
-        areaId: candidate.areaId,
-        date,
-        startTime: candidate.startTime,
-        endTime: candidate.endTime,
-        title: task.title,
-        content: task.content,
-        mobile: task.mobile,
-        open: task.open
-      });
-      attempts.push({ candidateIndex: index, status: "succeeded" });
-      return { status: "succeeded", candidateIndex: index, result, attempts };
-    } catch (error) {
-      attempts.push({ candidateIndex: index, status: "failed", conflict: isConflictError(error), message: error.message || "预约失败。" });
-      if (!isConflictError(error)) {
-        return { status: "failed", candidateIndex: index, message: error.message || "预约失败。", attempts };
+    const transientLimit = Math.max(1, Math.trunc(Number(maxTransientAttempts) || 2));
+    for (let attempt = 1; attempt <= transientLimit; attempt += 1) {
+      try {
+        const result = await submitReservation({
+          areaId: candidate.areaId,
+          date,
+          startTime: candidate.startTime,
+          endTime: candidate.endTime,
+          title: task.title,
+          content: task.content,
+          mobile: task.mobile,
+          open: task.open
+        });
+        attempts.push({ candidateIndex: index, status: "succeeded", attempt, transient: false, message: null });
+        return { status: "succeeded", candidateIndex: index, result, attempts };
+      } catch (error) {
+        const conflict = isConflictError(error);
+        const transient = !conflict && isTransientReservationError(error);
+        attempts.push({
+          candidateIndex: index,
+          status: "failed",
+          conflict,
+          transient,
+          attempt,
+          message: error.message || "预约失败。"
+        });
+        if (!conflict && !transient) {
+          if (isAuthReservationError(error)) {
+            return {
+              status: "auth_required",
+              candidateIndex: index,
+              message: error.message || "预约失败。",
+              attempts
+            };
+          }
+          return { status: "failed", candidateIndex: index, message: error.message || "预约失败。", attempts };
+        }
+        if (conflict) break;
+        if (transient && attempt < transientLimit) {
+          await wait(transientRetryDelayMs);
+        }
       }
     }
   }

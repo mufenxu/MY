@@ -1,11 +1,23 @@
 import { ACADEMIC_TIMETABLE_SOURCES } from "../lib/academic-config.js";
-import { autoReservationNextScanDelay, isAutoReservationDue } from "../lib/libroom-auto-reservation.js";
+import { autoReservationNextScanDelay, autoReservationRunPlan } from "../lib/libroom-auto-reservation.js";
 import { buildCourseOccurrences } from "../lib/academic-calendar.js";
 import { buildCourseReminderDelivery, enqueueCampusNotification, sendCampusNotification } from "../lib/notification-client.js";
 import { cookieHeaderFor } from "../lib/session-jar.js";
 import { iterateTaskPages, mapWithConcurrency } from "../lib/bounded-concurrency.js";
 import { librarySeatWaitlistNextScanDelay, librarySeatWaitlistRunPlan } from "../lib/library-seat-waitlist.js";
 import { randomUUID } from "node:crypto";
+
+export function groupAutoReservationTasksByUser(tasks = []) {
+  const groups = new Map();
+  for (const task of Array.isArray(tasks) ? tasks : []) {
+    const userId = String(task?.user_id || "").trim();
+    if (!userId) continue;
+    const group = groups.get(userId) || [];
+    group.push(task);
+    groups.set(userId, group);
+  }
+  return Array.from(groups.entries());
+}
 
 export function createBackgroundSchedulers({
   academicEvaluationAutoCapacitySnapshot,
@@ -530,19 +542,25 @@ export function createBackgroundSchedulers({
         shouldStop: () => isShuttingDown()
       })) {
         const now = new Date();
-        await mapWithConcurrency(tasks, 2, async (task) => {
-          if (!isAutoReservationDue(task, now)) return "skipped";
-          const user = await repository.findUserById(task.user_id);
+        await mapWithConcurrency(groupAutoReservationTasksByUser(tasks), 2, async ([userId, userTasks]) => {
+          const user = await repository.findUserById(userId);
           if (!user || user.disabled) return "skipped";
           return userContextStorage.run(
             { requestId: `auto-reservation-${randomUUID()}`, user },
             async () => {
               await reloginSchoolSessionIfWanted({ message: "libroom auto reservation" });
-              const result = await runAutoReservationTask(task, user, now);
-              return result?.status || "claimed";
+              const statuses = [];
+              for (const task of userTasks) {
+                const plan = autoReservationRunPlan(task, now);
+                if (!["ready", "expired", "invalid"].includes(plan.state)) continue;
+                const result = await runAutoReservationTask(task, user, now);
+                statuses.push(result?.status || "claimed");
+                if (result?.status === "succeeded") break;
+              }
+              return statuses.length ? statuses.join(",") : "skipped";
             }
           ).catch((error) => {
-            logger.warn("libroom_auto_reservation_task_failed", { taskId: task.id, error });
+            logger.warn("libroom_auto_reservation_user_failed", { userId, error });
             return "failed";
           });
         });

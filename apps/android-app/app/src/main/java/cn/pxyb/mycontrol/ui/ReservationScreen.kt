@@ -51,6 +51,7 @@ import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
@@ -570,7 +571,7 @@ private fun SingleReservationPanel(
     var endTime by rememberSaveable { mutableStateOf("11:00") }
     var title by rememberSaveable { mutableStateOf("个人课程研读与学习") }
     var content by rememberSaveable { mutableStateOf("用于个人课程自主研读、文献查阅及学术研讨。") }
-    var mobile by rememberSaveable { mutableStateOf("18783388384") }
+    var mobile by rememberSaveable { mutableStateOf("") }
     var open by rememberSaveable { mutableStateOf(false) }
 
     var spaceDropdownOpen by remember { mutableStateOf(false) }
@@ -1940,6 +1941,11 @@ private fun AutoReservationPanel(
                                                     isEditing = true
                                                     onClearFeedback()
                                                 },
+                                                onCopy = {
+                                                    editingTask = task.copyForNextRun(LocalDate.now())
+                                                    isEditing = true
+                                                    onClearFeedback()
+                                                },
                                                 onDelete = { taskToDelete = task },
                                             )
                                         }
@@ -1963,6 +1969,11 @@ private fun AutoReservationPanel(
                                         isEditing = true
                                         onClearFeedback()
                                     },
+                                    onCopy = {
+                                        editingTask = task.copyForNextRun(LocalDate.now())
+                                        isEditing = true
+                                        onClearFeedback()
+                                    },
                                     onDelete = { taskToDelete = task },
                                 )
                             }
@@ -1982,15 +1993,17 @@ private fun AutoTaskCard(
     isDeleting: Boolean,
     onToggle: () -> Unit,
     onEdit: () -> Unit,
+    onCopy: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val spaceMap = remember(spaces) { spaces.associateBy({ it.id }, { it.name }) }
-    val badge = when {
-        task.enabled -> "待执行" to ColorTokens.Green.foreground
-        task.lastStatus == "succeeded" -> "已完成" to ColorTokens.Blue.foreground
-        !task.lastStatus.isNullOrBlank() -> "已结束" to ColorTokens.Amber.foreground
-        else -> "已停用" to MaterialTheme.colorScheme.onSurfaceVariant
+    val badgeColor = when (task.status) {
+        "waiting", "ready", "running" -> ColorTokens.Green.foreground
+        "succeeded" -> ColorTokens.Blue.foreground
+        "failed", "auth_required", "expired", "invalid" -> ColorTokens.Amber.foreground
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
+    val terminalStatus = task.status in setOf("succeeded", "failed", "auth_required", "expired", "invalid", "disabled")
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -2021,11 +2034,11 @@ private fun AutoTaskCard(
                     )
                     Surface(
                         shape = RoundedCornerShape(999.dp),
-                        color = badge.second.copy(alpha = 0.12f),
+                        color = badgeColor.copy(alpha = 0.12f),
                     ) {
                         Text(
-                            text = badge.first,
-                            color = badge.second,
+                            text = task.statusText,
+                            color = badgeColor,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
@@ -2035,7 +2048,7 @@ private fun AutoTaskCard(
 
                 AppSwitch(
                     checked = task.enabled,
-                    onCheckedChange = { onToggle() },
+                    onCheckedChange = { _: Boolean -> onToggle() }.takeIf { !terminalStatus },
                 )
             }
 
@@ -2099,6 +2112,25 @@ private fun AutoTaskCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+
+                if (task.nextRunAt != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.EventAvailable,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Text(
+                            text = "下次运行: ${formatPlatformTime(task.nextRunAt)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
             }
 
             // 候选序列步骤胶囊
@@ -2136,6 +2168,9 @@ private fun AutoTaskCard(
             val resultText = when {
                 task.lastStatus == null -> "尚未执行"
                 task.lastStatus == "succeeded" -> "最近执行成功（命中了第 ${(task.lastCandidateIndex ?: 0) + 1} 个候选）"
+                task.lastStatus == "expired" -> "任务已过期：${task.lastMessage ?: "预约目标日期已结束"}"
+                task.lastStatus == "invalid" -> "任务配置无效：${task.lastMessage ?: "请重新编辑任务"}"
+                task.lastStatus == "auth_required" -> "需重新登录学校账号：${task.lastMessage ?: "请重新登录后再试"}"
                 else -> "最近执行未成功：${task.lastMessage ?: "未返回原因"}"
             }
             Surface(
@@ -2153,35 +2188,68 @@ private fun AutoTaskCard(
                 )
             }
 
+            if (task.lastAttempts.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        task.lastAttempts.take(4).forEach { attempt ->
+                            val attemptResult = when {
+                                attempt.status == "succeeded" -> "成功"
+                                attempt.conflict -> "已占用"
+                                attempt.transient -> "系统繁忙，已重试"
+                                else -> "失败"
+                            }
+                            Text(
+                                text = "第 ${attempt.candidateIndex + 1} 个候选 · 第 ${attempt.attempt} 次尝试 · $attemptResult${attempt.message?.let { "：$it" } ?: ""}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (task.lastAttempts.size > 4) {
+                            Text(
+                                text = "其余 ${task.lastAttempts.size - 4} 次尝试已省略",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
             // 操作栏
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(
+                AppSecondaryButton(
+                    text = "编辑",
+                    icon = Icons.Outlined.Edit,
                     onClick = onEdit,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("编辑", style = MaterialTheme.typography.labelMedium)
-                }
-                Spacer(Modifier.width(6.dp))
-                TextButton(
+                    modifier = Modifier.weight(1f),
+                )
+                AppSecondaryButton(
+                    text = "再次预约",
+                    icon = Icons.Outlined.ContentCopy,
+                    onClick = onCopy,
+                    modifier = Modifier.weight(1.25f),
+                )
+                AppDangerButton(
+                    text = "删除",
+                    icon = Icons.Outlined.Delete,
                     onClick = onDelete,
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
                     enabled = !isDeleting,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    if (isDeleting) {
-                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                    }
-                    Spacer(Modifier.width(4.dp))
-                    Text("删除", style = MaterialTheme.typography.labelMedium)
-                }
+                    loading = isDeleting,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }
@@ -2206,7 +2274,7 @@ private fun AutoReservationEditDialog(
     }
     var executeTime by rememberSaveable { mutableStateOf(task?.executeTime?.ifBlank { null } ?: "07:00") }
     var title by rememberSaveable { mutableStateOf(task?.title?.ifBlank { null } ?: "个人课程研读与学习") }
-    var mobile by rememberSaveable { mutableStateOf(task?.mobile?.ifBlank { null } ?: "18783388384") }
+    var mobile by rememberSaveable { mutableStateOf(task?.mobile?.ifBlank { null } ?: "") }
     var content by rememberSaveable { mutableStateOf(task?.content?.ifBlank { null } ?: "用于个人课程自主研读、文献查阅及学术研讨。") }
     var open by rememberSaveable { mutableStateOf(task?.open ?: false) }
 
@@ -2883,6 +2951,28 @@ private fun defaultAutoReservationExecuteDate(reservationDate: String, today: Lo
     }.getOrNull() ?: today
     val earliest = target.minusDays(3)
     return (if (earliest.isAfter(today)) earliest else today).format(DateTimeFormatter.ISO_LOCAL_DATE)
+}
+
+internal fun CampusAutoReservationTask.copyForNextRun(today: LocalDate): CampusAutoReservationTask {
+    val nextTarget = runCatching {
+        LocalDate.parse(reservationDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE).plusDays(7)
+    }.getOrNull() ?: today.plusDays(7)
+    val nextTargetText = nextTarget.format(DateTimeFormatter.ISO_LOCAL_DATE)
+    return copy(
+        id = "",
+        enabled = true,
+        status = "waiting",
+        statusText = "等待运行",
+        nextRunAt = null,
+        reservationDate = nextTargetText,
+        executeDate = defaultAutoReservationExecuteDate(nextTargetText, today),
+        lastStatus = null,
+        lastMessage = null,
+        lastCandidateIndex = null,
+        lastRunAt = null,
+        lastAttempts = emptyList(),
+        lastReservation = null,
+    )
 }
 
 private fun reservationWindowText(windows: List<CampusReservationTimeWindow>?): String {
