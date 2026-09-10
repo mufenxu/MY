@@ -110,7 +110,7 @@ internal fun AndroidReleaseScreen(
         item(key = "android-release-list-title", contentType = "section-title") {
             AndroidReleaseSectionTitle(
                 title = "版本列表",
-                detail = "保留历史安装包，可随时下载归档",
+                detail = "仅展示最近 20 个版本的安装包",
             )
         }
 

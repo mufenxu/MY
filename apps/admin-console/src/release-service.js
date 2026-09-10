@@ -15,6 +15,8 @@ const REVISION_PATTERN = /^[a-f0-9]{40}$/i;
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/i;
 const ANDROID_TAG_PATTERN = /^android-v(\d+)\.(\d+)\.(\d+)$/;
 const ANDROID_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/;
+// 与七牛安装包的版本保留数量保持一致。
+const ANDROID_RELEASE_HISTORY_LIMIT = 20;
 
 function shortRevision(value) {
   const revision = String(value || '');
@@ -432,14 +434,16 @@ export function createReleaseService({
           notes: String(release.body || '').trim(),
           installable: Boolean(apkAsset && sha256),
         };
-      });
+      })
+      .sort((left, right) => right.versionCode - left.versionCode)
+      .slice(0, ANDROID_RELEASE_HISTORY_LIMIT);
     const drafts = releases
       .filter((release) => release.draft)
       .map(mapAndroidDraft)
       .filter(Boolean);
     const data = {
       draft: drafts[0] || null,
-      releases: published.sort((left, right) => right.versionCode - left.versionCode),
+      releases: published,
       latest: published[0] || null,
       buildInProgress: buildStatus.buildInProgress,
       refreshedAt: nowIso(),
