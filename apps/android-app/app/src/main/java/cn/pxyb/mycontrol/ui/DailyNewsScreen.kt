@@ -39,7 +39,7 @@ fun DailyNewsScreen(
         onRefresh(false)
     }
     AppSubPage(
-        title = "近日趣事",
+        title = "每日新闻",
         subtitle = "每日 60 秒读懂世界",
         onBack = onBack,
         contentPadding = contentPadding,

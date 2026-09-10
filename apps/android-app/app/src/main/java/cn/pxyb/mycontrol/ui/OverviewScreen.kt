@@ -1612,7 +1612,7 @@ private fun homeQuickActionSpec(
 
     HomeQuickAction.DailyNews -> HomeQuickActionSpec(
         icon = Icons.Outlined.Newspaper,
-        label = "近日趣事",
+        label = "每日新闻",
         accent = ColorTokens.Teal.foreground,
         accentPale = ColorTokens.Teal.container,
         onClick = onOpenDailyNews,
@@ -1870,7 +1870,7 @@ private fun QuickActionArrowButton(
 private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action) {
     HomeQuickAction.Today -> "今日工作台"
     HomeQuickAction.Notifications -> "通知中心"
-    HomeQuickAction.DailyNews -> "近日趣事"
+    HomeQuickAction.DailyNews -> "每日新闻"
     HomeQuickAction.Scenes -> "智能场景"
     HomeQuickAction.Reservation -> "研讨间预约"
     HomeQuickAction.FreeClassrooms -> "空闲教室"
