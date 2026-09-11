@@ -4,6 +4,7 @@ import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
+import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonInlineRows
 
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
@@ -330,7 +331,7 @@ fun ProfileScreen(
                                         AppSecondaryButton(text = "退出我的其他设备", onClick = onRevokeOtherSessions,
                                             enabled = state.busyAction != "session", modifier = Modifier.fillMaxWidth().padding(12.dp))
                                         when {
-                                            security == null -> LoadingBlock("正在同步登录设备")
+                                            security == null -> ProfileSessionSkeleton()
                                             visibleSessions.isNullOrEmpty() -> Text(
                                                 "暂无活动会话",
                                                 style = MaterialTheme.typography.bodyMedium,
@@ -898,7 +899,7 @@ fun ProfileScreen(
                                 AppSecondaryButton(text = "退出我的其他设备", onClick = onRevokeOtherSessions,
                                     enabled = state.busyAction != "session", modifier = Modifier.fillMaxWidth().padding(12.dp))
                                 when {
-                                    security == null -> LoadingBlock("正在同步登录设备")
+                                    security == null -> ProfileSessionSkeleton()
                                     visibleSessions.isNullOrEmpty() -> Text(
                                         "暂无活动会话",
                                         style = MaterialTheme.typography.bodyMedium,
@@ -1427,6 +1428,14 @@ private fun AppUpdateStatusPanel(
     }
 }
 
+@Composable
+private fun ProfileSessionSkeleton() {
+    AppSkeletonInlineRows(
+        rowCount = 3,
+        leadingSize = 30.dp,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+    )
+}
 // ------------------------------------------------------------------------------------------------
 // 极简通透现代化 UI 组件
 // ------------------------------------------------------------------------------------------------

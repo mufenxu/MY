@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui
 
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
+import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonList
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -262,7 +263,13 @@ fun OperationsScreen(
                         ) {
                             SectionHeader("正在处理的问题", "可以直接记录、静音或标记解决")
                             val unresolvedIncidents = state.incidents.filter { it.status != "resolved" }
-                            if (unresolvedIncidents.isEmpty()) {
+                            if (state.refreshing && unresolvedIncidents.isEmpty()) {
+                                AppSkeletonList(
+                                    rowCount = 2,
+                                    leadingSize = 36.dp,
+                                    lineWidths = listOf(0.4f, 0.66f),
+                                )
+                            } else if (unresolvedIncidents.isEmpty()) {
                                 EmptyBlock("当前没有进行中的问题", "平台所有服务与组件运行稳定。")
                             } else {
                                 unresolvedIncidents.take(8).forEach { incident ->
@@ -302,7 +309,13 @@ fun OperationsScreen(
                             }
 
                             SectionHeader("资源与续期", "域名、证书和个人资源的到期提醒")
-                            if (upcomingResources.isEmpty()) {
+                            if (state.refreshing && upcomingResources.isEmpty()) {
+                                AppSkeletonList(
+                                    rowCount = 2,
+                                    leadingSize = 36.dp,
+                                    lineWidths = listOf(0.4f, 0.66f),
+                                )
+                            } else if (upcomingResources.isEmpty()) {
                                 EmptyBlock("近期没有资源到期", "资源接近提醒日期后会显示在这里。")
                             } else {
                                 upcomingResources.take(8).forEach { (resource, days) ->
@@ -491,7 +504,15 @@ fun OperationsScreen(
                 item(key = "resources-title", contentType = "section") {
                     SectionHeader("资源与续期", "域名、证书和个人资源的到期提醒")
                 }
-                if (upcomingResources.isEmpty()) {
+                if (state.refreshing && upcomingResources.isEmpty()) {
+                    item(key = "resources-loading", contentType = "loading") {
+                        AppSkeletonList(
+                            rowCount = 2,
+                            leadingSize = 36.dp,
+                            lineWidths = listOf(0.4f, 0.66f),
+                        )
+                    }
+                } else if (upcomingResources.isEmpty()) {
                     item(key = "resources-empty", contentType = "empty") {
                         EmptyBlock("近期没有资源到期", "资源接近提醒日期后会显示在这里。")
                     }

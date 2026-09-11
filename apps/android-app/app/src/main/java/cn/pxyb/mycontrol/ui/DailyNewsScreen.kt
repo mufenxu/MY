@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.DailyNews
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
+import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonList
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import java.time.format.TextStyle
@@ -49,7 +50,7 @@ fun DailyNewsScreen(
     ) {
         if (state.refreshing && news == null) {
             item(key = "daily-news-loading") {
-                LoadingBlock("正在加载今日新闻")
+                AppSkeletonList(rowCount = 5, leadingSize = 30.dp, lineWidths = listOf(0.42f, 0.86f))
             }
         }
         state.error?.let { message ->

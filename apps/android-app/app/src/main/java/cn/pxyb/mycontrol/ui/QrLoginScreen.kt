@@ -1,6 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
+import cn.pxyb.mycontrol.ui.components.feedback.AppOrbitLoader
 
 import android.Manifest
 import android.content.Intent
@@ -46,7 +47,6 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -407,8 +407,13 @@ private fun QrLoadingScreen(onClose: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         QrHeader("正在核验二维码", onClose)
         Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator()
-            Text("正在读取登录请求", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp))
+            AppOrbitLoader(size = 46.dp, strokeWidth = 3.5.dp)
+            Text(
+                "正在读取登录请求",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 18.dp),
+            )
         }
     }
 }

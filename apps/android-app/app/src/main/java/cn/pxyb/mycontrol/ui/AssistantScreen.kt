@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
+import cn.pxyb.mycontrol.ui.components.feedback.AppTypingDots
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -130,7 +131,7 @@ fun AssistantScreen(
             }
             if (state.sending) {
                 item(key = "assistant-loading") {
-                    LoadingBlock("AI 助手正在思考")
+                    AssistantTypingBubble()
                 }
             }
             state.error?.let { message ->
@@ -175,6 +176,26 @@ fun AssistantScreen(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun AssistantTypingBubble() {
+    AppPanel {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            AppTypingDots()
+            Text(
+                text = "AI 助手正在思考",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

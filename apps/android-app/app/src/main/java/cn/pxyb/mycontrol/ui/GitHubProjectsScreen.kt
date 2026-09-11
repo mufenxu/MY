@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui
 
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
+import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonList
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
 import androidx.compose.material.icons.outlined.RocketLaunch
@@ -121,7 +122,11 @@ fun GitHubProjectsScreen(
         ) {
             when {
                 !profileLoaded && profile == null -> item(key = "github-account-loading") {
-                    LoadingBlock("正在加载账号信息")
+                    AppSkeletonList(
+                        rowCount = 1,
+                        leadingSize = 48.dp,
+                        lineWidths = listOf(0.38f, 0.62f),
+                    )
                 }
                 profile != null -> item(key = "github-account-profile") {
                     GitHubAccountCard(profile = profile)

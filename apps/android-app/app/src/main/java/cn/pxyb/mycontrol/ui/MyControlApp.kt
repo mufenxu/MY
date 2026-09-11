@@ -31,6 +31,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import cn.pxyb.mycontrol.ui.theme.MotionTokens
+import cn.pxyb.mycontrol.ui.components.feedback.AppOrbitLoader
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
@@ -545,10 +546,10 @@ private fun FullScreenLoading() {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             BrandMark()
-            CircularProgressIndicator(
-                modifier = Modifier.padding(top = 26.dp).size(24.dp),
-                strokeWidth = 2.5.dp,
-                color = MaterialTheme.colorScheme.primary,
+            AppOrbitLoader(
+                modifier = Modifier.padding(top = 26.dp),
+                size = 30.dp,
+                strokeWidth = 3.dp,
             )
         }
     }

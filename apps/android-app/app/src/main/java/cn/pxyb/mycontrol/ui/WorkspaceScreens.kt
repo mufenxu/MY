@@ -5,6 +5,7 @@ import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.display.AppListCard
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
+import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonList
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -283,7 +284,13 @@ fun TodayScreen(
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 SectionHeader("今天的课程", state.timetable?.currentCalendarText)
-                                if (courses.isEmpty()) {
+                                if (state.refreshing && courses.isEmpty()) {
+                                    AppSkeletonList(
+                                        rowCount = 2,
+                                        leadingSize = 32.dp,
+                                        lineWidths = listOf(0.36f, 0.62f),
+                                    )
+                                } else if (courses.isEmpty()) {
                                     EmptyBlock("今天没有课程", "可以把时间留给个人待办或需要处理的事项。")
                                 } else {
                                     courses.forEach { course ->
@@ -397,7 +404,15 @@ fun TodayScreen(
                     item(key = "today-courses-title", contentType = "section") {
                         SectionHeader("今天的课程", state.timetable?.currentCalendarText)
                     }
-                    if (courses.isEmpty()) {
+                    if (state.refreshing && courses.isEmpty()) {
+                        item(key = "today-courses-loading", contentType = "loading") {
+                            AppSkeletonList(
+                                rowCount = 3,
+                                leadingSize = 32.dp,
+                                lineWidths = listOf(0.36f, 0.62f),
+                            )
+                        }
+                    } else if (courses.isEmpty()) {
                         item(key = "today-courses-empty", contentType = "empty") {
                             EmptyBlock("今天没有课程", "可以把时间留给个人待办或需要处理的事项。")
                         }
@@ -645,7 +660,15 @@ fun ScenesScreen(
             )
         }
 
-        if (scenes.isEmpty()) {
+        if (state.refreshing && scenes.isEmpty()) {
+            item(key = "scenes-loading", contentType = "loading") {
+                AppSkeletonList(
+                    rowCount = 2,
+                    leadingSize = 34.dp,
+                    lineWidths = listOf(0.34f, 0.6f),
+                )
+            }
+        } else if (scenes.isEmpty()) {
             item(key = "scenes-empty", contentType = "empty") {
                 EmptyBlock("还没有智能场景", "新建场景后，可以把多个设备动作合并为一次操作。")
             }
@@ -684,7 +707,15 @@ fun ScenesScreen(
             )
         }
 
-        if (rules.isEmpty()) {
+        if (state.refreshing && rules.isEmpty()) {
+            item(key = "rules-loading", contentType = "loading") {
+                AppSkeletonList(
+                    rowCount = 2,
+                    leadingSize = 34.dp,
+                    lineWidths = listOf(0.34f, 0.6f),
+                )
+            }
+        } else if (rules.isEmpty()) {
             item(key = "rules-empty", contentType = "empty") {
                 EmptyBlock("还没有自动化规则", "先创建场景，再按设备状态或环境指标配置自动执行条件。")
             }

@@ -1,6 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
+import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonList
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,7 +23,6 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -162,16 +162,7 @@ fun FreeClassroomScreen(
 
         if (result == null && state.refreshing) {
             item(key = "free-room-loading", contentType = "loading") {
-                AppPanel {
-                    Row(
-                        modifier = Modifier.padding(20.dp).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        Text("正在查询空闲教室", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
+                AppSkeletonList(rowCount = 3, leadingSize = 40.dp, lineWidths = listOf(0.5f, 0.78f))
             }
         }
 

@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
+import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonMedia
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
@@ -477,7 +478,7 @@ private fun IdentityCodeDialog(
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         when {
-                            loading -> CircularProgressIndicator(modifier = Modifier.size(36.dp))
+                            loading -> AppSkeletonMedia(size = 220.dp, corner = 24.dp)
                             error != null -> Text(
                                 text = error,
                                 color = MaterialTheme.colorScheme.error,

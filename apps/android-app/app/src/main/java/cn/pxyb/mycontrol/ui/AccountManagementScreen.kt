@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
+import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonInlineRows
 import cn.pxyb.mycontrol.util.QrUtils
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -1002,7 +1003,11 @@ private fun PasskeyListDialog(
                     )
                 }
                 if (loading && state.passkeys.isEmpty()) {
-                    LoadingBlock("正在读取已绑定密钥")
+                    AppSkeletonInlineRows(
+                        rowCount = 2,
+                        leadingSize = 30.dp,
+                        lineWidths = listOf(0.42f, 0.66f),
+                    )
                 } else if (state.passkeys.isEmpty()) {
                     DialogInfoText("暂无已绑定的 Passkey")
                 } else {

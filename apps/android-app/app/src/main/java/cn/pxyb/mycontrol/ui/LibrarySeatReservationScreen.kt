@@ -1,6 +1,9 @@
 package cn.pxyb.mycontrol.ui
 
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
+import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonSeatGrid
+import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonMetricRow
+import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonInlineRows
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -409,7 +412,12 @@ internal fun LibrarySeatReservationScreen(
                 ) {
                     SectionHeader("座位总览", "先选场馆和时间，再查阅览区与座位")
                     if (state.overviewLoading && state.venues.isEmpty()) {
-                        LoadingBlock("正在加载场馆和日期...")
+                        AppSkeletonMetricRow(count = 4)
+                        AppSkeletonInlineRows(
+                            rowCount = 2,
+                            leadingSize = 26.dp,
+                            lineWidths = listOf(0.38f, 0.62f),
+                        )
                     } else {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -566,7 +574,14 @@ internal fun LibrarySeatReservationScreen(
                     if (selectedAreas.isEmpty() && !state.areasLoading) "先点击查询，学校返回可预约区域后再选座位" else "点击某个阅览区后加载座位列表",
                 )
                 if (state.areasLoading) {
-                    AppPanel { LoadingBlock("正在查询阅览区...") }
+                    AppPanel {
+                        AppSkeletonInlineRows(
+                            rowCount = 2,
+                            leadingSize = 30.dp,
+                            modifier = Modifier.padding(14.dp),
+                            lineWidths = listOf(0.34f, 0.58f),
+                        )
+                    }
                 } else if (selectedAreas.isEmpty()) {
                     AppPanel { EmptyBlock("暂无阅览区结果", "请先查询，或调整日期与时段后重试。") }
                 } else if (isTablet) {
@@ -616,7 +631,7 @@ internal fun LibrarySeatReservationScreen(
                             selectedArea?.let { "${it.name} · ${it.floorName.ifBlank { "未注明楼层" }}" } ?: "先选一个阅览区",
                         )
                     if (state.seatsLoading) {
-                        LoadingBlock("正在加载座位...")
+                        AppSkeletonSeatGrid(columns = 6, rows = 2, cellHeight = 36.dp)
                     } else if (selectedSeats.isEmpty()) {
                         EmptyBlock("暂无座位结果", "如果阅览区已选中，请尝试刷新或重新查询。")
                     } else {
@@ -666,7 +681,7 @@ internal fun LibrarySeatReservationScreen(
                             "按当前日期与时段显示空闲状态",
                         )
                     if (state.floorSeatsLoading) {
-                        LoadingBlock("正在查询二层座位...")
+                        AppSkeletonSeatGrid(columns = 6, rows = 2, cellHeight = 34.dp)
                     } else if (floorSeats.isEmpty()) {
                         EmptyBlock("暂无 1-45 号座位结果", "请选择时段后点击上方按钮查询。")
                     } else {
@@ -852,7 +867,11 @@ private fun MySeatReservationsPanel(
             }
             val recordsLoading = if (showHistory) historyLoading else loading
             when {
-                recordsLoading -> LoadingBlock("正在加载预约记录...")
+                recordsLoading -> AppSkeletonInlineRows(
+                    rowCount = 3,
+                    leadingSize = 30.dp,
+                    lineWidths = listOf(0.32f, 0.58f),
+                )
                 records.isEmpty() -> EmptyBlock(
                     if (showHistory) "暂无历史预约记录" else "今日暂无预约记录",
                     if (showHistory) "历史预约成功的座位会显示在这里" else "预约成功后会自动显示在这里",
@@ -1579,7 +1598,11 @@ private fun LibrarySeatWaitlistPanel(
             }
             SectionHeader("我的候补任务", "开启后由服务端持续监听，成功即自动结束")
             when {
-                state.waitlistsLoading && state.waitlists.isEmpty() -> LoadingBlock("正在加载候补任务...")
+                state.waitlistsLoading && state.waitlists.isEmpty() -> AppSkeletonInlineRows(
+                    rowCount = 2,
+                    leadingSize = 30.dp,
+                    lineWidths = listOf(0.32f, 0.58f),
+                )
                 state.waitlists.isEmpty() -> EmptyBlock(
                     "暂无候补任务",
                     "选好日期、时段与座位范围后点击上方按钮开启监听。",
@@ -1632,7 +1655,7 @@ private fun LibrarySeatWaitlistPanel(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (floorSeatsLoading) {
-                    LoadingBlock("正在查询 1-45 号座位...")
+                    AppSkeletonSeatGrid(columns = 5, rows = 2, cellHeight = 34.dp)
                 } else {
                     Text(
                         text = "共 45 个座位 · 当前空闲 ${floorSeats.count { it.seat.isFree && it.seat.label.toIntOrNull() in 1..45 }} 个",
