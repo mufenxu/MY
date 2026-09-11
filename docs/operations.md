@@ -4,7 +4,7 @@
 
 本次仅合并 Platform、Core、Exam 的部署进程与镜像，不迁移数据库、用户、密钥或上传文件。常驻容器由八个减为六个，Campus、IoT、Notification、MongoDB、backup-runner 保持独立。
 
-升级前保留已有 `.env` 和数据卷，使用 `npm run backup` 备份；将原三个容器的资源预算合并到 `PLATFORM_MEMORY_LIMIT`、`PLATFORM_CPU_LIMIT`、`PLATFORM_PIDS_LIMIT`，避免继续使用原网关的小配额。保留 `CORE_API_IMAGE` 与 `EXAM_API_IMAGE` 指向已验证的旧镜像，供拆分回退使用。
+升级前保留已有 `.env` 和数据卷，使用 `npm run backup` 备份；按原三个容器的预算及宿主机容量调整 `PLATFORM_MEMORY_LIMIT` 和 `PLATFORM_PIDS_LIMIT`，避免继续使用原网关的小配额。`PLATFORM_CPU_LIMIT` 必须不超过宿主机可用 CPU 核数，4 核服务器设为 `4`，不能直接累加原三个容器的 CPU 上限。保留 `CORE_API_IMAGE` 与 `EXAM_API_IMAGE` 指向已验证的旧镜像，供拆分回退使用。
 
 ```bash
 npm run compose:pull
