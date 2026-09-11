@@ -32,7 +32,7 @@ services:
       start_period: 30s
     pids_limit: ${MONGODB_PIDS_LIMIT:-512}
     mem_limit: ${MONGODB_MEMORY_LIMIT:-1g}
-    cpus: ${MONGODB_CPU_LIMIT:-2}
+    cpus: ${MONGODB_CPU_LIMIT:-0}
     stop_grace_period: 60s
     logging: *default-logging
     networks:
@@ -250,7 +250,7 @@ services:
       - ALL
     pids_limit: ${PLATFORM_PIDS_LIMIT:-1024}
     mem_limit: ${PLATFORM_MEMORY_LIMIT:-2g}
-    cpus: ${PLATFORM_CPU_LIMIT:-4}
+    cpus: ${PLATFORM_CPU_LIMIT:-0}
     stop_grace_period: 60s
     logging: *default-logging
     networks:
@@ -296,7 +296,7 @@ services:
       - ALL
     pids_limit: ${NOTIFICATION_PIDS_LIMIT:-128}
     mem_limit: ${NOTIFICATION_MEMORY_LIMIT:-256m}
-    cpus: ${NOTIFICATION_CPU_LIMIT:-0.5}
+    cpus: ${NOTIFICATION_CPU_LIMIT:-0}
     stop_grace_period: 20s
     logging: *default-logging
     networks:
@@ -350,7 +350,7 @@ services:
       - ALL
     pids_limit: ${BACKUP_RUNNER_PIDS_LIMIT:-256}
     mem_limit: ${BACKUP_RUNNER_MEMORY_LIMIT:-512m}
-    cpus: ${BACKUP_RUNNER_CPU_LIMIT:-1}
+    cpus: ${BACKUP_RUNNER_CPU_LIMIT:-0}
     stop_grace_period: 60s
     logging: *default-logging
     networks:
@@ -403,7 +403,7 @@ services:
       - ALL
     pids_limit: ${CAMPUS_PIDS_LIMIT:-256}
     mem_limit: ${CAMPUS_MEMORY_LIMIT:-512m}
-    cpus: ${CAMPUS_CPU_LIMIT:-1}
+    cpus: ${CAMPUS_CPU_LIMIT:-0}
     stop_grace_period: 30s
     logging: *default-logging
     networks:
@@ -455,7 +455,7 @@ services:
       - ALL
     pids_limit: ${IOT_PIDS_LIMIT:-256}
     mem_limit: ${IOT_MEMORY_LIMIT:-512m}
-    cpus: ${IOT_CPU_LIMIT:-1}
+    cpus: ${IOT_CPU_LIMIT:-0}
     stop_grace_period: 30s
     logging: *default-logging
     networks:

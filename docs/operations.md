@@ -4,7 +4,9 @@
 
 本次仅合并 Platform、Core、Exam 的部署进程与镜像，不迁移数据库、用户、密钥或上传文件。常驻容器由八个减为六个，Campus、IoT、Notification、MongoDB、backup-runner 保持独立。
 
-升级前保留已有 `.env` 和数据卷，使用 `npm run backup` 备份；按原三个容器的预算及宿主机容量调整 `PLATFORM_MEMORY_LIMIT` 和 `PLATFORM_PIDS_LIMIT`，避免继续使用原网关的小配额。`PLATFORM_CPU_LIMIT` 必须不超过宿主机可用 CPU 核数，4 核服务器设为 `4`，不能直接累加原三个容器的 CPU 上限。保留 `CORE_API_IMAGE` 与 `EXAM_API_IMAGE` 指向已验证的旧镜像，供拆分回退使用。
+升级前保留已有 `.env` 和数据卷，使用 `npm run backup` 备份；按原三个容器的预算及宿主机容量调整 `PLATFORM_MEMORY_LIMIT` 和 `PLATFORM_PIDS_LIMIT`，避免继续使用原网关的小配额。保留 `CORE_API_IMAGE` 与 `EXAM_API_IMAGE` 指向已验证的旧镜像，供拆分回退使用。
+
+所有服务（含拆分回退）的 `*_CPU_LIMIT` 默认 `0`，表示不设 CPU 硬配额，由宿主机调度实际可用的 CPU。升级已有部署时，也需将 `.env` 或面板中原有的 `*_CPU_LIMIT` 改为 `0`，再重新创建容器；只更新 Compose 文件不会覆盖已有环境变量。需要手动限额时可设置正数，但单个容器的 CPU 上限必须不超过宿主机可用核数。内存与 PIDs 上限仍然保留，需按服务器容量配置；高负载时各容器会共享并竞争 CPU。
 
 ```bash
 npm run compose:pull

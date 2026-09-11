@@ -81,7 +81,7 @@ services:
       - ALL
     pids_limit: ${CORE_PIDS_LIMIT:-384}
     mem_limit: ${CORE_MEMORY_LIMIT:-768m}
-    cpus: ${CORE_CPU_LIMIT:-1.5}
+    cpus: ${CORE_CPU_LIMIT:-0}
     stop_grace_period: 30s
     logging: *split-logging
     networks:
@@ -130,7 +130,7 @@ services:
       - ALL
     pids_limit: ${EXAM_PIDS_LIMIT:-384}
     mem_limit: ${EXAM_MEMORY_LIMIT:-768m}
-    cpus: ${EXAM_CPU_LIMIT:-1.5}
+    cpus: ${EXAM_CPU_LIMIT:-0}
     stop_grace_period: 30s
     logging: *split-logging
     networks:
