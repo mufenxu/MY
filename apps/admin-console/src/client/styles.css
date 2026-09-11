@@ -11553,7 +11553,56 @@ input:focus-visible {
   color: var(--blue);
 }
 
-/* 3. 手机端全量适配 */
+/* ==========================================================================
+   3. 手机端与平板端全方位专属响应式适配增强 (Apple Vision 毛玻璃旗舰体系)
+   ========================================================================== */
+
+/* 全局移动触控与平滑渲染优化 */
+html, body {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* --- 平板端深度断点 (Tablet: 769px ~ 1180px) --- */
+@media (min-width: 769px) and (max-width: 1180px) {
+  .app-shell {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .workspace-content {
+    padding: 20px 22px 36px;
+  }
+
+  .topbar {
+    padding: 0 22px;
+  }
+
+  .cockpit-overview-strip {
+    grid-template-columns: minmax(240px, 1.2fr) repeat(2, minmax(130px, 1fr));
+  }
+
+  .matrix-cards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cockpit-three-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .operations-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .services-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .application-catalog {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* --- 移动端标准断点 (Mobile & Narrow Tablet: <= 980px) --- */
 @media (max-width: 980px) {
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
@@ -11564,39 +11613,265 @@ input:focus-visible {
     top: 0;
     left: 0;
     bottom: 0;
-    width: min(280px, 80vw);
+    width: min(290px, 82vw);
+    height: 100dvh;
     transform: translateX(-100%);
     z-index: 100;
+    background: var(--glass-bg-hover);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.35);
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .sidebar.mobile-open {
     transform: translateX(0);
-    box-shadow: 0 0 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .sidebar-footer {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
 
   .nav-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.4);
-    backdrop-filter: blur(4px);
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     z-index: 90;
     border: 0;
+    cursor: pointer;
+  }
+
+  .main-nav button {
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  .topbar {
+    min-height: 56px;
+    padding: env(safe-area-inset-top, 0px) 16px 0 16px;
+    gap: 12px;
+  }
+
+  .welcome-copy h1 {
+    font-size: 15.5px;
+  }
+
+  .welcome-copy span {
+    font-size: 11.5px;
+  }
+
+  .workspace-content {
+    padding: 16px 16px calc(36px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .cockpit-three-columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .topology-panel {
+    min-height: 340px;
+  }
+
+  .dependency-stage {
+    min-height: 290px;
+    margin: 10px 14px 14px;
+  }
+
+  .services-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .application-catalog {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- 手机端核心断点 (Mobile: <= 768px) --- */
+@media (max-width: 768px) {
+  .topbar {
+    padding: env(safe-area-inset-top, 0px) 12px 0 12px;
+    gap: 8px;
+  }
+
+  .topbar-actions {
+    gap: 8px;
+  }
+
+  .command-trigger {
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 11px;
+  }
+
+  .command-trigger span {
+    display: none;
+  }
+
+  .environment-label {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 11.5px;
+    gap: 5px;
+  }
+
+  .theme-switch,
+  .notification-button {
+    width: 36px;
+    height: 36px;
   }
 
   .cockpit-overview-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .cockpit-overview-primary {
     grid-column: 1 / -1;
+    padding: 14px 16px;
+    gap: 12px;
   }
 
-  .topbar {
-    padding: 0 16px;
-    min-height: 56px;
+  .cockpit-overview-icon {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
   }
 
+  .cockpit-overview-primary strong {
+    font-size: 15.5px;
+  }
+
+  .cockpit-overview-metric {
+    padding: 12px 14px;
+    gap: 4px;
+  }
+
+  .cockpit-overview-metric > strong {
+    font-size: 22px;
+  }
+
+  .cockpit-overview-metric > small {
+    font-size: 11px;
+  }
+
+  .matrix-cards-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .matrix-card {
+    padding: 16px;
+    gap: 10px;
+  }
+
+  .matrix-submodules {
+    gap: 6px;
+  }
+
+  .matrix-submodule-pill {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 11.5px;
+  }
+
+  .matrix-launch-action {
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
+  .launcher-card-item {
+    min-height: 46px;
+    padding: 8px 10px;
+  }
+
+  .quick-ops-btn {
+    min-height: 44px;
+    font-size: 12.5px;
+  }
+
+  .operations-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .operations-kpis article {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .kpi-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .service-table-card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .service-table-head,
+  .service-table-row {
+    min-width: 620px;
+    padding: 10px 14px;
+  }
+
+  .application-tile {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .management-link-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- 超窄屏与折叠屏外屏断点 (Ultra-compact Mobile: <= 480px) --- */
+@media (max-width: 480px) {
   .workspace-content {
-    padding: 16px 16px 36px;
+    padding: 12px 10px calc(28px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .welcome-copy h1 {
+    font-size: 14.5px;
+    letter-spacing: -0.2px;
+  }
+
+  .environment-label {
+    min-height: 28px;
+    padding: 0 6px;
+    font-size: 0;
+  }
+
+  .environment-label i {
+    width: 8px;
+    height: 8px;
+  }
+
+  .cockpit-overview-metric {
+    padding: 10px 12px;
+  }
+
+  .cockpit-overview-metric > strong {
+    font-size: 19px;
+  }
+
+  .cockpit-overview-metric > span {
+    font-size: 11px;
+  }
+
+  .operations-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dependency-stage {
+    min-height: 260px;
+    margin: 8px 8px 12px;
   }
 }

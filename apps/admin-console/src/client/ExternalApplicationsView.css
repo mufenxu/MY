@@ -93,13 +93,20 @@
 .external-secret-dialog dt { color: var(--muted); }
 .external-secret-dialog dd { overflow-wrap: anywhere; margin: 0; color: var(--ink); }
 @media (max-width: 760px) {
-  .external-applications-header { align-items: stretch; flex-direction: column; }
-  .external-applications-header > div:last-child { justify-content: flex-end; }
+  .external-applications-header { align-items: stretch; flex-direction: column; gap: 12px; }
+  .external-applications-header > div:last-child { justify-content: flex-start; flex-wrap: wrap; }
   .external-app-grid, .external-app-form-grid { grid-template-columns: minmax(0, 1fr); }
   .external-app-form-grid label.wide { grid-column: auto; }
-  .external-app-dialog { max-height: min(680px, calc(100vh - 32px)); max-height: min(680px, calc(100dvh - 32px)); }
+  .external-app-dialog, .external-secret-dialog { width: min(720px, calc(100vw - 20px)); border-radius: 16px; }
+  .external-app-dialog { max-height: min(680px, calc(100vh - 20px)); max-height: min(680px, calc(100dvh - 20px)); }
+  .external-app-dialog > header { padding: 16px 16px 0; }
+  .external-app-dialog form > footer { padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .external-app-dialog form > footer button { min-height: 40px; padding: 8px 16px; font-size: 13px; }
+  .external-secret-dialog { width: min(520px, calc(100vw - 20px)); padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px)); }
+  .external-secret-dialog dl > div { grid-template-columns: 80px minmax(0, 1fr); }
   .external-app-kind-options { grid-template-columns: minmax(0, 1fr); }
   .external-app-card > header { grid-template-columns: 40px minmax(0, 1fr); }
   .external-health { grid-column: 2; justify-self: start; }
   .external-app-card dl { grid-template-columns: minmax(0, 1fr); }
 }
+
