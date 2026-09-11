@@ -597,18 +597,19 @@ test('runner client proxies offsite configuration and recovery operations', asyn
   ]);
 });
 
-test('runner client recovers a backup job after the start request times out', async () => {
+test('runner client recovers a backup job after the start request times out', async (t) => {
   const token = 't'.repeat(32);
   let jobs = [];
+  let startSignal;
+  const requests = [];
+  t.mock.timers.enable({ apis: ['setTimeout'] });
 
-  await withHttpServer(async (req, res) => {
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    if (req.headers.authorization !== `Bearer ${token}`) {
-      res.writeHead(401);
-      res.end(JSON.stringify({ error: 'unauthorized', code: 'NOPE' }));
-      return;
-    }
-    if (req.method === 'POST' && req.url === '/backups/run') {
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    const resource = new URL(url).pathname;
+    requests.push(`${options.method} ${resource}`);
+    assert.equal(options.headers.Authorization, `Bearer ${token}`);
+    if (options.method === 'POST' && resource === '/backups/run') {
+      assert.equal(JSON.parse(options.body).requestedBy, 'admin');
       jobs = [{
         id: 'remote-timeout-1',
         type: 'backup',
@@ -616,31 +617,29 @@ test('runner client recovers a backup job after the start request times out', as
         requestedBy: 'admin',
         createdAt: new Date().toISOString(),
       }];
-      setTimeout(() => {
-        if (res.destroyed) return;
-        res.writeHead(202);
-        res.end(JSON.stringify({ job: jobs[0] }));
-      }, 100);
-      return;
+      startSignal = options.signal;
+      return new Promise((_resolve, reject) => {
+        startSignal.addEventListener('abort', () => reject(new DOMException('Timed out', 'AbortError')), { once: true });
+      });
     }
-    if (req.method === 'GET' && req.url === '/status') {
-      res.end(JSON.stringify({ capabilities: { canBackup: true, canRestore: true }, backups: [], jobs }));
-      return;
-    }
-    res.writeHead(404);
-    res.end(JSON.stringify({ error: 'not found' }));
-  }, async (origin) => {
-    const client = createBackupRunnerClient({
-      config: {
-        backupRunnerUrl: origin,
-        backupRunnerToken: token,
-        backupRunnerTimeoutMs: 20,
-        restoreConfirmText: 'RESTORE ALL DATA',
-      },
-    });
-
-    const job = await client.startBackup({ requestedBy: 'admin' });
-    assert.equal(job.id, 'remote-timeout-1');
-    assert.equal(job.status, 'running');
+    assert.equal(resource, '/status');
+    return Response.json({ capabilities: { canBackup: true, canRestore: true }, backups: [], jobs });
   });
+  const client = createBackupRunnerClient({
+    config: {
+      backupRunnerUrl: 'http://backup-runner.test/',
+      backupRunnerToken: token,
+      backupRunnerTimeoutMs: 20,
+      restoreConfirmText: 'RESTORE ALL DATA',
+    },
+  });
+
+  const pendingJob = client.startBackup({ requestedBy: 'admin' });
+  // Expire the request after job creation without depending on HTTP scheduling.
+  t.mock.timers.tick(20);
+  const job = await pendingJob;
+  assert.equal(startSignal.aborted, true);
+  assert.equal(job.id, 'remote-timeout-1');
+  assert.equal(job.status, 'running');
+  assert.deepEqual(requests, ['POST /backups/run', 'GET /status']);
 });
