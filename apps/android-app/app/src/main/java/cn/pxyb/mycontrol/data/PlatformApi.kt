@@ -145,6 +145,11 @@ class PlatformApi(
         Unit
     }
 
+    suspend fun markAppNotificationUnread(id: String) = withContext(Dispatchers.IO) {
+        execute("/api/app/notifications/${encodePath(id)}/unread", "POST", JSONObject())
+        Unit
+    }
+
     suspend fun snoozeAppNotification(id: String, snoozedUntilMillis: Long) = withContext(Dispatchers.IO) {
         execute(
             "/api/app/notifications/${encodePath(id)}/snooze",

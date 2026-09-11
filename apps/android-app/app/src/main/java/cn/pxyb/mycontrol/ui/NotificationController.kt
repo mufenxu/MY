@@ -84,9 +84,17 @@ class NotificationController(
     fun snooze(id: String, durationMillis: Long) {
         val record = appState.value.alerts.firstOrNull { it.id == id }
         val snoozedUntil = System.currentTimeMillis() + durationMillis
-        updateAlerts { alerts -> alerts.map { if (it.id == id) it.copy(read = false, snoozedUntil = snoozedUntil) else it } }
+        updateAlerts { alerts -> alerts.map { if (it.id == id) it.copy(snoozedUntil = snoozedUntil) else it } }
         if (record?.origin == "remote") launch { request { api.snoozeAppNotification(id, snoozedUntil) } }
         SnoozedAlertScheduler.schedule(application, appState.value.user?.username, id, durationMillis)
+    }
+
+    /** 把提醒恢复为未读并取消稍后：稍后状态一并清除，保证它重新回到未读列表。 */
+    fun restoreUnread(id: String) {
+        val record = appState.value.alerts.firstOrNull { it.id == id } ?: return
+        updateAlerts { alerts -> alerts.map { if (it.id == id) it.copy(read = false, snoozedUntil = null) else it } }
+        SnoozedAlertScheduler.cancelOne(application, appState.value.user?.username, id)
+        if (record.origin == "remote") launch { request { api.markAppNotificationUnread(id) } }
     }
 
     fun updateAlertPreferences(preferences: AlertPreferences) = launch {

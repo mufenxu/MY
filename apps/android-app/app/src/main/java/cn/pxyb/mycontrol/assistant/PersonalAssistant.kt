@@ -10,6 +10,7 @@ import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.SecurityData
 import cn.pxyb.mycontrol.data.TodoSnapshot
+import cn.pxyb.mycontrol.data.activeUnreadCount
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -141,9 +142,9 @@ fun buildPersonalAssistantSnapshot(
             destination = AssistantDestination.Profile,
             priority = AssistantPriority.Attention,
         )
-        alerts.any { !it.read } -> AssistantAction(
+        alerts.activeUnreadCount(nowMillis) > 0 -> AssistantAction(
             id = "unread-alerts",
-            title = "有 ${alerts.count { !it.read }} 条未读提醒",
+            title = "有 ${alerts.activeUnreadCount(nowMillis)} 条未读提醒",
             detail = "打开通知中心集中处理",
             destination = AssistantDestination.Notifications,
         )
@@ -159,7 +160,7 @@ fun buildPersonalAssistantSnapshot(
         ?: currentCourse?.first?.let { "正在上 ${it.courseName}" }
         ?: "今天暂无后续课程"
     val todoText = if (pendingTodos.isEmpty()) "待办已清空" else "${pendingTodos.size} 项待办未完成"
-    val attentionCount = incidents.count { it.status != "resolved" } + alerts.count { !it.read }
+    val attentionCount = incidents.count { it.status != "resolved" } + alerts.activeUnreadCount(nowMillis)
     val attentionText = if (attentionCount == 0) "没有新增提醒" else "$attentionCount 条事项需要关注"
 
     return PersonalAssistantSnapshot(

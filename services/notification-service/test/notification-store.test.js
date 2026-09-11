@@ -93,6 +93,54 @@ test('app inbox deduplicates messages and isolates recipient state', async () =>
   assert.equal((await store.listAppNotifications('bob')).total, 1);
 });
 
+test('app inbox dedupe scope includes the audience and supports mark unread', async () => {
+  const store = createMemoryNotificationStore({ encryptionKey });
+  const message = {
+    category: 'todo.reminder',
+    priority: 'normal',
+    title: '待办提醒',
+    summary: '记得提交实验报告。',
+    content: { kind: 'text', blocks: [{ type: 'text', text: '截止到今天 23:59。' }] },
+    source: { service: 'core', entityType: 'todo', entityId: 'todo-1' },
+    actions: [],
+  };
+  const single = await store.createAppNotification({
+    caller: 'core-api',
+    idempotencyKey: 'todo:reminder:2026-09-11',
+    recipients: ['alice'],
+    message,
+  });
+  assert.equal(single.deduplicated, false);
+
+  // 同一幂等键 + 同一受众仍然去重，避免重复提醒。
+  const repeated = await store.createAppNotification({
+    caller: 'core-api',
+    idempotencyKey: 'todo:reminder:2026-09-11',
+    recipients: ['alice'],
+    message,
+  });
+  assert.equal(repeated.deduplicated, true);
+
+  // 扩围到新受众时必须新建消息，否则新收件人会永远收不到这条通知。
+  const broadened = await store.createAppNotification({
+    caller: 'core-api',
+    idempotencyKey: 'todo:reminder:2026-09-11',
+    recipients: ['alice', 'bob'],
+    message,
+  });
+  assert.equal(broadened.deduplicated, false);
+  assert.equal((await store.listAppNotifications('bob')).total, 1);
+
+  const read = await store.markAppNotificationRead('bob', broadened.notification.id);
+  assert.ok(read.readAt);
+  const snoozedUntil = new Date(Date.now() + 3600000);
+  await store.snoozeAppNotification('bob', broadened.notification.id, snoozedUntil);
+  const unread = await store.markAppNotificationUnread('bob', broadened.notification.id);
+  assert.equal(unread.readAt, null);
+  assert.equal(unread.snoozedUntil, null);
+  assert.equal((await store.listAppNotifications('bob', { unreadOnly: true })).total, 1);
+});
+
 test('app device registration keeps push tokens out of public metadata', async () => {
   const store = createMemoryNotificationStore({ encryptionKey });
   const registered = await store.upsertAppDevice('alice', {

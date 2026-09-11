@@ -76,7 +76,7 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
     async createAppNotification(input) {
       prune();
       const timestamp = now();
-      const dedupeScopeKey = appDedupeScopeKey(input.caller, input.idempotencyKey);
+      const dedupeScopeKey = appDedupeScopeKey(input.caller, input.idempotencyKey, input.recipients);
       const duplicate = appMessages.find((row) => row.dedupeScopeKey === dedupeScopeKey && (!row.expiresAt || new Date(row.expiresAt) > timestamp));
       if (duplicate) return { notification: serializeDocument(duplicate), deduplicated: true };
       const notification = {
@@ -159,6 +159,15 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
       const recipient = appRecipients.find((row) => row.recipientId === String(recipientId || '').trim() && row.messageId === notificationId);
       if (!recipient || recipient.archivedAt) return null;
       recipient.snoozedUntil = snoozedUntil;
+      recipient.updatedAt = now();
+      return serializeAppNotification(appMessages.find((row) => row.id === notificationId), recipient, protector);
+    },
+    async markAppNotificationUnread(recipientId, notificationId) {
+      prune();
+      const recipient = appRecipients.find((row) => row.recipientId === String(recipientId || '').trim() && row.messageId === notificationId);
+      if (!recipient || recipient.archivedAt) return null;
+      recipient.readAt = null;
+      recipient.snoozedUntil = null;
       recipient.updatedAt = now();
       return serializeAppNotification(appMessages.find((row) => row.id === notificationId), recipient, protector);
     },
@@ -765,7 +774,7 @@ async function createMongoNotificationStore({
   return {
     async createAppNotification(input) {
       const timestamp = new Date();
-      const dedupeScopeKey = appDedupeScopeKey(input.caller, input.idempotencyKey);
+      const dedupeScopeKey = appDedupeScopeKey(input.caller, input.idempotencyKey, input.recipients);
       const notification = {
         id: crypto.randomUUID(),
         caller: input.caller,
@@ -903,6 +912,16 @@ async function createMongoNotificationStore({
       const recipient = await appRecipients.findOneAndUpdate(
         { recipientId: String(recipientId || '').trim(), messageId: notificationId, archivedAt: null },
         { $set: { snoozedUntil, updatedAt: new Date() } },
+        { returnDocument: 'after', projection: { _id: 0 } },
+      );
+      if (!recipient) return null;
+      const message = await appMessages.findOne({ id: notificationId }, { projection: { _id: 0 } });
+      return serializeAppNotification(message, recipient, protector);
+    },
+    async markAppNotificationUnread(recipientId, notificationId) {
+      const recipient = await appRecipients.findOneAndUpdate(
+        { recipientId: String(recipientId || '').trim(), messageId: notificationId, archivedAt: null },
+        { $set: { readAt: null, snoozedUntil: null, updatedAt: new Date() } },
         { returnDocument: 'after', projection: { _id: 0 } },
       );
       if (!recipient) return null;

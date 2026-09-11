@@ -1995,10 +1995,11 @@ private fun AuthenticatedShell(
                         onOpen = viewModel::openAlert,
                         onAction = viewModel::openNotificationAction,
                         onMarkRead = viewModel::markAlertRead,
+                        onMarkUnread = viewModel::markAlertUnread,
                         onMarkAllRead = viewModel::markAllAlertsRead,
                         onClearRead = viewModel::clearReadAlerts,
                         onArchive = viewModel::archiveAlert,
-                        onSnooze = { id -> viewModel.snoozeAlert(id) },
+                        onSnooze = { id, duration -> viewModel.snoozeAlert(id, duration) },
                         onUpdatePreferences = viewModel::updateAlertPreferences,
                         onBack = navigateBackFromSubScreen,
                     )

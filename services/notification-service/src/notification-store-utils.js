@@ -5,9 +5,12 @@ function normalizePositiveInteger(value, fallback, maximum) {
   return Math.min(Math.max(Number.isFinite(parsed) ? parsed : fallback, 1), maximum);
 }
 
-function appDedupeScopeKey(caller, idempotencyKey) {
+function appDedupeScopeKey(caller, idempotencyKey, recipients = []) {
+  const audience = [...new Set((recipients || [])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean))].sort();
   return crypto.createHash('sha256')
-    .update(JSON.stringify([String(caller || ''), String(idempotencyKey || '')]))
+    .update(JSON.stringify([String(caller || ''), String(idempotencyKey || ''), audience]))
     .digest('hex');
 }
 

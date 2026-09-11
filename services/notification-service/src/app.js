@@ -569,6 +569,17 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
     }
   });
 
+  app.post('/app/notifications/:id/unread', checkAppAccess, async (req, res, next) => {
+    try {
+      const notification = await store.markAppNotificationUnread(req.appUserId, String(req.params.id || ''));
+      if (!notification) throw httpError(404, 'APP_NOTIFICATION_NOT_FOUND', '通知不存在。');
+      return res.json({ notification });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
   app.post('/app/notifications/:id/snooze', checkAppAccess, async (req, res, next) => {
     try {
       const input = z.object({ snoozedUntil: z.string().datetime({ offset: true }) }).parse(req.body);

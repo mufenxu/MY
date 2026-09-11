@@ -339,6 +339,11 @@ export function Dashboard({ session, onLogout }) {
 
   return (
     <div className="app-shell">
+      <div className="glass-ambient-canvas" aria-hidden="true">
+        <div className="glass-ambient-orb orb-primary" />
+        <div className="glass-ambient-orb orb-secondary" />
+        <div className="glass-ambient-orb orb-tertiary" />
+      </div>
       {launchingService && (
         <div className="navigation-transition" role="status" aria-live="polite">
           <div className="navigation-transition-panel">

@@ -28,10 +28,10 @@ class SnoozedAlertWorker(
             val store = PersonalWorkspaceStore(applicationContext).apply { setAccount(username) }
             val alerts = store.readAlerts()
             val alert = alerts.firstOrNull { it.id == id } ?: return@withRequestSession Result.success()
-            if (alert.read) return@withRequestSession Result.success()
             val snoozedUntil = alert.snoozedUntil ?: return@withRequestSession Result.success()
             if (snoozedUntil > System.currentTimeMillis()) return@withRequestSession Result.retry()
-            val restored = alert.copy(snoozedUntil = null)
+            // 稍后到时重新提醒：恢复为未读并清除稍后状态，让它回到未读列表而不是静默消失。
+            val restored = alert.copy(read = false, snoozedUntil = null)
             store.writeAlerts(alerts.map { if (it.id == id) restored else it })
             AlertNotifier(applicationContext).apply { setAccount(username) }.notifyRecord(restored)
             Result.success()
@@ -66,5 +66,11 @@ object SnoozedAlertScheduler {
     fun cancel(context: Context, username: String?) {
         val scope = accountStorageScope(username) ?: return
         WorkManager.getInstance(context).cancelAllWorkByTag("snoozed-alert-$scope")
+    }
+
+    /** 取消单条提醒的稍后计划（用户手动恢复为未读时使用）。 */
+    fun cancelOne(context: Context, username: String?, alertId: String) {
+        val scope = accountStorageScope(username) ?: return
+        WorkManager.getInstance(context).cancelUniqueWork("snoozed-alert-$scope-$alertId")
     }
 }

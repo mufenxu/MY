@@ -15,6 +15,7 @@ import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot
 import cn.pxyb.mycontrol.assistant.shouldSuppressNotification
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.AppAlertRecord
+import cn.pxyb.mycontrol.data.NotificationKind
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.TodoSnapshot
@@ -22,6 +23,9 @@ import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.PlatformTask
 import cn.pxyb.mycontrol.data.SessionStore
 import cn.pxyb.mycontrol.data.accountStorageScope
+import cn.pxyb.mycontrol.data.isHighPriority
+import cn.pxyb.mycontrol.data.kind
+import cn.pxyb.mycontrol.data.REMOTE_OWNED_REMINDER_PREFIXES
 import java.time.LocalTime
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -60,23 +64,57 @@ class AlertNotifier(context: Context) {
         val manager = appContext.getSystemService(NotificationManager::class.java) ?: return
         manager.createNotificationChannels(
             listOf(
-                NotificationChannel(
-                    CHANNEL_ID,
-                    "重要告警",
-                    NotificationManager.IMPORTANCE_HIGH,
-                ).apply {
-                    description = "系统异常与需要立即处理的任务"
+                NotificationChannel(CHANNEL_ID, "重要告警", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "系统异常与需要立即处理的告警"
                     enableVibration(true)
                 },
-                NotificationChannel(
-                    MESSAGE_CHANNEL_ID,
-                    "一般通知",
-                    NotificationManager.IMPORTANCE_DEFAULT,
-                ).apply {
-                    description = "系统消息、进度更新与日常提醒"
+                NotificationChannel(CHANNEL_TASKS, "任务与待办", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "任务待办、审批与运维进度"
+                },
+                NotificationChannel(CHANNEL_SCHEDULE, "日程与提醒", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "课程、资源到期与日程提醒"
+                },
+                NotificationChannel(CHANNEL_DEVICES, "设备消息", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "IoT 设备上下线与自动化事件"
+                },
+                NotificationChannel(CHANNEL_SECURITY, "安全提醒", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "登录、会话与安全状态变更"
+                },
+                NotificationChannel(MESSAGE_CHANNEL_ID, "一般通知", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "其他系统消息与日常更新"
                 },
             ),
         )
+    }
+
+    private fun channelIdFor(kind: NotificationKind, critical: Boolean): String = when {
+        critical || kind == NotificationKind.Alert -> CHANNEL_ID
+        kind == NotificationKind.Task -> CHANNEL_TASKS
+        kind == NotificationKind.Schedule -> CHANNEL_SCHEDULE
+        kind == NotificationKind.Device -> CHANNEL_DEVICES
+        kind == NotificationKind.Security -> CHANNEL_SECURITY
+        else -> MESSAGE_CHANNEL_ID
+    }
+
+    /** 记录服务端已投递的提醒命名空间，用于抑制本地重复提醒。 */
+    private fun markRemoteReminderSeen(category: String) {
+        val prefix = REMOTE_OWNED_REMINDER_PREFIXES.firstOrNull { category.startsWith(it, ignoreCase = true) } ?: return
+        val key = scopedKey(KEY_REMOTE_REMINDER_SEEN)
+        val entries = preferences.getStringSet(key, emptySet()).orEmpty()
+            .filterNot { it.substringBefore('|') == prefix }
+            .toMutableSet()
+        entries.add("$prefix|${System.currentTimeMillis()}")
+        preferences.edit().putStringSet(key, entries).apply()
+    }
+
+    /** 服务端在窗口期内已投递过该命名空间的提醒时，本地不再重复生成。 */
+    private fun handledRemotely(prefix: String, windowMillis: Long = REMOTE_REMINDER_WINDOW_MS): Boolean {
+        val now = System.currentTimeMillis()
+        return preferences.getStringSet(scopedKey(KEY_REMOTE_REMINDER_SEEN), emptySet()).orEmpty().any { entry ->
+            if (entry.substringBefore('|') != prefix) return@any false
+            val at = entry.substringAfter('|', "").toLongOrNull() ?: return@any false
+            now - at in 0..windowMillis
+        }
     }
 
     fun evaluate(
@@ -164,35 +202,40 @@ class AlertNotifier(context: Context) {
         val now = System.currentTimeMillis()
         val existingIds = personalStore.readAlerts().mapTo(mutableSetOf(), AppAlertRecord::id)
         val generated = buildList {
-            todos.tasks.filter { task ->
-                !task.completed && task.reminderStatus != "dismissed" && task.reminderAt?.let { it <= now } == true
-            }.forEach { task ->
-                val id = "todo:${task.id}:${task.reminderAt}"
-                if (id !in existingIds) {
-                    add(AppAlertRecord(id, "todo", task.id, "待办提醒：${task.title}", "截止时间临近，打开今日工作台处理。", now))
+            // 服务端已下发待办提醒时不再本地重复生成，避免同一件事出现两条通知。
+            if (!handledRemotely(REMOTE_TODO_PREFIX)) {
+                todos.tasks.filter { task ->
+                    !task.completed && task.reminderStatus != "dismissed" && task.reminderAt?.let { it <= now } == true
+                }.forEach { task ->
+                    val id = "todo:${task.id}:${task.reminderAt}"
+                    if (id !in existingIds) {
+                        add(AppAlertRecord(id, "todo", task.id, "待办提醒：${task.title}", "截止时间临近，打开今日工作台处理。", now))
+                    }
                 }
             }
 
-            val week = Regex("第(\\d+)周").find(timetable?.currentCalendarText.orEmpty())
-                ?.groupValues?.getOrNull(1)?.toIntOrNull()
-            val today = LocalDate.now()
-            timetable?.courses.orEmpty().filter { course ->
-                course.day == today.dayOfWeek.value && (week == null || course.weeks.isEmpty() || week in course.weeks)
-            }.forEach { course ->
-                val start = parseCourseStart(today, course.timeRange) ?: return@forEach
-                if (now in (start - COURSE_NOTICE_WINDOW_MS)..start) {
-                    val id = "course:$today:${course.id}"
-                    if (id !in existingIds) {
-                        add(
-                            AppAlertRecord(
-                                id = id,
-                                type = "course",
-                                sourceId = course.id,
-                                title = "课程即将开始：${course.courseName}",
-                                body = listOf(course.timeRange, course.location).filter(String::isNotBlank).joinToString(" · "),
-                                createdAt = now,
-                            ),
-                        )
+            if (!handledRemotely(REMOTE_COURSE_PREFIX)) {
+                val week = Regex("第(\\d+)周").find(timetable?.currentCalendarText.orEmpty())
+                    ?.groupValues?.getOrNull(1)?.toIntOrNull()
+                val today = LocalDate.now()
+                timetable?.courses.orEmpty().filter { course ->
+                    course.day == today.dayOfWeek.value && (week == null || course.weeks.isEmpty() || week in course.weeks)
+                }.forEach { course ->
+                    val start = parseCourseStart(today, course.timeRange) ?: return@forEach
+                    if (now in (start - COURSE_NOTICE_WINDOW_MS)..start) {
+                        val id = "course:$today:${course.id}"
+                        if (id !in existingIds) {
+                            add(
+                                AppAlertRecord(
+                                    id = id,
+                                    type = "course",
+                                    sourceId = course.id,
+                                    title = "课程即将开始：${course.courseName}",
+                                    body = listOf(course.timeRange, course.location).filter(String::isNotBlank).joinToString(" · "),
+                                    createdAt = now,
+                                ),
+                            )
+                        }
                     }
                 }
             }
@@ -207,15 +250,16 @@ class AlertNotifier(context: Context) {
         if (accountScope == null || session.accountScope != accountScope) return false
         return sessionStore.withRequestSession(session) {
             if (alert.read || alert.snoozedUntil?.let { it > System.currentTimeMillis() } == true) return@withRequestSession false
-            val critical = alert.priority in setOf("urgent", "high", "critical") || alert.type == "incident"
+            val alertKind = alert.kind()
+            val critical = alert.isHighPriority() || alertKind == NotificationKind.Alert
             if (isSuppressed(alert.type, critical)) return@withRequestSession false
-            val intent = when (alert.type) {
-                "incident" -> DeepLinks.openIntent(appContext, destination = "notifications")
-                "task" -> DeepLinks.openIntent(appContext, destination = "notifications")
-                "todo", "course", "resource" -> DeepLinks.openIntent(appContext, destination = "today")
-                else -> DeepLinks.openIntent(appContext, destination = "notifications")
+            val destination = when {
+                alertKind == NotificationKind.Schedule -> "today"
+                alertKind == NotificationKind.Task && alert.type != "task" -> "today"
+                else -> "notifications"
             }
-            val channelId = if (critical) CHANNEL_ID else MESSAGE_CHANNEL_ID
+            val intent = DeepLinks.openIntent(appContext, destination = destination)
+            val channelId = channelIdFor(alertKind, critical)
             ensureChannel()
             val posted = notify(
                 notificationId = PERSONAL_BASE + alert.id.hashCode(),
@@ -235,6 +279,7 @@ class AlertNotifier(context: Context) {
     fun evaluateRemote(alerts: List<AppAlertRecord>) {
         if (accountScope == null) return
         ensureChannel()
+        alerts.filter { it.origin == "remote" }.forEach { markRemoteReminderSeen(it.type) }
         val seen = readRemoteSeenIds().toMutableSet()
         val unread = alerts.filter { it.origin == "remote" && !it.read && it.id !in seen }
         var posted = 0
@@ -265,6 +310,7 @@ class AlertNotifier(context: Context) {
     fun notifyResourceExpiry(resource: ResourceExpiry): Boolean {
         if (accountScope == null) return false
         ensureChannel()
+        if (handledRemotely(REMOTE_RESOURCE_PREFIX)) return true
         val expiresAt = runCatching { LocalDate.parse(resource.expiresAt) }.getOrNull() ?: return true
         val days = ChronoUnit.DAYS.between(LocalDate.now(), expiresAt).toInt()
         if (days > resource.advanceNoticeDays.coerceAtLeast(0)) return true
@@ -316,17 +362,21 @@ class AlertNotifier(context: Context) {
         )
         val publicContent = publicNotificationContent()
         val publicNotification = NotificationCompat.Builder(appContext, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_my_notification)
             .setContentTitle(publicContent.title)
             .setContentText(publicContent.body)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
         val builder = NotificationCompat.Builder(appContext, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_my_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setPriority(if (channelId == CHANNEL_ID) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(
+                if (channelId == CHANNEL_ID || channelId == CHANNEL_SECURITY) NotificationCompat.PRIORITY_HIGH
+                else NotificationCompat.PRIORITY_DEFAULT
+            )
+            .setGroup(GROUP_PREFIX + channelId)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(publicNotification)
             .setAutoCancel(true)
@@ -348,24 +398,24 @@ class AlertNotifier(context: Context) {
     ) {
         if (alert.type == "todo") {
             builder.addAction(
-                R.mipmap.ic_launcher,
+                R.drawable.ic_stat_my_notification,
                 "完成",
                 notificationActionIntent(NotificationActionReceiver.ACTION_COMPLETE_TODO, notificationId, alert),
             )
         } else {
             builder.addAction(
-                R.mipmap.ic_launcher,
+                R.drawable.ic_stat_my_notification,
                 "已读",
                 notificationActionIntent(NotificationActionReceiver.ACTION_MARK_READ, notificationId, alert),
             )
         }
         builder.addAction(
-            R.mipmap.ic_launcher,
+            R.drawable.ic_stat_my_notification,
             "1 小时后提醒",
             notificationActionIntent(NotificationActionReceiver.ACTION_SNOOZE, notificationId, alert),
         )
         builder.addAction(
-            R.mipmap.ic_launcher,
+            R.drawable.ic_stat_my_notification,
             "归档",
             notificationActionIntent(NotificationActionReceiver.ACTION_ARCHIVE, notificationId, alert),
         )
@@ -457,6 +507,16 @@ class AlertNotifier(context: Context) {
         const val KEY_POSTED_RESOURCES = "posted_resources_v1"
         const val CHANNEL_ID = "ops_alerts"
         const val MESSAGE_CHANNEL_ID = "app_notifications"
+        const val CHANNEL_TASKS = "mycontrol_tasks"
+        const val CHANNEL_SCHEDULE = "mycontrol_schedule"
+        const val CHANNEL_DEVICES = "mycontrol_devices"
+        const val CHANNEL_SECURITY = "mycontrol_security"
+        const val GROUP_PREFIX = "mycontrol.group."
+        const val KEY_REMOTE_REMINDER_SEEN = "remote_reminder_seen"
+        const val REMOTE_REMINDER_WINDOW_MS = 36 * 60 * 60_000L
+        const val REMOTE_TODO_PREFIX = "todo."
+        const val REMOTE_COURSE_PREFIX = "campus."
+        const val REMOTE_RESOURCE_PREFIX = "resource."
         const val INCIDENT_BASE = 41000
         const val TASK_BASE = 42000
         const val PERSONAL_BASE = 43000

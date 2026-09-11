@@ -1,6 +1,6 @@
 package cn.pxyb.mycontrol.data
 
-enum class NotificationMutationType { MarkRead, Snooze, Archive }
+enum class NotificationMutationType { MarkRead, MarkUnread, Snooze, Archive }
 
 data class NotificationMutation(
     val type: NotificationMutationType,
@@ -16,8 +16,11 @@ fun applyNotificationMutations(
         NotificationMutationType.MarkRead -> current.map {
             if (it.id == mutation.alertId) it.copy(read = true) else it
         }
+        NotificationMutationType.MarkUnread -> current.map {
+            if (it.id == mutation.alertId) it.copy(read = false, snoozedUntil = null) else it
+        }
         NotificationMutationType.Snooze -> current.map {
-            if (it.id == mutation.alertId) it.copy(read = false, snoozedUntil = mutation.snoozedUntilMillis) else it
+            if (it.id == mutation.alertId) it.copy(snoozedUntil = mutation.snoozedUntilMillis) else it
         }
         NotificationMutationType.Archive -> current.filterNot { it.id == mutation.alertId }
     }

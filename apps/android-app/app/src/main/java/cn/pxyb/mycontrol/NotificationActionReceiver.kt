@@ -97,6 +97,7 @@ suspend fun flushNotificationMutations(api: PlatformApi, store: PersonalWorkspac
         val result = runCatching {
             when (mutation.type) {
                 NotificationMutationType.MarkRead -> api.markAppNotificationRead(mutation.alertId)
+                NotificationMutationType.MarkUnread -> api.markAppNotificationUnread(mutation.alertId)
                 NotificationMutationType.Snooze -> api.snoozeAppNotification(
                     mutation.alertId,
                     mutation.snoozedUntilMillis ?: System.currentTimeMillis(),

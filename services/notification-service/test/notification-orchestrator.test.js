@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createNotificationOrchestrator, nextAllowedTime, renderTemplate } = require('../src/notification-orchestrator');
+const { createNotificationOrchestrator, nextAllowedTime, renderTemplate, resolveQuietWindow } = require('../src/notification-orchestrator');
 const { createMemoryNotificationStore } = require('../src/notification-store');
 
 const encryptionKey = Buffer.alloc(32, 9).toString('base64url');
@@ -18,6 +18,65 @@ test('quiet hours move a notification to the next allowed time', () => {
     quietHours: { start: '22:00', end: '07:00' },
   });
   assert.equal(next.toISOString(), '2026-07-21T23:00:00.000Z');
+});
+
+test('quiet hours understand the App preference shape and ignore disabled windows', () => {
+  assert.deepEqual(resolveQuietWindow({ quietHours: { enabled: true, startHour: 22, endHour: 7 } }), { start: 1320, end: 420 });
+  assert.equal(resolveQuietWindow({ quietHours: { enabled: false, startHour: 22, endHour: 7 } }), null);
+  assert.deepEqual(resolveQuietWindow({ quietHours: { start: '22:00', end: '07:00' } }), { start: 1320, end: 420 });
+  assert.equal(resolveQuietWindow({ quietHours: null }), null);
+
+  const now = new Date('2026-07-21T15:30:00.000Z'); // 23:30 in UTC+8
+  const next = nextAllowedTime(now, {
+    timezoneOffsetMinutes: 480,
+    quietHours: { enabled: true, startHour: 22, endHour: 7 },
+  });
+  assert.equal(next.toISOString(), '2026-07-21T23:00:00.000Z');
+  assert.equal(
+    nextAllowedTime(now, { timezoneOffsetMinutes: 480, quietHours: { enabled: false, startHour: 22, endHour: 7 } }).toISOString(),
+    now.toISOString(),
+  );
+});
+
+test('app quiet hours defer a single recipient but keep broadcasts immediate', async () => {
+  const current = new Date('2026-08-18T15:30:00.000Z'); // 23:30 in UTC+8
+  const store = createMemoryNotificationStore({ encryptionKey, now: () => new Date(current) });
+  const orchestrator = createNotificationOrchestrator({
+    store,
+    now: () => new Date(current),
+    deliver: async () => ({ delivery: { id: 'delivery-quiet' } }),
+    deliverApp: async () => ({ notificationId: 'app-quiet' }),
+  });
+  await store.saveRecipientPreference('user-1', {
+    enabled: true,
+    quietHours: { enabled: true, startHour: 22, endHour: 7 },
+    timezoneOffsetMinutes: 480,
+  });
+  const base = {
+    channels: ['app'],
+    priority: 'normal',
+    category: 'todo.reminder',
+    content: { kind: 'text', title: '待办提醒', summary: '记得提交实验报告。' },
+    source: { service: 'core-service', entityType: 'todo', entityId: 'todo-1' },
+    dedupeWindowSeconds: 86400,
+    maxAttempts: 4,
+  };
+
+  const single = await orchestrator.enqueueApp({
+    ...base,
+    idempotencyKey: 'todo:user-1:1',
+    dedupeKey: 'todo:user-1:1',
+    audience: { users: ['user-1'] },
+  }, { caller: 'core-service' });
+  assert.equal(single.job.scheduledAt, '2026-08-18T23:00:00.000Z');
+
+  const broadcast = await orchestrator.enqueueApp({
+    ...base,
+    idempotencyKey: 'todo:broadcast:1',
+    dedupeKey: 'todo:broadcast:1',
+    audience: { users: ['user-1', 'user-2'] },
+  }, { caller: 'core-service' });
+  assert.equal(broadcast.job.scheduledAt, '2026-08-18T15:30:00.000Z');
 });
 
 test('orchestrator schedules, deduplicates and delivers template jobs', async () => {

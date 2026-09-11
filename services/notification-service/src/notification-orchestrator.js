@@ -62,13 +62,35 @@ function minuteOfDay(value) {
   return hours * 60 + minutes;
 }
 
-function nextAllowedTime(now, preference) {
+const QUIET_HOUR_TEXT = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * 安静时段存在两种已落库的写法：
+ * - 企微通道：`{ start: '22:00', end: '07:00' }`；
+ * - App 通道（Android 提醒设置）：`{ enabled, startHour, endHour }`。
+ * 统一解析为分钟后，两个通道才能共用同一套顺延逻辑。
+ */
+function resolveQuietWindow(preference) {
   const quiet = preference?.quietHours;
+  if (!quiet) return null;
+  if (typeof quiet.start === 'string' && typeof quiet.end === 'string'
+    && QUIET_HOUR_TEXT.test(quiet.start) && QUIET_HOUR_TEXT.test(quiet.end)) {
+    return { start: minuteOfDay(quiet.start), end: minuteOfDay(quiet.end) };
+  }
+  if (quiet.enabled !== true) return null;
+  const startHour = Number(quiet.startHour);
+  const endHour = Number(quiet.endHour);
+  if (!Number.isInteger(startHour) || !Number.isInteger(endHour)) return null;
+  if (startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23) return null;
+  return { start: startHour * 60, end: endHour * 60 };
+}
+
+function nextAllowedTime(now, preference) {
+  const quiet = resolveQuietWindow(preference);
   if (!quiet) return now;
   const offset = Number(preference.timezoneOffsetMinutes || 0);
   const localMinute = ((now.getUTCHours() * 60 + now.getUTCMinutes() + offset) % 1440 + 1440) % 1440;
-  const start = minuteOfDay(quiet.start);
-  const end = minuteOfDay(quiet.end);
+  const { start, end } = quiet;
   const within = start < end ? localMinute >= start && localMinute < end : localMinute >= start || localMinute < end;
   if (!within) return now;
   const deltaMinutes = (end - localMinute + 1440) % 1440 || 1440;
@@ -137,8 +159,11 @@ function createNotificationOrchestrator({
   async function enqueueApp(rawInput, { caller, actor = '', requestId = '', apiClient = null } = {}) {
     const input = appNotificationSchema.parse(rawInput);
     const requestedAt = input.scheduledAt || now();
-    const scheduledAt = requestedAt > now() ? requestedAt : now();
     const recipients = [...input.audience.users].sort();
+    // 单收件人时与企微通道保持一致：落在安静时段内的通知顺延到时段结束，而不是丢掉；
+    // 多人广播保持立即入箱，由 App 推送分发器按收件人各自静音。
+    const preference = recipients.length === 1 ? await store.getRecipientPreference(recipients[0]) : null;
+    const scheduledAt = nextAllowedTime(requestedAt > now() ? requestedAt : now(), preference);
     return store.createNotificationJob({
       caller,
       actor: String(actor || '').slice(0, 128),
@@ -265,4 +290,5 @@ module.exports = {
   notificationTemplateSchema,
   recipientPreferenceSchema,
   renderTemplate,
+  resolveQuietWindow,
 };

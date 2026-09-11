@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   Network,
   RefreshCw,
+  Settings,
   Zap,
 } from 'lucide-react';
 import { HolographicTopology } from './HolographicTopology.jsx';
@@ -118,6 +119,7 @@ export function OverviewView({
   onOpenService = onOpenServices,
   onOpenIncidents,
   onOpenBackup = () => {},
+  onOpenConfiguration = () => {},
 }) {
   const sortedServices = [...services].sort((left, right) => (
     (STATE_PRIORITY[left.state] ?? 4) - (STATE_PRIORITY[right.state] ?? 4)
@@ -165,6 +167,82 @@ export function OverviewView({
           <span><CheckCircle2 size={13} />最近检查</span>
           <strong className="overview-time-value">{lastRefreshLabel}</strong>
           <small>所有服务的同步时间</small>
+        </div>
+      </section>
+
+      <section className="cockpit-business-matrix" aria-label="核心业务矩阵">
+        <div className="matrix-section-header">
+          <div className="matrix-title-group">
+            <span className="matrix-title-icon"><Boxes size={18} /></span>
+            <div>
+              <h3>核心业务服务矩阵</h3>
+              <p>高频业务系统监控与核心子功能快捷直达</p>
+            </div>
+          </div>
+          <button className="icon-text-btn glass-btn" type="button" onClick={onOpenServices} title="查看全部服务">
+            全部应用入口 <ArrowRight size={13} />
+          </button>
+        </div>
+        <div className="matrix-cards-grid">
+          {sortedServices.slice(0, 6).map((srv) => {
+            const ServiceIcon = SERVICE_ICONS[srv.id] || AppWindow;
+            const launcherTone = LAUNCHER_TONES[srv.id] || 'blue';
+            const state = STATE_META[srv.state] || STATE_META.unmonitored;
+            const stateLabel = srv.state === 'unmonitored' ? '未检查' : state.label;
+            const areas = Array.isArray(srv.managementAreas) ? srv.managementAreas : [];
+            const openService = () => (srv.adminUrl ? launchService(srv) : onOpenService?.(srv));
+
+            return (
+              <article key={srv.id} className={`matrix-card tone-${launcherTone} state-${srv.state}`}>
+                <div className="matrix-card-header">
+                  <span className={`matrix-card-icon tone-${launcherTone}`}>
+                    <ServiceIcon size={20} />
+                  </span>
+                  <div className="matrix-card-info">
+                    <h4>{srv.shortName || srv.name}</h4>
+                    <span className="matrix-state-badge">
+                      <i className={`status-indicator state-${srv.state}`} />
+                      {stateLabel}
+                    </span>
+                  </div>
+                  <span className="matrix-latency-pill">
+                    {Number.isFinite(srv.latencyMs) ? `${srv.latencyMs} ms` : '--'}
+                  </span>
+                </div>
+                <p className="matrix-card-desc">{srv.description || '统一服务节点'}</p>
+                {areas.length > 0 && (
+                  <div className="matrix-submodules" aria-label={`${srv.shortName || srv.name}快捷子模块`}>
+                    {areas.slice(0, 3).map((area) => (
+                      <button
+                        key={area.id}
+                        type="button"
+                        className="matrix-submodule-pill"
+                        title={`${area.label} · ${area.description}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          launchService({ ...srv, adminUrl: area.url, shortName: `${srv.shortName || srv.name} · ${area.label}` });
+                        }}
+                      >
+                        <span>{area.label}</span>
+                        <ChevronRight size={11} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="matrix-card-footer">
+                  <span className="matrix-check-time">同步于 {formatCheckedAt(srv.checkedAt)}</span>
+                  <button
+                    type="button"
+                    className="matrix-launch-action"
+                    onClick={openService}
+                  >
+                    <span>进入系统</span>
+                    <ArrowUpRight size={14} />
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
 
@@ -234,6 +312,11 @@ export function OverviewView({
               <button className="quick-ops-btn" type="button" onClick={onOpenBackup}>
                 <Archive size={14} />
                 <span>备份重要数据</span>
+                <ChevronRight size={14} />
+              </button>
+              <button className="quick-ops-btn" type="button" onClick={onOpenConfiguration}>
+                <Settings size={14} />
+                <span>运行参数配置</span>
                 <ChevronRight size={14} />
               </button>
             </div>

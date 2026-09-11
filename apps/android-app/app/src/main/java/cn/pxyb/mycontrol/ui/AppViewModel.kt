@@ -38,6 +38,8 @@ import cn.pxyb.mycontrol.data.AssistantActionItem
 import cn.pxyb.mycontrol.data.AssistantChatTurn
 import cn.pxyb.mycontrol.data.IotSceneAction
 import cn.pxyb.mycontrol.data.newTodoTask
+import cn.pxyb.mycontrol.data.activeUnreadCount
+import cn.pxyb.mycontrol.data.isSnoozedAt
 import org.json.JSONObject
 import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.PlatformWebSession
@@ -1157,10 +1159,13 @@ class AppViewModel(
         if (activeIncidents.isNotEmpty()) {
             put("incidents", activeIncidents.take(6).joinToString("；") { "${it.severity} ${it.title}" })
         }
-        val unreadAlerts = state.alerts.count { !it.read }
+        val unreadAlerts = state.alerts.activeUnreadCount()
         put("unreadAlertCount", unreadAlerts)
         if (unreadAlerts > 0) {
-            put("recentAlerts", state.alerts.filter { !it.read }.take(6).joinToString("；") { it.title })
+            put(
+                "recentAlerts",
+                state.alerts.filter { !it.read && !it.isSnoozedAt() }.take(6).joinToString("；") { it.title },
+            )
         }
         state.resourceExpiries.takeIf { it.isNotEmpty() }?.let { expiries ->
             put("resourceExpiries", expiries.take(6).joinToString("；") { "${it.type} ${it.name} 于 ${it.expiresAt} 到期" })
@@ -2005,6 +2010,8 @@ class AppViewModel(
     }
 
     fun markAlertRead(id: String) = notifications.markRead(id)
+
+    fun markAlertUnread(id: String) = notifications.restoreUnread(id)
 
     fun markAllAlertsRead() = notifications.markAllRead()
 

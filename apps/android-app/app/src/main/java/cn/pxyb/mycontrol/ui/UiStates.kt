@@ -7,6 +7,7 @@ import cn.pxyb.mycontrol.data.AssistantActionItem
 import cn.pxyb.mycontrol.data.AssistantSuggestion
 import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
+import cn.pxyb.mycontrol.data.activeUnreadCount
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusFreeClassrooms
@@ -571,7 +572,7 @@ internal fun AppUiState.toOverviewUiState() = OverviewUiState(
     todoSnapshot = todoSnapshot,
     timetable = campusTimetable,
     campusOverview = campusOverview,
-    unreadAlerts = alerts.count { !it.read },
+    unreadAlerts = alerts.activeUnreadCount(),
     assistantSnapshot = assistantSnapshot,
 )
 
@@ -584,7 +585,7 @@ internal fun AppUiState.toOperationsUiState() = OperationsUiState(
     incidents = incidents,
     iot = iot,
     resourceExpiries = resourceExpiries,
-    unreadAlerts = alerts.count { !it.read },
+    unreadAlerts = alerts.activeUnreadCount(),
     backup = backup,
     diagnostics = diagnostics,
     networkHealth = networkHealth,
@@ -598,7 +599,7 @@ internal fun AppUiState.toToolsUiState() = ToolsUiState(
     overview = overview,
     iot = iot,
     ct8 = ct8,
-    unreadAlerts = alerts.count { !it.read },
+    unreadAlerts = alerts.activeUnreadCount(),
 )
 
 internal fun AppUiState.toDailyNewsUiState() = DailyNewsUiState(
@@ -618,7 +619,7 @@ internal fun AppUiState.toProfileUiState() = ProfileUiState(
     appUpdate = appUpdate,
     webLoginLink = webLoginLink,
     cacheStorageInfo = cacheStorageInfo,
-    unreadAlerts = alerts.count { !it.read },
+    unreadAlerts = alerts.activeUnreadCount(),
     assistantButtonVisible = assistantButtonVisible,
     offlineMode = offlineMode,
     pendingTodoMutations = pendingTodoMutations,
@@ -821,7 +822,7 @@ internal fun AppUiState.toTodayUiState() = TodayUiState(
     pendingTodoMutations = pendingTodoMutations,
     timetable = campusTimetable,
     campusOverview = campusOverview,
-    unreadAlerts = alerts.count { !it.read },
+    unreadAlerts = alerts.activeUnreadCount(),
     resourceExpiries = resourceExpiries,
     sharedTodoDraft = sharedTodoDraft,
 )
