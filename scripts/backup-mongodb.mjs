@@ -49,12 +49,15 @@ async function run(command, args, { capture = false } = {}) {
 async function runningApplications() {
   const output = await run('docker', [...composeArgs, 'ps', '--services', '--status', 'running'], { capture: true });
   const running = new Set(output.split(/\r?\n/).map((value) => value.trim()).filter(Boolean));
+  if (running.has('core-api') || running.has('exam-api')) {
+    composeArgs.push('-f', 'infra/docker/compose.split.yml');
+  }
   return applicationServices.filter((service) => running.has(service));
 }
 
 async function withApplicationsStopped(callback) {
   const running = await runningApplications();
-  if (running.length > 0) await run('docker', [...composeArgs, 'stop', '--timeout', '30', ...running]);
+  if (running.length > 0) await run('docker', [...composeArgs, 'stop', '--timeout', '60', ...running]);
 
   let result;
   let taskError;
@@ -101,7 +104,8 @@ try {
       waitForChild(dump, 'mongodump')
     ]);
 
-    await run('docker', [...composeArgs, 'cp', 'core-api:/app/services/core-api/uploads', workDirectory]);
+    const uploadsService = stoppedServices.includes('core-api') ? 'core-api' : 'platform-api';
+    await run('docker', [...composeArgs, 'cp', `${uploadsService}:/app/services/core-api/uploads`, workDirectory]);
     const metadata = {
       formatVersion: 2,
       createdAt: new Date().toISOString(),

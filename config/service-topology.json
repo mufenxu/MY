@@ -5,7 +5,8 @@
     {
       "id": "core",
       "registryId": "core",
-      "internalUrl": "http://core-api:3045",
+      "containerService": "platform-api",
+      "internalUrl": "http://127.0.0.1:3045",
       "publicApiPath": "/api/core",
       "managedAppPath": "/apps/core/",
       "healthPath": "/health",
@@ -16,7 +17,8 @@
     {
       "id": "exam",
       "registryId": "exam",
-      "internalUrl": "http://exam-api:3110",
+      "containerService": "platform-api",
+      "internalUrl": "http://127.0.0.1:3110",
       "publicApiPath": "/api/exam",
       "managedAppPath": "/apps/exam/",
       "healthPath": "/version",

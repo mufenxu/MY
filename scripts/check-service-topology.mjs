@@ -56,8 +56,14 @@ export function inspectTopology({
     if (!compose.includes(`${service.legacyHostEnv}: \${${service.legacyHostEnv}`)) {
       errors.push(`${service.id}: Compose does not pass ${service.legacyHostEnv} to the gateway`);
     }
-    const block = serviceBlock(compose, service.internalUrl.slice('http://'.length).split(':')[0]);
-    if (service.hostPortForbidden && block.split('\n').some((line) => line.trim() === 'ports:')) {
+    const internalUrl = new URL(service.internalUrl);
+    const block = serviceBlock(compose, service.containerService || internalUrl.hostname);
+    if (!block) errors.push(`${service.id}: missing runtime container`);
+    const publishedPorts = block.match(/^    ports:\n((?:      .*\n?)*)/m)?.[1] || '';
+    const publishesServicePort = service.containerService
+      ? new RegExp(`:${internalUrl.port}(?:/tcp)?["']?\\s*$`, 'm').test(publishedPorts)
+      : Boolean(publishedPorts);
+    if (service.hostPortForbidden && publishesServicePort) {
       errors.push(`${service.id}: production Compose exposes a host port`);
     }
   }

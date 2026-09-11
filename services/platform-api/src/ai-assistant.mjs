@@ -26,7 +26,7 @@ export function readAiAssistantConfig(env = process.env) {
     apiBaseUrl,
     apiKey,
     model: String(env.SUB2API_MODEL || env.AI_MODEL || DEFAULT_MODEL).trim(),
-    timeoutMs: boundedInteger(env.AI_API_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, { min: 5_000, max: 120_000 }),
+    timeoutMs: boundedInteger(env.PLATFORM_AI_API_TIMEOUT_MS ?? env.AI_API_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, { min: 5_000, max: 120_000 }),
     maxTokens: boundedInteger(env.AI_MAX_TOKENS, MAX_REPLY_TOKENS, { min: 200, max: 2_000 }),
     rateLimitPerMinute: boundedInteger(
       env.PLATFORM_AI_RATE_LIMIT_PER_MINUTE,

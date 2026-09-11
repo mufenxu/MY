@@ -2,19 +2,9 @@
 
 const TARGETS = {
   platform: {
-    aliases: ['platform', 'platform-api'],
+    aliases: ['platform', 'platform-api', 'core', 'core-api', 'exam', 'exam-api'],
     composeService: 'platform-api',
     imageTag: 'platform-api-latest',
-  },
-  core: {
-    aliases: ['core', 'core-api'],
-    composeService: 'core-api',
-    imageTag: 'core-api-latest',
-  },
-  exam: {
-    aliases: ['exam', 'exam-api'],
-    composeService: 'exam-api',
-    imageTag: 'exam-api-latest',
   },
   notification: {
     aliases: ['notification', 'notification-service'],
@@ -120,7 +110,7 @@ function main() {
   console.log('- ALIYUN_ACR_PASSWORD\n');
   console.log('After the workflow succeeds, deploy on the server:');
   console.log(`docker compose --env-file .env -f infra/docker/compose.yml pull ${services}`);
-  console.log(`docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build ${services}`);
+  console.log('npm run compose:up');
 }
 
 try {

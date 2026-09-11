@@ -22,6 +22,8 @@ https://pxyb.cn/api/notify               企业微信通知发送 API
 
 ## 环境变量
 
+以下密钥生成步骤仅用于首次部署。已有环境升级时保留原 `.env`、密钥和数据库密码；主后端合并只需同步资源预算，详见 [operations.md](operations.md#主后端合并升级与回退)。
+
 1. 将 `.env.example` 复制为 `.env`。
 2. 将 `PLATFORM_PUBLIC_ORIGIN` 设置为统一域名：`https://pxyb.cn`。
 3. 生成内部认证 Ed25519 密钥对：
@@ -30,7 +32,7 @@ https://pxyb.cn/api/notify               企业微信通知发送 API
 npm run keys:internal
 ```
 
-4. 把输出的私钥和公钥两行原样填入 `.env`。私钥只注入统一网关，下游容器只持有公钥，无法反向伪造管理员身份。
+4. 把输出的私钥和公钥两行原样填入 `.env`。私钥仅注入包含网关、Core、Exam 的主容器；独立的 Campus、IoT、Notification 容器只持有公钥。
 5. 确认以下映射值对应各业务系统中已经存在的管理员账号：
 
 ```dotenv
@@ -64,9 +66,11 @@ PLATFORM_SSO_CAMPUS_USERNAME=admin
 
 ```bash
 docker compose --env-file .env -f infra/docker/compose.yml pull
-docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build --force-recreate
+npm run compose:up
 docker compose --env-file .env -f infra/docker/compose.yml ps
 ```
+
+`compose:up` 会先停止旧 Core / Exam 容器，再启动主后端，避免重复执行后台任务。综合和考试接口在主容器内运行，安卓和小程序的域名、路径与认证方式不变。拆分回退使用 `npm run compose:rollback-split`，保留旧镜像引用和数据卷。
 
 只有本机排障确实需要直连 Campus/IoT 时，才临时叠加调试文件：
 

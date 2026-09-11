@@ -241,8 +241,6 @@ export function loadConfig(env = process.env) {
     releaseImages: {
       platform: env.PLATFORM_API_IMAGE || '',
       backup: env.BACKUP_RUNNER_IMAGE || '',
-      core: env.CORE_API_IMAGE || '',
-      exam: env.EXAM_API_IMAGE || '',
       notification: env.NOTIFICATION_SERVICE_IMAGE || '',
       campus: env.CAMPUS_SERVICE_IMAGE || '',
       iot: env.IOT_SERVICE_IMAGE || '',

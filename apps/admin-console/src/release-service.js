@@ -3,7 +3,8 @@ import { inflateRawSync } from 'node:zlib';
 import { createMemoryReleaseStore } from './release-store.js';
 
 export const RELEASE_TARGETS = new Set(['platform', 'backup', 'core', 'exam', 'notification', 'campus', 'iot', 'mongodb', 'all']);
-const BUILD_TARGETS = [...RELEASE_TARGETS].filter((target) => target !== 'all');
+const LEGACY_MODULE_TARGETS = new Set(['core', 'exam']);
+const BUILD_TARGETS = [...RELEASE_TARGETS].filter((target) => target !== 'all' && !LEGACY_MODULE_TARGETS.has(target));
 const BUILD_CALLBACK_STATES = new Set(['queued', 'building', 'succeeded', 'failed', 'cancelled']);
 const ACTIVE_BUILD_STATES = new Set(['queued', 'building']);
 const TERMINAL_BUILD_STATES = new Set(['succeeded', 'failed', 'cancelled']);
@@ -183,7 +184,7 @@ function validateArtifact(value, config) {
   const shaTag = stringValue(value?.shaTag);
   const digest = stringValue(value?.digest, 80).toLowerCase();
   const reference = stringValue(value?.reference);
-  if (!BUILD_TARGETS.includes(component) || !DIGEST_PATTERN.test(digest)) {
+  if (!RELEASE_TARGETS.has(component) || component === 'all' || !DIGEST_PATTERN.test(digest)) {
     throw new ReleaseOperationError(400, 'INVALID_RELEASE_ARTIFACT', '构建产物信息无效。');
   }
   const repository = String(config.releaseAllowedImageRepository || '').replace(/[:/@]+$/, '');
@@ -681,7 +682,8 @@ export function createReleaseService({
     if (reasons.length) {
       throw new ReleaseOperationError(403, 'RELEASE_BUILD_DISABLED', reasons.join('；'));
     }
-    const normalized = normalizeTargets(targets);
+    const normalized = [...new Set(normalizeTargets(targets)
+      .map((target) => LEGACY_MODULE_TARGETS.has(target) ? 'platform' : target))];
     const id = idFactory();
     const build = await store.createBuild({
       id,

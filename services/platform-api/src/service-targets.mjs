@@ -11,6 +11,13 @@ export function resolveServiceMode(env = process.env) {
     iot: String(env.MQTT_SERVICE_URL || '').trim(),
     notify: String(env.NOTIFICATION_SERVICE_URL || '').trim(),
   };
+  if (!external) {
+    targets.core = `http://127.0.0.1:${Number.parseInt(env.CORE_PORT || '3045', 10)}`;
+    targets.exam = `http://127.0.0.1:${Number.parseInt(env.EXAM_PORT || env.PORT || '3110', 10)}`;
+    targets.campus ||= 'http://campus-service:22101';
+    targets.iot ||= 'http://iot-service:22102';
+    targets.notify ||= 'http://notification-service:3000';
+  }
   if (external) {
     const missing = ['core', 'exam', 'campus', 'iot', 'notify'].filter((service) => !targets[service]);
     if (missing.length > 0) {

@@ -234,6 +234,7 @@ function requestAuditFields(req) {
 
 export function createApp({
   config = loadConfig(),
+  serviceTargets = {},
   fetchImpl = fetch,
   sessionRegistry = null,
   readinessCheck = async () => true,
@@ -257,7 +258,7 @@ export function createApp({
   sloManager = null,
   changeCalendarManager = null,
 } = {}) {
-  const registry = loadServiceRegistry(config.registryPath);
+  const registry = loadServiceRegistry(config.registryPath, { baseUrls: serviceTargets });
   const monitor = createStatusMonitor(registry.services, {
     timeoutMs: config.serviceTimeoutMs,
     fetchImpl,
