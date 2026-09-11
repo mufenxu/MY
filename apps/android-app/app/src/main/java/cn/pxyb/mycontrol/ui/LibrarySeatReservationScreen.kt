@@ -929,10 +929,18 @@ private fun SeatReservationRecordCard(record: LibrarySeatReservationRecord) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Text(
-                text = "${record.date}  ${record.startTime}~${record.endTime}".trim(),
-                style = MaterialTheme.typography.bodySmall,
-            )
+            val timeRange = listOf(record.startTime, record.endTime)
+                .filter(String::isNotBlank)
+                .joinToString("~")
+            val schedule = listOf(record.date, timeRange)
+                .filter(String::isNotBlank)
+                .joinToString("  ")
+            if (schedule.isNotBlank()) {
+                Text(
+                    text = schedule,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             if (record.receipt.isNotBlank()) {
                 Text(
                     text = "凭证号 ${record.receipt}",
