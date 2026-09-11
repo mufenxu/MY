@@ -11,6 +11,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
+import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
+import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
 import cn.pxyb.mycontrol.ui.components.picker.AppDatePickerModal
 import cn.pxyb.mycontrol.ui.theme.MotionTokens
 
@@ -60,6 +62,7 @@ import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FactCheck
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Public
@@ -1984,7 +1987,6 @@ private fun AutoReservationPanel(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AutoTaskCard(
     task: CampusAutoReservationTask,
@@ -1996,53 +1998,77 @@ private fun AutoTaskCard(
     onDelete: () -> Unit,
 ) {
     val spaceMap = remember(spaces) { spaces.associateBy({ it.id }, { it.name }) }
-    val badgeColor = when (task.status) {
-        "waiting", "ready", "running" -> ColorTokens.Green.foreground
-        "succeeded" -> ColorTokens.Blue.foreground
-        "failed", "auth_required", "expired", "invalid" -> ColorTokens.Amber.foreground
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    val semantic = when (task.status) {
+        "waiting", "ready", "running" -> AppStatusSemantic.Info
+        "succeeded" -> AppStatusSemantic.Success
+        "failed", "auth_required", "expired", "invalid" -> AppStatusSemantic.Warning
+        else -> AppStatusSemantic.Neutral
+    }
+    val accent = when (semantic) {
+        AppStatusSemantic.Info -> ColorTokens.Blue
+        AppStatusSemantic.Success -> ColorTokens.Green
+        AppStatusSemantic.Warning -> ColorTokens.Amber
+        else -> null
+    }
+    val accentForeground = accent?.foreground ?: MaterialTheme.colorScheme.onSurfaceVariant
+    val accentContainer = accent?.container ?: MaterialTheme.colorScheme.surfaceVariant
+    val accentBorder = accent?.border ?: MaterialTheme.colorScheme.outlineVariant
+    val statusIcon = when (task.status) {
+        "waiting", "ready", "running" -> Icons.Outlined.AutoAwesome
+        "succeeded" -> Icons.Outlined.CheckCircle
+        "auth_required" -> Icons.Outlined.Lock
+        "expired" -> Icons.Outlined.EventBusy
+        "invalid", "failed" -> Icons.Outlined.WarningAmber
+        else -> Icons.Outlined.Info
     }
     val terminalStatus = task.status in setOf("succeeded", "failed", "auth_required", "expired", "invalid", "disabled")
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
         color = glassCardColor(),
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = accentContainer,
+                    border = BorderStroke(1.dp, accentBorder.copy(alpha = 0.7f)),
+                    modifier = Modifier.size(36.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = statusIcon,
+                            contentDescription = null,
+                            tint = accentForeground,
+                            modifier = Modifier.size(19.dp),
+                        )
+                    }
+                }
+
+                Column(
                     modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     Text(
                         text = task.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
-                        color = badgeColor.copy(alpha = 0.12f),
-                    ) {
-                        Text(
-                            text = task.statusText,
-                            color = badgeColor,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        )
-                    }
+                    AppStatusBadge(label = task.statusText, semantic = semantic)
                 }
 
                 AppSwitch(
@@ -2051,41 +2077,27 @@ private fun AutoTaskCard(
                 )
             }
 
-            // 基础属性行
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
+            // 目标 / 运行 / 下次运行
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 val taskWk = remember(task.reservationDate) {
                     try {
                         val d = LocalDate.parse(task.reservationDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
-                        " (${weekdayName(d)})"
+                        " ${weekdayName(d)}"
                     } catch (_: Throwable) {
                         ""
                     }
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Icon(
-                        Icons.Outlined.CalendarMonth,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Text(
-                        text = "目标: ${task.reservationDate}$taskWk",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                AppDetailRow(
+                    label = "目标日期",
+                    value = task.reservationDate.ifBlank { "--" } + taskWk,
+                    icon = Icons.Outlined.CalendarMonth,
+                    valueColor = MaterialTheme.colorScheme.onSurface,
+                )
 
                 val executeWk = remember(task.executeDate) {
                     try {
                         val d = LocalDate.parse(task.executeDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
-                        " (${weekdayName(d)})"
+                        " ${weekdayName(d)}"
                     } catch (_: Throwable) {
                         ""
                     }
@@ -2095,75 +2107,120 @@ private fun AutoTaskCard(
                 } else {
                     "进入 3 天窗口后 ${task.executeTime}"
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Icon(
-                        Icons.Outlined.AccessTime,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Text(
-                        text = "运行: $executeText",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                AppDetailRow(
+                    label = "运行时间",
+                    value = executeText,
+                    icon = Icons.Outlined.AccessTime,
+                )
 
                 if (task.nextRunAt != null) {
+                    AppDetailRow(
+                        label = "下次运行",
+                        value = formatPlatformTime(task.nextRunAt),
+                        icon = Icons.Outlined.EventAvailable,
+                        valueColor = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
+            // 候选空间与时段：按优先级编号展示
+            if (task.candidates.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Icon(
-                            Icons.Outlined.EventAvailable,
+                            Icons.Outlined.MeetingRoom,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(14.dp),
                         )
                         Text(
-                            text = "下次运行: ${formatPlatformTime(task.nextRunAt)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            text = "候选空间与时段",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold,
                         )
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
+                        ) {
+                            Text(
+                                text = "${task.candidates.size} 个",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),
+                            )
+                        }
                     }
-                }
-            }
 
-            // 候选序列步骤胶囊
-            if (task.candidates.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "候选空间与时段 (${task.candidates.size}个)：",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         task.candidates.forEachIndexed { index, candidate ->
                             val sName = spaceMap[candidate.areaId] ?: "空间${candidate.areaId}"
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (index == 0) {
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                            },
+                                        ),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = "${index + 1}",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                        ),
+                                        color = if (index == 0) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    )
+                                }
                                 Text(
-                                    text = "${index + 1}. $sName (${candidate.startTime}-${candidate.endTime})",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    text = sName,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                                    fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
                                 )
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    border = BorderStroke(
+                                        0.6.dp,
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f),
+                                    ),
+                                ) {
+                                    Text(
+                                        text = "${candidate.startTime} - ${candidate.endTime}",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // 执行结果提示
+            // 最近执行结果
             val resultText = when {
                 task.lastStatus == null -> "尚未执行"
                 task.lastStatus == "succeeded" -> "最近执行成功（命中了第 ${(task.lastCandidateIndex ?: 0) + 1} 个候选）"
@@ -2172,69 +2229,136 @@ private fun AutoTaskCard(
                 task.lastStatus == "auth_required" -> "需重新登录学校账号：${task.lastMessage ?: "请重新登录后再试"}"
                 else -> "最近执行未成功：${task.lastMessage ?: "未返回原因"}"
             }
+            val resultAccent = when {
+                task.lastStatus == "succeeded" -> ColorTokens.Green
+                task.lastStatus == null -> null
+                else -> ColorTokens.Amber
+            }
+            val resultForeground = resultAccent?.foreground ?: MaterialTheme.colorScheme.onSurfaceVariant
+            val resultContainer = resultAccent?.container?.copy(alpha = 0.6f)
+                ?: MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            val resultBorder = resultAccent?.border?.copy(alpha = 0.7f)
+                ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(6.dp),
-                color = if (task.lastStatus == "succeeded") ColorTokens.Green.foreground.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(10.dp),
+                color = resultContainer,
+                border = BorderStroke(1.dp, resultBorder),
             ) {
-                Text(
-                    text = "执行结果：$resultText",
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (task.lastStatus == "succeeded") ColorTokens.Green.foreground else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = when {
+                            task.lastStatus == "succeeded" -> Icons.Outlined.CheckCircle
+                            task.lastStatus == null -> Icons.Outlined.Info
+                            else -> Icons.Outlined.WarningAmber
+                        },
+                        contentDescription = null,
+                        tint = resultForeground,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "最近执行结果",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = resultForeground,
+                        )
+                        Text(
+                            text = resultText,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
 
+            // 最近尝试明细
             if (task.lastAttempts.isNotEmpty()) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(6.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "最近尝试",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        border = BorderStroke(
+                            0.6.dp,
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        ),
                     ) {
-                        task.lastAttempts.take(4).forEach { attempt ->
-                            val attemptResult = when {
-                                attempt.status == "succeeded" -> "成功"
-                                attempt.conflict -> "已占用"
-                                attempt.transient -> "系统繁忙，已重试"
-                                else -> "失败"
+                        Column(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            task.lastAttempts.take(4).forEach { attempt ->
+                                val attemptResult = when {
+                                    attempt.status == "succeeded" -> "成功"
+                                    attempt.conflict -> "已占用"
+                                    attempt.transient -> "系统繁忙，已重试"
+                                    else -> "失败"
+                                }
+                                val attemptDot = when {
+                                    attempt.status == "succeeded" -> ColorTokens.Green.foreground
+                                    attempt.conflict -> ColorTokens.Amber.foreground
+                                    attempt.transient -> ColorTokens.Blue.foreground
+                                    else -> ColorTokens.Red.foreground
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(attemptDot),
+                                    )
+                                    Text(
+                                        text = "候选 ${attempt.candidateIndex + 1} · 第 ${attempt.attempt} 次 · $attemptResult${attempt.message?.let { "：$it" } ?: ""}",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
                             }
-                            Text(
-                                text = "第 ${attempt.candidateIndex + 1} 个候选 · 第 ${attempt.attempt} 次尝试 · $attemptResult${attempt.message?.let { "：$it" } ?: ""}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        if (task.lastAttempts.size > 4) {
-                            Text(
-                                text = "其余 ${task.lastAttempts.size - 4} 次尝试已省略",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            if (task.lastAttempts.size > 4) {
+                                Text(
+                                    text = "其余 ${task.lastAttempts.size - 4} 次尝试已省略",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
             }
 
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
             // 操作栏
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AppSecondaryButton(
+                AppButton(
                     text = "编辑",
                     onClick = onEdit,
                     modifier = Modifier.weight(1f),
                     height = 40.dp,
-                    compact = true,
                 )
                 AppSecondaryButton(
                     text = "再次预约",
