@@ -272,6 +272,35 @@ class PlatformApi(
         )
     }
 
+    suspend fun acrImages(refresh: Boolean = false): AcrImageCatalog = withContext(Dispatchers.IO) {
+        val path = if (refresh) "$ACR_IMAGES_PATH?refresh=1" else ACR_IMAGES_PATH
+        parseAcrImageCatalog(execute(path, timeoutSeconds = 45).json)
+    }
+
+    suspend fun deleteAcrImages(tags: List<String>): AcrImageMutation = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("confirm", true)
+            .put("tags", JSONArray().apply { tags.forEach { put(it) } })
+        parseAcrImageMutation(execute("$ACR_IMAGES_PATH/delete", "POST", body, timeoutSeconds = 180).json)
+    }
+
+    suspend fun pruneAcrImages(
+        keep: Int,
+        prefixes: List<String> = emptyList(),
+        includeUnknown: Boolean = false,
+        dryRun: Boolean = true,
+    ): AcrImageMutation = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("keep", keep)
+            .put("includeUnknown", includeUnknown)
+            .put("dryRun", dryRun)
+            .put("confirm", !dryRun)
+        if (prefixes.isNotEmpty()) {
+            body.put("prefixes", JSONArray().apply { prefixes.forEach { put(it) } })
+        }
+        parseAcrImageMutation(execute("$ACR_IMAGES_PATH/prune", "POST", body, timeoutSeconds = 180).json)
+    }
+
     suspend fun backupQuality(): BackupQuality = withContext(Dispatchers.IO) {
         val json = execute("/api/backups/quality").json
         val latest = json.optJSONObject("latestBackup")
@@ -468,6 +497,7 @@ class PlatformApi(
         const val AUTH_STATUS_PATH = "/api/auth/status"
         const val EXTERNAL_APPLICATIONS_PATH = "/api/external-apps"
         const val TODOS_PATH = "/apps/core/api/todos"
+        const val ACR_IMAGES_PATH = "/api/acr/images"
         const val DAILY_NEWS_PATH = "/apps/core/api/news/daily"
         const val RESOURCE_EXPIRIES_PATH = "/apps/core/api/resources/expiry-summary"
     }
@@ -1045,6 +1075,72 @@ private fun JSONObject.toAndroidReleaseRecord(): AndroidReleaseRecord = AndroidR
 )
 internal fun JSONObject.nullableString(key: String): String? =
     takeIf { has(key) && !isNull(key) }?.optString(key)?.takeIf { it.isNotBlank() }
+
+internal fun parseAcrImageCatalog(json: JSONObject): AcrImageCatalog {
+    val timeline = json.optJSONObject("commitTimeline") ?: JSONObject()
+    val limits = json.optJSONObject("limits") ?: JSONObject()
+    return AcrImageCatalog(
+        repository = json.optString("repository"),
+        registry = json.optString("registry"),
+        tagCount = json.optInt("tagCount"),
+        credentialsConfigured = json.optBoolean("credentialsConfigured"),
+        canDelete = json.optBoolean("canDelete"),
+        timelineAvailable = timeline.optBoolean("available"),
+        unknownTimelineTags = timeline.optInt("unknownTags"),
+        protectedTags = json.optJSONArray("protectedTags").platformObjects().map { item ->
+            AcrProtectedTag(
+                tag = item.optString("tag"),
+                reason = item.optString("reason", "protected"),
+                digest = item.nullableString("digest"),
+            )
+        },
+        groups = json.optJSONArray("groups").platformObjects().map { group ->
+            AcrImageGroup(
+                prefix = group.optString("prefix"),
+                tags = group.optJSONArray("tags").platformObjects().map { item ->
+                    AcrImageTag(
+                        tag = item.optString("tag"),
+                        revision = item.nullableString("revision"),
+                        createdAt = item.nullableString("createdAt"),
+                    )
+                },
+            )
+        },
+        otherTags = json.optJSONArray("otherTags").platformStringList(),
+        maxBatch = limits.optInt("maxBatch", 60),
+        fetchedAt = json.nullableString("fetchedAt"),
+    )
+}
+
+internal fun parseAcrImageMutation(json: JSONObject): AcrImageMutation = AcrImageMutation(
+    deleted = json.optJSONArray("deleted").toAcrOutcomes(),
+    skipped = json.optJSONArray("skipped").toAcrOutcomes(),
+    failed = json.optJSONArray("failed").toAcrOutcomes(),
+    plan = json.optJSONArray("plan").toAcrPlannedTags(),
+    planned = json.optInt("planned"),
+    remaining = json.optInt("remaining"),
+)
+
+private fun JSONArray?.toAcrPlannedTags(): List<AcrPlannedTag> = platformObjects().map { item ->
+    AcrPlannedTag(
+        tag = item.optString("tag"),
+        prefix = item.nullableString("prefix"),
+        createdAt = item.nullableString("createdAt"),
+    )
+}
+
+private fun JSONArray?.toAcrOutcomes(): List<AcrImageOutcome> = platformObjects().map { item ->
+    AcrImageOutcome(
+        tag = item.optString("tag"),
+        digest = item.nullableString("digest"),
+        reason = item.nullableString("reason"),
+    )
+}
+
+private fun JSONArray?.platformStringList(): List<String> {
+    if (this == null) return emptyList()
+    return (0 until length()).mapNotNull { index -> optString(index).takeIf { it.isNotBlank() } }
+}
 
 private fun JSONObject.nullableInt(key: String): Int? =
     takeIf { has(key) && !isNull(key) }?.optInt(key)

@@ -128,3 +128,49 @@ For an ECS instance in the same Beijing VPC, the VPC registry endpoint may be us
 ## Legacy ACR Build Rules
 
 Old ACR source build rules such as `tags:build-platform-.*` are no longer part of the release flow. Delete or disable them in the ACR console to avoid accidental failed builds.
+
+## Image Management
+
+The Android app can list and delete ACR image versions through the platform API. Registry credentials stay on the server and are never sent to the client.
+
+Configure these variables in the server `.env` and recreate `platform-api`:
+
+```text
+ACR_USERNAME=<username shown on the ACR "访问凭证" page>
+ACR_PASSWORD=<ACR fixed password>
+```
+
+Both values come from the ACR console credentials page. They are not the Alibaba Cloud account login password and must not be committed to Git. Leave them empty to keep the API read-only.
+
+| Endpoint | Role | Purpose |
+| --- | --- | --- |
+| `GET /api/acr/images?refresh=1` | any console session | list tags, protection reasons and build times |
+| `POST /api/acr/images/delete` | `super_admin` | delete explicit tags, at most 60 per call |
+| `POST /api/acr/images/prune` | `super_admin` | keep the newest N candidates per prefix |
+
+Deletion rules enforced by the server:
+
+- Tag protection: `*-latest`, `latest`, `__ACR_BUILD_SERVICE_INTERNAL_IMAGE_CACHE`, and every tag referenced by `PLATFORM_*_IMAGE` are never deleted.
+- Digest protection: a tag whose manifest digest is still referenced by a production tag or by a pinned `@sha256:` image is skipped as `in-use`.
+- Batch limit: 60 tags per request, with at most 4 concurrent deletes to stay clear of registry throttling.
+- Every destructive call is audited as `acr.images.delete` or `acr.images.prune`.
+
+Implementation constraints worth keeping in mind:
+
+- ACR personal edition has no public OpenAPI, so the platform uses the Docker Registry V2 API.
+- The token scope must be `repository:<namespace>/<name>:*`; requesting `pull,push,delete` silently degrades to `pull,push` and deletion returns 401.
+- Deletion must reference a manifest digest. Deleting by tag name returns HTTP 400.
+- Build times come from GitHub commit dates for the 12-character revision embedded in candidate tags; tags without a matching commit stay without a timestamp and are excluded from automatic pruning.
+- ACR reclaims storage asynchronously after a tag is deleted, so capacity does not drop immediately.
+
+## Local ACR Probe
+
+`npm run acr:probe` audits the registry from a workstation without touching the platform:
+
+```bash
+npm run acr:probe                    # list tags, separate production tags from cleanup candidates
+npm run acr:probe -- --probe-delete  # non-destructive capability probe for the delete scope
+npm run acr:probe -- --delete <tag> --yes   # delete one tag for real
+```
+
+It reads `ACR_USERNAME` / `ACR_PASSWORD` and `PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY` from `.env`, and never writes the credentials anywhere.

@@ -154,6 +154,8 @@ class AppViewModel(
         ::forceReauthentication,
     )
     val androidReleaseState = androidReleases.state
+    private val registryImages = RegistryImagesStateHolder(viewModelScope, api, ::forceReauthentication)
+    val registryImagesState = registryImages.state
     val todos = TodoController(viewModelScope, TodoRepository(application, api, sessionStore), mutableState, ::forceReauthentication)
     private val notifications: NotificationController = NotificationController(
         application, viewModelScope, api, sessionStore, personalStore, alertNotifier, mutableState, ::forceReauthentication,
@@ -2556,6 +2558,31 @@ class AppViewModel(
         androidReleases.dispatchBuild(confirmation)
 
     fun downloadAndroidRelease(record: AndroidReleaseRecord) = androidReleases.download(record)
+
+    fun loadRegistryImages(force: Boolean = false) = registryImages.load(force)
+
+    fun toggleRegistryImage(tag: String) = registryImages.toggle(tag)
+
+    fun toggleRegistryImagePrefix(prefix: String, selected: Boolean) =
+        registryImages.togglePrefix(prefix, selected)
+
+    fun clearRegistryImageSelection() = registryImages.clearSelection()
+
+    fun updateRegistryImageKeepCount(value: Int) = registryImages.updateKeepCount(value)
+
+    fun updateRegistryImageIncludeUnknown(value: Boolean) = registryImages.updateIncludeUnknown(value)
+
+    fun deleteRegistryImages(confirmation: suspend () -> Boolean) =
+        registryImages.deleteSelected(confirmation)
+
+    fun previewRegistryImagePrune() = registryImages.previewPrune()
+
+    fun executeRegistryImagePrune(confirmation: suspend () -> Boolean) =
+        registryImages.executePrune(confirmation)
+
+    fun discardRegistryImagePlan() = registryImages.discardPlan()
+
+    fun clearRegistryImageFeedback() = registryImages.clearFeedback()
 
     private companion object {
         const val REFRESH_CACHE_WINDOW_MS = 30_000L

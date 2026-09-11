@@ -589,3 +589,65 @@ data class GitHubReleaseRecord(
     val assetsCount: Int,
 )
 
+@Immutable
+data class AcrImageTag(
+    val tag: String,
+    val revision: String?,
+    val createdAt: String?,
+)
+
+@Immutable
+data class AcrImageGroup(
+    val prefix: String,
+    val tags: List<AcrImageTag>,
+)
+
+@Immutable
+data class AcrProtectedTag(
+    val tag: String,
+    val reason: String,
+    val digest: String?,
+)
+
+@Immutable
+data class AcrImageCatalog(
+    val repository: String,
+    val registry: String,
+    val tagCount: Int,
+    val credentialsConfigured: Boolean,
+    val canDelete: Boolean,
+    val timelineAvailable: Boolean,
+    val unknownTimelineTags: Int,
+    val protectedTags: List<AcrProtectedTag>,
+    val groups: List<AcrImageGroup>,
+    val otherTags: List<String>,
+    val maxBatch: Int,
+    val fetchedAt: String?,
+) {
+    val candidateCount: Int get() = groups.sumOf { it.tags.size }
+}
+
+@Immutable
+data class AcrImageOutcome(
+    val tag: String,
+    val digest: String?,
+    val reason: String?,
+)
+
+@Immutable
+data class AcrImageMutation(
+    val deleted: List<AcrImageOutcome>,
+    val skipped: List<AcrImageOutcome>,
+    val failed: List<AcrImageOutcome>,
+    val plan: List<AcrPlannedTag> = emptyList(),
+    val planned: Int = 0,
+    val remaining: Int = 0,
+)
+
+@Immutable
+data class AcrPlannedTag(
+    val tag: String,
+    val prefix: String?,
+    val createdAt: String?,
+)
+

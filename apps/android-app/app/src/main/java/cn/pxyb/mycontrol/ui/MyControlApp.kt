@@ -200,6 +200,7 @@ internal object AppRoute {
     const val GoogleAccounts = "google-accounts"
     const val GitHubProjects = "github-projects"
     const val AndroidReleases = "android-releases"
+    const val RegistryImages = "registry-images"
     const val Search = "search"
     const val Assistant = "assistant"
     const val Today = "today"
@@ -255,6 +256,7 @@ private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Scenes -> MainTab.Overview
     AppRoute.Notifications -> MainTab.Overview
     AppRoute.Operations -> MainTab.Operations
+    AppRoute.RegistryImages -> MainTab.Operations
     AppRoute.Tools,
     AppRoute.Authenticator -> MainTab.Tools
     AppRoute.Profile,
@@ -271,6 +273,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Assistant -> MainTab.Overview
     AppRoute.GitHubProjects -> MainTab.Profile
     AppRoute.AndroidReleases -> MainTab.Profile
+    AppRoute.RegistryImages -> MainTab.Operations
     AppRoute.Notifications,
     AppRoute.Search,
     AppRoute.Today,
@@ -1984,6 +1987,7 @@ private fun AuthenticatedShell(
                         onIncidentMute = { id -> viewModel.muteIncident(id, onSensitiveActionConfirmation) },
                         onIncidentResolve = { id, note -> viewModel.resolveIncident(id, note, onSensitiveActionConfirmation) },
                         onRefresh = onRefresh,
+                        onOpenRegistryImages = { navigateToSubScreen(AppRoute.RegistryImages) },
                     )
                 }
                 composable(AppRoute.Notifications) {
@@ -2161,6 +2165,28 @@ private fun AuthenticatedShell(
                         },
                         onDownload = viewModel::downloadAndroidRelease,
                         onInstallDownloaded = viewModel::installDownloadedAppUpdate,
+                    )
+                }
+                composable(AppRoute.RegistryImages) {
+                    val registryState by viewModel.registryImagesState.collectAsStateWithLifecycle()
+                    val profileState by viewModel.profileState.collectAsStateWithLifecycle()
+                    RegistryImagesScreen(
+                        state = registryState,
+                        canManage = profileState.user?.role == "super_admin",
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onLoad = { viewModel.loadRegistryImages() },
+                        onRefresh = { viewModel.loadRegistryImages(force = true) },
+                        onToggle = viewModel::toggleRegistryImage,
+                        onTogglePrefix = { prefix, selected -> viewModel.toggleRegistryImagePrefix(prefix, selected) },
+                        onClearSelection = viewModel::clearRegistryImageSelection,
+                        onDeleteSelected = { viewModel.deleteRegistryImages(onSensitiveActionConfirmation) },
+                        onKeepCountChange = viewModel::updateRegistryImageKeepCount,
+                        onIncludeUnknownChange = viewModel::updateRegistryImageIncludeUnknown,
+                        onPrunePreview = viewModel::previewRegistryImagePrune,
+                        onPruneConfirm = { viewModel.executeRegistryImagePrune(onSensitiveActionConfirmation) },
+                        onPruneDismiss = viewModel::discardRegistryImagePlan,
+                        onDismissFeedback = viewModel::clearRegistryImageFeedback,
                     )
                 }
                 composable(AppRoute.Search) {

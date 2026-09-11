@@ -4,6 +4,7 @@ import { registerNotificationRoutes } from './routes/notification-routes.js';
 import { registerOperationsRoutes } from './routes/operations-routes.js';
 import { registerSecurityRoutes } from './routes/security-routes.js';
 import { registerReleaseRoutes } from './routes/release-routes.js';
+import { registerAcrRoutes } from './routes/acr-routes.js';
 import { registerBackupRoutes } from './routes/backup-routes.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -43,6 +44,7 @@ import { createPasskeyService } from './passkeys.js';
 import { QR_LOGIN_TTL_MS, createMemoryQrLoginStore } from './qr-login-store.js';
 import { createMemoryWebLoginTicketStore } from './web-login-ticket-store.js';
 import { ReleaseOperationError, createReleaseService } from './release-service.js';
+import { createAcrService } from './acr-service.js';
 import { createMemoryReleaseStore } from './release-store.js';
 import { createRequestDiagnostics } from './request-diagnostics.js';
 import { createSloService } from './slo-service.js';
@@ -243,6 +245,7 @@ export function createApp({
   releaseStore = null,
   operationsManager = null,
   releaseManager = null,
+  acrManager = null,
   notificationManager = null,
   authStore = null,
   authRiskStore = null,
@@ -336,6 +339,7 @@ export function createApp({
     operationsStore: store,
     notifier,
   });
+  const acr = acrManager || createAcrService({ config, fetchImpl });
   const operations = operationsManager || createOperationsCenter({
     services: registry.services,
     monitor,
@@ -1638,6 +1642,13 @@ export function createApp({
     requireConsoleRequest,
     requireRole,
     verifyReauthentication,
+  });
+
+  registerAcrRoutes(app, {
+    acr,
+    recordAudit,
+    requireConsoleRequest,
+    requireRole,
   });
 
   registerBackupRoutes(app, {

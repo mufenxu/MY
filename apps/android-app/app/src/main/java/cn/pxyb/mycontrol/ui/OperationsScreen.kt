@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.EditNote
@@ -54,6 +56,7 @@ fun OperationsScreen(
     onRunDiagnostics: () -> Unit,
     onTriggerBackup: () -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenRegistryImages: () -> Unit,
     onMeasureNetwork: () -> Unit,
     onIncidentNote: (String, String) -> Unit,
     onIncidentMute: (String) -> Unit,
@@ -584,6 +587,40 @@ fun OperationsScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            item(key = "registry-images-title", contentType = "section") {
+                SectionHeader("镜像仓库", "清理阿里云 ACR 中堆积的历史镜像版本")
+            }
+            item(key = "registry-images", contentType = "card") {
+                AppPanel(onClick = onOpenRegistryImages) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        IconTile(
+                            Icons.Outlined.Inventory2,
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.primaryContainer,
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("容器镜像管理", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "查看并删除阿里云 ACR 里的旧版本镜像",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Icon(
+                            Icons.Outlined.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
