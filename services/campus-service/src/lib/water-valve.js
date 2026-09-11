@@ -1,5 +1,21 @@
 import { HttpError } from "./http.js";
 
+// 官方系统没有“设备是否正在出水”的查询接口（官方 App/H5 靠蓝牙直连设备读取），
+// 设备端手动停水不会回传状态，所以本地 running 必须有时间上限。
+const WATER_VALVE_MAX_RUNNING_MS = 10 * 60 * 1000;
+
+function waterValveRunning(state) {
+  if (state?.running !== true) return false;
+  const openedAt = Number(state.timestamp);
+  const openedAtMs = Number.isFinite(openedAt) && openedAt > 0 ? openedAt * 1000 : null;
+  if (openedAtMs == null) return true;
+  return Date.now() - openedAtMs < WATER_VALVE_MAX_RUNNING_MS;
+}
+
+function waterValveExpired(state) {
+  return state?.running === true && !waterValveRunning(state);
+}
+
 export function parseWaterValveCode(rawCode) {
   const value = String(rawCode || "").trim();
   if (!value) return "";
@@ -79,8 +95,22 @@ export function createWaterValveService({
   ensureSessions,
   readSessionJar,
   saveSessionJar,
-  request
+  request,
+  scheduleAutoClose
 }) {
+  async function stopExpiredWaterValve(jar, state) {
+    if (!waterValveExpired(state)) return state;
+    try {
+      await request(jar, "/bluetoothApp/closeValueOnline", () => ({
+        seqNo: state.seqNo,
+        timestamp: state.timestamp != null ? Number(state.timestamp) : null
+      }));
+    } catch {
+      // 关阀失败也让状态回到待机，避免界面长期停在“出水中”。
+    }
+    return { ...state, running: false, timestamp: null, updatedAt: new Date().toISOString() };
+  }
+
   async function get() {
     await ensureSessions();
     const jar = await readSessionJar();
@@ -89,14 +119,15 @@ export function createWaterValveService({
 
     const nextStates = [];
     for (const state of states) {
+      const active = await stopExpiredWaterValve(jar, state);
       try {
         const response = await request(jar, "/bluetoothApp/openValueBefore", (session) => ({
-          seqNo: state.seqNo,
+          seqNo: active.seqNo,
           accNum: session.accNum
         }));
-        const normalized = normalizeWaterValveDevice(response, state.seqNo);
+        const normalized = normalizeWaterValveDevice(response, active.seqNo);
         nextStates.push({
-          ...state,
+          ...active,
           deviceName: normalized.deviceName,
           defaultValue: normalized.defaultValue,
           balance: normalized.balance,
@@ -104,7 +135,10 @@ export function createWaterValveService({
           error: null
         });
       } catch (error) {
-        nextStates.push({ ...state, error: error.message || "生活用水设备状态查询失败" });
+        nextStates.push({
+          ...active,
+          error: error.message || "生活用水设备状态查询失败"
+        });
       }
     }
     persistWaterValves(jar, nextStates);
@@ -166,6 +200,20 @@ export function createWaterValveService({
     const nextStates = states.map((item) => (item.seqNo === seqNo ? nextState : item));
     persistWaterValves(jar, nextStates);
     await saveSessionJar(jar);
+    scheduleAutoClose?.(seqNo, WATER_VALVE_MAX_RUNNING_MS);
+    return waterValvesPublic(nextStates);
+  }
+
+  async function closeIfExpired(seqNo) {
+    await ensureSessions();
+    const jar = await readSessionJar();
+    const states = waterValveStates(jar);
+    const state = states.find((item) => item.seqNo === seqNo);
+    if (!waterValveExpired(state)) return null;
+    const closed = await stopExpiredWaterValve(jar, state);
+    const nextStates = states.map((item) => (item.seqNo === seqNo ? closed : item));
+    persistWaterValves(jar, nextStates);
+    await saveSessionJar(jar);
     return waterValvesPublic(nextStates);
   }
 
@@ -216,5 +264,5 @@ export function createWaterValveService({
     return waterValvesPublic(nextStates);
   }
 
-  return { get, bind, open, close, unbind, reorder };
+  return { get, bind, open, close, closeIfExpired, unbind, reorder };
 }

@@ -2968,11 +2968,30 @@ const serveStatic = createStaticAssetHandler({
   json
 });
 
+const waterValveAutoCloseTimers = new Set();
+
 const waterValve = createWaterValveService({
   ensureSessions: ensureCampusSessions,
   readSessionJar,
   saveSessionJar,
-  request: uwcAuthedRequest
+  request: uwcAuthedRequest,
+  scheduleAutoClose: (seqNo, delayMs) => {
+    const user = userContextStorage.getStore()?.user || defaultSystemUser || null;
+    if (!user) return;
+    const timer = setTimeout(() => {
+      waterValveAutoCloseTimers.delete(timer);
+      if (shuttingDown) return;
+      userContextStorage
+        .run({ requestId: `water-valve-auto-${randomUUID()}`, user }, () =>
+          withCampusSessionLock(() => waterValve.closeIfExpired(seqNo))
+        )
+        .catch((error) =>
+          logger.warn("water_valve_auto_close_failed", { seqNo, reason: error?.message || String(error) })
+        );
+    }, delayMs);
+    timer.unref?.();
+    waterValveAutoCloseTimers.add(timer);
+  }
 });
 
 const server = createServer((req, res) => {
@@ -3059,6 +3078,8 @@ function shutdown(signal) {
   shuttingDown = true;
   logger.info("service_stopping", { signal });
   stopBackgroundSchedulers();
+  for (const timer of waterValveAutoCloseTimers) clearTimeout(timer);
+  waterValveAutoCloseTimers.clear();
   for (const job of academicEvaluationAutoJobs.values()) {
     if (!activeAcademicEvaluationAutoStatus(job.status)) continue;
     job.cancelRequested = true;

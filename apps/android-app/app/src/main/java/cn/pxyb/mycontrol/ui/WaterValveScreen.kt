@@ -99,6 +99,7 @@ import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import java.time.YearMonth
 import kotlin.math.abs
+import kotlinx.coroutines.delay
 
 private enum class WaterValveAction { Open, Close }
 
@@ -142,6 +143,17 @@ fun WaterValveScreen(
     LaunchedEffect(state.refreshing) {
         if (!state.refreshing) {
             hasInitialLoaded = true
+        }
+    }
+
+    // 官方系统没有“设备正在出水”的查询接口，设备端手动停水不会回传，
+    // 出水期间定时刷新，让超过时限的出水状态自动回到待机。
+    val anyDeviceRunning = state.valve.devices.any { it.running }
+    val currentOnRefresh by rememberUpdatedState(onRefresh)
+    LaunchedEffect(anyDeviceRunning) {
+        while (anyDeviceRunning) {
+            delay(60_000)
+            currentOnRefresh(true)
         }
     }
 
