@@ -5,7 +5,6 @@ const runtimeFiles = {
   coreServer: ['CORE_SERVER_PATH', 'services/core-api/server.js'],
   coreStatic: ['CORE_STATIC_PATH', 'apps/core-admin/dist'],
   examServer: ['EXAM_SERVER_PATH', 'services/exam-api/src/server.js'],
-  notifyApp: ['NOTIFY_APP_PATH', 'services/notification-service/src/app.js'],
   portalApp: ['PORTAL_APP_PATH', 'apps/admin-console/src/app.js'],
   portalConfig: ['PORTAL_CONFIG_PATH', 'apps/admin-console/src/config.js'],
   portalAuthStore: ['PORTAL_AUTH_STORE_PATH', 'apps/admin-console/src/auth-store.js'],
@@ -20,7 +19,7 @@ const runtimeFiles = {
   portalExternalApplicationStore: ['PORTAL_EXTERNAL_APPLICATION_STORE_PATH', 'apps/admin-console/src/external-application-store.js'],
   officialWebsiteStatic: ['OFFICIAL_WEBSITE_STATIC_PATH', 'apps/official-website'],
 };
-const localServiceRuntimeNames = new Set(['coreServer', 'coreStatic', 'examServer', 'notifyApp']);
+const localServiceRuntimeNames = new Set(['coreServer', 'coreStatic', 'examServer']);
 
 export function resolveWorkspaceRoot(moduleUrl = import.meta.url) {
   const moduleDirectory = path.dirname(fileURLToPath(moduleUrl));

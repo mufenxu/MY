@@ -1,9 +1,7 @@
 {
   "schemaVersion": 1,
   "targets": {
-    "platform": { "aliases": ["platform-api"], "dockerfile": "infra/docker/platform-api.Dockerfile", "context": ".", "tag": "platform-api-latest", "envKey": "PLATFORM_API_IMAGE" },
-    "core": { "aliases": ["core-api"], "dockerfile": "infra/docker/core-api.Dockerfile", "context": ".", "tag": "core-api-latest", "envKey": "CORE_API_IMAGE" },
-    "exam": { "aliases": ["exam-api"], "dockerfile": "infra/docker/exam-api.Dockerfile", "context": ".", "tag": "exam-api-latest", "envKey": "EXAM_API_IMAGE" },
+    "platform": { "aliases": ["platform-api", "core", "core-api", "exam", "exam-api"], "dockerfile": "infra/docker/platform-api.Dockerfile", "context": ".", "tag": "platform-api-latest", "envKey": "PLATFORM_API_IMAGE" },
     "notification": { "aliases": ["notification-service"], "dockerfile": "infra/docker/notification-service.Dockerfile", "context": ".", "tag": "notification-service-latest", "envKey": "NOTIFICATION_SERVICE_IMAGE" },
     "backup": { "aliases": ["backup-runner"], "dockerfile": "infra/docker/backup-runner.Dockerfile", "context": ".", "tag": "backup-runner-latest", "envKey": "BACKUP_RUNNER_IMAGE" },
     "campus": { "aliases": ["campus-service"], "dockerfile": "infra/docker/campus-service.Dockerfile", "context": ".", "tag": "campus-service-latest", "envKey": "CAMPUS_SERVICE_IMAGE" },
@@ -24,16 +22,16 @@
       "targets": ["backup"]
     },
     {
-      "paths": ["infra/docker/compose.yml"],
+      "paths": ["infra/docker/compose.yml", "infra/docker/compose.split.yml"],
       "targets": ["platform"]
     },
     {
       "paths": ["infra/docker/core-api.Dockerfile", "apps/core-admin/**", "services/core-api/**"],
-      "targets": ["core"]
+      "targets": ["platform"]
     },
     {
       "paths": ["infra/docker/exam-api.Dockerfile", "apps/exam-admin/**", "services/exam-api/**"],
-      "targets": ["exam"]
+      "targets": ["platform"]
     },
     {
       "paths": ["infra/docker/notification-service.Dockerfile", "services/notification-service/**"],
@@ -53,11 +51,11 @@
     },
     {
       "paths": ["packages/platform-auth/**"],
-      "targets": ["platform", "core", "exam", "notification", "backup", "campus", "iot"]
+      "targets": ["platform", "notification", "backup", "campus", "iot"]
     },
     {
       "paths": ["packages/platform-browser-runtime/**"],
-      "targets": ["core", "exam"]
+      "targets": ["platform"]
     }
   ]
 }

@@ -253,12 +253,12 @@ test('release builds create a persistent release and dispatch allowlisted target
     },
   });
 
-  const build = await releases.dispatchBuild({ targets: ['platform', 'core'], requestedBy: 'admin' });
+  const build = await releases.dispatchBuild({ targets: ['platform', 'core', 'exam'], requestedBy: 'admin' });
   assert.equal(build.id, 'release-1');
-  assert.deepEqual(build.targets, ['platform', 'core']);
+  assert.deepEqual(build.targets, ['platform']);
   const body = JSON.parse(requests.find((request) => request.options.method === 'POST').options.body);
   assert.deepEqual(body.inputs, {
-    targets: 'platform,core',
+    targets: 'platform',
     push_sha_tags: 'true',
     release_id: 'release-1',
   });
@@ -512,7 +512,14 @@ test('release summary restores missing artifacts from GitHub run artifact manife
     },
   });
 
-  await releases.dispatchBuild({ targets: ['core'], requestedBy: 'admin' });
+  await store.createBuild({
+    id: 'e5ad557074e4',
+    status: 'queued',
+    repository: enabledConfig().githubRepository,
+    workflow: enabledConfig().githubWorkflow,
+    ref: enabledConfig().githubRef,
+    targets: ['core'],
+  });
   const summary = await releases.getSummary();
   assert.equal(summary.builds[0].id, 'e5ad557074e4');
   assert.equal(summary.builds[0].status, 'succeeded');

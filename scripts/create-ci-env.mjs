@@ -16,8 +16,6 @@ const values = {
   TZ: 'Asia/Shanghai',
   MONGODB_IMAGE: 'my-platform/mongodb:ci',
   PLATFORM_API_IMAGE: 'my-platform/platform-api:ci',
-  CORE_API_IMAGE: 'my-platform/core-api:ci',
-  EXAM_API_IMAGE: 'my-platform/exam-api:ci',
   NOTIFICATION_SERVICE_IMAGE: 'my-platform/notification-service:ci',
   BACKUP_RUNNER_IMAGE: 'my-platform/backup-runner:ci',
   CAMPUS_SERVICE_IMAGE: 'my-platform/campus-service:ci',

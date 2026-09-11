@@ -27,16 +27,6 @@ services:
       cache_from:
         - type=gha,scope=platform-api
 
-  core-api:
-    build:
-      cache_from:
-        - type=gha,scope=core-api
-
-  exam-api:
-    build:
-      cache_from:
-        - type=gha,scope=exam-api
-
   notification-service:
     build:
       cache_from:

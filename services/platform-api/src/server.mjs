@@ -1,7 +1,8 @@
 import http from 'node:http';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { createCoreWebApp, createOfficialWebsiteApp, createPlatformRouter } from './router.mjs';
+import { createOfficialWebsiteApp, createPlatformRouter } from './router.mjs';
+import { createEmbeddedServices } from './embedded-services.mjs';
 import {
   closePortalStores,
   createPersistentPortalStores,
@@ -18,12 +19,16 @@ const { paths } = resolveRuntimePaths({ includeLocalServices: !serviceMode.exter
 
 let coreRuntime = null;
 let examRuntime = null;
-let notifyApp = null;
 if (!serviceMode.external) {
   coreRuntime = require(paths.coreServer);
   examRuntime = require(paths.examServer);
-  notifyApp = require(paths.notifyApp);
 }
+const embeddedServices = serviceMode.external ? null : createEmbeddedServices({
+  core: coreRuntime,
+  exam: examRuntime,
+  targets: serviceMode.targets,
+});
+let shuttingDown = false;
 const [{ createApp: createPortalApp }, { loadConfig: loadPortalConfig }] = await Promise.all([
   import(pathToFileURL(paths.portalApp).href),
   import(pathToFileURL(paths.portalConfig).href),
@@ -82,16 +87,18 @@ const {
   externalApplicationStore,
 } = portalStores;
 const readinessCheck = async () => {
+  if (shuttingDown) return false;
   const [servicesReady, storesReady] = await Promise.all([
     serviceMode.external
       ? checkExternalServices(serviceMode.targets)
-      : Promise.resolve(Boolean(coreRuntime.isCoreRuntimeReady() && examRuntime.isExamRuntimeReady())),
+      : Promise.resolve(embeddedServices.isReady()),
     pingPortalStores(portalStores),
   ]);
   return Boolean(servicesReady && storesReady);
 };
 const portalApp = createPortalApp({
   config: portalConfig,
+  serviceTargets: { core: serviceMode.targets.core, exam: serviceMode.targets.exam },
   authStore,
   authRiskStore,
   sessionRegistry,
@@ -104,7 +111,6 @@ const portalApp = createPortalApp({
   externalApplicationStore,
   readinessCheck,
 });
-portalApp.locals.operationsCenter.start();
 const sessionVerifierCache = createSessionVerifierCache({
   verify: (token) => portalApp.locals.verifyConsoleSession(token),
   ttlMs: process.env.PLATFORM_SESSION_CACHE_TTL_MS || 5_000,
@@ -122,16 +128,10 @@ const getPlatformSession = async (req) => {
   const token = cookies[sessionCookieName(portalConfig.isProduction)] || cookies[SESSION_COOKIE_NAME];
   return sessionVerifierCache.verify(token);
 };
-const coreWebApp = serviceMode.external
-  ? null
-  : createCoreWebApp({ coreApp: coreRuntime.app, staticPath: paths.coreStatic });
 const websiteApp = createOfficialWebsiteApp({ staticPath: paths.officialWebsiteStatic });
 const router = createPlatformRouter({
   portalApp,
   websiteApp,
-  coreApp: coreWebApp,
-  examApp: examRuntime?.app,
-  notifyApp,
   campusTarget: serviceMode.targets.campus || 'http://campus-service:22101',
   mqttTarget: serviceMode.targets.iot || 'http://iot-service:22102',
   coreTarget: serviceMode.targets.core,
@@ -154,14 +154,6 @@ const router = createPlatformRouter({
 
 const host = process.env.PLATFORM_API_HOST || '0.0.0.0';
 const port = Number.parseInt(process.env.PLATFORM_API_PORT || '22100', 10);
-let shuttingDown = false;
-
-if (!serviceMode.external) {
-  await Promise.all([
-    coreRuntime.initializeCoreRuntime(),
-    examRuntime.initializeExamRuntime(),
-  ]);
-}
 
 const server = http.createServer((req, res) => {
   router.handler(req, res).catch((error) => {
@@ -174,6 +166,11 @@ const server = http.createServer((req, res) => {
     }
   });
 });
+const connections = new Set();
+server.on('connection', (socket) => {
+  connections.add(socket);
+  socket.once('close', () => connections.delete(socket));
+});
 server.requestTimeout = portalConfig.backupTransferTimeoutMs;
 server.on('upgrade', (req, socket, head) => {
   router.handleUpgrade(req, socket, head).catch((error) => {
@@ -181,31 +178,39 @@ server.on('upgrade', (req, socket, head) => {
     socket.destroy();
   });
 });
-server.listen(port, host, () => {
-  console.log(`MY Platform API listening on http://${host}:${port}`);
-});
 
 async function shutdown(signal, exitCode = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`Received ${signal}, shutting down MY Platform API.`);
-  router.close();
   portalApp.locals.operationsCenter.stop();
   sessionVerifierCache.clear();
-  const forceTimer = setTimeout(() => server.closeAllConnections?.(), 10_000);
+  const deadline = setTimeout(() => {
+    console.error('主后端关闭超时，终止进程。');
+    process.exit(1);
+  }, 50_000);
+  deadline.unref();
+  const forceTimer = setTimeout(() => {
+    // HTTP closeAllConnections does not include upgraded WebSocket connections.
+    for (const socket of connections) socket.destroy();
+  }, 10_000);
   forceTimer.unref();
   await new Promise((resolve) => server.close(resolve));
   clearTimeout(forceTimer);
+  router.close();
   const results = await Promise.allSettled([
-    coreRuntime?.closeCoreRuntime?.(),
-    examRuntime?.closeExamRuntime?.(),
+    embeddedServices?.close(),
     closePortalStores(portalStores).then((errors) => {
       if (errors.length) throw new AggregateError(errors, 'Failed to close one or more portal stores.');
     }),
   ]);
   for (const result of results) {
-    if (result.status === 'rejected') console.error(result.reason);
+    if (result.status === 'rejected') {
+      console.error(result.reason);
+      exitCode = 1;
+    }
   }
+  clearTimeout(deadline);
   process.exit(exitCode);
 }
 
@@ -218,3 +223,18 @@ process.on('uncaughtException', (error) => {
   console.error('Uncaught exception:', error);
   shutdown('uncaughtException', 1);
 });
+
+try {
+  await embeddedServices?.start();
+  if (!shuttingDown) {
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, host, resolve);
+    });
+    portalApp.locals.operationsCenter.start();
+    console.log(`MY Platform API listening on http://${host}:${port}`);
+  }
+} catch (error) {
+  console.error('主后端启动失败。', error);
+  await shutdown('startup failure', 1);
+}

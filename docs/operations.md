@@ -1,5 +1,27 @@
 # Production operations
 
+## 主后端合并升级与回退
+
+本次仅合并 Platform、Core、Exam 的部署进程与镜像，不迁移数据库、用户、密钥或上传文件。常驻容器由八个减为六个，Campus、IoT、Notification、MongoDB、backup-runner 保持独立。
+
+升级前保留已有 `.env` 和数据卷，使用 `npm run backup` 备份；将原三个容器的资源预算合并到 `PLATFORM_MEMORY_LIMIT`、`PLATFORM_CPU_LIMIT`、`PLATFORM_PIDS_LIMIT`，避免继续使用原网关的小配额。保留 `CORE_API_IMAGE` 与 `EXAM_API_IMAGE` 指向已验证的旧镜像，供拆分回退使用。
+
+```bash
+npm run compose:pull
+npm run compose:up
+curl --fail http://127.0.0.1:22100/api/readyz
+```
+
+首次切换和日常升级统一使用 `compose:up`：它先停止旧 Core / Exam 容器，再启动并等待合并后的服务就绪，避免同一组后台任务同时运行。原 `core_uploads`、`core_logs` 卷挂载到主容器的原目录，不删除旧容器或数据卷。切换会有短暂停机，应在维护窗口执行。
+
+需要恢复独立进程时：
+
+```bash
+npm run compose:rollback-split
+```
+
+该命令先停止主容器，再用 `compose.split.yml` 启动旧 Core / Exam 镜像和外部代理模式的网关。回退使用相同数据库与上传卷，不需要导出导入数据；上线前应确认旧镜像仍可用。备份和恢复脚本会识别正在运行的独立业务容器，统一暂停相关写入进程。
+
 ## First deployment after the MongoDB consolidation
 
 1. Back up the current MongoDB volume, campus `app.db`, IoT `mqttapi.db`, IoT `config.json`, and core uploads.
@@ -24,7 +46,7 @@ npm run migrate:sqlite
 5. Start the complete stack and verify readiness:
 
 ```bash
-docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build --wait
+npm run compose:up
 curl --fail http://127.0.0.1:22100/api/readyz
 curl --fail http://127.0.0.1:22100/api/campus/api/ready
 curl --fail http://127.0.0.1:22100/api/iot/api/ready
@@ -51,7 +73,7 @@ MONGO_BACKUP_PASSWORD=<独立随机密码>
 
 ```bash
 docker compose --env-file .env -f infra/docker/compose.yml build platform-api backup-runner
-docker compose --env-file .env -f infra/docker/compose.yml up -d --force-recreate platform-api backup-runner
+npm run compose:up
 ```
 
 如果控制中心显示执行器不可用，先检查 `backup-runner` 健康状态和两端 Token 是否一致。执行器不发布宿主机端口，不能从公网直接调用。
@@ -61,7 +83,7 @@ docker compose --env-file .env -f infra/docker/compose.yml up -d --force-recreat
 网页进程无法可靠停止所有独立业务容器，因此生产 Compose 默认设置 `PLATFORM_RESTORE_ENABLED=false`，控制台不执行在线恢复。恢复只在维护窗口通过下面的命令行入口执行；命令会先停止当前正在运行的全部业务容器，避免 `mongorestore --drop` 与在线写入并发。恢复数据库后，按命令输出恢复上传目录，再启动业务容器以清掉进程内缓存和长连接状态：
 
 ```bash
-docker compose --env-file .env -f infra/docker/compose.yml restart core-api exam-api notification-service campus-service iot-service
+docker compose --env-file .env -f infra/docker/compose.yml start platform-api notification-service campus-service iot-service
 ```
 
 命令行仍保留宿主机备份入口，可在服务器项目根目录创建一份本地备份：
@@ -153,7 +175,7 @@ Pull, recreate, and verify:
 
 ```bash
 npm run compose:pull
-docker compose --env-file .env -f infra/docker/compose.yml up -d --no-build --force-recreate --wait
+npm run compose:up
 curl --fail http://127.0.0.1:22100/api/readyz
 ```
 

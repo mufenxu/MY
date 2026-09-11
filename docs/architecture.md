@@ -4,14 +4,16 @@
 
 | Container | Source | Responsibility |
 | --- | --- | --- |
-| `platform-api` | `services/platform-api` | 统一门户、会话校验、内部身份签发与反向代理；不持有业务或 Mongo root 凭据 |
-| `core-api` | `services/core-api` | 综合业务 API 与管理前端 |
-| `exam-api` | `services/exam-api` | 考试业务 API 与管理前端 |
+| `platform-api` | `services/platform-api`、`services/core-api`、`services/exam-api` | 统一门户、网关、综合与考试业务 API 及管理前端；使用各模块独立数据库账号，不持有 Mongo root 凭据 |
 | `notification-service` | `services/notification-service` | 企业微信通知 API |
 | `backup-runner` | `scripts/backup-runner.mjs` | 内网限定的备份/恢复执行器，使用专用 Mongo backup/restore 账号 |
 | `campus-service` | `services/campus-service` | 校园系统连接器与用户网页 |
 | `iot-service` | `services/iot-service` | MQTT、设备控制、遥测和 WebSocket |
-| `mongodb` | Official image | 为核心与考试模块提供两个隔离数据库 |
+| `mongodb` | Official image | 为六个业务模块提供隔离数据库 |
+
+默认部署为六个常驻容器，另有一次性 `mongodb-init` 初始化任务。主后端只有一个 Node 进程：网关监听 `22100`，Core 与 Exam 的 HTTP 接口分别监听该容器内的 `127.0.0.1:3045` 和 `127.0.0.1:3110`。原代理、鉴权和路径改写继续生效；各模块保留独立依赖目录、数据库连接与后台任务。主入口在模块初始化完成后才接受请求，退出时先排空请求再关闭模块。
+
+独立 Core / Exam Dockerfile 与 `infra/docker/compose.split.yml` 仅用于拆分回退，操作见 [operations.md](operations.md)。
 
 两个微信小程序位于 `apps/`，通过微信开发者工具或 CI 发布，不进入 Docker 镜像。
 
@@ -22,12 +24,12 @@
 | Public path | Purpose | Internal target |
 | --- | --- | --- |
 | `/` | 统一登录与服务总览 | 管理门户 |
-| `/apps/core/` | 综合业务管理后台 | `core-api:3045` |
-| `/apps/exam/` | 考试学习管理后台 | `exam-api:3110` |
+| `/apps/core/` | 综合业务管理后台 | 主容器 `127.0.0.1:3045` |
+| `/apps/exam/` | 考试学习管理后台 | 主容器 `127.0.0.1:3110` |
 | `/apps/campus/` | 校园服务工作台 | `campus-service:22101` |
 | `/apps/iot/` | IoT / MQTT 管理后台 | `iot-service:22102` |
-| `/api/core/` | 综合业务规范化 API 入口 | `core-api` |
-| `/api/exam/` | 考试业务规范化 API 入口 | `exam-api` |
+| `/api/core/` | 综合业务规范化 API 入口 | 主容器 Core 模块 |
+| `/api/exam/` | 考试业务规范化 API 入口 | 主容器 Exam 模块 |
 | `/api/campus/` | 校园服务规范化 API 入口 | `campus-service:22101` |
 | `/api/iot/` | IoT 规范化 API 入口 | `iot-service:22102` |
 | `/api/notify` | 通知发送入口；健康检查为 `/api/notify/healthz` | `notification-service:3000` |
@@ -40,8 +42,8 @@
 - 中央会话除签名校验外还必须存在于服务端会话表；主动退出会立即撤销当前会话，容器重启后需要重新登录。
 - `/apps/*` 由平台网关统一校验；未登录请求无法到达业务服务。
 - 网关使用 Ed25519 私钥为每个内部请求签发 15 秒有效、绑定目标服务、HTTP 方法、路径和查询参数的身份票据。
-- 下游容器只持有 Ed25519 公钥；单个业务容器失陷时无法伪造新的统一管理员票据。
-- 网关会删除所有外部传入的内部身份请求头，业务容器再独立验签，防止伪造或跨服务重放。
+- 私钥位于主容器，Core / Exam 与网关共享进程和信任边界；独立的 Campus、IoT、Notification 容器仅持有公钥。模块的数据权限仍分别校验，但合并后的模块不再具备进程隔离。
+- 网关会删除所有外部传入的内部身份请求头，业务模块再独立验签，防止伪造或跨服务重放。
 - 综合、考试和校园后台会将统一账号映射到各自已有管理员，原权限、数据归属和审计记录保持不变。
 - 原业务登录、JWT、API Key 和小程序用户认证继续保留，仅统一网页管理面的登录。
 - `core-api` 与 `platform-api` 调用通知服务时使用短时 HMAC 签名，签名绑定调用方、方法、路径、请求体、时间戳和一次性随机数；通知服务拒绝过期或重放请求。
@@ -52,8 +54,8 @@
 | Service | Host port | Container port | Exposure |
 | --- | ---: | ---: | --- |
 | `platform-api` | `22100` | `22100` | Loopback, behind the reverse proxy |
-| `core-api` | none | `3045` | Docker networks only |
-| `exam-api` | none | `3110` | Docker networks only |
+| Core module | none | `3045` | Main container loopback only |
+| Exam module | none | `3110` | Main container loopback only |
 | `notification-service` | none | `3000` | Docker networks only |
 | `backup-runner` | none | `22103` | Internal Docker network only |
 | `campus-service` | none | `22101` | Docker networks only |
@@ -64,7 +66,7 @@
 
 ## Image distribution
 
-Alibaba Cloud Container Registry is the primary production image source. GitHub Container Registry remains a backup produced by CI. Production hosts pull eight product images from the Beijing ACR endpoint so deployment does not depend on Docker Hub or GHCR connectivity. The one-shot `mongodb-init` service reuses the MongoDB image and does not add another image.
+Alibaba Cloud Container Registry is the primary production image source. GitHub Container Registry remains a backup produced by CI. Production hosts pull six product images from the Beijing ACR endpoint so deployment does not depend on Docker Hub or GHCR connectivity. The one-shot `mongodb-init` service reuses the MongoDB image and does not add another image. Core and Exam changes build the shared `platform-api` image; their old image references are retained only for split rollback.
 
 ## Boundaries
 
@@ -85,7 +87,7 @@ Alibaba Cloud Container Registry is the primary production image source. GitHub 
 - `iot-service` 使用 MongoDB 数据库 `iot_app`。
 - `notification-service` 使用独立的 MongoDB 数据库 `notification_app`，保存加密的发送载荷和通知投递台账。
 - 六个数据库分别使用独立的最小权限账号；初始化任务使用 root，备份执行器使用独立的 `backup`/`restore` 账号。
-- 服务之间只通过 Docker 内网 HTTP API 交互，不经过公网域名，也不跨边界直接读取对方数据库。
+- Core / Exam 与网关通过容器内回环 HTTP 交互，其他服务通过 Docker 内网 HTTP API 交互；不经过公网域名，也不跨模块直接读取对方数据库。
 
 ## Feature ownership
 

@@ -10,19 +10,19 @@ import {
 
 test('shared package changes resolve every image that copies the package', async () => {
   const graph = await loadImageBuildGraph();
-  assert.deepEqual(resolveChangedImageTargets(['packages/platform-browser-runtime/index.js'], graph), ['core', 'exam']);
+  assert.deepEqual(resolveChangedImageTargets(['packages/platform-browser-runtime/index.js'], graph), ['platform']);
   assert.deepEqual(
     resolveChangedImageTargets(['packages/platform-auth/index.cjs'], graph),
-    ['platform', 'core', 'exam', 'notification', 'backup', 'campus', 'iot'],
+    ['platform', 'notification', 'backup', 'campus', 'iot'],
   );
 });
 
 test('manual aliases, global rules, and release artifact filtering are deterministic', async () => {
   const graph = await loadImageBuildGraph();
-  assert.deepEqual(resolveRequestedImageTargets('notification-service,platform-api', graph), ['platform', 'notification']);
+  assert.deepEqual(resolveRequestedImageTargets('notification-service,platform-api,core,exam-api', graph), ['platform', 'notification']);
   assert.deepEqual(resolveChangedImageTargets(['.github/workflows/aliyun-acr.yml'], graph), Object.keys(graph.targets));
   assert.equal('runner' in graph.targets, false);
-  assert.equal(releaseArtifactTargets(['platform', 'core'], graph).join(','), 'platform,core');
+  assert.equal(releaseArtifactTargets(['platform', 'notification'], graph).join(','), 'platform,notification');
   assert.throws(() => resolveRequestedImageTargets('unknown', graph), /Unknown image target/);
 });
 

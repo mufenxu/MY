@@ -5,7 +5,13 @@ import { checkExternalServices, resolveServiceMode } from '../src/service-target
 test('external service mode requires every configured platform target', () => {
   assert.deepEqual(resolveServiceMode({ PLATFORM_EXTERNAL_SERVICES: 'false' }), {
     external: false,
-    targets: { core: '', exam: '', campus: '', iot: '', notify: '' },
+    targets: {
+      core: 'http://127.0.0.1:3045',
+      exam: 'http://127.0.0.1:3110',
+      campus: 'http://campus-service:22101',
+      iot: 'http://iot-service:22102',
+      notify: 'http://notification-service:3000',
+    },
   });
   assert.throws(
     () => resolveServiceMode({ PLATFORM_EXTERNAL_SERVICES: 'true', CORE_SERVICE_URL: 'http://core' }),

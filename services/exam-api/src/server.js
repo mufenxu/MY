@@ -188,13 +188,11 @@ async function initializeCriticalIndexes(models = [Admin, ExamProgress, ExamResu
 
 async function closeExamRuntime() {
     setRuntimeReady(false);
-    if (initialized) {
-        searchBackfillController?.abort();
-        await searchBackfill;
-        await stopAiGenerationWorker();
-        await disconnectDatabase();
-        initialized = false;
-    }
+    searchBackfillController?.abort();
+    await searchBackfill;
+    await stopAiGenerationWorker();
+    await disconnectDatabase();
+    initialized = false;
 }
 
 function isExamRuntimeReady() {

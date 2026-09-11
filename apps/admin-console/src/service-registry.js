@@ -96,14 +96,17 @@ function normalizeService(input) {
   });
 }
 
-export function loadServiceRegistry(registryPath) {
+export function loadServiceRegistry(registryPath, { baseUrls = {} } = {}) {
   const raw = fs.readFileSync(registryPath, 'utf8');
   const registry = JSON.parse(raw);
   if (registry.schemaVersion !== 1 || !Array.isArray(registry.services)) {
     throw new Error('platform.config.json 格式不受支持。');
   }
 
-  const services = registry.services.map(normalizeService);
+  const services = registry.services.map((service) => normalizeService({
+    ...service,
+    baseUrl: baseUrls[service.id] || service.baseUrl,
+  }));
   const ids = new Set();
   for (const service of services) {
     if (ids.has(service.id)) throw new Error(`服务 id 重复：${service.id}`);

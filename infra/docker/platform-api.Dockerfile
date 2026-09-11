@@ -23,6 +23,34 @@ COPY packages/platform-auth/ /build/packages/platform-auth/
 COPY services/platform-api/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
+FROM ${NODE_IMAGE} AS core-admin-build
+WORKDIR /build/apps/core-admin
+COPY packages/platform-browser-runtime/ /build/packages/platform-browser-runtime/
+COPY apps/core-admin/package*.json ./
+RUN npm ci --no-audit --no-fund
+COPY apps/core-admin/ ./
+RUN npm run build
+
+FROM ${NODE_IMAGE} AS exam-admin-build
+WORKDIR /build/apps/exam-admin
+COPY packages/platform-browser-runtime/ /build/packages/platform-browser-runtime/
+COPY apps/exam-admin/package*.json ./
+RUN npm ci --no-audit --no-fund
+COPY apps/exam-admin/ ./
+RUN npm run build
+
+FROM ${NODE_IMAGE} AS core-api-deps
+WORKDIR /build/services/core-api
+COPY packages/platform-auth/ /build/packages/platform-auth/
+COPY services/core-api/package*.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
+FROM ${NODE_IMAGE} AS exam-api-deps
+WORKDIR /build/services/exam-api
+COPY packages/platform-auth/ /build/packages/platform-auth/
+COPY services/exam-api/package*.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
 FROM ${NODE_IMAGE} AS runtime
 ARG BUILD_REVISION=unknown
 ARG BUILD_TIMESTAMP=
@@ -31,9 +59,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production \
-    PLATFORM_EXTERNAL_SERVICES=true \
+    PLATFORM_EXTERNAL_SERVICES=false \
     PLATFORM_API_HOST=0.0.0.0 \
     PLATFORM_API_PORT=22100 \
+    CORE_PORT=3045 \
+    CORE_ADMIN_DIST=/app/apps/core-admin/dist \
+    PORT=3110 \
     PLATFORM_CONFIG_PATH=/app/config/platform.services.docker.json \
     PLATFORM_RELEASE_REVISION=${BUILD_REVISION} \
     PLATFORM_RELEASE_DEPLOYED_AT=${BUILD_TIMESTAMP}
@@ -42,6 +73,12 @@ WORKDIR /app
 COPY --chown=node:node packages/platform-auth/ ./packages/platform-auth/
 COPY --chown=node:node services/platform-api/ ./services/platform-api/
 COPY --from=platform-api-deps --chown=node:node /build/services/platform-api/node_modules ./services/platform-api/node_modules
+COPY --chown=node:node services/core-api/ ./services/core-api/
+COPY --from=core-api-deps --chown=node:node /build/services/core-api/node_modules ./services/core-api/node_modules
+COPY --from=core-admin-build --chown=node:node /build/apps/core-admin/dist ./apps/core-admin/dist
+COPY --chown=node:node services/exam-api/ ./services/exam-api/
+COPY --from=exam-api-deps --chown=node:node /build/services/exam-api/node_modules ./services/exam-api/node_modules
+COPY --from=exam-admin-build --chown=node:node /build/apps/exam-admin/dist ./services/exam-api/frontend/dist
 COPY --chown=node:node apps/admin-console/src ./apps/admin-console/src
 COPY --chown=node:node apps/admin-console/scripts ./apps/admin-console/scripts
 COPY --chown=node:node apps/admin-console/package.json ./apps/admin-console/package.json
@@ -50,7 +87,8 @@ COPY --from=admin-console-build --chown=node:node /build/apps/admin-console/dist
 COPY --from=official-website-build --chown=node:node /build/apps/official-website/dist ./apps/official-website/dist
 COPY --chown=node:node config/platform.services.docker.json ./config/platform.services.docker.json
 
-RUN chown -R node:node /app
+RUN mkdir -p /app/services/core-api/uploads /app/services/core-api/logs \
+    && chown -R node:node /app
 
 USER node
 WORKDIR /app/services/platform-api

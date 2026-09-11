@@ -56,9 +56,12 @@ async function run(command, args, { capture = false } = {}) {
 
 const runningOutput = await run('docker', [...composeArgs, 'ps', '--services', '--status', 'running'], { capture: true });
 const runningSet = new Set(runningOutput.split(/\r?\n/).map((value) => value.trim()).filter(Boolean));
+if (runningSet.has('core-api') || runningSet.has('exam-api')) {
+  composeArgs.push('-f', 'infra/docker/compose.split.yml');
+}
 const runningApplications = applicationServices.filter((service) => runningSet.has(service));
 if (runningApplications.length > 0) {
-  await run('docker', [...composeArgs, 'stop', '--timeout', '30', ...runningApplications]);
+  await run('docker', [...composeArgs, 'stop', '--timeout', '60', ...runningApplications]);
 }
 
 let restoreError;
