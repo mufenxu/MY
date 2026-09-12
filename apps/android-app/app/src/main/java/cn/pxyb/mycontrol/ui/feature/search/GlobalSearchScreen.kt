@@ -79,8 +79,12 @@ fun GlobalSearchScreen(
     val results = remember(query, category, state.items) {
         val normalized = query.trim()
         val matches = if (normalized.isBlank()) {
-            if (category != null) state.items else
-            state.items.filter { it.featureRoute != null } + state.items.filter { it.featureRoute == null }.take(12)
+            if (category != null) {
+                state.items
+            } else {
+                state.items.filter { it.featureRoute != null } +
+                    state.items.filter { it.featureRoute == null }.take(12)
+            }
         } else {
             state.items.filter { item ->
                 item.title.contains(normalized, ignoreCase = true) ||
