@@ -2666,9 +2666,10 @@ function renderAuth(error) {
     ${loginHint}
     <span class="auth-session-grid">${authSessionEntries(auth).map(authSessionChip).join("")}</span>
   `;
+  const nextLoginAt = formatSessionDate(auth.autoRelogin?.nextLoginAt);
   nodes.authNote.textContent = auth.autoRelogin?.enabled
-    ? "已开启过期自动重登，学校密码会加密保存在本系统。"
-    : "未开启自动重登时，密码仅用于本次 CAS 登录。";
+    ? `已开启每6天自动重登，会话提前过期时也会自动恢复。${nextLoginAt ? `下次计划：${nextLoginAt}。` : ""}学校密码加密保存在本系统。`
+    : "未开启自动重登，密码仅用于本次学校登录；勾选自动重登并重新登录后生效。";
   renderOverview();
 }
 

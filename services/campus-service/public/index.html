@@ -217,18 +217,18 @@
         </label>
         <label class="remember">
           <input id="rememberInput" type="checkbox" checked>
-          <span>7天内自动登录</span>
+          <span>保持学校登录状态</span>
         </label>
         <label class="remember">
           <input id="autoReloginInput" type="checkbox">
-          <span>会话过期后自动重新登录</span>
+          <span>每6天自动登录，过期时自动恢复</span>
         </label>
         <button id="loginButton" type="submit">登录并保存会话</button>
       </form>
       <div class="auth-actions">
         <button id="logoutButton" type="button" class="ghost">退出学校会话</button>
       </div>
-      <p id="authNote" class="auth-note">未开启自动重登时，密码只用于本次 CAS 登录，不会写入磁盘。部署到公网时请务必使用 HTTPS。</p>
+      <p id="authNote" class="auth-note">开启自动重登后，学校密码将加密保存，用于每6天自动登录及过期恢复。</p>
     </section>
 
     <section id="study" class="app-section academic-section">
@@ -912,7 +912,7 @@
   <script src="./platform-runtime.js?v=20260715-sso-v1" defer></script>
   <script src="./formatters.js?v=20260722-global-scope-v1" defer></script>
   <script src="./academic-integrations.js?v=20260721-calendar-reminders" defer></script>
-  <script src="./app.js?v=20260721-calendar-reminders" defer></script>
+  <script src="./app.js?v=20260912-school-relogin" defer></script>
   <script src="./libroom-page.js" defer></script>
   <script src="./admin.js?v=20260715-admin-workspace-v2" defer></script>
 </body>

@@ -153,6 +153,7 @@ const campusSessionQueue = new KeyedSerialQueue();
 const schoolReloginQueue = new KeyedSerialQueue();
 const schoolReloginFailedAt = new Map();
 const schoolReloginSuccessAt = new Map();
+const SCHOOL_RELOGIN_INTERVAL_MS = 6 * 24 * 60 * 60 * 1000;
 const SCHOOL_RELOGIN_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
 const SCHOOL_RELOGIN_SUCCESS_DEDUPE_MS = 10 * 1000;
 const SCHOOL_AUTH_RETRY_ATTEMPTS = 2;
@@ -1268,7 +1269,14 @@ function savedSchoolReloginCredentials(jar) {
 }
 
 function autoReloginSummary(jar) {
-  return { enabled: Boolean(savedSchoolReloginCredentials(jar)) };
+  const enabled = Boolean(savedSchoolReloginCredentials(jar));
+  const loginAt = validDateMs(jar.meta?.loginAt) ?? validDateMs(jar.meta?.autoRelogin?.savedAt);
+  return {
+    enabled,
+    nextLoginAt: enabled && loginAt !== null
+      ? new Date(loginAt + SCHOOL_RELOGIN_INTERVAL_MS).toISOString()
+      : null
+  };
 }
 
 function schoolReloginLog(value) {
@@ -1284,6 +1292,12 @@ async function reloginWithSavedCredentials(reason) {
 }
 
 function schoolSessionReloginWanted(summary, jar) {
+  const automatic = autoReloginSummary(jar);
+  if (automatic.enabled && (
+    !summary?.hasStoredSession
+    || !automatic.nextLoginAt
+    || Date.parse(automatic.nextLoginAt) <= Date.now()
+  )) return true;
   if (!summary?.hasStoredSession) return false;
   if (summary.needsLogin) return true;
   const cas = summary.sessions?.cas;
@@ -1303,19 +1317,18 @@ function schoolSessionHealthy(summary) {
 
 async function reloginWithSavedCredentialsInternal(reason, { force }) {
   const userId = currentUserId();
-  const failedAt = schoolReloginFailedAt.get(userId) || 0;
-  if (Date.now() - failedAt < SCHOOL_RELOGIN_FAILURE_COOLDOWN_MS) {
-    if (force) {
-      logger.info("school_session_auto_relogin_skip", {
-        userId,
-        reason: schoolReloginLog(reason),
-        cause: "failure_cooldown"
-      });
-    }
-    return false;
-  }
-
   return schoolReloginQueue.run(userId, async () => {
+    const failedAt = schoolReloginFailedAt.get(userId) || 0;
+    if (Date.now() - failedAt < SCHOOL_RELOGIN_FAILURE_COOLDOWN_MS) {
+      if (force) {
+        logger.info("school_session_auto_relogin_skip", {
+          userId,
+          reason: schoolReloginLog(reason),
+          cause: "failure_cooldown"
+        });
+      }
+      return false;
+    }
     const jar = await loadSessionJarForUser(userId);
     const current = storedSessionSummary(jar);
     const credentials = savedSchoolReloginCredentials(jar);
@@ -1581,7 +1594,6 @@ function storedSessionSummary(jar) {
 
 async function refreshStoredSessionsIfNeeded(jar) {
   const before = storedSessionSummary(jar);
-  if (!before.hasStoredSession) return jar;
   if (schoolSessionReloginWanted(before, jar)) {
     const relogined = await reloginWithSavedCredentials(before);
     if (relogined) {
@@ -1589,6 +1601,7 @@ async function refreshStoredSessionsIfNeeded(jar) {
       return jar;
     }
   }
+  if (!before.hasStoredSession) return jar;
   if (refreshBlockedByCas(before.sessions.cas)) return jar;
 
   let touched = false;
@@ -1976,8 +1989,8 @@ async function loginWithCasFull({ username, password, rememberMe = true, saveCre
   return { view, status: storedSessionSummary(jar) };
 }
 
-async function loginWithCas({ username, password, rememberMe = true }) {
-  return loginWithCasFull({ username, password, rememberMe });
+async function loginWithCas({ username, password, rememberMe = true, saveCredentials = false }) {
+  return loginWithCasFull({ username, password, rememberMe, saveCredentials });
 }
 
 function calendarPaths(token) {
