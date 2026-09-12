@@ -6,6 +6,7 @@ import {
   normalizeLibrarySeatAreasPayload,
   normalizeLibrarySeatBreachPayload,
   normalizeLibrarySeatCancelResult,
+  normalizeLibrarySeatCreditPayload,
   normalizeLibrarySeatCurrentUsePayload,
   normalizeLibrarySeatDoorLogPayload,
   normalizeLibrarySeatLayoutPayload,
@@ -415,4 +416,57 @@ test("builds a deduplicated seat reminder notification payload", () => {
   assert.match(payload.dedupeKey, /^campus-library-seat-[0-9a-f]{48}$/);
   assert.equal(payload.content.title, "座位即将结束");
   assert.equal(buildLibrarySeatReminderPayload(reminder, { appId: "" }), null);
+});
+
+test("normalizes the credit profile and quota policy", () => {
+  assert.deepEqual(
+    normalizeLibrarySeatCreditPayload(
+      { data: { fullName: "张三", score: 96 } },
+      { data: { policyType: 1, superviseAway: "30", buildSeTime: "06:30", ruleText: "每日可预约 2 次" } }
+    ),
+    {
+      fullName: "张三",
+      score: 96,
+      policyType: 1,
+      scoreEnabled: true,
+      superviseAway: 30,
+      buildSeTime: "06:30",
+      ruleText: "每日可预约 2 次"
+    }
+  );
+  assert.deepEqual(
+    normalizeLibrarySeatCreditPayload({ data: { score: 0 } }, { data: { policyType: -1 } }),
+    {
+      fullName: "",
+      score: 0,
+      policyType: -1,
+      scoreEnabled: false,
+      superviseAway: 0,
+      buildSeTime: "",
+      ruleText: ""
+    }
+  );
+});
+
+test("calls the credit and policy endpoints", async () => {
+  const calls = [];
+  const client = createLibrarySeatClient({
+    token: "member-token",
+    requestImpl: async (pathname, data) => {
+      calls.push({ pathname, data });
+      if (pathname === "/static/frontApi/user/getUserInfo") {
+        return { payload: { status: true, code: 200, data: { fullName: "张三", score: 88 } }, status: 200, ok: true };
+      }
+      return { payload: { status: true, code: 200, data: { policyType: 0, superviseAway: 30 } }, status: 200, ok: true };
+    }
+  });
+
+  const profile = await client.getCreditProfile();
+
+  assert.deepEqual(calls.map((call) => call.pathname), [
+    "/static/frontApi/user/getUserInfo",
+    "/static/public/cg/getSysSet/PC"
+  ]);
+  assert.equal(profile.score, 88);
+  assert.equal(profile.superviseAway, 30);
 });

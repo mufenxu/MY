@@ -39,6 +39,11 @@ function dataOf(payload) {
   return payload && Object.hasOwn(payload, "data") ? payload.data : payload;
 }
 
+function objectOf(payload) {
+  const data = dataOf(payload);
+  return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+}
+
 function upstreamMessage(payload, fallback) {
   return String(payload?.message || payload?.msg || payload?.error || fallback);
 }
@@ -342,6 +347,22 @@ export function normalizeLibrarySeatStartTimesPayload(payload) {
   }).filter(Boolean);
 }
 
+export function normalizeLibrarySeatCreditPayload(userPayload, systemPayload) {
+  const user = objectOf(userPayload);
+  const system = objectOf(systemPayload);
+  const score = Number(user.score ?? user.creditScore ?? user.integral);
+  const policyType = Number(system.policyType ?? user.policyType);
+  return {
+    fullName: firstString(user, ["fullName", "name", "userName"]),
+    score: Number.isFinite(score) ? Math.trunc(score) : null,
+    policyType: Number.isFinite(policyType) ? Math.trunc(policyType) : null,
+    scoreEnabled: Number.isFinite(policyType) ? policyType !== -1 : Number.isFinite(score),
+    superviseAway: Math.max(0, intValue(system.superviseAway ?? system.superviseAwayMinute, 0)),
+    buildSeTime: firstString(system, ["buildSeTime"]),
+    ruleText: firstString(system, ["ruleText", "readText"])
+  };
+}
+
 function normalizeLibrarySeatLayoutSeats(layout) {
   return asArray(layout?.objects).map((object) => {
     const seat = object && typeof object === "object" ? object.seat : null;
@@ -570,6 +591,17 @@ export function createLibrarySeatClient({
       ),
       { roomId: input.roomId ?? input.areaId }
     ),
+    getCreditProfile: async () => {
+      const [userResult, systemResult] = await Promise.allSettled([
+        request("/static/frontApi/user/getUserInfo", {}),
+        request("/static/public/cg/getSysSet/PC", {}, { tokenRequired: false })
+      ]);
+      if (userResult.status === "rejected" && systemResult.status === "rejected") throw userResult.reason;
+      return normalizeLibrarySeatCreditPayload(
+        userResult.status === "fulfilled" ? userResult.value : null,
+        systemResult.status === "fulfilled" ? systemResult.value : null
+      );
+    },
     submitReservation: async (input = {}) => {
       const normalized = normalizeLibrarySeatReservationInput(input);
       return request(

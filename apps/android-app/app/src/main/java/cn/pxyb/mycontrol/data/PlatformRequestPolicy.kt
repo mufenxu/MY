@@ -32,6 +32,7 @@ internal const val CAMPUS_LIBRARY_SEAT_CURRENT_USE_CHECK_IN_PATH = "$CAMPUS_LIBR
 internal const val CAMPUS_LIBRARY_SEAT_CURRENT_USE_LEAVE_PATH = "$CAMPUS_LIBRARY_SEAT_CURRENT_USE_PATH/leave"
 internal const val CAMPUS_LIBRARY_SEAT_CURRENT_USE_STOP_PATH = "$CAMPUS_LIBRARY_SEAT_CURRENT_USE_PATH/stop"
 internal const val CAMPUS_LIBRARY_SEAT_TIMELINE_PATH = "$CAMPUS_API_PATH/campus/library-seat/timeline"
+internal const val CAMPUS_LIBRARY_SEAT_CREDIT_PATH = "$CAMPUS_API_PATH/campus/library-seat/credit"
 internal const val CAMPUS_LIBRARY_SEAT_BREACHES_PATH = "$CAMPUS_API_PATH/campus/library-seat/breaches"
 internal const val CAMPUS_LIBRARY_SEAT_DOOR_LOGS_PATH = "$CAMPUS_API_PATH/campus/library-seat/door-logs"
 

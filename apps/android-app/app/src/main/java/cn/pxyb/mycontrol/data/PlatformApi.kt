@@ -808,7 +808,7 @@ internal fun parseLibrarySeatSeatsPayload(
 
 internal fun parseLibrarySeatTimelinePayload(json: JSONObject): LibrarySeatTimeline {
     val data = json.optJSONObject("data") ?: json
-    val free = data.optJSONArray("freeList").platformObjects().mapNotNull { row ->
+    val free = data.optJSONArray("free").platformObjects().mapNotNull { row ->
         val left = row.optDouble("left", Double.NaN)
         val width = row.optDouble("width", Double.NaN)
         if (left.isNaN() || width.isNaN() || width <= 0.0) return@mapNotNull null
@@ -817,7 +817,7 @@ internal fun parseLibrarySeatTimelinePayload(json: JSONObject): LibrarySeatTimel
             width = width.coerceIn(0.0, 100.0).toFloat(),
         )
     }.sortedBy { it.left }
-    val marks = data.optJSONArray("markList").platformObjects().mapNotNull { row ->
+    val marks = data.optJSONArray("marks").platformObjects().mapNotNull { row ->
         val left = row.optDouble("left", Double.NaN)
         if (left.isNaN()) return@mapNotNull null
         LibrarySeatTimelineMark(
@@ -826,6 +826,24 @@ internal fun parseLibrarySeatTimelinePayload(json: JSONObject): LibrarySeatTimel
         )
     }.sortedBy { it.left }
     return LibrarySeatTimeline(free = free, marks = marks)
+}
+
+internal fun parseLibrarySeatCreditPayload(json: JSONObject): LibrarySeatCreditProfile {
+    val data = json.optJSONObject("data") ?: json
+    val score = (data.opt("score") as? Number)?.toInt()
+    val policyType = (data.opt("policyType") as? Number)?.toInt()
+    val superviseAway = (data.opt("superviseAway") as? Number)?.toInt()
+        ?: data.optString("superviseAway").toIntOrNull()
+        ?: 0
+    return LibrarySeatCreditProfile(
+        fullName = data.seatString("fullName", "name", "userName"),
+        score = score,
+        policyType = policyType,
+        scoreEnabled = data.optBoolean("scoreEnabled", policyType?.let { it != -1 } ?: (score != null)),
+        superviseAway = superviseAway.coerceAtLeast(0),
+        buildSeTime = data.seatString("buildSeTime"),
+        ruleText = data.seatString("ruleText", "readText"),
+    )
 }
 
 internal fun parseLibrarySeatReservationRecordsPayload(

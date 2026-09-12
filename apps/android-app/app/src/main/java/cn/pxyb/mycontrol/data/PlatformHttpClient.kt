@@ -114,6 +114,7 @@ internal class PlatformHttpClient(
                     path.startsWith(CAMPUS_LIBRARY_SEAT_AREAS_PATH) ||
                     path.startsWith(CAMPUS_LIBRARY_SEAT_SEATS_PATH) ||
                     path.startsWith(CAMPUS_LIBRARY_SEAT_TIMELINE_PATH) ||
+                    path.startsWith(CAMPUS_LIBRARY_SEAT_CREDIT_PATH) ||
                     path.startsWith(CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH) ||
                     path.startsWith(CAMPUS_LIBRARY_SEAT_BREACHES_PATH) ||
                     path.startsWith(CAMPUS_LIBRARY_SEAT_DOOR_LOGS_PATH) ||

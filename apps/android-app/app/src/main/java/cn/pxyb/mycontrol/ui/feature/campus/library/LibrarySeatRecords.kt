@@ -4,8 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,7 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.LibrarySeatBreachPage
 import cn.pxyb.mycontrol.data.LibrarySeatBreachRecord
+import cn.pxyb.mycontrol.data.LibrarySeatCreditProfile
 import cn.pxyb.mycontrol.data.LibrarySeatDoorLog
 import cn.pxyb.mycontrol.data.LibrarySeatMakeLife
 import cn.pxyb.mycontrol.data.LibrarySeatReservationHistory
@@ -38,6 +36,8 @@ import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppInlineDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
+import cn.pxyb.mycontrol.ui.components.display.AppMetricCell
+import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonInlineRows
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
@@ -53,8 +53,6 @@ private enum class SeatRecordTab(val label: String) {
     Breach("违约记录"),
     DoorLog("门禁记录"),
 }
-
-@OptIn(ExperimentalLayoutApi::class)
 
 @Composable
 internal fun MySeatReservationsPanel(
@@ -72,6 +70,8 @@ internal fun MySeatReservationsPanel(
     makeLifeLoading: Boolean,
     makeLifeReservationId: String,
     usageAction: LibrarySeatUsageAction?,
+    credit: LibrarySeatCreditProfile,
+    creditLoading: Boolean,
     onLoadReservations: () -> Unit,
     onLoadHistory: () -> Unit,
     onLoadBreaches: () -> Unit,
@@ -110,6 +110,7 @@ internal fun MySeatReservationsPanel(
                 title = "我的座位",
                 subtitle = "官方系统同步 · 使用中的座位、违约与门禁记录",
             )
+            CreditQuotaSummary(profile = credit, loading = creditLoading)
             CurrentSeatUsageCard(
                 record = currentUse,
                 loading = currentUseLoading,
@@ -119,28 +120,20 @@ internal fun MySeatReservationsPanel(
                 onStopSeat = onStopSeat,
                 onCancelReservation = onCancelReservation,
             )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                SeatRecordTab.entries.forEach { tab ->
-                    FilterChip(
-                        selected = selectedTab == tab,
-                        onClick = {
-                            if (selectedTab != tab) {
-                                selectedTab = tab
-                                when (tab) {
-                                    SeatRecordTab.Today -> onLoadReservations()
-                                    SeatRecordTab.History -> onLoadHistory()
-                                    SeatRecordTab.Breach -> onLoadBreaches()
-                                    SeatRecordTab.DoorLog -> onLoadDoorLogs()
-                                }
-                            }
-                        },
-                        label = { Text(tab.label) },
-                    )
-                }
-            }
+            AppSegmentedControl(
+                options = SeatRecordTab.entries.toList(),
+                selected = selectedTab,
+                onSelect = { tab ->
+                    selectedTab = tab
+                    when (tab) {
+                        SeatRecordTab.Today -> onLoadReservations()
+                        SeatRecordTab.History -> onLoadHistory()
+                        SeatRecordTab.Breach -> onLoadBreaches()
+                        SeatRecordTab.DoorLog -> onLoadDoorLogs()
+                    }
+                },
+                label = { it.label },
+            )
             when (selectedTab) {
                 SeatRecordTab.Today -> SeatReservationList(
                     records = reservations.sortedWith(
@@ -178,6 +171,80 @@ internal fun MySeatReservationsPanel(
                 onClick = onGoToBookSeat,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+    }
+}
+
+@Composable
+private fun CreditQuotaSummary(profile: LibrarySeatCreditProfile, loading: Boolean) {
+    if (!loading && profile.isEmpty) return
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "信用与配额",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.weight(1f),
+                )
+                if (profile.fullName.isNotBlank()) {
+                    Text(
+                        text = profile.fullName,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AppMetricCell(
+                    label = "信用积分",
+                    value = when {
+                        loading -> "读取中"
+                        profile.scoreEnabled && profile.score != null -> profile.score.toString()
+                        else -> "未启用"
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                AppMetricCell(
+                    label = "暂离上限",
+                    value = when {
+                        loading -> "读取中"
+                        profile.superviseAway > 0 -> "${profile.superviseAway} 分钟"
+                        else -> "未启用"
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                AppMetricCell(
+                    label = "开放预约时间",
+                    value = profile.buildSeTime.takeIf(String::isNotBlank) ?: "—",
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (profile.ruleText.isNotBlank()) {
+                Text(
+                    text = profile.ruleText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -321,8 +388,6 @@ private fun SeatReservationList(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-
 @Composable
 private fun CurrentSeatUsageCard(
     record: LibrarySeatReservationRecord?,
@@ -408,15 +473,16 @@ private fun CurrentSeatUsageCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            FlowRow(
+            Row(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 when (record.status.uppercase()) {
                     "RESERVE" -> {
                         AppButton(
                             text = "签到",
                             onClick = onCheckIn,
+                            modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = usageAction == LibrarySeatUsageAction.CheckIn,
                             height = 40.dp,
@@ -424,6 +490,7 @@ private fun CurrentSeatUsageCard(
                         AppInlineDangerButton(
                             text = "取消预约",
                             onClick = { onCancelReservation(record.id) },
+                            modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = usageAction == LibrarySeatUsageAction.Cancel,
                         )
@@ -432,6 +499,7 @@ private fun CurrentSeatUsageCard(
                         AppSecondaryButton(
                             text = "暂离",
                             onClick = onLeaveSeat,
+                            modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = usageAction == LibrarySeatUsageAction.Leave,
                             height = 40.dp,
@@ -439,6 +507,7 @@ private fun CurrentSeatUsageCard(
                         AppDangerButton(
                             text = "结束使用",
                             onClick = onStopSeat,
+                            modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = usageAction == LibrarySeatUsageAction.Stop,
                             height = 40.dp,
@@ -448,6 +517,7 @@ private fun CurrentSeatUsageCard(
                         AppButton(
                             text = "返回座位",
                             onClick = onCheckIn,
+                            modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = usageAction == LibrarySeatUsageAction.CheckIn,
                             height = 40.dp,
@@ -455,6 +525,7 @@ private fun CurrentSeatUsageCard(
                         AppDangerButton(
                             text = "结束使用",
                             onClick = onStopSeat,
+                            modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = usageAction == LibrarySeatUsageAction.Stop,
                             height = 40.dp,

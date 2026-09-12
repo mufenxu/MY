@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui.feature.campus.library
 
 import cn.pxyb.mycontrol.data.CampusRepository
 import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
+import cn.pxyb.mycontrol.data.LibrarySeatCreditProfile
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
 import cn.pxyb.mycontrol.data.LibrarySeatTimeline
 import cn.pxyb.mycontrol.data.LibrarySeatWaitlistRequest
@@ -41,6 +42,7 @@ class LibrarySeatStateHolder(
         timelineLoading = false,
         timelineSeatId = "",
         timelineDate = "",
+        creditLoading = false,
         waitlistsLoading = false,
         waitlistSaving = false,
         waitlistDeletingId = null,
@@ -479,6 +481,14 @@ class LibrarySeatStateHolder(
         action = { campus.librarySeatTimeline(seatId, date) },
         success = { timeline -> copy(timeline = timeline, timelineLoading = false) },
         failure = { copy(timelineLoading = false, timeline = LibrarySeatTimeline()) },
+    )
+
+    fun loadLibrarySeatCredit(force: Boolean = false) = launchAction(
+        isBusy = { creditLoading && !force },
+        start = { copy(creditLoading = true) },
+        action = { campus.librarySeatCredit() },
+        success = { profile -> copy(credit = profile, creditLoading = false) },
+        failure = { copy(creditLoading = false) },
     )
 
     fun loadLibrarySeatWaitlists(force: Boolean = false) = launchAction(

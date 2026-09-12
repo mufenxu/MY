@@ -95,6 +95,7 @@ internal fun LibrarySeatReservationScreen(
     onLoadBreaches: () -> Unit,
     onLoadDoorLogs: () -> Unit,
     onLoadMakeLife: (String) -> Unit,
+    onLoadCredit: () -> Unit,
     onCheckIn: () -> Unit,
     onLeaveSeat: () -> Unit,
     onStopSeat: () -> Unit,
@@ -239,6 +240,7 @@ internal fun LibrarySeatReservationScreen(
     LaunchedEffect(Unit) {
         onLoadReservations()
         onLoadCurrentUse()
+        onLoadCredit()
     }
 
     LaunchedEffect(state.venues) {
@@ -730,6 +732,8 @@ internal fun LibrarySeatReservationScreen(
                     makeLifeLoading = state.makeLifeLoading,
                     makeLifeReservationId = state.makeLifeReservationId,
                     usageAction = state.usageAction,
+                    credit = state.credit,
+                    creditLoading = state.creditLoading,
                     onLoadReservations = onLoadReservations,
                     onLoadHistory = onLoadReservationHistory,
                     onLoadBreaches = onLoadBreaches,
