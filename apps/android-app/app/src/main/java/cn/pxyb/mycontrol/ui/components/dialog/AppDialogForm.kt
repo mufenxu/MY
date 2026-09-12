@@ -10,10 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import cn.pxyb.mycontrol.ui.AppDialog
-import cn.pxyb.mycontrol.ui.AppDialogDangerButton
-import cn.pxyb.mycontrol.ui.AppDialogPrimaryButton
-import cn.pxyb.mycontrol.ui.AppDialogSecondaryButton
+import cn.pxyb.mycontrol.ui.components.button.AppDialogDangerButton
+import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
+import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 
 @Composable
 fun AppDialogForm(
@@ -31,20 +30,23 @@ fun AppDialogForm(
     errorMessage: String? = null,
     content: @Composable () -> Unit,
 ) {
+    val dismiss = { if (!loading) onDismissRequest() }
     AppDialog(
-        onDismissRequest = onDismissRequest,
+        onDismissRequest = dismiss,
         modifier = modifier,
         icon = icon,
+        iconTint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+        iconBackground = if (danger) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
         title = title,
         subtitle = subtitle,
         footer = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 AppDialogSecondaryButton(
                     text = cancelText,
-                    onClick = onDismissRequest,
+                    onClick = dismiss,
                     modifier = Modifier.weight(1f),
                     enabled = !loading,
                 )
@@ -68,7 +70,7 @@ fun AppDialogForm(
             }
         },
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             content()
             if (!errorMessage.isNullOrBlank()) {
                 DialogErrorText(errorMessage)

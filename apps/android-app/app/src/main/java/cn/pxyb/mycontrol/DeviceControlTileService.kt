@@ -2,15 +2,15 @@ package cn.pxyb.mycontrol
 
 import android.annotation.SuppressLint
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.ComponentName
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import cn.pxyb.mycontrol.ui.MainTab
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.SessionStore
+import cn.pxyb.mycontrol.ui.navigation.MainTab
 
 class DeviceControlTileService : TileService() {
     override fun onStartListening() {

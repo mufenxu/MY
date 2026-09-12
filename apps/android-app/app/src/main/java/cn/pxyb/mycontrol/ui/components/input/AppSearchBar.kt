@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
 
@@ -35,6 +36,7 @@ fun AppSearchBar(
     placeholder: String = "搜索名称、状态或内容",
     onSearch: ((String) -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null,
+    keyboardType: KeyboardType = KeyboardType.Text,
 ) {
     val dark = isAppInDarkTheme()
     val focusManager = LocalFocusManager.current
@@ -79,7 +81,7 @@ fun AppSearchBar(
             }
         },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(
             onSearch = {
                 focusManager.clearFocus()

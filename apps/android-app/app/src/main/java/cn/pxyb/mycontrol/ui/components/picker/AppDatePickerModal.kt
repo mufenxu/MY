@@ -15,9 +15,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cn.pxyb.mycontrol.ui.AppDialog
-import cn.pxyb.mycontrol.ui.AppDialogPrimaryButton
-import cn.pxyb.mycontrol.ui.AppDialogSecondaryButton
+import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
+import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 

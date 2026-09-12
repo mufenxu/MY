@@ -4,7 +4,7 @@
 
 - **系统安全区由外壳统一管理**：认证后的页面统一由 `AuthenticatedShell` 处理 `WindowInsets.safeDrawing`；页面内部**严禁再次调用 `statusBarsPadding()`**，避免产生双重顶部空白。
 - **推荐统一使用标准脚手架 `AppSubPage`**：
-  新增二级页面一律使用共享脚手架 `AppSubPage`（位于 `ui/AppLayout.kt`），它已自动集成 `BackHandler`、`AppSecondaryHeader`、缓存极光背景、大屏宽度限制（`AppTabletContentMaxWidth = 1120.dp`）、统一间距与可选下拉刷新。禁止再手写冗余的 `LazyColumn` 样板代码。
+  新增二级页面一律使用共享脚手架 `AppSubPage`（位于 `ui/components/layout/AppLayout.kt`），它已自动集成 `BackHandler`、`AppSecondaryHeader`、缓存极光背景、大屏宽度限制（`AppTabletContentMaxWidth = 1120.dp`）、统一间距与可选下拉刷新。禁止再手写冗余的 `LazyColumn` 样板代码。
 - **二级页头交互模式规范 (`pinHeader`)**：
   - **吸顶模式 (`pinHeader = true`)**：适用于**长信息流、大量数据列表、全局搜索、操作日志、发布管理**等页面。页头固定悬浮在顶部并透出毛玻璃背景，确保用户深层滑动后标题上下文不丢失、随时可一键返回或执行页头操作。
   - **随动模式 (`pinHeader = false`，默认)**：适用于**短卡片页、设置表单页、概要信息页**等内容较短的页面，页头作为列表首项随内容滑动。
@@ -14,7 +14,7 @@
 ## 2. 视觉与材质约束
 
 - **毛玻璃拟态 (Glassmorphism)**：
-  - 核心质感见 `ui/Glassmorphism.kt`：半透明磨砂表面 (`glassCardColor()`) + 顶部高光渐变 + 发丝描边 (`1.dp outlineVariant`，alpha ≈ 0.45) + **0 阴影投影**（严禁添加深色阴影，防止出现灰色脏晕边）。
+  - 核心质感见 `ui/components/layout/Glassmorphism.kt`：半透明磨砂表面 (`glassCardColor()`) + 顶部高光渐变 + 发丝描边 (`1.dp outlineVariant`，alpha ≈ 0.45) + **0 阴影投影**（严禁添加深色阴影，防止出现灰色脏晕边）。
   - 极光背景 (`auroraBackdrop`) 已采用 `drawWithCache` 缓存径向渐变着色器；严禁在滑动项内部私自构建高频重绘的渐变画笔。
 - **底部浮动胶囊导航**：
   保持现有浮动胶囊底栏的形状、尺寸、颜色和弹性选中动画；系统手势区避让由外层处理。
@@ -55,7 +55,7 @@
   - 页头操作：`AppSecondaryHeader` / `AppHeaderIconButton`
 ## 6. 统一按钮体系与操作规范 (Button System Specification)
 
-全 App 所有页面的按钮必须统一使用封装好的现代胶囊流光按钮族（位于 `ui/Components.kt`），**严禁在任何业务界面裸写 Material 3 原生 `Button`、`FilledTonalButton`、`OutlinedButton`**。
+全 App 所有页面的按钮必须统一使用封装好的现代胶囊流光按钮族（位于 `ui/components/button/AppButtons.kt`），**严禁在任何业务界面裸写 Material 3 原生 `Button`、`FilledTonalButton`、`OutlinedButton`**。
 
 - **三级按钮体系选型准则**：
   1. **主行动按钮 (`AppButton`)**：
@@ -108,10 +108,13 @@
 
 工程已全面完成公共组件模块化抽取，所有通用 UI 必须优先复用位于 `cn.pxyb.mycontrol.ui.components` 及 `cn.pxyb.mycontrol.util` 中的标准化组件，严禁在业务界面私自复制粘贴或手写重复实现：
 
+业务页面、状态和业务专用组件归入 `ui.feature.<业务>`；导航与认证外壳归入 `ui.navigation`，启动界面归入 `ui.startup`。公共组件不依赖业务包。业务请求沿用现有 StateHolder / Controller，必须接入账号切换时的状态重置和锁屏、退出时的请求取消。
+
 | 模块子包 | 组件名称 | 核心功能与设计亮点 |
 | :--- | :--- | :--- |
 | **`ui.components.input`** | `AppTextField` | 毛玻璃圆角输入框，自动带清空图标、密码眼睛显隐、Leading 图标与浮动错误避让 |
 | | `AppSearchBar` | 现代全圆角胶囊搜索栏，支持实时清空按键与回车键盘响应 |
+| | `AppSelectField` / `AppSelectOption` | 统一下拉选择字段，按选项值管理选中态，支持说明、禁用态与占位文字 |
 | **`ui.components.picker`** | `AppWheelPicker<T>` | 解耦的高性能惯性轮盘，集成触觉微震动反馈与正居中选中刻度指示 |
 | | `AppDatePickerModal` | 年月日标准滚轮弹窗，支持“今天/明天/周几”智能相对标签 |
 | | `AppTimePickerModal` | 时分滚轮弹窗，支持开放范围、步长限制与弹窗自适应联动 |
@@ -121,10 +124,12 @@
 | | `AppDetailRow` | 键值详情行，支持单行/折行对齐与一键点击/长按复制到剪贴板 |
 | | `AppMetricCard` | 现代指标展示小卡片与自适应网格看板 (`AppMetricDashboard`) |
 | | `AppAvatar` | 支持网络加载、首字母自动散列双色极光渐变兜底与在线状态圆点 |
+| | `AppQrCode` | 二维码白底、留白与加载失败占位；登录和绑定流程由业务处理 |
 | | `AppDivider` | 统一规范的发丝分割线，支持自定义起止内边距 |
 | **`ui.components.feedback`** | `AppFeedbackBanner` | 极光微光毛玻璃胶囊操作反馈横幅，支持方案 D 倒计时微光进度环、4秒平滑淡出、3D 同心微徽标与胶囊重试 |
 | | `AppEmptyState` | 标准居中空状态，带毛玻璃圆形底衬图标、主副说明文案与主次操作胶囊按键 |
 | | `AppErrorState` | 标准错误面板，集成就地一键重试机制 |
 | **`ui.components.filter`** | `AppFilterChip` / `AppFilterBar` | 胶囊形微凸毛玻璃多维筛选栏，支持横向平滑滚动 |
+| | `AppSegmentedControl` / `AppChoiceRow` | 分段单选与带标题的选项行，统一选中语义和交互 |
 | **`util`** | `QrUtils` | 集中统一的 Data URL Base64 二维码安全解析工具，杜绝各 Screen 私有重复实现 |
-| | `DateTimeUtils` | 集中统一的平台时间格式化与相对活跃/同步时间计算工具 |
+| | `DateTimeUtils` | 集中统一的平台时间、分钟值和相对时间格式化；仅需日末端点的业务显式传入 `allowEndOfDay = true` 解析 `24:00` |

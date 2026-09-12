@@ -34,25 +34,28 @@ fun AppStatusBadge(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
 ) {
-    val foreground = when (semantic) {
-        AppStatusSemantic.Success -> MaterialTheme.colorScheme.secondary
-        AppStatusSemantic.Warning -> MaterialTheme.colorScheme.tertiary
-        AppStatusSemantic.Error -> MaterialTheme.colorScheme.error
-        AppStatusSemantic.Info -> MaterialTheme.colorScheme.primary
-        AppStatusSemantic.Neutral -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    val background = when (semantic) {
-        AppStatusSemantic.Success -> MaterialTheme.colorScheme.secondaryContainer
-        AppStatusSemantic.Warning -> MaterialTheme.colorScheme.tertiaryContainer
-        AppStatusSemantic.Error -> MaterialTheme.colorScheme.errorContainer
-        AppStatusSemantic.Info -> MaterialTheme.colorScheme.primaryContainer
-        AppStatusSemantic.Neutral -> MaterialTheme.colorScheme.surfaceVariant
-    }
+    StatusBadgeContent(label, statusStyle(semantic), modifier, icon)
+}
+
+@Composable
+fun AppStatusBadge(status: String, label: String? = null, modifier: Modifier = Modifier) {
+    val style = statusStyle(status)
+    StatusBadgeContent(label ?: style.label, style, modifier, style.icon)
+}
+
+@Composable
+private fun StatusBadgeContent(
+    label: String,
+    style: StatusStyle,
+    modifier: Modifier,
+    icon: ImageVector?,
+) {
+    val foreground = style.foreground
 
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(50),
-        color = background,
+        color = style.background,
         contentColor = foreground,
         border = BorderStroke(0.6.dp, foreground.copy(alpha = 0.24f)),
     ) {

@@ -3,7 +3,7 @@ package cn.pxyb.mycontrol
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import cn.pxyb.mycontrol.ui.MainTab
+import cn.pxyb.mycontrol.ui.navigation.MainTab
 
 object DeepLinks {
     const val SCHEME = "mycontrol"

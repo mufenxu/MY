@@ -6,18 +6,18 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Bundle
 import android.os.Build
+import android.os.Bundle
 import android.view.ContextThemeWrapper
-import android.view.ViewGroup
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.MimeTypeMap
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
-import android.webkit.ValueCallback
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -29,15 +29,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -45,11 +45,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,23 +58,28 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.MainActivity
-import cn.pxyb.mycontrol.data.SessionStore
-import cn.pxyb.mycontrol.data.WebSessionStore
 import cn.pxyb.mycontrol.data.AppPreferences
 import cn.pxyb.mycontrol.data.AppThemePreference
-import cn.pxyb.mycontrol.util.authenticateDevice
-import androidx.lifecycle.Lifecycle
-import kotlinx.coroutines.Job
 import cn.pxyb.mycontrol.data.ExternalApplicationAutoLogin
 import cn.pxyb.mycontrol.data.PlatformWebCookie
+import cn.pxyb.mycontrol.data.SessionStore
+import cn.pxyb.mycontrol.data.WebSessionStore
+import cn.pxyb.mycontrol.ui.components.button.AppButton
+import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
+import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
+import cn.pxyb.mycontrol.util.authenticateDevice
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -138,7 +143,7 @@ internal fun LoginBotChallengeDialog(onDismiss: () -> Unit, onVerified: (String)
                     onRelease = { it.stopLoading(); it.destroy() },
                 )
             }
-            error?.let { message -> FeedbackBanner(message, error = true, onRetry = { error = null; revision++ }) }
+            error?.let { message -> AppFeedbackBanner(message, error = true, onRetry = { error = null; revision++ }) }
         }
     }
 }

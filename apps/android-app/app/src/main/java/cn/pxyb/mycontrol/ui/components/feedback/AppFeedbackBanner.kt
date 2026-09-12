@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui.components.feedback
 
-import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -60,9 +59,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import cn.pxyb.mycontrol.ui.pressFeedback
+import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 /**
@@ -392,4 +391,3 @@ fun AppFeedbackBanner(
         onDismiss = onDismiss,
     )
 }
-

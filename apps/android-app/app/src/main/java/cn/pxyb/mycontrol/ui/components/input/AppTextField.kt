@@ -107,7 +107,7 @@ fun AppTextField(
                 when {
                     trailingIcon != null -> trailingIcon()
                     isPassword -> {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }, enabled = enabled) {
                             Icon(
                                 imageVector = if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
                                 contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",

@@ -15,19 +15,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cn.pxyb.mycontrol.ui.AppDialog
-import cn.pxyb.mycontrol.ui.AppDialogPrimaryButton
-import cn.pxyb.mycontrol.ui.AppDialogSecondaryButton
+import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
+import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
+import cn.pxyb.mycontrol.util.DateTimeUtils.parseTimeMinutes
 import java.util.Locale
-
-internal fun parseTimeToMinutes(timeStr: String): Int? {
-    val parts = timeStr.trim().split(":")
-    if (parts.size != 2) return null
-    val h = parts[0].toIntOrNull() ?: return null
-    val m = parts[1].toIntOrNull() ?: return null
-    if (h !in 0..23 || m !in 0..59) return null
-    return h * 60 + m
-}
 
 /**
  * 现代时分双轮滚轮选择弹窗
@@ -42,9 +34,9 @@ fun AppTimePickerModal(
     maxTime: String = "23:59",
     minuteStep: Int = 1,
 ) {
-    val minMin = (parseTimeToMinutes(minTime) ?: 0).coerceIn(0, 1439)
-    val maxMin = (parseTimeToMinutes(maxTime) ?: 1439).coerceIn(minMin, 1439)
-    val clampedCurrentMin = (parseTimeToMinutes(currentTime) ?: minMin).coerceIn(minMin, maxMin)
+    val minMin = (parseTimeMinutes(minTime) ?: 0).coerceIn(0, 1439)
+    val maxMin = (parseTimeMinutes(maxTime) ?: 1439).coerceIn(minMin, 1439)
+    val clampedCurrentMin = (parseTimeMinutes(currentTime) ?: minMin).coerceIn(minMin, maxMin)
 
     val currentH = clampedCurrentMin / 60
     val currentM = clampedCurrentMin % 60

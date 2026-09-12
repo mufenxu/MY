@@ -1,6 +1,9 @@
 package cn.pxyb.mycontrol.ui
 
 import androidx.compose.ui.unit.dp
+import cn.pxyb.mycontrol.ui.components.layout.metricGridColumnCount
+import cn.pxyb.mycontrol.ui.components.layout.quickActionColumnCount
+import cn.pxyb.mycontrol.ui.components.layout.unreadBadgeLabel
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

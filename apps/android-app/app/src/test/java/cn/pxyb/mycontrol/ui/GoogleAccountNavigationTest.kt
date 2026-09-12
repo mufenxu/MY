@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.navigation.MainTab
+import cn.pxyb.mycontrol.ui.navigation.parentTabForSubScreen
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

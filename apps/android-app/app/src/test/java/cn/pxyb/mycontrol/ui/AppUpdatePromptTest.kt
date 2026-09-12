@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import cn.pxyb.mycontrol.ui.feature.updates.shouldShowStartupUpdatePrompt
 import cn.pxyb.mycontrol.update.AppUpdatePhase
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

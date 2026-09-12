@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui
 
-
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
@@ -18,33 +17,28 @@ import cn.pxyb.mycontrol.DeviceControlTileService
 import cn.pxyb.mycontrol.assistant.buildGuardianAlerts
 import cn.pxyb.mycontrol.assistant.buildPersonalAssistantSnapshot
 import cn.pxyb.mycontrol.assistant.sharedTodoTitle
-import cn.pxyb.mycontrol.data.ApiException
-import cn.pxyb.mycontrol.data.AssistantPreferences
-import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AndroidCalendarSync
-import cn.pxyb.mycontrol.data.AutomationCondition
 import cn.pxyb.mycontrol.data.AndroidReleaseRecord
+import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationAction
+import cn.pxyb.mycontrol.data.AssistantActionItem
+import cn.pxyb.mycontrol.data.AssistantChatTurn
+import cn.pxyb.mycontrol.data.AssistantPreferences
+import cn.pxyb.mycontrol.data.AutomationCondition
+import cn.pxyb.mycontrol.data.BackupQuality
 import cn.pxyb.mycontrol.data.CampusTimetable
-import cn.pxyb.mycontrol.data.CampusWaterValve
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
 import cn.pxyb.mycontrol.data.GoogleAccountStore
 import cn.pxyb.mycontrol.data.HomePreferences
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
-import cn.pxyb.mycontrol.data.AssistantActionItem
-import cn.pxyb.mycontrol.data.AssistantChatTurn
 import cn.pxyb.mycontrol.data.IotSceneAction
-import cn.pxyb.mycontrol.data.newTodoTask
-import cn.pxyb.mycontrol.data.activeUnreadCount
-import cn.pxyb.mycontrol.data.isSnoozedAt
-import org.json.JSONObject
+import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.PlatformWebSession
 import cn.pxyb.mycontrol.data.QuickScenePreference
-import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.ResponseSnapshotStore
 import cn.pxyb.mycontrol.data.SecurityData
@@ -52,46 +46,79 @@ import cn.pxyb.mycontrol.data.SessionStore
 import cn.pxyb.mycontrol.data.TodoRepository
 import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.TodoTask
+import cn.pxyb.mycontrol.data.activeUnreadCount
+import cn.pxyb.mycontrol.data.isSnoozedAt
 import cn.pxyb.mycontrol.data.mergeHydratedAlerts
+import cn.pxyb.mycontrol.data.newTodoTask
 import cn.pxyb.mycontrol.data.shouldInvalidatePlatformSession
+import cn.pxyb.mycontrol.ui.feature.account.AccountSecurityController
+import cn.pxyb.mycontrol.ui.feature.account.toAccountManagementUiState
+import cn.pxyb.mycontrol.ui.feature.assistant.AssistantChatMessageUi
+import cn.pxyb.mycontrol.ui.feature.assistant.AssistantChatUiState
+import cn.pxyb.mycontrol.ui.feature.auth.toEntryUiState
+import cn.pxyb.mycontrol.ui.feature.auth.toQrLoginUiState
+import cn.pxyb.mycontrol.ui.feature.campus.library.LibrarySeatStateHolder
+import cn.pxyb.mycontrol.ui.feature.campus.reservation.ReservationStateHolder
+import cn.pxyb.mycontrol.ui.feature.campus.reservation.campusReservationRedirect
+import cn.pxyb.mycontrol.ui.feature.campus.toFreeClassroomUiState
+import cn.pxyb.mycontrol.ui.feature.campus.water.WaterValveStateHolder
+import cn.pxyb.mycontrol.ui.feature.google.GoogleAccountsController
+import cn.pxyb.mycontrol.ui.feature.google.toGoogleAccountDeskUiState
+import cn.pxyb.mycontrol.ui.feature.news.toDailyNewsUiState
+import cn.pxyb.mycontrol.ui.feature.notifications.NotificationController
+import cn.pxyb.mycontrol.ui.feature.notifications.toNotificationCenterUiState
+import cn.pxyb.mycontrol.ui.feature.operations.toOperationsUiState
+import cn.pxyb.mycontrol.ui.feature.overview.toOverviewUiState
+import cn.pxyb.mycontrol.ui.feature.profile.CacheStorageInfo
+import cn.pxyb.mycontrol.ui.feature.profile.NetworkDiagnostics
+import cn.pxyb.mycontrol.ui.feature.profile.toProfileUiState
+import cn.pxyb.mycontrol.ui.feature.projects.toProjectsUiState
+import cn.pxyb.mycontrol.ui.feature.registry.RegistryImagesStateHolder
+import cn.pxyb.mycontrol.ui.feature.releases.AndroidReleaseStateHolder
+import cn.pxyb.mycontrol.ui.feature.scenes.ScenesController
+import cn.pxyb.mycontrol.ui.feature.search.GlobalSearchItem
+import cn.pxyb.mycontrol.ui.feature.search.SearchDestination
+import cn.pxyb.mycontrol.ui.feature.search.toGlobalSearchUiState
+import cn.pxyb.mycontrol.ui.feature.todos.TodoController
+import cn.pxyb.mycontrol.ui.feature.tools.toToolsUiState
+import cn.pxyb.mycontrol.ui.feature.updates.AppUpdateStateHolder
+import cn.pxyb.mycontrol.ui.feature.workspace.toTodayUiState
+import cn.pxyb.mycontrol.ui.navigation.MainTab
+import cn.pxyb.mycontrol.ui.navigation.SAVED_SELECTED_TAB
+import cn.pxyb.mycontrol.ui.navigation.SAVED_WORKSPACE_DESTINATION
+import cn.pxyb.mycontrol.ui.navigation.WorkspaceDestination
+import cn.pxyb.mycontrol.ui.navigation.restoredMainTab
+import cn.pxyb.mycontrol.ui.navigation.restoredWorkspaceDestination
+import cn.pxyb.mycontrol.ui.state.ActionStateHolder
+import cn.pxyb.mycontrol.ui.state.handleFeatureRequestFailure
+import cn.pxyb.mycontrol.update.AppUpdateManager
 import cn.pxyb.mycontrol.widget.CourseWidgetProvider
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
-import cn.pxyb.mycontrol.update.AppUpdateManager
-import kotlinx.coroutines.Job
+import java.io.File
+import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.LocalDate
-import java.time.ZoneId
-import java.util.UUID
-import java.io.File
-import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.InetAddress
-import java.net.URL
-import java.time.temporal.ChronoUnit
-import javax.net.ssl.HttpsURLConnection
-import java.security.cert.X509Certificate
+import org.json.JSONObject
 
 @OptIn(kotlinx.coroutines.FlowPreview::class)
 enum class QrScanDestination { Login, Authenticator, WaterValve, Unsupported }
@@ -107,6 +134,7 @@ class AppViewModel(
     private val personalStore = PersonalWorkspaceStore(application)
     private val snapshotStore = ResponseSnapshotStore(application)
     private val api = PlatformApi(sessionStore, snapshotStore)
+    private val networkDiagnostics = NetworkDiagnostics(api)
     private val alertNotifier = AlertNotifier(application)
     private val androidCalendarSync = AndroidCalendarSync(application)
     private val hasSavedSession = sessionStore.hasSession()
@@ -175,12 +203,19 @@ class AppViewModel(
     private val assistantChatMutable = MutableStateFlow(AssistantChatUiState())
     val assistantChatState: StateFlow<AssistantChatUiState> = assistantChatMutable.asStateFlow()
     val todayState = deriveState(AppUiState::toTodayUiState)
-    val waterValveState = deriveState(AppUiState::toWaterValveUiState)
+    private val waterValves = WaterValveStateHolder(
+        viewModelScope,
+        api,
+        canRun = { mutableState.value.let { it.user != null && !it.locked && it.busyAction != "logout" } },
+        onSessionExpired = ::forceReauthentication,
+    )
+    val waterValveState = waterValves.state
     val freeClassroomState = deriveState(AppUiState::toFreeClassroomUiState)
     val reservations = ReservationStateHolder(viewModelScope, api.campus, ::forceReauthentication)
     val librarySeats = LibrarySeatStateHolder(viewModelScope, api.campus, ::forceReauthentication)
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
-    val scenesState = deriveState(AppUiState::toScenesUiState)
+    private val scenes = ScenesController(viewModelScope, api.iot, actions, mutableState, { refreshIot(force = true) }, ::publishWidget)
+    val scenesState = scenes.state
     private var pendingQrLogin: Pair<String, String>? = null
     private var passwordLoginChallenge: cn.pxyb.mycontrol.data.LoginChallenge? = null
     private var pendingLoginResult: cn.pxyb.mycontrol.data.LoginResult? = null
@@ -190,7 +225,7 @@ class AppViewModel(
     private var deviceLoginJob: Job? = null
     private val accountRequestScope = CoroutineScope(viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job]))
     private var qrLoginJob: Job? = null
-    private var waterBillJob: Job? = null
+
     private var appInForeground = false
     private val refreshJobs = mutableMapOf<DataSection, Job>()
     private val lastRefreshElapsedMs = mutableMapOf<DataSection, Long>()
@@ -198,7 +233,7 @@ class AppViewModel(
     private var initialIncidentsLoaded = false
     private var initialTasksLoaded = false
     private var operationalEffectsJob: Job? = null
-    private val waterValveMutex = Mutex()
+
     private var featureAccountUsername: String? = null
 
     private fun <T> deriveState(transform: (AppUiState) -> T): StateFlow<T> = mutableState
@@ -710,6 +745,7 @@ class AppViewModel(
             androidReleases.reset()
             reservations.reset()
             librarySeats.reset()
+            waterValves.reset()
             featureAccountUsername = username
         }
         notifications.reset()
@@ -747,18 +783,11 @@ class AppViewModel(
     private fun cancelAccountRequests() {
         accountRequestScope.coroutineContext.cancelChildren()
         qrLoginJob = null
-        waterBillJob = null
+        waterValves.cancelPending()
         operationalEffectsJob?.cancel()
         operationalEffectsJob = null
         assistantChatMutable.update { it.copy(sending = false) }
-        mutableState.update {
-            it.copy(
-                qrLoginBusy = false,
-                campusWaterValveBusy = false,
-                campusWaterValveLoading = false,
-                campusWaterBillLoading = false,
-            )
-        }
+        mutableState.update { it.copy(qrLoginBusy = false) }
     }
 
     private fun handleLoginFailure(error: Throwable) {
@@ -1768,126 +1797,21 @@ class AppViewModel(
         evaluatePersonalReminders()
     }
 
-    fun refreshWaterValve(force: Boolean = false) {
-        if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" || it.campusWaterValveLoading }) return
-        accountRequestScope.launch {
-            waterValveMutex.withLock {
-                if (!force && mutableState.value.campusWaterValve.bound) return@withLock
-                mutableState.update { it.copy(campusWaterValveLoading = true, campusWaterValveError = null) }
-                try {
-                    val valve = api.withRequestMetadata { api.campus.campusWaterValve() }.value
-                    mutableState.update {
-                        it.copy(
-                            campusWaterValve = valve,
-                            campusWaterValveError = valve.error,
-                        )
-                    }
-                } catch (error: Throwable) {
-                    handleFeatureRequestFailure(error, ::forceReauthentication)
-                    mutableState.update {
-                        it.copy(
-                            campusWaterValveError = error.message ?: "饮水机状态加载失败，请重试。",
-                        )
-                    }
-                } finally {
-                    if (isActive) mutableState.update { it.copy(campusWaterValveLoading = false) }
-                }
-            }
-        }
-    }
+    fun refreshWaterValve(force: Boolean = false) = waterValves.refreshWaterValve(force)
 
-    fun refreshWaterBill(month: String, force: Boolean = false) {
-        if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" }) return
-        waterBillJob?.cancel()
-        if (!force && mutableState.value.campusWaterBill?.month == month) {
-            mutableState.update { it.copy(campusWaterBillLoading = false) }
-            return
-        }
-        waterBillJob = accountRequestScope.launch {
-            mutableState.update { it.copy(campusWaterBillLoading = true, campusWaterBillError = null) }
-            try {
-                val bill = api.withRequestMetadata { api.campus.campusWaterBill(month) }.value
-                mutableState.update {
-                    it.copy(
-                        campusWaterBill = bill,
-                        campusWaterBillError = bill.error,
-                    )
-                }
-            } catch (error: Throwable) {
-                handleFeatureRequestFailure(error, ::forceReauthentication)
-                mutableState.update {
-                    it.copy(
-                        campusWaterBillError = error.message ?: "生活用水账单加载失败，请重试。",
-                    )
-                }
-            } finally {
-                if (isActive) mutableState.update { it.copy(campusWaterBillLoading = false) }
-            }
-        }
-    }
+    fun refreshWaterBill(month: String, force: Boolean = false) = waterValves.refreshWaterBill(month, force)
 
-    fun bindWaterValve(rawCode: String) = runWaterValveAction(
-        successMessage = "饮水机绑定成功",
-        failureMessage = "饮水机绑定失败，请重试。",
-        action = { api.campus.bindCampusWaterValve(rawCode) },
-    )
+    fun bindWaterValve(rawCode: String) = waterValves.bindWaterValve(rawCode)
 
-    fun openWaterValve(seqNo: String) = runWaterValveAction(
-        successMessage = "饮水机已开启",
-        failureMessage = "饮水机开启失败，请重试。",
-        action = { api.campus.openCampusWaterValve(seqNo) },
-    )
+    fun openWaterValve(seqNo: String) = waterValves.openWaterValve(seqNo)
 
-    fun closeWaterValve(seqNo: String) = runWaterValveAction(
-        successMessage = "饮水机已关闭",
-        failureMessage = "饮水机关闭失败，请重试。",
-        action = { api.campus.closeCampusWaterValve(seqNo) },
-    )
+    fun closeWaterValve(seqNo: String) = waterValves.closeWaterValve(seqNo)
 
-    fun unbindWaterValve(seqNo: String) = runWaterValveAction(
-        successMessage = "饮水机绑定已删除",
-        failureMessage = "饮水机绑定删除失败，请重试。",
-        action = { api.campus.unbindCampusWaterValve(seqNo) },
-    )
+    fun unbindWaterValve(seqNo: String) = waterValves.unbindWaterValve(seqNo)
 
-    fun reorderWaterValves(seqNos: List<String>) = runWaterValveAction(
-        successMessage = "饮水机排序已保存",
-        failureMessage = "饮水机排序保存失败，请重试。",
-        action = { api.campus.reorderCampusWaterValves(seqNos) },
-    )
+    fun reorderWaterValves(seqNos: List<String>) = waterValves.reorderWaterValves(seqNos)
 
-    private fun runWaterValveAction(
-        successMessage: String,
-        failureMessage: String,
-        action: suspend () -> CampusWaterValve,
-    ) {
-        if (mutableState.value.let { it.campusWaterValveBusy || it.user == null || it.locked || it.busyAction == "logout" }) return
-        mutableState.update {
-            it.copy(campusWaterValveBusy = true, campusWaterValveError = null, campusWaterValveMessage = null)
-        }
-        accountRequestScope.launch {
-            try {
-                waterValveMutex.withLock {
-                    val valve = api.withRequestMetadata(allowCache = false) { action() }.value
-                    mutableState.update {
-                        it.copy(
-                            campusWaterValve = valve,
-                            campusWaterValveMessage = successMessage,
-                        )
-                    }
-                }
-            } catch (error: Throwable) {
-                handleFeatureRequestFailure(error, ::forceReauthentication)
-                mutableState.update { it.copy(campusWaterValveError = error.message ?: failureMessage) }
-            } finally {
-                if (isActive) mutableState.update { it.copy(campusWaterValveBusy = false) }
-            }
-        }
-    }
-
-    fun clearWaterValveFeedback() {
-        mutableState.update { it.copy(campusWaterValveError = null, campusWaterValveMessage = null) }
-    }
+    fun clearWaterValveFeedback() = waterValves.clearWaterValveFeedback()
 
     fun queryFreeClassrooms(dayplus: Int, sections: List<Int>, building: String) =
         launchRefresh(DataSection.FreeClassrooms, force = true, publishError = false) {
@@ -2053,22 +1977,10 @@ class AppViewModel(
         openNotificationDeepLink(action.deepLink)
     }
 
-    fun saveIotScene(id: String?, name: String, actions: List<IotSceneAction>) {
-        if (name.isBlank() || actions.isEmpty()) {
-            mutableState.update { it.copy(error = "请填写场景名称并至少添加一个设备动作。") }
-            return
-        }
-        runAction("scene-edit", if (id == null) "智能场景已创建。" else "智能场景已更新。") {
-            if (id == null) api.iot.createIotScene(name, actions) else api.iot.updateIotScene(id, name, actions)
-            refreshIot(force = true)
-        }
-    }
+    fun saveIotScene(id: String?, name: String, actions: List<IotSceneAction>) =
+        scenes.saveIotScene(id, name, actions)
 
-    fun deleteIotScene(id: String, confirmation: suspend () -> Boolean) =
-        runAction("scene-delete", "智能场景已删除。", confirmation) {
-            api.iot.deleteIotScene(id)
-            mutableState.update { it.copy(iot = api.iot.dashboard()) }
-        }
+    fun deleteIotScene(id: String, confirmation: suspend () -> Boolean) = scenes.deleteIotScene(id, confirmation)
 
     fun saveIotRule(
         id: String?,
@@ -2078,32 +1990,12 @@ class AppViewModel(
         actions: List<IotSceneAction>,
         cooldownSeconds: Int,
         confirmation: suspend () -> Boolean,
-    ) {
-        if (name.isBlank() || condition.deviceId.isBlank() || actions.isEmpty()) {
-            mutableState.update { it.copy(error = "请填写规则名称、触发条件并选择执行场景。") }
-            return
-        }
-        runAction("rule-edit", if (id == null) "自动化规则已创建。" else "自动化规则已更新。", confirmation) {
-            if (id == null) {
-                api.iot.createIotRule(name, condition, actions, cooldownSeconds)
-            } else {
-                api.iot.updateIotRule(id, name, enabled, condition, actions, cooldownSeconds)
-            }
-            refreshIot(force = true)
-        }
-    }
+    ) = scenes.saveIotRule(id, name, enabled, condition, actions, cooldownSeconds, confirmation)
 
     fun setIotRuleEnabled(id: String, enabled: Boolean, confirmation: suspend () -> Boolean) =
-        runAction("rule-toggle", if (enabled) "自动化规则已启用。" else "自动化规则已停用。", confirmation) {
-            api.iot.setIotRuleEnabled(id, enabled)
-            mutableState.update { it.copy(iot = api.iot.dashboard()) }
-        }
+        scenes.setIotRuleEnabled(id, enabled, confirmation)
 
-    fun deleteIotRule(id: String, confirmation: suspend () -> Boolean) =
-        runAction("rule-delete", "自动化规则已删除。", confirmation) {
-            api.iot.deleteIotRule(id)
-            mutableState.update { it.copy(iot = api.iot.dashboard()) }
-        }
+    fun deleteIotRule(id: String, confirmation: suspend () -> Boolean) = scenes.deleteIotRule(id, confirmation)
 
     fun runDiagnostics() = runAction("diagnostics", "所有者一键巡检已完成。") {
         val diagnostics = api.runDiagnostics()
@@ -2138,12 +2030,7 @@ class AppViewModel(
         mutableState.update { it.copy(ct8 = api.ct8()) }
     }
 
-    fun runIotScene(id: String, confirmation: suspend () -> Boolean) =
-        runAction("scene", "IoT 场景指令已进入执行队列。", confirmation) {
-            api.iot.runIotScene(id)
-            mutableState.update { it.copy(iot = api.iot.dashboard()) }
-            publishWidget()
-        }
+    fun runIotScene(id: String, confirmation: suspend () -> Boolean) = scenes.runIotScene(id, confirmation)
 
     fun addIncidentNote(id: String, note: String) =
         runAction("incident-note:$id", "处理记录已保存。") {
@@ -2337,7 +2224,6 @@ class AppViewModel(
         CourseWidgetProvider.clear(getApplication())
     }
 
-
     private fun reloadPersonalState() = notifications.reloadLocal()
 
     private fun syncRemoteNotifications(force: Boolean = false) = launchRefresh(DataSection.Notifications, force) {
@@ -2392,98 +2278,9 @@ class AppViewModel(
         if (mutableState.value.user == null) return
         viewModelScope.launch {
             mutableState.update { it.copy(networkHealth = it.networkHealth.copy(status = "measuring")) }
-            mutableState.update { it.copy(networkHealth = withContext(Dispatchers.IO) { inspectNetworkHealth() }) }
+            mutableState.update { it.copy(networkHealth = withContext(Dispatchers.IO) { networkDiagnostics.inspect() }) }
         }
     }
-
-    private suspend fun inspectNetworkHealth(): NetworkHealth {
-        val checks = mutableListOf<NetworkCheckResult>()
-        val baseUrl = runCatching { URL(BuildConfig.PLATFORM_BASE_URL) }.getOrNull()
-        val host = baseUrl?.host.orEmpty()
-        val dnsStart = System.nanoTime()
-        val dnsResult = runCatching { InetAddress.getByName(host) }
-        val dnsMs = (System.nanoTime() - dnsStart) / 1_000_000L
-        checks += NetworkCheckResult(
-            label = "DNS 解析",
-            ok = dnsResult.isSuccess,
-            detail = if (dnsResult.isSuccess) "$host · ${dnsMs}ms" else "无法解析 $host",
-        )
-
-        val apiStart = System.nanoTime()
-        val apiResult = runCatching { api.withRequestMetadata(allowCache = false) { api.auth.authStatus() } }
-        val apiMs = (System.nanoTime() - apiStart) / 1_000_000L
-        checks += NetworkCheckResult(
-            label = "平台 API",
-            ok = apiResult.isSuccess,
-            detail = if (apiResult.isSuccess) "响应 ${apiMs}ms" else (apiResult.exceptionOrNull()?.message ?: "请求失败"),
-        )
-
-        val updateResult = checkHttpEndpoint(BuildConfig.APP_UPDATE_MANIFEST_URL)
-        checks += NetworkCheckResult("更新源", updateResult.first, updateResult.second)
-        val fallbackResult = checkHttpEndpoint(BuildConfig.APP_UPDATE_MANIFEST_FALLBACK_URL)
-        checks += NetworkCheckResult("GitHub 备用源", fallbackResult.first, fallbackResult.second)
-
-        val certificateDays = checkCertificateDays(baseUrl)
-        checks += NetworkCheckResult(
-            label = "HTTPS 证书",
-            ok = certificateDays == null || certificateDays >= 14,
-            detail = certificateDays?.let { "剩余约 ${it.coerceAtLeast(0)} 天" } ?: "未能读取证书有效期",
-        )
-        val apiOk = apiResult.isSuccess
-        val dnsOk = dnsResult.isSuccess
-        val hardFailure = !dnsOk || !apiOk
-        val status = when {
-            hardFailure -> "error"
-            checks.any { !it.ok } -> "warning"
-            apiMs < 150 -> "healthy"
-            apiMs < 500 -> "warning"
-            else -> "error"
-        }
-        val message = when (status) {
-            "healthy" -> "手机到平台与更新源均可访问 · API ${apiMs}ms"
-            "warning" -> checks.firstOrNull { !it.ok }?.let { "${it.label}需要关注：${it.detail}" }
-                ?: "平台可访问，但响应偏慢 · API ${apiMs}ms"
-            else -> checks.firstOrNull { !it.ok }?.let { "${it.label}失败：${it.detail}" } ?: "远程网关连接失败"
-        }
-        return NetworkHealth(
-            latencyMs = apiMs,
-            status = status,
-            gatewayUrl = BuildConfig.PLATFORM_BASE_URL,
-            checkedAtMillis = System.currentTimeMillis(),
-            dnsOk = dnsOk,
-            apiOk = apiOk,
-            message = message,
-            certificateDaysRemaining = certificateDays,
-            checks = checks,
-        )
-    }
-
-    private fun checkHttpEndpoint(rawUrl: String): Pair<Boolean, String> = runCatching {
-        val connection = URL(rawUrl).openConnection() as HttpURLConnection
-        connection.connectTimeout = 5_000
-        connection.readTimeout = 5_000
-        connection.requestMethod = "GET"
-        connection.instanceFollowRedirects = true
-        try {
-            val code = connection.responseCode
-            if (code in 200..399) true to "HTTP $code" else false to "HTTP $code"
-        } finally {
-            connection.disconnect()
-        }
-    }.getOrElse { false to (it.message ?: "请求失败") }
-
-    private fun checkCertificateDays(url: URL?): Long? = runCatching {
-        val connection = url?.openConnection() as? HttpsURLConnection ?: return null
-        connection.connectTimeout = 5_000
-        connection.readTimeout = 5_000
-        try {
-            connection.connect()
-            val certificate = connection.serverCertificates.firstOrNull() as? X509Certificate ?: return null
-            ChronoUnit.DAYS.between(java.time.Instant.now(), certificate.notAfter.toInstant())
-        } finally {
-            connection.disconnect()
-        }
-    }.getOrNull()
 
     fun updateCacheStorageInfo() {
         viewModelScope.launch(Dispatchers.IO) {

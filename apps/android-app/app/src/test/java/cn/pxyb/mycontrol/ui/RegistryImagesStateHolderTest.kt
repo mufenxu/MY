@@ -5,6 +5,10 @@ import cn.pxyb.mycontrol.data.AcrImageGroup
 import cn.pxyb.mycontrol.data.AcrImageMutation
 import cn.pxyb.mycontrol.data.AcrImageOutcome
 import cn.pxyb.mycontrol.data.AcrImageTag
+import cn.pxyb.mycontrol.ui.feature.registry.formatAcrTimestamp
+import cn.pxyb.mycontrol.ui.feature.registry.hasTag
+import cn.pxyb.mycontrol.ui.feature.registry.protectedReasonLabel
+import cn.pxyb.mycontrol.ui.feature.registry.summarizeAcrMutation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull

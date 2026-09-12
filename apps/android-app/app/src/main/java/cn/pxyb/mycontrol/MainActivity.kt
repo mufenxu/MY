@@ -1,10 +1,10 @@
 package cn.pxyb.mycontrol
 
-import android.content.Intent
 import android.Manifest
-import android.content.pm.PackageManager
 import android.app.PendingIntent
+import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.nfc.NdefMessage
 import android.nfc.NdefRecord
 import android.nfc.NfcAdapter
@@ -18,14 +18,13 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.core.app.NotificationManagerCompat
-import androidx.lifecycle.lifecycleScope
+import androidx.core.content.ContextCompat
 import androidx.credentials.CreatePublicKeyCredentialRequest
 import androidx.credentials.CreatePublicKeyCredentialResponse
 import androidx.credentials.CredentialManager
@@ -39,20 +38,20 @@ import androidx.credentials.exceptions.GetCredentialInterruptedException
 import androidx.credentials.exceptions.GetCredentialProviderConfigurationException
 import androidx.credentials.exceptions.GetCredentialUnsupportedException
 import androidx.credentials.exceptions.NoCredentialException
-import cn.pxyb.mycontrol.AlertNotifier
-import cn.pxyb.mycontrol.ui.AppViewModel
-import cn.pxyb.mycontrol.ui.MyControlApp
-import cn.pxyb.mycontrol.ui.theme.MYControlTheme
+import androidx.lifecycle.lifecycleScope
 import cn.pxyb.mycontrol.data.AppPreferences
 import cn.pxyb.mycontrol.data.AppThemePreference
 import cn.pxyb.mycontrol.data.SessionStore
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import cn.pxyb.mycontrol.ui.AppViewModel
+import cn.pxyb.mycontrol.ui.MyControlApp
+import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 import cn.pxyb.mycontrol.util.authenticateDevice
 import cn.pxyb.mycontrol.util.promptDeviceAuthentication
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 class MainActivity : ComponentActivity() {
     private val appViewModel: AppViewModel by viewModels()

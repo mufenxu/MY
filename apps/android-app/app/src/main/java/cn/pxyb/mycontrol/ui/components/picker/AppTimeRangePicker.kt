@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui.components.picker
 
-import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -30,17 +29,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.util.Locale
-
-internal fun formatMinutesToTime(minutes: Int): String {
-    val h = (minutes / 60).coerceIn(0, 23)
-    val m = (minutes % 60).coerceIn(0, 59)
-    return String.format(Locale.ROOT, "%02d:%02d", h, m)
-}
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
+import cn.pxyb.mycontrol.util.DateTimeUtils.formatMinutesToTime
+import cn.pxyb.mycontrol.util.DateTimeUtils.parseTimeMinutes
 
 /**
  * 现代起止时段滚轮选择器卡片
@@ -71,14 +65,14 @@ fun AppTimeRangePicker(
 ) {
     var pickingTarget by remember { mutableStateOf<String?>(null) }
 
-    val startMin = parseTimeToMinutes(startTime)
-    val endMin = parseTimeToMinutes(endTime)
+    val startMin = parseTimeMinutes(startTime)
+    val endMin = parseTimeMinutes(endTime)
     val durationMin = if (startMin != null && endMin != null && endMin > startMin) endMin - startMin else null
     val hasDurationRule = minDurationMinutes != null || maxDurationMinutes != null
     val isDurationValid = durationMin != null && hasDurationRule &&
         (minDurationMinutes == null || durationMin >= minDurationMinutes) &&
         (maxDurationMinutes == null || durationMin <= maxDurationMinutes)
-    val maxEndMin = parseTimeToMinutes(maxEndTime) ?: 1290
+    val maxEndMin = parseTimeMinutes(maxEndTime) ?: 1290
 
     if (pickingTarget != null) {
         val isStart = pickingTarget == "start"
@@ -92,9 +86,9 @@ fun AppTimeRangePicker(
             onConfirm = { chosen ->
                 if (isStart) {
                     onStartTimeChange(chosen)
-                    val newStartMin = parseTimeToMinutes(chosen)
+                    val newStartMin = parseTimeMinutes(chosen)
                     if (newStartMin != null) {
-                        val currEndMin = parseTimeToMinutes(endTime)
+                        val currEndMin = parseTimeMinutes(endTime)
                         val durationBroken = currEndMin == null || currEndMin <= newStartMin ||
                             (minDurationMinutes != null && (currEndMin - newStartMin) < minDurationMinutes) ||
                             (maxDurationMinutes != null && (currEndMin - newStartMin) > maxDurationMinutes)
@@ -282,7 +276,7 @@ fun AppTimeRangePicker(
                         val isCurrentDuration = durationMin == durationMinutes
                         Surface(
                             onClick = {
-                                val curStartMin = parseTimeToMinutes(startTime) ?: 540
+                                val curStartMin = parseTimeMinutes(startTime) ?: 540
                                 val targetEndMin = (curStartMin + durationMinutes).coerceAtMost(maxEndMin)
                                 onEndTimeChange(formatMinutesToTime(targetEndMin))
                             },

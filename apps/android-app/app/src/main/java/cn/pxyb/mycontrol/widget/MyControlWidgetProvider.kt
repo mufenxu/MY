@@ -5,18 +5,16 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
 import cn.pxyb.mycontrol.DeepLinks
-import cn.pxyb.mycontrol.MainActivity
-import cn.pxyb.mycontrol.ui.MainTab
 import cn.pxyb.mycontrol.R
+import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.IotData
 import cn.pxyb.mycontrol.data.OverviewData
 import cn.pxyb.mycontrol.data.QuickScenePreference
-import cn.pxyb.mycontrol.assistant.PersonalAssistantSnapshot
+import cn.pxyb.mycontrol.ui.navigation.MainTab
 import java.util.Date
 
 class MyControlWidgetProvider : AppWidgetProvider() {

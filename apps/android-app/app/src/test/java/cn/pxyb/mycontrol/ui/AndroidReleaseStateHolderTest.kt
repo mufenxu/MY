@@ -1,6 +1,8 @@
 package cn.pxyb.mycontrol.ui
 
 import cn.pxyb.mycontrol.data.AndroidReleaseRecord
+import cn.pxyb.mycontrol.ui.feature.releases.AndroidReleaseDownloadMode
+import cn.pxyb.mycontrol.ui.feature.releases.androidReleaseDownloadMode
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

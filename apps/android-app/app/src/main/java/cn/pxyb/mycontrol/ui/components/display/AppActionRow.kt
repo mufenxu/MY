@@ -2,7 +2,6 @@ package cn.pxyb.mycontrol.ui.components.display
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -28,10 +27,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cn.pxyb.mycontrol.ui.AppPanel
-import cn.pxyb.mycontrol.ui.AppSwitch
-import cn.pxyb.mycontrol.ui.pressFeedback
+import cn.pxyb.mycontrol.ui.components.input.AppSwitch
+import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
+import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 /**
  * 现代列表操作/设置单元格行

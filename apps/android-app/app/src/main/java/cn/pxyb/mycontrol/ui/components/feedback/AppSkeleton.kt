@@ -38,8 +38,8 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import cn.pxyb.mycontrol.ui.glassCardColor
-import cn.pxyb.mycontrol.ui.glassShimmer
+import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
+import cn.pxyb.mycontrol.ui.components.layout.glassShimmer
 import cn.pxyb.mycontrol.ui.theme.BrandCyan
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
@@ -252,7 +252,7 @@ fun AppSkeletonSeatGrid(
     }
 }
 
-/** 指标卡骨架行：与 MetricCell 同构，用于概览数字拉取中。 */
+/** 指标卡骨架行：与 AppMetricCell 同构，用于概览数字拉取中。 */
 @Composable
 fun AppSkeletonMetricRow(
     count: Int = 4,
