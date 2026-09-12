@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Notifications
@@ -49,7 +50,7 @@ fun GlobalSearchScreen(
     val results = remember(query, state.items) {
         val normalized = query.trim()
         if (normalized.isBlank()) {
-            state.items.take(20)
+            state.items.filter { it.featureRoute != null } + state.items.filter { it.featureRoute == null }.take(12)
         } else {
             state.items.filter { item ->
                 item.title.contains(normalized, ignoreCase = true) ||
@@ -63,7 +64,7 @@ fun GlobalSearchScreen(
 
     AppSubPage(
         title = "全局搜索",
-        subtitle = "应用、服务、任务、课程、设备与资源",
+        subtitle = "功能入口、应用与个人数据",
         onBack = onBack,
         contentPadding = contentPadding,
         pinHeader = true,
@@ -74,7 +75,7 @@ fun GlobalSearchScreen(
             AppSearchBar(
                 query = query,
                 onQueryChange = { query = it },
-                placeholder = "搜索名称、状态或内容",
+                placeholder = "搜索功能、课程、设备或任务",
             )
         }
         if (state.refreshing && results.isEmpty()) {
@@ -157,10 +158,11 @@ private fun SearchResultRow(item: GlobalSearchItem, onClick: () -> Unit) {
 }
 
 private fun searchResultIcon(destination: SearchDestination): ImageVector = when (destination) {
-    SearchDestination.Overview -> Icons.Outlined.Cloud
+    SearchDestination.Overview, SearchDestination.Operations -> Icons.Outlined.Cloud
     SearchDestination.Notifications -> Icons.Outlined.Notifications
     SearchDestination.Tools -> Icons.Outlined.Devices
     SearchDestination.GoogleAccounts -> Icons.Outlined.Email
-    SearchDestination.Today -> Icons.Outlined.CalendarMonth
+    SearchDestination.Today, SearchDestination.Timetable -> Icons.Outlined.CalendarMonth
+    SearchDestination.Todos -> Icons.Outlined.Checklist
     SearchDestination.Scenes -> Icons.Outlined.Tune
 }

@@ -97,26 +97,40 @@ class NotificationController(
         if (record.origin == "remote") launch { request { api.markAppNotificationUnread(id) } }
     }
 
-    fun updateAlertPreferences(preferences: AlertPreferences) = launch {
-        preferenceMutex.withLock {
-            val previous = withStore { readAlertPreferences() }
-            if (previous.quietHoursEnabled != preferences.quietHoursEnabled ||
-                previous.quietStartHour != preferences.quietStartHour || previous.quietEndHour != preferences.quietEndHour
-            ) {
-                api.saveAppNotificationPreference(
-                    AppNotificationPreference(
-                        quietHoursEnabled = preferences.quietHoursEnabled,
-                        quietStartHour = preferences.quietStartHour,
-                        quietEndHour = preferences.quietEndHour,
-                        timezoneOffsetMinutes = ZoneId.systemDefault().rules.getOffset(Instant.now()).totalSeconds / 60,
-                    ),
-                )
+    fun updateAlertPreferences(preferences: AlertPreferences, onComplete: (String?) -> Unit = {}) {
+        val current = appState.value
+        if (current.user == null || current.locked || current.busyAction == "logout") {
+            onComplete("请先登录并解锁应用，再保存通知设置。")
+            return
+        }
+        launch {
+            try {
+                preferenceMutex.withLock {
+                    val previous = withStore { readAlertPreferences() }
+                    if (previous.quietHoursEnabled != preferences.quietHoursEnabled ||
+                        previous.quietStartHour != preferences.quietStartHour || previous.quietEndHour != preferences.quietEndHour
+                    ) {
+                        api.saveAppNotificationPreference(
+                            AppNotificationPreference(
+                                quietHoursEnabled = preferences.quietHoursEnabled,
+                                quietStartHour = preferences.quietStartHour,
+                                quietEndHour = preferences.quietEndHour,
+                                timezoneOffsetMinutes = ZoneId.systemDefault().rules.getOffset(Instant.now()).totalSeconds / 60,
+                            ),
+                        )
+                    }
+                    withStore {
+                        writeAlertPreferences(preferences)
+                        DailyBriefScheduler.schedule(application, appState.value.user?.username)
+                    }
+                    appState.update { it.copy(alertPreferences = preferences, error = null, message = "提醒设置已保存。") }
+                }
+                onComplete(null)
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                onComplete(error.message ?: "通知设置保存失败，请重试。")
+                throw error
             }
-            withStore {
-                writeAlertPreferences(preferences)
-                DailyBriefScheduler.schedule(application, appState.value.user?.username)
-            }
-            appState.update { it.copy(alertPreferences = preferences, error = null, message = "提醒设置已保存。") }
         }
     }
 

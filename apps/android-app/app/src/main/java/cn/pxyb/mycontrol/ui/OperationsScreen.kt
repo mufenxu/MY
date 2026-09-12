@@ -36,6 +36,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material3.CircularProgressIndicator
+import cn.pxyb.mycontrol.data.ServiceInfo
+import cn.pxyb.mycontrol.ui.components.display.AppActionRow
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,13 +65,39 @@ fun OperationsScreen(
     onRunDiagnostics: () -> Unit,
     onTriggerBackup: () -> Unit,
     onOpenNotifications: () -> Unit,
-    onOpenRegistryImages: () -> Unit,
+    onOpenProjects: () -> Unit,
+    requestWebLoginUrl: suspend (String) -> String,
     onMeasureNetwork: () -> Unit,
     onIncidentNote: (String, String) -> Unit,
     onIncidentMute: (String) -> Unit,
     onIncidentResolve: (String, String) -> Unit,
     onRefresh: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var showServices by rememberSaveable { mutableStateOf(false) }
+    var openingServiceId by remember { mutableStateOf<String?>(null) }
+    var serviceOpenError by remember { mutableStateOf<String?>(null) }
+    val services = remember(state.overview?.services) {
+        state.overview?.services.orEmpty().sortedWith(compareBy<ServiceInfo> { it.state == "healthy" }.thenBy { it.name })
+    }
+    fun openService(service: ServiceInfo) {
+        val adminUrl = service.adminUrl?.takeIf(String::isNotBlank) ?: return
+        if (openingServiceId != null) return
+        openingServiceId = service.id
+        serviceOpenError = null
+        scope.launch {
+            runCatching { requestWebLoginUrl(adminUrl) }
+                .onSuccess { loginUrl ->
+                    openingServiceId = null
+                    openPlatformWebLink(context, loginUrl, service.name)
+                }
+                .onFailure { error ->
+                    openingServiceId = null
+                    serviceOpenError = error.message?.takeIf(String::isNotBlank) ?: "打开服务失败，请重试。"
+                }
+        }
+    }
     var confirmBackup by remember { mutableStateOf(false) }
     var noteTarget by remember { mutableStateOf<IncidentInfo?>(null) }
     var noteText by remember { mutableStateOf("") }
@@ -96,7 +131,7 @@ fun OperationsScreen(
                 .fillMaxSize()
                 .auroraBackdrop(dark),
             contentPadding = appPageContentPadding(contentPadding),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "status-header", contentType = "header") {
                 ImmersiveHeader(
@@ -117,6 +152,58 @@ fun OperationsScreen(
                 }
             }
 
+            item(key = "projects") {
+                AppPanel {
+                    AppActionRow(
+                        title = "项目与发布",
+                        subtitle = "GitHub 项目、Android 发布、CT8 任务与容器镜像",
+                        icon = Icons.Outlined.Code,
+                        onClick = onOpenProjects,
+                    )
+                }
+            }
+            item(key = "services") {
+                AppPanel {
+                    AppActionRow(
+                        title = "服务监控",
+                        subtitle = "${services.size} 项服务 · ${if (showServices) "收起运行指标" else "查看运行指标与服务入口"}",
+                        icon = Icons.Outlined.Hub,
+                        onClick = { showServices = !showServices },
+                    )
+                }
+            }
+            if (showServices) {
+                serviceOpenError?.let { message ->
+                    item(key = "service-open-error") { FeedbackBanner(message, error = true) }
+                }
+                if (services.isEmpty()) {
+                    item(key = "services-empty") {
+                        if (state.refreshing) GlassShimmerList(itemCount = 2, itemHeight = 72.dp)
+                        else EmptyBlock("暂无服务数据", "下拉刷新可重新获取服务状态。")
+                    }
+                } else {
+                    items(services, key = { "service-${it.id}" }, contentType = { "service" }) { service ->
+                        AppPanel {
+                            AppActionRow(
+                                title = service.name,
+                                subtitle = listOfNotNull(
+                                    service.category,
+                                    service.httpStatus?.let { "HTTP $it" },
+                                    service.latencyMs?.let { "$it ms" },
+                                    if (!service.adminUrl.isNullOrBlank()) "点击打开" else null,
+                                ).joinToString(" · "),
+                                enabled = openingServiceId == null || openingServiceId == service.id,
+                                onClick = if (service.adminUrl.isNullOrBlank()) null else { { openService(service) } },
+                                trailingContent = {
+                                    if (openingServiceId == service.id) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                                    else StatusBadge(service.state)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
             if (isTablet) {
                 // 平板 / 大屏：自适应双列运维管理布局
                 item(key = "tablet-operations-layout", contentType = "tablet-operations") {
@@ -127,7 +214,7 @@ fun OperationsScreen(
                         // 左列：系统概览指标 + 检查与连通性 + 诊断巡检 + 备份健康
                         Column(
                             modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             SectionHeader("系统概览", "只保留日常需要关注的结论")
                             AppPanel {
@@ -262,7 +349,7 @@ fun OperationsScreen(
                         // 右列：正在处理的问题 + 资源与续期到期提醒
                         Column(
                             modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             SectionHeader("正在处理的问题", "可以直接记录、静音或标记解决")
                             val unresolvedIncidents = state.incidents.filter { it.status != "resolved" }
@@ -591,39 +678,7 @@ fun OperationsScreen(
                 }
             }
 
-            item(key = "registry-images-title", contentType = "section") {
-                SectionHeader("镜像仓库", "清理阿里云 ACR 中堆积的历史镜像版本")
-            }
-            item(key = "registry-images", contentType = "card") {
-                AppPanel(onClick = onOpenRegistryImages) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        IconTile(
-                            Icons.Outlined.Inventory2,
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.primaryContainer,
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("容器镜像管理", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "查看并删除阿里云 ACR 里的旧版本镜像",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Icon(
-                            Icons.Outlined.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
+
         }
     }
 

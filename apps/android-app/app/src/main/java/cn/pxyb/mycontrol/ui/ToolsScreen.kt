@@ -34,7 +34,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoMode
 import androidx.compose.material.icons.outlined.Lightbulb
-import androidx.compose.material.icons.outlined.LockClock
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Router
@@ -43,7 +42,6 @@ import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +52,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import cn.pxyb.mycontrol.ui.components.display.AppDivider
+import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,17 +70,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.DeviceInfo
 import cn.pxyb.mycontrol.data.DeviceTelemetryInsight
-import cn.pxyb.mycontrol.data.Ct8Data
 import cn.pxyb.mycontrol.data.IotScene
 import cn.pxyb.mycontrol.data.TelemetryMetricSummary
 import cn.pxyb.mycontrol.data.TelemetrySeriesPoint
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
-
-private sealed interface ToolConfirmation {
-    data object Ct8 : ToolConfirmation
-    data class Scene(val scene: IotScene) : ToolConfirmation
-}
 
 private data class RelayTarget(
     val deviceId: String,
@@ -118,336 +113,151 @@ fun ToolsScreen(
     state: ToolsUiState,
     contentPadding: PaddingValues,
     currentTab: MainTab,
-    onTriggerCt8: () -> Unit,
     onRunScene: (String) -> Unit,
     onControlRelay: (String, String, Boolean) -> Unit,
     onRefresh: () -> Unit,
     onOpenNotifications: () -> Unit,
-    onOpenAuthenticator: () -> Unit,
+    onOpenScenes: () -> Unit,
 ) {
-    var confirmation by remember { mutableStateOf<ToolConfirmation?>(null) }
-
-    LaunchedEffect(currentTab) {
-        confirmation = null
-    }
-
-    val relayTargets = relayTargets()
+    var confirmation by remember { mutableStateOf<IotScene?>(null) }
+    var showConnectionDetails by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(currentTab) { confirmation = null }
+    val targets = relayTargets()
     val canOperate = state.user?.role in setOf("operator", "super_admin")
     val iot = state.iot
-    val ct8 = state.ct8
     val sensorDevices = remember(iot?.devices) {
         iot?.devices.orEmpty().filter { it.temperature != null || it.humidity != null }
     }
-    val sensorDeviceIds = remember(sensorDevices) { sensorDevices.map(DeviceInfo::id) }
-    var selectedSensorId by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(sensorDeviceIds) {
-        if (selectedSensorId !in sensorDeviceIds) {
-            selectedSensorId = sensorDevices.firstOrNull()?.id
-        }
-    }
-
+    var selectedSensorId by rememberSaveable { mutableStateOf<String?>(null) }
     val sensorDevice = sensorDevices.firstOrNull { it.id == selectedSensorId } ?: sensorDevices.firstOrNull()
-    val telemetryInsight = remember(iot?.insights, sensorDevice?.id) {
-        iot?.insights?.firstOrNull { it.deviceId == sensorDevice?.id }
-    }
-
+    val telemetryInsight = iot?.insights?.firstOrNull { it.deviceId == sensorDevice?.id }
     val isTablet = useTwoPaneLayout()
-
     val listState = rememberLazyListState()
     val dark = isAppInDarkTheme()
+    val controls: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ToolSectionTitle("设备与开关", "常用灯光与插座", ColorTokens.Amber.foreground)
+            targets.forEach { target ->
+                ModernRelayCard(
+                    target = target,
+                    device = iot?.devices?.firstOrNull { it.id == target.deviceId },
+                    mqttConnected = iot?.mqttConnected == true,
+                    canOperate = canOperate,
+                    busy = "relay:${target.deviceId}:${target.relayId}" in state.busyActions,
+                    enabled = !state.busyActions.blocksAction("relay:${target.deviceId}:${target.relayId}"),
+                    onControlRelay = onControlRelay,
+                )
+            }
+            AppPanel {
+                AppActionRow(
+                    title = "场景与自动化",
+                    subtitle = "管理场景、条件规则与执行记录",
+                    icon = Icons.Outlined.AutoMode,
+                    onClick = onOpenScenes,
+                )
+                iot?.scenes.orEmpty().take(3).forEach { scene ->
+                    AppDivider()
+                    ModernSceneRow(
+                        scene = scene,
+                        canOperate = canOperate,
+                        busy = "scene" in state.busyActions,
+                        enabled = !state.busyActions.blocksAction("scene"),
+                        onRun = { confirmation = scene },
+                    )
+                }
+            }
+        }
+    }
+    val environment: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ToolSectionTitle("环境感知", "室内温湿度与变化趋势", ColorTokens.Green.foreground)
+            if (sensorDevices.size > 1) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    sensorDevices.forEach { device ->
+                        AppFilterChip(
+                            label = device.name,
+                            selected = sensorDevice?.id == device.id,
+                            onClick = { selectedSensorId = device.id },
+                        )
+                    }
+                }
+            }
+            ModernEnvironmentCard(sensorDevice)
+            if (telemetryInsight != null) {
+                TelemetryInsightPanel(telemetryInsight)
+            } else if (sensorDevice != null && !state.refreshing) {
+                TelemetryInsightUnavailable()
+            }
+            AppPanel {
+                AppActionRow(
+                    title = "连接详情",
+                    subtitle = if (showConnectionDetails) "收起连接状态与消息统计" else "查看连接状态与消息统计",
+                    icon = Icons.Outlined.Router,
+                    onClick = { showConnectionDetails = !showConnectionDetails },
+                )
+            }
+            if (showConnectionDetails) {
+                ModernMqttStatusPanel(
+                    mqttConnected = iot?.mqttConnected == true,
+                    connectionState = iot?.connectionState ?: "等待设备状态",
+                    onlineDevices = iot?.devices?.count { it.online } ?: 0,
+                    totalDevices = iot?.devices?.size ?: 0,
+                    messagesReceived = iot?.messagesReceived ?: 0,
+                )
+            }
+        }
+    }
     PullToRefresh(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,
-        atTop = {
-            listState.firstVisibleItemIndex == 0 &&
-                listState.firstVisibleItemScrollOffset == 0
-        },
+        atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
     ) {
         LazyColumn(
             state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .auroraBackdrop(dark)
-                .padding(
-                    start = AppPageHorizontalPadding,
-                    end = AppPageHorizontalPadding,
-                    top = contentPadding.calculateTopPadding() + 4.dp,
-                ),
-            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.fillMaxSize().auroraBackdrop(dark),
+            contentPadding = appPageContentPadding(contentPadding),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // 1. 全新通透极简顶部标题（无黑色包覆块，无刷新按钮）
-            item(key = "tools-header", contentType = "header") {
-                LightweightHeaderBanner(
-                    mqttConnected = iot?.mqttConnected == true,
-                    unreadCount = state.unreadAlerts,
-                    onOpenNotifications = onOpenNotifications,
-                )
+            item(key = "tools-header") {
+                LightweightHeaderBanner(iot?.mqttConnected == true, state.unreadAlerts, onOpenNotifications)
             }
-
-            state.sectionError?.let { message ->
-                item(key = "tools-error", contentType = "banner") {
-                    FeedbackBanner("设备数据暂不可用：$message", error = true)
-                }
-            }
-
-            item(key = "authenticator", contentType = "action") {
+            item(key = "connection-summary") {
                 AppPanel {
                     AppActionRow(
-                        title = "本地验证器",
-                        subtitle = "离线生成第三方网站 TOTP 动态码",
-                        icon = Icons.Outlined.LockClock,
-                        onClick = onOpenAuthenticator,
+                        title = if (iot == null) "正在读取设备状态" else "${iot.devices.count { it.online }} / ${iot.devices.size} 台设备在线",
+                        subtitle = if (iot?.mqttConnected == true) "设备控制已连接" else "设备控制暂未连接",
+                        icon = Icons.Outlined.Router,
+                        trailingContent = null,
                     )
                 }
             }
-
+            state.sectionError?.let { message ->
+                item(key = "tools-error") { FeedbackBanner("设备数据暂不可用：$message", error = true, onRetry = onRefresh) }
+            }
             if (isTablet) {
-                // 平板 / 大屏：自适应双列 IoT 智控中心
-                item(key = "tablet-tools-layout", contentType = "tablet-tools") {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        // 左列：IoT 吞吐状态 + 环境感知传感器与遥测洞察 + CT8 流水线
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                            ToolSectionTitle(title = "IoT 实时状态", subtitle = "智控节点与全网数据吞吐", accent = ColorTokens.Blue.foreground)
-                            ModernMqttStatusPanel(
-                                mqttConnected = iot?.mqttConnected == true,
-                                connectionState = iot?.connectionState ?: "等待 IoT 状态",
-                                onlineDevices = iot?.devices?.count { it.online } ?: 0,
-                                totalDevices = iot?.devices?.size ?: 0,
-                                messagesReceived = iot?.messagesReceived ?: 0,
-                            )
-
-                            ToolSectionTitle(title = "环境感知", subtitle = "多维度室内环境指标", accent = ColorTokens.Green.foreground)
-                            if (sensorDevices.size > 1) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    sensorDevices.forEach { device ->
-                                        FilterChip(
-                                            selected = selectedSensorId == device.id,
-                                            onClick = { selectedSensorId = device.id },
-                                            label = { Text(device.name, maxLines = 1) },
-                                        )
-                                    }
-                                }
-                            }
-                            ModernEnvironmentCard(sensorDevice)
-                            if (telemetryInsight != null) {
-                                TelemetryInsightPanel(telemetryInsight)
-                            } else if (sensorDevice != null && !state.refreshing) {
-                                TelemetryInsightUnavailable()
-                            }
-
-                            ToolSectionTitle(title = "CT8 自动化执行", subtitle = "GitHub Actions 任务流水线", accent = ColorTokens.Sky.foreground)
-                            ModernCt8Panel(
-                                ct8 = ct8,
-                                canOperate = canOperate,
-                                busy = "ct8" in state.busyActions,
-                                enabled = !state.busyActions.blocksAction("ct8"),
-                                onTrigger = { confirmation = ToolConfirmation.Ct8 },
-                            )
-                        }
-
-                        // 右列：智能继电器设备控制 + 快捷自动化场景联动
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                            ToolSectionTitle(title = "设备与开关", subtitle = "低延迟 MQTT 实时触控", accent = ColorTokens.Amber.foreground)
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                relayTargets.forEach { target ->
-                                    ModernRelayCard(
-                                        target = target,
-                                        device = iot?.devices?.firstOrNull { it.id == target.deviceId },
-                                        mqttConnected = iot?.mqttConnected == true,
-                                        canOperate = canOperate,
-                                        busy = "relay:${target.deviceId}:${target.relayId}" in state.busyActions,
-                                        enabled = !state.busyActions.blocksAction("relay:${target.deviceId}:${target.relayId}"),
-                                        onControlRelay = onControlRelay,
-                                    )
-                                }
-                            }
-
-                            if (!iot?.scenes.isNullOrEmpty()) {
-                                ToolSectionTitle(title = "快捷自动化", subtitle = "一键触发预设联动场景", accent = ColorTokens.Purple.foreground)
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(24.dp),
-                                    color = glassCardColor(),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                                    shadowElevation = 0.dp,
-                                ) {
-                                    Column {
-                                        iot!!.scenes.forEachIndexed { index, scene ->
-                                            ModernSceneRow(
-                                                scene = scene,
-                                                canOperate = canOperate,
-                                                busy = "scene" in state.busyActions,
-                                                enabled = !state.busyActions.blocksAction("scene"),
-                                                onRun = { confirmation = ToolConfirmation.Scene(scene) },
-                                            )
-                                            if (index < iot.scenes.lastIndex) {
-                                                HorizontalDivider(
-                                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                item(key = "device-columns") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(1f)) { controls() }
+                        Column(Modifier.weight(1f)) { environment() }
                     }
                 }
             } else {
-                // 手机单列流
-                item(key = "iot-title", contentType = "section") {
-                    ToolSectionTitle(title = "IoT 实时状态", subtitle = "智控节点与全网数据吞吐", accent = ColorTokens.Blue.foreground)
-                }
-                item(key = "iot-status", contentType = "card") {
-                    ModernMqttStatusPanel(
-                        mqttConnected = iot?.mqttConnected == true,
-                        connectionState = iot?.connectionState ?: "等待 IoT 状态",
-                        onlineDevices = iot?.devices?.count { it.online } ?: 0,
-                        totalDevices = iot?.devices?.size ?: 0,
-                        messagesReceived = iot?.messagesReceived ?: 0,
-                    )
-                }
-
-                item(key = "environment-title", contentType = "section") {
-                    ToolSectionTitle(title = "环境感知", subtitle = "多维度室内环境指标", accent = ColorTokens.Green.foreground)
-                }
-                if (sensorDevices.size > 1) {
-                    item(key = "sensor-filter", contentType = "filter") {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            sensorDevices.forEach { device ->
-                                FilterChip(
-                                    selected = selectedSensorId == device.id,
-                                    onClick = { selectedSensorId = device.id },
-                                    label = { Text(device.name, maxLines = 1) },
-                                )
-                            }
-                        }
-                    }
-                }
-                item(key = "environment-card", contentType = "card") {
-                    ModernEnvironmentCard(sensorDevice)
-                }
-                if (telemetryInsight != null) {
-                    item(key = "telemetry-insight", contentType = "card") {
-                        TelemetryInsightPanel(telemetryInsight)
-                    }
-                } else if (sensorDevice != null && !state.refreshing) {
-                    item(key = "telemetry-unavailable", contentType = "card") {
-                        TelemetryInsightUnavailable()
-                    }
-                }
-
-                item(key = "relay-title", contentType = "section") {
-                    ToolSectionTitle(title = "设备与开关", subtitle = "低延迟 MQTT 实时触控", accent = ColorTokens.Amber.foreground)
-                }
-                item(key = "relays", contentType = "card") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        relayTargets.forEach { target ->
-                            ModernRelayCard(
-                                target = target,
-                                device = iot?.devices?.firstOrNull { it.id == target.deviceId },
-                                mqttConnected = iot?.mqttConnected == true,
-                                canOperate = canOperate,
-                                busy = "relay:${target.deviceId}:${target.relayId}" in state.busyActions,
-                                enabled = !state.busyActions.blocksAction("relay:${target.deviceId}:${target.relayId}"),
-                                onControlRelay = onControlRelay,
-                            )
-                        }
-                    }
-                }
-
-                if (!iot?.scenes.isNullOrEmpty()) {
-                    item(key = "scenes", contentType = "card") {
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            ToolSectionTitle(title = "快捷自动化", subtitle = "一键触发预设联动场景", accent = ColorTokens.Purple.foreground)
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(24.dp),
-                                color = glassCardColor(),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                                shadowElevation = 0.dp,
-                            ) {
-                                Column {
-                                    iot!!.scenes.forEachIndexed { index, scene ->
-                                        ModernSceneRow(
-                                            scene = scene,
-                                            canOperate = canOperate,
-                                            busy = "scene" in state.busyActions,
-                                            enabled = !state.busyActions.blocksAction("scene"),
-                                            onRun = { confirmation = ToolConfirmation.Scene(scene) },
-                                        )
-                                        if (index < iot.scenes.lastIndex) {
-                                            HorizontalDivider(
-                                                modifier = Modifier.padding(horizontal = 16.dp),
-                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                item(key = "ct8-title", contentType = "section") {
-                    ToolSectionTitle(title = "CT8 自动化执行", subtitle = "GitHub Actions 任务流水线", accent = ColorTokens.Sky.foreground)
-                }
-                item(key = "ct8", contentType = "card") {
-                    ModernCt8Panel(
-                        ct8 = ct8,
-                        canOperate = canOperate,
-                        busy = "ct8" in state.busyActions,
-                        enabled = !state.busyActions.blocksAction("ct8"),
-                        onTrigger = { confirmation = ToolConfirmation.Ct8 },
-                    )
-                }
-
-                item(key = "tools-bottom-spacer", contentType = "spacer") {
-                    Spacer(Modifier.height(16.dp))
-                }
+                item(key = "device-controls") { controls() }
+                item(key = "device-environment") { environment() }
             }
         }
     }
-
-    when (val pending = confirmation) {
-        ToolConfirmation.Ct8 -> ToolConfirmDialog(
-            title = "触发 CT8 自动化？",
-            detail = "任务将提交到 GitHub Actions，并由平台持续记录执行状态。",
-            confirmLabel = "确认触发",
-            onDismiss = { confirmation = null },
-            onConfirm = {
-                confirmation = null
-                onTriggerCt8()
-            },
-        )
-        is ToolConfirmation.Scene -> ToolConfirmDialog(
-            title = "运行“${pending.scene.name}”？",
-            detail = "场景包含 ${pending.scene.actionCount} 个设备动作，执行结果将写入 IoT 审计记录。",
+    confirmation?.let { scene ->
+        ToolConfirmDialog(
+            title = "运行“${scene.name}”？",
+            detail = "场景包含 ${scene.actionCount} 个设备动作，执行结果将写入记录。",
             confirmLabel = "确认运行",
             onDismiss = { confirmation = null },
-            onConfirm = {
-                confirmation = null
-                onRunScene(pending.scene.id)
-            },
+            onConfirm = { confirmation = null; onRunScene(scene.id) },
         )
-        null -> Unit
     }
 }
 
@@ -1172,65 +982,6 @@ private fun ModernSceneRow(
 }
 
 /** CT8 自动化面板 */
-@Composable
-private fun ModernCt8Panel(
-    ct8: Ct8Data?,
-    canOperate: Boolean,
-    busy: Boolean,
-    enabled: Boolean,
-    onTrigger: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shadowElevation = 0.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                IconTile(Icons.Outlined.AutoMode, ColorTokens.Sky.foreground, ColorTokens.Sky.container)
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "流水线 ${ct8?.latestRunId?.let { "#${it.takeLast(8)}" } ?: "--"}",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    )
-                    Text(
-                        formatPlatformTime(ct8?.lastRunAt),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                StatusBadge(ct8?.activeStatus?.takeIf { it != "idle" } ?: ct8?.latestStatus ?: "unknown")
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                MetricCell("目标主机", ct8?.totalHosts?.toString() ?: "--", Modifier.weight(1f))
-                MetricCell("成功节点", ct8?.successHosts?.toString() ?: "--", Modifier.weight(1f), ColorTokens.Green.foreground)
-                MetricCell("异常节点", ct8?.failedHosts?.toString() ?: "--", Modifier.weight(1f), ColorTokens.Amber.foreground)
-            }
-
-            AppButton(
-                text = "立即触发 GitHub Actions 任务",
-                icon = Icons.Outlined.PlayArrow,
-                onClick = onTrigger,
-                enabled = canOperate && enabled && ct8?.activeStatus !in setOf("running", "queued", "in_progress"),
-                loading = busy,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-}
-
 @Composable
 private fun ToolConfirmDialog(
     title: String,

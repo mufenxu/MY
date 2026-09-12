@@ -57,7 +57,7 @@ import cn.pxyb.mycontrol.data.PlatformTask
 
 enum class MainTab { Overview, Notifications, Operations, Tools, Profile }
 
-enum class WorkspaceDestination { Today, Notifications, Scenes }
+enum class WorkspaceDestination { Today, Timetable, Campus, Todos, Notifications, Scenes, Projects }
 
 enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, IotInsights, Ct8, Security, Todos, Campus, FreeClassrooms, Resources, Notifications, Reservation, DailyNews }
 
@@ -272,8 +272,16 @@ data class ToolsUiState(
     val user: PlatformUser?,
     val overview: OverviewData?,
     val iot: IotData?,
-    val ct8: Ct8Data?,
     val unreadAlerts: Int,
+)
+
+@Immutable
+data class ProjectsUiState(
+    val refreshing: Boolean,
+    val sectionError: String?,
+    val busyActions: Set<String>,
+    val user: PlatformUser?,
+    val ct8: Ct8Data?,
 )
 
 @Immutable
@@ -359,7 +367,7 @@ data class QrLoginUiState(
     val qrLoginError: String?,
 )
 
-enum class SearchDestination { Overview, Notifications, Tools, GoogleAccounts, Today, Scenes }
+enum class SearchDestination { Overview, Operations, Notifications, Tools, GoogleAccounts, Today, Timetable, Todos, Scenes }
 
 @Immutable
 data class GlobalSearchItem(
@@ -369,6 +377,7 @@ data class GlobalSearchItem(
     val category: String,
     val destination: SearchDestination,
     val focusId: String? = null,
+    val featureRoute: String? = null,
 )
 
 @Immutable
@@ -376,6 +385,32 @@ data class GlobalSearchUiState(
     val refreshing: Boolean,
     val error: String?,
     val items: List<GlobalSearchItem>,
+)
+
+internal val featureSearchItems = listOf(
+    GlobalSearchItem("feature:today", "今日安排", "今日课程、个人待办与到期提醒", "日常安排", SearchDestination.Today, featureRoute = AppRoute.Today),
+    GlobalSearchItem("feature:timetable", "本学期课表", "课程、上课地点与校历", "校园服务", SearchDestination.Timetable, featureRoute = AppRoute.Timetable),
+    GlobalSearchItem("feature:todos", "个人待办", "添加任务、截止时间、优先级与重复提醒", "日常安排", SearchDestination.Todos, featureRoute = AppRoute.Todos),
+    GlobalSearchItem("feature:campus", "校园服务", "一卡通余额、宿舍能耗、绩点与校园工具", "校园服务", SearchDestination.Today, featureRoute = AppRoute.Campus),
+    GlobalSearchItem("feature:reservation", "研讨间预约", "图书馆研讨间、预约记录与自动预约", "校园服务", SearchDestination.Today, featureRoute = AppRoute.Reservation),
+    GlobalSearchItem("feature:seat", "座位预约", "图书馆自习座位与我的预约", "校园服务", SearchDestination.Today, featureRoute = AppRoute.LibrarySeatReservation),
+    GlobalSearchItem("feature:classrooms", "空闲教室", "查找可以自习的空教室", "校园服务", SearchDestination.Today, featureRoute = AppRoute.FreeClassrooms),
+    GlobalSearchItem("feature:water", "饮水机", "校园饮水、开关与用水账单", "校园服务", SearchDestination.Today, featureRoute = AppRoute.CampusWaterValve),
+    GlobalSearchItem("feature:news", "每日新闻", "新闻简报与资讯", "日常安排", SearchDestination.Overview, featureRoute = AppRoute.DailyNews),
+    GlobalSearchItem("feature:devices", "设备控制", "灯光、插座、环境温湿度与 IoT 状态", "设备与自动化", SearchDestination.Tools, featureRoute = AppRoute.Tools),
+    GlobalSearchItem("feature:scenes", "场景与自动化", "智能场景、条件规则、NFC 与执行记录", "设备与自动化", SearchDestination.Scenes, featureRoute = AppRoute.Scenes),
+    GlobalSearchItem("feature:status", "系统状态", "服务监控、巡检、备份与资源续期", "系统维护", SearchDestination.Operations, featureRoute = AppRoute.Operations),
+    GlobalSearchItem("feature:projects", "项目与发布", "GitHub、Android 发布、CT8 任务与容器镜像", "项目与发布", SearchDestination.Operations, featureRoute = AppRoute.Projects),
+    GlobalSearchItem("feature:github", "GitHub 项目", "仓库公开性与 Release 管理", "项目与发布", SearchDestination.Operations, featureRoute = AppRoute.GitHubProjects),
+    GlobalSearchItem("feature:android", "Android 发布管理", "版本构建、发布配置与历史安装包", "项目与发布", SearchDestination.Operations, featureRoute = AppRoute.AndroidReleases),
+    GlobalSearchItem("feature:registry", "容器镜像管理", "阿里云 ACR 历史镜像清理", "项目与发布", SearchDestination.Operations, featureRoute = AppRoute.RegistryImages),
+    GlobalSearchItem("feature:authenticator", "本地验证器", "第三方网站 TOTP 动态验证码、离线验证", "账号工具", SearchDestination.Overview, featureRoute = AppRoute.Authenticator),
+    GlobalSearchItem("feature:google", "Google 邮箱台账", "邮箱、别名、账号与 OpenAI 使用状态", "账号工具", SearchDestination.GoogleAccounts, featureRoute = AppRoute.GoogleAccounts),
+    GlobalSearchItem("feature:account", "账号与安全", "修改密码、MFA、Passkey、恢复码与应用锁", "账号与安全", SearchDestination.Overview, featureRoute = AppRoute.Account),
+    GlobalSearchItem("feature:sessions", "登录设备与会话", "撤销登录、退出其他设备与电脑端免密登录", "账号与安全", SearchDestination.Overview, featureRoute = AppRoute.LoginSessions),
+    GlobalSearchItem("feature:notifications", "通知中心", "未读消息、任务提醒与稍后提醒", "通知与偏好", SearchDestination.Notifications, featureRoute = AppRoute.Notifications),
+    GlobalSearchItem("feature:notification-settings", "通知设置", "免打扰、安静时段、业务订阅、每日简报与上课专注", "通知与偏好", SearchDestination.Overview, featureRoute = AppRoute.NotificationSettings),
+    GlobalSearchItem("feature:assistant", "AI 小助手", "个人助手、安排与快捷操作", "日常安排", SearchDestination.Overview, featureRoute = AppRoute.Assistant),
 )
 
 @Immutable
@@ -559,8 +594,8 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
 )
 
 internal fun AppUiState.toOverviewUiState() = OverviewUiState(
-    refreshing = isRefreshing(DataSection.Overview, DataSection.ExternalApplications, DataSection.Incidents, DataSection.Tasks, DataSection.Campus),
-    sectionError = sectionError(DataSection.Overview, DataSection.ExternalApplications, DataSection.Incidents, DataSection.Tasks, DataSection.Campus),
+    refreshing = isRefreshing(DataSection.Overview, DataSection.ExternalApplications, DataSection.Incidents, DataSection.Tasks, DataSection.Campus, DataSection.Todos),
+    sectionError = sectionError(DataSection.Overview, DataSection.ExternalApplications, DataSection.Incidents, DataSection.Tasks, DataSection.Campus, DataSection.Todos),
     overview = overview,
     externalApplications = externalApplications,
     externalApplicationsLoading = sectionLoadStates[DataSection.ExternalApplications]?.refreshing == true,
@@ -592,14 +627,21 @@ internal fun AppUiState.toOperationsUiState() = OperationsUiState(
 )
 
 internal fun AppUiState.toToolsUiState() = ToolsUiState(
-    refreshing = isRefreshing(DataSection.Iot, DataSection.Ct8),
-    sectionError = sectionError(DataSection.Iot, DataSection.Ct8),
-    busyActions = actions.running.filter { actionResources(it).any(setOf("iot", "ct8")::contains) }.toSet(),
+    refreshing = isRefreshing(DataSection.Iot),
+    sectionError = sectionError(DataSection.Iot),
+    busyActions = actions.running.filter { "iot" in actionResources(it) }.toSet(),
     user = user,
     overview = overview,
     iot = iot,
-    ct8 = ct8,
     unreadAlerts = alerts.activeUnreadCount(),
+)
+
+internal fun AppUiState.toProjectsUiState() = ProjectsUiState(
+    refreshing = isRefreshing(DataSection.Ct8),
+    sectionError = sectionError(DataSection.Ct8),
+    busyActions = actions.running.filter { "ct8" in actionResources(it) }.toSet(),
+    user = user,
+    ct8 = ct8,
 )
 
 internal fun AppUiState.toDailyNewsUiState() = DailyNewsUiState(
@@ -682,6 +724,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
         DataSection.Notifications,
     ),
     items = buildList {
+        addAll(featureSearchItems)
         externalApplications.filter(ExternalApplication::enabled).forEach { application ->
             add(
                 GlobalSearchItem(
@@ -703,7 +746,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                     title = service.name,
                     detail = "${service.category} · ${service.state}",
                     category = "服务",
-                    destination = SearchDestination.Overview,
+                    destination = SearchDestination.Operations,
                 ),
             )
         }
@@ -749,7 +792,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                     title = task.title,
                     detail = listOf(task.priority, task.courseRef?.name.orEmpty()).filter(String::isNotBlank).joinToString(" · "),
                     category = "个人待办",
-                    destination = SearchDestination.Today,
+                    destination = SearchDestination.Todos,
                     focusId = task.id,
                 ),
             )
@@ -773,7 +816,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                     title = course.courseName,
                     detail = listOf(course.dayName, course.sectionText, course.location).filter(String::isNotBlank).joinToString(" · "),
                     category = "课程",
-                    destination = SearchDestination.Today,
+                    destination = SearchDestination.Timetable,
                 ),
             )
         }

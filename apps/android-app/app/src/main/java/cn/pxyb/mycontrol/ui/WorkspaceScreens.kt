@@ -134,7 +134,7 @@ import java.util.UUID
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 
-private enum class CampusWorkspaceSection { Today, Timetable, Campus }
+private enum class CampusWorkspaceSection { Today, Timetable, Campus, Todos }
 
 internal fun campusReservationRedirect(): String = "/apps/campus/#reservation"
 
@@ -154,11 +154,19 @@ fun TodayScreen(
     onOpenLibrarySeatReservation: () -> Unit,
     onOpenWaterValve: () -> Unit,
     onConsumeSharedDraft: () -> Unit,
+    initialSection: WorkspaceDestination = WorkspaceDestination.Today,
 ) {
     var editingTodoId by rememberSaveable { mutableStateOf<String?>(null) }
     val editingTodo = state.todoSnapshot.tasks.firstOrNull { it.id == editingTodoId }
     var addingTodo by rememberSaveable { mutableStateOf(false) }
-    var campusSection by rememberSaveable { mutableStateOf(CampusWorkspaceSection.Today) }
+    var campusSection by rememberSaveable(initialSection) {
+        mutableStateOf(when (initialSection) {
+            WorkspaceDestination.Timetable -> CampusWorkspaceSection.Timetable
+            WorkspaceDestination.Campus -> CampusWorkspaceSection.Campus
+            WorkspaceDestination.Todos -> CampusWorkspaceSection.Todos
+            else -> CampusWorkspaceSection.Today
+        })
+    }
     LaunchedEffect(state.sharedTodoDraft) {
         if (!state.sharedTodoDraft.isNullOrBlank()) {
             editingTodoId = null
@@ -207,8 +215,48 @@ fun TodayScreen(
     }
     val isTablet = useTwoPaneLayout()
 
+    val todoItems: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
+        item(key = "todos-title", contentType = "section") {
+            SectionHeader(
+                "个人待办",
+                "${activeTodos.size} 项未完成",
+                trailing = {
+                    IconButton(onClick = { addingTodo = true }) {
+                        Icon(Icons.Outlined.Add, contentDescription = "添加待办")
+                    }
+                },
+            )
+        }
+        if (state.todoSnapshot.tasks.isEmpty()) {
+            item(key = "todos-empty", contentType = "empty") {
+                AppPanel(onClick = { addingTodo = true }) {
+                    Row(
+                        modifier = Modifier.padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        IconTile(Icons.Outlined.Add, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
+                        Column {
+                            Text("添加第一项待办", style = MaterialTheme.typography.titleMedium)
+                            Text("支持截止时间、优先级、重复和课程关联", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        } else {
+            items(state.todoSnapshot.tasks, key = TodoTask::id, contentType = { "todo" }) { task ->
+                TodoCard(task, onToggleTodo, { editingTodoId = task.id }, onDeleteTodo)
+            }
+        }
+    }
+
     WorkspacePage(
-        title = "今日工作台",
+        title = when (campusSection) {
+            CampusWorkspaceSection.Today -> "今日安排"
+            CampusWorkspaceSection.Timetable -> "本学期课表"
+            CampusWorkspaceSection.Campus -> "校园服务"
+            CampusWorkspaceSection.Todos -> "个人待办"
+        },
         subtitle = listOfNotNull(
             state.timetable?.currentCalendarText?.takeIf(String::isNotBlank),
             "${courses.size} 节课",
@@ -246,26 +294,19 @@ fun TodayScreen(
             }
         }
 
-        item(key = "campus-title", contentType = "section") {
-            SectionHeader("校园智览", state.timetable?.termText ?: "课表与校园生活信息")
-        }
-        item(key = "campus-filter", contentType = "filter") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AppFilterChip(
-                    label = "今日课程",
-                    selected = campusSection == CampusWorkspaceSection.Today,
-                    onClick = { campusSection = CampusWorkspaceSection.Today },
-                )
-                AppFilterChip(
-                    label = "本学期课表",
-                    selected = campusSection == CampusWorkspaceSection.Timetable,
-                    onClick = { campusSection = CampusWorkspaceSection.Timetable },
-                )
-                AppFilterChip(
-                    label = "校园信息",
-                    selected = campusSection == CampusWorkspaceSection.Campus,
-                    onClick = { campusSection = CampusWorkspaceSection.Campus },
-                )
+        item(key = "workspace-sections", contentType = "filter") {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                listOf(
+                    CampusWorkspaceSection.Today to "今日安排",
+                    CampusWorkspaceSection.Todos to "个人待办",
+                    CampusWorkspaceSection.Timetable to "本学期课表",
+                    CampusWorkspaceSection.Campus to "校园服务",
+                ).forEach { (section, label) ->
+                    AppFilterChip(label = label, selected = campusSection == section, onClick = { campusSection = section })
+                }
             }
         }
 
@@ -422,6 +463,8 @@ fun TodayScreen(
                         }
                     }
 
+                    todoItems()
+
                     // 🌟 明日课程预告
                     item(key = "tomorrow-courses-title", contentType = "section") {
                         SectionHeader(
@@ -476,39 +519,6 @@ fun TodayScreen(
                         }
                     }
 
-                    item(key = "todos-title", contentType = "section") {
-                        SectionHeader(
-                            "个人待办",
-                            "${activeTodos.size} 项未完成",
-                            trailing = {
-                                IconButton(onClick = { addingTodo = true }) {
-                                    Icon(Icons.Outlined.Add, contentDescription = "添加待办")
-                                }
-                            },
-                        )
-                    }
-                    if (state.todoSnapshot.tasks.isEmpty()) {
-                        item(key = "todos-empty", contentType = "empty") {
-                            AppPanel(onClick = { addingTodo = true }) {
-                                Row(
-                                    modifier = Modifier.padding(18.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    IconTile(Icons.Outlined.Add, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
-                                    Column {
-                                        Text("添加第一项待办", style = MaterialTheme.typography.titleMedium)
-                                        Text("支持截止时间、优先级、重复和课程关联", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        items(state.todoSnapshot.tasks, key = TodoTask::id, contentType = { "todo" }) { task ->
-                            TodoCard(task, onToggleTodo, { editingTodoId = task.id }, onDeleteTodo)
-                        }
-                    }
-
                     item(key = "attention-title", contentType = "section") {
                         SectionHeader("需要处理", "系统提醒统一进入通知中心")
                     }
@@ -535,6 +545,7 @@ fun TodayScreen(
                     }
                 }
             }
+            CampusWorkspaceSection.Todos -> todoItems()
             CampusWorkspaceSection.Timetable -> item(key = "timetable", contentType = "workspace") {
                 TermTimetable(
                     courses = state.timetable?.courses.orEmpty(),
@@ -624,7 +635,7 @@ fun ScenesScreen(
     }
 
     WorkspacePage(
-        title = "智能场景与自动化",
+        title = "场景与自动化",
         subtitle = "手动控制场景或配置条件自动联动执行",
         contentPadding = contentPadding,
         onBack = onBack,
@@ -1781,64 +1792,17 @@ private fun CampusQuickToolsGrid(
     onOpenLibrarySeatReservation: () -> Unit,
     onOpenWaterValve: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        SectionHeader("校园快捷服务", "常用教务与生活服务指南")
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionHeader("校园快捷服务", "预约、自习与日常用水")
         AppPanel {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    QuickToolItem(
-                        icon = Icons.Outlined.MeetingRoom,
-                        label = "自习空教室",
-                        accent = ColorTokens.Green.foreground,
-                        accentPale = ColorTokens.Green.container,
-                        modifier = Modifier.weight(1f),
-                        onClick = onOpenFreeClassrooms,
-                    )
-                    QuickToolItem(
-                        icon = Icons.Outlined.CalendarMonth,
-                        label = "研讨间预约",
-                        accent = ColorTokens.Blue.foreground,
-                        accentPale = ColorTokens.Blue.container,
-                        modifier = Modifier.weight(1f),
-                        onClick = onOpenReservation,
-                    )
-                    QuickToolItem(
-                        icon = Icons.Outlined.Chair,
-                        label = "座位预约",
-                        accent = ColorTokens.Teal.foreground,
-                        accentPale = ColorTokens.Teal.container,
-                        modifier = Modifier.weight(1f),
-                        onClick = onOpenLibrarySeatReservation,
-                    )
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    QuickToolItem(Icons.Outlined.MeetingRoom, "空闲教室", ColorTokens.Green.foreground, ColorTokens.Green.container, Modifier.weight(1f), onOpenFreeClassrooms)
+                    QuickToolItem(Icons.Outlined.CalendarMonth, "研讨间预约", ColorTokens.Blue.foreground, ColorTokens.Blue.container, Modifier.weight(1f), onOpenReservation)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    QuickToolItem(
-                        icon = Icons.Outlined.WaterDrop,
-                        label = "饮水机",
-                        accent = MaterialTheme.colorScheme.tertiary,
-                        accentPale = MaterialTheme.colorScheme.tertiaryContainer,
-                        modifier = Modifier.weight(1f),
-                        onClick = onOpenWaterValve,
-                    )
-                    QuickToolItem(
-                        icon = Icons.Outlined.School,
-                        label = "成绩明细",
-                        accent = ColorTokens.Purple.foreground,
-                        accentPale = ColorTokens.Purple.container,
-                        modifier = Modifier.weight(1f),
-                    )
-                    QuickToolItem(
-                        icon = Icons.Outlined.Bolt,
-                        label = "水电充值",
-                        accent = ColorTokens.Sky.foreground,
-                        accentPale = ColorTokens.Sky.container,
-                        modifier = Modifier.weight(1f),
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    QuickToolItem(Icons.Outlined.Chair, "座位预约", ColorTokens.Teal.foreground, ColorTokens.Teal.container, Modifier.weight(1f), onOpenLibrarySeatReservation)
+                    QuickToolItem(Icons.Outlined.WaterDrop, "饮水机", MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.tertiaryContainer, Modifier.weight(1f), onOpenWaterValve)
                 }
             }
         }
@@ -1851,33 +1815,19 @@ private fun QuickToolItem(
     label: String,
     accent: Color,
     accentPale: Color,
-    modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null,
+    modifier: Modifier,
+    onClick: () -> Unit,
 ) {
     Column(
         modifier = modifier
-            .then(
-                if (onClick != null) {
-                    Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable(onClick = onClick)
-                } else {
-                    Modifier
-                },
-            )
-            .padding(vertical = 4.dp),
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         QuickActionGlassTile(icon, accent, accentPale, modifier = Modifier.size(42.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 

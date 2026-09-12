@@ -81,7 +81,7 @@ internal fun AndroidReleaseScreen(
     }
 
     AppSubPage(
-        title = "应用版本管理",
+        title = "Android 发布管理",
         subtitle = "安装包归档与下一次 Android 发布",
         onBack = onBack,
         contentPadding = contentPadding,

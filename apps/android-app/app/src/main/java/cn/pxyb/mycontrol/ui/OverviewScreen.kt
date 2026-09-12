@@ -20,7 +20,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,12 +45,10 @@ import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FactCheck
 import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CenterFocusWeak
 import androidx.compose.material.icons.outlined.Chair
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.CloudOff
-import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -75,6 +72,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import cn.pxyb.mycontrol.assistant.buildPersonalAssistantSnapshot
+import cn.pxyb.mycontrol.ui.components.display.AppActionRow
+import cn.pxyb.mycontrol.ui.components.display.AppDivider
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
@@ -82,27 +84,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cn.pxyb.mycontrol.data.CampusCourse
 import cn.pxyb.mycontrol.data.ExternalApplication
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
 import cn.pxyb.mycontrol.data.HomeQuickAction
-import cn.pxyb.mycontrol.data.ServiceInfo
 import kotlinx.coroutines.launch
 import java.util.Date
-import java.time.LocalDate
 
 @Composable
 fun OverviewScreen(
@@ -125,77 +123,26 @@ fun OverviewScreen(
     onOpenWaterValve: () -> Unit = {},
     onOpenAccountManagement: () -> Unit = {},
     onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
-    requestWebLoginUrl: suspend (String) -> String,
     requestExternalApplicationLaunch: suspend (String) -> ExternalApplicationLaunch,
 ) {
     var customizingQuickActions by remember { mutableStateOf(false) }
-    var openingServiceId by remember { mutableStateOf<String?>(null) }
-    var serviceOpenError by remember { mutableStateOf<String?>(null) }
     var openingExternalApplicationId by remember { mutableStateOf<String?>(null) }
     var externalApplicationOpenError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val overview = state.overview
     val activeIncidents = remember(state.incidents) { state.incidents.filter { it.status != "resolved" } }
-    val visibleIncidents = remember(activeIncidents) { activeIncidents.take(3) }
-    // 通知服务(notify)与 CT8 自动化(ct8-automation)没有管理后台入口，首页“服务监控”不展示这两项
-    val homeServices = remember(overview?.services) {
-        overview?.services.orEmpty().filterNot { it.id == "notify" || it.id == "ct8-automation" }
-    }
-    val sortedServices = remember(homeServices) {
-        homeServices.sortedWith(compareBy<ServiceInfo> { servicePriority(it.state) }.thenBy { it.name })
-    }
-    val recentAudits = remember(overview?.audits) { overview?.audits.orEmpty().take(5) }
-    val (healthyCount, monitoredCount, averageLatencyMs) = remember(homeServices) {
-        val services = homeServices
-        val monitored = services.count { it.state != "unmonitored" }
-        val healthy = services.count { it.state == "healthy" }
-        val average = services.mapNotNull { it.latencyMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
-        Triple(healthy, monitored, average)
-    }
-    val courseCount = remember(state.timetable?.courses) {
-        state.timetable?.courses.orEmpty().asSequence().map(CampusCourse::courseName).distinct().count()
-    }
-    val currentDate = LocalDate.now()
-    val todayCourseTotal = remember(state.timetable, currentDate) { todayCourseCount(state) }
-    val listState = rememberLazyListState()
+    val monitored = overview?.services.orEmpty().filter { it.state != "unmonitored" }
+    val needsAttention = activeIncidents.isNotEmpty() || monitored.any { it.state != "healthy" }
     val isTablet = useTwoPaneLayout()
-    val contentWidth = appContentWidth()
-    val quickActionWidth = if (isTablet) {
-        (contentWidth - AppPageHorizontalPadding * 2 - 16.dp) / 2 - 12.dp
-    } else {
-        contentWidth
+    val width = appContentWidth()
+    val quickActionWidth = if (isTablet) (width - AppPageHorizontalPadding * 2 - 12.dp) / 2 else width
+    val quickActionColumns = quickActionColumnCount(quickActionWidth, LocalDensity.current.fontScale)
+    val quickActionRows = remember(state.homeQuickActionOrder, state.hiddenHomeQuickActions, quickActionColumns) {
+        state.homeQuickActionOrder.filterNot(state.hiddenHomeQuickActions::contains).chunked(quickActionColumns)
     }
-    val density = LocalDensity.current
-    val quickActionColumns = remember(quickActionWidth, density.fontScale) {
-        quickActionColumnCount(quickActionWidth, density.fontScale)
-    }
-    val visibleQuickActions = remember(state.homeQuickActionOrder, state.hiddenHomeQuickActions) {
-        state.homeQuickActionOrder.filterNot(state.hiddenHomeQuickActions::contains)
-    }
-    val quickActionRows = remember(visibleQuickActions, quickActionColumns) {
-        visibleQuickActions.chunked(quickActionColumns)
-    }
-
-    fun openServiceAdmin(service: ServiceInfo) {
-        val adminUrl = service.adminUrl?.takeIf { it.isNotBlank() } ?: return
-        if (openingServiceId != null) return
-        openingServiceId = service.id
-        serviceOpenError = null
-        scope.launch {
-            runCatching { requestWebLoginUrl(adminUrl) }
-                .onSuccess { loginUrl ->
-                    openingServiceId = null
-                    openPlatformWebLink(context, loginUrl, service.name)
-                }
-                .onFailure { error ->
-                    openingServiceId = null
-                    serviceOpenError = error.message?.takeIf { it.isNotBlank() }
-                        ?: "自动登录链接生成失败，请稍后重试。"
-                }
-        }
-    }
-
+    val listState = rememberLazyListState()
+    val dark = isAppInDarkTheme()
     fun openExternalApplication(application: ExternalApplication) {
         if (!application.canAccess || openingExternalApplicationId != null) return
         // 直接打开类型不需要平台统一认证：跳过登录票据生成，仅打开网址本身。
@@ -262,915 +209,149 @@ fun OverviewScreen(
             }
         }
     }
-    val stableOpenServiceAdmin: (ServiceInfo) -> Unit = remember { { service -> openServiceAdmin(service) } }
-    val stableOpenExternalApplication: (ExternalApplication) -> Unit = remember {
-        { application -> openExternalApplication(application) }
-    }
-    val openTodayWorkspace = remember { { onOpenWorkspace(WorkspaceDestination.Today) } }
-    val openNotificationsWorkspace = remember { { onOpenWorkspace(WorkspaceDestination.Notifications) } }
-    val startCustomizingQuickActions = remember { { customizingQuickActions = true } }
-    val dark = isAppInDarkTheme()
-    PullToRefresh(
-        isRefreshing = state.refreshing,
-        onRefresh = onRefresh,
-        atTop = {
-            listState.firstVisibleItemIndex == 0 &&
-                listState.firstVisibleItemScrollOffset == 0
-        },
-    ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .auroraBackdrop(dark)
-                .padding(
-                    start = AppPageHorizontalPadding,
-                    end = AppPageHorizontalPadding,
-                    top = contentPadding.calculateTopPadding() + 4.dp,
-                ),
-            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // 1. 通透清爽顶栏
-            item(key = "overview-header", contentType = "header") {
-                ModernOverviewHeader(
-                    onOpenQrLogin = onOpenQrLogin,
-                    onOpenSearch = onOpenSearch,
-                    unreadCount = state.unreadAlerts,
-                    onOpenNotifications = onOpenNotifications,
-                    calendarText = state.timetable?.currentCalendarText,
-                )
-            }
 
-            state.sectionError?.let { message ->
-                item(key = "overview-error", contentType = "banner") {
-                    FeedbackBanner("部分数据暂不可用：$message", error = true)
-                }
-            }
-            if (state.offlineMode) {
-                item(key = "offline-notice", contentType = "banner") {
-                    OfflineSnapshotNotice(state.cachedAtMillis)
-                }
-            }
-            state.assistantSnapshot?.let { assistant ->
-                item(key = "assistant-next-action", contentType = "assistant") {
-                    AppPanel(
-                        onClick = {
-                            when (assistant.nextAction.destination) {
-                                cn.pxyb.mycontrol.assistant.AssistantDestination.Today -> onOpenWorkspace(WorkspaceDestination.Today)
-                                cn.pxyb.mycontrol.assistant.AssistantDestination.Notifications -> onOpenWorkspace(WorkspaceDestination.Notifications)
-                                cn.pxyb.mycontrol.assistant.AssistantDestination.Operations -> onOpenOperations()
-                                cn.pxyb.mycontrol.assistant.AssistantDestination.Profile -> onSelectTab(MainTab.Profile)
-                            }
-                        },
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(13.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            IconTile(Icons.Outlined.AutoAwesome, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(36.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("下一步", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
-                                Text(assistant.nextAction.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, fontSize = 14.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(assistant.nextAction.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            }
-                            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                        }
-                    }
-                }
-            }
-            if (overview == null) {
-                item(key = "overview-loading", contentType = "loading") {
-                    OverviewLoadingSkeleton(refreshing = state.refreshing)
-                }
-            } else {
-                if (isTablet) {
-                    // 平板 / 展开大屏：自适应 2 列 Bento Grid 仪表盘
-                    item(key = "tablet-overview-bento", contentType = "tablet-bento") {
-                    val incidentCount = activeIncidents.size
-                    val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
-                    val isDark = isAppInDarkTheme()
-                    val campus = state.campusOverview
-                    val campusInteractionSource = remember { MutableInteractionSource() }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        // 左列 (50% 宽)：核心状态 Hero + 校园日常 + 快捷中心 + 待处理事项
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            // 1. 系统状态 Hero Card
-                            val topGradientStart = if (stable) {
-                                if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.30f) else ColorTokens.Green.container.copy(alpha = 0.85f)
-                            } else {
-                                if (isDark) ColorTokens.AmberDark.container.copy(alpha = 0.30f) else ColorTokens.Amber.container.copy(alpha = 0.85f)
-                            }
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(20.dp),
-                                color = glassCardColor(),
-                                shadowElevation = 0.dp,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(
-                                            Brush.verticalGradient(
-                                                colors = listOf(topGradientStart, Color.Transparent),
-                                            ),
-                                        )
-                                        .padding(14.dp),
-                                ) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                        ) {
-                                            Box(
-                                                modifier = Modifier.size(42.dp),
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                val progress = if (monitoredCount == 0) 0f else healthyCount.toFloat() / monitoredCount.toFloat()
-                                                CircularProgressIndicator(
-                                                    progress = { progress },
-                                                    modifier = Modifier.size(42.dp),
-                                                    color = if (stable) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
-                                                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                                                    strokeWidth = 3.8.dp,
-                                                    strokeCap = StrokeCap.Round,
-                                                )
-                                                Icon(
-                                                    if (stable) Icons.Outlined.CloudDone else Icons.Outlined.ErrorOutline,
-                                                    contentDescription = null,
-                                                    tint = if (stable) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
-                                                    modifier = Modifier.size(20.dp),
-                                                )
-                                            }
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    if (stable) "一切正常，平台稳定运行"
-                                                    else if (incidentCount > 0) "有 $incidentCount 项需关注"
-                                                    else "部分服务需关注",
-                                                    style = MaterialTheme.typography.titleMedium.copy(
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 16.sp,
-                                                    ),
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                )
-                                                Text(
-                                                    "$healthyCount/$monitoredCount 服务监测中 · ${formatPlatformTime(overview.refreshedAt)}",
-                                                    style = MaterialTheme.typography.bodySmall.copy(
-                                                        fontSize = 11.5.sp,
-                                                    ),
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(top = 1.dp),
-                                                )
-                                            }
-                                        }
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        ) {
-                                            ModernOverviewMetric(
-                                                label = "健康服务",
-                                                value = "$healthyCount/$monitoredCount",
-                                                accent = ColorTokens.Green.foreground,
-                                                bgColor = if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.22f) else ColorTokens.Green.container,
-                                                modifier = Modifier.weight(1f),
-                                            )
-                                            ModernOverviewMetric(
-                                                label = "平均响应",
-                                                value = averageLatencyMs?.let { "$it ms" } ?: "--",
-                                                accent = ColorTokens.Blue.foreground,
-                                                bgColor = if (isDark) ColorTokens.BlueDark.container.copy(alpha = 0.22f) else ColorTokens.Blue.container,
-                                                modifier = Modifier.weight(1f),
-                                            )
-                                            ModernOverviewMetric(
-                                                label = "待处理事项",
-                                                value = activeIncidents.size.toString(),
-                                                accent = if (activeIncidents.isEmpty()) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
-                                                bgColor = if (activeIncidents.isEmpty()) {
-                                                    if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.22f) else ColorTokens.Green.container
-                                                } else {
-                                                    if (isDark) ColorTokens.RedDark.container.copy(alpha = 0.22f) else ColorTokens.Red.container
-                                                },
-                                                modifier = Modifier.weight(1f),
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            // 2. 校园智览卡片
-                            OverviewSectionTitle("校园工作台", "课表、成绩与校园日常", dotColor = ColorTokens.Blue.foreground)
-                            Surface(
-                                onClick = openTodayWorkspace,
-                                interactionSource = campusInteractionSource,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .pressFeedback(campusInteractionSource, pressedScale = 0.985f),
-                                shape = RoundedCornerShape(20.dp),
-                                color = glassCardColor(),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                                shadowElevation = 0.dp,
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(34.dp)
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(
-                                                    if (isDark) ColorTokens.Blue.foreground.copy(alpha = 0.20f)
-                                                    else ColorTokens.Blue.container.copy(alpha = 0.65f)
-                                                ),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(
-                                                Icons.Outlined.CalendarMonth,
-                                                contentDescription = null,
-                                                tint = ColorTokens.Blue.foreground,
-                                                modifier = Modifier.size(18.dp),
-                                            )
-                                        }
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                "校园日常概览",
-                                                style = MaterialTheme.typography.titleMedium.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 15.sp,
-                                                ),
-                                            )
-                                            Text(
-                                                state.timetable?.currentCalendarText?.takeIf(String::isNotBlank)
-                                                    ?: "课表、成绩和校园生活信息",
-                                                style = MaterialTheme.typography.bodySmall.copy(
-                                                    fontSize = 11.5.sp,
-                                                ),
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                        }
-                                        Icon(
-                                            Icons.Outlined.ChevronRight,
-                                            contentDescription = "查看校园智览",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        ModernOverviewMetric(
-                                            label = "今日课程",
-                                            value = "$todayCourseTotal 节",
-                                            accent = ColorTokens.Blue.foreground,
-                                            bgColor = if (isDark) ColorTokens.BlueDark.container.copy(alpha = 0.22f) else ColorTokens.Blue.container,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                        ModernOverviewMetric(
-                                            label = "本学期课程",
-                                            value = if (courseCount > 0) "$courseCount 门" else "--",
-                                            accent = ColorTokens.Green.foreground,
-                                            bgColor = if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.22f) else ColorTokens.Green.container,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                        ModernOverviewMetric(
-                                            label = "综合绩点",
-                                            value = campus?.gpa?.overall ?: "--",
-                                            accent = ColorTokens.Purple.foreground,
-                                            bgColor = if (isDark) ColorTokens.PurpleDark.container.copy(alpha = 0.22f) else ColorTokens.Purple.container,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                    }
-                                }
-                            }
-
-                            // 3. 快捷中心
-                            OverviewSectionTitle(
-                                title = "快捷中心",
-                                subtitle = "高频工具与常用入口一键直达",
-                                dotColor = ColorTokens.Amber.foreground,
-                                trailing = {
-                                    val editInteractionSource = remember { MutableInteractionSource() }
-                                    Surface(
-                                        onClick = startCustomizingQuickActions,
-                                        interactionSource = editInteractionSource,
-                                        modifier = Modifier.pressFeedback(editInteractionSource),
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                        ) {
-                                            Icon(
-                                                Icons.Outlined.Edit,
-                                                contentDescription = "调整快捷操作",
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(12.dp),
-                                            )
-                                            Text(
-                                                "自定义",
-                                                style = MaterialTheme.typography.labelMedium.copy(
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    fontSize = 11.5.sp,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                ),
-                                            )
-                                        }
-                                    }
-                                },
-                            )
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(20.dp),
-                                color = glassCardColor(),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                                shadowElevation = 0.dp,
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    quickActionRows.forEach { rowActions ->
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceEvenly,
-                                        ) {
-                                            rowActions.forEach { action ->
-                                                val spec = homeQuickActionSpec(
-                                                    action = action,
-                                                    onSelectTab = onSelectTab,
-                                                    onRunDiagnostics = onRunDiagnostics,
-                                                    onTriggerBackup = onTriggerBackup,
-                                                    onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
-                                                    onOpenOperations = onOpenOperations,
-                                                    onOpenWorkspace = onOpenWorkspace,
-                                                    onOpenReservation = onOpenReservation,
-                                                    onOpenFreeClassrooms = onOpenFreeClassrooms,
-                                                    onOpenSeatReservation = onOpenSeatReservation,
-                                                    onOpenWaterValve = onOpenWaterValve,
-                                                    onOpenDailyNews = onOpenDailyNews,
-                                                    onOpenSearch = onOpenSearch,
-                                                    onOpenQrLogin = onOpenQrLogin,
-                                                    onOpenAccountManagement = onOpenAccountManagement,
-                                                )
-                                                QuickAction(
-                                                    icon = spec.icon,
-                                                    label = spec.label,
-                                                    accent = spec.accent,
-                                                    accentPale = spec.accentPale,
-                                                    modifier = Modifier.weight(1f),
-                                                    onClick = spec.onClick,
-                                                )
-                                            }
-                                            repeat(quickActionColumns - rowActions.size) { Spacer(Modifier.weight(1f)) }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // 4. 待处理事项
-                            if (activeIncidents.isNotEmpty()) {
-                                OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知", dotColor = ColorTokens.Red.foreground)
-                                visibleIncidents.forEach { incident ->
-                                    val incidentCardShape = RoundedCornerShape(16.dp)
-                                    val incidentInteractionSource = remember(incident.id) { MutableInteractionSource() }
-                                    Surface(
-                                        onClick = openNotificationsWorkspace,
-                                        interactionSource = incidentInteractionSource,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .pressFeedback(incidentInteractionSource),
-                                        shape = incidentCardShape,
-                                        color = if (isDark) ColorTokens.RedDark.container.copy(alpha = 0.20f) else ColorTokens.Red.container.copy(alpha = 0.6f),
-                                        border = BorderStroke(0.5.dp, if (isDark) ColorTokens.RedDark.border.copy(alpha = 0.4f) else ColorTokens.Red.border),
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        ) {
-                                            IconTile(Icons.Outlined.ErrorOutline, ColorTokens.Red.foreground, ColorTokens.Red.container, modifier = Modifier.size(34.dp))
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    incident.title,
-                                                    style = MaterialTheme.typography.titleMedium.copy(
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 14.sp,
-                                                    ),
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                )
-                                                Text(
-                                                    "${incident.source} · ${formatPlatformTime(incident.updatedAt ?: incident.openedAt)}",
-                                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                            }
-                                            Icon(
-                                                Icons.Outlined.ChevronRight,
-                                                contentDescription = "查看通知",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(18.dp),
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // 右列 (50% 宽)：外部应用 + 核心服务健康监控
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
-                                OverviewSectionTitle("外部应用", "独立项目免密快捷直达", dotColor = ColorTokens.Purple.foreground)
-                                externalApplicationOpenError?.let { message ->
-                                    FeedbackBanner(message, error = true)
-                                }
-                                if (state.externalApplications.isEmpty()) {
-                                    ExternalApplicationsLoadingPlaceholder()
-                                } else {
-                                    OverviewTwoColumnGrid(items = state.externalApplications) { application ->
-                                        ExternalApplicationRow(
-                                            application = application,
-                                            opening = openingExternalApplicationId == application.id,
-                                            onOpen = stableOpenExternalApplication,
-                                        )
-                                    }
-                                }
-                            }
-
-                            OverviewSectionTitle("服务监控", "核心微服务运行指标与状态", dotColor = ColorTokens.Green.foreground)
-                            serviceOpenError?.let { message ->
-                                FeedbackBanner(message, error = true)
-                            }
-                            if (sortedServices.isEmpty()) {
-                                EmptyBlock("暂无服务监测", "等待平台状态同步")
-                            } else {
-                                OverviewTwoColumnGrid(items = sortedServices) { service ->
-                                    ServiceRow(
-                                        service = service,
-                                        opening = openingServiceId == service.id,
-                                        onOpen = stableOpenServiceAdmin,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                // 手机 / 紧凑屏幕模式：经典单列流
-                item(key = "health-hero", contentType = "hero") {
-                    val incidentCount = activeIncidents.size
-                    val stable = incidentCount == 0 && monitoredCount > 0 && healthyCount == monitoredCount
-                    val isDark = isAppInDarkTheme()
-                    val topGradientStart = if (stable) {
-                        if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.30f) else ColorTokens.Green.container.copy(alpha = 0.85f)
-                    } else {
-                        if (isDark) ColorTokens.AmberDark.container.copy(alpha = 0.30f) else ColorTokens.Amber.container.copy(alpha = 0.85f)
-                    }
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        color = glassCardColor(),
-                        shadowElevation = 0.dp,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(topGradientStart, Color.Transparent),
-                                    ),
+    val quickActions: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            OverviewSectionTitle("常用入口", "按习惯选择并排列", trailing = {
+                AppHeaderIconButton(Icons.Outlined.Edit, "调整常用入口", { customizingQuickActions = true })
+            })
+            AppPanel {
+                Column(Modifier.padding(horizontal = 6.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    quickActionRows.forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            row.forEach { action ->
+                                val spec = homeQuickActionSpec(
+                                    action, onSelectTab, onRunDiagnostics, onTriggerBackup,
+                                    onOpenGoogleAccountDesk, onOpenOperations, onOpenWorkspace,
+                                    onOpenReservation, onOpenFreeClassrooms, onOpenSeatReservation,
+                                    onOpenWaterValve, onOpenDailyNews, onOpenSearch, onOpenQrLogin,
+                                    onOpenAccountManagement,
                                 )
-                                .padding(14.dp),
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    Box(
-                                        modifier = Modifier.size(42.dp),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        val progress = if (monitoredCount == 0) 0f else healthyCount.toFloat() / monitoredCount.toFloat()
-                                        CircularProgressIndicator(
-                                            progress = { progress },
-                                            modifier = Modifier.size(42.dp),
-                                            color = if (stable) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
-                                            trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                                            strokeWidth = 3.8.dp,
-                                            strokeCap = StrokeCap.Round,
-                                        )
-                                        Icon(
-                                            if (stable) Icons.Outlined.CloudDone else Icons.Outlined.ErrorOutline,
-                                            contentDescription = null,
-                                            tint = if (stable) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            if (stable) "一切正常，平台稳定运行"
-                                            else if (incidentCount > 0) "有 $incidentCount 项需关注"
-                                            else "部分服务需关注",
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 16.sp,
-                                            ),
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                        )
-                                        Text(
-                                            "$healthyCount/$monitoredCount 服务监测中 · ${formatPlatformTime(overview.refreshedAt)}",
-                                            style = MaterialTheme.typography.bodySmall.copy(
-                                                fontSize = 11.5.sp,
-                                            ),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(top = 1.dp),
-                                        )
-                                    }
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    ModernOverviewMetric(
-                                        label = "健康服务",
-                                        value = "$healthyCount/$monitoredCount",
-                                        accent = ColorTokens.Green.foreground,
-                                        bgColor = if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.22f) else ColorTokens.Green.container,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    ModernOverviewMetric(
-                                        label = "平均响应",
-                                        value = averageLatencyMs?.let { "$it ms" } ?: "--",
-                                        accent = ColorTokens.Blue.foreground,
-                                        bgColor = if (isDark) ColorTokens.BlueDark.container.copy(alpha = 0.22f) else ColorTokens.Blue.container,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    ModernOverviewMetric(
-                                        label = "待处理事项",
-                                        value = activeIncidents.size.toString(),
-                                        accent = if (activeIncidents.isEmpty()) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
-                                        bgColor = if (activeIncidents.isEmpty()) {
-                                            if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.22f) else ColorTokens.Green.container
-                                        } else {
-                                            if (isDark) ColorTokens.RedDark.container.copy(alpha = 0.22f) else ColorTokens.Red.container
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
+                                QuickAction(spec.icon, spec.label, spec.accent, spec.accentPale, Modifier.weight(1f), spec.onClick)
                             }
+                            repeat(quickActionColumns - row.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                 }
-
-                item(key = "campus-title", contentType = "section") {
-                    OverviewSectionTitle("校园工作台", "课表、成绩与校园日常", dotColor = ColorTokens.Blue.foreground)
-                }
-                item(key = "campus-card", contentType = "card") {
-                    val campus = state.campusOverview
-                    val isDark = isAppInDarkTheme()
-                    val campusInteractionSource = remember { MutableInteractionSource() }
-                    Surface(
-                        onClick = openTodayWorkspace,
-                        interactionSource = campusInteractionSource,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .pressFeedback(campusInteractionSource, pressedScale = 0.985f),
-                        shape = RoundedCornerShape(20.dp),
-                        color = glassCardColor(),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                        shadowElevation = 0.dp,
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(
-                                            if (isDark) ColorTokens.Blue.foreground.copy(alpha = 0.20f)
-                                            else ColorTokens.Blue.container.copy(alpha = 0.65f)
-                                        ),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.CalendarMonth,
-                                        contentDescription = null,
-                                        tint = ColorTokens.Blue.foreground,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        "校园日常概览",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp,
-                                        ),
-                                    )
-                                    Text(
-                                        state.timetable?.currentCalendarText?.takeIf(String::isNotBlank)
-                                            ?: "课表、成绩和校园生活信息",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            fontSize = 11.5.sp,
-                                        ),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                Icon(
-                                    Icons.Outlined.ChevronRight,
-                                    contentDescription = "查看校园智览",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                ModernOverviewMetric(
-                                    label = "今日课程",
-                                    value = "$todayCourseTotal 节",
-                                    accent = ColorTokens.Blue.foreground,
-                                    bgColor = if (isDark) ColorTokens.BlueDark.container.copy(alpha = 0.22f) else ColorTokens.Blue.container,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                ModernOverviewMetric(
-                                    label = "本学期课程",
-                                    value = if (courseCount > 0) "$courseCount 门" else "--",
-                                    accent = ColorTokens.Green.foreground,
-                                    bgColor = if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.22f) else ColorTokens.Green.container,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                ModernOverviewMetric(
-                                    label = "综合绩点",
-                                    value = campus?.gpa?.overall ?: "--",
-                                    accent = ColorTokens.Purple.foreground,
-                                    bgColor = if (isDark) ColorTokens.PurpleDark.container.copy(alpha = 0.22f) else ColorTokens.Purple.container,
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                item(key = "quick-actions-title", contentType = "section") {
-                    OverviewSectionTitle(
-                        title = "快捷中心",
-                        subtitle = "高频工具与常用入口一键直达",
-                        dotColor = ColorTokens.Amber.foreground,
-                        trailing = {
-                            val editInteractionSource = remember { MutableInteractionSource() }
-                            Surface(
-                                onClick = startCustomizingQuickActions,
-                                interactionSource = editInteractionSource,
-                                modifier = Modifier.pressFeedback(editInteractionSource),
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Edit,
-                                        contentDescription = "调整快捷操作",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(12.dp),
-                                    )
-                                    Text(
-                                        "自定义",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 11.5.sp,
-                                            color = MaterialTheme.colorScheme.primary,
-                                        ),
-                                    )
-                                }
-                            }
-                        },
-                    )
-                }
-
-                item(key = "quick-actions-card", contentType = "quick-actions-grid") {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        color = glassCardColor(),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                        shadowElevation = 0.dp,
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            quickActionRows.forEach { rowActions ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceEvenly,
-                                ) {
-                                    rowActions.forEach { action ->
-                                        val spec = homeQuickActionSpec(
-                                            action = action,
-                                            onSelectTab = onSelectTab,
-                                            onRunDiagnostics = onRunDiagnostics,
-                                            onTriggerBackup = onTriggerBackup,
-                                            onOpenGoogleAccountDesk = onOpenGoogleAccountDesk,
-                                            onOpenOperations = onOpenOperations,
-                                            onOpenWorkspace = onOpenWorkspace,
-                                            onOpenReservation = onOpenReservation,
-                                            onOpenFreeClassrooms = onOpenFreeClassrooms,
-                                                            onOpenSeatReservation = onOpenSeatReservation,
-                                                            onOpenWaterValve = onOpenWaterValve,
-                                                            onOpenDailyNews = onOpenDailyNews,
-                                                            onOpenSearch = onOpenSearch,
-                                            onOpenQrLogin = onOpenQrLogin,
-                                            onOpenAccountManagement = onOpenAccountManagement,
-                                        )
-                                        QuickAction(
-                                            icon = spec.icon,
-                                            label = spec.label,
-                                            accent = spec.accent,
-                                            accentPale = spec.accentPale,
-                                            modifier = Modifier.weight(1f),
-                                            onClick = spec.onClick,
-                                        )
-                                    }
-                                    repeat(quickActionColumns - rowActions.size) { Spacer(Modifier.weight(1f)) }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (activeIncidents.isNotEmpty()) {
-                    item(key = "incident-title", contentType = "section") {
-                        OverviewSectionTitle("需要关注", "${activeIncidents.size} 条待处理通知", dotColor = ColorTokens.Red.foreground)
-                    }
-                    items(
-                        items = visibleIncidents,
-                        key = { "incident-${it.id}" },
-                        contentType = { "incident" },
-                    ) { incident ->
-                        val incidentCardShape = RoundedCornerShape(16.dp)
-                        val incidentInteractionSource = remember(incident.id) { MutableInteractionSource() }
-                        val isDark = isAppInDarkTheme()
-                        Surface(
-                            onClick = openNotificationsWorkspace,
-                            interactionSource = incidentInteractionSource,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .pressFeedback(incidentInteractionSource),
-                            shape = incidentCardShape,
-                            color = if (isDark) ColorTokens.RedDark.container.copy(alpha = 0.20f) else ColorTokens.Red.container.copy(alpha = 0.6f),
-                            border = BorderStroke(0.5.dp, if (isDark) ColorTokens.RedDark.border.copy(alpha = 0.4f) else ColorTokens.Red.border),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                IconTile(Icons.Outlined.ErrorOutline, ColorTokens.Red.foreground, ColorTokens.Red.container, modifier = Modifier.size(34.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        incident.title,
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp,
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Text(
-                                        "${incident.source} · ${formatPlatformTime(incident.updatedAt ?: incident.openedAt)}",
-                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                Icon(
-                                    Icons.Outlined.ChevronRight,
-                                    contentDescription = "查看通知",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
-                    item(key = "external-apps-title", contentType = "section") {
-                        OverviewSectionTitle("外部应用", "独立项目免密快捷直达", dotColor = ColorTokens.Purple.foreground)
-                    }
-                    externalApplicationOpenError?.let { message ->
-                        item(key = "external-apps-error", contentType = "banner") {
-                            FeedbackBanner(message, error = true)
-                        }
-                    }
-                    if (state.externalApplications.isEmpty()) {
-                        item(key = "external-apps-loading", contentType = "loading") {
-                            ExternalApplicationsLoadingPlaceholder()
-                        }
-                    } else {
-                        item(key = "external-apps-grid", contentType = "grid") {
-                            OverviewTwoColumnGrid(items = state.externalApplications) { application ->
-                                ExternalApplicationRow(
-                                    application = application,
-                                    opening = openingExternalApplicationId == application.id,
-                                    onOpen = stableOpenExternalApplication,
-                                )
-                            }
-                        }
-                    }
-                }
-
-                item(key = "services-title", contentType = "section") {
-                    OverviewSectionTitle("服务监控", "核心微服务运行指标与状态", dotColor = ColorTokens.Green.foreground)
-                }
-                serviceOpenError?.let { message ->
-                    item(key = "services-error", contentType = "banner") {
-                        FeedbackBanner(message, error = true)
-                    }
-                }
-                if (sortedServices.isEmpty()) {
-                    item(key = "services-empty", contentType = "empty") {
-                        EmptyBlock("暂无服务监测", "等待平台状态同步")
-                    }
-                } else {
-                    item(key = "services-grid", contentType = "grid") {
-                        OverviewTwoColumnGrid(items = sortedServices) { service ->
-                            ServiceRow(
-                                service = service,
-                                opening = openingServiceId == service.id,
-                                onOpen = stableOpenServiceAdmin,
-                            )
-                        }
-                    }
-                }
-
-                item(key = "overview-bottom-spacer", contentType = "spacer") {
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
             }
         }
     }
-
+    val statusSummary: @Composable () -> Unit = {
+        AppPanel {
+            AppActionRow(
+                title = when {
+                    activeIncidents.isNotEmpty() -> "${activeIncidents.size} 项系统问题需要关注"
+                    needsAttention -> "部分服务需要关注"
+                    monitored.isNotEmpty() -> "系统运行正常"
+                    else -> "系统状态"
+                },
+                subtitle = if (activeIncidents.isNotEmpty()) activeIncidents.take(2).joinToString("；") { it.title }
+                    else "${monitored.count { it.state == "healthy" }} / ${monitored.size} 项服务正常 · 查看状态与维护",
+                icon = if (needsAttention) Icons.Outlined.ErrorOutline else Icons.Outlined.CloudDone,
+                iconTint = if (needsAttention) ColorTokens.Amber.foreground else MaterialTheme.colorScheme.primary,
+                onClick = onOpenOperations,
+            )
+        }
+    }
+    PullToRefresh(
+        isRefreshing = state.refreshing,
+        onRefresh = onRefresh,
+        atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
+    ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().auroraBackdrop(dark),
+            contentPadding = appPageContentPadding(contentPadding),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item(key = "overview-header") {
+                ModernOverviewHeader(onOpenQrLogin, onOpenSearch, state.unreadAlerts, onOpenNotifications, state.timetable?.currentCalendarText)
+            }
+            state.sectionError?.let { message ->
+                item(key = "overview-error") { FeedbackBanner(message, error = true, onRetry = onRefresh) }
+            }
+            if (state.offlineMode) {
+                item(key = "offline-notice") { OfflineSnapshotNotice(state.cachedAtMillis) }
+            }
+            if (needsAttention) { item(key = "attention-summary") { statusSummary() } }
+            if (isTablet) {
+                item(key = "overview-workspace") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(1f)) { HomeScheduleCard(state, onOpenWorkspace) }
+                        Column(Modifier.weight(1f)) { quickActions() }
+                    }
+                }
+            } else {
+                item(key = "today-summary") { HomeScheduleCard(state, onOpenWorkspace) }
+                item(key = "quick-actions") { quickActions() }
+            }
+            if (!needsAttention) { item(key = "status-summary") { statusSummary() } }
+            if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
+                item(key = "applications-title") { OverviewSectionTitle("接入应用", "已接入的应用快捷访问") }
+                externalApplicationOpenError?.let { message ->
+                    item(key = "applications-error") { FeedbackBanner(message, error = true) }
+                }
+                if (state.externalApplications.isEmpty()) {
+                    item(key = "applications-loading") { ExternalApplicationsLoadingPlaceholder() }
+                } else {
+                    item(key = "applications") {
+                        OverviewTwoColumnGrid(state.externalApplications) { application ->
+                            ExternalApplicationRow(application, openingExternalApplicationId == application.id, ::openExternalApplication)
+                        }
+                    }
+                }
+            }
+        }
+    }
     if (customizingQuickActions) {
         QuickActionsDialog(
             order = state.homeQuickActionOrder,
             hidden = state.hiddenHomeQuickActions,
             onDismiss = { customizingQuickActions = false },
-            onSave = { order, hidden ->
-                onUpdateQuickActions(order, hidden)
-                customizingQuickActions = false
-            },
+            onSave = { order, hidden -> onUpdateQuickActions(order, hidden); customizingQuickActions = false },
         )
     }
 }
 
-// ------------------------------------------------------------------------------------------------
-// 极简通透 Overview 组件
-// ------------------------------------------------------------------------------------------------
+@Composable
+private fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (WorkspaceDestination) -> Unit) {
+    var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000)
+            nowMillis = System.currentTimeMillis()
+        }
+    }
+    val courseAction = remember(state.timetable, nowMillis) {
+        buildPersonalAssistantSnapshot(nowMillis = nowMillis, timetable = state.timetable).nextAction.takeIf { it.id.startsWith("course:") }
+    }
+    val pendingTodos = remember(state.todoSnapshot.tasks) {
+        state.todoSnapshot.tasks.filterNot { it.completed }.sortedBy { it.dueAt ?: Long.MAX_VALUE }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        OverviewSectionTitle("今日安排", "课程、待办与校园日常")
+        AppPanel {
+            AppActionRow(
+                title = courseAction?.title ?: if (state.timetable == null) "今日课程" else "今天暂无后续课程",
+                subtitle = courseAction?.detail ?: if (state.timetable == null) "查看课程与日程" else "查看今日安排或本学期课表",
+                icon = Icons.Outlined.CalendarMonth,
+                onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
+            )
+            AppDivider()
+            AppActionRow(
+                title = "个人待办 · ${pendingTodos.size} 项未完成",
+                subtitle = pendingTodos.firstOrNull()?.title ?: "记录下一件要完成的事",
+                icon = Icons.Outlined.FactCheck,
+                onClick = { onOpenWorkspace(WorkspaceDestination.Todos) },
+            )
+            Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppSecondaryButton("本学期课表", { onOpenWorkspace(WorkspaceDestination.Timetable) }, modifier = Modifier.weight(1f))
+                AppSecondaryButton("校园服务", { onOpenWorkspace(WorkspaceDestination.Campus) }, modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
 
-/** 顶部玻璃 Header：方案 A【灵动智感胶囊款】(Dynamic Island & Smart Capsule) */
 @Composable
 private fun ModernOverviewHeader(
     onOpenQrLogin: () -> Unit,
@@ -1451,48 +632,6 @@ private fun OverviewServiceCardShell(
     }
 }
 
-/** 极简 Bento 指标组件 */
-@Composable
-private fun ModernOverviewMetric(
-    label: String,
-    value: String,
-    accent: Color,
-    bgColor: Color,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = bgColor.copy(alpha = 0.55f),
-        border = BorderStroke(0.5.dp, accent.copy(alpha = 0.25f)),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.5.sp,
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                value,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = accent,
-                    fontSize = 14.5.sp,
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
 private var scanViewfinder: ImageVector? = null
 
 private val ScanViewfinder: ImageVector
@@ -1597,7 +736,7 @@ private fun homeQuickActionSpec(
 ): HomeQuickActionSpec = when (action) {
     HomeQuickAction.Today -> HomeQuickActionSpec(
         icon = Icons.Outlined.CalendarMonth,
-        label = "今日工作台",
+        label = "今日安排",
         accent = ColorTokens.Blue.foreground,
         accentPale = ColorTokens.Blue.container,
     ) { onOpenWorkspace(WorkspaceDestination.Today) }
@@ -1619,7 +758,7 @@ private fun homeQuickActionSpec(
 
     HomeQuickAction.Scenes -> HomeQuickActionSpec(
         icon = Icons.Outlined.Tune,
-        label = "智能场景",
+        label = "场景与自动化",
         accent = ColorTokens.Purple.foreground,
         accentPale = ColorTokens.Purple.container,
     ) { onOpenWorkspace(WorkspaceDestination.Scenes) }
@@ -1681,7 +820,7 @@ private fun homeQuickActionSpec(
 
     HomeQuickAction.GoogleAccounts -> HomeQuickActionSpec(
         icon = Icons.Outlined.Email,
-        label = "邮箱台账",
+        label = "Google 邮箱台账",
         accent = ColorTokens.Indigo.foreground,
         accentPale = ColorTokens.Indigo.container,
         onClick = onOpenGoogleAccountDesk,
@@ -1697,7 +836,7 @@ private fun homeQuickActionSpec(
 
     HomeQuickAction.Account -> HomeQuickActionSpec(
         icon = Icons.Outlined.Security,
-        label = "安全中心",
+        label = "账号与安全",
         accent = ColorTokens.Green.foreground,
         accentPale = ColorTokens.Green.container,
         onClick = onOpenAccountManagement,
@@ -1867,10 +1006,10 @@ private fun QuickActionArrowButton(
     }
 }
 private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action) {
-    HomeQuickAction.Today -> "今日工作台"
+    HomeQuickAction.Today -> "今日安排"
     HomeQuickAction.Notifications -> "通知中心"
     HomeQuickAction.DailyNews -> "每日新闻"
-    HomeQuickAction.Scenes -> "智能场景"
+    HomeQuickAction.Scenes -> "场景与自动化"
     HomeQuickAction.Reservation -> "研讨间预约"
     HomeQuickAction.FreeClassrooms -> "空闲教室"
     HomeQuickAction.SeatReservation -> "座位预约"
@@ -1878,25 +1017,10 @@ private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action
     HomeQuickAction.Devices -> "设备控制"
     HomeQuickAction.Diagnostics -> "系统自检"
     HomeQuickAction.Backup -> "数据备份"
-    HomeQuickAction.GoogleAccounts -> "邮箱台账"
+    HomeQuickAction.GoogleAccounts -> "Google 邮箱台账"
     HomeQuickAction.Operations -> "系统状态"
-    HomeQuickAction.Account -> "安全中心"
+    HomeQuickAction.Account -> "账号与安全"
 }
-
-private val WeekPattern = Regex("第(\\d+)周")
-
-private fun todayCourseCount(state: OverviewUiState): Int {
-    val day = LocalDate.now().dayOfWeek.value
-    val week = WeekPattern.find(state.timetable?.currentCalendarText.orEmpty())
-        ?.groupValues?.getOrNull(1)?.toIntOrNull()
-    return state.timetable?.courses.orEmpty().count { course ->
-        course.day == day && (week == null || course.weeks.isEmpty() || week in course.weeks)
-    }
-}
-
-private fun formatCampusAmount(value: String): String = value
-    .takeIf { it.startsWith("¥") || it.startsWith("￥") }
-    ?: "¥$value"
 
 @Composable
 private fun OfflineSnapshotNotice(cachedAtMillis: Long?) {
@@ -1913,204 +1037,6 @@ private fun OfflineSnapshotNotice(cachedAtMillis: Long?) {
     )
 }
 
-// 首页预加载骨架：overview 数据到达前，按真实区块同构渲染呼吸脉冲占位
-@Composable
-private fun OverviewLoadingSkeleton(refreshing: Boolean) {
-    val transition = rememberInfiniteTransition(label = "overview-loading")
-    val pulse by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 720, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "overview-loading-pulse",
-    )
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            text = if (refreshing) "正在同步平台状态" else "等待平台状态",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp),
-        )
-        SkeletonHeroCard(pulse)
-        SkeletonCampusCard(pulse)
-        SkeletonSectionTitle(pulse)
-        SkeletonQuickActionsCard(pulse)
-        SkeletonSectionTitle(pulse)
-        SkeletonListRowsCard(rows = 2, pulse = pulse)
-        SkeletonSectionTitle(pulse)
-        SkeletonListRowsCard(rows = 3, pulse = pulse)
-    }
-}
-
-@Composable
-private fun SkeletonGlassCard(content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-        shadowElevation = 0.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            content = content,
-        )
-    }
-}
-
-@Composable
-private fun SkeletonBlock(modifier: Modifier, pulse: Float, corner: Dp = 6.dp) {
-    Box(
-        modifier
-            .clip(RoundedCornerShape(corner))
-            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f * pulse)),
-    )
-}
-
-@Composable
-private fun SkeletonMetric(pulse: Float, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
-        ) {
-            SkeletonBlock(Modifier.fillMaxWidth(0.62f).height(9.dp), pulse = pulse)
-            SkeletonBlock(Modifier.fillMaxWidth(0.45f).height(16.dp), pulse = pulse)
-        }
-    }
-}
-
-@Composable
-private fun SkeletonSectionTitle(pulse: Float) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 5.dp)
-    ) {
-        SkeletonBlock(
-            modifier = Modifier.width(168.dp).height(28.dp),
-            pulse = pulse,
-            corner = 14.dp,
-        )
-    }
-}
-
-@Composable
-private fun SkeletonHeroCard(pulse: Float) {
-    SkeletonGlassCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            SkeletonBlock(Modifier.size(42.dp), pulse = pulse, corner = 21.dp)
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                SkeletonBlock(Modifier.fillMaxWidth(0.55f).height(15.dp), pulse = pulse)
-                SkeletonBlock(Modifier.fillMaxWidth(0.7f).height(10.dp), pulse = pulse)
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SkeletonMetric(pulse = pulse, modifier = Modifier.weight(1f))
-            SkeletonMetric(pulse = pulse, modifier = Modifier.weight(1f))
-            SkeletonMetric(pulse = pulse, modifier = Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun SkeletonCampusCard(pulse: Float) {
-    SkeletonGlassCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            SkeletonBlock(Modifier.size(34.dp), pulse = pulse, corner = 10.dp)
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                SkeletonBlock(Modifier.fillMaxWidth(0.42f).height(13.dp), pulse = pulse)
-                SkeletonBlock(Modifier.fillMaxWidth(0.6f).height(9.dp), pulse = pulse)
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SkeletonMetric(pulse = pulse, modifier = Modifier.weight(1f))
-            SkeletonMetric(pulse = pulse, modifier = Modifier.weight(1f))
-            SkeletonMetric(pulse = pulse, modifier = Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun SkeletonQuickActionsCard(pulse: Float) {
-    SkeletonGlassCard {
-        repeat(2) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                repeat(4) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(7.dp),
-                    ) {
-                        SkeletonBlock(Modifier.size(46.dp), pulse = pulse, corner = 14.dp)
-                        SkeletonBlock(Modifier.width(32.dp).height(8.dp), pulse = pulse)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SkeletonListRowsCard(rows: Int, pulse: Float) {
-    SkeletonGlassCard {
-        repeat(rows) { index ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                SkeletonBlock(Modifier.size(36.dp), pulse = pulse, corner = 11.dp)
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(7.dp),
-                ) {
-                    SkeletonBlock(
-                        Modifier.fillMaxWidth(if (index % 2 == 0) 0.5f else 0.38f).height(12.dp),
-                        pulse = pulse,
-                    )
-                    SkeletonBlock(Modifier.fillMaxWidth(0.62f).height(9.dp), pulse = pulse)
-                }
-                SkeletonBlock(Modifier.width(42.dp).height(18.dp), pulse = pulse, corner = 9.dp)
-            }
-        }
-    }
-}
-
 @Composable
 private fun QuickAction(
     icon: ImageVector,
@@ -2125,9 +1051,11 @@ private fun QuickAction(
     Column(
         modifier = modifier
             .pressFeedback(interactionSource, pressedScale = 0.90f)
+            .clip(RoundedCornerShape(16.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                role = Role.Button,
                 onClick = onClick,
             )
             .padding(vertical = 4.dp, horizontal = 2.dp),
@@ -2150,7 +1078,9 @@ private fun QuickAction(
                 letterSpacing = (-0.1).sp,
             ),
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
+            textAlign = TextAlign.Center,
+            minLines = 2,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
     }
@@ -2187,115 +1117,6 @@ private fun applicationVisualTheme(application: ExternalApplication): VisualThem
             accent = ColorTokens.Green.foreground, // 矩阵绿
             accentPale = ColorTokens.Green.container,
         )
-    }
-}
-
-@Composable
-private fun serviceVisualTheme(service: ServiceInfo): VisualTheme {
-    val id = service.id.lowercase()
-    val name = service.name.lowercase()
-    return when {
-        "mqtt" in id || "mqtt" in name -> VisualTheme(
-            icon = Icons.Outlined.Speed,
-            accent = ColorTokens.Cyan.foreground, // 物联青
-            accentPale = ColorTokens.Cyan.container,
-        )
-        "campus" in id || "校园" in name -> VisualTheme(
-            icon = Icons.Outlined.CalendarMonth,
-            accent = ColorTokens.Blue.foreground, // 校园蓝
-            accentPale = ColorTokens.Blue.container,
-        )
-        "platform" in id || "控制台" in name || "统一" in name -> VisualTheme(
-            icon = Icons.Outlined.Security,
-            accent = ColorTokens.Green.foreground, // 盾牌绿
-            accentPale = ColorTokens.Green.container,
-        )
-        "exam" in id || "考试" in name -> VisualTheme(
-            icon = Icons.Outlined.FactCheck,
-            accent = ColorTokens.Orange.foreground, // 能量橙
-            accentPale = ColorTokens.Orange.container,
-        )
-        "notify" in id || "通知" in name -> VisualTheme(
-            icon = Icons.Outlined.Notifications,
-            accent = ColorTokens.Pink.foreground, // 活力玫红
-            accentPale = ColorTokens.Pink.container,
-        )
-        "ct8" in id || "自动化" in name -> VisualTheme(
-            icon = Icons.Outlined.CloudSync,
-            accent = MaterialTheme.colorScheme.onSurfaceVariant, // 钛金灰
-            accentPale = MaterialTheme.colorScheme.surfaceContainerLow,
-        )
-        else -> if (service.category == "miniapp") VisualTheme(
-            icon = Icons.Outlined.Hub,
-            accent = ColorTokens.Purple.foreground, // 微应用紫
-            accentPale = ColorTokens.Purple.container,
-        ) else VisualTheme(
-            icon = Icons.Outlined.Hub,
-            accent = ColorTokens.Blue.foreground,
-            accentPale = ColorTokens.Blue.container,
-        )
-    }
-}
-
-@Composable
-private fun ServiceRow(
-    service: ServiceInfo,
-    opening: Boolean,
-    onOpen: (ServiceInfo) -> Unit,
-) {
-    val theme = serviceVisualTheme(service)
-    val hasAdminUrl = !service.adminUrl.isNullOrBlank()
-
-    OverviewServiceCardShell(
-        title = service.name,
-        icon = theme.icon,
-        accent = theme.accent,
-        accentPale = theme.accentPale,
-        enabled = hasAdminUrl && !opening,
-        opening = opening,
-        onClick = { onOpen(service) },
-    ) {
-        val isOk = service.httpStatus != null && service.httpStatus in 200..299
-        val statusColor = when {
-            service.httpStatus == null -> MaterialTheme.colorScheme.onSurfaceVariant
-            isOk -> ColorTokens.Green.foreground
-            else -> ColorTokens.Red.foreground
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(5.dp)
-                    .clip(CircleShape)
-                    .background(statusColor),
-            )
-            if (service.httpStatus != null) {
-                Surface(
-                    shape = RoundedCornerShape(3.dp),
-                    color = statusColor.copy(alpha = 0.12f),
-                ) {
-                    Text(
-                        text = "${service.httpStatus}",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 9.sp,
-                            color = statusColor,
-                        ),
-                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 0.5.dp),
-                    )
-                }
-            }
-            Text(
-                text = service.latencyMs?.let { "$it ms" } ?: if (service.httpStatus == null) "等待监测" else "正常",
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
     }
 }
 
@@ -2430,11 +1251,4 @@ private fun openBrowserLink(context: android.content.Context, url: String) {
     } catch (error: Exception) {
         throw IllegalStateException("系统未找到可用浏览器。", error)
     }
-}
-
-private fun servicePriority(state: String): Int = when (state) {
-    "offline" -> 0
-    "degraded" -> 1
-    "healthy" -> 2
-    else -> 3
 }

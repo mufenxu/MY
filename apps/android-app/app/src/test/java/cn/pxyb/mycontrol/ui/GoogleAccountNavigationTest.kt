@@ -19,7 +19,7 @@ class GoogleAccountNavigationTest {
         assertEquals(MainTab.Overview, parentTabForSubScreen("search", "profile"))
         assertEquals(MainTab.Overview, parentTabForSubScreen("today", "profile"))
         assertEquals(MainTab.Overview, parentTabForSubScreen("notifications", null))
-        assertEquals(MainTab.Overview, parentTabForSubScreen("scenes", "profile"))
+        assertEquals(MainTab.Tools, parentTabForSubScreen("scenes", "profile"))
     }
 
     @Test

@@ -201,9 +201,15 @@ internal object AppRoute {
     const val GitHubProjects = "github-projects"
     const val AndroidReleases = "android-releases"
     const val RegistryImages = "registry-images"
+    const val Projects = "projects"
+    const val NotificationSettings = "notification-settings"
+    const val LoginSessions = "login-sessions"
     const val Search = "search"
     const val Assistant = "assistant"
     const val Today = "today"
+    const val Timetable = "timetable"
+    const val Campus = "campus"
+    const val Todos = "todos"
     const val FreeClassrooms = "free-classrooms"
     const val Reservation = "reservation"
     const val LibrarySeatReservation = "library-seat-reservation"
@@ -230,11 +236,19 @@ private fun MainTab.route(): String = when (this) {
     MainTab.Profile -> AppRoute.Profile
 }
 
+private fun WorkspaceDestination.route(): String = when (this) {
+    WorkspaceDestination.Today -> AppRoute.Today
+    WorkspaceDestination.Timetable -> AppRoute.Timetable
+    WorkspaceDestination.Campus -> AppRoute.Campus
+    WorkspaceDestination.Todos -> AppRoute.Todos
+    WorkspaceDestination.Notifications -> AppRoute.Notifications
+    WorkspaceDestination.Scenes -> AppRoute.Scenes
+    WorkspaceDestination.Projects -> AppRoute.Projects
+}
+
 private fun AppEntryUiState.requestedRoute(): String = when {
     pendingLibrarySeatMyReservations -> AppRoute.LibrarySeatReservation
-    workspaceDestination == WorkspaceDestination.Today -> AppRoute.Today
-    workspaceDestination == WorkspaceDestination.Notifications -> AppRoute.Notifications
-    workspaceDestination == WorkspaceDestination.Scenes -> AppRoute.Scenes
+    workspaceDestination != null -> workspaceDestination.route()
     globalSearchOpen -> AppRoute.Search
     googleAccountDeskOpen -> AppRoute.GoogleAccounts
     githubProjectsOpen -> AppRoute.GitHubProjects
@@ -244,46 +258,37 @@ private fun AppEntryUiState.requestedRoute(): String = when {
 }
 
 private fun primaryTabForRoute(route: String?): MainTab? = when (route) {
-    AppRoute.Overview,
-    AppRoute.Search,
-    AppRoute.Assistant,
-    AppRoute.Today,
-    AppRoute.FreeClassrooms,
-    AppRoute.Reservation,
-    AppRoute.LibrarySeatReservation,
-    AppRoute.CampusWaterValve,
-    AppRoute.DailyNews,
-    AppRoute.Scenes -> MainTab.Overview
-    AppRoute.Notifications -> MainTab.Overview
-    AppRoute.Operations -> MainTab.Operations
-    AppRoute.RegistryImages -> MainTab.Operations
-    AppRoute.Tools,
-    AppRoute.Authenticator -> MainTab.Tools
-    AppRoute.Profile,
-    AppRoute.Account -> MainTab.Profile
-    AppRoute.GitHubProjects -> MainTab.Profile
-    AppRoute.AndroidReleases -> MainTab.Profile
+    AppRoute.Overview, AppRoute.Search, AppRoute.Assistant,
+    AppRoute.Today, AppRoute.Timetable, AppRoute.Campus, AppRoute.Todos,
+    AppRoute.FreeClassrooms, AppRoute.Reservation, AppRoute.LibrarySeatReservation,
+    AppRoute.CampusWaterValve, AppRoute.DailyNews, AppRoute.Notifications -> MainTab.Overview
+    AppRoute.Operations, AppRoute.Projects, AppRoute.GitHubProjects,
+    AppRoute.AndroidReleases, AppRoute.RegistryImages -> MainTab.Operations
+    AppRoute.Tools, AppRoute.Scenes -> MainTab.Tools
+    AppRoute.Profile, AppRoute.Account, AppRoute.GoogleAccounts,
+    AppRoute.Authenticator, AppRoute.LoginSessions, AppRoute.NotificationSettings -> MainTab.Profile
     else -> null
 }
 
 internal fun parentTabForSubScreen(route: String?, previousRoute: String?): MainTab? = when (route) {
     AppRoute.GoogleAccounts -> primaryTabForRoute(previousRoute) ?: MainTab.Profile
-    AppRoute.Account -> MainTab.Profile
-    AppRoute.Authenticator -> MainTab.Tools
-    AppRoute.Assistant -> MainTab.Overview
-    AppRoute.GitHubProjects -> MainTab.Profile
-    AppRoute.AndroidReleases -> MainTab.Profile
+    AppRoute.Account, AppRoute.Authenticator, AppRoute.LoginSessions,
+    AppRoute.NotificationSettings -> MainTab.Profile
+    AppRoute.Projects, AppRoute.GitHubProjects, AppRoute.AndroidReleases,
     AppRoute.RegistryImages -> MainTab.Operations
-    AppRoute.Notifications,
-    AppRoute.Search,
-    AppRoute.Today,
-    AppRoute.FreeClassrooms,
-    AppRoute.Reservation,
-    AppRoute.LibrarySeatReservation,
-    AppRoute.CampusWaterValve,
-    AppRoute.DailyNews,
-    AppRoute.Scenes -> MainTab.Overview
+    AppRoute.Scenes -> MainTab.Tools
+    AppRoute.Assistant, AppRoute.Notifications, AppRoute.Search,
+    AppRoute.Today, AppRoute.Timetable, AppRoute.Campus, AppRoute.Todos,
+    AppRoute.FreeClassrooms, AppRoute.Reservation, AppRoute.LibrarySeatReservation,
+    AppRoute.CampusWaterValve, AppRoute.DailyNews -> MainTab.Overview
     else -> null
+}
+
+internal fun parentRouteForSubScreen(route: String?, previousRoute: String?): String? = when (route) {
+    AppRoute.GitHubProjects, AppRoute.AndroidReleases, AppRoute.RegistryImages -> AppRoute.Projects
+    AppRoute.LoginSessions -> AppRoute.Account
+    AppRoute.NotificationSettings -> if (previousRoute == AppRoute.Notifications) AppRoute.Notifications else AppRoute.Profile
+    else -> parentTabForSubScreen(route, previousRoute)?.route()
 }
 
 @Composable
@@ -1685,13 +1690,10 @@ private fun AuthenticatedShell(
     val currentRoute = currentBackStackEntry?.destination?.route ?: initialRoute
     val isSubScreen = parentTabForSubScreen(currentRoute, null) != null
     val navigateBackFromSubScreen: () -> Unit = {
-        val parentTab = parentTabForSubScreen(
-            route = currentRoute,
-            previousRoute = navController.previousBackStackEntry?.destination?.route,
-        )
-        if (parentTab != null) {
-            val parentRoute = parentTab.route()
-            viewModel.syncNavigationDestination(parentTab)
+        val previousRoute = navController.previousBackStackEntry?.destination?.route
+        val parentRoute = parentRouteForSubScreen(currentRoute, previousRoute)
+        if (parentRoute != null) {
+            primaryTabForRoute(parentRoute)?.let { viewModel.syncNavigationDestination(it, autoRefresh = false) }
             if (!navController.popBackStack(parentRoute, inclusive = false)) {
                 navController.navigate(parentRoute) {
                     popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
@@ -1704,16 +1706,23 @@ private fun AuthenticatedShell(
         navigate@{ route ->
             val current = navController.currentBackStackEntry?.destination?.route
             if (current == route) return@navigate
-            val parentRoute = parentTabForSubScreen(route, current)?.route() ?: return@navigate
-            // 保证预测性手势预览的上一页与页头返回目标一致。
-            if (current != parentRoute && !navController.popBackStack(parentRoute, inclusive = false)) {
-                navController.navigate(parentRoute) {
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            val parentRoute = parentRouteForSubScreen(route, current) ?: return@navigate
+            // 嵌套功能保留真实父页面，使页头返回与系统预测性返回一致。
+            fun ensureParent(target: String) {
+                if (navController.currentBackStackEntry?.destination?.route == target) return
+                if (navController.popBackStack(target, inclusive = false)) return
+                val ancestor = parentRouteForSubScreen(target, null)
+                if (ancestor != null) ensureParent(ancestor)
+                navController.navigate(target) {
+                    if (ancestor == null) {
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        restoreState = true
+                    }
                     launchSingleTop = true
-                    restoreState = true
                 }
-                navController.popBackStack(parentRoute, inclusive = false)
+                navController.popBackStack(target, inclusive = false)
             }
+            ensureParent(parentRoute)
             navController.navigate(route) { launchSingleTop = true }
         }
     }
@@ -1792,7 +1801,7 @@ private fun AuthenticatedShell(
             AppRoute.Operations -> viewModel.syncNavigationDestination(MainTab.Operations)
             AppRoute.Account -> viewModel.syncNavigationDestination(MainTab.Profile, accountManagementOpen = true)
             AppRoute.GoogleAccounts -> viewModel.syncNavigationDestination(MainTab.Profile, googleAccountDeskOpen = true)
-            AppRoute.GitHubProjects -> viewModel.syncNavigationDestination(MainTab.Profile, githubProjectsOpen = true)
+            AppRoute.GitHubProjects -> viewModel.syncNavigationDestination(MainTab.Operations, githubProjectsOpen = true)
             AppRoute.Search -> viewModel.syncNavigationDestination(MainTab.Overview, globalSearchOpen = true)
             AppRoute.Assistant -> viewModel.syncNavigationDestination(MainTab.Overview, assistantOpen = true)
             AppRoute.Today -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
@@ -1800,7 +1809,14 @@ private fun AuthenticatedShell(
             AppRoute.Reservation -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.LibrarySeatReservation -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.DailyNews -> viewModel.syncNavigationDestination(MainTab.Overview, autoRefresh = false)
-            AppRoute.Scenes -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Scenes)
+            AppRoute.Scenes -> viewModel.syncNavigationDestination(MainTab.Tools, workspaceDestination = WorkspaceDestination.Scenes)
+            AppRoute.Timetable -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Timetable)
+            AppRoute.Campus -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Campus)
+            AppRoute.Todos -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Todos)
+            AppRoute.Projects -> viewModel.syncNavigationDestination(MainTab.Operations, workspaceDestination = WorkspaceDestination.Projects)
+            AppRoute.AndroidReleases, AppRoute.RegistryImages -> viewModel.syncNavigationDestination(MainTab.Operations, autoRefresh = false)
+            AppRoute.Authenticator, AppRoute.NotificationSettings -> viewModel.syncNavigationDestination(MainTab.Profile, autoRefresh = false)
+            AppRoute.LoginSessions -> viewModel.syncNavigationDestination(MainTab.Profile)
         }
     }
     LaunchedEffect(state.error, state.message) {
@@ -1967,7 +1983,6 @@ private fun AuthenticatedShell(
                         },
                         onOpenAccountManagement = viewModel::openAccountManagement,
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
-                        requestWebLoginUrl = viewModel::createPlatformWebLoginUrl,
                         requestExternalApplicationLaunch = viewModel::createExternalApplicationLaunch,
                     )
                 }
@@ -1987,7 +2002,8 @@ private fun AuthenticatedShell(
                         onIncidentMute = { id -> viewModel.muteIncident(id, onSensitiveActionConfirmation) },
                         onIncidentResolve = { id, note -> viewModel.resolveIncident(id, note, onSensitiveActionConfirmation) },
                         onRefresh = onRefresh,
-                        onOpenRegistryImages = { navigateToSubScreen(AppRoute.RegistryImages) },
+                        onOpenProjects = { navigateToSubScreen(AppRoute.Projects) },
+                        requestWebLoginUrl = viewModel::createPlatformWebLoginUrl,
                     )
                 }
                 composable(AppRoute.Notifications) {
@@ -2005,28 +2021,24 @@ private fun AuthenticatedShell(
                         onClearRead = viewModel::clearReadAlerts,
                         onArchive = viewModel::archiveAlert,
                         onSnooze = { id, duration -> viewModel.snoozeAlert(id, duration) },
-                        onUpdatePreferences = viewModel::updateAlertPreferences,
+                        onOpenSettings = { navigateToSubScreen(AppRoute.NotificationSettings) },
                         onBack = navigateBackFromSubScreen,
                     )
                 }
                 composable(AppRoute.Tools) {
                     val toolsState by viewModel.toolsState.collectAsStateWithLifecycle()
                     ToolsScreen(
-                        toolsState,
-                        contentPadding,
-                        state.selectedTab,
-                        { viewModel.triggerCt8(onSensitiveActionConfirmation) },
-                        { id -> viewModel.runIotScene(id, onSensitiveActionConfirmation) },
-                        { deviceId, relayId, enabled ->
-                            viewModel.controlIotRelay(deviceId, relayId, enabled)
-                        },
-                        onRefresh,
-                        onOpenNotifications = { viewModel.openWorkspace(WorkspaceDestination.Notifications) },
-                        onOpenAuthenticator = {
-                            navigateToSubScreen(AppRoute.Authenticator)
-                        },
+                        state = toolsState,
+                        contentPadding = contentPadding,
+                        currentTab = state.selectedTab,
+                        onRunScene = { id -> viewModel.runIotScene(id, onSensitiveActionConfirmation) },
+                        onControlRelay = { deviceId, relayId, enabled -> viewModel.controlIotRelay(deviceId, relayId, enabled) },
+                        onRefresh = onRefresh,
+                        onOpenNotifications = { navigateToSubScreen(AppRoute.Notifications) },
+                        onOpenScenes = { navigateToSubScreen(AppRoute.Scenes) },
                     )
                 }
+
                 composable(AppRoute.Authenticator) {
                     val authenticatorViewModel: AuthenticatorViewModel = viewModel()
                     val authenticatorState by authenticatorViewModel.state.collectAsStateWithLifecycle()
@@ -2046,21 +2058,15 @@ private fun AuthenticatedShell(
                     ProfileScreen(
                         state = profileState,
                         contentPadding = contentPadding,
-                        onRevokeSession = { nonce -> viewModel.revokeSession(nonce, onSensitiveActionConfirmation) },
-                        onRevokeOtherSessions = { viewModel.revokeOtherSessions(onSensitiveActionConfirmation) },
                         onOpenQrLogin = viewModel::openQrScanner,
                         onLogout = viewModel::logout,
                         onRefresh = onRefresh,
                         onClearCache = viewModel::clearLocalCache,
                         onForceFullSync = viewModel::forceFullSync,
                         onOpenAccountManagement = viewModel::openAccountManagement,
-                        onOpenGoogleAccountDesk = viewModel::openGoogleAccountDesk,
-                        onOpenGitHubProjects = viewModel::openGitHubProjects,
-                        onOpenAndroidReleases = { navigateToSubScreen(AppRoute.AndroidReleases) },
-                        notificationsEnabled = notificationsEnabled,
-                        onRequestNotifications = onRequestNotifications,
-                        onCreateDesktopMagicLink = viewModel::createDesktopMagicLink,
-                        onUpdateNotificationPreferences = viewModel::updateNotificationPreferences,
+                        onOpenGoogleAccountDesk = { navigateToSubScreen(AppRoute.GoogleAccounts) },
+                        onOpenAuthenticator = { navigateToSubScreen(AppRoute.Authenticator) },
+                        onOpenNotificationSettings = { navigateToSubScreen(AppRoute.NotificationSettings) },
                         onCheckUpdates = viewModel::checkAppUpdates,
                         onDownloadAndInstallUpdate = viewModel::downloadAndInstallAppUpdate,
                         onInstallDownloadedUpdate = viewModel::installDownloadedAppUpdate,
@@ -2079,6 +2085,7 @@ private fun AuthenticatedShell(
                         contentPadding = contentPadding,
                         onDismiss = navigateBackFromSubScreen,
                         onRefresh = onRefresh,
+                        onOpenLoginSessions = { navigateToSubScreen(AppRoute.LoginSessions) },
                         onChangedPassword = viewModel::changePassword,
                         onBeginTotpEnrollment = viewModel::beginTotpEnrollment,
                         onConfirmTotpEnrollment = viewModel::confirmTotpEnrollment,
@@ -2100,6 +2107,42 @@ private fun AuthenticatedShell(
                                 viewModel.setAppLockEnabled(false)
                             }
                         },
+                    )
+                }
+                composable(AppRoute.LoginSessions) {
+                    val profileState by viewModel.profileState.collectAsStateWithLifecycle()
+                    LoginSessionsScreen(
+                        state = profileState,
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onRefresh = onRefresh,
+                        onRevokeSession = { nonce -> viewModel.revokeSession(nonce, onSensitiveActionConfirmation) },
+                        onRevokeOtherSessions = { viewModel.revokeOtherSessions(onSensitiveActionConfirmation) },
+                        onCreateDesktopMagicLink = viewModel::createDesktopMagicLink,
+                    )
+                }
+                composable(AppRoute.NotificationSettings) {
+                    val profileState by viewModel.profileState.collectAsStateWithLifecycle()
+                    NotificationSettingsScreen(
+                        preferences = profileState.alertPreferences,
+                        notificationsEnabled = notificationsEnabled,
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onRequestNotifications = onRequestNotifications,
+                        onSave = viewModel::saveNotificationPreferences,
+                    )
+                }
+                composable(AppRoute.Projects) {
+                    val projectsState by viewModel.projectsState.collectAsStateWithLifecycle()
+                    ProjectsScreen(
+                        state = projectsState,
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onRefresh = onRefresh,
+                        onOpenGitHubProjects = { navigateToSubScreen(AppRoute.GitHubProjects) },
+                        onOpenAndroidReleases = { navigateToSubScreen(AppRoute.AndroidReleases) },
+                        onOpenRegistryImages = { navigateToSubScreen(AppRoute.RegistryImages) },
+                        onTriggerCt8 = { viewModel.triggerCt8(onSensitiveActionConfirmation) },
                     )
                 }
                 composable(AppRoute.GoogleAccounts) {
@@ -2195,7 +2238,19 @@ private fun AuthenticatedShell(
                         state = searchState,
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
-                        onSelect = viewModel::openGlobalSearchResult,
+                        onSelect = { item ->
+                            val route = item.featureRoute
+                            if (route == null) {
+                                viewModel.openGlobalSearchResult(item)
+                            } else {
+                                viewModel.closeGlobalSearch()
+                                when (route) {
+                                    AppRoute.Tools -> navigateToTab(MainTab.Tools)
+                                    AppRoute.Operations -> navigateToTab(MainTab.Operations)
+                                    else -> navigateToSubScreen(route)
+                                }
+                            }
+                        },
                     )
                 }
                 composable(AppRoute.Assistant) {
@@ -2211,54 +2266,57 @@ private fun AuthenticatedShell(
                         onExecuteAction = viewModel::performAssistantAction,
                     )
                 }
-                composable(AppRoute.Today) {
-                    val todayState by viewModel.todayState.collectAsStateWithLifecycle()
-                    val context = LocalContext.current
-                    val calendarPermissions = remember {
-                        arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
-                    }
-                    val calendarPermissionLauncher = rememberLauncherForActivityResult(
-                        ActivityResultContracts.RequestMultiplePermissions(),
-                    ) { result ->
-                        if (calendarPermissions.all { result[it] == true }) {
-                            viewModel.syncAndroidCalendar()
-                        } else {
-                            viewModel.reportCalendarPermissionDenied()
+                listOf(WorkspaceDestination.Today, WorkspaceDestination.Timetable, WorkspaceDestination.Campus, WorkspaceDestination.Todos).forEach { destination ->
+                    composable(destination.route()) {
+                        val todayState by viewModel.todayState.collectAsStateWithLifecycle()
+                        val context = LocalContext.current
+                        val calendarPermissions = remember {
+                            arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
                         }
-                    }
-                    TodayScreen(
-                        state = todayState,
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onRefresh = { viewModel.refreshCurrentWorkspace() },
-                        onSaveTodo = viewModel::saveTodo,
-                        onToggleTodo = viewModel::toggleTodo,
-                        onDeleteTodo = viewModel::deleteTodo,
-                        onSyncCalendar = {
-                            if (calendarPermissions.all { permission ->
-                                    ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-                                }
-                            ) {
+                        val calendarPermissionLauncher = rememberLauncherForActivityResult(
+                            ActivityResultContracts.RequestMultiplePermissions(),
+                        ) { result ->
+                            if (calendarPermissions.all { result[it] == true }) {
                                 viewModel.syncAndroidCalendar()
                             } else {
-                                calendarPermissionLauncher.launch(calendarPermissions)
+                                viewModel.reportCalendarPermissionDenied()
                             }
-                        },
-                        onOpenNotifications = { navigateToTab(MainTab.Notifications) },
-                        onOpenFreeClassrooms = {
-                            navigateToSubScreen(AppRoute.FreeClassrooms)
-                        },
-                        onOpenReservation = {
-                            navigateToSubScreen(AppRoute.Reservation)
-                        },
-                        onOpenLibrarySeatReservation = {
-                            navigateToSubScreen(AppRoute.LibrarySeatReservation)
-                        },
-                        onOpenWaterValve = {
-                            navigateToSubScreen(AppRoute.CampusWaterValve)
-                        },
-                        onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
-                    )
+                        }
+                        TodayScreen(
+                            state = todayState,
+                            contentPadding = contentPadding,
+                            onBack = navigateBackFromSubScreen,
+                            onRefresh = { viewModel.refreshCurrentWorkspace() },
+                            onSaveTodo = viewModel::saveTodo,
+                            onToggleTodo = viewModel::toggleTodo,
+                            onDeleteTodo = viewModel::deleteTodo,
+                            onSyncCalendar = {
+                                if (calendarPermissions.all { permission ->
+                                        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                                    }
+                                ) {
+                                    viewModel.syncAndroidCalendar()
+                                } else {
+                                    calendarPermissionLauncher.launch(calendarPermissions)
+                                }
+                            },
+                            onOpenNotifications = { navigateToTab(MainTab.Notifications) },
+                            onOpenFreeClassrooms = {
+                                navigateToSubScreen(AppRoute.FreeClassrooms)
+                            },
+                            onOpenReservation = {
+                                navigateToSubScreen(AppRoute.Reservation)
+                            },
+                            onOpenLibrarySeatReservation = {
+                                navigateToSubScreen(AppRoute.LibrarySeatReservation)
+                            },
+                            onOpenWaterValve = {
+                                navigateToSubScreen(AppRoute.CampusWaterValve)
+                            },
+                            onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
+                            initialSection = destination,
+                        )
+                    }
                 }
                 composable(AppRoute.DailyNews) {
                     val dailyNewsState by viewModel.dailyNewsState.collectAsStateWithLifecycle()

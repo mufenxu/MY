@@ -34,7 +34,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Assignment
-import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.DoneAll
@@ -43,7 +42,6 @@ import androidx.compose.material.icons.outlined.MarkEmailRead
 import androidx.compose.material.icons.outlined.MarkEmailUnread
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsActive
-import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Schedule
@@ -81,7 +79,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationAction
 import cn.pxyb.mycontrol.data.AppNotificationBlock
@@ -97,14 +94,12 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
 import cn.pxyb.mycontrol.ui.components.input.AppSearchBar
-import cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal
 import cn.pxyb.mycontrol.ui.theme.AccentColors
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.TextStyle
 import java.util.Locale
@@ -145,12 +140,11 @@ fun NotificationCenterScreen(
     onClearRead: () -> Unit,
     onArchive: (String) -> Unit,
     onSnooze: (String, Long) -> Unit,
-    onUpdatePreferences: (AlertPreferences) -> Unit,
+    onOpenSettings: () -> Unit,
     onBack: () -> Unit,
 ) {
     var filterTab by rememberSaveable { mutableStateOf(NotificationFilter.All.id) }
     var query by rememberSaveable { mutableStateOf("") }
-    var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var selectedAlertId by rememberSaveable { mutableStateOf<String?>(null) }
     var snoozeTargetId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingArchiveId by remember { mutableStateOf<String?>(null) }
@@ -206,8 +200,8 @@ fun NotificationCenterScreen(
         }
         AppHeaderIconButton(
             icon = Icons.Outlined.Settings,
-            contentDescription = "提醒设置",
-            onClick = { settingsOpen = true },
+            contentDescription = "通知设置",
+            onClick = onOpenSettings,
         )
     }
 
@@ -237,7 +231,7 @@ fun NotificationCenterScreen(
         if (state.preferences.quietHoursEnabled) {
             item(key = "quiet-hours", contentType = "banner") {
                 AppFeedbackBanner(
-                    message = "安静时段 ${hourLabel(state.preferences.quietStartHour)} - ${hourLabel(state.preferences.quietEndHour)} 内不弹出系统通知，历史仍会保留。",
+                    message = "安静时段 ${"%02d:00".format(state.preferences.quietStartHour)} - ${"%02d:00".format(state.preferences.quietEndHour)} 内不弹出系统通知，历史仍会保留。",
                     type = AppFeedbackType.Info,
                     showCloseButton = false,
                     autoDismissDurationMillis = null,
@@ -346,14 +340,6 @@ fun NotificationCenterScreen(
                     ),
             )
         }
-    }
-
-    if (settingsOpen) {
-        QuietHoursDialog(
-            preferences = state.preferences,
-            onDismiss = { settingsOpen = false },
-            onSave = { onUpdatePreferences(it); settingsOpen = false },
-        )
     }
 
     snoozeTargetId?.let { id ->
@@ -1384,94 +1370,3 @@ private fun SnoozeDialog(onDismiss: () -> Unit, onPick: (Long) -> Unit) {
         }
     }
 }
-
-@Composable
-private fun QuietHoursDialog(
-    preferences: AlertPreferences,
-    onDismiss: () -> Unit,
-    onSave: (AlertPreferences) -> Unit,
-) {
-    var enabled by remember { mutableStateOf(preferences.quietHoursEnabled) }
-    var startHour by remember { mutableStateOf(preferences.quietStartHour.coerceIn(0, 23)) }
-    var endHour by remember { mutableStateOf(preferences.quietEndHour.coerceIn(0, 23)) }
-    var picking by remember { mutableStateOf<String?>(null) }
-
-    AppDialog(
-        onDismissRequest = onDismiss,
-        icon = Icons.Outlined.NotificationsOff,
-        title = "提醒设置",
-        subtitle = "安静时段仍会保存通知历史，但不弹出系统通知",
-        footer = {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                AppDialogSecondaryButton("取消", onDismiss, Modifier.weight(1f))
-                AppDialogPrimaryButton(
-                    "保存",
-                    {
-                        onSave(
-                            preferences.copy(
-                                quietHoursEnabled = enabled,
-                                quietStartHour = startHour,
-                                quietEndHour = endHour,
-                            ),
-                        )
-                    },
-                    Modifier.weight(1f),
-                )
-            }
-        },
-    ) {
-        AppActionRow(
-            title = "启用安静时段",
-            subtitle = "适合睡眠和专注时间",
-            icon = Icons.Outlined.Bedtime,
-            iconTint = ColorTokens.Indigo.foreground,
-            onClick = { enabled = !enabled },
-            trailingContent = {
-                AppSwitch(checked = enabled, onCheckedChange = { enabled = it })
-            },
-        )
-        if (enabled) {
-            AppActionRow(
-                title = "开始时间",
-                subtitle = hourLabel(startHour),
-                icon = Icons.Outlined.AccessTime,
-                iconTint = ColorTokens.Blue.foreground,
-                onClick = { picking = QUIET_START },
-                trailingContent = null,
-            )
-            AppActionRow(
-                title = "结束时间",
-                subtitle = hourLabel(endHour),
-                icon = Icons.Outlined.Schedule,
-                iconTint = ColorTokens.Amber.foreground,
-                onClick = { picking = QUIET_END },
-                trailingContent = null,
-            )
-        }
-    }
-
-    when (picking) {
-        QUIET_START -> AppTimePickerModal(
-            title = "安静时段开始",
-            currentTime = hourLabel(startHour),
-            minuteStep = 60,
-            onDismiss = { picking = null },
-            onConfirm = { value ->
-                startHour = value.substringBefore(':').toIntOrNull()?.coerceIn(0, 23) ?: startHour
-                picking = null
-            },
-        )
-        QUIET_END -> AppTimePickerModal(
-            title = "安静时段结束",
-            currentTime = hourLabel(endHour),
-            minuteStep = 60,
-            onDismiss = { picking = null },
-            onConfirm = { value ->
-                endHour = value.substringBefore(':').toIntOrNull()?.coerceIn(0, 23) ?: endHour
-                picking = null
-            },
-        )
-    }
-}
-
-private fun hourLabel(hour: Int): String = "%02d:00".format(hour)

@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Lock
@@ -69,6 +70,7 @@ fun AccountManagementScreen(
     contentPadding: PaddingValues,
     onDismiss: () -> Unit,
     onRefresh: () -> Unit,
+    onOpenLoginSessions: () -> Unit,
     onChangedPassword: (oldPassword: String, newPassword: String, totp: String) -> Unit,
     onBeginTotpEnrollment: (password: String, totp: String) -> Unit,
     onConfirmTotpEnrollment: (code: String) -> Unit,
@@ -124,13 +126,23 @@ fun AccountManagementScreen(
         ) {
         item {
             AppSecondaryHeader(
-                title = "账号管理",
+                title = "账号与安全",
                 subtitle = "密码、安全与登录凭证设置",
                 onBack = onDismiss,
             )
         }
         state.sectionError?.let { message ->
             item(key = "section-error") { FeedbackBanner("安全数据暂不可用：$message", error = true) }
+        }
+        item(key = "login-sessions") {
+            AppPanel {
+                AppActionRow(
+                    title = "登录设备与会话",
+                    subtitle = "管理登录设备、撤销会话与电脑端免密登录",
+                    icon = Icons.Outlined.Devices,
+                    onClick = onOpenLoginSessions,
+                )
+            }
         }
         if (passkeyCount > 0 && state.androidPasskeySupported) {
             item(key = "passkey-reauthentication") {
@@ -277,7 +289,7 @@ fun AccountManagementScreen(
                                 AccountActionRow(
                                     icon = Icons.Outlined.LockReset,
                                     title = "修改登录密码",
-                                    subtitle = "定期更新密码以保证中央控制面板安全",
+                                    subtitle = "更新当前平台账号的登录密码",
                                     onClick = { showChangePasswordDialog = true }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -385,7 +397,7 @@ fun AccountManagementScreen(
                         AccountActionRow(
                             icon = Icons.Outlined.LockReset,
                             title = "修改登录密码",
-                            subtitle = "定期更新密码以保证中央控制面板安全",
+                            subtitle = "更新当前平台账号的登录密码",
                             onClick = { showChangePasswordDialog = true }
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

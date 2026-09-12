@@ -164,6 +164,7 @@ class AppViewModel(
     val overviewState = deriveState(AppUiState::toOverviewUiState)
     val operationsState = deriveState(AppUiState::toOperationsUiState)
     val toolsState = deriveState(AppUiState::toToolsUiState)
+    val projectsState = deriveState(AppUiState::toProjectsUiState)
     val profileState = deriveState(AppUiState::toProfileUiState)
     val dailyNewsState = deriveState(AppUiState::toDailyNewsUiState)
     val accountManagementState = deriveState(AppUiState::toAccountManagementUiState)
@@ -988,11 +989,17 @@ class AppViewModel(
     fun openWorkspace(destination: WorkspaceDestination) {
         mutableState.update {
             it.copy(
-                selectedTab = MainTab.Overview,
+                selectedTab = when (destination) {
+                    WorkspaceDestination.Scenes -> MainTab.Tools
+                    WorkspaceDestination.Projects -> MainTab.Operations
+                    else -> MainTab.Overview
+                },
                 pendingTabNavigation = null,
                 accountManagementOpen = false,
                 googleAccountDeskOpen = false,
+                githubProjectsOpen = false,
                 globalSearchOpen = false,
+                assistantOpen = false,
                 workspaceDestination = destination,
                 error = null,
                 message = null,
@@ -1000,9 +1007,11 @@ class AppViewModel(
         }
         persistNavigationState()
         when (destination) {
-            WorkspaceDestination.Today -> refreshToday()
+            WorkspaceDestination.Today, WorkspaceDestination.Timetable,
+            WorkspaceDestination.Campus, WorkspaceDestination.Todos -> refreshToday()
             WorkspaceDestination.Notifications -> reloadPersonalState()
             WorkspaceDestination.Scenes -> refreshIot()
+            WorkspaceDestination.Projects -> refreshCt8(true)
         }
     }
 
@@ -1182,11 +1191,14 @@ class AppViewModel(
     fun openGlobalSearchResult(item: GlobalSearchItem) {
         mutableState.update { it.copy(globalSearchOpen = false) }
         when (item.destination) {
-            SearchDestination.Overview -> selectTab(MainTab.Overview)
+            SearchDestination.Overview -> openOperationalTarget(MainTab.Overview)
+            SearchDestination.Operations -> openOperationalTarget(MainTab.Operations)
             SearchDestination.Notifications -> openWorkspace(WorkspaceDestination.Notifications)
-            SearchDestination.Tools -> selectTab(MainTab.Tools)
+            SearchDestination.Tools -> openOperationalTarget(MainTab.Tools)
             SearchDestination.GoogleAccounts -> openGoogleAccountDesk()
             SearchDestination.Today -> openWorkspace(WorkspaceDestination.Today)
+            SearchDestination.Timetable -> openWorkspace(WorkspaceDestination.Timetable)
+            SearchDestination.Todos -> openWorkspace(WorkspaceDestination.Todos)
             SearchDestination.Scenes -> openWorkspace(WorkspaceDestination.Scenes)
         }
     }
@@ -1226,19 +1238,18 @@ class AppViewModel(
         mutableState.update { it.copy(googleAccountDeskOpen = false) }
     }
     fun openGitHubProjects() {
-        val changedTab = mutableState.value.selectedTab != MainTab.Profile
         mutableState.update {
             it.copy(
-                selectedTab = MainTab.Profile,
+                selectedTab = MainTab.Operations,
                 accountManagementOpen = false,
                 googleAccountDeskOpen = false,
                 githubProjectsOpen = true,
                 globalSearchOpen = false,
+                workspaceDestination = null,
                 error = null,
                 message = null,
             )
         }
-        if (changedTab) refreshForTab(MainTab.Profile)
         refreshGitHubProjects()
     }
 
@@ -1573,6 +1584,7 @@ class AppViewModel(
             tab = current.selectedTab,
             accountManagementOpen = current.accountManagementOpen,
             googleAccountDeskOpen = current.googleAccountDeskOpen,
+            githubProjectsOpen = current.githubProjectsOpen,
             globalSearchOpen = current.globalSearchOpen,
             assistantOpen = current.assistantOpen,
             workspaceDestination = current.workspaceDestination,
@@ -1595,8 +1607,9 @@ class AppViewModel(
             assistantOpen -> {
                 // AI 助手使用现有工作台状态作为上下文，无需额外拉取。
             }
-            workspaceDestination == WorkspaceDestination.Today -> refreshToday(force)
+            workspaceDestination in setOf(WorkspaceDestination.Today, WorkspaceDestination.Timetable, WorkspaceDestination.Campus, WorkspaceDestination.Todos) -> refreshToday(force)
             workspaceDestination == WorkspaceDestination.Scenes -> refreshIot(force)
+            workspaceDestination == WorkspaceDestination.Projects -> refreshCt8(force)
             workspaceDestination == WorkspaceDestination.Notifications -> {
                 refreshIncidents(force)
                 syncRemoteNotifications(force)
@@ -1659,7 +1672,6 @@ class AppViewModel(
             }
             MainTab.Tools -> {
                 refreshIot(force)
-                refreshCt8(force)
             }
             MainTab.Profile -> {
                 refreshSecurity(force)
@@ -2538,6 +2550,9 @@ class AppViewModel(
     fun createDesktopMagicLink(onResult: (String?, String?) -> Unit) = accountSecurity.createDesktopMagicLink(onResult)
 
     fun updateNotificationPreferences(preferences: AlertPreferences) = notifications.updateNotificationPreferences(preferences)
+
+    fun saveNotificationPreferences(preferences: AlertPreferences, onComplete: (String?) -> Unit) =
+        notifications.updateAlertPreferences(preferences, onComplete)
 
     fun checkAppUpdates() = appUpdates.check()
 
