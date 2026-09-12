@@ -949,9 +949,22 @@ internal fun AuthenticatedShell(
                         },
                         onLoadSeats = viewModel.librarySeats::loadLibrarySeatSeats,
                         onQueryFloorSeats = viewModel.librarySeats::queryLibrarySeatFloorSeats,
+                        onLoadTimeline = { seatId, date ->
+                            viewModel.librarySeats.loadLibrarySeatTimeline(seatId, date)
+                        },
                         onSubmitReservation = viewModel.librarySeats::submitLibrarySeatReservation,
                         onLoadReservations = viewModel.librarySeats::loadLibrarySeatReservations,
                         onLoadReservationHistory = viewModel.librarySeats::loadLibrarySeatReservationHistory,
+                        onLoadCurrentUse = { viewModel.librarySeats.loadLibrarySeatCurrentUse() },
+                        onLoadBreaches = { viewModel.librarySeats.loadLibrarySeatBreaches() },
+                        onLoadDoorLogs = { viewModel.librarySeats.loadLibrarySeatDoorLogs() },
+                        onLoadMakeLife = { reservationId ->
+                            viewModel.librarySeats.loadLibrarySeatMakeLife(reservationId)
+                        },
+                        onCheckIn = viewModel.librarySeats::checkInLibrarySeat,
+                        onLeaveSeat = viewModel.librarySeats::leaveLibrarySeat,
+                        onStopSeat = viewModel.librarySeats::stopLibrarySeat,
+                        onCancelReservation = viewModel.librarySeats::cancelLibrarySeatReservation,
                         onOpenOfficialReservation = {
                             viewModel.openOfficialLibrarySeatReservation { session ->
                                 openPlatformWebLink(

@@ -2665,6 +2665,7 @@ async function handleApiRoutes(req, res, url) {
       readBodyJson,
       repository,
       saveLibrarySeatWaitlist,
+      wakeLibrarySeatReminderScheduler,
       wakeLibrarySeatWaitlistScheduler
     })) {
       return;
@@ -2948,7 +2949,9 @@ const {
   wakeLibroomAutoReservationScheduler,
   startLibroomAutoReservationScheduler,
   wakeLibrarySeatWaitlistScheduler,
-  startLibrarySeatWaitlistScheduler
+  startLibrarySeatWaitlistScheduler,
+  wakeLibrarySeatReminderScheduler,
+  startLibrarySeatReminderScheduler
 } = createBackgroundSchedulers({
   academicEvaluationAutoCapacitySnapshot,
   academicEvaluationAutoTasks,
@@ -2956,6 +2959,7 @@ const {
   cachedAcademicTimetableForUser,
   CAS_ORIGIN,
   getAcademicTimetable,
+  getLibrarySeatCurrentUse: async () => (await librarySeatClient()).getCurrentUse(),
   isCasLoginRequiredError,
   librarySeatWaitlistFailureText,
   logger,
@@ -3069,6 +3073,7 @@ server.listen(PORT, HOST, () => {
   startAcademicReminderScheduler();
   startLibroomAutoReservationScheduler();
   startLibrarySeatWaitlistScheduler();
+  startLibrarySeatReminderScheduler();
 });
 
 let shuttingDown = false;

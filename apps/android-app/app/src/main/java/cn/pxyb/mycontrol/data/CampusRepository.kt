@@ -12,6 +12,8 @@ import org.json.JSONObject
 import java.time.YearMonth
 
 class CampusRepository internal constructor(private val http: PlatformHttpClient) {
+    private val librarySeatSeatCache = LinkedHashMap<String, Pair<Long, List<LibrarySeatStatus>>>()
+
     suspend fun campusTimetable(): CampusTimetable = withContext(Dispatchers.IO) {
         val envelope = http.execute(CAMPUS_TIMETABLE_PATH).json
         val json = envelope.optJSONObject("data") ?: envelope
@@ -239,14 +241,21 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         endMinute: Int,
         amPm: Int = 0,
     ): List<LibrarySeatStatus> = withContext(Dispatchers.IO) {
+        val cacheKey = "$roomId|$date|$startMinute|$endMinute|$amPm"
+        librarySeatSeatCache[cacheKey]
+            ?.takeIf { System.currentTimeMillis() - it.first < LIBRARY_SEAT_SEAT_CACHE_MS }
+            ?.let { return@withContext it.second }
         val query = buildList {
             add("roomId=${encodePath(roomId)}")
             add("date=${encodePath(date)}")
             add("startMinute=$startMinute")
             add("endMinute=$endMinute")
-            add("amPm=$amPm")
+            if (amPm > 0) add("amPm=$amPm")
         }.joinToString("&", prefix = "?")
-        parseLibrarySeatSeatsPayload(http.execute("$CAMPUS_LIBRARY_SEAT_SEATS_PATH$query").json)
+        val seats = parseLibrarySeatSeatsPayload(http.execute("$CAMPUS_LIBRARY_SEAT_SEATS_PATH$query").json)
+        if (librarySeatSeatCache.size >= LIBRARY_SEAT_SEAT_CACHE_LIMIT) librarySeatSeatCache.clear()
+        librarySeatSeatCache[cacheKey] = System.currentTimeMillis() to seats
+        seats
     }
 
     suspend fun submitLibrarySeatReservation(request: LibrarySeatReservationRequest): Unit = withContext(Dispatchers.IO) {
@@ -257,6 +266,12 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
             .put("endMinute", request.endMinute)
             .put("capToken", request.capToken)
         http.execute(CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH, method = "POST", body = body)
+        librarySeatSeatCache.clear()
+    }
+
+    suspend fun librarySeatTimeline(seatId: String, date: String): LibrarySeatTimeline = withContext(Dispatchers.IO) {
+        val query = "?seatId=${encodePath(seatId)}&date=${encodePath(date)}"
+        parseLibrarySeatTimelinePayload(http.execute("$CAMPUS_LIBRARY_SEAT_TIMELINE_PATH$query").json)
     }
 
     suspend fun librarySeatReservations(): List<LibrarySeatReservationRecord> = withContext(Dispatchers.IO) {
@@ -270,6 +285,53 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
                 http.execute("$CAMPUS_LIBRARY_SEAT_RESERVATIONS_HISTORY_PATH$query").json,
             )
         }
+
+    suspend fun librarySeatCurrentUse(): LibrarySeatReservationRecord? = withContext(Dispatchers.IO) {
+        parseLibrarySeatCurrentUsePayload(http.execute(CAMPUS_LIBRARY_SEAT_CURRENT_USE_PATH).json)
+    }
+
+    suspend fun librarySeatCheckIn(): String = withContext(Dispatchers.IO) {
+        parseLibrarySeatActionMessage(
+            http.execute(CAMPUS_LIBRARY_SEAT_CURRENT_USE_CHECK_IN_PATH, method = "POST").json,
+            "签到成功。",
+        )
+    }
+
+    suspend fun librarySeatLeave(): String = withContext(Dispatchers.IO) {
+        parseLibrarySeatActionMessage(
+            http.execute(CAMPUS_LIBRARY_SEAT_CURRENT_USE_LEAVE_PATH, method = "POST").json,
+            "已成功暂离。",
+        )
+    }
+
+    suspend fun librarySeatStop(): String = withContext(Dispatchers.IO) {
+        parseLibrarySeatActionMessage(
+            http.execute(CAMPUS_LIBRARY_SEAT_CURRENT_USE_STOP_PATH, method = "POST").json,
+            "已结束使用。",
+        )
+    }
+
+    suspend fun cancelLibrarySeatReservation(reservationId: String): LibrarySeatCancelResult = withContext(Dispatchers.IO) {
+        val path = "$CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH/${encodePath(reservationId)}/cancel"
+        val result = parseLibrarySeatCancelResultPayload(http.execute(path, method = "POST").json)
+        librarySeatSeatCache.clear()
+        result
+    }
+
+    suspend fun librarySeatBreaches(page: Int = 0, size: Int = 10): LibrarySeatBreachPage = withContext(Dispatchers.IO) {
+        val query = "?page=$page&size=$size"
+        parseLibrarySeatBreachPayload(http.execute("$CAMPUS_LIBRARY_SEAT_BREACHES_PATH$query").json)
+    }
+
+    suspend fun librarySeatDoorLogs(date: String): List<LibrarySeatDoorLog> = withContext(Dispatchers.IO) {
+        val query = "?date=${encodePath(date)}"
+        parseLibrarySeatDoorLogPayload(http.execute("$CAMPUS_LIBRARY_SEAT_DOOR_LOGS_PATH$query").json)
+    }
+
+    suspend fun librarySeatMakeLife(reservationId: String): List<LibrarySeatMakeLife> = withContext(Dispatchers.IO) {
+        val path = "$CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH/${encodePath(reservationId)}/life"
+        parseLibrarySeatMakeLifePayload(http.execute(path).json)
+    }
 
     suspend fun librarySeatWaitlists(): List<LibrarySeatWaitlistTask> = withContext(Dispatchers.IO) {
         val response = http.execute(CAMPUS_LIBRARY_SEAT_WAITLISTS_PATH)
@@ -528,4 +590,8 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
     private data class CampusEnergy(val balance: String?, val room: String?)
 
 }
+
+private const val LIBRARY_SEAT_SEAT_CACHE_MS = 60_000L
+
+private const val LIBRARY_SEAT_SEAT_CACHE_LIMIT = 40
 

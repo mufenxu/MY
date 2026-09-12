@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.ui.feature.campus.library
 import cn.pxyb.mycontrol.data.CampusRepository
 import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
+import cn.pxyb.mycontrol.data.LibrarySeatTimeline
 import cn.pxyb.mycontrol.data.LibrarySeatWaitlistRequest
 import cn.pxyb.mycontrol.ui.state.FeatureStateHolder
 import kotlinx.coroutines.CoroutineScope
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 class LibrarySeatStateHolder(
     parentScope: CoroutineScope,
@@ -29,6 +31,16 @@ class LibrarySeatStateHolder(
         submitLoading = false,
         reservationsLoading = false,
         historyReservationsLoading = false,
+        currentUseLoading = false,
+        breachesLoading = false,
+        doorLogsLoading = false,
+        makeLifeLoading = false,
+        makeLifeReservationId = "",
+        usageAction = null,
+        timeline = LibrarySeatTimeline(),
+        timelineLoading = false,
+        timelineSeatId = "",
+        timelineDate = "",
         waitlistsLoading = false,
         waitlistSaving = false,
         waitlistDeletingId = null,
@@ -59,6 +71,7 @@ class LibrarySeatStateHolder(
     fun refreshLibrarySeat() {
         loadLibrarySeatOverview(force = true)
         loadLibrarySeatReservations(force = true)
+        loadLibrarySeatCurrentUse(force = true)
         loadLibrarySeatWaitlists(force = true)
     }
 
@@ -341,6 +354,131 @@ class LibrarySeatStateHolder(
                 error = error.message ?: "历史预约记录加载失败，请重试。",
             )
         },
+    )
+
+    fun loadLibrarySeatCurrentUse(force: Boolean = false) = launchAction(
+        isBusy = { currentUseLoading && !force },
+        start = { copy(currentUseLoading = true) },
+        action = { campus.librarySeatCurrentUse() },
+        success = { record -> copy(currentUse = record, currentUseLoading = false) },
+        failure = { error ->
+            copy(
+                currentUseLoading = false,
+                error = error.message ?: "当前使用中的座位加载失败，请重试。",
+            )
+        },
+    )
+
+    fun checkInLibrarySeat() = launchUsageAction(
+        action = LibrarySeatUsageAction.CheckIn,
+        fallbackMessage = "签到失败，请重试。",
+        request = { campus.librarySeatCheckIn() },
+    )
+
+    fun leaveLibrarySeat() = launchUsageAction(
+        action = LibrarySeatUsageAction.Leave,
+        fallbackMessage = "暂离失败，请重试。",
+        request = { campus.librarySeatLeave() },
+    )
+
+    fun stopLibrarySeat() = launchUsageAction(
+        action = LibrarySeatUsageAction.Stop,
+        fallbackMessage = "结束使用失败，请重试。",
+        request = { campus.librarySeatStop() },
+    )
+
+    private fun launchUsageAction(
+        action: LibrarySeatUsageAction,
+        fallbackMessage: String,
+        request: suspend () -> String,
+    ) = launchAction(
+        isBusy = { usageAction != null },
+        start = { copy(usageAction = action, error = null, message = null) },
+        action = request,
+        success = { text -> copy(usageAction = null, message = text.ifBlank { "操作成功。" }) },
+        failure = { error -> copy(usageAction = null, error = error.message ?: fallbackMessage) },
+        afterSuccess = { refreshLibrarySeatUsage() },
+    )
+
+    fun cancelLibrarySeatReservation(reservationId: String) = launchAction(
+        isBusy = { reservationId.isBlank() || usageAction != null },
+        start = { copy(usageAction = LibrarySeatUsageAction.Cancel, error = null, message = null) },
+        action = { campus.cancelLibrarySeatReservation(reservationId) },
+        success = { result ->
+            copy(
+                usageAction = null,
+                message = "取消成功，今日还可取消 ${result.remainingCancelCount} 次。",
+            )
+        },
+        failure = { error -> copy(usageAction = null, error = error.message ?: "取消预约失败，请重试。") },
+        afterSuccess = { refreshLibrarySeatUsage() },
+    )
+
+    private fun refreshLibrarySeatUsage() {
+        loadLibrarySeatCurrentUse(force = true)
+        loadLibrarySeatReservations(force = true)
+    }
+
+    fun loadLibrarySeatBreaches(force: Boolean = false) = launchAction(
+        isBusy = { breachesLoading && !force },
+        start = { copy(breachesLoading = true) },
+        action = { campus.librarySeatBreaches(page = 0, size = 20) },
+        success = { page -> copy(breaches = page, breachesLoading = false) },
+        failure = { error ->
+            copy(
+                breachesLoading = false,
+                error = error.message ?: "违约记录加载失败，请重试。",
+            )
+        },
+    )
+
+    fun loadLibrarySeatDoorLogs(date: String = LocalDate.now().toString(), force: Boolean = false) = launchAction(
+        isBusy = { doorLogsLoading && !force },
+        start = { copy(doorLogsLoading = true) },
+        action = { campus.librarySeatDoorLogs(date) },
+        success = { logs -> copy(doorLogs = logs, doorLogsLoading = false) },
+        failure = { error ->
+            copy(
+                doorLogsLoading = false,
+                error = error.message ?: "门禁记录加载失败，请重试。",
+            )
+        },
+    )
+
+    fun loadLibrarySeatMakeLife(reservationId: String, force: Boolean = false) = launchAction(
+        isBusy = { makeLifeLoading && makeLifeReservationId == reservationId && !force },
+        start = {
+            copy(
+                makeLifeLoading = true,
+                makeLifeReservationId = reservationId,
+                makeLife = emptyList(),
+            )
+        },
+        action = { campus.librarySeatMakeLife(reservationId) },
+        success = { rows -> copy(makeLife = rows, makeLifeLoading = false) },
+        failure = { error ->
+            copy(
+                makeLifeLoading = false,
+                error = error.message ?: "变更记录加载失败，请重试。",
+            )
+        },
+    )
+
+    fun loadLibrarySeatTimeline(seatId: String, date: String, force: Boolean = false) = launchAction(
+        isBusy = {
+            timelineLoading && timelineSeatId == seatId && timelineDate == date && !force
+        },
+        start = {
+            copy(
+                timelineLoading = true,
+                timelineSeatId = seatId,
+                timelineDate = date,
+                timeline = LibrarySeatTimeline(),
+            )
+        },
+        action = { campus.librarySeatTimeline(seatId, date) },
+        success = { timeline -> copy(timeline = timeline, timelineLoading = false) },
+        failure = { copy(timelineLoading = false, timeline = LibrarySeatTimeline()) },
     )
 
     fun loadLibrarySeatWaitlists(force: Boolean = false) = launchAction(

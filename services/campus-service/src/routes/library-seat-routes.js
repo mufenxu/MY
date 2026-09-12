@@ -12,6 +12,7 @@ export async function handleLibrarySeatRoutes(req, res, url, {
   readBodyJson,
   repository,
   saveLibrarySeatWaitlist,
+  wakeLibrarySeatReminderScheduler,
   wakeLibrarySeatWaitlistScheduler
 }) {
   if (url.pathname === "/api/campus/library-seat/official-webview-login" && req.method === "GET") {
@@ -55,7 +56,34 @@ export async function handleLibrarySeatRoutes(req, res, url, {
       date,
       startMinute: Number(url.searchParams.get("startMinute") || 0),
       endMinute: Number(url.searchParams.get("endMinute") || 0),
-      amPm: Number(url.searchParams.get("amPm") || 0)
+      amPm: url.searchParams.get("amPm") || ""
+    });
+    json(res, 200, { ok: true, data });
+    return true;
+  }
+  if (url.pathname === "/api/campus/library-seat/timeline" && req.method === "GET") {
+    const client = await librarySeatClient();
+    const data = await client.getTimeline({
+      seatId: url.searchParams.get("seatId") || url.searchParams.get("id") || "",
+      date: url.searchParams.get("date") || ""
+    });
+    json(res, 200, { ok: true, data });
+    return true;
+  }
+  if (url.pathname === "/api/campus/library-seat/start-times" && req.method === "GET") {
+    const client = await librarySeatClient();
+    const data = await client.getStartTimes({
+      seatId: url.searchParams.get("seatId") || url.searchParams.get("id") || "",
+      date: url.searchParams.get("date") || ""
+    });
+    json(res, 200, { ok: true, data });
+    return true;
+  }
+  if (url.pathname === "/api/campus/library-seat/layout" && req.method === "GET") {
+    const client = await librarySeatClient();
+    const data = await client.getSeatLayout({
+      roomId: url.searchParams.get("roomId") || url.searchParams.get("areaId") || "",
+      updV: Number(url.searchParams.get("updV") || url.searchParams.get("version") || 0)
     });
     json(res, 200, { ok: true, data });
     return true;
@@ -87,6 +115,73 @@ export async function handleLibrarySeatRoutes(req, res, url, {
       endMinute: normalized.endMinute
     });
     json(res, 201, { ok: true, data: result });
+    return true;
+  }
+  if (url.pathname === "/api/campus/library-seat/current-use" && req.method === "GET") {
+    const client = await librarySeatClient();
+    json(res, 200, { ok: true, data: await client.getCurrentUse() });
+    return true;
+  }
+  if (url.pathname === "/api/campus/library-seat/current-use/check-in" && req.method === "POST") {
+    const client = await librarySeatClient();
+    const data = await client.checkIn();
+    wakeLibrarySeatReminderScheduler("checked_in");
+    logger.info("audit_library_seat_checked_in", { actorUserId: currentUserId() });
+    json(res, 200, { ok: true, data });
+    return true;
+  }
+  if (url.pathname === "/api/campus/library-seat/current-use/leave" && req.method === "POST") {
+    const client = await librarySeatClient();
+    const data = await client.leaveSeat();
+    wakeLibrarySeatReminderScheduler("left_seat");
+    logger.info("audit_library_seat_left", { actorUserId: currentUserId() });
+    json(res, 200, { ok: true, data });
+    return true;
+  }
+  if (url.pathname === "/api/campus/library-seat/current-use/stop" && req.method === "POST") {
+    const client = await librarySeatClient();
+    const data = await client.stopSeat();
+    wakeLibrarySeatReminderScheduler("stopped_seat");
+    logger.info("audit_library_seat_stopped", { actorUserId: currentUserId() });
+    json(res, 200, { ok: true, data });
+    return true;
+  }
+  const librarySeatReservationActionPath = url.pathname.match(
+    /^\/api\/campus\/library-seat\/reservations\/([^/]+)\/(cancel|life)$/
+  );
+  if (librarySeatReservationActionPath) {
+    const reservationId = decodeURIComponent(librarySeatReservationActionPath[1]);
+    const action = librarySeatReservationActionPath[2];
+    const client = await librarySeatClient();
+    if (action === "cancel" && req.method === "POST") {
+      const data = await client.cancelReservation(reservationId);
+      wakeLibrarySeatReminderScheduler("reservation_cancelled");
+      logger.info("audit_library_seat_reservation_cancelled", {
+        actorUserId: currentUserId(),
+        reservationId,
+        remainingCancelCount: data.remainingCancelCount
+      });
+      json(res, 200, { ok: true, data });
+      return true;
+    }
+    if (action === "life" && req.method === "GET") {
+      json(res, 200, { ok: true, data: await client.getMakeLife(reservationId) });
+      return true;
+    }
+  }
+  if (url.pathname === "/api/campus/library-seat/breaches" && req.method === "GET") {
+    const client = await librarySeatClient();
+    const data = await client.getBreachRecords({
+      page: url.searchParams.get("page"),
+      size: url.searchParams.get("size")
+    });
+    json(res, 200, { ok: true, data });
+    return true;
+  }
+  if (url.pathname === "/api/campus/library-seat/door-logs" && req.method === "GET") {
+    const client = await librarySeatClient();
+    const data = await client.getDoorLog({ date: url.searchParams.get("date") || "" });
+    json(res, 200, { ok: true, data });
     return true;
   }
   const librarySeatWaitlistPath = url.pathname.match(/^\/api\/campus\/library-seat\/waitlists(?:\/([^/]+))?$/);

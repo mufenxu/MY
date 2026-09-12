@@ -9,6 +9,27 @@ export const LIBRARY_SEAT_CAS_SERVICE_URL =
 const AUTH_ERROR_CODES = new Set([401, 403, 10001, 10002, 10003, 20003]);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const SAFE_ID = /^[A-Za-z0-9_-]+$/;
+const SEAT_AVAILABILITY_CACHE_MS = Math.max(0, Number(process.env.LIBRARY_SEAT_AVAILABILITY_CACHE_MS ?? 20_000) || 0);
+const SEAT_AVAILABILITY_CACHE_LIMIT = 200;
+
+const seatAvailabilityCache = new Map();
+
+function readSeatAvailabilityCache(key) {
+  if (!(SEAT_AVAILABILITY_CACHE_MS > 0)) return null;
+  const entry = seatAvailabilityCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    seatAvailabilityCache.delete(key);
+    return null;
+  }
+  return entry.seats;
+}
+
+function writeSeatAvailabilityCache(key, seats) {
+  if (!(SEAT_AVAILABILITY_CACHE_MS > 0)) return;
+  if (seatAvailabilityCache.size >= SEAT_AVAILABILITY_CACHE_LIMIT) seatAvailabilityCache.clear();
+  seatAvailabilityCache.set(key, { seats, expiresAt: Date.now() + SEAT_AVAILABILITY_CACHE_MS });
+}
 
 function fail(status, message, code = "LIBRARY_SEAT_REQUEST_FAILED", details = null) {
   throw new HttpError(status, message, details, code);
@@ -46,6 +67,11 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function actionMessage(value) {
+  if (value && typeof value === "object") return firstString(value, ["message", "msg"], "");
+  return stringValue(value);
+}
+
 export function cachedLibrarySeatToken(jar) {
   const session = jar?.meta?.librarySeat;
   if (!session?.token || !session.expiresAt) return "";
@@ -64,6 +90,10 @@ function safeId(value, label, code) {
   const id = stringValue(value);
   if (!id || !SAFE_ID.test(id)) fail(400, `${label}不正确。`, code);
   return id;
+}
+
+function librarySeatId(input) {
+  return safeId(input?.seatId ?? input?.id, "座位", "INVALID_LIBRARY_SEAT_ID");
 }
 
 function minuteValue(value, label, code) {
@@ -212,6 +242,143 @@ function normalizeLibrarySeatReservationRecords(rows = []) {
   return asArray(rows).map(normalizeLibrarySeatReservationRecord).filter(Boolean);
 }
 
+const LIBRARY_SEAT_DOOR_DIRECTIONS = new Map([[0, "入馆"], [1, "离馆"]]);
+
+export function normalizeLibrarySeatCurrentUsePayload(payload) {
+  const data = dataOf(payload);
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  return normalizeLibrarySeatReservationRecord(data);
+}
+
+export function normalizeLibrarySeatCancelResult(payload) {
+  return { remainingCancelCount: Math.max(0, intValue(dataOf(payload), 0)) };
+}
+
+export function normalizeLibrarySeatBreachPayload(payload) {
+  const data = dataOf(payload) || {};
+  const rows = asArray(Array.isArray(data) ? data : data.list);
+  const records = rows.map((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+    const status = firstString(row, ["status"]).toUpperCase();
+    return {
+      id: firstString(row, ["id"]),
+      status,
+      statusText: librarySeatReservationStatusText(status),
+      seatLabel: firstString(row, ["seatLabel", "seatNo"], ""),
+      location: firstString(row, ["location"], ""),
+      date: firstString(row, ["makeDateStr", "makeDate"], ""),
+      startTime: firstString(row, ["makeBeginStr"], ""),
+      endTime: firstString(row, ["makeEndStr"], ""),
+      actualTime: firstString(row, ["actualStr"], ""),
+      awayRange: firstString(row, ["awayRange"], "")
+    };
+  }).filter(Boolean);
+  return { total: intValue(data.count, records.length), records };
+}
+
+export function normalizeLibrarySeatDoorLogPayload(payload) {
+  return asArray(dataOf(payload)).map((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+    const direction = intValue(row.direction, 0);
+    return {
+      id: firstString(row, ["id"]),
+      doorName: firstString(row, ["doorName"], ""),
+      dateTime: firstString(row, ["dateTimeStr", "dateTime"], ""),
+      direction,
+      directionText: LIBRARY_SEAT_DOOR_DIRECTIONS.get(direction) || "未知"
+    };
+  }).filter(Boolean);
+}
+
+export function normalizeLibrarySeatMakeLifePayload(payload) {
+  return asArray(dataOf(payload)).map((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+    return {
+      stageName: firstString(row, ["stageName"], ""),
+      createdDate: firstString(row, ["createdDate"], ""),
+      sourceName: firstString(row, ["sourceName"], "")
+    };
+  }).filter(Boolean);
+}
+
+const LIBRARY_SEAT_LAYOUT_VERSION_SEPARATOR = "_updVersion_";
+
+function boundedPercent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Math.max(0, Math.min(100, Math.round(number * 100) / 100));
+}
+
+export function normalizeLibrarySeatTimelinePayload(payload) {
+  const data = dataOf(payload);
+  const source = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const free = asArray(source.freeList).map((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+    const left = boundedPercent(row.left);
+    const width = boundedPercent(row.width);
+    if (left === null || width === null || width <= 0) return null;
+    return { left, width };
+  }).filter(Boolean).sort((left, right) => left.left - right.left);
+  const marks = asArray(source.markList).map((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+    const left = boundedPercent(row.left);
+    if (left === null) return null;
+    return { left, label: firstString(row, ["label", "text", "name"]) };
+  }).filter(Boolean).sort((left, right) => left.left - right.left);
+  return { free, marks };
+}
+
+export function normalizeLibrarySeatStartTimesPayload(payload) {
+  return asArray(dataOf(payload)).map((row) => {
+    if (Array.isArray(row)) {
+      const value = stringValue(row[0]);
+      return value ? { value, text: stringValue(row[1], value) } : null;
+    }
+    if (row && typeof row === "object") {
+      const value = firstString(row, ["value", "startMinute", "minute"]);
+      return value ? { value, text: firstString(row, ["text", "label", "time"], value) } : null;
+    }
+    return null;
+  }).filter(Boolean);
+}
+
+function normalizeLibrarySeatLayoutSeats(layout) {
+  return asArray(layout?.objects).map((object) => {
+    const seat = object && typeof object === "object" ? object.seat : null;
+    if (!seat || typeof seat !== "object" || Array.isArray(seat)) return null;
+    const id = firstString(seat, ["id"]);
+    if (!id) return null;
+    const left = Number(object.left);
+    const top = Number(object.top);
+    return {
+      id,
+      label: firstString(seat, ["label", "seatNo", "no"], id),
+      name: firstString(seat, ["name", "seatName"]),
+      left: Number.isFinite(left) ? left : null,
+      top: Number.isFinite(top) ? top : null
+    };
+  }).filter(Boolean);
+}
+
+export function normalizeLibrarySeatLayoutPayload(payload, { roomId = "" } = {}) {
+  const raw = dataOf(payload);
+  const text = typeof raw === "string" ? raw : "";
+  const id = stringValue(roomId);
+  if (!text) return { roomId: id, unchanged: true, version: "", seats: [] };
+  const index = text.lastIndexOf(LIBRARY_SEAT_LAYOUT_VERSION_SEPARATOR);
+  const body = index >= 0 ? text.slice(0, index) : text;
+  const version = index >= 0
+    ? stringValue(text.slice(index + LIBRARY_SEAT_LAYOUT_VERSION_SEPARATOR.length))
+    : "";
+  let layout = null;
+  try {
+    layout = JSON.parse(body);
+  } catch {
+    layout = null;
+  }
+  return { roomId: id, unchanged: false, version, seats: normalizeLibrarySeatLayoutSeats(layout) };
+}
+
 export function normalizeLibrarySeatReservationInput(input = {}) {
   const seatId = safeId(input.seatId ?? input.seat_id, "座位", "INVALID_LIBRARY_SEAT_ID");
   const date = validDate(input.date ?? input.makeDate);
@@ -328,13 +495,22 @@ export function createLibrarySeatClient({
     getSeats: async (input = {}) => {
       const roomId = safeId(input.roomId ?? input.areaId, "阅览区", "INVALID_LIBRARY_SEAT_ROOM");
       const date = validDate(input.date);
-      await request(`/static/frontApi/res/querySeatLayout/${roomId}/${Number(input.amPm || 0)}`, {});
-      const seats = await request(`/static/frontApi/res/freeSeatIdsDuration/${roomId}/${date}`, {
+      const range = {
         beginMinute: minuteValue(input.startMinute, "开始时间", "INVALID_LIBRARY_SEAT_START"),
         endMinute: minuteValue(input.endMinute, "结束时间", "INVALID_LIBRARY_SEAT_END"),
         minMinute: 0
-      });
-      return normalizeLibrarySeatSeatsPayload(seats);
+      };
+      const amPm = Number(stringValue(input.amPm));
+      const useSlice = Number.isFinite(amPm) && amPm > 0;
+      const cacheKey = `${roomId}|${date}|${range.beginMinute}|${range.endMinute}|${amPm}`;
+      const cached = readSeatAvailabilityCache(cacheKey);
+      if (cached) return cached;
+      const seats = useSlice
+        ? await request(`/static/frontApi/res/freeSeatIdsSlice/${roomId}/${date}`, { ...range, amPm })
+        : await request(`/static/frontApi/res/freeSeatIdsDuration/${roomId}/${date}`, range);
+      const normalized = normalizeLibrarySeatSeatsPayload(seats);
+      writeSeatAvailabilityCache(cacheKey, normalized);
+      return normalized;
     },
     getMyReservations: async () => normalizeLibrarySeatReservationRecords(
       await request("/static/frontApi/user/lastMake", {})
@@ -346,6 +522,54 @@ export function createLibrarySeatClient({
       const list = normalizeLibrarySeatReservationRecords(Array.isArray(payload) ? payload : payload?.list);
       return { total: intValue(payload?.count, list.length), records: list };
     },
+    getCurrentUse: async () => normalizeLibrarySeatCurrentUsePayload(
+      await request("/static/frontApi/user/currentUseMake", {})
+    ),
+    checkIn: async () => actionMessage(
+      await request("/static/frontApi/make/checkIn?qrMd5=PC", {}, { conflict: true })
+    ),
+    leaveSeat: async () => actionMessage(
+      await request("/static/frontApi/make/leave", {}, { conflict: true })
+    ),
+    stopSeat: async () => actionMessage(
+      await request("/static/frontApi/make/stop", {}, { conflict: true })
+    ),
+    cancelReservation: async (input) => normalizeLibrarySeatCancelResult(
+      await request(
+        `/static/frontApi/make/cancel/${safeId(input?.id ?? input, "预约", "INVALID_LIBRARY_SEAT_RESERVATION")}`,
+        {},
+        { conflict: true }
+      )
+    ),
+    getBreachRecords: async (input = {}) => {
+      const page = Math.max(0, intValue(input.page, 0));
+      const size = Math.min(50, Math.max(1, intValue(input.size, 10)));
+      return normalizeLibrarySeatBreachPayload(
+        await request(`/static/frontApi/user/breach/${page}/${size}`, {})
+      );
+    },
+    getDoorLog: async (input = {}) => normalizeLibrarySeatDoorLogPayload(
+      await request(`/static/frontApi/user/doorLog/${validDate(input.date)}`, {})
+    ),
+    getMakeLife: async (input) => normalizeLibrarySeatMakeLifePayload(
+      await request(
+        `/static/frontApi/user/makeLife/${safeId(input?.id ?? input, "预约", "INVALID_LIBRARY_SEAT_RESERVATION")}`,
+        {}
+      )
+    ),
+    getTimeline: async (input = {}) => normalizeLibrarySeatTimelinePayload(
+      await request(`/static/frontApi/res/getTimeLine/${librarySeatId(input)}/${validDate(input.date)}`, {})
+    ),
+    getStartTimes: async (input = {}) => normalizeLibrarySeatStartTimesPayload(
+      await request(`/static/frontApi/res/getStartTimes/${librarySeatId(input)}/${validDate(input.date)}`, {})
+    ),
+    getSeatLayout: async (input = {}) => normalizeLibrarySeatLayoutPayload(
+      await request(
+        `/static/frontApi/res/querySeatLayout/${safeId(input.roomId ?? input.areaId, "阅览区", "INVALID_LIBRARY_SEAT_ROOM")}/${Math.max(0, intValue(input.updV ?? input.version, 0))}`,
+        {}
+      ),
+      { roomId: input.roomId ?? input.areaId }
+    ),
     submitReservation: async (input = {}) => {
       const normalized = normalizeLibrarySeatReservationInput(input);
       return request(

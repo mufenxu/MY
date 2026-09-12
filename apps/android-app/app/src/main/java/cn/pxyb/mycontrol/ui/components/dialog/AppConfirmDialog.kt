@@ -2,7 +2,9 @@ package cn.pxyb.mycontrol.ui.components.dialog
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,6 +40,7 @@ fun AppConfirmDialog(
     danger: Boolean = false,
     busy: Boolean = false,
     dismissLabel: String = "取消",
+    extraContent: (@Composable () -> Unit)? = null,
 ) {
     AppDialog(
         onDismissRequest = { if (!busy) onDismiss() },
@@ -48,6 +51,10 @@ fun AppConfirmDialog(
         title = title,
         content = {
             DialogInfoText(detail)
+            if (extraContent != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                extraContent()
+            }
         },
         footer = {
             Row(

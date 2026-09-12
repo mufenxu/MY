@@ -308,6 +308,26 @@ data class LibrarySeatFloorSeat(
 )
 
 @Immutable
+data class LibrarySeatTimelineSlice(
+    val left: Float,
+    val width: Float,
+)
+
+@Immutable
+data class LibrarySeatTimelineMark(
+    val left: Float,
+    val label: String = "",
+)
+
+@Immutable
+data class LibrarySeatTimeline(
+    val free: List<LibrarySeatTimelineSlice> = emptyList(),
+    val marks: List<LibrarySeatTimelineMark> = emptyList(),
+) {
+    val isEmpty: Boolean get() = free.isEmpty() && marks.isEmpty()
+}
+
+@Immutable
 data class LibrarySeatReservationRequest(
     val seatId: String,
     val date: String,
@@ -380,6 +400,47 @@ data class LibrarySeatReservationRecord(
 data class LibrarySeatReservationHistory(
     val total: Int = 0,
     val records: List<LibrarySeatReservationRecord> = emptyList(),
+)
+
+@Immutable
+data class LibrarySeatBreachRecord(
+    val id: String = "",
+    val status: String = "",
+    val statusText: String = "未知",
+    val seatLabel: String = "",
+    val location: String = "",
+    val date: String = "",
+    val startTime: String = "",
+    val endTime: String = "",
+    val actualTime: String = "",
+    val awayRange: String = "",
+)
+
+@Immutable
+data class LibrarySeatBreachPage(
+    val total: Int = 0,
+    val records: List<LibrarySeatBreachRecord> = emptyList(),
+)
+
+@Immutable
+data class LibrarySeatDoorLog(
+    val id: String = "",
+    val doorName: String = "",
+    val dateTime: String = "",
+    val direction: Int = 0,
+    val directionText: String = "未知",
+)
+
+@Immutable
+data class LibrarySeatMakeLife(
+    val stageName: String = "",
+    val createdDate: String = "",
+    val sourceName: String = "",
+)
+
+@Immutable
+data class LibrarySeatCancelResult(
+    val remainingCancelCount: Int = 0,
 )
 
 @Immutable

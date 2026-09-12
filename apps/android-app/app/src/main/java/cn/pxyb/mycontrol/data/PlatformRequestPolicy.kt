@@ -27,6 +27,13 @@ internal const val CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH = "$CAMPUS_API_PATH/cam
 internal const val CAMPUS_LIBRARY_SEAT_RESERVATIONS_HISTORY_PATH = "$CAMPUS_API_PATH/campus/library-seat/reservations/history"
 internal const val CAMPUS_LIBRARY_SEAT_OFFICIAL_WEBVIEW_LOGIN_PATH = "$CAMPUS_API_PATH/campus/library-seat/official-webview-login"
 internal const val CAMPUS_LIBRARY_SEAT_WAITLISTS_PATH = "$CAMPUS_API_PATH/campus/library-seat/waitlists"
+internal const val CAMPUS_LIBRARY_SEAT_CURRENT_USE_PATH = "$CAMPUS_API_PATH/campus/library-seat/current-use"
+internal const val CAMPUS_LIBRARY_SEAT_CURRENT_USE_CHECK_IN_PATH = "$CAMPUS_LIBRARY_SEAT_CURRENT_USE_PATH/check-in"
+internal const val CAMPUS_LIBRARY_SEAT_CURRENT_USE_LEAVE_PATH = "$CAMPUS_LIBRARY_SEAT_CURRENT_USE_PATH/leave"
+internal const val CAMPUS_LIBRARY_SEAT_CURRENT_USE_STOP_PATH = "$CAMPUS_LIBRARY_SEAT_CURRENT_USE_PATH/stop"
+internal const val CAMPUS_LIBRARY_SEAT_TIMELINE_PATH = "$CAMPUS_API_PATH/campus/library-seat/timeline"
+internal const val CAMPUS_LIBRARY_SEAT_BREACHES_PATH = "$CAMPUS_API_PATH/campus/library-seat/breaches"
+internal const val CAMPUS_LIBRARY_SEAT_DOOR_LOGS_PATH = "$CAMPUS_API_PATH/campus/library-seat/door-logs"
 
 internal fun shouldInvalidatePlatformSession(status: Int, code: String): Boolean =
     status == 401 && code in setOf(

@@ -4,6 +4,8 @@ import { buildCourseOccurrences } from "../lib/academic-calendar.js";
 import { buildCourseReminderDelivery, enqueueCampusNotification, sendCampusNotification } from "../lib/notification-client.js";
 import { cookieHeaderFor } from "../lib/session-jar.js";
 import { iterateTaskPages, mapWithConcurrency } from "../lib/bounded-concurrency.js";
+import { cachedLibrarySeatToken } from "../lib/library-seat.js";
+import { buildLibrarySeatReminderPayload, librarySeatReminderPlan } from "../lib/library-seat-reminder.js";
 import { librarySeatWaitlistNextScanDelay, librarySeatWaitlistRunPlan } from "../lib/library-seat-waitlist.js";
 import { randomUUID } from "node:crypto";
 
@@ -26,6 +28,7 @@ export function createBackgroundSchedulers({
   cachedAcademicTimetableForUser,
   CAS_ORIGIN,
   getAcademicTimetable,
+  getLibrarySeatCurrentUse,
   isCasLoginRequiredError,
   librarySeatWaitlistFailureText,
   logger,
@@ -68,6 +71,28 @@ export function createBackgroundSchedulers({
 
   const LIBRARY_SEAT_WAITLIST_MAX_FAILURES = Math.min(50, Math.max(1, Number(process.env.CAMPUS_LIBRARY_SEAT_WAITLIST_MAX_FAILURES || 5)));
 
+  const LIBRARY_SEAT_REMINDER_INTERVAL_MS = Number(process.env.CAMPUS_LIBRARY_SEAT_REMINDER_INTERVAL_MS || 5 * 60 * 1000);
+
+  const LIBRARY_SEAT_REMINDER_START_DELAY_MS = Number(process.env.CAMPUS_LIBRARY_SEAT_REMINDER_START_DELAY_MS || 90 * 1000);
+
+  const LIBRARY_SEAT_REMINDER_CHECK_IN_LEAD_MINUTES = Number(process.env.CAMPUS_LIBRARY_SEAT_REMINDER_CHECK_IN_LEAD_MINUTES || 15);
+
+  const LIBRARY_SEAT_REMINDER_CHECK_IN_GRACE_MINUTES = Number(process.env.CAMPUS_LIBRARY_SEAT_REMINDER_CHECK_IN_GRACE_MINUTES || 20);
+
+  const LIBRARY_SEAT_REMINDER_ENDING_LEAD_MINUTES = Number(process.env.CAMPUS_LIBRARY_SEAT_REMINDER_ENDING_LEAD_MINUTES || 10);
+
+  const LIBRARY_SEAT_REMINDER_AWAY_MINUTES = Number(process.env.CAMPUS_LIBRARY_SEAT_REMINDER_AWAY_MINUTES || 30);
+
+  const LIBRARY_SEAT_REMINDER_CHECKPOINT = "library-seat-reminders";
+
+  const LIBRARY_SEAT_REMINDER_STATE_MS = 26 * 60 * 60 * 1000;
+
+  const LIBRARY_SEAT_REMINDER_MAX_USERS = 200;
+
+  const LIBRARY_SEAT_REMINDER_CONCURRENCY = 2;
+
+  const LIBRARY_SEAT_REMINDER_MAX_STATE = 2_000;
+
   const CAMPUS_REMINDER_HORIZON_HOURS = Math.min(168, Math.max(1, Number(process.env.CAMPUS_REMINDER_HORIZON_HOURS || 24) || 24));
 
   const CAMPUS_REMINDER_BATCH_SIZE = Math.min(1_000, Math.max(1, Math.trunc(Number(process.env.CAMPUS_REMINDER_BATCH_SIZE || 100) || 100)));
@@ -101,6 +126,12 @@ export function createBackgroundSchedulers({
   let librarySeatWaitlistRunning = false;
 
   let librarySeatWaitlistRescheduleRequested = false;
+
+  let librarySeatReminderTimer = null;
+
+  let librarySeatReminderRunning = false;
+
+  let librarySeatReminderRescheduleRequested = false;
 
   let academicAutoRefreshRunning = false;
 
@@ -150,6 +181,24 @@ export function createBackgroundSchedulers({
     lastError: null
   };
 
+  const librarySeatReminderOperation = {
+    running: false,
+    skippedRuns: 0,
+    lastReason: null,
+    lastStartedAt: null,
+    lastFinishedAt: null,
+    lastDurationMs: null,
+    scanned: 0,
+    completed: 0,
+    failed: 0,
+    skipped: 0,
+    truncated: 0,
+    queued: 0,
+    deduplicated: 0,
+    timedOut: false,
+    lastError: null
+  };
+
   function stopBackgroundSchedulers() {
     if (academicRefreshStartTimer) clearTimeout(academicRefreshStartTimer);
     if (academicRefreshInterval) clearInterval(academicRefreshInterval);
@@ -157,6 +206,7 @@ export function createBackgroundSchedulers({
     if (academicReminderInterval) clearInterval(academicReminderInterval);
     if (libroomAutoReservationTimer) clearTimeout(libroomAutoReservationTimer);
     if (librarySeatWaitlistTimer) clearTimeout(librarySeatWaitlistTimer);
+    if (librarySeatReminderTimer) clearTimeout(librarySeatReminderTimer);
   }
 
   function beginBackgroundOperation(state, reason) {
@@ -215,6 +265,13 @@ export function createBackgroundSchedulers({
         batchSize: CAMPUS_REMINDER_BATCH_SIZE
       },
       academicEvaluations: academicEvaluationAutoCapacitySnapshot(),
+      librarySeatReminders: {
+        ...librarySeatReminderOperation,
+        concurrency: LIBRARY_SEAT_REMINDER_CONCURRENCY,
+        intervalMs: LIBRARY_SEAT_REMINDER_INTERVAL_MS,
+        userScanLimit: LIBRARY_SEAT_REMINDER_MAX_USERS,
+        checkpoint: LIBRARY_SEAT_REMINDER_CHECKPOINT
+      },
       trackedTasks: backgroundTasks.size + academicEvaluationAutoTasks.size
     };
   }
@@ -701,6 +758,157 @@ export function createBackgroundSchedulers({
     if (!librarySeatWaitlistSchedulerEnabled()) return;
     scheduleLibrarySeatWaitlistScan("startup", Math.max(0, LIBRARY_SEAT_WAITLIST_START_DELAY_MS));
   }
+
+  function librarySeatReminderSchedulerEnabled() {
+    const notificationConfigured = Boolean(
+      process.env.NOTIFICATION_SERVICE_URL
+      && (process.env.CAMPUS_NOTIFICATION_API_KEY || process.env.NOTIFY_API_KEY)
+    );
+    return notificationConfigured
+      && Number.isFinite(LIBRARY_SEAT_REMINDER_INTERVAL_MS)
+      && LIBRARY_SEAT_REMINDER_INTERVAL_MS > 0
+      && typeof getLibrarySeatCurrentUse === "function";
+  }
+
+  function scheduleLibrarySeatReminderScan(reason, delayMs) {
+    if (isShuttingDown() || !librarySeatReminderSchedulerEnabled()) return;
+    if (librarySeatReminderTimer) clearTimeout(librarySeatReminderTimer);
+    const delay = Math.max(0, Math.trunc(Number(delayMs) || 0));
+    librarySeatReminderTimer = setTimeout(() => {
+      librarySeatReminderTimer = null;
+      trackBackgroundTask(() => runLibrarySeatReminderScheduler(reason));
+    }, delay);
+  }
+
+  function wakeLibrarySeatReminderScheduler(reason) {
+    if (!librarySeatReminderSchedulerEnabled()) return;
+    if (librarySeatReminderRunning) {
+      librarySeatReminderRescheduleRequested = true;
+      return;
+    }
+    scheduleLibrarySeatReminderScan(reason, 0);
+  }
+
+  async function runLibrarySeatReminderScheduler(reason) {
+    if (isShuttingDown() || !librarySeatReminderSchedulerEnabled()) return;
+    if (librarySeatReminderRunning) {
+      librarySeatReminderRescheduleRequested = true;
+      return;
+    }
+    librarySeatReminderRunning = true;
+    const startedAt = beginBackgroundOperation(librarySeatReminderOperation, reason);
+    let operationError = null;
+    try {
+      const now = new Date();
+      const stored = await repository.getBackgroundCheckpoint(LIBRARY_SEAT_REMINDER_CHECKPOINT) || {};
+      const sent = new Map(
+        (Array.isArray(stored.sent) ? stored.sent : [])
+          .filter((entry) => entry?.key && Date.parse(entry.expiresAt) > now.getTime())
+          .map((entry) => [entry.key, entry])
+      );
+      const rows = await repository.listActiveUsers({
+        afterId: stored.afterId || "",
+        limit: LIBRARY_SEAT_REMINDER_MAX_USERS + 1
+      });
+      const users = rows.slice(0, LIBRARY_SEAT_REMINDER_MAX_USERS);
+      librarySeatReminderOperation.scanned = users.length;
+      librarySeatReminderOperation.truncated = Math.max(0, rows.length - users.length);
+      await mapWithConcurrency(users, LIBRARY_SEAT_REMINDER_CONCURRENCY, (user) => (
+        userContextStorage.run({ requestId: `library-seat-reminder-${randomUUID()}`, user }, async () => {
+          try {
+            if (isShuttingDown()) return "skipped";
+            const jar = await readSessionJar();
+            if (!cachedLibrarySeatToken(jar)) {
+              librarySeatReminderOperation.skipped += 1;
+              return "skipped";
+            }
+            const preference = await repository.getReminderPreference(user.id);
+            const appId = String(preference?.app_recipient_id || "").trim();
+            if (!appId) {
+              librarySeatReminderOperation.skipped += 1;
+              return "skipped";
+            }
+            const usage = await getLibrarySeatCurrentUse();
+            if (!usage) {
+              librarySeatReminderOperation.skipped += 1;
+              return "skipped";
+            }
+            const reminders = librarySeatReminderPlan(usage, new Date(), {
+              checkInLeadMinutes: LIBRARY_SEAT_REMINDER_CHECK_IN_LEAD_MINUTES,
+              checkInGraceMinutes: LIBRARY_SEAT_REMINDER_CHECK_IN_GRACE_MINUTES,
+              endingLeadMinutes: LIBRARY_SEAT_REMINDER_ENDING_LEAD_MINUTES,
+              awayMinutes: LIBRARY_SEAT_REMINDER_AWAY_MINUTES
+            });
+            let userQueued = 0;
+            for (const reminder of reminders) {
+              const key = `${user.id}|${reminder.dedupeKey}`;
+              if (sent.has(key)) {
+                librarySeatReminderOperation.deduplicated += 1;
+                continue;
+              }
+              const payload = buildLibrarySeatReminderPayload(reminder, {
+                appId,
+                wecomId: String(preference?.recipient_id || "").trim()
+              });
+              if (!payload) continue;
+              await enqueueCampusNotification(payload, { requestId: `library-seat-reminder-${randomUUID()}` });
+              sent.set(key, {
+                key,
+                expiresAt: new Date(Date.now() + LIBRARY_SEAT_REMINDER_STATE_MS).toISOString()
+              });
+              userQueued += 1;
+            }
+            if (userQueued) {
+              librarySeatReminderOperation.queued += userQueued;
+              librarySeatReminderOperation.completed += userQueued;
+              logger.info("library_seat_reminder_queued", { userId: user.id, count: userQueued });
+            } else {
+              librarySeatReminderOperation.completed += 1;
+            }
+            return userQueued ? "queued" : "skipped";
+          } catch (error) {
+            librarySeatReminderOperation.failed += 1;
+            logger.warn("library_seat_reminder_user_failed", {
+              userId: user.id,
+              reason: librarySeatWaitlistFailureText(error)
+            });
+            return "failed";
+          }
+        })
+      ));
+      const state = [...sent.values()]
+        .sort((left, right) => Date.parse(left.expiresAt) - Date.parse(right.expiresAt))
+        .slice(-LIBRARY_SEAT_REMINDER_MAX_STATE);
+      const lastUser = users[users.length - 1];
+      const nextAfterId = rows.length > users.length && lastUser ? lastUser.id : "";
+      await repository.saveBackgroundCheckpoint(LIBRARY_SEAT_REMINDER_CHECKPOINT, {
+        afterId: nextAfterId,
+        sent: state
+      });
+      if (reason !== "interval" || librarySeatReminderOperation.queued) {
+        logger.info("library_seat_reminder_scan_completed", {
+          reason,
+          users: librarySeatReminderOperation.scanned,
+          queued: librarySeatReminderOperation.queued,
+          deduplicated: librarySeatReminderOperation.deduplicated
+        });
+      }
+    } catch (error) {
+      operationError = error;
+      logger.warn("library_seat_reminder_scan_failed", { reason, error: error?.message });
+    } finally {
+      librarySeatReminderRunning = false;
+      finishBackgroundOperation(librarySeatReminderOperation, startedAt, operationError);
+      const delay = librarySeatReminderRescheduleRequested ? 0 : LIBRARY_SEAT_REMINDER_INTERVAL_MS;
+      librarySeatReminderRescheduleRequested = false;
+      scheduleLibrarySeatReminderScan("interval", delay);
+    }
+  }
+
+  function startLibrarySeatReminderScheduler() {
+    if (!librarySeatReminderSchedulerEnabled()) return;
+    scheduleLibrarySeatReminderScan("startup", Math.max(0, LIBRARY_SEAT_REMINDER_START_DELAY_MS));
+  }
   return {
     backgroundTasks,
     stopBackgroundSchedulers,
@@ -710,6 +918,8 @@ export function createBackgroundSchedulers({
     wakeLibroomAutoReservationScheduler,
     startLibroomAutoReservationScheduler,
     wakeLibrarySeatWaitlistScheduler,
-    startLibrarySeatWaitlistScheduler
+    startLibrarySeatWaitlistScheduler,
+    wakeLibrarySeatReminderScheduler,
+    startLibrarySeatReminderScheduler
   };
 }

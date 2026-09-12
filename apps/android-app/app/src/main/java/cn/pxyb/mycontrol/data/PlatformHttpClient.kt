@@ -108,7 +108,19 @@ internal class PlatformHttpClient(
             .callTimeout(timeoutSeconds + 15, TimeUnit.SECONDS)
             .build()
         val cacheable = authenticated && method == "GET" &&
-            (path in CACHEABLE_PATHS || path.startsWith("/apps/iot/api/devices/") && path.endsWith("/insights?range=24h"))
+            (
+                path in CACHEABLE_PATHS ||
+                    path.startsWith(CAMPUS_LIBRARY_SEAT_OVERVIEW_PATH) ||
+                    path.startsWith(CAMPUS_LIBRARY_SEAT_AREAS_PATH) ||
+                    path.startsWith(CAMPUS_LIBRARY_SEAT_SEATS_PATH) ||
+                    path.startsWith(CAMPUS_LIBRARY_SEAT_TIMELINE_PATH) ||
+                    path.startsWith(CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH) ||
+                    path.startsWith(CAMPUS_LIBRARY_SEAT_BREACHES_PATH) ||
+                    path.startsWith(CAMPUS_LIBRARY_SEAT_DOOR_LOGS_PATH) ||
+                    path.startsWith(CAMPUS_LIBRARY_SEAT_CURRENT_USE_PATH) ||
+                    path.startsWith(CAMPUS_LIBRARY_SEAT_WAITLISTS_PATH) ||
+                    path.startsWith("/apps/iot/api/devices/") && path.endsWith("/insights?range=24h")
+                )
 
         return suspendCancellableCoroutine { continuation ->
             val call = requestClient.newCall(request.build())

@@ -5,6 +5,7 @@ import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_OFFICIAL_WEBVIEW_LOGIN_PATH
 import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_OVERVIEW_PATH
 import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH
 import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_SEATS_PATH
+import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_TIMELINE_PATH
 import cn.pxyb.mycontrol.data.CAMPUS_LIBROOM_AUTO_RESERVATIONS_PATH
 import cn.pxyb.mycontrol.data.CAMPUS_LIBROOM_AVAILABILITY_PATH
 import cn.pxyb.mycontrol.data.CAMPUS_LIBROOM_RESERVATIONS_PATH
@@ -15,14 +16,22 @@ import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.data.LibrarySeatArea
+import cn.pxyb.mycontrol.data.LibrarySeatCancelResult
 import cn.pxyb.mycontrol.data.LibrarySeatFloor
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
 import cn.pxyb.mycontrol.data.LibrarySeatVenue
 import cn.pxyb.mycontrol.data.formatCampusReservationRulesForDisplay
 import cn.pxyb.mycontrol.data.parseCampusReservationSpacesPayload
+import cn.pxyb.mycontrol.data.parseLibrarySeatActionMessage
 import cn.pxyb.mycontrol.data.parseLibrarySeatAreasPayload
+import cn.pxyb.mycontrol.data.parseLibrarySeatBreachPayload
+import cn.pxyb.mycontrol.data.parseLibrarySeatCancelResultPayload
+import cn.pxyb.mycontrol.data.parseLibrarySeatCurrentUsePayload
+import cn.pxyb.mycontrol.data.parseLibrarySeatDoorLogPayload
+import cn.pxyb.mycontrol.data.parseLibrarySeatMakeLifePayload
 import cn.pxyb.mycontrol.data.parseLibrarySeatOverviewPayload
 import cn.pxyb.mycontrol.data.parseLibrarySeatSeatsPayload
+import cn.pxyb.mycontrol.data.parseLibrarySeatTimelinePayload
 import cn.pxyb.mycontrol.data.toCampusAutoReservationTask
 import cn.pxyb.mycontrol.ui.feature.campus.library.LibrarySeatUiState
 import cn.pxyb.mycontrol.ui.feature.campus.reservation.ReservationUiState
@@ -32,6 +41,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -48,6 +58,7 @@ class CampusReservationModelTest {
         assertEquals("/apps/campus/api/campus/library-seat/seats", CAMPUS_LIBRARY_SEAT_SEATS_PATH)
         assertEquals("/apps/campus/api/campus/library-seat/reservations", CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH)
         assertEquals("/apps/campus/api/campus/library-seat/official-webview-login", CAMPUS_LIBRARY_SEAT_OFFICIAL_WEBVIEW_LOGIN_PATH)
+        assertEquals("/apps/campus/api/campus/library-seat/timeline", CAMPUS_LIBRARY_SEAT_TIMELINE_PATH)
     }
 
     @Test
@@ -343,6 +354,37 @@ class CampusReservationModelTest {
     }
 
     @Test
+    fun `library seat timeline parses free slices and occupied marks`() {
+        val response = JSONObject().put(
+            "data",
+            JSONObject()
+                .put(
+                    "freeList",
+                    JSONArray()
+                        .put(JSONObject().put("left", 10).put("width", 20))
+                        .put(JSONObject().put("left", 40).put("width", 0)),
+                )
+                .put(
+                    "markList",
+                    JSONArray()
+                        .put(JSONObject().put("left", 30).put("label", "已占用"))
+                        .put(JSONObject().put("left", 70)),
+                ),
+        )
+
+        val timeline = parseLibrarySeatTimelinePayload(response)
+
+        assertEquals(1, timeline.free.size)
+        assertEquals(10f, timeline.free[0].left)
+        assertEquals(20f, timeline.free[0].width)
+        assertEquals(2, timeline.marks.size)
+        assertEquals("已占用", timeline.marks[0].label)
+        assertEquals("", timeline.marks[1].label)
+        assertFalse(timeline.isEmpty)
+        assertTrue(parseLibrarySeatTimelinePayload(JSONObject()).isEmpty)
+    }
+
+    @Test
     fun `library seat reservation request holds expected values`() {
         val request = LibrarySeatReservationRequest(
             seatId = "1935965539382956037",
@@ -376,5 +418,119 @@ class CampusReservationModelTest {
         assertFalse(state.queryLoading)
         assertFalse(state.submitLoading)
         assertTrue(state.autoTasks.isEmpty())
+    }
+
+    @Test
+    fun `library seat current use parses the active reservation`() {
+        val response = JSONObject().put(
+            "data",
+            JSONObject()
+                .put("id", "mk-1")
+                .put("seatLabel", "12")
+                .put("status", "CHECK_IN")
+                .put("makeDateStr", "2026-09-12")
+                .put("makeBeginStr", "08:00")
+                .put("makeEndStr", "12:00"),
+        )
+
+        val record = parseLibrarySeatCurrentUsePayload(response)
+
+        assertEquals("mk-1", record?.id)
+        assertEquals("履约中", record?.statusText)
+        assertEquals("08:00", record?.startTime)
+        assertNull(parseLibrarySeatCurrentUsePayload(JSONObject().put("data", JSONObject.NULL)))
+    }
+
+    @Test
+    fun `library seat cancel result exposes the remaining quota`() {
+        assertEquals(
+            LibrarySeatCancelResult(remainingCancelCount = 3),
+            parseLibrarySeatCancelResultPayload(JSONObject().put("data", JSONObject().put("remainingCancelCount", 3))),
+        )
+        assertEquals(
+            0,
+            parseLibrarySeatCancelResultPayload(JSONObject().put("data", JSONObject.NULL)).remainingCancelCount,
+        )
+    }
+
+    @Test
+    fun `library seat breaches and door logs parse official record fields`() {
+        val breaches = parseLibrarySeatBreachPayload(
+            JSONObject().put(
+                "data",
+                JSONObject()
+                    .put("count", 2)
+                    .put(
+                        "list",
+                        JSONArray()
+                            .put(
+                                JSONObject()
+                                    .put("id", "1")
+                                    .put("status", "MISS")
+                                    .put("seatLabel", "9")
+                                    .put("location", "图书馆|二层")
+                                    .put("makeDateStr", "2026-09-01"),
+                            )
+                            .put(
+                                JSONObject()
+                                    .put("id", "2")
+                                    .put("status", "NO_STOP")
+                                    .put("seatLabel", "10"),
+                            ),
+                    ),
+            ),
+        )
+
+        assertEquals(2, breaches.total)
+        assertEquals("失约", breaches.records[0].statusText)
+        assertEquals("未签退", breaches.records[1].statusText)
+
+        val doorLogs = parseLibrarySeatDoorLogPayload(
+            JSONObject().put(
+                "data",
+                JSONArray().put(
+                    JSONObject()
+                        .put("doorName", "图书馆正门")
+                        .put("dateTimeStr", "2026-09-12 08:01:00")
+                        .put("direction", 0),
+                ),
+            ),
+        )
+
+        assertEquals(1, doorLogs.size)
+        assertEquals("图书馆正门", doorLogs[0].doorName)
+        assertEquals("入馆", doorLogs[0].directionText)
+    }
+
+    @Test
+    fun `library seat make life parses change stages`() {
+        val rows = parseLibrarySeatMakeLifePayload(
+            JSONObject().put(
+                "data",
+                JSONArray().put(
+                    JSONObject()
+                        .put("stageName", "暂离")
+                        .put("createdDate", "2026-09-12 09:00")
+                        .put("sourceName", "PC"),
+                ),
+            ),
+        )
+
+        assertEquals(1, rows.size)
+        assertEquals("暂离", rows[0].stageName)
+        assertEquals("2026-09-12 09:00", rows[0].createdDate)
+        assertEquals("PC", rows[0].sourceName)
+    }
+
+    @Test
+    fun `library seat usage action message prefers the official message`() {
+        assertEquals(
+            "暂离成功",
+            parseLibrarySeatActionMessage(JSONObject().put("data", "暂离成功"), "已成功暂离。"),
+        )
+        assertEquals(
+            "已成功暂离。",
+            parseLibrarySeatActionMessage(JSONObject().put("data", JSONObject.NULL), "已成功暂离。"),
+        )
     }
 }

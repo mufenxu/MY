@@ -806,6 +806,28 @@ internal fun parseLibrarySeatSeatsPayload(
     }.sortedWith(compareBy<LibrarySeatStatus> { it.label.toIntOrNull() ?: Int.MAX_VALUE }.thenBy { it.label })
 }
 
+internal fun parseLibrarySeatTimelinePayload(json: JSONObject): LibrarySeatTimeline {
+    val data = json.optJSONObject("data") ?: json
+    val free = data.optJSONArray("freeList").platformObjects().mapNotNull { row ->
+        val left = row.optDouble("left", Double.NaN)
+        val width = row.optDouble("width", Double.NaN)
+        if (left.isNaN() || width.isNaN() || width <= 0.0) return@mapNotNull null
+        LibrarySeatTimelineSlice(
+            left = left.coerceIn(0.0, 100.0).toFloat(),
+            width = width.coerceIn(0.0, 100.0).toFloat(),
+        )
+    }.sortedBy { it.left }
+    val marks = data.optJSONArray("markList").platformObjects().mapNotNull { row ->
+        val left = row.optDouble("left", Double.NaN)
+        if (left.isNaN()) return@mapNotNull null
+        LibrarySeatTimelineMark(
+            left = left.coerceIn(0.0, 100.0).toFloat(),
+            label = row.seatString("label", "text", "name"),
+        )
+    }.sortedBy { it.left }
+    return LibrarySeatTimeline(free = free, marks = marks)
+}
+
 internal fun parseLibrarySeatReservationRecordsPayload(
     json: JSONObject,
     jsonArray: JSONArray = JSONArray(),
@@ -859,20 +881,107 @@ internal fun parseLibrarySeatReservationRecord(row: JSONObject): LibrarySeatRese
         floorName = row.seatString("floorName"),
         roomName = row.seatString("roomName"),
         status = status,
-        statusText = when (status.uppercase()) {
-            "RESERVE" -> "预约"
-            "CHECK_IN" -> "履约中"
-            "AWAY" -> "暂离"
-            "LEAVE_EARLY" -> "早退"
-            "STOP" -> "已结束"
-            "MISS" -> "失约"
-            "CANCEL" -> "已取消"
-            "NO_STOP" -> "未签退"
-            else -> status.ifBlank { "未知" }
-        },
+        statusText = librarySeatReservationStatusText(status),
         message = row.seatString("message"),
         awayRange = row.seatString("awayRange"),
     )
+}
+
+internal fun librarySeatReservationStatusText(status: String): String = when (status.uppercase()) {
+    "RESERVE" -> "预约"
+    "CHECK_IN" -> "履约中"
+    "AWAY" -> "暂离"
+    "LEAVE_EARLY" -> "早退"
+    "STOP" -> "已结束"
+    "MISS" -> "失约"
+    "CANCEL" -> "已取消"
+    "NO_STOP" -> "未签退"
+    else -> status.ifBlank { "未知" }
+}
+
+internal fun parseLibrarySeatCurrentUsePayload(json: JSONObject): LibrarySeatReservationRecord? =
+    json.optJSONObject("data")?.let { parseLibrarySeatReservationRecord(it) }
+
+internal fun parseLibrarySeatCancelResultPayload(json: JSONObject): LibrarySeatCancelResult {
+    val remaining = when (val data = json.opt("data")) {
+        is Number -> data.toInt()
+        is JSONObject -> data.optionalSeatInt("remainingCancelCount", "count")
+        else -> 0
+    }
+    return LibrarySeatCancelResult(remainingCancelCount = remaining.coerceAtLeast(0))
+}
+
+internal fun parseLibrarySeatActionMessage(json: JSONObject, fallback: String): String {
+    val data = json.opt("data")
+    if (data is String && data.isNotBlank()) return data
+    return json.optString("message").takeIf(String::isNotBlank) ?: fallback
+}
+
+internal fun parseLibrarySeatBreachPayload(json: JSONObject, jsonArray: JSONArray = JSONArray()): LibrarySeatBreachPage {
+    val payload = json.opt("data") ?: json.takeIf { it.length() > 0 } ?: jsonArray
+    val rows = when (payload) {
+        is JSONArray -> payload.platformObjects()
+        is JSONObject -> payload.optJSONArray("list")?.platformObjects()
+            ?: payload.optJSONArray("records")?.platformObjects()
+            ?: emptyList()
+        else -> emptyList()
+    }
+    val records = rows.map { row ->
+        val status = row.seatString("status")
+        LibrarySeatBreachRecord(
+            id = row.seatString("id"),
+            status = status,
+            statusText = row.seatString("statusText").ifBlank { librarySeatReservationStatusText(status) },
+            seatLabel = row.seatString("seatLabel", "seatNo"),
+            location = row.seatString("location"),
+            date = row.seatString("date", "makeDateStr", "makeDate"),
+            startTime = row.seatString("startTime", "makeBeginStr"),
+            endTime = row.seatString("endTime", "makeEndStr"),
+            actualTime = row.seatString("actualTime", "actualStr"),
+            awayRange = row.seatString("awayRange"),
+        )
+    }
+    val total = if (payload is JSONObject) {
+        payload.optionalSeatInt("total", "count").takeIf { it > 0 } ?: records.size
+    } else {
+        records.size
+    }
+    return LibrarySeatBreachPage(total = total, records = records)
+}
+
+internal fun parseLibrarySeatDoorLogPayload(json: JSONObject, jsonArray: JSONArray = JSONArray()): List<LibrarySeatDoorLog> {
+    val payload = json.opt("data") ?: json.takeIf { it.length() > 0 } ?: jsonArray
+    val rows = when (payload) {
+        is JSONArray -> payload.platformObjects()
+        is JSONObject -> payload.optJSONArray("list")?.platformObjects() ?: emptyList()
+        else -> emptyList()
+    }
+    return rows.map { row ->
+        val direction = row.optionalSeatInt("direction")
+        LibrarySeatDoorLog(
+            id = row.seatString("id"),
+            doorName = row.seatString("doorName"),
+            dateTime = row.seatString("dateTime", "dateTimeStr"),
+            direction = direction,
+            directionText = row.seatString("directionText").ifBlank { if (direction == 0) "入馆" else "离馆" },
+        )
+    }
+}
+
+internal fun parseLibrarySeatMakeLifePayload(json: JSONObject, jsonArray: JSONArray = JSONArray()): List<LibrarySeatMakeLife> {
+    val payload = json.opt("data") ?: json.takeIf { it.length() > 0 } ?: jsonArray
+    val rows = when (payload) {
+        is JSONArray -> payload.platformObjects()
+        is JSONObject -> payload.optJSONArray("list")?.platformObjects() ?: emptyList()
+        else -> emptyList()
+    }
+    return rows.map { row ->
+        LibrarySeatMakeLife(
+            stageName = row.seatString("stageName"),
+            createdDate = row.seatString("createdDate"),
+            sourceName = row.seatString("sourceName"),
+        )
+    }
 }
 
 internal fun JSONObject.toLibrarySeatWaitlistTask(): LibrarySeatWaitlistTask? {

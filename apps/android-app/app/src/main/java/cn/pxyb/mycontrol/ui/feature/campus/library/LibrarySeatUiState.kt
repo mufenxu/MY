@@ -2,11 +2,15 @@ package cn.pxyb.mycontrol.ui.feature.campus.library
 
 import androidx.compose.runtime.Immutable
 import cn.pxyb.mycontrol.data.LibrarySeatArea
+import cn.pxyb.mycontrol.data.LibrarySeatBreachPage
+import cn.pxyb.mycontrol.data.LibrarySeatDoorLog
 import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
+import cn.pxyb.mycontrol.data.LibrarySeatMakeLife
 import cn.pxyb.mycontrol.data.LibrarySeatOverview
 import cn.pxyb.mycontrol.data.LibrarySeatReservationHistory
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRecord
 import cn.pxyb.mycontrol.data.LibrarySeatStatus
+import cn.pxyb.mycontrol.data.LibrarySeatTimeline
 import cn.pxyb.mycontrol.data.LibrarySeatVenue
 import cn.pxyb.mycontrol.data.LibrarySeatWaitlistTask
 
@@ -20,6 +24,8 @@ data class LibrarySeatQuery(
     val power: Boolean = false,
     val window: Boolean = false,
 )
+
+enum class LibrarySeatUsageAction { CheckIn, Leave, Stop, Cancel }
 
 @Immutable
 data class LibrarySeatUiState(
@@ -37,6 +43,20 @@ data class LibrarySeatUiState(
     val reservationsLoading: Boolean = false,
     val historyReservations: LibrarySeatReservationHistory = LibrarySeatReservationHistory(),
     val historyReservationsLoading: Boolean = false,
+    val currentUse: LibrarySeatReservationRecord? = null,
+    val currentUseLoading: Boolean = false,
+    val breaches: LibrarySeatBreachPage = LibrarySeatBreachPage(),
+    val breachesLoading: Boolean = false,
+    val doorLogs: List<LibrarySeatDoorLog> = emptyList(),
+    val doorLogsLoading: Boolean = false,
+    val makeLife: List<LibrarySeatMakeLife> = emptyList(),
+    val makeLifeLoading: Boolean = false,
+    val makeLifeReservationId: String = "",
+    val usageAction: LibrarySeatUsageAction? = null,
+    val timeline: LibrarySeatTimeline = LibrarySeatTimeline(),
+    val timelineLoading: Boolean = false,
+    val timelineSeatId: String = "",
+    val timelineDate: String = "",
     val waitlists: List<LibrarySeatWaitlistTask> = emptyList(),
     val waitlistsLoading: Boolean = false,
     val waitlistSaving: Boolean = false,
@@ -52,5 +72,5 @@ data class LibrarySeatUiState(
     val venues: List<LibrarySeatVenue> get() = overview.venues
     val dates: List<String> get() = overview.dates
     val refreshing: Boolean get() = overviewLoading || areasLoading || seatsLoading || floorSeatsLoading || submitLoading ||
-        reservationsLoading || historyReservationsLoading
+        reservationsLoading || historyReservationsLoading || currentUseLoading
 }

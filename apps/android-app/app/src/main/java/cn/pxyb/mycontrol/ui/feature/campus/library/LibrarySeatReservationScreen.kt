@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.LibrarySeatArea
 import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
+import cn.pxyb.mycontrol.data.LibrarySeatTimeline
 import cn.pxyb.mycontrol.data.LibrarySeatWaitlistRequest
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
@@ -86,9 +87,18 @@ internal fun LibrarySeatReservationScreen(
     onQueryAreas: (String, String, Int, Int, String?, Int, Boolean, Boolean) -> Unit,
     onLoadSeats: (String, String, Int, Int, Int) -> Unit,
     onQueryFloorSeats: (String, String, String, Int, Int) -> Unit,
+    onLoadTimeline: (String, String) -> Unit,
     onSubmitReservation: (LibrarySeatReservationRequest, () -> Unit) -> Unit,
     onLoadReservations: () -> Unit,
     onLoadReservationHistory: () -> Unit,
+    onLoadCurrentUse: () -> Unit,
+    onLoadBreaches: () -> Unit,
+    onLoadDoorLogs: () -> Unit,
+    onLoadMakeLife: (String) -> Unit,
+    onCheckIn: () -> Unit,
+    onLeaveSeat: () -> Unit,
+    onStopSeat: () -> Unit,
+    onCancelReservation: (String) -> Unit,
     onOpenOfficialReservation: () -> Unit,
     onLoadWaitlists: () -> Unit,
     onCreateWaitlist: (LibrarySeatWaitlistRequest, () -> Unit) -> Unit,
@@ -228,6 +238,7 @@ internal fun LibrarySeatReservationScreen(
     }
     LaunchedEffect(Unit) {
         onLoadReservations()
+        onLoadCurrentUse()
     }
 
     LaunchedEffect(state.venues) {
@@ -308,7 +319,10 @@ internal fun LibrarySeatReservationScreen(
                             if (selectedTab != tab) {
                                 selectedTab = tab
                                 when (tab) {
-                                    LibrarySeatTab.My -> onLoadReservations()
+                                    LibrarySeatTab.My -> {
+                                        onLoadReservations()
+                                        onLoadCurrentUse()
+                                    }
                                     LibrarySeatTab.Waitlist -> onLoadWaitlists()
                                     LibrarySeatTab.Book -> Unit
                                 }
@@ -642,6 +656,7 @@ internal fun LibrarySeatReservationScreen(
                                         selected = selectedSeatId == seat.id,
                                         onClick = {
                                             selectedSeatId = seat.id
+                                            onLoadTimeline(seat.id, selectedDate)
                                             showConfirmDialog = true
                                         },
                                         modifier = Modifier.weight(1f),
@@ -688,6 +703,7 @@ internal fun LibrarySeatReservationScreen(
                                 selectedFloorSeat = floorSeat
                                 selectedAreaId = floorSeat.areaId
                                 selectedSeatId = floorSeat.seat.id
+                                onLoadTimeline(floorSeat.seat.id, selectedDate)
                                 showConfirmDialog = true
                             },
                         )
@@ -704,8 +720,25 @@ internal fun LibrarySeatReservationScreen(
                     loading = state.reservationsLoading,
                     history = state.historyReservations,
                     historyLoading = state.historyReservationsLoading,
+                    currentUse = state.currentUse,
+                    currentUseLoading = state.currentUseLoading,
+                    breaches = state.breaches,
+                    breachesLoading = state.breachesLoading,
+                    doorLogs = state.doorLogs,
+                    doorLogsLoading = state.doorLogsLoading,
+                    makeLife = state.makeLife,
+                    makeLifeLoading = state.makeLifeLoading,
+                    makeLifeReservationId = state.makeLifeReservationId,
+                    usageAction = state.usageAction,
                     onLoadReservations = onLoadReservations,
                     onLoadHistory = onLoadReservationHistory,
+                    onLoadBreaches = onLoadBreaches,
+                    onLoadDoorLogs = onLoadDoorLogs,
+                    onLoadMakeLife = onLoadMakeLife,
+                    onCheckIn = onCheckIn,
+                    onLeaveSeat = onLeaveSeat,
+                    onStopSeat = onStopSeat,
+                    onCancelReservation = onCancelReservation,
                     onGoToBookSeat = { selectedTab = LibrarySeatTab.Book },
                 )
             }
@@ -768,6 +801,12 @@ internal fun LibrarySeatReservationScreen(
                 "日期：${formatSeatDateLabel(selectedDate)}",
                 "时段：${timeRangeLabel(startTime, endTime)}",
             ).joinToString("\n"),
+            extraContent = {
+                SeatAvailabilityTimeline(
+                    timeline = if (state.timelineSeatId == seat.id) state.timeline else LibrarySeatTimeline(),
+                    loading = state.timelineLoading && state.timelineSeatId == seat.id,
+                )
+            },
             confirmLabel = "确认提交",
             onDismiss = {
                 showConfirmDialog = false
