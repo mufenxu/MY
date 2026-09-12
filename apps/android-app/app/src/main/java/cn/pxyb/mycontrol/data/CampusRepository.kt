@@ -274,8 +274,9 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         parseLibrarySeatTimelinePayload(http.execute("$CAMPUS_LIBRARY_SEAT_TIMELINE_PATH$query").json)
     }
 
-    suspend fun librarySeatCredit(): LibrarySeatCreditProfile = withContext(Dispatchers.IO) {
-        parseLibrarySeatCreditPayload(http.execute(CAMPUS_LIBRARY_SEAT_CREDIT_PATH).json)
+    suspend fun librarySeatCredit(venueId: String = ""): LibrarySeatCreditProfile = withContext(Dispatchers.IO) {
+        val query = venueId.trim().takeIf(String::isNotEmpty)?.let { "?venueId=${encodePath(it)}" }.orEmpty()
+        parseLibrarySeatCreditPayload(http.execute("$CAMPUS_LIBRARY_SEAT_CREDIT_PATH$query").json)
     }
 
     suspend fun librarySeatReservations(): List<LibrarySeatReservationRecord> = withContext(Dispatchers.IO) {

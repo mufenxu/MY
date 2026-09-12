@@ -331,14 +331,22 @@ data class LibrarySeatTimeline(
 data class LibrarySeatCreditProfile(
     val fullName: String = "",
     val score: Int? = null,
-    val policyType: Int? = null,
     val scoreEnabled: Boolean = false,
     val superviseAway: Int = 0,
-    val buildSeTime: String = "",
+    val openTime: String = "",
+    val closeTime: String = "",
     val ruleText: String = "",
 ) {
+    val openTimeRange: String
+        get() = when {
+            openTime.isNotBlank() && closeTime.isNotBlank() -> "$openTime - $closeTime"
+            openTime.isNotBlank() -> openTime
+            closeTime.isNotBlank() -> closeTime
+            else -> ""
+        }
+
     val isEmpty: Boolean
-        get() = score == null && superviseAway <= 0 && buildSeTime.isBlank() && ruleText.isBlank()
+        get() = score == null && superviseAway <= 0 && openTimeRange.isBlank() && ruleText.isBlank()
 }
 
 @Immutable

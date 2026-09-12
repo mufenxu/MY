@@ -230,12 +230,15 @@ private fun CreditQuotaSummary(profile: LibrarySeatCreditProfile, loading: Boole
                     },
                     modifier = Modifier.weight(1f),
                 )
-                AppMetricCell(
-                    label = "开放预约时间",
-                    value = profile.buildSeTime.takeIf(String::isNotBlank) ?: "—",
-                    modifier = Modifier.weight(1f),
-                )
             }
+            AppMetricCell(
+                label = "开放预约时间",
+                value = when {
+                    loading -> "读取中"
+                    else -> profile.openTimeRange.ifBlank { "—" }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
             if (profile.ruleText.isNotBlank()) {
                 Text(
                     text = profile.ruleText,

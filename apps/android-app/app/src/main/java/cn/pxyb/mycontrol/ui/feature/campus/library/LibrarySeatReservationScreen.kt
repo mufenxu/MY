@@ -240,7 +240,10 @@ internal fun LibrarySeatReservationScreen(
     LaunchedEffect(Unit) {
         onLoadReservations()
         onLoadCurrentUse()
-        onLoadCredit()
+    }
+    // 信用与配额里的开放时段按当前场馆解析，等场馆确定后再加载，避免出现空档。
+    LaunchedEffect(state.selectedVenueId) {
+        if (!state.selectedVenueId.isNullOrBlank()) onLoadCredit()
     }
 
     LaunchedEffect(state.venues) {

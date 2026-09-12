@@ -90,7 +90,10 @@ export async function handleLibrarySeatRoutes(req, res, url, {
   }
   if (url.pathname === "/api/campus/library-seat/credit" && req.method === "GET") {
     const client = await librarySeatClient();
-    json(res, 200, { ok: true, data: await client.getCreditProfile() });
+    const data = await client.getCreditProfile({
+      venueId: url.searchParams.get("venueId") || url.searchParams.get("buildId") || ""
+    });
+    json(res, 200, { ok: true, data });
     return true;
   }
   if (url.pathname === "/api/campus/library-seat/reservations" && req.method === "GET") {

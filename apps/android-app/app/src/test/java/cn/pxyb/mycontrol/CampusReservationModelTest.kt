@@ -394,11 +394,11 @@ class CampusReservationModelTest {
             JSONObject()
                 .put("fullName", "张三")
                 .put("score", 96)
-                .put("policyType", 1)
                 .put("scoreEnabled", true)
                 .put("superviseAway", 30)
-                .put("buildSeTime", "06:30")
-                .put("ruleText", "每日可预约 2 次"),
+                .put("openTime", "08:00")
+                .put("closeTime", "21:45")
+                .put("ruleText", "图书馆阅览座位管理规定"),
         )
 
         val profile = parseLibrarySeatCreditPayload(response)
@@ -406,8 +406,8 @@ class CampusReservationModelTest {
         assertEquals("张三", profile.fullName)
         assertEquals(96, profile.score)
         assertEquals(30, profile.superviseAway)
-        assertEquals("06:30", profile.buildSeTime)
-        assertEquals("每日可预约 2 次", profile.ruleText)
+        assertEquals("08:00 - 21:45", profile.openTimeRange)
+        assertEquals("图书馆阅览座位管理规定", profile.ruleText)
         assertTrue(profile.scoreEnabled)
         assertFalse(profile.isEmpty)
         assertTrue(parseLibrarySeatCreditPayload(JSONObject()).isEmpty)

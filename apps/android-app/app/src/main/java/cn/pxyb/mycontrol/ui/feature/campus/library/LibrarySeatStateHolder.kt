@@ -486,7 +486,10 @@ class LibrarySeatStateHolder(
     fun loadLibrarySeatCredit(force: Boolean = false) = launchAction(
         isBusy = { creditLoading && !force },
         start = { copy(creditLoading = true) },
-        action = { campus.librarySeatCredit() },
+        action = {
+            val current = mutableState.value
+            campus.librarySeatCredit(current.query?.venueId ?: current.selectedVenueId.orEmpty())
+        },
         success = { profile -> copy(credit = profile, creditLoading = false) },
         failure = { copy(creditLoading = false) },
     )
